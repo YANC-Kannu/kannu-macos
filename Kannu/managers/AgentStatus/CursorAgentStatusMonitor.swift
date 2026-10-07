@@ -1,0 +1,2160 @@
+import AppKit
+import Combine
+import CoreServices
+import Darwin
+import Defaults
+import Foundation
+
+/// The closed notch's narrow window onto the monitor: the traffic-light verdict and the reveal
+/// pulse, nothing else. `ContentView` observes THIS, never the monitor itself — the monitor
+/// publishes `sessions` on every hook write (up to ~20 Hz under a busy agent), and observing the
+/// whole object re-ran ContentView's ~3,300-line body for values it never reads. Measured on a
+/// Release build under agent load: 38 % average CPU, all of it SwiftUI re-render churn
+/// (docs/REGRESSIONS.md entry 10 addendum).
+///
+/// A mirror, not a second truth: every value is written only by the monitor's own `didSet`s, and
+/// the pulse *verdict* stays `AgentActivityPulseLatch` with its single consumer. Views that need
+/// the session list (the open panel, `AgentTrafficLightIndicator`) observe the monitor directly,
+/// as leaves.
+@MainActor
+final class AgentTrafficLightProjection: ObservableObject {
+    @Published fileprivate(set) var trafficLightState: AgentTrafficLightState = .inactive
+    @Published fileprivate(set) var shouldShowTrafficLight = false
+    @Published fileprivate(set) var activityPulse = 0
+}
+
+@MainActor
+final class CursorAgentStatusMonitor: ObservableObject {
+    /// See `AgentTrafficLightProjection` — what the closed notch observes instead of this object.
+    let projection = AgentTrafficLightProjection()
+
+    static let shared = CursorAgentStatusMonitor()
+
+    @Published private(set) var trafficLightState: AgentTrafficLightState = .inactive {
+        didSet { projection.trafficLightState = trafficLightState }
+    }
+    @Published private(set) var shouldShowTrafficLight = false {
+        didSet { projection.shouldShowTrafficLight = shouldShowTrafficLight }
+    }
+    @Published private(set) var sessions: [AgentSessionStatus] = []
+    /// Latest server-reported Claude rate-limit usage, and the only cache of it: the statusline
+    /// hook's `claude-usage.json`, falling back to the desktop app's own history. Refreshed on the
+    /// cadence in `refreshClaudeUsage(now:)`, never on demand. Nil until first observation.
+    @Published private(set) var claudeUsage: ClaudeUsageSnapshot?
+    /// Why `claudeUsage` may be thinner than expected; the card renders it as one line of text.
+    @Published private(set) var claudeUsageHint: ClaudeUsageSnapshot.Hint?
+
+    /// Bumped whenever an agent actually does something — a traffic light transition or any
+    /// change to the session list. Views use it to drive time-boxed reveals; unlike
+    /// `trafficLightState` it also fires on same-state activity (executing → executing), so a
+    /// window keyed off it stays open for the whole of a long run rather than expiring mid-way.
+    @Published private(set) var activityPulse: Int = 0 {
+        didSet { projection.activityPulse = activityPulse }
+    }
+    /// Whether every `activityPulse` bump since the reveal observer last consumed was the
+    /// running-agent heartbeat. A "was the last bump a heartbeat" flag was wrong here: one
+    /// `rescan()` publishes up to three bumps (session list, traffic light, then the heartbeat)
+    /// and SwiftUI delivers them as a single `onChange`, so the trailing heartbeat masked the
+    /// transition it rode in with and the island never revealed on idle → executing.
+    private var pulseLatch = AgentActivityPulseLatch()
+
+    /// For the reveal observer: true when nothing but heartbeats fired since its last call.
+    /// Consuming resets the window, so exactly one observer may call this per pulse.
+    func consumeActivityPulseWasHeartbeatOnly() -> Bool {
+        pulseLatch.consume()
+    }
+
+    private var eventStream: FSEventStreamRef?
+    private var statusDirectorySource: DispatchSourceFileSystemObject?
+    private var statusDirectoryFD: Int32 = -1
+    private var rescanTask: Task<Void, Never>?
+    private var quickRescanTask: Task<Void, Never>?
+    private var pollTimer: Timer?
+    private var isRunning = false
+    private var watchedPaths: [String] = []
+    private var hadHookFilesThisCycle = false
+    private var executionStartByConversationID: [String: Date] = [:]
+    private var claudeJSONLURLBySessionId: [String: URL] = [:]
+    private var cachedTranscriptAnalysisBySession: [String: TranscriptAnalysis] = [:]
+    private var cachedTranscriptAnalysisAt: Date?
+    private var lastActivityPulseAt: Date?
+    private var lastClaudeUsageReadAt: Date?
+    /// The statusline file's own cadence (see `ClaudeUsageSnapshot.shouldReadStatusline`), and the
+    /// other two sources as last read, merged with it between full reads.
+    private var lastStatuslineReadAt: Date?
+    private var lastStatuslineModifiedAt: Date?
+    private var claudeUsageCache: ClaudeUsageSnapshot?
+    private var claudeUsageDesktop: ClaudeUsageSnapshot?
+    /// Chats that went red and then ended, kept on the list for a while (see
+    /// `AgentTrafficLightMapper.retainEndedSessions`).
+    private var endedRetention: [String: AgentTrafficLightMapper.RetainedEndedSession] = [:]
+    private var lastPublishedTrafficLightState: AgentTrafficLightState?
+    private var lastPublishedShouldShowTrafficLight: Bool?
+    /// Warp's recent exchanges, read on a worker (see `refreshWarpExchangesIfNeeded`) and
+    /// mapped here on every rescan. Empty until the first read returns.
+    private var warpExchanges: [WarpAgentStore.Exchange] = []
+    private var warpRefreshInFlight = false
+    /// Claude Desktop's index of the chats its Code tab hosts, read on a worker (see
+    /// `refreshDesktopSessionIndexIfNeeded`) and reduced to CLI session id → Desktop id.
+    private let desktopSessionIndexLoader = ClaudeDesktopSessionIndex.Loader()
+    private var desktopSessionIDByCLISessionID: [String: String] = [:]
+    private var desktopIndexRefreshInFlight = false
+
+    private init() {}
+
+    func start() {
+        guard !isRunning else { return }
+        isRunning = true
+        installWatchers()
+        scheduleRescan(delay: 0)
+        // Slow safety net only: hook files and Claude transcript/session dirs are all under
+        // FSEvents or the kqueue watcher, so changes rescan event-driven. This interval is the
+        // ceiling for changes with no filesystem trace (chiefly: an agent process dying without
+        // writing anything) — the dead-PID reconciler runs on every rescan, whatever triggers it.
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.scheduleRescan(delay: 0)
+            }
+        }
+    }
+
+    func stop() {
+        isRunning = false
+        rescanTask?.cancel()
+        rescanTask = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
+        if let statusDirectorySource {
+            // The cancel handler (fd captured by value) closes the descriptor.
+            statusDirectorySource.cancel()
+            self.statusDirectorySource = nil
+        }
+        statusDirectoryFD = -1
+        quickRescanTask?.cancel()
+        quickRescanTask = nil
+        if let eventStream {
+            FSEventStreamStop(eventStream)
+            FSEventStreamInvalidate(eventStream)
+            FSEventStreamRelease(eventStream)
+            self.eventStream = nil
+        }
+        warpExchanges = []
+        desktopSessionIDByCLISessionID = [:]
+        trafficLightState = .inactive
+        shouldShowTrafficLight = false
+        sessions = []
+        activityPulse = 0
+        lastActivityPulseAt = nil
+        executionStartByConversationID.removeAll()
+        cachedTranscriptAnalysisBySession.removeAll()
+        cachedTranscriptAnalysisAt = nil
+        lastPublishedTrafficLightState = nil
+        lastPublishedShouldShowTrafficLight = nil
+        endedRetention.removeAll()
+        ClaudeTurnTokenFollower.shared.reset()
+        CursorTranscriptParser.invalidatePathCache()
+        AgentSessionLogParser.invalidatePathCache()
+    }
+
+    private func installWatchers() {
+        try? FileManager.default.createDirectory(
+            at: AgentHookInstaller.statusDirectory,
+            withIntermediateDirectories: true
+        )
+        // Only watch hook status + transcript roots. Avoid Cursor's huge Application Support trees.
+        // The Claude dirs make passive session detection event-driven: transcripts and session
+        // PID files change on every turn, so the FSEvents callback (which already invalidates
+        // both path caches) covers what the old 1-second poll existed for.
+        watchedPaths = [
+            CursorTranscriptParser.projectsDirectory.path,
+            AgentHookInstaller.statusDirectory.path,
+            AgentSessionLogParser.claudeProjectsDirectory.path,
+            AgentSessionLogParser.claudeSessionsDirectory.path
+        ]
+        // Passive-only sources, watched only when present. Warp's WAL changes on every write
+        // (agent or not); the store caches its query for 2 s so a busy terminal costs one read.
+        if let warpDB = WarpAgentStore.databaseURL {
+            watchedPaths.append(warpDB.deletingLastPathComponent().path)
+        }
+        let desktopRoot = ClaudeDesktopAgentSessionStore.defaultRoot
+        if FileManager.default.fileExists(atPath: desktopRoot.path) {
+            watchedPaths.append(desktopRoot.path)
+        }
+
+        installStatusDirectoryWatcher()
+
+        var context = FSEventStreamContext(
+            version: 0,
+            info: Unmanaged.passUnretained(self).toOpaque(),
+            retain: nil,
+            release: nil,
+            copyDescription: nil
+        )
+
+        let flags = FSEventStreamCreateFlags(
+            kFSEventStreamCreateFlagUseCFTypes
+                | kFSEventStreamCreateFlagFileEvents
+                | kFSEventStreamCreateFlagNoDefer
+        )
+
+        let callback: FSEventStreamCallback = { _, info, numEvents, eventPaths, eventFlags, _ in
+            guard let info else { return }
+            let monitor = Unmanaged<CursorAgentStatusMonitor>.fromOpaque(info).takeUnretainedValue()
+            // kFSEventStreamCreateFlagUseCFTypes: the paths arrive as a CFArray of CFString.
+            let paths = (Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as NSArray) as? [String] ?? []
+            let events = (0..<min(numEvents, paths.count)).map { (path: paths[$0], flags: UInt32(eventFlags[$0])) }
+            Task { @MainActor in
+                // Appends and hook writes leave the transcript lists valid (see
+                // TranscriptListingInvalidation); dropping them on every event re-walked both
+                // project trees on the main actor several times a second while agents worked.
+                if TranscriptListingInvalidation.shouldInvalidate(events: events, transcriptRoots: CursorAgentStatusMonitor.transcriptRootPaths) {
+                    CursorTranscriptParser.invalidatePathCache()
+                    AgentSessionLogParser.invalidatePathCache()
+                }
+                monitor.scheduleRescan(delay: 0.35)
+            }
+        }
+
+        guard let stream = FSEventStreamCreate(
+            nil,
+            callback,
+            &context,
+            watchedPaths as CFArray,
+            FSEventStreamEventId(kFSEventStreamEventIdSinceNow),
+            0.5,
+            flags
+        ) else { return }
+
+        eventStream = stream
+        FSEventStreamSetDispatchQueue(stream, DispatchQueue.main)
+        FSEventStreamStart(stream)
+    }
+
+    /// Trees whose file list the path caches hold.
+    private static var transcriptRootPaths: [String] {
+        [
+            CursorTranscriptParser.projectsDirectory.path,
+            AgentSessionLogParser.claudeProjectsDirectory.path,
+            AgentSessionLogParser.codexSessionsDirectory.path,
+        ]
+    }
+
+    /// Immediate refresh when hook status JSON files change (sub-100ms).
+    private func installStatusDirectoryWatcher() {
+        let directory = AgentHookInstaller.statusDirectory
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let fd = open(directory.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        statusDirectoryFD = fd
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .delete, .rename, .attrib, .link],
+            queue: .main
+        )
+        source.setEventHandler { [weak self] in
+            Task { @MainActor in
+                self?.scheduleQuickRescan()
+            }
+        }
+        // fd captured by value — see SystemTimerBridge.startFileMonitor for why closing
+        // via self from an enqueued cancel handler closes the wrong descriptor.
+        source.setCancelHandler {
+            close(fd)
+        }
+        source.resume()
+        statusDirectorySource = source
+    }
+
+    private func scheduleQuickRescan() {
+        guard isRunning else { return }
+        quickRescanTask?.cancel()
+        quickRescanTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.rescan(hooksOnly: true)
+        }
+    }
+
+    private func scheduleRescan(delay: TimeInterval) {
+        guard isRunning else { return }
+        rescanTask?.cancel()
+        rescanTask = Task { [weak self] in
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            guard !Task.isCancelled else { return }
+            await self?.rescan(hooksOnly: false)
+        }
+    }
+
+    /// Subagent conversations folded into their parent on the last hook parse (v38 `parent_id`).
+    private var foldedSubagentConversationIDs: Set<String> = []
+
+    private func rescan(hooksOnly: Bool = false) async {
+        guard isRunning else { return }
+        let now = Date()
+        let previousStateByConversationID = latestDisplayStateByConversationID(from: sessions)
+
+        let staleMinutes = Defaults[.agentStatusStaleMinutes]
+        let collapseSeconds = Defaults[.agentStoppedCollapseSeconds]
+        let inactiveSeconds = Defaults[.agentInactiveDisplaySeconds]
+
+        // Passive Claude facts first: the hook parser must know which prompts are provably still
+        // open (live process, tool_use outstanding) before it ages or deletes a file. No data
+        // flows the other way. Cursor's corroboration is the previous cycle's transcript
+        // analysis — a lag of a second is nothing to a hold that only matters after five minutes.
+        let (passiveClaudeSessions, deadPIDConversationIDs, liveClaudeTails) = buildClaudeSessions(
+            staleMinutes: staleMinutes,
+            collapseSeconds: collapseSeconds,
+            inactiveSeconds: inactiveSeconds,
+            now: now
+        )
+        let cursorPendingApprovalIDs = Set(
+            cachedTranscriptAnalysisBySession.filter { $0.value.hasPendingToolApproval }.map(\.key)
+        )
+
+        var hookSessions = parseHookSessions(
+            staleMinutes: staleMinutes,
+            collapseSeconds: collapseSeconds,
+            inactiveSeconds: inactiveSeconds,
+            now: now,
+            allowBackingDelete: !hooksOnly,
+            liveClaudeTails: liveClaudeTails,
+            cursorPendingApprovalIDs: cursorPendingApprovalIDs
+        )
+        // Extracted to AgentTrafficLightMapper.reconcileClaudeSessions (pure, tested):
+        // this merge has regressed repeatedly while it lived inline here, unreachable by
+        // the logic test target — docs/REGRESSIONS.md entries 5 and 7.
+        hookSessions = AgentTrafficLightMapper.reconcileClaudeSessions(
+            hookSessions: hookSessions,
+            passiveSessions: passiveClaudeSessions,
+            deadPIDConversationIDs: deadPIDConversationIDs,
+            collapseMs: Int64(collapseSeconds) * 1_000,
+            inactiveMs: Int64(inactiveSeconds) * 1_000,
+            nowMs: Int64(now.timeIntervalSince1970 * 1000)
+        )
+
+        let transcriptAnalysis: [String: TranscriptAnalysis]
+        let transcriptSessions: [AgentSessionStatus]
+        if hooksOnly, !sessions.isEmpty {
+            // Hook events carry the awaiting_input signal directly (preToolUse fires when
+            // the approval card is shown), so hook-triggered rescans reuse cached transcript
+            // context instead of re-reading transcripts.
+            transcriptAnalysis = cachedTranscriptAnalysis(maxAgeMinutes: staleMinutes, now: now, forceRefresh: false)
+            let hookConversationIDs = Set(hookSessions.map(\.conversationID))
+            // A subagent card published before its parent_id was known must not be retained.
+            let retainedTranscriptSessions = sessions.filter {
+                !hookConversationIDs.contains($0.conversationID) && !foldedSubagentConversationIDs.contains($0.conversationID)
+            }
+            transcriptSessions = retainedTranscriptSessions
+        } else if isCursorRunning() {
+            transcriptAnalysis = cachedTranscriptAnalysis(maxAgeMinutes: staleMinutes, now: now, forceRefresh: false)
+            transcriptSessions = buildTranscriptSessions(
+                analysisBySession: transcriptAnalysis,
+                staleMinutes: staleMinutes,
+                collapseSeconds: collapseSeconds,
+                inactiveSeconds: inactiveSeconds
+            ) + buildExtraPassiveSessions(
+                staleMinutes: staleMinutes, collapseSeconds: collapseSeconds, inactiveSeconds: inactiveSeconds, now: now
+            )
+        } else {
+            transcriptAnalysis = [:]
+            cachedTranscriptAnalysisBySession = [:]
+            cachedTranscriptAnalysisAt = now
+            transcriptSessions = buildExtraPassiveSessions(
+                staleMinutes: staleMinutes, collapseSeconds: collapseSeconds, inactiveSeconds: inactiveSeconds, now: now
+            )
+        }
+
+        // Enrichment runs on the HOOK sessions, before the merge: transcript sessions already
+        // carry these verdicts from their builder, and a merged record can wear a Cursor
+        // identity over a Claude-won state (`adoptingIdentity`) — running the Cursor-only
+        // enrichment after the merge let stale composer approval evidence rewrite that fresh
+        // Claude `.executing` into a false yellow.
+        let mergedSessions = collapseSubagentSessions(
+            applyExecutionRunState(
+                to: mergeSessions(
+                    hookSessions: enrichHookSessionsWithTranscripts(
+                        hookSessions,
+                        analysisBySession: transcriptAnalysis
+                    ),
+                    transcriptSessions: transcriptSessions
+                ),
+                previousStateByConversationID: previousStateByConversationID,
+                now: now
+            ),
+            staleMinutes: staleMinutes
+        )
+        // Keep chats that were red and have now gone on the list a while longer. Uses the
+        // previously published list as "before", so the pure helper sees exactly what the user saw.
+        let retention = AgentTrafficLightMapper.retainEndedSessions(
+            previous: sessions,
+            current: enrichChatNames(fromComposerStore: mergedSessions),
+            retained: endedRetention,
+            now: now
+        )
+        endedRetention = retention.retained
+        let resolvedSessions = retention.sessions
+
+        let sortedSessions = resolvedSessions.sorted { $0.updatedAt > $1.updatedAt }
+        if sessions != sortedSessions {
+            // A subagent's tool call only moves its chat's count: publish, but no reveal pulse.
+            let pulse = AgentTrafficLightMapper.pulseRelevantChange(from: sessions, to: sortedSessions)
+            sessions = sortedSessions
+            if pulse {
+                pulseLatch.noteTransition()
+                activityPulse &+= 1
+            }
+        }
+        // Token totals for the cards' requests, read off the main actor (entry 11). Requests only here.
+        ClaudeTurnTokenFollower.shared.follow(sortedSessions)
+        hadHookFilesThisCycle = !hookSessions.isEmpty || hadRecentHookFiles(staleMinutes: staleMinutes)
+
+        let visibleSessions = resolvedSessions.filter(\.isVisible)
+        if visibleSessions.isEmpty {
+            publishTrafficLight(state: .inactive, shouldShow: false)
+        } else {
+            applyDisplay(from: visibleSessions)
+        }
+
+        refreshClaudeUsage(now: now)
+        emitActivityHeartbeatIfRunning(now: now)
+    }
+
+    /// Refreshes the cached Claude usage, at most once per `claudeUsageRefreshInterval`.
+    ///
+    /// The statusline hook is authoritative because it reports reset times. The desktop app's own
+    /// history is the fallback for the case the hook cannot cover — a user who runs Claude only in
+    /// the desktop app, where the statusline command never fires.
+    private func refreshClaudeUsage(now: Date) {
+        let statuslineURL = AgentHookInstaller.statusDirectory.appendingPathComponent(AgentHookInstaller.usageFileName)
+        let statuslineModifiedAt = (try? statuslineURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+        if ClaudeUsageSnapshot.shouldRefresh(
+            now: now,
+            lastRead: lastClaudeUsageReadAt,
+            state: trafficLightState,
+            hasSnapshot: claudeUsage != nil
+        ) {
+            lastClaudeUsageReadAt = now
+            lastStatuslineReadAt = now
+            lastStatuslineModifiedAt = statuslineModifiedAt
+            apply(Self.loadClaudeUsageSnapshot(now: now))
+            return
+        }
+        // Between full reads: the statusline file alone, merged with the other sources as they
+        // were last read (Claude's cache in ~/.claude.json is large; it stays on the slow cadence).
+        guard ClaudeUsageSnapshot.shouldReadStatusline(
+            now: now,
+            modifiedAt: statuslineModifiedAt,
+            lastSeenModifiedAt: lastStatuslineModifiedAt,
+            lastRead: lastStatuslineReadAt
+        ) else { return }
+        lastStatuslineReadAt = now
+        lastStatuslineModifiedAt = statuslineModifiedAt
+        let statusline = ClaudeUsageSnapshot.load(from: statuslineURL)
+        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop, now: now))
+    }
+
+    private struct ClaudeUsageLoad {
+        let snapshot: ClaudeUsageSnapshot?
+        let hint: ClaudeUsageSnapshot.Hint?
+        let cache: ClaudeUsageSnapshot?
+        let desktop: ClaudeUsageSnapshot?
+    }
+
+    private func apply(_ load: ClaudeUsageLoad) {
+        claudeUsageCache = load.cache
+        claudeUsageDesktop = load.desktop
+        if load.snapshot != claudeUsage { claudeUsage = load.snapshot }
+        if load.hint != claudeUsageHint { claudeUsageHint = load.hint }
+    }
+
+    /// The single source list for Claude usage, best first, merged one window key at a time. The
+    /// statusline hook is freshest but only writes while a session drives it; Claude's own cached
+    /// usage carries real reset times and the per-model weekly windows nothing else has; the
+    /// desktop history is percentages with inferred resets. Merging per key (not falling through
+    /// whole snapshots) means one rolled-over five-hour window in the cache no longer takes the
+    /// still-live per-model bar down with it. One definition, so a fourth source can never be
+    /// added to one caller and forgotten in the other.
+    private static func loadClaudeUsageSnapshot(now: Date) -> ClaudeUsageLoad {
+        let url = AgentHookInstaller.statusDirectory
+            .appendingPathComponent(AgentHookInstaller.usageFileName)
+        // All three are local reads on a 600 s cadence, so reading every one is cheap.
+        let statusline = ClaudeUsageSnapshot.load(from: url)
+        return mergeClaudeUsage(statusline: statusline, cache: ClaudeCachedUsage.load(),
+                                desktop: ClaudeDesktopUsageHistory.load(now: now), now: now)
+    }
+
+    private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
+                                         desktop: ClaudeUsageSnapshot?, now: Date) -> ClaudeUsageLoad {
+        let sources = [statusline, cache, desktop]
+        // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
+        // shouldRefresh keeps its cadence gate (a nil snapshot re-reads on every rescan tick).
+        let snapshot = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
+        let hint = ClaudeUsageSnapshot.hint(
+            hooksInstalled: AgentHookInstaller.shared.isInstalled(.claude),
+            statusline: statusline,
+            cache: cache,
+            now: now
+        )
+        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop)
+    }
+
+    /// Re-reads the usage sources immediately, bypassing the cadence gate. For the manual button,
+    /// which wants the freshest on-disk value the instant a fetch completes.
+    private func reloadClaudeUsageNow() {
+        let now = Date()
+        lastClaudeUsageReadAt = now
+        lastStatuslineReadAt = now
+        apply(Self.loadClaudeUsageSnapshot(now: now))
+    }
+
+    /// Triggers Claude Code's own usage fetch, which writes `cachedUsageUtilization` to
+    /// `~/.claude.json` — the only local source for the per-model (e.g. Fable) weekly window.
+    ///
+    /// Runs the installed CLI under a pseudo-terminal issuing `/usage`, because that slash command
+    /// only runs in an interactive session (headless `-p` treats it as prompt text). The spawn uses
+    /// the credential Claude already stored in the keychain: silent after a one-time "Always Allow",
+    /// and it reads only limit metadata — no message, no tokens, no cost. Kannu never sees the
+    /// credential; it only re-reads the file the CLI writes.
+    /// True while a user-triggered usage fetch is running; drives the button's spinner and stops
+    /// a second press from spawning a concurrent process.
+    @Published private(set) var isRefreshingClaudeUsage = false
+
+    /// Runs Claude Code's own `/usage`, the only thing that refreshes the per-model (Fable) weekly
+    /// window, then reloads the display from what it wrote.
+    ///
+    /// `/usage` is declared `requires: {ink}`, so it only runs in an interactive session — headless
+    /// `--print` treats it as prompt text. An interactive session normally registers itself as a
+    /// remote-control device (which showed up as a phantom chat and a new-device sign-in warning),
+    /// so the spawn disables that explicitly and persists no session.
+    ///
+    /// The spawn inherits no `CLAUDE_CODE_OAUTH_*` variables, so the CLI uses its keychain sign-in.
+    /// That sign-in must carry the `user:profile` scope or the CLI's fetch returns nothing and the
+    /// cache stays as it was; `claudeUsageHint` tells the user when that is the case.
+    func refreshClaudeUsageFromCLI() {
+        guard !isRefreshingClaudeUsage else { return }
+        guard let binary = Self.resolveClaudeBinary() else {
+            reloadClaudeUsageNow()
+            return
+        }
+        isRefreshingClaudeUsage = true
+
+        // A GCD worker, not a Task: runUsageFetch is up to ~55 s of Thread.sleep, and a
+        // detached Task would pin one cooperative-pool thread (sized to core count) for the
+        // whole fetch, starving every other Task in the process on a small machine.
+        DispatchQueue.global(qos: .userInitiated).async {
+            Self.runUsageFetch(binary: binary)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    // Order matters: refresh the cache first, then re-run the providers so the
+                    // card renders the new numbers. Doing this at press time would race the fetch.
+                    self.reloadClaudeUsageNow()
+                    LLMUsageManager.shared.refreshAll(force: true)
+                    self.isRefreshingClaudeUsage = false
+                }
+            }
+        }
+    }
+
+    /// Newest installed Claude Code binary, so this keeps working across version bumps.
+    private nonisolated static func resolveClaudeBinary() -> URL? {
+        let base = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Claude/claude-code")
+        guard let versions = try? FileManager.default.contentsOfDirectory(
+            at: base, includingPropertiesForKeys: nil) else { return nil }
+        return versions
+            .map { $0.appendingPathComponent("claude.app/Contents/MacOS/claude") }
+            .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
+            .sorted { $0.path.compare($1.path, options: .numeric) == .orderedAscending }
+            .last
+    }
+
+    private nonisolated static func runUsageFetch(binary: URL) {
+        // Two attempts. The first suppresses the remote-control device registration (the phantom
+        // chat); if that flag turns out to be rejected or ineffective and no fetch lands, fall back
+        // to the bare invocation, which is proven to fetch. Better a working refresh than a clean
+        // one that does nothing.
+        for arguments in ClaudeUsageFetchCommand.attempts {
+            guard ClaudeUsageFetchCommand.isValidForInteractiveSession(arguments: arguments) else { continue }
+            if attemptUsageFetch(binary: binary, arguments: arguments) { return }
+        }
+    }
+
+    /// One `/usage` run. Returns true when the on-disk fetch stamp advanced, i.e. it worked.
+    private nonisolated static func attemptUsageFetch(binary: URL, arguments: [String]) -> Bool {
+        let configURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".claude.json")
+        func fetchedAtMs() -> Double? {
+            guard let data = try? Data(contentsOf: configURL),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let cache = json["cachedUsageUtilization"] as? [String: Any] else { return nil }
+            return (cache["fetchedAtMs"] as? NSNumber)?.doubleValue
+        }
+        let before = fetchedAtMs()
+
+        let process = Process()
+        process.executableURL = binary
+        process.arguments = arguments
+        process.environment = ClaudeUsageFetchCommand.environment()
+        // Deliberately NOT setting `process.environment`: plain inheritance, exactly as the
+        // version that was proven to fetch. Setting CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC here
+        // suppressed nonessential network traffic — which is what the usage fetch is — so the
+        // session started, `/usage` ran, and nothing was ever fetched.
+
+        // A pty is required: `/usage` is declared `requires: {ink}` and only runs interactively.
+        var master: Int32 = 0, slave: Int32 = 0
+        guard openpty(&master, &slave, nil, nil, nil) == 0 else { return false }
+        let masterHandle = FileHandle(fileDescriptor: master, closeOnDealloc: true)
+        let slaveHandle = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
+        process.standardInput = slaveHandle
+        process.standardOutput = slaveHandle
+        process.standardError = slaveHandle
+        // Drain the pty so the child never blocks on a full buffer; the output itself is unused.
+        masterHandle.readabilityHandler = { _ = $0.availableData }
+
+        do { try process.run() } catch {
+            // Reachable: Claude Code self-updates by reaping old version directories, so the
+            // binary resolved a moment ago can be gone. Every other exit path clears the
+            // handler before the handle is dropped — an armed readability source on a
+            // closing descriptor is FileHandle's documented crash — so this one must too.
+            masterHandle.readabilityHandler = nil
+            try? masterHandle.close()
+            try? slaveHandle.close()
+            return false
+        }
+
+        // Give the TUI time to come up before typing, then issue the command.
+        Thread.sleep(forTimeInterval: 3)
+        if !process.isRunning {
+            // Rejected argument or instant exit — nothing was typed, so report failure and let the
+            // caller try the next invocation.
+            masterHandle.readabilityHandler = nil
+            try? masterHandle.close()
+            return false
+        }
+        masterHandle.write(Data("/usage\r".utf8))
+
+        var fetched = false
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.25)
+            if let now = fetchedAtMs(), now != before { fetched = true; break }
+            if !process.isRunning { break }
+        }
+
+        if process.isRunning && fetched {
+            masterHandle.write(Data("/exit\r".utf8))
+            let quitDeadline = Date().addingTimeInterval(2)
+            while process.isRunning && Date() < quitDeadline { Thread.sleep(forTimeInterval: 0.1) }
+        }
+        if process.isRunning {
+            // terminate() only signals and the TUI can trap SIGTERM; escalate so waitUntilExit()
+            // can never block this task and strand the spinner.
+            process.terminate()
+            let killDeadline = Date().addingTimeInterval(2)
+            while process.isRunning && Date() < killDeadline { Thread.sleep(forTimeInterval: 0.1) }
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
+            process.waitUntilExit()
+        }
+        masterHandle.readabilityHandler = nil
+        try? masterHandle.close()
+        return fetched
+    }
+
+    /// Keeps a still-running agent visible to time-boxed consumers.
+    ///
+    /// A long tool changes neither the traffic light state nor the session list, so the
+    /// change-driven pulses above fall silent and any window keyed off them expires mid-run.
+    /// Re-announcing on a slow cadence while the aggregate state is an active run keeps that
+    /// window refreshed, without extending it once work actually stops.
+    private func emitActivityHeartbeatIfRunning(now: Date) {
+        guard trafficLightState.isActiveRun, shouldShowTrafficLight else {
+            lastActivityPulseAt = nil
+            return
+        }
+        if let last = lastActivityPulseAt, now.timeIntervalSince(last) < agentActivityHeartbeatSeconds {
+            return
+        }
+        lastActivityPulseAt = now
+        pulseLatch.noteHeartbeat()
+        activityPulse &+= 1
+    }
+
+    private func cachedTranscriptAnalysis(
+        maxAgeMinutes: Int,
+        now: Date,
+        forceRefresh: Bool
+    ) -> [String: TranscriptAnalysis] {
+        if !forceRefresh,
+           let cachedTranscriptAnalysisAt,
+           now.timeIntervalSince(cachedTranscriptAnalysisAt) < 1.5 {
+            return cachedTranscriptAnalysisBySession
+        }
+        let fresh = CursorTranscriptParser.analyzeRecentSessions(maxAgeMinutes: maxAgeMinutes, now: now)
+        cachedTranscriptAnalysisBySession = fresh
+        cachedTranscriptAnalysisAt = now
+        return fresh
+    }
+
+    private func publishTrafficLight(state: AgentTrafficLightState, shouldShow: Bool) {
+        var changed = false
+        if lastPublishedTrafficLightState != state {
+            trafficLightState = state
+            lastPublishedTrafficLightState = state
+            changed = true
+        }
+        if lastPublishedShouldShowTrafficLight != shouldShow {
+            shouldShowTrafficLight = shouldShow
+            lastPublishedShouldShowTrafficLight = shouldShow
+            changed = true
+        }
+        if changed {
+            pulseLatch.noteTransition()
+            activityPulse &+= 1
+        }
+    }
+
+    private func mergeSessions(
+        hookSessions: [AgentSessionStatus],
+        transcriptSessions: [AgentSessionStatus]
+    ) -> [AgentSessionStatus] {
+        var mergedByConversationID: [String: AgentSessionStatus] = [:]
+
+        for session in hookSessions + transcriptSessions {
+            guard let existing = mergedByConversationID[session.conversationID] else {
+                mergedByConversationID[session.conversationID] = session
+                continue
+            }
+            mergedByConversationID[session.conversationID] = preferredMergedSession(existing, session)
+        }
+
+        return Array(mergedByConversationID.values)
+    }
+
+    /// Prefer the more urgent traffic-light state; break ties with the newer timestamp.
+    private func preferredMergedSession(_ existing: AgentSessionStatus, _ incoming: AgentSessionStatus) -> AgentSessionStatus {
+        let winner: AgentSessionStatus
+        let loser: AgentSessionStatus
+        if shouldPreferFreshHookActiveState(primary: existing, secondary: incoming) {
+            winner = existing
+            loser = incoming
+        } else if shouldPreferFreshHookActiveState(primary: incoming, secondary: existing) {
+            winner = incoming
+            loser = existing
+        } else if existing.displayState != incoming.displayState {
+            if existing.displayState > incoming.displayState {
+                winner = existing
+                loser = incoming
+            } else {
+                winner = incoming
+                loser = existing
+            }
+        } else if incoming.updatedAt >= existing.updatedAt {
+            winner = incoming
+            loser = existing
+        } else {
+            winner = existing
+            loser = incoming
+        }
+        let merged = AgentSessionStatus(
+            id: winner.id,
+            provider: winner.provider,
+            conversationID: winner.conversationID,
+            chatName: preferredChatName(primary: winner.chatName, fallback: loser.chatName),
+            projectName: normalizedProjectName(winner.projectName) ?? normalizedProjectName(loser.projectName),
+            rawState: winner.rawState,
+            displayState: winner.displayState,
+            updatedAt: winner.updatedAt,
+            isVisible: winner.isVisible || loser.isVisible,
+            executionStartedAt: winner.executionStartedAt ?? loser.executionStartedAt,
+            cwd: winner.cwd ?? loser.cwd,
+            hostPID: winner.hostPID ?? loser.hostPID
+        ).carryingExtras(from: winner).carryingExtras(from: loser)
+        // Same conversation reported by a host and the engine it embeds: the state stays the
+        // winner's, but the host names the card — otherwise the provider, icon and row id
+        // flap with whichever record was fresher this rescan.
+        if let identity = AgentTrafficLightMapper.hostIdentitySession(existing, incoming),
+           identity.provider.lowercased() != winner.provider.lowercased() {
+            return merged.adoptingIdentity(of: identity)
+        }
+        return merged
+    }
+
+    /// Hook state is authoritative while it is fresh: transcript `hasPendingToolApproval`
+    /// can linger and incorrectly paint yellow during active thinking/executing.
+    private func shouldPreferFreshHookActiveState(
+        primary: AgentSessionStatus,
+        secondary: AgentSessionStatus
+    ) -> Bool {
+        guard isHookStateSession(primary) else { return false }
+        guard secondary.displayState == .awaitingInput else { return false }
+        guard !isHookStateSession(secondary) else { return false }
+        guard Date().timeIntervalSince(primary.updatedAt) < 90 else { return false }
+        // Prefer hook executing over stale transcript yellow (WebSearch already approved).
+        if primary.displayState == .executing { return true }
+        // Let transcript yellow beat hook thinking (Shell Run card).
+        return false
+    }
+
+    private func isHookStateSession(_ session: AgentSessionStatus) -> Bool {
+        switch session.rawState.lowercased() {
+        case "thinking", "executing", "awaiting_input", "awaitinginput", "awaiting",
+             "stopped", "stop", "completed", "aborted", "error":
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Roll Task/subagent activity into the parent chat so they don't appear as extra sessions.
+    private func collapseSubagentSessions(_ sessions: [AgentSessionStatus], staleMinutes: Int) -> [AgentSessionStatus] {
+        let subagentParents = CursorTranscriptParser.subagentToParentSessionMap(maxAgeMinutes: staleMinutes)
+        guard !subagentParents.isEmpty else { return sessions }
+
+        var rolledUp: [String: AgentSessionStatus] = [:]
+
+        for session in sessions {
+            // The map is built from Cursor's own transcripts; another provider's session
+            // sharing a uuid with a Cursor subagent must not be re-keyed onto its parent.
+            let parentID = session.provider.lowercased() == "cursor"
+                ? subagentParents[session.conversationID] : nil
+            let targetID = parentID ?? session.conversationID
+
+            let candidate: AgentSessionStatus
+            if let parentID {
+                var rolled = AgentSessionStatus(
+                    id: "cursor-\(parentID)",
+                    provider: session.provider,
+                    conversationID: parentID,
+                    chatName: session.chatName,
+                    projectName: session.projectName,
+                    rawState: session.rawState,
+                    displayState: session.displayState,
+                    updatedAt: session.updatedAt,
+                    isVisible: session.isVisible,
+                    executionStartedAt: session.executionStartedAt,
+                    cwd: session.cwd,
+                    hostPID: session.hostPID
+                ).carryingExtras(from: session)
+                // The request is the parent conversation's own; never a subagent's turn.
+                rolled.turn = nil
+                candidate = rolled
+            } else {
+                candidate = session
+            }
+
+            if let existing = rolledUp[targetID] {
+                let merged = preferredMergedSession(existing, candidate)
+                rolledUp[targetID] = AgentSessionStatus(
+                    id: existing.id.hasPrefix("cursor-") ? existing.id : candidate.id,
+                    provider: merged.provider,
+                    conversationID: targetID,
+                    chatName: normalizedChatName(existing.chatName) ?? normalizedChatName(candidate.chatName),
+                    projectName: normalizedProjectName(existing.projectName) ?? normalizedProjectName(candidate.projectName),
+                    rawState: merged.rawState,
+                    displayState: merged.displayState,
+                    updatedAt: max(existing.updatedAt, candidate.updatedAt),
+                    isVisible: existing.isVisible || candidate.isVisible,
+                    executionStartedAt: merged.executionStartedAt ?? existing.executionStartedAt ?? candidate.executionStartedAt,
+                    cwd: existing.cwd ?? candidate.cwd,
+                    hostPID: existing.hostPID ?? candidate.hostPID
+                ).carryingExtras(from: existing).carryingExtras(from: candidate)
+            } else {
+                rolledUp[targetID] = candidate
+            }
+        }
+
+        return Array(rolledUp.values)
+    }
+
+    private func applyDisplay(from visible: [AgentSessionStatus]) {
+        var state = AgentTrafficLightMapper.aggregate(visible)
+
+        if state == .inactive {
+            if Defaults[.showAgentStoppedIndicator] {
+                state = .stopped
+            } else {
+                publishTrafficLight(state: .inactive, shouldShow: false)
+                return
+            }
+        }
+
+        publishTrafficLight(state: state, shouldShow: true)
+    }
+
+    private func hadRecentHookFiles(staleMinutes: Int) -> Bool {
+        let directory = AgentHookInstaller.statusDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return false }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let staleMs = Int64(staleMinutes) * 60_000
+        return files.contains { file in
+            guard file.pathExtension == "json" else { return false }
+            if let mtime = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                let tsMs = Int64(mtime.timeIntervalSince1970 * 1000)
+                return nowMs - tsMs <= staleMs
+            }
+            return true
+        }
+    }
+
+    /// Layer transcript-derived context on top of hook states. The hook file is the source
+    /// of truth for awaiting_input: measured Cursor timing shows `preToolUse` fires when the
+    /// approval card is shown and `postToolUse` after the decision, so the hook alone brackets
+    /// the yellow window correctly. Transcript signals must never override hook yellow.
+    private func enrichHookSessionsWithTranscripts(
+        _ sessions: [AgentSessionStatus],
+        analysisBySession: [String: TranscriptAnalysis]
+    ) -> [AgentSessionStatus] {
+        let now = Date()
+
+        return sessions.map { session in
+            guard session.provider.lowercased() == "cursor" else { return session }
+
+            let rawState = session.rawState.lowercased()
+            if rawState == "stopped" || rawState == "stop" || session.displayState == .stopped {
+                return session
+            }
+
+            // Hook yellow wins outright; transcripts lag the live card.
+            if rawState == "awaiting_input" || session.displayState == .awaitingInput {
+                return session
+            }
+
+            let analysis = analysisBySession[session.conversationID]
+
+            if analysis?.isUserPromptAwaitingResponse == true {
+                return AgentSessionStatus(
+                    id: session.id,
+                    provider: session.provider,
+                    conversationID: session.conversationID,
+                    chatName: session.chatName,
+                    projectName: session.projectName,
+                    rawState: "thinking",
+                    displayState: .thinking,
+                    updatedAt: session.updatedAt,
+                    isVisible: true,
+                    executionStartedAt: session.executionStartedAt,
+                    cwd: session.cwd,
+                    hostPID: session.hostPID
+                ).carryingExtras(from: session)
+            }
+
+            if analysis?.hasPendingToolApproval == true,
+               session.displayState == .thinking || session.displayState == .executing {
+                return AgentSessionStatus(
+                    id: session.id,
+                    provider: session.provider,
+                    conversationID: session.conversationID,
+                    chatName: session.chatName,
+                    projectName: session.projectName,
+                    rawState: "awaiting_input",
+                    displayState: .awaitingInput,
+                    updatedAt: session.updatedAt,
+                    isVisible: true,
+                    executionStartedAt: session.executionStartedAt,
+                    cwd: session.cwd,
+                    hostPID: session.hostPID
+                ).carryingExtras(from: session)
+            }
+
+            // Transcript `turn_ended` lags behind live hooks. Never demote a fresh
+            // thinking/executing hook file to stopped or green never appears.
+            let hookIsLiveActive = ["thinking", "executing", "awaiting_input"].contains(rawState)
+                && now.timeIntervalSince(session.updatedAt) < 90
+            if analysis?.isTurnEndedAtTail == true,
+               (session.displayState == .executing || session.displayState == .thinking),
+               !hookIsLiveActive {
+                return AgentSessionStatus(
+                    id: session.id,
+                    provider: session.provider,
+                    conversationID: session.conversationID,
+                    chatName: session.chatName,
+                    projectName: session.projectName,
+                    rawState: "stopped",
+                    displayState: .stopped,
+                    updatedAt: session.updatedAt,
+                    isVisible: true,
+                    executionStartedAt: session.executionStartedAt,
+                    cwd: session.cwd,
+                    hostPID: session.hostPID
+                ).carryingExtras(from: session)
+            }
+
+            return session
+        }
+    }
+
+    /// Runs `body` under the hook script's directory lock without ever blocking the main
+    /// actor. Returns false, with `body` not run, when a hook currently holds the lock: the
+    /// file is mid-rewrite and any delete decision made from its previous contents is void
+    /// for this cycle. Mirrors the script's own fallback — if the lock file cannot be opened
+    /// at all, proceed unlocked rather than never deleting anything.
+    private static func withStatusLock(in directory: URL, _ body: () -> Void) -> Bool {
+        let lockPath = directory.appendingPathComponent(".kannu-status.lock").path
+        let fd = open(lockPath, O_WRONLY | O_CREAT | O_APPEND, 0o600)
+        guard fd >= 0 else { body(); return true }
+        defer { close(fd) }
+        guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { return false }
+        body()
+        return true
+    }
+
+    /// `allowBackingDelete` is false on the 50 ms hook-triggered rescan: that path does not
+    /// invalidate `CursorTranscriptParser`'s 2 s path cache (the FSEvents path does), so a
+    /// brand-new Cursor conversation's hook file would be judged "unbacked" against a listing
+    /// taken before it existed and deleted milliseconds after the hook wrote it.
+    private func parseHookSessions(
+        staleMinutes: Int,
+        collapseSeconds: Int,
+        inactiveSeconds: Int,
+        now: Date = Date(),
+        allowBackingDelete: Bool = true,
+        liveClaudeTails: [String: AgentSessionLogParser.ClaudeTailState] = [:],
+        cursorPendingApprovalIDs: Set<String> = []
+    ) -> [AgentSessionStatus] {
+        let directory = AgentHookInstaller.statusDirectory
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return [] }
+
+        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+        let staleMs = Int64(staleMinutes) * 60_000
+        let collapseMs = Int64(collapseSeconds) * 1_000
+        let inactiveMs = Int64(inactiveSeconds) * 1_000
+
+        var results: [AgentSessionStatus] = []
+        var subagentParentByKey: [String: String] = [:]
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+
+        struct HookFile {
+            let url: URL
+            let mtimeAtRead: Date?
+            let json: [String: Any]
+            let state: String
+            let tsMs: Int64
+            let provider: String
+            let conversationID: String
+            let turn: HookTurn?
+        }
+        var hookFiles: [HookFile] = []
+        for file in files where file.pathExtension == "json" {
+            // The agent hook replaces this file atomically (mkstemp + os.replace) and can
+            // do so between our read and a delete decision below. Deleting is only safe if
+            // the file is still the one we judged — otherwise we destroy a status the
+            // agent wrote milliseconds ago and its session vanishes until the next hook
+            // event, potentially minutes away. The stat must come BEFORE the read: sampled
+            // after it, a replace landing in between pairs the new file's mtime with the
+            // old file's contents and the guard deletes exactly what it exists to protect.
+            let mtimeAtRead = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            guard let data = try? Data(contentsOf: file),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let state = json["state"] as? String else { continue }
+
+            var tsMs = (json["ts"] as? NSNumber)?.int64Value ?? 0
+            if tsMs <= 0,
+               let mtime = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                tsMs = Int64(mtime.timeIntervalSince1970 * 1000)
+            }
+
+            let provider = (json["provider"] as? String) ?? "unknown"
+            let conversationID = file.deletingPathExtension().lastPathComponent
+                .replacingOccurrences(of: "\(provider)-", with: "")
+            hookFiles.append(HookFile(url: file, mtimeAtRead: mtimeAtRead, json: json, state: state, tsMs: tsMs,
+                                      provider: provider, conversationID: conversationID,
+                                      turn: HookTurn(hookFile: json, home: homePath, now: now)))
+        }
+
+        // For the stale-cap rule below: which chats a recently written subagent file names, and
+        // which chats have an open turn (since when).
+        var freshSubagentParentKeys = Set<String>()
+        var openTurnStartByKey: [String: Date] = [:]
+        for hookFile in hookFiles {
+            let providerKey = hookFile.provider.lowercased()
+            if let parent = hookFile.json["parent_id"] as? String, AgentTrafficLightMapper.isHookConversationID(parent),
+               nowMs - hookFile.tsMs <= staleMs {
+                freshSubagentParentKeys.insert(providerKey + "|" + parent)
+            }
+            if let turn = hookFile.turn, turn.endedAt == nil {
+                openTurnStartByKey[providerKey + "|" + hookFile.conversationID] = turn.startedAt
+            }
+        }
+
+        for hookFile in hookFiles {
+            let file = hookFile.url
+            let json = hookFile.json
+            let state = hookFile.state
+            let tsMs = hookFile.tsMs
+            let provider = hookFile.provider
+            let conversationID = hookFile.conversationID
+
+            func removeIfUnchanged() {
+                // Under the script's lock so a hook mid-read-modify-write cannot have the file
+                // pulled out from under it (it would resurrect the card from its cached copy).
+                _ = Self.withStatusLock(in: directory) {
+                    let mtimeNow = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+                    guard mtimeNow == hookFile.mtimeAtRead else { return }
+                    try? FileManager.default.removeItem(at: file)
+                }
+            }
+
+            // A prompt nobody has answered keeps its yellow only while evidence says the wait
+            // is still open (REGRESSIONS entry 12). `claudeTail` exists only for a Claude process
+            // that is alive this rescan.
+            let claudeTail = liveClaudeTails[conversationID]
+            let holdsYellow = AgentTrafficLightMapper.holdsAwaitingInput(
+                provider: provider,
+                processAlive: claudeTail != nil,
+                tail: claudeTail,
+                cursorPendingApproval: cursorPendingApprovalIDs.contains(conversationID)
+            )
+            // A corroborated Claude prompt outlives the stale cap. Its file ends by SessionEnd
+            // (the hook deletes it), a newer event, or the process dying — the next rescan then
+            // finds no live tail and this guard deletes it. Every other provider keeps the cap;
+            // for the hook-only ones it is the end of their yellow.
+            let awaitingOutlivesCap = AgentTrafficLightMapper.isAwaitingInputRawState(state)
+                && AgentTrafficLightMapper.awaitingInputOutlivesStaleCap(
+                    provider: provider, processAlive: claudeTail != nil, tail: claudeTail
+                )
+            // A silent chat mid-workflow (or mid long Bash call) keeps its file, and with it the
+            // request's turn; so do its subagents' files while that turn is open.
+            let providerKey = provider.lowercased()
+            let subagentOfOpenTurn: Bool = {
+                guard let parent = json["parent_id"] as? String,
+                      let parentStart = openTurnStartByKey[providerKey + "|" + parent],
+                      let ownStart = hookFile.turn?.startedAt else { return false }
+                return ownStart >= parentStart
+            }()
+            let activeOutlivesCap = AgentTrafficLightMapper.hookFileOutlivesStaleCap(
+                provider: provider,
+                rawState: state,
+                processAlive: claudeTail != nil,
+                namedByFreshSubagent: freshSubagentParentKeys.contains(providerKey + "|" + conversationID),
+                subagentOfOpenTurn: subagentOfOpenTurn
+            )
+            guard nowMs - tsMs <= staleMs || awaitingOutlivesCap || activeOutlivesCap else {
+                removeIfUnchanged()
+                continue
+            }
+
+            if AgentTrafficLightMapper.isSimulationConversationID(conversationID) {
+                removeIfUnchanged()
+                continue
+            }
+            // Kannu's own /usage probe fires SessionStart/Stop hooks like any session; its id is
+            // learned from the passive path (process ancestry) and remembered in Defaults.
+            if AgentTrafficLightMapper.isUsageProbeSession(
+                conversationID: conversationID,
+                probeIDs: Defaults[.claudeUsageProbeConversationIDs]
+            ) {
+                removeIfUnchanged()
+                continue
+            }
+
+            // Cursor's backing check consults live app state and is cheap to trust. For
+            // claude/codex the "backing" is the same transcript listing that feeds chat-name
+            // lookup — deleting on a miss welded "no name yet" to "delete the session": a
+            // brand-new session (no JSONL yet), a >30-min approval wait (quiet transcript),
+            // or the per-scan session cap all destroyed hook files written seconds earlier.
+            // Their freshness is already enforced by the staleMs check above.
+            // A fresh hook file is its own proof of a live chat, and the backing lookup is
+            // one query against a multi-gigabyte state.vscdb Cursor holds open — a single
+            // slow or contended read must never delete a live card (the Cursor card used to
+            // blink out of the notch on every miss). Only an unbacked file past the grace is
+            // dropped; the stale cap above still reaps everything eventually.
+            if allowBackingDelete,
+               providerKey == "cursor",
+               AgentTrafficLightMapper.shouldDropUnbackedCursorHookFile(tsMs: tsMs, nowMs: nowMs),
+               !hasHookSessionBacking(
+                conversationID: conversationID,
+                provider: provider,
+                staleMinutes: staleMinutes
+               ) {
+                removeIfUnchanged()
+                continue
+            }
+            let chatName = preferredHookChatName(from: json)
+            let projectName = normalizedProjectName(
+                json["project"] as? String ?? json["project_name"] as? String ?? json["workspace_name"] as? String
+            )
+            let hookCwd = (json["cwd"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let ageMs = nowMs - tsMs
+            let resolved = AgentTrafficLightMapper.resolveHookState(
+                rawState: state,
+                ageMs: ageMs,
+                collapseMs: collapseMs,
+                inactiveMs: inactiveMs,
+                holdAwaitingInput: holdsYellow
+            )
+
+            var session = AgentSessionStatus(
+                id: file.deletingPathExtension().lastPathComponent,
+                provider: provider,
+                conversationID: conversationID,
+                chatName: chatName,
+                projectName: projectName,
+                rawState: state,
+                displayState: resolved.state,
+                updatedAt: Date(timeIntervalSince1970: TimeInterval(tsMs) / 1000),
+                isVisible: resolved.visible,
+                executionStartedAt: nil,
+                cwd: hookCwd
+            )
+            // Additive field the script writes beside the state (v31+). Untrusted input: clamped.
+            session.toolErrorCount = max(0, min(999, (json["tool_errors"] as? NSNumber)?.intValue ?? 0))
+            session.isUnattended = (json["unattended"] as? Bool) ?? false
+            // v33: the run ended on an error (StopFailure, or an Antigravity Stop carrying one).
+            // Only a literal `true` counts — the file is untrusted input.
+            if (json["ended_on_error"] as? Bool) == true { session.runError = .failed }
+            // v34+: what the hook's local checks found in this session's input or output.
+            // Untrusted input, re-sanitised by each kind's parser.
+            session.sightings = HookSightings(hookFile: json)
+            // v35: the terminal the agent runs in (validated), for click-through to its tab.
+            session.terminal = TerminalLocator(hookFile: json)
+            // v39: this request's start, end, tool calls and Claude transcript offset (validated).
+            session.turn = hookFile.turn
+            // v38: a subagent's file names the chat it belongs to (validated: untrusted input).
+            if let parent = json["parent_id"] as? String, parent != conversationID,
+               AgentTrafficLightMapper.isHookConversationID(parent) {
+                subagentParentByKey[provider.lowercased() + "|" + conversationID] = parent
+            }
+            results.append(session)
+        }
+
+        // One card per chat: subagents fold into their parent before names are resolved, so a
+        // stand-in for a parent with no file of its own is named from the parent's transcript too.
+        let (folded, foldedIDs) = AgentTrafficLightMapper.foldSubagentHookSessions(results, parentByKey: subagentParentByKey)
+        foldedSubagentConversationIDs = foldedIDs
+        let enriched = enrichChatNames(fromComposerStore: folded)
+        return enrichProjectNamesFromTranscripts(enriched, maxAgeMinutes: staleMinutes)
+    }
+
+    private func buildTranscriptSessions(
+        analysisBySession: [String: TranscriptAnalysis],
+        staleMinutes: Int,
+        collapseSeconds: Int,
+        inactiveSeconds: Int
+    ) -> [AgentSessionStatus] {
+        let paths = CursorTranscriptParser.listRecentTranscriptPaths(maxAgeMinutes: staleMinutes)
+        guard !paths.isEmpty else { return [] }
+
+        var ids = Set<String>()
+        var projectNamesBySessionID: [String: String] = [:]
+        var snapshots: [AgentSessionSnapshot] = []
+
+        for path in paths {
+            let sessionID = CursorTranscriptParser.sessionID(from: path)
+            ids.insert(sessionID)
+            let projectName = CursorTranscriptParser.displayProjectName(
+                fromSlug: CursorTranscriptParser.projectSlug(from: path)
+            )
+            if let projectName {
+                projectNamesBySessionID[sessionID] = projectName
+            }
+            let analysis = analysisBySession[sessionID] ?? CursorTranscriptParser.analyze(path: path)
+            snapshots.append(
+                AgentSessionSnapshot(
+                    sessionID: sessionID,
+                    lastActivityMs: analysis.mtimeMs,
+                    composerStatus: nil,
+                    isDone: analysis.isDone,
+                    hasActiveToolUse: analysis.hasActiveToolUse,
+                    hasPendingToolApproval: analysis.hasPendingToolApproval,
+                    isUserPromptAwaitingResponse: analysis.isUserPromptAwaitingResponse,
+                    transcriptMtimeMs: analysis.mtimeMs
+                )
+            )
+        }
+
+        // Prefer lightweight composer headers first, then only scan workspace DBs for unresolved IDs.
+        let composerMeta = loadComposerMetaWithWorkspaceFallback(forIDs: ids)
+        snapshots = snapshots.map { snapshot in
+            guard let meta = composerMeta[snapshot.sessionID] else { return snapshot }
+            let lastActivity = max(snapshot.lastActivityMs, meta.updatedMs, meta.checkpointMs)
+            return AgentSessionSnapshot(
+                sessionID: snapshot.sessionID,
+                lastActivityMs: lastActivity,
+                composerStatus: meta.status,
+                isDone: snapshot.isDone,
+                hasActiveToolUse: snapshot.hasActiveToolUse,
+                hasPendingToolApproval: snapshot.hasPendingToolApproval,
+                isUserPromptAwaitingResponse: snapshot.isUserPromptAwaitingResponse,
+                transcriptMtimeMs: max(snapshot.transcriptMtimeMs, meta.checkpointMs)
+            )
+        }
+
+        let transcriptChatNames = CursorTranscriptParser.displayChatNamesBySessionID(
+            maxAgeMinutes: staleMinutes
+        )
+        let transcriptAssistantSnippets = CursorTranscriptParser.assistantSnippetsBySessionID(
+            maxAgeMinutes: staleMinutes
+        )
+        let glassTitles = CursorGlassAgentStore.loadAgentTitles(forIDs: ids)
+        let titleSources = ChatTitleSources(
+            composerMeta: composerMeta,
+            glassTitles: glassTitles,
+            transcriptTitles: transcriptChatNames,
+            transcriptAssistantSnippets: transcriptAssistantSnippets,
+            planRegistryTitles: CursorComposerStore.loadPlanRegistryNames()
+        )
+
+        return snapshots.map { snapshot in
+            let mapped = AgentTrafficLightMapper.map(
+                session: snapshot,
+                staleMinutes: staleMinutes,
+                stoppedCollapseSeconds: collapseSeconds,
+                inactiveDisplaySeconds: inactiveSeconds
+            )
+            let chatName = resolveCursorChatName(
+                sessionID: snapshot.sessionID,
+                hookName: nil,
+                sources: titleSources
+            )
+            return AgentSessionStatus(
+                id: "cursor-\(snapshot.sessionID)",
+                provider: "cursor",
+                conversationID: snapshot.sessionID,
+                chatName: chatName,
+                projectName: normalizedProjectName(projectNamesBySessionID[snapshot.sessionID]),
+                rawState: snapshot.composerStatus ?? "transcript",
+                displayState: mapped.state,
+                updatedAt: Date(timeIntervalSince1970: TimeInterval(snapshot.lastActivityMs) / 1000),
+                isVisible: mapped.visible,
+                executionStartedAt: nil
+            )
+        }
+    }
+
+    private struct ChatTitleSources {
+        let composerMeta: [String: ComposerMeta]
+        let glassTitles: [String: String]
+        let transcriptTitles: [String: String]
+        let transcriptAssistantSnippets: [String: [String]]
+        let planRegistryTitles: Set<String>
+    }
+
+    private struct HookProviderTitleSources {
+        let logTitles: [String: String]
+        let logAssistantSnippets: [String: [String]]
+    }
+
+    private func isUnreliableChatTitle(
+        _ candidate: String?,
+        sessionID: String,
+        sources: ChatTitleSources
+    ) -> Bool {
+        guard let candidate = normalizedChatName(candidate) else { return true }
+        if Self.looksLikeToolName(candidate) { return true }
+        if sources.planRegistryTitles.contains(candidate) { return true }
+        if CursorTranscriptParser.isTranscriptPromptFallback(
+            candidate,
+            sessionID: sessionID,
+            transcriptTitles: sources.transcriptTitles
+        ) {
+            return true
+        }
+        if CursorTranscriptParser.isAssistantProseFallback(
+            candidate,
+            sessionID: sessionID,
+            transcriptAssistantSnippets: sources.transcriptAssistantSnippets
+        ) {
+            return true
+        }
+        return false
+    }
+
+    private func normalizedChatName(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func preferredHookChatName(from json: [String: Any]) -> String? {
+        let titleCandidates = [
+            json["conversation_title"] as? String,
+            json["title"] as? String,
+            json["chat_name"] as? String,
+            json["conversation_name"] as? String,
+            json["chatTitle"] as? String,
+            json["bubbleTitle"] as? String
+        ]
+        for candidate in titleCandidates {
+            guard let normalized = normalizedChatName(candidate), !Self.looksLikeToolName(normalized) else { continue }
+            return normalized
+        }
+        guard let storedName = normalizedChatName(json["name"] as? String), !Self.looksLikeToolName(storedName) else {
+            return nil
+        }
+        return storedName
+    }
+
+    private func resolveCursorChatName(
+        sessionID: String,
+        hookName: String?,
+        sources: ChatTitleSources
+    ) -> String? {
+        // Hook and composer/glass titles go through full reliability vetting.
+        let candidates = [
+            hookName,
+            sources.composerMeta[sessionID]?.name,
+            sources.glassTitles[sessionID]
+        ]
+        for candidate in candidates {
+            guard let normalized = normalizedChatName(candidate),
+                  !isUnreliableChatTitle(normalized, sessionID: sessionID, sources: sources) else {
+                continue
+            }
+            return normalized
+        }
+
+        // Transcript title is trusted directly (only tool-name heuristic), not compared against itself.
+        if let transcriptTitle = normalizedChatName(sources.transcriptTitles[sessionID]), !Self.looksLikeToolName(transcriptTitle) {
+            return transcriptTitle
+        }
+
+        return nil
+    }
+
+    private func loadChatTitleSources(forIDs ids: Set<String>, maxAgeMinutes: Int) -> ChatTitleSources {
+        ChatTitleSources(
+            composerMeta: loadComposerMetaWithWorkspaceFallback(forIDs: ids),
+            glassTitles: CursorGlassAgentStore.loadAgentTitles(forIDs: ids),
+            transcriptTitles: CursorTranscriptParser.displayChatNamesBySessionID(maxAgeMinutes: maxAgeMinutes),
+            transcriptAssistantSnippets: CursorTranscriptParser.assistantSnippetsBySessionID(maxAgeMinutes: maxAgeMinutes),
+            planRegistryTitles: CursorComposerStore.loadPlanRegistryNames()
+        )
+    }
+
+    private func authoritativeHookChatName(
+        from storedName: String?,
+        sessionID: String,
+        sources: ChatTitleSources
+    ) -> String? {
+        guard let storedName = normalizedChatName(storedName),
+              !isUnreliableChatTitle(storedName, sessionID: sessionID, sources: sources) else {
+            return nil
+        }
+        return storedName
+    }
+
+    private func shouldReplaceChatName(
+        current: String?,
+        resolved: String?,
+        sessionID: String,
+        sources: ChatTitleSources
+    ) -> Bool {
+        guard let resolved else { return false }
+        guard let current = normalizedChatName(current) else { return true }
+        if isUnreliableChatTitle(current, sessionID: sessionID, sources: sources) {
+            return resolved != current
+        }
+        return false
+    }
+
+    private func preferredChatName(primary: String?, fallback: String?) -> String? {
+        if let primary = normalizedChatName(primary), !Self.looksLikeToolName(primary) {
+            return primary
+        }
+        if let fallback = normalizedChatName(fallback), !Self.looksLikeToolName(fallback) {
+            return fallback
+        }
+        return normalizedChatName(primary) ?? normalizedChatName(fallback)
+    }
+
+    private func normalizedProjectName(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func enrichChatNames(fromComposerStore sessions: [AgentSessionStatus]) -> [AgentSessionStatus] {
+        let staleMinutes = Defaults[.agentStatusStaleMinutes]
+        let cursorIDs = Set(
+            sessions
+                .filter { $0.provider.lowercased() == "cursor" }
+                .map(\.conversationID)
+        )
+        let cursorSources = cursorIDs.isEmpty
+            ? nil
+            : loadChatTitleSources(forIDs: cursorIDs, maxAgeMinutes: staleMinutes)
+
+        var hookProviderSources: [AgentSessionLogProvider: HookProviderTitleSources] = [:]
+        for logProvider in AgentSessionLogProvider.allCases {
+            let ids = Set(
+                sessions
+                    .filter { AgentSessionLogProvider.from(hookProvider: $0.provider) == logProvider }
+                    .map(\.conversationID)
+            )
+            guard !ids.isEmpty else { continue }
+            hookProviderSources[logProvider] = HookProviderTitleSources(
+                logTitles: AgentSessionLogParser.displayChatNamesBySessionID(
+                    provider: logProvider,
+                    maxAgeMinutes: staleMinutes
+                ),
+                logAssistantSnippets: AgentSessionLogParser.assistantSnippetsBySessionID(
+                    provider: logProvider,
+                    maxAgeMinutes: staleMinutes
+                )
+            )
+        }
+
+        return sessions.map { session in
+            let providerKey = session.provider.lowercased()
+
+            if providerKey == "cursor", let cursorSources {
+                let hookName = authoritativeHookChatName(
+                    from: session.chatName,
+                    sessionID: session.conversationID,
+                    sources: cursorSources
+                )
+                let resolved = resolveCursorChatName(
+                    sessionID: session.conversationID,
+                    hookName: hookName,
+                    sources: cursorSources
+                )
+                guard shouldReplaceChatName(
+                    current: session.chatName,
+                    resolved: resolved,
+                    sessionID: session.conversationID,
+                    sources: cursorSources
+                ), let resolved else {
+                    return session
+                }
+                return session.replacingChatName(resolved)
+            }
+
+            if let logProvider = AgentSessionLogProvider.from(hookProvider: providerKey),
+               let sources = hookProviderSources[logProvider] {
+                let hookName = authoritativeHookProviderChatName(
+                    from: session.chatName,
+                    sessionID: session.conversationID,
+                    sources: sources
+                )
+                let resolved = resolveHookProviderChatName(
+                    sessionID: session.conversationID,
+                    hookName: hookName,
+                    sources: sources
+                )
+                guard shouldReplaceHookProviderChatName(
+                    current: session.chatName,
+                    resolved: resolved,
+                    sessionID: session.conversationID,
+                    sources: sources
+                ), let resolved else {
+                    return session
+                }
+                return session.replacingChatName(resolved)
+            }
+
+            if providerKey == "vscode" {
+                let hookName = normalizedChatName(session.chatName)
+                guard let hookName,
+                      !Self.looksLikeToolName(hookName),
+                      hookName != session.chatName else {
+                    return session
+                }
+                return session.replacingChatName(hookName)
+            }
+
+            return session
+        }
+    }
+
+    private func resolveHookProviderChatName(
+        sessionID: String,
+        hookName: String?,
+        sources: HookProviderTitleSources
+    ) -> String? {
+        // The log-derived title (e.g. Claude's ai-title) is the trusted source here, not a
+        // hook-echoed candidate to sanity-check against itself — isUnreliableHookProviderChatTitle's
+        // isPromptFallback compares a candidate against sources.logTitles[sessionID], which is
+        // always true when the candidate *is* that value, so it must be excluded from that check.
+        if let normalizedHook = normalizedChatName(hookName),
+           !isUnreliableHookProviderChatTitle(normalizedHook, sessionID: sessionID, sources: sources) {
+            return normalizedHook
+        }
+        if let logTitle = normalizedChatName(sources.logTitles[sessionID]), !Self.looksLikeToolName(logTitle) {
+            return logTitle
+        }
+        return nil
+    }
+
+    private func authoritativeHookProviderChatName(
+        from storedName: String?,
+        sessionID: String,
+        sources: HookProviderTitleSources
+    ) -> String? {
+        guard let storedName = normalizedChatName(storedName),
+              !isUnreliableHookProviderChatTitle(storedName, sessionID: sessionID, sources: sources) else {
+            return nil
+        }
+        return storedName
+    }
+
+    private func shouldReplaceHookProviderChatName(
+        current: String?,
+        resolved: String?,
+        sessionID: String,
+        sources: HookProviderTitleSources
+    ) -> Bool {
+        guard let resolved else { return false }
+        guard let current = normalizedChatName(current) else { return true }
+        if isUnreliableHookProviderChatTitle(current, sessionID: sessionID, sources: sources) {
+            return resolved != current
+        }
+        return false
+    }
+
+    private func isUnreliableHookProviderChatTitle(
+        _ candidate: String?,
+        sessionID: String,
+        sources: HookProviderTitleSources
+    ) -> Bool {
+        guard let candidate = normalizedChatName(candidate) else { return true }
+        if Self.looksLikeToolName(candidate) { return true }
+        if AgentSessionLogParser.isPromptFallback(
+            candidate,
+            sessionID: sessionID,
+            logTitles: sources.logTitles
+        ) {
+            return true
+        }
+        if AgentSessionLogParser.isAssistantProseFallback(
+            candidate,
+            sessionID: sessionID,
+            assistantSnippets: sources.logAssistantSnippets
+        ) {
+            return true
+        }
+        return false
+    }
+
+    private func hasHookSessionBacking(
+        conversationID: String,
+        provider: String,
+        staleMinutes: Int
+    ) -> Bool {
+        switch provider.lowercased() {
+        case "cursor":
+            let transcriptPaths = CursorTranscriptParser.listRecentTranscriptPaths(maxAgeMinutes: staleMinutes)
+            if transcriptPaths.contains(where: { CursorTranscriptParser.sessionID(from: $0) == conversationID }) {
+                return true
+            }
+            let meta = CursorComposerStore.loadComposerMeta(forIDs: [conversationID])
+            return meta[conversationID] != nil
+        case "codex":
+            return AgentSessionLogParser.hasSessionBacking(
+                provider: .codex,
+                conversationID: conversationID,
+                maxAgeMinutes: staleMinutes
+            )
+        case "claude":
+            return AgentSessionLogParser.hasSessionBacking(
+                provider: .claude,
+                conversationID: conversationID,
+                maxAgeMinutes: staleMinutes
+            )
+        case "vscode":
+            return true
+        default:
+            return true
+        }
+    }
+
+    private func loadComposerMetaWithWorkspaceFallback(forIDs ids: Set<String>) -> [String: ComposerMeta] {
+        guard !ids.isEmpty else { return [:] }
+
+        var composerMeta = CursorComposerStore.loadComposerMeta(
+            forIDs: ids,
+            includeWorkspaceDatabases: false
+        )
+        let unresolved = ids.filter { composerMeta[$0] == nil }
+        guard !unresolved.isEmpty else { return composerMeta }
+
+        let workspaceMeta = CursorComposerStore.loadComposerMeta(
+            forIDs: Set(unresolved),
+            includeWorkspaceDatabases: true
+        )
+        for (id, meta) in workspaceMeta {
+            composerMeta[id] = meta
+        }
+        return composerMeta
+    }
+
+    nonisolated static func looksLikeToolName(_ value: String?) -> Bool {
+        AgentApprovalGatedTools.looksLikeToolName(value)
+    }
+
+    private func enrichProjectNamesFromTranscripts(
+        _ sessions: [AgentSessionStatus],
+        maxAgeMinutes: Int
+    ) -> [AgentSessionStatus] {
+        // Hook files carry their project (from cwd), so usually nothing needs a name. Build only the
+        // maps a nameless session needs: listing Cursor's transcript folders and reading every
+        // provider's logs ran on each hook event before, for no change in the result.
+        let needing = sessions.filter { normalizedProjectName($0.projectName) == nil }
+        guard !needing.isEmpty else { return sessions }
+        let cursorProjectBySessionID = needing.contains { $0.provider.lowercased() == "cursor" }
+            ? projectNamesFromTranscriptPaths(maxAgeMinutes: maxAgeMinutes)
+            : [:]
+        var logProjectBySessionID: [String: [String: String]] = [:]
+        let neededLogProviders = Set(needing.compactMap { AgentSessionLogProvider.from(hookProvider: $0.provider.lowercased()) })
+        for logProvider in AgentSessionLogProvider.allCases where neededLogProviders.contains(logProvider) {
+            logProjectBySessionID[logProvider.rawValue] = AgentSessionLogParser.projectNamesBySessionID(
+                provider: logProvider,
+                maxAgeMinutes: maxAgeMinutes
+            )
+        }
+
+        return sessions.map { session in
+            guard normalizedProjectName(session.projectName) == nil else { return session }
+
+            let providerKey = session.provider.lowercased()
+            let projectName: String?
+            if providerKey == "cursor" {
+                projectName = cursorProjectBySessionID[session.conversationID]
+            } else if let logProvider = AgentSessionLogProvider.from(hookProvider: providerKey) {
+                projectName = logProjectBySessionID[logProvider.rawValue]?[session.conversationID]
+            } else {
+                projectName = nil
+            }
+
+            guard let projectName else { return session }
+            return AgentSessionStatus(
+                id: session.id,
+                provider: session.provider,
+                conversationID: session.conversationID,
+                chatName: session.chatName,
+                projectName: projectName,
+                rawState: session.rawState,
+                displayState: session.displayState,
+                updatedAt: session.updatedAt,
+                isVisible: session.isVisible,
+                executionStartedAt: session.executionStartedAt,
+                cwd: session.cwd,
+                hostPID: session.hostPID
+            ).carryingExtras(from: session)
+        }
+    }
+
+    private func latestDisplayStateByConversationID(
+        from sessions: [AgentSessionStatus]
+    ) -> [String: AgentTrafficLightState] {
+        var result: [String: AgentTrafficLightState] = [:]
+        let sorted = sessions.sorted { $0.updatedAt > $1.updatedAt }
+        for session in sorted {
+            if result[session.conversationID] == nil {
+                result[session.conversationID] = session.displayState
+            }
+        }
+        return result
+    }
+
+    /// Stamps each session's `executionStartedAt`. The rule is `AgentExecutionClock`, which is where the
+    /// reasoning and the tests live; this is the plumbing that feeds it and applies the answer.
+    private func applyExecutionRunState(
+        to sessions: [AgentSessionStatus],
+        previousStateByConversationID: [String: AgentTrafficLightState],
+        now: Date
+    ) -> [AgentSessionStatus] {
+        let resolution = AgentExecutionClock.resolve(
+            inputs: sessions.map { session in
+                AgentExecutionClock.Input(
+                    conversationID: session.conversationID,
+                    isActiveRun: session.displayState.isActiveRun,
+                    hasActiveRawState: session.hasActiveRawState,
+                    updatedAt: session.updatedAt,
+                    previousWasActiveRun: previousStateByConversationID[session.conversationID]?.isActiveRun == true
+                )
+            },
+            existing: executionStartByConversationID,
+            now: now
+        )
+        executionStartByConversationID = resolution.startByConversationID
+
+        return sessions.map { session in
+            let executionStartForSession = resolution.displayedStartByConversationID[session.conversationID]
+
+            return AgentSessionStatus(
+                id: session.id,
+                provider: session.provider,
+                conversationID: session.conversationID,
+                chatName: session.chatName,
+                projectName: session.projectName,
+                rawState: session.rawState,
+                displayState: session.displayState,
+                updatedAt: session.updatedAt,
+                isVisible: session.isVisible,
+                executionStartedAt: executionStartForSession,
+                cwd: session.cwd,
+                hostPID: session.hostPID
+            ).carryingExtras(from: session)
+        }
+    }
+
+    private func projectNamesFromTranscriptPaths(maxAgeMinutes: Int) -> [String: String] {
+        var projectBySessionID: [String: String] = [:]
+        let paths = CursorTranscriptParser.listRecentTranscriptPaths(maxAgeMinutes: maxAgeMinutes)
+        for path in paths {
+            let sessionID = CursorTranscriptParser.sessionID(from: path)
+            guard let projectName = CursorTranscriptParser.displayProjectName(
+                fromSlug: CursorTranscriptParser.projectSlug(from: path)
+            ) else { continue }
+            projectBySessionID[sessionID] = projectName
+        }
+        return projectBySessionID
+    }
+
+    // MARK: - Passive Claude session detection
+
+    private func buildClaudeSessions(
+        staleMinutes: Int,
+        collapseSeconds: Int,
+        inactiveSeconds: Int,
+        now: Date = Date()
+    ) -> (
+        sessions: [AgentSessionStatus],
+        deadPIDConversationIDs: Set<String>,
+        /// Tail verdict per conversation whose process is alive this rescan — the evidence the
+        /// hook parser needs to keep an unanswered prompt yellow (REGRESSIONS entry 12).
+        liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState]
+    ) {
+        let sessionsDir = AgentSessionLogParser.claudeSessionsDirectory
+        guard FileManager.default.fileExists(atPath: sessionsDir.path),
+              let files = try? FileManager.default.contentsOfDirectory(
+                at: sessionsDir,
+                includingPropertiesForKeys: [.contentModificationDateKey]
+              ) else { return ([], [], [:]) }
+        refreshDesktopSessionIndexIfNeeded()
+
+        let staleMs = Int64(staleMinutes) * 60_000
+        let nowMs = Int64(now.timeIntervalSince1970 * 1000)
+        let collapseMs = Int64(collapseSeconds) * 1_000
+        let inactiveMs = Int64(inactiveSeconds) * 1_000
+        let recentJsonlThreshold: TimeInterval = 10  // seconds of silence before we stop assuming "thinking"
+
+        var results: [AgentSessionStatus] = []
+        var deadPIDConversationIDs: Set<String> = []
+        // Session files are keyed by PID, but the dead set is keyed by conversation id —
+        // and `claude --resume` reuses a conversation id under a new PID. Track which ids
+        // have a live process so an orphaned file from a crashed earlier run cannot mark
+        // the live one dead. See the subtraction before `return`.
+        var liveConversationIDs: Set<String> = []
+        var liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState] = [:]
+
+        for file in files where file.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: file),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let pid = json["pid"] as? Int,
+                  let sessionId = json["sessionId"] as? String,
+                  let startedAtNum = json["startedAt"] as? NSNumber else { continue }
+            let startedAtMs = startedAtNum.int64Value
+
+            guard json["kind"] as? String == "interactive" else { continue }
+
+            // Kannu's own /usage probe: a child of this process. Remember its id so the dead
+            // session file (and the probe's hook file) stay ignored after it exits.
+            var probeIDs = Defaults[.claudeUsageProbeConversationIDs]
+            if AgentTrafficLightMapper.isUsageProbeSession(conversationID: sessionId, probeIDs: probeIDs) {
+                continue
+            }
+
+            let processAlive = isClaudeProcessAlive(pid: pid, startedAtMs: startedAtMs,
+                                                    recordProcStartMs: claudeRecordProcStartMs(json))
+            if processAlive, isDescendantOfThisProcess(pid: pid) {
+                probeIDs = AgentTrafficLightMapper.rememberingProbeConversationID(sessionId, in: probeIDs)
+                Defaults[.claudeUsageProbeConversationIDs] = probeIDs
+                continue
+            }
+            // Skip stale check for live processes — a session may run for many hours.
+            if processAlive {
+                liveConversationIDs.insert(sessionId)
+            } else {
+                // Recorded before the stale skip: a long-lived session that was SIGKILLed
+                // has an old startedAt, and the reconciler still needs to know it is dead.
+                deadPIDConversationIDs.insert(sessionId)
+                guard nowMs - startedAtMs <= staleMs else { continue }
+            }
+
+            let jsonlURL = claudeJSONLURL(forSessionId: sessionId)
+            var jsonlMtime: Date? = nil
+            if let url = jsonlURL {
+                jsonlMtime = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            }
+
+            let tsMs: Int64
+            if let mtime = jsonlMtime {
+                tsMs = Int64(mtime.timeIntervalSince1970 * 1000)
+            } else {
+                tsMs = startedAtMs
+            }
+
+            // Passive detection can see writes and process liveness — it cannot see whether Claude
+            // is actually asking the user anything. It must therefore never claim yellow: a quiet
+            // live session is shown as a dim idle card, and yellow is left to real hook signals.
+            // It may corroborate a hook's yellow, though: the live tail is handed to the hook
+            // parser (`holdsAwaitingInput`), never turned into a colour here.
+            //
+            // Live sessions bypass `resolveHookState` deliberately. Its staleness ladder maps a
+            // long-running "thinking" to `.stopped`, which the old unconditional `visible: true`
+            // override then force-showed — a live session pinned as red.
+            let rawState: String
+            let resolved: (state: AgentTrafficLightState, visible: Bool)
+            var updatedAtMs = tsMs
+            var runError: RunError? = nil
+            if processAlive {
+                // The transcript tail, not mtime, decides — a multi-minute tool writes its
+                // `tool_use` record up front and then stays silent, while post-turn bookkeeping
+                // keeps bumping mtime after the run ended.
+                let tail = jsonlURL.map { AgentSessionLogParser.claudeTailState(at: $0) }
+                    ?? .unknown
+                liveTailByConversationID[sessionId] = tail.state
+                let passive = AgentTrafficLightMapper.passiveClaudeState(
+                    tail: tail,
+                    jsonlMtime: jsonlMtime,
+                    fallbackTsMs: tsMs,
+                    now: now,
+                    collapseMs: collapseMs,
+                    inactiveMs: inactiveMs,
+                    recentJsonlThreshold: recentJsonlThreshold
+                )
+                rawState = passive.rawState
+                resolved = (passive.state, passive.visible)
+                updatedAtMs = passive.updatedAtMs
+                // Set only with `.turnFinished`, which the ladder maps to "stopped".
+                runError = tail.runError
+            } else {
+                rawState = "stopped"
+                resolved = AgentTrafficLightMapper.resolveHookState(
+                    rawState: rawState,
+                    ageMs: nowMs - tsMs,
+                    collapseMs: collapseMs,
+                    inactiveMs: inactiveMs
+                )
+            }
+
+            let chatName: String? = jsonlURL.flatMap {
+                AgentSessionLogParser.displayChatName(from: $0, provider: .claude)
+            }
+
+            let projectName: String?
+            if let cwd = json["cwd"] as? String {
+                let base = URL(fileURLWithPath: cwd).lastPathComponent
+                projectName = base.isEmpty ? nil : base
+            } else {
+                projectName = nil
+            }
+
+            var session = AgentSessionStatus(
+                id: "claude-\(sessionId)",
+                provider: "claude",
+                conversationID: sessionId,
+                chatName: chatName,
+                projectName: projectName,
+                rawState: rawState,
+                displayState: resolved.state,
+                updatedAt: Date(timeIntervalSince1970: TimeInterval(updatedAtMs) / 1000),
+                isVisible: resolved.visible,
+                executionStartedAt: nil,
+                // Click-through locators: the parent chain of this pid leads to the hosting
+                // terminal/IDE, and cwd identifies the project. Only attach the pid while the
+                // process is provably alive — a dead pid must not make the row clickable.
+                cwd: json["cwd"] as? String,
+                hostPID: processAlive ? pid : nil
+            )
+            session.runError = runError
+            // Claude Desktop's own id for this chat, so click-through can land on it. A live
+            // session must say it is Desktop-hosted; a dead process takes any match.
+            session.desktopSessionID = ClaudeDesktopSessionIndex.resolvedDesktopSessionID(
+                cliSessionID: sessionId,
+                processAlive: processAlive,
+                sessionFile: json,
+                idMap: desktopSessionIDByCLISessionID
+            )
+            results.append(session)
+        }
+
+        // A live process for a conversation id always beats a stale orphan file for the same
+        // id. Without this, resuming a crashed session left it permanently "dead", and the
+        // reconciler's `processDead ||` short-circuit bypasses the timestamp guard — flashing
+        // red at the moment the user submits a prompt.
+        return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID)
+    }
+
+    /// The on-disk transcript of a Claude conversation, for features that act on a whole chat
+    /// (ADR session analysis). Same cache as the passive path.
+    func claudeTranscriptURL(forConversationID conversationID: String) -> URL? {
+        claudeJSONLURL(forSessionId: conversationID)
+    }
+
+    private func claudeJSONLURL(forSessionId sessionId: String) -> URL? {
+        // The projects-tree walk is expensive and session→JSONL mapping never changes,
+        // so cache hits (validated by fileExists) skip the enumeration entirely.
+        if let cached = claudeJSONLURLBySessionId[sessionId],
+           FileManager.default.fileExists(atPath: cached.path) {
+            return cached
+        }
+        let projectsDir = AgentSessionLogParser.claudeProjectsDirectory
+        guard let enumerator = FileManager.default.enumerator(
+            at: projectsDir,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+
+        let target = "\(sessionId).jsonl"
+        for case let url as URL in enumerator {
+            guard url.lastPathComponent == target,
+                  !url.path.contains("/subagents/") else { continue }
+            claudeJSONLURLBySessionId[sessionId] = url
+            return url
+        }
+        return nil
+    }
+
+    /// Passive-only providers with no hook and no session file: Warp (SQLite) and Claude
+    /// Desktop's agent mode (audit logs). Built on full rescans only; the hook-triggered quick
+    /// rescan retains the previous cycle's non-hook sessions, so they persist between them.
+    private func buildExtraPassiveSessions(
+        staleMinutes: Int,
+        collapseSeconds: Int,
+        inactiveSeconds: Int,
+        now: Date
+    ) -> [AgentSessionStatus] {
+        var results = ClaudeDesktopAgentSessionStore.sessions(
+            staleMinutes: staleMinutes,
+            collapseSeconds: collapseSeconds,
+            inactiveSeconds: inactiveSeconds,
+            now: now
+        )
+        refreshWarpExchangesIfNeeded(staleMinutes: staleMinutes, now: now)
+        results += WarpAgentStore.sessions(
+            exchanges: warpExchanges,
+            collapseSeconds: collapseSeconds,
+            inactiveSeconds: inactiveSeconds,
+            warpRunning: isWarpRunning(),
+            now: now
+        )
+        return results
+    }
+
+    /// Warp's database lives in its group container, so the first open raises the macOS
+    /// "access data from other apps" prompt — and `open()` blocks until the user answers. On the
+    /// main actor that froze the whole app (every timer, every hover) for as long as the dialog
+    /// stayed up. So the read runs on a worker, one at a time; the result lands here and, when it
+    /// changed, schedules the rescan that maps it. Rescans meanwhile map the last result.
+    private func refreshWarpExchangesIfNeeded(staleMinutes: Int, now: Date) {
+        guard !warpRefreshInFlight else { return }
+        warpRefreshInFlight = true
+        let since = WarpAgentStore.since(staleMinutes: staleMinutes, now: now)
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            // `databaseURL` stats the container path; the store's 2 s query cache is touched by
+            // this one worker only.
+            let exchanges = WarpAgentStore.databaseURL.map {
+                WarpAgentStore.loadRecentExchanges(databaseURL: $0, since: since, now: now)
+            } ?? []
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.warpRefreshInFlight = false
+                    guard self.isRunning, exchanges != self.warpExchanges else { return }
+                    self.warpExchanges = exchanges
+                    self.scheduleRescan(delay: 0)
+                }
+            }
+        }
+    }
+
+    /// Desktop's session records are 100+ KB each and rewritten on every Desktop turn, so they
+    /// are read on a worker, one read at a time, and only the reduced id map crosses back —
+    /// compared as a map, so an activity timestamp bump alone never schedules a rescan.
+    private func refreshDesktopSessionIndexIfNeeded() {
+        guard !desktopIndexRefreshInFlight else { return }
+        desktopIndexRefreshInFlight = true
+        let loader = desktopSessionIndexLoader
+        let root = ClaudeDesktopSessionIndex.defaultRoot
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let map = ClaudeDesktopSessionIndex.desktopSessionIDsByCLISessionID(loader.records(root: root))
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.desktopIndexRefreshInFlight = false
+                    guard self.isRunning, map != self.desktopSessionIDByCLISessionID else { return }
+                    self.desktopSessionIDByCLISessionID = map
+                    self.scheduleRescan(delay: 0)
+                }
+            }
+        }
+    }
+
+    private func isWarpRunning() -> Bool {
+        NSWorkspace.shared.runningApplications.contains { app in
+            guard let bundleID = app.bundleIdentifier else { return false }
+            return WarpAgentStore.bundleIdentifiers.contains(bundleID)
+        }
+    }
+
+    private func isCursorRunning() -> Bool {
+        NSWorkspace.shared.runningApplications.contains { app in
+            guard let bundleID = app.bundleIdentifier else { return false }
+            return bundleID.hasPrefix("com.todesktop.") || bundleID == "com.cursor.Cursor"
+        }
+    }
+
+    /// True when `pid`'s parent chain reaches this process within a few hops — the shape of the
+    /// `/usage` probe (`Process` → `claude` launcher → `claude` session). Same sysctl idiom as
+    /// `isClaudeProcessAlive` and `AgentSessionOpener.terminalHostApplication`.
+    private func isDescendantOfThisProcess(pid: Int) -> Bool {
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        var current = pid_t(pid)
+        for _ in 0..<6 {
+            guard current > 1 else { return false }
+            var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(current)]
+            var info = kinfo_proc()
+            var size = MemoryLayout<kinfo_proc>.size
+            guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return false }
+            let parent = info.kp_eproc.e_ppid
+            if parent == selfPID { return true }
+            guard parent != current else { return false }
+            current = parent
+        }
+        return false
+    }
+
+    // Returns true only if the process is alive AND its start time matches startedAtMs
+    // within 5 seconds, preventing PID-reuse false positives.
+    private func isClaudeProcessAlive(pid: Int, startedAtMs: Int64, recordProcStartMs: Int64? = nil) -> Bool {
+        guard kill(pid_t(pid), 0) == 0 else { return false }
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return true }
+        let procStartMs = Int64(info.kp_proc.p_starttime.tv_sec) * 1000
+            + Int64(info.kp_proc.p_starttime.tv_usec) / 1000
+        return AgentTrafficLightMapper.processMatchesSessionRecord(
+            processStartMs: procStartMs, recordStartedAtMs: startedAtMs, recordProcStartMs: recordProcStartMs
+        )
+    }
+
+    /// The session record's own view of when its process started (`"procStart": "Sat Sep 12
+    /// 07:12:39 2026"`, UTC). Used only to confirm identity — anything unparseable falls back to
+    /// the window around `startedAt`, so a format or timezone change can never mark a chat dead.
+    private static let claudeProcStartFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+        return formatter
+    }()
+
+    private func claudeRecordProcStartMs(_ json: [String: Any]) -> Int64? {
+        guard let text = json["procStart"] as? String else { return nil }
+        let squeezed = text.split(separator: " ", omittingEmptySubsequences: true).joined(separator: " ")
+        guard let date = Self.claudeProcStartFormatter.date(from: squeezed) else { return nil }
+        return Int64(date.timeIntervalSince1970 * 1000)
+    }
+}
+
