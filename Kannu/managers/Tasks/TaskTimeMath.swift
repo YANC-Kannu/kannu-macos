@@ -96,6 +96,23 @@ enum TaskTimeMath {
         }
         return result
     }
+
+    // MARK: - Ending an interrupted segment
+
+    /// The latest end `segment` may be given: the earliest start of any segment on the task that
+    /// began after it, capped at `now`, and never before its own start.
+    ///
+    /// After a crash at 10:00 the user re-times 10:05–11:00, then ends the interrupted session. An
+    /// end past 10:05 would count 10:05–11:00 twice, in the tracked total and in the log drafts
+    /// folded from it. A segment that began before the interrupted one is an earlier session and
+    /// does not bound it.
+    static func endBound(for segment: WorkSegment, in segments: [WorkSegment], now: Date) -> Date {
+        let nextStart = segments.lazy
+            .filter { $0.id != segment.id && $0.start > segment.start }
+            .map(\.start)
+            .min()
+        return max(segment.start, min(nextStart ?? now, now))
+    }
 }
 
 /// A length of time as people type it and read it: "1h 12m", "72m", "1.5h", "90".

@@ -56,6 +56,9 @@ final class TasksManager: ObservableObject {
     struct InterruptedSession: Identifiable {
         let task: TaskItem
         let segment: WorkSegment
+        /// The latest end the user may give it: before any later session on the task, never in
+        /// the future (`TaskTimeMath.endBound`).
+        let endBound: Date
         var id: UUID { segment.id }
     }
 
@@ -117,8 +120,17 @@ final class TasksManager: ObservableObject {
 
     /// Segments left open by a quit or a crash, newest first, with their task.
     var interruptedSessions: [InterruptedSession] {
-        tasks.flatMap { task in task.segments.filter(\.isInterrupted).map { InterruptedSession(task: task, segment: $0) } }
-            .sorted { $0.segment.start > $1.segment.start }
+        let now = Date()
+        return tasks.flatMap { task in
+            task.segments.filter(\.isInterrupted).map { segment in
+                InterruptedSession(
+                    task: task,
+                    segment: segment,
+                    endBound: TaskTimeMath.endBound(for: segment, in: task.segments, now: now)
+                )
+            }
+        }
+        .sorted { $0.segment.start > $1.segment.start }
     }
 
     func trackedSeconds(of task: TaskItem, now: Date = Date()) -> Int {
@@ -289,13 +301,15 @@ final class TasksManager: ObservableObject {
     }
 
     /// Ends an interrupted session where the user says it ended: never before it started, never in
-    /// the future.
+    /// the future, and never past the start of a later session on the task, so work timed again
+    /// after a crash is not counted twice.
     func setEndTime(_ end: Date, segmentID: UUID, taskID: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }),
               let segmentIndex = tasks[index].segments.firstIndex(where: { $0.id == segmentID && $0.isInterrupted }) else { return }
         var task = tasks[index]
-        let start = task.segments[segmentIndex].start
-        task.segments[segmentIndex].end = min(max(start, end), max(start, Date()))
+        let segment = task.segments[segmentIndex]
+        let bound = TaskTimeMath.endBound(for: segment, in: task.segments, now: Date())
+        task.segments[segmentIndex].end = min(max(segment.start, end), bound)
         let folded = WorklogDrafts.folding(task, into: drafts)
         tasks[index] = folded.task
         drafts = folded.drafts

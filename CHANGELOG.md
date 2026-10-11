@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - Interrupted sessions cannot end past a later session on the same task
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on PR #79: `TaskTimeMath.endBound`, `setEndTime` clamp, Set End Time picker range and copy
+- **Changes:**
+  - `TaskTimeMath.endBound(for:in:now:)` (pure, logic target): the latest end an interrupted segment
+    may be given is the earliest start of any segment on the task that began after it, capped at now
+    and never before its own start. A segment that began before it is an earlier session and does not
+    bound it.
+  - `TasksManager.setEndTime` clamps to that bound instead of to now alone, so after a crash at
+    10:00, re-timing 10:05–11:00, then ending the interrupted session at 11:00, the tracked total and
+    the folded log drafts count 10:05–11:00 once. `InterruptedSession` carries the bound; the Set End
+    Time… sheet uses it as the picker's upper limit and its explanation says why the picker stops
+    there.
+  - Tests: `TaskTimeMathTests` covers no later segment (now), a later segment (its start, whatever
+    the array order, live or ended), an earlier segment (ignored), the now and start caps, and that
+    ending at the bound counts the re-timed work once; a source pin checks that `setEndTime` clamps
+    through the helper and the picker's range stops at the bound.
+
 ### 2026-10-04 - Brain › Tasks: an ordered task list with estimates, and the actual time recorded by Kannu's timer
 - **Developer label:** "task will have option to add estimate and also record the actual time"
 - **Agent label:** Brain Tasks PR2: local tasks, estimates, timer session events, recorded actual time
