@@ -93,6 +93,91 @@ final class TaskTimeMathTests: XCTestCase {
         XCTAssertEqual(Math.opening(interrupted, at: at(minutes: 30)).count, 2, "a new live segment beside it")
     }
 
+    // MARK: - The end an interrupted segment may be given
+
+    func testWithNoLaterSegmentTheEndMayBeAnyTimeUpToNow() {
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [interrupted], now: at(minutes: 90)), at(minutes: 90))
+    }
+
+    func testALaterSegmentBoundsTheEndAtItsStart() {
+        // Crashed while timing from 9:00, re-timed 10:05–11:00, then a manual entry: the interrupted
+        // session may not end past 10:05, or 10:05–11:00 would count twice.
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        let retimed = WorkSegment(start: at(minutes: 65), end: at(minutes: 120), origin: .timer)
+        let manual = WorkSegment(start: at(minutes: 130), end: at(minutes: 140), origin: .manual)
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [interrupted, manual, retimed], now: at(minutes: 200)),
+                       at(minutes: 65), "the earliest later start, whatever the array order")
+
+        let live = WorkSegment(start: at(minutes: 65), origin: .timer)
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [interrupted, live], now: at(minutes: 70)),
+                       at(minutes: 65), "a live re-timing bounds it too")
+    }
+
+    func testASegmentThatStartedBeforeTheInterruptedOneDoesNotBoundIt() {
+        let earlier = WorkSegment(start: at(minutes: -60), end: at(minutes: -30), origin: .timer)
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [earlier, interrupted], now: at(minutes: 30)), at(minutes: 30))
+    }
+
+    func testTheNextStartIsClockFreeSoTheSheetCanCapItAtItsOwnNow() {
+        // The Set End Time sheet holds this and caps it at Date() on each render, so a Brain window
+        // left open for an hour still lets the user pick a time up to now.
+        let earlier = WorkSegment(start: at(minutes: -60), end: at(minutes: -30), origin: .timer)
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        let retimed = WorkSegment(start: at(minutes: 65), end: at(minutes: 120), origin: .timer)
+        let manual = WorkSegment(start: at(minutes: 130), end: at(minutes: 140), origin: .manual)
+        XCTAssertNil(Math.nextStart(after: interrupted, in: [earlier, interrupted]), "no later session: only now bounds it")
+        XCTAssertEqual(Math.nextStart(after: interrupted, in: [interrupted, manual, retimed]), at(minutes: 65))
+    }
+
+    func testTheBoundNeverPassesNowNorPrecedesTheStart() {
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        let future = WorkSegment(start: at(minutes: 500), end: at(minutes: 510), origin: .manual)
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [interrupted, future], now: at(minutes: 30)),
+                       at(minutes: 30), "a later start past now is capped at now")
+        XCTAssertEqual(Math.endBound(for: interrupted, in: [interrupted], now: at(minutes: -10)),
+                       at(minutes: 0), "a clock that went back: never before the start")
+    }
+
+    func testEndingAtTheBoundCountsTheReTimedWorkOnce() {
+        var interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        let retimed = WorkSegment(start: at(minutes: 65), end: at(minutes: 120), origin: .timer)
+        interrupted.end = Math.endBound(for: interrupted, in: [interrupted, retimed], now: at(minutes: 200))
+        XCTAssertEqual(Math.trackedSeconds([interrupted, retimed], now: at(minutes: 200)), 120 * 60)
+    }
+
+    /// `TasksManager` and the Settings sheet are not in this target, so this pins their source: the
+    /// manager clamps through the helper, and the picker's upper limit is the next session's start
+    /// capped at the sheet's own `Date()`, not a bound stamped when the task list last rendered.
+    func testTheManagerAndTheSheetClampToTheBound() throws {
+        let manager = try Self.source("Kannu/managers/Tasks/TasksManager.swift")
+        let setEndTime = try XCTUnwrap(Self.function("setEndTime", in: manager), "setEndTime is gone?")
+        XCTAssertTrue(setEndTime.contains("TaskTimeMath.endBound("), "setEndTime must clamp to TaskTimeMath.endBound")
+        XCTAssertFalse(setEndTime.contains("max(start, Date())"), "the old now-only clamp is back")
+
+        let settings = try Self.source("Kannu/components/Settings/TasksSettings.swift")
+        let picker = try XCTUnwrap(settings.split(separator: "\n").first { $0.contains("DatePicker(") }, "the end-time picker is gone?")
+        XCTAssertTrue(picker.contains("nextSessionStart"), "the end-time picker's range must stop at the next session: \(picker)")
+        XCTAssertTrue(picker.contains("Date()"), "the picker must cap at its own now, or a Brain window left open forbids the latest stretch: \(picker)")
+    }
+
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // KannuTests/
+        .deletingLastPathComponent()   // repo root
+
+    private static func source(_ path: String) throws -> String {
+        try String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    /// The text of `func name(` up to the next function at the same indent.
+    private static func function(_ name: String, in source: String) -> String? {
+        guard let start = source.range(of: "func \(name)(")?.lowerBound else { return nil }
+        let rest = source[start...]
+        let end = rest.dropFirst().range(of: "\n    func ")?.lowerBound ?? rest.endIndex
+        return String(rest[..<end])
+    }
+
     // MARK: - Rounding to the nearest quarter hour
 
     func testRoundingAtTheQuarterHourBoundaries() {

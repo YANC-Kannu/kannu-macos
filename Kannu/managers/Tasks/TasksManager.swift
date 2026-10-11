@@ -75,6 +75,9 @@ final class TasksManager: ObservableObject {
     struct InterruptedSession: Identifiable {
         let task: TaskItem
         let segment: WorkSegment
+        /// When the next session on the task began, if one has: the end may not pass it
+        /// (`TaskTimeMath.nextStart`). Clock-free, so the view caps it at now when it renders.
+        let nextSessionStart: Date?
         var id: UUID { segment.id }
     }
 
@@ -129,6 +132,14 @@ final class TasksManager: ObservableObject {
     private var jiraSyncInFlight: Int?
     /// The page appeared before the task file was read: sync once it is.
     private var pendingJiraSyncWhenReady = false
+    /// Refresh was asked while a sync was running. That sync carries the filter it started with,
+    /// so it would end with "Synced" for the old filter and mark tasks gone against it: the
+    /// refresh runs when it is done. Connect and Disconnect drop it with the sync.
+    private var pendingJiraRefresh = false
+    /// Connects between their first await and their return. `isJiraConnected` stays false until
+    /// a Connect's save has landed, so it alone cannot tell "Remove Token" that a new token is on
+    /// its way into the Keychain.
+    private var jiraConnectsInFlight = 0
     /// The same four, for GitLab. Its generation also moves when Include merge requests is switched
     /// during a sync, which read the old setting.
     private var lastGitLabSync: Date?
@@ -136,12 +147,13 @@ final class TasksManager: ObservableObject {
     private var gitlabSyncInFlight: Int?
     private var pendingGitLabSyncWhenReady = false
     /// The reminders macOS was last told about (`TaskReminderPlan.wanted`). Taken from the file at
-    /// load; each save after that sends only what changed. `checkReminderPermission` checks it
-    /// against what macOS actually holds.
+    /// load; each save after that sends only what changed; emptied when Tasks is turned off, which
+    /// takes them all back. `checkReminderPermission` checks it against what macOS actually holds.
     private var reminderBaseline: [UUID: TaskReminderPlan.Reminder] = [:]
-    /// A reminder's Start clicked before the task file was read, and what to do if it cannot
-    /// start: tried once the file is read, or the fallback runs when it cannot be.
-    private var pendingReminderStart: (taskID: UUID, otherwise: () -> Void)?
+    /// A reminder's Start clicked before the task file was read, what to do if it cannot start,
+    /// and the notification's completion: tried once the file is read, or the fallback runs when
+    /// it cannot be, and the completion runs after either.
+    private var pendingReminderStart: (taskID: UUID, otherwise: () -> Void, completion: () -> Void)?
 
     private init() {
         store = TaskFileStore(directory: { AppSupportPaths.child("Tasks") })
@@ -174,6 +186,25 @@ final class TasksManager: ObservableObject {
             MainActor.assumeIsolated { self?.objectWillChange.send() }
         }
         .store(in: &cancellables)
+        // Tasks off: Settings takes every reminder back (`TaskReminders.withdrawAll`), so macOS holds
+        // none, and the baseline must say so — or the next save would send only what changed since,
+        // and the unchanged reminders would stay missing. Tasks on: they are sent again at once, and
+        // the baseline is the list again, as at load — left empty, the next save would count every
+        // reminder as changed and take back one that fired in between (`TaskReminderPlanTests`).
+        Defaults.publisher(.enableTasks, options: [])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if change.newValue {
+                        self.reminderBaseline = TaskReminderPlan.wanted(self.tasks)
+                        self.checkReminderPermission()
+                    } else {
+                        self.reminderBaseline = [:]
+                    }
+                }
+            }
+            .store(in: &cancellables)
         Task { await load() }
     }
 
@@ -210,8 +241,16 @@ final class TasksManager: ObservableObject {
 
     /// Segments left open by a quit or a crash, newest first, with their task.
     var interruptedSessions: [InterruptedSession] {
-        tasks.flatMap { task in task.segments.filter(\.isInterrupted).map { InterruptedSession(task: task, segment: $0) } }
-            .sorted { $0.segment.start > $1.segment.start }
+        tasks.flatMap { task in
+            task.segments.filter(\.isInterrupted).map { segment in
+                InterruptedSession(
+                    task: task,
+                    segment: segment,
+                    nextSessionStart: TaskTimeMath.nextStart(after: segment, in: task.segments)
+                )
+            }
+        }
+        .sorted { $0.segment.start > $1.segment.start }
     }
 
     func trackedSeconds(of task: TaskItem, now: Date = Date()) -> Int {
@@ -427,11 +466,13 @@ final class TasksManager: ObservableObject {
     /// Whether macOS still lets the reminders show, and whether it holds the ones the list wants.
     /// Asks nothing. Judged from what macOS reports, not from the file: requests for tasks that
     /// are gone (or for everything, with tasks off) are taken back, and, while notifications are
-    /// allowed, any wanted reminder still ahead that macOS is missing is added. Runs after the
-    /// task file is read and whenever the Task list opens.
+    /// allowed, every wanted reminder still ahead is sent again, so one macOS holds with an older
+    /// date is replaced. Runs after the task file is read, when Tasks is turned on and whenever
+    /// the Task list opens — after any `withdrawAll` asked for before it, so a removal computed
+    /// from an earlier snapshot never takes back what this resend sends.
     func checkReminderPermission() {
         guard isReady else { return }
-        Task { [weak self] in
+        TaskReminders.serially { [weak self] in
             let permission = await TaskReminders.permission()
             let held = await TaskReminders.held()
             guard let self, isReady else { return }
@@ -446,15 +487,21 @@ final class TasksManager: ObservableObject {
 
     /// Start, on a task's reminder: the user's click. Before the task file is read, it waits for
     /// it. When the task cannot start — the timer is off, the task is gone, or the file could not
-    /// be read — `otherwise` runs, so the click is never silently lost.
-    func startFromReminder(_ taskID: UUID, otherwise: @escaping () -> Void) {
+    /// be read — `otherwise` runs, so the click is never silently lost. `completion` is the
+    /// notification's own, and runs once the click has been answered: after the start, the
+    /// fallback, or the load's failure — never before.
+    func startFromReminder(_ taskID: UUID, otherwise: @escaping () -> Void, completion: @escaping () -> Void) {
         switch loadState {
         case .loading:
-            pendingReminderStart = (taskID, otherwise)
+            // A second click before the file is read replaces the first, whose notification is done.
+            pendingReminderStart?.completion()
+            pendingReminderStart = (taskID, otherwise, completion)
         case .failed:
             otherwise()
+            completion()
         case .ready:
             if !start(taskID) { otherwise() }
+            completion()
         }
     }
 
@@ -486,13 +533,15 @@ final class TasksManager: ObservableObject {
     }
 
     /// Ends an interrupted session where the user says it ended: never before it started, never in
-    /// the future.
+    /// the future, and never past the start of a later session on the task, so work timed again
+    /// after a crash is not counted twice.
     func setEndTime(_ end: Date, segmentID: UUID, taskID: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }),
               let segmentIndex = tasks[index].segments.firstIndex(where: { $0.id == segmentID && $0.isInterrupted }) else { return }
         var task = tasks[index]
-        let start = task.segments[segmentIndex].start
-        task.segments[segmentIndex].end = min(max(start, end), max(start, Date()))
+        let segment = task.segments[segmentIndex]
+        let bound = TaskTimeMath.endBound(for: segment, in: task.segments, now: Date())
+        task.segments[segmentIndex].end = min(max(segment.start, end), bound)
         let folded = WorklogDrafts.folding(task, into: drafts)
         tasks[index] = folded.task
         drafts = folded.drafts
@@ -539,7 +588,8 @@ final class TasksManager: ObservableObject {
     ///    the site or server the time was recorded against.
     /// 3. **Jira:** a retry first asks Jira, read-only, whether the entry is already there (its
     ///    `kannu` marker), and sends only if it is not. Then `POST …/worklog?adjustEstimate=auto&
-    ///    notifyUsers=false`; a lost answer is checked once more, read-only.
+    ///    notifyUsers=false`; a lost answer is checked read-only, twice a few seconds apart, before
+    ///    it counts as not logged.
     ///    **GitLab:** `POST …/add_spent_time?duration=`; a lost answer is uncertain, and the user
     ///    chooses Mark as Logged or Send Again.
     /// 4. Immediately before either request is built, after the last wait, `canStillSend` looks
@@ -800,10 +850,17 @@ final class TasksManager: ObservableObject {
         syncJira(interactive: false, using: nil)
     }
 
-    /// Refresh, and Allow Keychain Access: the user asked, so the Keychain may ask them too.
+    /// Refresh, Allow Keychain Access, and Return or Reset on the issue filter: the user asked, so
+    /// the Keychain may ask them too. During a sync only the filter row can get here (Refresh is
+    /// disabled and the Keychain row hidden while one runs), and its request is kept, not dropped:
+    /// that sync fetches the filter it started with, and runs again for the new one when it finishes.
     func refreshJira(now: Date = Date()) {
-        guard isJiraSyncOn, isReady, !isJiraSyncing else { return }
+        guard isJiraSyncOn, isReady else { return }
         if case .rateLimited(let until) = jiraSync, until > now { return }
+        guard !isJiraSyncing else {
+            pendingJiraRefresh = true
+            return
+        }
         syncJira(interactive: true, using: nil)
     }
 
@@ -824,12 +881,19 @@ final class TasksManager: ObservableObject {
             return String(localized: "An API token has no spaces in it. Copy it again from Atlassian.")
         }
         let credential = JiraCredential(site: host, email: email, token: token)
+        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
+        let generation = jiraGeneration
+        jiraConnectsInFlight += 1
+        defer { jiraConnectsInFlight -= 1 }
         let verified: JiraMyself
         switch await JiraClient().verify(credential) {
         case .verified(let myself): verified = myself
         case .failed(let failure): return Self.connectMessage(for: failure, host: host)
         }
-        guard !Task.isCancelled else { return String(localized: "Cancelled.") }
+        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
+        // Keychain item now: nothing is saved over it. After the save the connect is committed —
+        // the Keychain and the display copies change together, below, with no await between.
+        guard !Task.isCancelled, generation == jiraGeneration else { return String(localized: "Cancelled.") }
         guard await JiraCredentialStore.save(credential) else {
             return String(localized: "Jira accepted the token, but Kannu could not save it in your Keychain.")
         }
@@ -839,6 +903,7 @@ final class TasksManager: ObservableObject {
         Defaults[.jiraEnabled] = true
         jiraGeneration += 1
         jiraSyncInFlight = nil
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         // The save replaced whatever a failed Disconnect left in the Keychain.
@@ -862,6 +927,7 @@ final class TasksManager: ObservableObject {
         jiraGeneration += 1
         jiraSyncInFlight = nil
         pendingJiraSyncWhenReady = false
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         Defaults[.jiraEnabled] = false
@@ -884,8 +950,10 @@ final class TasksManager: ObservableObject {
 
     /// Disconnect could not delete the saved token: the user asks again. The delete may raise the
     /// Keychain dialog (an item saved by a differently signed build); it runs off the main actor.
+    /// Not while a Connect is in flight: the display copies still say disconnected until its save
+    /// lands, and a delete queued behind that save would take the new token with it.
     func retryRemovingJiraToken() {
-        guard !isJiraConnected else { return }
+        guard !isJiraConnected, jiraConnectsInFlight == 0 else { return }
         removeJiraToken()
     }
 
@@ -945,6 +1013,17 @@ final class TasksManager: ObservableObject {
         guard generation == jiraGeneration else { return }
         jiraSyncInFlight = nil
         jiraSync = state
+        guard pendingJiraRefresh else { return }
+        pendingJiraRefresh = false
+        // The filter changed under this sync: run the user's Refresh now, with Refresh's own
+        // guards. Not after a refused token or a sign-in that needs reconnecting, though: a new
+        // filter does not change that answer, and sending the token again can lock the account.
+        // Nor after the user declined the Keychain dialog: running again would raise it straight
+        // back. The Allow Keychain Access button carries that retry, and it reads the current filter.
+        switch state {
+        case .authFailed, .needsReconnect, .needsKeychainApproval: return
+        default: refreshJira()
+        }
     }
 
     private func didFetchJira(_ outcome: SyncOutcome, failure: JiraClient.Failure?, host: String, generation: Int) {
@@ -1353,6 +1432,7 @@ final class TasksManager: ObservableObject {
             if let pending = pendingReminderStart {
                 pendingReminderStart = nil
                 pending.otherwise()
+                pending.completion()
             }
         }
     }
@@ -1393,6 +1473,7 @@ final class TasksManager: ObservableObject {
         if let pending = pendingReminderStart {
             pendingReminderStart = nil
             if !start(pending.taskID) { pending.otherwise() }
+            pending.completion()
         }
         checkReminderPermission()
     }
@@ -1416,9 +1497,10 @@ final class TasksManager: ObservableObject {
     }
 
     /// Tells macOS about reminders that changed with this edit: added, moved, retitled, or gone
-    /// because the task was done, hidden, deleted or unscheduled.
+    /// because the task was done, hidden, deleted or unscheduled. With Tasks off nothing is wanted:
+    /// the baseline is empty then, and a save must not send the whole list back.
     private func syncReminders() {
-        let wanted = TaskReminderPlan.wanted(tasks)
+        let wanted = Defaults[.enableTasks] ? TaskReminderPlan.wanted(tasks) : [:]
         let changes = TaskReminderPlan.changes(from: reminderBaseline, to: wanted, now: Date())
         reminderBaseline = wanted
         TaskReminders.apply(changes)

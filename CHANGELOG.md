@@ -4,6 +4,147 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - The Set End Time picker keeps a live clock and only mentions a later session when there is one
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the interrupted-session end bound: live picker ceiling, conditional explanation
+- **Changes:**
+  - `TaskTimeMath.nextStart(after:in:)` (pure, logic target): the earliest start of any segment on the
+    task that began after the given one, or nil. Clock-free; `endBound` is now expressed through it.
+  - `InterruptedSession` carries that `nextSessionStart` instead of an `endBound` stamped with the
+    `Date()` of the last task-list render, and the Set End Time… sheet caps it at its own `Date()` when
+    it renders. A Brain window left open no longer forbids the stretch between the list's last render
+    and now; `setEndTime` still clamps with fresh segments and a fresh now.
+  - The sheet's explanation says "It cannot end after a later session on this task began." only when a
+    later session exists; with none, the two-sentence text is back.
+  - Tests: `TaskTimeMathTests` covers `nextStart` (nil with no later segment, the earliest later
+    start otherwise, earlier ones ignored); the source pin now requires `nextSessionStart` and a live
+    `Date()` on the picker's range line.
+
+### 2026-10-11 - Interrupted sessions cannot end past a later session on the same task
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on PR #79: `TaskTimeMath.endBound`, `setEndTime` clamp, Set End Time picker range and copy
+- **Changes:**
+  - `TaskTimeMath.endBound(for:in:now:)` (pure, logic target): the latest end an interrupted segment
+    may be given is the earliest start of any segment on the task that began after it, capped at now
+    and never before its own start. A segment that began before it is an earlier session and does not
+    bound it.
+  - `TasksManager.setEndTime` clamps to that bound instead of to now alone, so after a crash at
+    10:00, re-timing 10:05–11:00, then ending the interrupted session at 11:00, the tracked total and
+    the folded log drafts count 10:05–11:00 once. `InterruptedSession` carries the bound; the Set End
+    Time… sheet uses it as the picker's upper limit and its explanation says why the picker stops
+    there.
+  - Tests: `TaskTimeMathTests` covers no later segment (now), a later segment (its start, whatever
+    the array order, live or ended), an earlier segment (ignored), the now and start caps, and that
+    ending at the bound counts the re-timed work once; a source pin checks that `setEndTime` clamps
+    through the helper and the picker's range stops at the bound.
+
+### 2026-10-11 - Jira sync review follow-up: the refresh pin checks the order inside finishJiraSync, and the notes name the filter row
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync review follow-up: finishJiraSync ordering pin, wording fix
+- **Changes:**
+  - `JiraSyncRulesTests.refreshProblems` now requires `finishJiraSync` to clear the in-flight sync, publish
+    its state and consume `pendingJiraRefresh` before it calls `refreshJira()`. Run earlier, `refreshJira`'s
+    guards read the sync that is ending: the refresh is kept again and stuck until some later sync, or the
+    rate-limit guard still sees `.syncing`, a new sync starts, and `jiraSync = state` overwrites its
+    `.syncing` with the ended sync's result. Two planted offenders — the call moved above
+    `jiraSyncInFlight = nil`, and above `jiraSync = state` — pin the problem text.
+  - The entry below and the `refreshJira` doc comment no longer say Refresh can be pressed during a sync:
+    the Refresh button is disabled and the Keychain row hidden while one runs, so the Issue filter's
+    Return and Reset are the only way into the kept refresh.
+
+### 2026-10-11 - Jira sync: a filter edited mid-sync is not lost, a late 401 cannot reject a fresh connection, and Remove Token waits for a Connect
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync race review: pending refresh, generation-pinned finish, Connect in-flight count
+- **Changes:**
+  - Return or Reset on the Issue filter during a running sync is kept instead of dropped (Refresh is
+    disabled and the Keychain row hidden while one runs, so the filter row is the only way in):
+    `refreshJira` records `pendingJiraRefresh` while a sync is in flight, `finishJiraSync` consumes it
+    and runs the refresh for the new filter once that sync ends — after clearing the in-flight sync and
+    publishing its state, which `refreshJira`'s guards read — and Connect and Disconnect clear it with
+    the sync they replace. Not after `.authFailed`, `.needsReconnect` or `.needsKeychainApproval`: a new
+    filter changes none of those answers, re-sending a refused token can lock the account, and the user
+    just declined the Keychain dialog — Allow Keychain Access carries that retry with the current filter.
+  - The 401 path stays behind the generation check: `didFetchJira` and `finishJiraSync` only write
+    `jiraSync` after `guard generation == jiraGeneration`, and every `finishJiraSync(` call passes the
+    generation its sync captured, so a late answer for a replaced token never marks the new sign-in refused.
+  - Remove Token refuses while a Connect is in flight (`jiraConnectsInFlight`, counted before the first
+    await, uncounted on every return): `isJiraConnected` stays false until the Connect's save lands, and
+    a delete queued behind that save would have taken the new token with it. The Connect re-checks
+    cancellation and the generation in one guard right before the save, with no await between the save
+    and the display copies.
+  - New `KannuTests/JiraSyncRulesTests.swift`: source pins for all three rules, each with a
+    planted-offender test, including a `finishJiraSync(jiraGeneration, …)` call that would make the
+    guard inside hold vacuously, and a `finishJiraSync` that runs the kept refresh before clearing the
+    in-flight sync or publishing its state.
+
+### 2026-10-11 - The worklog recheck's tests pin that the wait is the configured delay
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the two-read recheck: the wait is proven to be `recheckDelay`, and its comment says only tests change it
+- **Changes:**
+  - WorklogPosterTests: the reporting clock records how long the one sleep asked for, and the
+    cancellation test asserts it is at least 59 s of the 60 s handed in; the two-miss send is timed
+    and must finish under 1 s on its 20 ms delay. A `verifyLostJiraWorklog` that stopped reading
+    `recheckDelay` and slept a constant 3 s now fails a test instead of only slowing the suite.
+  - `WorklogPoster.recheckDelay`'s comment said tests only shorten it; they also stretch it to pin a
+    wait cut short, so it now says only tests change it, and in which directions.
+
+### 2026-10-11 - A lost Jira worklog answer is checked twice before Kannu says nothing was logged
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on #83: a lost Jira POST is read back twice, 3 s apart, before it counts as not logged; a wait cut short stays uncertain
+- **Changes:**
+  - `WorklogPoster.verifyLostJiraWorklog`: after a POST whose answer was lost (timeout, dropped
+    connection, 502/504), one read-only `GET` that finds nothing is no longer an answer, because
+    Jira may still be committing the POST. It waits `recheckDelay` (3 s) and reads once more; only
+    two misses give `.checkedNotFound` (failed, Retry), a read that fails gives `.uncertain`, and a
+    wait cut short by cancellation gives `.uncertain` too — never "not logged" on a guess, which is
+    what let Keep Local Only drop an entry Jira holds. Found on either read is logged. The marker is
+    still matched first, then author, start and length.
+  - The wait sleeps on an injected `clock: any Clock<Duration>` (default `ContinuousClock`), so the
+    test of a cut-short wait can see the wait begin instead of racing the first read's cancellation.
+  - `WorklogDrafts.Verdict.checkedNotFound` and `TasksManager.confirmWorklog`'s steps say two checks.
+  - Tests: WorklogPosterTests — found on the second read is logged with the same `GET` repeated; not
+    found twice is `.checkedNotFound` with exactly `POST, GET, GET`; a miss then a failed read
+    (offline, 500, 401, unreadable JSON) is `.uncertain`; a 60 s wait cancelled once a reporting
+    clock says it began is `.uncertain` with no second read and ends with the cancellation.
+
+### 2026-10-11 - Reminders are re-added with their current dates, survive a click during launch, and finish their action before macOS is told
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Brain Tasks PR7 review pass: resend on grant, pre-gate reminder delegate with buffered clicks, completion after the answer, baseline reset on Tasks off and on, one chain for the notification-center work
+- **Changes:**
+  - `TaskReminderPlan.reconcile` with `canAdd` now sends every wanted reminder still ahead again
+    (`resend`), held or not, judged at the same instant as its removals: a request macOS kept while
+    notifications were off carries the date and title the task had then, and only a resend replaces
+    it. Permission granted, the task file read, Tasks turned on and the Task list opened all go
+    through it.
+  - `TaskReminderCenter.shared.install()` moved from `continueLaunch()` to
+    `applicationDidFinishLaunching`, before the Terms of Use gate: a click on a reminder while Kannu
+    is not running launches it, and macOS hands the response to the delegate set by the time that
+    method returns, so one set after the terms missed it. Installing sets the delegate and the Start
+    category only — no permission prompt, no file read, no `TasksManager`. A response arriving before
+    `continueLaunch()` waits in `TaskReminderCenter` (`launchContinued` and `waiting`, main-actor
+    state) and is answered by `launchDidContinue()`, which `continueLaunch()` calls last; the Enable
+    tasks check and the Start and default actions are unchanged.
+  - The notification's completion handler runs after the click is answered, not before it: Start's
+    completion goes to `TasksManager.startFromReminder(_:otherwise:completion:)` and runs after the
+    start, the Task-list fallback or the load's failure; a Start replaced by a second click before
+    the file is read is completed when it is discarded; a click on the banner completes once the
+    Task list has opened.
+  - Tasks off empties `reminderBaseline` along with macOS, and a save with Tasks off wants nothing,
+    so Tasks on sends every reminder again at once instead of only what changed since. Tasks on also
+    restores the baseline to the list first, as at load: left empty, the next save counted every
+    reminder as changed and took a reminder that had fired in between off the screen.
+  - `TaskReminders.serially` runs the notification-center operations one after another —
+    `withdrawAll` and `TasksManager.checkReminderPermission` both go through it. Each reads what
+    macOS holds and then changes it, and Tasks turned off and on again within a moment could
+    otherwise have the removal, computed first, take back the reminders the resend had just sent.
+  - Tests: TaskReminderPlanTests (the reconcile resends what is ahead and judges additions and
+    removals at one instant; an empty baseline takes back a reminder that fired), LaunchGateRulesTests
+    (the delegate is installed once, before the gate, and asks, reads and builds nothing; a click
+    waits for the launch and is answered last; a planted offender for each), TaskListRulesTests (the
+    completion after the answer, the baseline emptied on Tasks off and restored on Tasks on, both
+    operations on the chain). The 2026-10-06 entry below is corrected where it placed the delegate
+    in `continueLaunch()`.
+
 ### 2026-10-11 - The timer tab's page swipe yields to the ruler by geometry, not by hover
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — review finding R-G on the timer tab's page swipe: the ruler's `ScrollWheelMonitor` owns the sideways scroll and the swipe's monitor yields over the owner's live frame before an event is offered, so a sideways scroll over the ruler sets minutes even before the hover-derived `isSuspended` has caught up; the rule pinned by a new test
@@ -259,8 +400,9 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     back, and while notifications are allowed any wanted reminder still ahead that macOS is missing
     is added, so notifications turned on while Kannu was not running, or a replaced `tasks.json`,
     are caught. Turning Enable tasks off takes back every task reminder, waiting or shown.
-    `TaskReminderCenter` is installed in `continueLaunch()` after the terms (a delegate and a
-    category only: no prompt, no file read, `TasksManager` stays lazy); Start times the task, a
+    `TaskReminderCenter` is installed in `applicationDidFinishLaunching`, before the terms gate (a
+    delegate and a category only: no prompt, no file read, `TasksManager` stays lazy; a click that
+    arrives before the launch continued waits for it); Start times the task, a
     click opens Brain on the Task list itself. A Start that cannot start (the timer is off, the task
     is gone, the file could not be read) opens the Task list instead of doing nothing. Kannu never
     starts a timer on its own. With notifications off, the Task list and the Schedule sheet show
@@ -290,8 +432,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     asked only from `setSchedule`, only Start starts a task, with planted offenders; the reminder
     and Task list deep-link wiring above), the drop cases
     in TaskOrderTests and TaskSourceFilterTests, JiraDecodingTests expecting the category,
-    LaunchGateRulesTests (the delegate is installed only
-    in `continueLaunch()`, which asks nothing and builds no `TasksManager`), and BrainNamingRulesTests
+    LaunchGateRulesTests (the delegate is installed once, before the gate, and asks nothing and
+    builds no `TasksManager`), and BrainNamingRulesTests
     allowing "Open Notification Settings" and the Notifications pane's URL. docs/SETTINGS.md
     records the in-tab sub-page rule, names its back row as the one sanctioned lone leading
     button, and replaces the old caption rule with the new copy rule (descriptions in about eight
@@ -380,10 +522,11 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     an ADF comment only when one was typed, and `properties [{key:"kannu", value:{entry:<draft id>}}]`.
     2xx is logged with the worklog id; 400/403/404 fail with Jira's own reason; 401 asks to
     reconnect (and the Sources row shows the refused token); 429 and offline fail, retryable; a lost
-    answer (timeout, dropped connection, 502/504) is checked with one read-only `GET
-    …/worklog?startedAfter=…&startedBefore=…&expand=properties`, matching the marker, then author,
-    start and length: found is logged, missing fails retryable, a failed check stays uncertain. A
-    Jira retry always checks first, so an entry is never logged twice.
+    answer (timeout, dropped connection, 502/504) is checked with up to two read-only `GET
+    …/worklog?startedAfter=…&startedBefore=…&expand=properties`, 3 s apart, matching the marker, then
+    author, start and length: found is logged, missing twice fails retryable, a failed check or a
+    wait cut short stays uncertain. A Jira retry always checks first, so an entry is never logged
+    twice.
   - GitLab: `POST /api/v4/projects/:id/issues/:iid/add_spent_time?duration=1h15m`, or
     `merge_requests/:iid/add_spent_time` for a merge request, token only in `PRIVATE-TOKEN`. A
     read_api token offers only Keep local only, and says why. A lost answer reads "May already be
@@ -391,7 +534,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Disconnect keeps the entries: kept local, or sent once reconnected to the same site or server.
     Footers and the Connect sheets now say Kannu writes only when you log time; both Sources footers
     still say the token is kept in your Keychain.
-  - New pure file in the logic target: `WorklogPoster` (the send and the one read-only check over
+  - New pure file in the logic target: `WorklogPoster` (the send and the read-only checks over
     `IntegrationHTTP`). `JiraAPI` gains the worklog and check request builders, the marker match and
     Jira's refusal reason; `GitLabAPI` the spend request and duration; `WorklogDrafts` the verdicts,
     availability, card text and `deferredAt`; `JiraSite.apiURL` takes a query. App file:
@@ -399,7 +542,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Tests: JiraWorklogRequestTests (`started` at +0000, +0530 and across DST, the marker, ADF,
     `notifyUsers=false`, `adjustEstimate=auto`, the check request and matching),
     GitLabSpendRequestTests (issue vs merge request path, duration format, `PRIVATE-TOKEN` only),
-    WorklogPosterTests (a `URLProtocol` stub: every outcome, exactly one check on Jira, none on
+    WorklogPosterTests (a `URLProtocol` stub: every outcome, at most two checks on Jira, none on
     GitLab), WorklogDraftTests extended (15-minute rounding, `.sending` saved then relaunched is
     uncertain with its card's reason, a typed length surviving the next fold, reconcile found is
     logged, Not now, availability), WorklogConsentRulesTests (source scan with planted offenders:
