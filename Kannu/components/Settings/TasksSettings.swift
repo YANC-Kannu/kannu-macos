@@ -164,7 +164,7 @@ private struct TaskListSections: View {
                                     segmentID: entry.segment.id,
                                     title: entry.task.title,
                                     start: entry.segment.start,
-                                    endBound: entry.endBound
+                                    nextSessionStart: entry.nextSessionStart
                                 )
                             }
                             Button("Discard") {
@@ -401,9 +401,9 @@ private enum TaskSheet: Identifiable {
     case customEstimateForNewTask(current: Int?)
     case estimate(taskID: UUID, title: String, current: Int?)
     case addTime(taskID: UUID, title: String)
-    /// `endBound` is the latest end allowed: before any later session on the task, never in the
-    /// future (`TaskTimeMath.endBound`).
-    case endTime(taskID: UUID, segmentID: UUID, title: String, start: Date, endBound: Date)
+    /// `nextSessionStart` is when the next session on the task began, if one has: the end may not
+    /// pass it. The sheet caps it at now on its own render, so the clock stays live.
+    case endTime(taskID: UUID, segmentID: UUID, title: String, start: Date, nextSessionStart: Date?)
 
     var id: String {
         switch self {
@@ -483,8 +483,9 @@ private struct TaskValueSheet: View {
 
     @ViewBuilder
     private var field: some View {
-        if case .endTime(_, _, _, let start, let endBound) = sheet {
-            DatePicker("Stopped working at", selection: $date, in: start...max(start, endBound),
+        if case .endTime(_, _, _, let start, let nextSessionStart) = sheet {
+            // Date() here, not a stored bound: the list may have rendered long before the click.
+            DatePicker("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())),
                        displayedComponents: [.date, .hourAndMinute])
         } else {
             TextField("Length", text: $text, prompt: Text("1h 30m"))
@@ -516,6 +517,8 @@ private struct TaskValueSheet: View {
             return "How long you expect it to take, such as 1h 30m, 90m or 1.5h. A number on its own is minutes."
         case .addTime:
             return "Time you worked on it without the timer, such as 45m or 1h 15m. It is recorded as ending now."
+        case .endTime(_, _, _, _, .none):
+            return "Kannu stopped while this was being timed. When did you stop working on it?"
         case .endTime:
             return "Kannu stopped while this was being timed. When did you stop working on it? It cannot end after a later session on this task began."
         }

@@ -56,9 +56,9 @@ final class TasksManager: ObservableObject {
     struct InterruptedSession: Identifiable {
         let task: TaskItem
         let segment: WorkSegment
-        /// The latest end the user may give it: before any later session on the task, never in
-        /// the future (`TaskTimeMath.endBound`).
-        let endBound: Date
+        /// When the next session on the task began, if one has: the end may not pass it
+        /// (`TaskTimeMath.nextStart`). Clock-free, so the view caps it at now when it renders.
+        let nextSessionStart: Date?
         var id: UUID { segment.id }
     }
 
@@ -120,13 +120,12 @@ final class TasksManager: ObservableObject {
 
     /// Segments left open by a quit or a crash, newest first, with their task.
     var interruptedSessions: [InterruptedSession] {
-        let now = Date()
-        return tasks.flatMap { task in
+        tasks.flatMap { task in
             task.segments.filter(\.isInterrupted).map { segment in
                 InterruptedSession(
                     task: task,
                     segment: segment,
-                    endBound: TaskTimeMath.endBound(for: segment, in: task.segments, now: now)
+                    nextSessionStart: TaskTimeMath.nextStart(after: segment, in: task.segments)
                 )
             }
         }

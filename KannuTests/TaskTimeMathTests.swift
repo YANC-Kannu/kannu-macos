@@ -120,6 +120,17 @@ final class TaskTimeMathTests: XCTestCase {
         XCTAssertEqual(Math.endBound(for: interrupted, in: [earlier, interrupted], now: at(minutes: 30)), at(minutes: 30))
     }
 
+    func testTheNextStartIsClockFreeSoTheSheetCanCapItAtItsOwnNow() {
+        // The Set End Time sheet holds this and caps it at Date() on each render, so a Brain window
+        // left open for an hour still lets the user pick a time up to now.
+        let earlier = WorkSegment(start: at(minutes: -60), end: at(minutes: -30), origin: .timer)
+        let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
+        let retimed = WorkSegment(start: at(minutes: 65), end: at(minutes: 120), origin: .timer)
+        let manual = WorkSegment(start: at(minutes: 130), end: at(minutes: 140), origin: .manual)
+        XCTAssertNil(Math.nextStart(after: interrupted, in: [earlier, interrupted]), "no later session: only now bounds it")
+        XCTAssertEqual(Math.nextStart(after: interrupted, in: [interrupted, manual, retimed]), at(minutes: 65))
+    }
+
     func testTheBoundNeverPassesNowNorPrecedesTheStart() {
         let interrupted = WorkSegment(start: at(minutes: 0), origin: .recovered)
         let future = WorkSegment(start: at(minutes: 500), end: at(minutes: 510), origin: .manual)
@@ -137,7 +148,8 @@ final class TaskTimeMathTests: XCTestCase {
     }
 
     /// `TasksManager` and the Settings sheet are not in this target, so this pins their source: the
-    /// manager clamps through the helper, and the picker's upper limit is the same bound.
+    /// manager clamps through the helper, and the picker's upper limit is the next session's start
+    /// capped at the sheet's own `Date()`, not a bound stamped when the task list last rendered.
     func testTheManagerAndTheSheetClampToTheBound() throws {
         let manager = try Self.source("Kannu/managers/Tasks/TasksManager.swift")
         let setEndTime = try XCTUnwrap(Self.function("setEndTime", in: manager), "setEndTime is gone?")
@@ -146,7 +158,8 @@ final class TaskTimeMathTests: XCTestCase {
 
         let settings = try Self.source("Kannu/components/Settings/TasksSettings.swift")
         let picker = try XCTUnwrap(settings.split(separator: "\n").first { $0.contains("DatePicker(") }, "the end-time picker is gone?")
-        XCTAssertTrue(picker.contains("endBound"), "the end-time picker's range must stop at the bound: \(picker)")
+        XCTAssertTrue(picker.contains("nextSessionStart"), "the end-time picker's range must stop at the next session: \(picker)")
+        XCTAssertTrue(picker.contains("Date()"), "the picker must cap at its own now, or a Brain window left open forbids the latest stretch: \(picker)")
     }
 
     private static let repoRoot = URL(fileURLWithPath: #filePath)

@@ -107,11 +107,16 @@ enum TaskTimeMath {
     /// folded from it. A segment that began before the interrupted one is an earlier session and
     /// does not bound it.
     static func endBound(for segment: WorkSegment, in segments: [WorkSegment], now: Date) -> Date {
-        let nextStart = segments.lazy
+        max(segment.start, min(nextStart(after: segment, in: segments) ?? now, now))
+    }
+
+    /// The earliest start of any segment on the task that began after `segment`, or nil when none
+    /// has. Clock-free, so a view can hold it and cap it at its own `Date()` when it renders.
+    static func nextStart(after segment: WorkSegment, in segments: [WorkSegment]) -> Date? {
+        segments.lazy
             .filter { $0.id != segment.id && $0.start > segment.start }
             .map(\.start)
             .min()
-        return max(segment.start, min(nextStart ?? now, now))
     }
 }
 
