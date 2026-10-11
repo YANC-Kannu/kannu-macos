@@ -125,6 +125,7 @@ struct NotchTimerView: View {
             } else {
                 lockedAccentColor = nil
                 isRenamingSession = false
+                focusedNameField = nil
             }
         }
         .onChange(of: focusedNameField) { previous, current in
@@ -143,9 +144,13 @@ struct NotchTimerView: View {
             commitRename()
             vm.setAutoCloseSuppression(false, token: nameEditingToken)
         }
-        // A click into another app leaves the field focused in a window that is no longer key.
+        // A click into another app leaves the field focused in a window that is no longer key: save
+        // the rename and drop the focus, which lets the notch auto-close again. A half-typed
+        // next-session name goes with this view when the notch closes.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
-            if note.object is KannuWindow { commitRename() }
+            guard note.object is KannuWindow else { return }
+            commitRename()
+            focusedNameField = nil
         }
         .onChange(of: timerManager.activePresetId) { _, _ in
             if timerManager.isTimerActive && lockedAccentColor == nil {
