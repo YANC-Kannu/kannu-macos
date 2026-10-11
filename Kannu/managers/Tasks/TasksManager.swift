@@ -109,6 +109,14 @@ final class TasksManager: ObservableObject {
     private var jiraSyncInFlight: Int?
     /// The page appeared before the task file was read: sync once it is.
     private var pendingJiraSyncWhenReady = false
+    /// Refresh was asked while a sync was running. That sync carries the filter it started with,
+    /// so it would end with "Synced" for the old filter and mark tasks gone against it: the
+    /// refresh runs when it is done. Connect and Disconnect drop it with the sync.
+    private var pendingJiraRefresh = false
+    /// Connects between their first await and their return. `isJiraConnected` stays false until
+    /// a Connect's save has landed, so it alone cannot tell "Remove Token" that a new token is on
+    /// its way into the Keychain.
+    private var jiraConnectsInFlight = 0
 
     private init() {
         store = TaskFileStore(directory: { AppSupportPaths.child("Tasks") })
@@ -407,10 +415,16 @@ final class TasksManager: ObservableObject {
         syncJira(interactive: false, using: nil)
     }
 
-    /// Refresh, and Allow Keychain Access: the user asked, so the Keychain may ask them too.
+    /// Refresh, Allow Keychain Access, and Return or Reset on the issue filter: the user asked, so
+    /// the Keychain may ask them too. During a sync the request is kept, not dropped: that sync
+    /// fetches the filter it started with, and runs again for the new one when it finishes.
     func refreshJira(now: Date = Date()) {
-        guard isJiraSyncOn, isReady, !isJiraSyncing else { return }
+        guard isJiraSyncOn, isReady else { return }
         if case .rateLimited(let until) = jiraSync, until > now { return }
+        guard !isJiraSyncing else {
+            pendingJiraRefresh = true
+            return
+        }
         syncJira(interactive: true, using: nil)
     }
 
@@ -431,12 +445,19 @@ final class TasksManager: ObservableObject {
             return String(localized: "An API token has no spaces in it. Copy it again from Atlassian.")
         }
         let credential = JiraCredential(site: host, email: email, token: token)
+        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
+        let generation = jiraGeneration
+        jiraConnectsInFlight += 1
+        defer { jiraConnectsInFlight -= 1 }
         let verified: JiraMyself
         switch await JiraClient().verify(credential) {
         case .verified(let myself): verified = myself
         case .failed(let failure): return Self.connectMessage(for: failure, host: host)
         }
-        guard !Task.isCancelled else { return String(localized: "Cancelled.") }
+        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
+        // Keychain item now: nothing is saved over it. After the save the connect is committed —
+        // the Keychain and the display copies change together, below, with no await between.
+        guard !Task.isCancelled, generation == jiraGeneration else { return String(localized: "Cancelled.") }
         guard await JiraCredentialStore.save(credential) else {
             return String(localized: "Jira accepted the token, but Kannu could not save it in your Keychain.")
         }
@@ -446,6 +467,7 @@ final class TasksManager: ObservableObject {
         Defaults[.jiraEnabled] = true
         jiraGeneration += 1
         jiraSyncInFlight = nil
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         // The save replaced whatever a failed Disconnect left in the Keychain.
@@ -466,6 +488,7 @@ final class TasksManager: ObservableObject {
         jiraGeneration += 1
         jiraSyncInFlight = nil
         pendingJiraSyncWhenReady = false
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         Defaults[.jiraEnabled] = false
@@ -488,8 +511,10 @@ final class TasksManager: ObservableObject {
 
     /// Disconnect could not delete the saved token: the user asks again. The delete may raise the
     /// Keychain dialog (an item saved by a differently signed build); it runs off the main actor.
+    /// Not while a Connect is in flight: the display copies still say disconnected until its save
+    /// lands, and a delete queued behind that save would take the new token with it.
     func retryRemovingJiraToken() {
-        guard !isJiraConnected else { return }
+        guard !isJiraConnected, jiraConnectsInFlight == 0 else { return }
         removeJiraToken()
     }
 
@@ -549,6 +574,17 @@ final class TasksManager: ObservableObject {
         guard generation == jiraGeneration else { return }
         jiraSyncInFlight = nil
         jiraSync = state
+        guard pendingJiraRefresh else { return }
+        pendingJiraRefresh = false
+        // The filter changed under this sync: run the user's Refresh now, with Refresh's own
+        // guards. Not after a refused token or a sign-in that needs reconnecting, though: a new
+        // filter does not change that answer, and sending the token again can lock the account.
+        // Nor after the user declined the Keychain dialog: running again would raise it straight
+        // back. The Allow Keychain Access button carries that retry, and it reads the current filter.
+        switch state {
+        case .authFailed, .needsReconnect, .needsKeychainApproval: return
+        default: refreshJira()
+        }
     }
 
     private func didFetchJira(_ outcome: SyncOutcome, failure: JiraClient.Failure?, host: String, generation: Int) {

@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - Jira sync: a filter edited mid-sync is not lost, a late 401 cannot reject a fresh connection, and Remove Token waits for a Connect
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync race review: pending refresh, generation-pinned finish, Connect in-flight count
+- **Changes:**
+  - Return or Reset on the Issue filter (and Refresh) during a running sync is kept instead of dropped:
+    `refreshJira` records `pendingJiraRefresh` while a sync is in flight, `finishJiraSync` consumes it
+    and runs the refresh for the new filter once that sync ends, and Connect and Disconnect clear it with
+    the sync they replace. Not after `.authFailed`, `.needsReconnect` or `.needsKeychainApproval`: a new
+    filter changes none of those answers, re-sending a refused token can lock the account, and the user
+    just declined the Keychain dialog — Allow Keychain Access carries that retry with the current filter.
+  - The 401 path stays behind the generation check: `didFetchJira` and `finishJiraSync` only write
+    `jiraSync` after `guard generation == jiraGeneration`, and every `finishJiraSync(` call passes the
+    generation its sync captured, so a late answer for a replaced token never marks the new sign-in refused.
+  - Remove Token refuses while a Connect is in flight (`jiraConnectsInFlight`, counted before the first
+    await, uncounted on every return): `isJiraConnected` stays false until the Connect's save lands, and
+    a delete queued behind that save would have taken the new token with it. The Connect re-checks
+    cancellation and the generation in one guard right before the save, with no await between the save
+    and the display copies.
+  - New `KannuTests/JiraSyncRulesTests.swift`: source pins for all three rules, each with a
+    planted-offender test, including a `finishJiraSync(jiraGeneration, …)` call that would make the
+    guard inside hold vacuously.
+
 ### 2026-10-04 - Brain › Tasks: Jira Cloud as a source, with your Jira issues in the task order
 - **Developer label:** "what about jira page, i want a section in main brain in productivity for task management"
 - **Agent label:** Brain Tasks PR3: Jira read inside Productivity › Tasks (Sources section, read-only sync, token in the Keychain)
