@@ -24,8 +24,9 @@ import XCTest
 /// stub that answers from handwritten fixtures and records every request. Nothing leaves this Mac
 /// and no real token exists. What each answer means (§6 of the design): 2xx logged with the worklog
 /// id, 400/403/404 refused with the server's reason, 401 the token, 429 and offline never sent, and
-/// a lost answer checked with exactly one read-only GET on Jira — never on GitLab, which cannot find
-/// an entry again.
+/// a lost answer checked with read-only GETs on Jira — at most two, a pause apart, because Jira may
+/// still be committing the POST when the first one looks — never on GitLab, which cannot find an
+/// entry again.
 final class WorklogPosterTests: XCTestCase {
     private let jira = JiraCredential(site: "acme.atlassian.net", email: "user@example.invalid", token: "dummy-token-not-real")
     private let gitlab = GitLabCredential(baseURL: "https://gitlab.example.com", token: "glpat-dummy-token-not-real")
@@ -82,15 +83,37 @@ final class WorklogPosterTests: XCTestCase {
         override func stopLoading() {}
     }
 
+    /// A clock that says when a sleep begins, then sleeps for real. The cancellation test cancels
+    /// only once the wait is known to have started, so its verdict comes from the wait being cut
+    /// short — not from the first read's `URLError.cancelled`, which is ambiguous and uncertain too.
+    final class ReportingClock: Clock, @unchecked Sendable {
+        typealias Instant = ContinuousClock.Instant
+        typealias Duration = Swift.Duration
+        private let inner = ContinuousClock()
+        private let began: XCTestExpectation
+
+        init(began: XCTestExpectation) { self.began = began }
+
+        var now: Instant { inner.now }
+        var minimumResolution: Duration { inner.minimumResolution }
+
+        func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+            began.fulfill()
+            try await inner.sleep(until: deadline, tolerance: tolerance)
+        }
+    }
+
     private var session: URLSession!
     private var poster: WorklogPoster!
+    /// The pause before the second check, shortened so the suite does not wait 3 s per lost answer.
+    private let recheckDelay: Duration = .milliseconds(20)
 
     override func setUp() {
         super.setUp()
         let configuration = IntegrationHTTP.makeConfiguration(base: .ephemeral)
         configuration.protocolClasses = [StubProtocol.self]
         session = IntegrationHTTP.makeSession(configuration: configuration)
-        poster = WorklogPoster(session: session)
+        poster = WorklogPoster(session: session, recheckDelay: recheckDelay)
     }
 
     override func tearDown() {
@@ -120,6 +143,18 @@ final class WorklogPosterTests: XCTestCase {
     """
 
     private static func isPOST(_ request: URLRequest) -> Bool { request.httpMethod == "POST" }
+
+    private static let empty = #"{"worklogs":[]}"#
+
+    /// A stub whose POST is lost and whose GETs answer in order, the last one repeating.
+    private static func lostThenReads(_ lost: Answer, _ reads: [Answer]) -> (URLRequest) -> Answer {
+        var served = 0
+        return { request in
+            if isPOST(request) { return lost }
+            defer { served += 1 }
+            return reads[min(served, reads.count - 1)]
+        }
+    }
 
     // MARK: - Jira
 
@@ -168,36 +203,74 @@ final class WorklogPosterTests: XCTestCase {
         XCTAssertEqual(WorklogDrafts.resolution(of: offline, source: .jira).event, .rejected, "failed, and Retry sends it")
     }
 
-    func testALostAnswerIsCheckedOnceAndFoundIsLogged() async throws {
+    func testALostAnswerIsCheckedAndFoundIsLogged() async throws {
         for lost in [Answer(error: .timedOut), Answer(error: .networkConnectionLost), Answer(status: 502), Answer(status: 504)] {
             StubProtocol.reset { request in Self.isPOST(request) ? lost : Answer(status: 200, body: Self.marked) }
             let verdict = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
             XCTAssertEqual(verdict, .logged(remoteID: "100028"), "\(lost)")
             let requests = StubProtocol.requests()
-            XCTAssertEqual(requests.map(\.httpMethod), ["POST", "GET"], "exactly one read-only check")
+            XCTAssertEqual(requests.map(\.httpMethod), ["POST", "GET"], "found on the first read: no second one")
             XCTAssertEqual(URLComponents(url: try XCTUnwrap(requests[1].url), resolvingAgainstBaseURL: false)?.queryItems?.last,
                            URLQueryItem(name: "expand", value: "properties"))
             XCTAssertNil(requests[1].httpBody)
         }
     }
 
-    func testALostAnswerWithNoEntryThereFailsAndCanBeRetried() async throws {
-        StubProtocol.reset { request in Self.isPOST(request) ? Answer(error: .timedOut) : Answer(status: 200, body: #"{"worklogs":[]}"#) }
+    func testAnEntryJiraWasStillCommittingIsFoundOnTheSecondReadAndLogged() async throws {
+        StubProtocol.reset(Self.lostThenReads(Answer(status: 504), [Answer(status: 200, body: Self.empty), Answer(status: 200, body: Self.marked)]))
+        let verdict = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
+        XCTAssertEqual(verdict, .logged(remoteID: "100028"), "a first miss is not an answer")
+        let requests = StubProtocol.requests()
+        XCTAssertEqual(requests.map(\.httpMethod), ["POST", "GET", "GET"])
+        XCTAssertEqual(requests[1].url, requests[2].url, "the same read-only check, repeated")
+        XCTAssertNil(requests[2].httpBody)
+    }
+
+    func testALostAnswerWithNoEntryThereTwiceFailsAndCanBeRetried() async throws {
+        StubProtocol.reset(Self.lostThenReads(Answer(error: .timedOut), [Answer(status: 200, body: Self.empty)]))
         let verdict = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
         XCTAssertEqual(verdict, .checkedNotFound)
-        XCTAssertEqual(StubProtocol.requests().count, 2)
+        XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET", "GET"], "two misses, never a loop")
         let resolution = WorklogDrafts.resolution(of: verdict, source: .jira)
         XCTAssertEqual(WorklogDrafts.transition(.sending, on: resolution.event), .failed)
         XCTAssertEqual(WorklogDrafts.transition(.failed, on: .retry), .sending, "retryable")
     }
 
-    func testALostAnswerWhoseCheckFailsTooIsUncertain() async throws {
+    func testALostAnswerWhoseCheckFailsIsUncertain() async throws {
         StubProtocol.reset { _ in Answer(error: .timedOut) }
-        let verdict = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
-        XCTAssertEqual(verdict, .uncertain)
-        XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET"], "one check, never a loop")
-        let resolution = WorklogDrafts.resolution(of: verdict, source: .jira)
+        let first = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
+        XCTAssertEqual(first, .uncertain)
+        XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET"], "a failed read is not retried")
+        let resolution = WorklogDrafts.resolution(of: first, source: .jira)
         XCTAssertEqual(WorklogDrafts.transition(.sending, on: resolution.event), .uncertain)
+
+        for failing in [Answer(error: .notConnectedToInternet), Answer(status: 500), Answer(status: 401), Answer(status: 200, body: "not json")] {
+            StubProtocol.reset(Self.lostThenReads(Answer(error: .timedOut), [Answer(status: 200, body: Self.empty), failing]))
+            let second = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
+            XCTAssertEqual(second, .uncertain, "a miss then a failed read is not 'not there': \(failing)")
+            XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET", "GET"])
+        }
+    }
+
+    func testTheSecondReadWaitsAndRespectsCancellation() async throws {
+        XCTAssertEqual(WorklogPoster().recheckDelay, .seconds(3), "the pause Jira gets to finish committing")
+
+        StubProtocol.reset { request in Self.isPOST(request) ? Answer(error: .timedOut) : Answer(status: 200, body: Self.empty) }
+        // The wait begins only after the first read returned `.notFound`, so cancelling once it has
+        // begun pins the wait's own cancellation, never the first GET's.
+        let waitBegan = expectation(description: "the first read missed and the wait began")
+        let slow = WorklogPoster(session: session, recheckDelay: .seconds(60), clock: ReportingClock(began: waitBegan))
+        let request = try jiraRequest()
+        let entryLookup = lookup
+        let start = ContinuousClock.now
+        let sending = Task { await slow.postJiraWorklog(request, lookup: entryLookup) }
+        await fulfillment(of: [waitBegan], timeout: 5)
+        XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET"], "the first read was made and missed before the wait")
+        sending.cancel()
+        let verdict = await sending.value
+        XCTAssertEqual(verdict, .uncertain, "a wait cut short never says 'not there'")
+        XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET"], "no second read after cancellation")
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(30), "the 60 s wait ended with the cancellation")
     }
 
     func testTheCheckAloneFindsOrMisses() async {

@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - A lost Jira worklog answer is checked twice before Kannu says nothing was logged
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on #83: a lost Jira POST is read back twice, 3 s apart, before it counts as not logged; a wait cut short stays uncertain
+- **Changes:**
+  - `WorklogPoster.verifyLostJiraWorklog`: after a POST whose answer was lost (timeout, dropped
+    connection, 502/504), one read-only `GET` that finds nothing is no longer an answer, because
+    Jira may still be committing the POST. It waits `recheckDelay` (3 s) and reads once more; only
+    two misses give `.checkedNotFound` (failed, Retry), a read that fails gives `.uncertain`, and a
+    wait cut short by cancellation gives `.uncertain` too — never "not logged" on a guess, which is
+    what let Keep Local Only drop an entry Jira holds. Found on either read is logged. The marker is
+    still matched first, then author, start and length.
+  - The wait sleeps on an injected `clock: any Clock<Duration>` (default `ContinuousClock`), so the
+    test of a cut-short wait can see the wait begin instead of racing the first read's cancellation.
+  - `WorklogDrafts.Verdict.checkedNotFound` and `TasksManager.confirmWorklog`'s steps say two checks.
+  - Tests: WorklogPosterTests — found on the second read is logged with the same `GET` repeated; not
+    found twice is `.checkedNotFound` with exactly `POST, GET, GET`; a miss then a failed read
+    (offline, 500, 401, unreadable JSON) is `.uncertain`; a 60 s wait cancelled once a reporting
+    clock says it began is `.uncertain` with no second read and ends with the cancellation.
+
 ### 2026-10-04 - Brain › Tasks: Time to log asks before your recorded time goes to Jira or GitLab
 - **Developer label:** "task will have option to add estimate and also record the actual time, work on how we could manage jira tickets well"
 - **Agent label:** Brain Tasks PR5: ask, then log — Jira worklogs and GitLab spent time, sent only from the user's click, written ahead, reconciled once
@@ -35,10 +54,11 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     an ADF comment only when one was typed, and `properties [{key:"kannu", value:{entry:<draft id>}}]`.
     2xx is logged with the worklog id; 400/403/404 fail with Jira's own reason; 401 asks to
     reconnect (and the Sources row shows the refused token); 429 and offline fail, retryable; a lost
-    answer (timeout, dropped connection, 502/504) is checked with one read-only `GET
-    …/worklog?startedAfter=…&startedBefore=…&expand=properties`, matching the marker, then author,
-    start and length: found is logged, missing fails retryable, a failed check stays uncertain. A
-    Jira retry always checks first, so an entry is never logged twice.
+    answer (timeout, dropped connection, 502/504) is checked with up to two read-only `GET
+    …/worklog?startedAfter=…&startedBefore=…&expand=properties`, 3 s apart, matching the marker, then
+    author, start and length: found is logged, missing twice fails retryable, a failed check or a
+    wait cut short stays uncertain. A Jira retry always checks first, so an entry is never logged
+    twice.
   - GitLab: `POST /api/v4/projects/:id/issues/:iid/add_spent_time?duration=1h15m`, or
     `merge_requests/:iid/add_spent_time` for a merge request, token only in `PRIVATE-TOKEN`. A
     read_api token offers only Keep local only, and says why. A lost answer reads "May already be
@@ -46,7 +66,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Disconnect keeps the entries: kept local, or sent once reconnected to the same site or server.
     Footers and the Connect sheets now say Kannu writes only when you log time; both Sources footers
     still say the token is kept in your Keychain.
-  - New pure file in the logic target: `WorklogPoster` (the send and the one read-only check over
+  - New pure file in the logic target: `WorklogPoster` (the send and the read-only checks over
     `IntegrationHTTP`). `JiraAPI` gains the worklog and check request builders, the marker match and
     Jira's refusal reason; `GitLabAPI` the spend request and duration; `WorklogDrafts` the verdicts,
     availability, card text and `deferredAt`; `JiraSite.apiURL` takes a query. App file:
@@ -54,7 +74,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Tests: JiraWorklogRequestTests (`started` at +0000, +0530 and across DST, the marker, ADF,
     `notifyUsers=false`, `adjustEstimate=auto`, the check request and matching),
     GitLabSpendRequestTests (issue vs merge request path, duration format, `PRIVATE-TOKEN` only),
-    WorklogPosterTests (a `URLProtocol` stub: every outcome, exactly one check on Jira, none on
+    WorklogPosterTests (a `URLProtocol` stub: every outcome, at most two checks on Jira, none on
     GitLab), WorklogDraftTests extended (15-minute rounding, `.sending` saved then relaunched is
     uncertain with its card's reason, a typed length surviving the next fold, reconcile found is
     logged, Not now, availability), WorklogConsentRulesTests (source scan with planted offenders:

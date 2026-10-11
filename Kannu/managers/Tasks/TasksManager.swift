@@ -439,7 +439,8 @@ final class TasksManager: ObservableObject {
     ///    the site or server the time was recorded against.
     /// 3. **Jira:** a retry first asks Jira, read-only, whether the entry is already there (its
     ///    `kannu` marker), and sends only if it is not. Then `POST …/worklog?adjustEstimate=auto&
-    ///    notifyUsers=false`; a lost answer is checked once more, read-only.
+    ///    notifyUsers=false`; a lost answer is checked read-only, twice a few seconds apart, before
+    ///    it counts as not logged.
     ///    **GitLab:** `POST …/add_spent_time?duration=`; a lost answer is uncertain, and the user
     ///    chooses Mark Logged or Send Again.
     /// 4. Immediately before either request is built, after the last wait, `canStillSend` looks

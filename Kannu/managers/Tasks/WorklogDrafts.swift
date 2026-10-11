@@ -221,15 +221,15 @@ enum WorklogDrafts {
         case authRejected(status: Int)
         /// It never reached the server: offline, unreachable, or a rate limit.
         case notSent(HTTPOutcome)
-        /// Jira lost the answer, and the one read-only check found no such entry.
+        /// Jira lost the answer, and both read-only checks, a few seconds apart, found no such entry.
         case checkedNotFound
         /// It may have arrived and could not be checked.
         case uncertain
     }
 
     /// The verdict an answer to a write gives on its own. A lost answer (`.ambiguous`: a timeout, a
-    /// dropped connection, a 5xx) is `.uncertain` here; `WorklogPoster` checks Jira once before
-    /// settling for that.
+    /// dropped connection, a 5xx) is `.uncertain` here; `WorklogPoster` checks Jira, read-only,
+    /// before settling for that.
     static func verdict(for outcome: HTTPOutcome, reason: String?) -> Verdict {
         switch outcome {
         case .ok:
