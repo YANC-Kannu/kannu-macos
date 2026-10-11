@@ -46,7 +46,8 @@ struct RulerTimerPicker: View {
     let tintColor: Color
     let startAction: () -> Void
     /// The pointer entered (true) or left (false) the ruler strip, whose sideways scroll sets the
-    /// minutes: `NotchTimerView` holds its tab-wide page swipe off meanwhile.
+    /// minutes: `NotchTimerView` holds its tab-wide page swipe off meanwhile. A second guard: the
+    /// swipe already yields over the strip by geometry (`ScrollWheelMonitor.ownsSidewaysScroll`).
     var onScrollAreaHover: (Bool) -> Void = { _ in }
 
     // Raw continuous value for smooth dragging
@@ -186,7 +187,9 @@ struct RulerTimerPicker: View {
             )
 #if canImport(AppKit)
             .background {
-                ScrollWheelMonitor { event in
+                // The sideways scroll over this strip is the ruler's: the tab's page swipe
+                // (`HorizontalSwipeMonitor`) yields by this view's live frame, not by hover.
+                ScrollWheelMonitor(ownsSidewaysScroll: true) { event in
                     guard event.isHorizontalTrackpadScroll else { return false }
                     applyTrackpadScroll(event.scrollingDeltaX)
                     return true

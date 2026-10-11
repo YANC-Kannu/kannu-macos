@@ -92,7 +92,9 @@ enum TaskReminderPlan {
     /// - A waiting request is taken back when its task no longer wants one, or wants one whose time
     ///   has passed (it can never fire).
     /// - A reminder on screen is taken back only when its task no longer wants one at all.
-    /// - With `canAdd`, every wanted reminder still ahead that macOS is not holding is added.
+    /// - With `canAdd`, every wanted reminder still ahead is sent again (`resend`), held or not: a
+    ///   request macOS holds can carry an older date or title — one it kept while notifications
+    ///   were off, say — and only a resend replaces it. Judged at the same `now` as the removals.
     static func reconcile(pending: [String], delivered: [String], wanted: [UUID: Reminder],
                           now: Date, canAdd: Bool) -> Changes {
         let pendingIDs = pending.filter { $0.hasPrefix(identifierPrefix) }
@@ -104,10 +106,7 @@ enum TaskReminderPlan {
         let staleDelivered = deliveredIDs.filter { identifier in
             taskID(fromIdentifier: identifier).flatMap { wanted[$0] } == nil
         }
-        let held = Set(pendingIDs)
-        let add = canAdd
-            ? soonestFirst(wanted.values.filter { $0.date > now && !held.contains(identifier(for: $0.taskID)) })
-            : []
+        let add = canAdd ? resend(wanted, now: now).add : []
         return Changes(add: add, remove: Array(Set(stalePending + staleDelivered)).sorted())
     }
 
