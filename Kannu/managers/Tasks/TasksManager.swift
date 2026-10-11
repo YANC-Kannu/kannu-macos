@@ -75,6 +75,9 @@ final class TasksManager: ObservableObject {
     struct InterruptedSession: Identifiable {
         let task: TaskItem
         let segment: WorkSegment
+        /// When the next session on the task began, if one has: the end may not pass it
+        /// (`TaskTimeMath.nextStart`). Clock-free, so the view caps it at now when it renders.
+        let nextSessionStart: Date?
         var id: UUID { segment.id }
     }
 
@@ -126,6 +129,14 @@ final class TasksManager: ObservableObject {
     private var jiraSyncInFlight: Int?
     /// The page appeared before the task file was read: sync once it is.
     private var pendingJiraSyncWhenReady = false
+    /// Refresh was asked while a sync was running. That sync carries the filter it started with,
+    /// so it would end with "Synced" for the old filter and mark tasks gone against it: the
+    /// refresh runs when it is done. Connect and Disconnect drop it with the sync.
+    private var pendingJiraRefresh = false
+    /// Connects between their first await and their return. `isJiraConnected` stays false until
+    /// a Connect's save has landed, so it alone cannot tell "Remove Token" that a new token is on
+    /// its way into the Keychain.
+    private var jiraConnectsInFlight = 0
     /// The same four, for GitLab. Its generation also moves when Include merge requests is switched
     /// during a sync, which read the old setting.
     private var lastGitLabSync: Date?
@@ -192,8 +203,16 @@ final class TasksManager: ObservableObject {
 
     /// Segments left open by a quit or a crash, newest first, with their task.
     var interruptedSessions: [InterruptedSession] {
-        tasks.flatMap { task in task.segments.filter(\.isInterrupted).map { InterruptedSession(task: task, segment: $0) } }
-            .sorted { $0.segment.start > $1.segment.start }
+        tasks.flatMap { task in
+            task.segments.filter(\.isInterrupted).map { segment in
+                InterruptedSession(
+                    task: task,
+                    segment: segment,
+                    nextSessionStart: TaskTimeMath.nextStart(after: segment, in: task.segments)
+                )
+            }
+        }
+        .sorted { $0.segment.start > $1.segment.start }
     }
 
     func trackedSeconds(of task: TaskItem, now: Date = Date()) -> Int {
@@ -402,13 +421,15 @@ final class TasksManager: ObservableObject {
     }
 
     /// Ends an interrupted session where the user says it ended: never before it started, never in
-    /// the future.
+    /// the future, and never past the start of a later session on the task, so work timed again
+    /// after a crash is not counted twice.
     func setEndTime(_ end: Date, segmentID: UUID, taskID: UUID) {
         guard let index = tasks.firstIndex(where: { $0.id == taskID }),
               let segmentIndex = tasks[index].segments.firstIndex(where: { $0.id == segmentID && $0.isInterrupted }) else { return }
         var task = tasks[index]
-        let start = task.segments[segmentIndex].start
-        task.segments[segmentIndex].end = min(max(start, end), max(start, Date()))
+        let segment = task.segments[segmentIndex]
+        let bound = TaskTimeMath.endBound(for: segment, in: task.segments, now: Date())
+        task.segments[segmentIndex].end = min(max(segment.start, end), bound)
         let folded = WorklogDrafts.folding(task, into: drafts)
         tasks[index] = folded.task
         drafts = folded.drafts
@@ -455,7 +476,8 @@ final class TasksManager: ObservableObject {
     ///    the site or server the time was recorded against.
     /// 3. **Jira:** a retry first asks Jira, read-only, whether the entry is already there (its
     ///    `kannu` marker), and sends only if it is not. Then `POST …/worklog?adjustEstimate=auto&
-    ///    notifyUsers=false`; a lost answer is checked once more, read-only.
+    ///    notifyUsers=false`; a lost answer is checked read-only, twice a few seconds apart, before
+    ///    it counts as not logged.
     ///    **GitLab:** `POST …/add_spent_time?duration=`; a lost answer is uncertain, and the user
     ///    chooses Mark Logged or Send Again.
     /// 4. Immediately before either request is built, after the last wait, `canStillSend` looks
@@ -715,10 +737,17 @@ final class TasksManager: ObservableObject {
         syncJira(interactive: false, using: nil)
     }
 
-    /// Refresh, and Allow Keychain Access: the user asked, so the Keychain may ask them too.
+    /// Refresh, Allow Keychain Access, and Return or Reset on the issue filter: the user asked, so
+    /// the Keychain may ask them too. During a sync only the filter row can get here (Refresh is
+    /// disabled and the Keychain row hidden while one runs), and its request is kept, not dropped:
+    /// that sync fetches the filter it started with, and runs again for the new one when it finishes.
     func refreshJira(now: Date = Date()) {
-        guard isJiraSyncOn, isReady, !isJiraSyncing else { return }
+        guard isJiraSyncOn, isReady else { return }
         if case .rateLimited(let until) = jiraSync, until > now { return }
+        guard !isJiraSyncing else {
+            pendingJiraRefresh = true
+            return
+        }
         syncJira(interactive: true, using: nil)
     }
 
@@ -739,12 +768,19 @@ final class TasksManager: ObservableObject {
             return String(localized: "An API token has no spaces in it. Copy it again from Atlassian.")
         }
         let credential = JiraCredential(site: host, email: email, token: token)
+        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
+        let generation = jiraGeneration
+        jiraConnectsInFlight += 1
+        defer { jiraConnectsInFlight -= 1 }
         let verified: JiraMyself
         switch await JiraClient().verify(credential) {
         case .verified(let myself): verified = myself
         case .failed(let failure): return Self.connectMessage(for: failure, host: host)
         }
-        guard !Task.isCancelled else { return String(localized: "Cancelled.") }
+        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
+        // Keychain item now: nothing is saved over it. After the save the connect is committed —
+        // the Keychain and the display copies change together, below, with no await between.
+        guard !Task.isCancelled, generation == jiraGeneration else { return String(localized: "Cancelled.") }
         guard await JiraCredentialStore.save(credential) else {
             return String(localized: "Jira accepted the token, but Kannu could not save it in your Keychain.")
         }
@@ -754,6 +790,7 @@ final class TasksManager: ObservableObject {
         Defaults[.jiraEnabled] = true
         jiraGeneration += 1
         jiraSyncInFlight = nil
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         // The save replaced whatever a failed Disconnect left in the Keychain.
@@ -777,6 +814,7 @@ final class TasksManager: ObservableObject {
         jiraGeneration += 1
         jiraSyncInFlight = nil
         pendingJiraSyncWhenReady = false
+        pendingJiraRefresh = false
         lastJiraSync = nil
         jiraSync = .idle
         Defaults[.jiraEnabled] = false
@@ -799,8 +837,10 @@ final class TasksManager: ObservableObject {
 
     /// Disconnect could not delete the saved token: the user asks again. The delete may raise the
     /// Keychain dialog (an item saved by a differently signed build); it runs off the main actor.
+    /// Not while a Connect is in flight: the display copies still say disconnected until its save
+    /// lands, and a delete queued behind that save would take the new token with it.
     func retryRemovingJiraToken() {
-        guard !isJiraConnected else { return }
+        guard !isJiraConnected, jiraConnectsInFlight == 0 else { return }
         removeJiraToken()
     }
 
@@ -860,6 +900,17 @@ final class TasksManager: ObservableObject {
         guard generation == jiraGeneration else { return }
         jiraSyncInFlight = nil
         jiraSync = state
+        guard pendingJiraRefresh else { return }
+        pendingJiraRefresh = false
+        // The filter changed under this sync: run the user's Refresh now, with Refresh's own
+        // guards. Not after a refused token or a sign-in that needs reconnecting, though: a new
+        // filter does not change that answer, and sending the token again can lock the account.
+        // Nor after the user declined the Keychain dialog: running again would raise it straight
+        // back. The Allow Keychain Access button carries that retry, and it reads the current filter.
+        switch state {
+        case .authFailed, .needsReconnect, .needsKeychainApproval: return
+        default: refreshJira()
+        }
     }
 
     private func didFetchJira(_ outcome: SyncOutcome, failure: JiraClient.Failure?, host: String, generation: Int) {
