@@ -26,9 +26,12 @@ import os
 ///
 /// - Permission is asked only from `TasksManager.setSchedule`, the first time the user schedules a
 ///   task — never at launch (`TaskListRulesTests`).
-/// - `TaskReminderCenter.install()` runs in `continueLaunch()`, after the Terms of Use: it sets the
-///   delegate and the Start category, which asks nothing and reads no file.
+/// - `TaskReminderCenter.install()` runs in `applicationDidFinishLaunching`, before the Terms of
+///   Use gate: it sets the delegate and the Start category, which asks nothing and reads no file.
+///   A response that arrives before `continueLaunch()` has run waits there (`LaunchGateRulesTests`).
 /// - What to add or take back is worked out by the pure `TaskReminderPlan`.
+/// - Whatever reads what macOS holds and then changes it runs on one chain (`serially`), in the
+///   order asked for, so a removal computed from an earlier snapshot lands before the next read.
 enum TaskReminders {
     static let categoryID = "kannu.task-reminder"
     static let startActionID = "kannu.task-reminder.start"
@@ -103,10 +106,28 @@ enum TaskReminders {
         return (pending.filter { $0.hasPrefix(prefix) }, delivered.filter { $0.hasPrefix(prefix) })
     }
 
+    /// The operations that read what macOS holds and then change it, in the order they were asked
+    /// for. Each one is a `held()` and then an `apply`, and a change computed from one snapshot
+    /// must land before the next snapshot is read: Tasks turned off and on again within a moment
+    /// would otherwise have the removal, computed first, take back the reminders the resend had
+    /// just sent, and macOS would hold nothing with Tasks on (`TaskListRulesTests`).
+    @MainActor private static var chain: Task<Void, Never>?
+
+    /// Runs `operation` once every operation queued before it has finished.
+    @MainActor
+    static func serially(_ operation: @escaping @MainActor () async -> Void) {
+        let previous = chain
+        chain = Task {
+            await previous?.value
+            await operation()
+        }
+    }
+
     /// Takes back every task reminder, waiting or on screen: tasks were turned off. Reads no file
     /// and does not build `TasksManager`.
+    @MainActor
     static func withdrawAll() {
-        Task {
+        serially {
             let held = await held()
             apply(TaskReminderPlan.reconcile(pending: held.pending, delivered: held.delivered,
                                              wanted: [:], now: Date(), canAdd: false))
@@ -127,15 +148,35 @@ enum TaskReminders {
 }
 
 /// Answers the reminders: Start times the task, a click on the notification opens Brain at the
-/// Task list. Installed in `continueLaunch()`, after the Terms of Use.
+/// Task list.
+///
+/// Installed in `applicationDidFinishLaunching`, before the Terms of Use gate: a click on a
+/// reminder while Kannu is not running launches it, and macOS hands the response to whatever
+/// delegate is set by the time that method returns — one set in `continueLaunch()` never sees it.
+/// Installing only sets the delegate. The response itself waits here until `launchDidContinue()`,
+/// which `continueLaunch()` calls last, so nothing acts before the terms are accepted and before
+/// what the answer needs (the Settings window, `TasksManager`) may exist.
 final class TaskReminderCenter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = TaskReminderCenter()
+
+    /// A click on a reminder, as `didReceive` hands it over.
+    private struct Response {
+        let taskID: UUID
+        let action: String
+        /// The notification's own completion: runs once the click has been answered.
+        let completion: () -> Void
+    }
+
+    /// Responses arriving before the launch continued wait in `waiting`. Both are main-actor
+    /// state: `didReceive` hops there before touching them, and the compiler holds the rest to it.
+    @MainActor private var launchContinued = false
+    @MainActor private var waiting: [Response] = []
 
     private override init() {
         super.init()
     }
 
-    /// Sets the delegate and the Start category. Asks nothing and reads no file.
+    /// Sets the delegate and the Start category. Asks nothing, reads no file and builds nothing.
     func install() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -155,27 +196,53 @@ final class TaskReminderCenter: NSObject, UNUserNotificationCenterDelegate {
         completionHandler(isReminder ? [.banner, .list, .sound] : [])
     }
 
+    /// The launch ran (`continueLaunch()`): the responses held until now are answered, in order.
+    @MainActor
+    func launchDidContinue() {
+        launchContinued = true
+        let held = waiting
+        waiting.removeAll()
+        for response in held { answer(response) }
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let taskID = TaskReminderPlan.taskID(fromIdentifier: response.notification.request.identifier)
-        let action = response.actionIdentifier
-        completionHandler()
-        guard let taskID else { return }
+        // Another app's notification, or one of Kannu's that is not a reminder: nothing to answer.
+        guard let taskID = TaskReminderPlan.taskID(fromIdentifier: response.notification.request.identifier) else {
+            completionHandler()
+            return
+        }
+        let reminder = Response(taskID: taskID, action: response.actionIdentifier, completion: completionHandler)
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
-                // With tasks turned off since, a reminder does nothing.
-                guard Defaults[.enableTasks] else { return }
-                if action == TaskReminders.startActionID {
-                    // When the task cannot start (timer off, task gone, file unreadable), the click
-                    // opens the Task list instead of doing nothing.
-                    TasksManager.shared.startFromReminder(taskID) { TasksBrainDestination.taskList.open() }
-                } else if action == UNNotificationDefaultActionIdentifier {
-                    TasksBrainDestination.taskList.open()
-                }
+                if self.launchContinued { self.answer(reminder) } else { self.waiting.append(reminder) }
             }
+        }
+    }
+
+    /// Start times the task; a click on the banner opens the Task list; a dismissal does nothing.
+    /// The completion runs after the answer, not before it: for Start, once the task started, the
+    /// Task list opened instead, or the file turned out unreadable.
+    @MainActor
+    private func answer(_ response: Response) {
+        // With tasks turned off since, a reminder does nothing.
+        guard Defaults[.enableTasks] else { return response.completion() }
+        if response.action == TaskReminders.startActionID {
+            // When the task cannot start (timer off, task gone, file unreadable), the click opens
+            // the Task list instead of doing nothing.
+            TasksManager.shared.startFromReminder(
+                response.taskID,
+                otherwise: { TasksBrainDestination.taskList.open() },
+                completion: response.completion
+            )
+        } else if response.action == UNNotificationDefaultActionIdentifier {
+            TasksBrainDestination.taskList.open()
+            response.completion()
+        } else {
+            response.completion()
         }
     }
 }

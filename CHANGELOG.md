@@ -4,6 +4,44 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - Reminders are re-added with their current dates, survive a click during launch, and finish their action before macOS is told
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Brain Tasks PR7 review pass: resend on grant, pre-gate reminder delegate with buffered clicks, completion after the answer, baseline reset on Tasks off and on, one chain for the notification-center work
+- **Changes:**
+  - `TaskReminderPlan.reconcile` with `canAdd` now sends every wanted reminder still ahead again
+    (`resend`), held or not, judged at the same instant as its removals: a request macOS kept while
+    notifications were off carries the date and title the task had then, and only a resend replaces
+    it. Permission granted, the task file read, Tasks turned on and the Task list opened all go
+    through it.
+  - `TaskReminderCenter.shared.install()` moved from `continueLaunch()` to
+    `applicationDidFinishLaunching`, before the Terms of Use gate: a click on a reminder while Kannu
+    is not running launches it, and macOS hands the response to the delegate set by the time that
+    method returns, so one set after the terms missed it. Installing sets the delegate and the Start
+    category only — no permission prompt, no file read, no `TasksManager`. A response arriving before
+    `continueLaunch()` waits in `TaskReminderCenter` (`launchContinued` and `waiting`, main-actor
+    state) and is answered by `launchDidContinue()`, which `continueLaunch()` calls last; the Enable
+    tasks check and the Start and default actions are unchanged.
+  - The notification's completion handler runs after the click is answered, not before it: Start's
+    completion goes to `TasksManager.startFromReminder(_:otherwise:completion:)` and runs after the
+    start, the Task-list fallback or the load's failure; a Start replaced by a second click before
+    the file is read is completed when it is discarded; a click on the banner completes once the
+    Task list has opened.
+  - Tasks off empties `reminderBaseline` along with macOS, and a save with Tasks off wants nothing,
+    so Tasks on sends every reminder again at once instead of only what changed since. Tasks on also
+    restores the baseline to the list first, as at load: left empty, the next save counted every
+    reminder as changed and took a reminder that had fired in between off the screen.
+  - `TaskReminders.serially` runs the notification-center operations one after another —
+    `withdrawAll` and `TasksManager.checkReminderPermission` both go through it. Each reads what
+    macOS holds and then changes it, and Tasks turned off and on again within a moment could
+    otherwise have the removal, computed first, take back the reminders the resend had just sent.
+  - Tests: TaskReminderPlanTests (the reconcile resends what is ahead and judges additions and
+    removals at one instant; an empty baseline takes back a reminder that fired), LaunchGateRulesTests
+    (the delegate is installed once, before the gate, and asks, reads and builds nothing; a click
+    waits for the launch and is answered last; a planted offender for each), TaskListRulesTests (the
+    completion after the answer, the baseline emptied on Tasks off and restored on Tasks on, both
+    operations on the chain). The 2026-10-06 entry below is corrected where it placed the delegate
+    in `continueLaunch()`.
+
 ### 2026-10-06 - Brain › Tasks gets a Task list page with filters, tags and reminders, real drag and drop, and shorter text
 - **Developer label:** "there should be drag and drop and for all explaination we give like this, try to make it cleaner; also where is seperate tab for task listing with filtered tabs and all"
 - **Agent label:** Brain Tasks PR7: Task list sub-page (Source/Project/Status/Tag filters, tags, local-task reminders), draggable/dropDestination reordering, copy pass
@@ -42,8 +80,9 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     back, and while notifications are allowed any wanted reminder still ahead that macOS is missing
     is added, so notifications turned on while Kannu was not running, or a replaced `tasks.json`,
     are caught. Turning Enable tasks off takes back every task reminder, waiting or shown.
-    `TaskReminderCenter` is installed in `continueLaunch()` after the terms (a delegate and a
-    category only: no prompt, no file read, `TasksManager` stays lazy); Start times the task, a
+    `TaskReminderCenter` is installed in `applicationDidFinishLaunching`, before the terms gate (a
+    delegate and a category only: no prompt, no file read, `TasksManager` stays lazy; a click that
+    arrives before the launch continued waits for it); Start times the task, a
     click opens Brain on the Task list itself. A Start that cannot start (the timer is off, the task
     is gone, the file could not be read) opens the Task list instead of doing nothing. Kannu never
     starts a timer on its own. With notifications off, the Task list and the Schedule sheet show
@@ -73,8 +112,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     asked only from `setSchedule`, only Start starts a task, with planted offenders; the reminder
     and Task list deep-link wiring above), the drop cases
     in TaskOrderTests and TaskSourceFilterTests, JiraDecodingTests expecting the category,
-    LaunchGateRulesTests (the delegate is installed only
-    in `continueLaunch()`, which asks nothing and builds no `TasksManager`), and BrainNamingRulesTests
+    LaunchGateRulesTests (the delegate is installed once, before the gate, and asks nothing and
+    builds no `TasksManager`), and BrainNamingRulesTests
     allowing "Open Notification Settings" and the Notifications pane's URL. docs/SETTINGS.md
     records the in-tab sub-page rule, names its back row as the one sanctioned lone leading
     button, and replaces the old caption rule with the new copy rule (descriptions in about eight

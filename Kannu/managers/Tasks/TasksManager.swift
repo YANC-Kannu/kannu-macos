@@ -136,12 +136,13 @@ final class TasksManager: ObservableObject {
     private var gitlabSyncInFlight: Int?
     private var pendingGitLabSyncWhenReady = false
     /// The reminders macOS was last told about (`TaskReminderPlan.wanted`). Taken from the file at
-    /// load; each save after that sends only what changed. `checkReminderPermission` checks it
-    /// against what macOS actually holds.
+    /// load; each save after that sends only what changed; emptied when Tasks is turned off, which
+    /// takes them all back. `checkReminderPermission` checks it against what macOS actually holds.
     private var reminderBaseline: [UUID: TaskReminderPlan.Reminder] = [:]
-    /// A reminder's Start clicked before the task file was read, and what to do if it cannot
-    /// start: tried once the file is read, or the fallback runs when it cannot be.
-    private var pendingReminderStart: (taskID: UUID, otherwise: () -> Void)?
+    /// A reminder's Start clicked before the task file was read, what to do if it cannot start,
+    /// and the notification's completion: tried once the file is read, or the fallback runs when
+    /// it cannot be, and the completion runs after either.
+    private var pendingReminderStart: (taskID: UUID, otherwise: () -> Void, completion: () -> Void)?
 
     private init() {
         store = TaskFileStore(directory: { AppSupportPaths.child("Tasks") })
@@ -173,6 +174,25 @@ final class TasksManager: ObservableObject {
             MainActor.assumeIsolated { self?.objectWillChange.send() }
         }
         .store(in: &cancellables)
+        // Tasks off: Settings takes every reminder back (`TaskReminders.withdrawAll`), so macOS holds
+        // none, and the baseline must say so — or the next save would send only what changed since,
+        // and the unchanged reminders would stay missing. Tasks on: they are sent again at once, and
+        // the baseline is the list again, as at load — left empty, the next save would count every
+        // reminder as changed and take back one that fired in between (`TaskReminderPlanTests`).
+        Defaults.publisher(.enableTasks, options: [])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] change in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    if change.newValue {
+                        self.reminderBaseline = TaskReminderPlan.wanted(self.tasks)
+                        self.checkReminderPermission()
+                    } else {
+                        self.reminderBaseline = [:]
+                    }
+                }
+            }
+            .store(in: &cancellables)
         Task { await load() }
     }
 
@@ -429,11 +449,13 @@ final class TasksManager: ObservableObject {
     /// Whether macOS still lets the reminders show, and whether it holds the ones the list wants.
     /// Asks nothing. Judged from what macOS reports, not from the file: requests for tasks that
     /// are gone (or for everything, with tasks off) are taken back, and, while notifications are
-    /// allowed, any wanted reminder still ahead that macOS is missing is added. Runs after the
-    /// task file is read and whenever the Task list opens.
+    /// allowed, every wanted reminder still ahead is sent again, so one macOS holds with an older
+    /// date is replaced. Runs after the task file is read, when Tasks is turned on and whenever
+    /// the Task list opens — after any `withdrawAll` asked for before it, so a removal computed
+    /// from an earlier snapshot never takes back what this resend sends.
     func checkReminderPermission() {
         guard isReady else { return }
-        Task { [weak self] in
+        TaskReminders.serially { [weak self] in
             let permission = await TaskReminders.permission()
             let held = await TaskReminders.held()
             guard let self, isReady else { return }
@@ -448,15 +470,21 @@ final class TasksManager: ObservableObject {
 
     /// Start, on a task's reminder: the user's click. Before the task file is read, it waits for
     /// it. When the task cannot start — the timer is off, the task is gone, or the file could not
-    /// be read — `otherwise` runs, so the click is never silently lost.
-    func startFromReminder(_ taskID: UUID, otherwise: @escaping () -> Void) {
+    /// be read — `otherwise` runs, so the click is never silently lost. `completion` is the
+    /// notification's own, and runs once the click has been answered: after the start, the
+    /// fallback, or the load's failure — never before.
+    func startFromReminder(_ taskID: UUID, otherwise: @escaping () -> Void, completion: @escaping () -> Void) {
         switch loadState {
         case .loading:
-            pendingReminderStart = (taskID, otherwise)
+            // A second click before the file is read replaces the first, whose notification is done.
+            pendingReminderStart?.completion()
+            pendingReminderStart = (taskID, otherwise, completion)
         case .failed:
             otherwise()
+            completion()
         case .ready:
             if !start(taskID) { otherwise() }
+            completion()
         }
     }
 
@@ -1353,6 +1381,7 @@ final class TasksManager: ObservableObject {
             if let pending = pendingReminderStart {
                 pendingReminderStart = nil
                 pending.otherwise()
+                pending.completion()
             }
         }
     }
@@ -1393,6 +1422,7 @@ final class TasksManager: ObservableObject {
         if let pending = pendingReminderStart {
             pendingReminderStart = nil
             if !start(pending.taskID) { pending.otherwise() }
+            pending.completion()
         }
         checkReminderPermission()
     }
@@ -1416,9 +1446,10 @@ final class TasksManager: ObservableObject {
     }
 
     /// Tells macOS about reminders that changed with this edit: added, moved, retitled, or gone
-    /// because the task was done, hidden, deleted or unscheduled.
+    /// because the task was done, hidden, deleted or unscheduled. With Tasks off nothing is wanted:
+    /// the baseline is empty then, and a save must not send the whole list back.
     private func syncReminders() {
-        let wanted = TaskReminderPlan.wanted(tasks)
+        let wanted = Defaults[.enableTasks] ? TaskReminderPlan.wanted(tasks) : [:]
         let changes = TaskReminderPlan.changes(from: reminderBaseline, to: wanted, now: Date())
         reminderBaseline = wanted
         TaskReminders.apply(changes)

@@ -116,8 +116,8 @@ final class TaskListRulesTests: XCTestCase {
     func testOnlyTheStartActionStartsATask() throws {
         let reminders = try Self.read(Self.remindersPath)
         XCTAssertEqual(Self.occurrences(of: "startFromReminder(", in: reminders), 1)
-        let startCall = try XCTUnwrap(reminders.range(of: "TasksManager.shared.startFromReminder(taskID)"))
-        let guardAction = try XCTUnwrap(reminders.range(of: "if action == TaskReminders.startActionID"))
+        let startCall = try XCTUnwrap(reminders.range(of: "TasksManager.shared.startFromReminder("))
+        let guardAction = try XCTUnwrap(reminders.range(of: "if response.action == TaskReminders.startActionID"))
         XCTAssertLessThan(guardAction.lowerBound, startCall.lowerBound, "a task starts without the Start action")
         XCTAssertFalse(reminders.contains("startTimer("), "the reminders file starts a timer itself")
         XCTAssertFalse(reminders.contains(".start("), "the reminders file starts a task itself")
@@ -148,11 +148,66 @@ final class TaskListRulesTests: XCTestCase {
                       "Show all in Brain lands on the row, not the Task list")
         XCTAssertTrue(settings.contains("showsTaskList = id == SettingsDeepLink.tasksListOpenID"),
                       "the Task list's deep link does not open it")
-        XCTAssertTrue(reminders.contains("TasksManager.shared.startFromReminder(taskID) { TasksBrainDestination.taskList.open() }"),
+        XCTAssertTrue(reminders.contains("otherwise: { TasksBrainDestination.taskList.open() },"),
                       "a Start that cannot start is a silent no-op")
         let failed = try XCTUnwrap(manager.range(of: "loadState = .failed(reason)"))
         XCTAssertTrue(manager[failed.upperBound...].prefix(200).contains("pending.otherwise()"),
                       "a Start clicked before a failed load is dropped")
+    }
+
+    /// The notification's completion runs after the click is answered (CodeRabbit on #86: it ran
+    /// first, so macOS took the response as handled while the start had not happened yet), and
+    /// Tasks off empties the reminder baseline along with macOS, so Tasks on sends every reminder
+    /// again instead of only the ones that changed since.
+    func testAReminderIsCompletedAfterItsAnswerAndTasksOffEmptiesTheBaseline() throws {
+        let manager = try Self.read(Self.managerPath)
+        let reminders = try Self.read(Self.remindersPath)
+        // The delegate completes another app's notification on arrival, and hands a reminder's on.
+        XCTAssertEqual(Self.occurrences(of: "completionHandler()", in: reminders), 1, "a reminder is completed on arrival")
+        XCTAssertTrue(reminders.contains("else {\n            completionHandler()\n            return\n        }"),
+                      "the one completion on arrival is not the other-notification branch")
+        XCTAssertTrue(reminders.contains("completion: completionHandler)"), "the completion never reaches the answer")
+        XCTAssertTrue(reminders.contains("completion: response.completion\n"), "Start's completion never reaches TasksManager")
+        XCTAssertTrue(reminders.contains("TasksBrainDestination.taskList.open()\n            response.completion()"),
+                      "a click on the banner is completed before the Task list opens")
+        // TasksManager completes after the start, the fallback or the load's failure, and completes
+        // a click it discards for a later one.
+        let start = try XCTUnwrap(Self.functionBody("startFromReminder", in: manager))
+        XCTAssertTrue(start.contains("pendingReminderStart?.completion()\n            pendingReminderStart = (taskID, otherwise, completion)"),
+                      "a replaced waiting click is never completed")
+        XCTAssertTrue(start.contains("otherwise()\n            completion()"), "a failed load's fallback is not followed by the completion")
+        XCTAssertTrue(start.contains("if !start(taskID) { otherwise() }\n            completion()"), "the completion runs before the start")
+        XCTAssertTrue(try XCTUnwrap(Self.functionBody("apply", in: manager))
+                        .contains("if !start(pending.taskID) { pending.otherwise() }\n            pending.completion()"),
+                      "a click that waited for the file is not completed after its start")
+        let failed = try XCTUnwrap(manager.range(of: "loadState = .failed(reason)"))
+        XCTAssertTrue(manager[failed.upperBound...].prefix(300).contains("pending.otherwise()\n                pending.completion()"),
+                      "a click that waited for a failed load is not completed after its fallback")
+        // Tasks off: the baseline follows macOS; Tasks on: the reminders are sent again.
+        let toggle = try XCTUnwrap(manager.range(of: "Defaults.publisher(.enableTasks, options: [])"),
+                                   "TasksManager no longer watches the Tasks switch")
+        let reaction = manager[toggle.upperBound...].prefix(600)
+        XCTAssertTrue(reaction.contains("reminderBaseline = [:]"),
+                      "Tasks off leaves the baseline full: after Tasks on, the next save sends only what changed")
+        let resent = try XCTUnwrap(reaction.range(of: "checkReminderPermission()"),
+                                   "Tasks on waits for the Task list to send the reminders again")
+        // Tasks on also restores the baseline, ahead of the resend: left empty, the next save counts
+        // every reminder as changed and takes a fired one off the screen (TaskReminderPlanTests).
+        let restored = try XCTUnwrap(reaction.range(of: "reminderBaseline = TaskReminderPlan.wanted(self.tasks)"),
+                                     "Tasks on leaves the baseline empty: the next save takes back a reminder that fired")
+        XCTAssertLessThan(restored.lowerBound, resent.lowerBound, "the baseline is restored after the resend, not before it")
+        // Off and on again within a moment: the removal, computed first, must land before the resend
+        // reads what macOS holds, so both run on the one chain and neither in a Task of its own.
+        let check = try XCTUnwrap(Self.functionBody("checkReminderPermission", in: manager))
+        XCTAssertTrue(check.contains("TaskReminders.serially { [weak self] in"), "the resend runs outside the reminder chain")
+        XCTAssertFalse(check.contains("Task {"), "the resend runs in a Task of its own, racing withdrawAll")
+        let withdraw = try XCTUnwrap(Self.functionBody("withdrawAll", in: reminders))
+        XCTAssertTrue(withdraw.contains("serially {"), "withdrawAll runs outside the reminder chain")
+        XCTAssertFalse(withdraw.contains("Task {"), "withdrawAll runs in a Task of its own, racing the resend")
+        // With the baseline empty and Tasks off, a save must not send the whole list back.
+        XCTAssertTrue(try XCTUnwrap(Self.functionBody("syncReminders", in: manager))
+                        .contains("Defaults[.enableTasks] ? TaskReminderPlan.wanted(tasks) : [:]"),
+                      "a save with Tasks off sends every reminder again")
     }
 
     // MARK: - Rules

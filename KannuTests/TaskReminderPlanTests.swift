@@ -96,18 +96,43 @@ final class TaskReminderPlanTests: XCTestCase {
         XCTAssertEqual(resend.remove, [], "a resend only adds")
     }
 
+    /// `changes` trusts the baseline as what macOS was last told. Against an empty one, every
+    /// reminder counts as changed, and a changed reminder whose time has passed is taken back — for
+    /// one that fired in between, off the screen. So whoever empties the baseline (Tasks off) must
+    /// fill it again before the next save (Tasks on, in `TasksManager`).
+    func testAnEmptyBaselineTakesBackAReminderThatFired() {
+        let list = [task("Fired", at: -60), task("Ahead", at: 600)]
+        let wanted = Plan.wanted(list)
+        let changes = Plan.changes(from: [:], to: wanted, now: now)
+        XCTAssertEqual(changes.remove, [Plan.identifier(for: list[0].id)], "the fired reminder is taken off the screen")
+        XCTAssertEqual(changes.add.map(\.title), ["Ahead"], "the one ahead is sent again")
+        XCTAssertTrue(Plan.changes(from: wanted, to: wanted, now: now).isEmpty, "with the baseline restored, a save leaves both alone")
+    }
+
     // MARK: - Reconcile with what macOS holds
 
-    func testReconcileAddsWhatMacOSIsMissingOnceAllowed() {
+    func testReconcileResendsEveryReminderStillAheadOnceAllowed() {
         let list = [task("A", at: 1200), task("B", at: 600), task("Past", at: -60)]
         let wanted = Plan.wanted(list)
         let a = Plan.identifier(for: list[0].id)
-        // Notifications were turned on while Kannu was not running: macOS holds only A.
+        // Notifications were turned on while Kannu was not running: macOS holds only A — and the
+        // request it holds may carry the date A had back then.
         let allowed = Plan.reconcile(pending: [a], delivered: [], wanted: wanted, now: now, canAdd: true)
-        XCTAssertEqual(allowed, Plan.Changes(add: [wanted[list[1].id]!], remove: []),
-                       "B is added; A is already held; a past one is never added")
+        XCTAssertEqual(allowed, Plan.resend(wanted, now: now), "the additions are a resend: A replaced, B added, soonest first")
+        XCTAssertEqual(allowed.add.map(\.title), ["B", "A"], "a past one is never added")
+        XCTAssertEqual(allowed.remove, [], "a resend takes nothing back")
         let refused = Plan.reconcile(pending: [], delivered: [], wanted: wanted, now: now, canAdd: false)
         XCTAssertTrue(refused.isEmpty, "nothing is added while macOS refuses")
+    }
+
+    /// Removals and additions are judged at the same instant, so a reminder due exactly `now` is
+    /// neither sent again nor left waiting.
+    func testReconcileJudgesAdditionsAndRemovalsAtTheSameInstant() {
+        let list = [task("Due now", at: 0), task("Ahead", at: 1)]
+        let wanted = Plan.wanted(list)
+        let dueNow = Plan.identifier(for: list[0].id)
+        let changes = Plan.reconcile(pending: [dueNow], delivered: [], wanted: wanted, now: now, canAdd: true)
+        XCTAssertEqual(changes, Plan.Changes(add: [wanted[list[1].id]!], remove: [dueNow]))
     }
 
     func testReconcileTakesBackRequestsTheListNoLongerWants() {
@@ -120,7 +145,7 @@ final class TaskReminderPlanTests: XCTestCase {
         // tasks.json was moved aside: macOS still holds a request for a task that is gone.
         let changes = Plan.reconcile(pending: [kept, gone, other, Plan.identifierPrefix + "nope"],
                                      delivered: [shown, gone, other], wanted: wanted, now: now, canAdd: true)
-        XCTAssertEqual(changes.add, [])
+        XCTAssertEqual(changes.add.map(\.title), ["Kept"], "the kept one is sent again; the shown one is past")
         XCTAssertEqual(changes.remove, [Plan.identifierPrefix + "nope", gone].sorted(),
                        "the gone task's request and shown reminder go; a wanted one shown stays; other apps' stay")
     }
