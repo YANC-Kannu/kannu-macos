@@ -140,7 +140,7 @@ struct TasksSettings: View {
             TasksManager.shared.setEstimate(seconds, for: taskID)
         case (.addTime(let taskID, _), .duration(let seconds)):
             if let seconds { TasksManager.shared.addManualTime(seconds, to: taskID) }
-        case (.endTime(let taskID, let segmentID, _, _), .date(let end)):
+        case (.endTime(let taskID, let segmentID, _, _, _), .date(let end)):
             TasksManager.shared.setEndTime(end, segmentID: segmentID, taskID: taskID)
         default:
             break
@@ -572,7 +572,13 @@ private struct TaskListSections: View {
                     LabeledContent {
                         HStack(spacing: SettingsMetrics.rowContent) {
                             Button("Set End Time…") {
-                                sheet = .endTime(taskID: entry.task.id, segmentID: entry.segment.id, title: entry.task.title, start: entry.segment.start)
+                                sheet = .endTime(
+                                    taskID: entry.task.id,
+                                    segmentID: entry.segment.id,
+                                    title: entry.task.title,
+                                    start: entry.segment.start,
+                                    nextSessionStart: entry.nextSessionStart
+                                )
                             }
                             Button("Discard") {
                                 manager.discardInterruptedSession(segmentID: entry.segment.id, taskID: entry.task.id)
@@ -860,7 +866,9 @@ private enum TaskSheet: Identifiable {
     case customEstimateForNewTask(current: Int?)
     case estimate(taskID: UUID, title: String, current: Int?)
     case addTime(taskID: UUID, title: String)
-    case endTime(taskID: UUID, segmentID: UUID, title: String, start: Date)
+    /// `nextSessionStart` is when the next session on the task began, if one has: the end may not
+    /// pass it. The sheet caps it at now on its own render, so the clock stays live.
+    case endTime(taskID: UUID, segmentID: UUID, title: String, start: Date, nextSessionStart: Date?)
     /// Connect… on the Jira Cloud row: served by `JiraConnectSheet`, not `TaskValueSheet`.
     case connectJira
     /// Connect… on the GitLab row: served by `GitLabConnectSheet`.
@@ -873,7 +881,7 @@ private enum TaskSheet: Identifiable {
         case .customEstimateForNewTask: return "new-task-estimate"
         case .estimate(let taskID, _, _): return "estimate-\(taskID)"
         case .addTime(let taskID, _): return "add-time-\(taskID)"
-        case .endTime(_, let segmentID, _, _): return "end-time-\(segmentID)"
+        case .endTime(_, let segmentID, _, _, _): return "end-time-\(segmentID)"
         }
     }
 }
@@ -903,7 +911,7 @@ private struct TaskValueSheet: View {
         case .addTime, .endTime, .connectJira, .connectGitLab:
             _text = State(initialValue: "")
         }
-        if case .endTime(_, _, _, let start) = sheet {
+        if case .endTime(_, _, _, let start, _) = sheet {
             // Kannu never guesses the end: the picker starts where the session started.
             _date = State(initialValue: start)
         } else {
@@ -946,8 +954,9 @@ private struct TaskValueSheet: View {
 
     @ViewBuilder
     private var field: some View {
-        if case .endTime(_, _, _, let start) = sheet {
-            DatePicker("Stopped working at", selection: $date, in: start...max(start, Date()),
+        if case .endTime(_, _, _, let start, let nextSessionStart) = sheet {
+            // Date() here, not a stored bound: the list may have rendered long before the click.
+            DatePicker("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())),
                        displayedComponents: [.date, .hourAndMinute])
         } else {
             TextField("Length", text: $text, prompt: Text("1h 30m"))
@@ -971,7 +980,7 @@ private struct TaskValueSheet: View {
     private var subject: String? {
         switch sheet {
         case .customEstimateForNewTask, .connectJira, .connectGitLab: return nil
-        case .estimate(_, let title, _), .addTime(_, let title), .endTime(_, _, let title, _): return title
+        case .estimate(_, let title, _), .addTime(_, let title), .endTime(_, _, let title, _, _): return title
         }
     }
 
@@ -981,8 +990,10 @@ private struct TaskValueSheet: View {
             return "How long you expect it to take, such as 1h 30m, 90m or 1.5h. A number on its own is minutes."
         case .addTime:
             return "Time you worked on it without the timer, such as 45m or 1h 15m. It is recorded as ending now."
-        case .endTime:
+        case .endTime(_, _, _, _, .none):
             return "Kannu stopped while this was being timed. When did you stop working on it?"
+        case .endTime:
+            return "Kannu stopped while this was being timed. When did you stop working on it? It cannot end after a later session on this task began."
         case .connectJira, .connectGitLab:
             return ""
         }
