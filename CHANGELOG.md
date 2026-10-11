@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Opus 5.5) — concurrency audit risk R-B, found when the stack's merge-up brought `JiraSyncRulesTests` (#80) next to the worklog send (#83)
+- **Changes:**
+  - A worklog send now remembers which connection its token belongs to (the source's generation,
+    read right after the token is loaded). A 401 marks the Sources row only if that connection is
+    still the current one, through `markJiraRejected` / `markGitLabRejected`. Before, a 401 for a
+    token sent just before a Disconnect and Connect marked the new connection rejected and stopped
+    its background syncs.
+  - `finishSend(_:verdict:source:)` no longer writes the sync state itself, so
+    `JiraSyncRulesTests.testEverySyncStateWriteSitsBehindTheGenerationCheck` covers this path too.
+
 ### 2026-10-11 - A finished Clock timer closes with its 1 s ease again, and the timer notes say what a closed notch drops
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — review follow-up on the timer lifecycle fix: the Clock-timer close's animation, and two notes that overstated what the fix keeps
