@@ -642,6 +642,8 @@ final class TasksManager: ObservableObject {
                     self.restoreUnsent(draftID, to: previous, message: String(localized: "macOS did not let Kannu read the saved Jira token, so nothing was sent."))
                     return
                 }
+                // The connection this token belongs to: a 401 for it says nothing about a newer one.
+                let generation = self.jiraGeneration
                 let lookup = JiraWorklogLookup(
                     credential: credential, issueID: remote.remoteID, entry: draft.id,
                     accountID: accountID, started: draft.started, seconds: draft.seconds
@@ -650,7 +652,7 @@ final class TasksManager: ObservableObject {
                 if event == .retry {
                     switch await poster.findJiraWorklog(lookup) {
                     case .found(let remoteID):
-                        self.finishSend(draftID, verdict: .logged(remoteID: remoteID), source: source)
+                        self.finishSend(draftID, verdict: .logged(remoteID: remoteID), source: source, generation: generation)
                         return
                     case .notFound:
                         break
@@ -674,7 +676,7 @@ final class TasksManager: ObservableObject {
                     return
                 }
                 let verdict = await poster.postJiraWorklog(request, lookup: lookup)
-                self.finishSend(draftID, verdict: verdict, source: source)
+                self.finishSend(draftID, verdict: verdict, source: source, generation: generation)
             case .gitlab:
                 let credential: GitLabCredential
                 switch await GitLabCredentialStore.load(allowInteraction: true) {
@@ -687,6 +689,7 @@ final class TasksManager: ObservableObject {
                     self.restoreUnsent(draftID, to: previous, message: String(localized: "macOS did not let Kannu read the saved GitLab token, so nothing was sent."))
                     return
                 }
+                let generation = self.gitlabGeneration
                 guard self.canStillSend(draftID) else {
                     self.restoreUnsent(draftID, to: previous, message: String(localized: "GitLab was disconnected, or connected to another server, before Kannu could send this, so nothing was sent."))
                     return
@@ -697,7 +700,7 @@ final class TasksManager: ObservableObject {
                     return
                 }
                 let verdict = await poster.postGitLabSpend(request)
-                self.finishSend(draftID, verdict: verdict, source: source)
+                self.finishSend(draftID, verdict: verdict, source: source, generation: generation)
             case .local:
                 self.restoreUnsent(draftID, to: previous, message: nil)
             }
@@ -792,19 +795,34 @@ final class TasksManager: ObservableObject {
         logger.notice("Logging time: nothing sent")
     }
 
-    private func finishSend(_ draftID: UUID, verdict: WorklogDrafts.Verdict, source: TaskSource) {
+    /// `generation` is the source's connection the send's token belonged to.
+    private func finishSend(_ draftID: UUID, verdict: WorklogDrafts.Verdict, source: TaskSource, generation: Int) {
         let resolution = WorklogDrafts.resolution(of: verdict, source: source)
         var remoteID: String?
         if case .logged(let id) = verdict { remoteID = id }
         if case .authRejected(let status) = verdict {
             // The token was refused: the Sources row says so, and no sync re-sends it on its own.
             switch source {
-            case .jira where !isJiraSyncing: jiraSync = .authFailed(status: status)
-            case .gitlab where !isGitLabSyncing: gitlabSync = .authFailed(status: status)
-            default: break
+            case .jira: markJiraRejected(generation, status: status)
+            case .gitlab: markGitLabRejected(generation, status: status)
+            case .local: break
             }
         }
         finishSend(draftID, event: resolution.event, message: resolution.message, remoteID: remoteID)
+    }
+
+    /// A worklog's 401 marks the Sources row, unless Jira was reconnected or disconnected while the
+    /// request was out: a refusal of the old token says nothing about the new connection, and
+    /// marking it would stop the new one's background syncs. A sync in flight reports for itself.
+    private func markJiraRejected(_ generation: Int, status: Int) {
+        guard generation == jiraGeneration, !isJiraSyncing else { return }
+        jiraSync = .authFailed(status: status)
+    }
+
+    /// The same for GitLab.
+    private func markGitLabRejected(_ generation: Int, status: Int) {
+        guard generation == gitlabGeneration, !isGitLabSyncing else { return }
+        gitlabSync = .authFailed(status: status)
     }
 
     private func finishSend(_ draftID: UUID, event: WorklogDrafts.Event, message: String?, remoteID: String? = nil) {
