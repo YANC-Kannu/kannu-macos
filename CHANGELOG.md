@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - The worklog recheck's tests pin that the wait is the configured delay
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the two-read recheck: the wait is proven to be `recheckDelay`, and its comment says only tests change it
+- **Changes:**
+  - WorklogPosterTests: the reporting clock records how long the one sleep asked for, and the
+    cancellation test asserts it is at least 59 s of the 60 s handed in; the two-miss send is timed
+    and must finish under 1 s on its 20 ms delay. A `verifyLostJiraWorklog` that stopped reading
+    `recheckDelay` and slept a constant 3 s now fails a test instead of only slowing the suite.
+  - `WorklogPoster.recheckDelay`'s comment said tests only shorten it; they also stretch it to pin a
+    wait cut short, so it now says only tests change it, and in which directions.
+
 ### 2026-10-11 - A lost Jira worklog answer is checked twice before Kannu says nothing was logged
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on #83: a lost Jira POST is read back twice, 3 s apart, before it counts as not logged; a wait cut short stays uncertain

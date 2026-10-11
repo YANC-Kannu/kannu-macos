@@ -49,7 +49,8 @@ struct WorklogPoster {
 
     let session: URLSession
     /// How long Jira gets to finish committing a POST whose answer was lost before the second
-    /// read-only check. Tests shorten it; nothing else does.
+    /// read-only check. Only tests change it: shorter so the suite does not wait, longer to pin a
+    /// wait that is cut short.
     let recheckDelay: Duration
     /// What the wait sleeps on. Tests hand in a clock that says when the wait began, so a test of
     /// the wait being cut short can prove it was the wait, and not the first read, that was cancelled.

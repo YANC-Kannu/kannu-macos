@@ -83,21 +83,35 @@ final class WorklogPosterTests: XCTestCase {
         override func stopLoading() {}
     }
 
-    /// A clock that says when a sleep begins, then sleeps for real. The cancellation test cancels
-    /// only once the wait is known to have started, so its verdict comes from the wait being cut
-    /// short — not from the first read's `URLError.cancelled`, which is ambiguous and uncertain too.
+    /// A clock that says when a sleep begins and how long was asked for, then sleeps for real. The
+    /// cancellation test cancels only once the wait is known to have started, so its verdict comes
+    /// from the wait being cut short — not from the first read's `URLError.cancelled`, which is
+    /// ambiguous and uncertain too. `requested` pins that the wait is the poster's `recheckDelay`,
+    /// not a constant the injection no longer reaches.
     final class ReportingClock: Clock, @unchecked Sendable {
         typealias Instant = ContinuousClock.Instant
         typealias Duration = Swift.Duration
         private let inner = ContinuousClock()
         private let began: XCTestExpectation
+        private let lock = NSLock()
+        private var requestedWait: Duration?
 
         init(began: XCTestExpectation) { self.began = began }
 
         var now: Instant { inner.now }
         var minimumResolution: Duration { inner.minimumResolution }
 
+        /// How long the one sleep asked for, measured from the clock's own `now` as it began.
+        var requested: Duration? {
+            lock.lock()
+            defer { lock.unlock() }
+            return requestedWait
+        }
+
         func sleep(until deadline: Instant, tolerance: Duration?) async throws {
+            lock.lock()
+            requestedWait = deadline - inner.now
+            lock.unlock()
             began.fulfill()
             try await inner.sleep(until: deadline, tolerance: tolerance)
         }
@@ -228,7 +242,9 @@ final class WorklogPosterTests: XCTestCase {
 
     func testALostAnswerWithNoEntryThereTwiceFailsAndCanBeRetried() async throws {
         StubProtocol.reset(Self.lostThenReads(Answer(error: .timedOut), [Answer(status: 200, body: Self.empty)]))
+        let start = ContinuousClock.now
         let verdict = await poster.postJiraWorklog(try jiraRequest(), lookup: lookup)
+        XCTAssertLessThan(ContinuousClock.now - start, .seconds(1), "the pause between the reads is the 20 ms recheckDelay handed in, not the 3 s default")
         XCTAssertEqual(verdict, .checkedNotFound)
         XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET", "GET"], "two misses, never a loop")
         let resolution = WorklogDrafts.resolution(of: verdict, source: .jira)
@@ -259,13 +275,16 @@ final class WorklogPosterTests: XCTestCase {
         // The wait begins only after the first read returned `.notFound`, so cancelling once it has
         // begun pins the wait's own cancellation, never the first GET's.
         let waitBegan = expectation(description: "the first read missed and the wait began")
-        let slow = WorklogPoster(session: session, recheckDelay: .seconds(60), clock: ReportingClock(began: waitBegan))
+        let clock = ReportingClock(began: waitBegan)
+        let slow = WorklogPoster(session: session, recheckDelay: .seconds(60), clock: clock)
         let request = try jiraRequest()
         let entryLookup = lookup
         let start = ContinuousClock.now
         let sending = Task { await slow.postJiraWorklog(request, lookup: entryLookup) }
         await fulfillment(of: [waitBegan], timeout: 5)
         XCTAssertEqual(StubProtocol.requests().map(\.httpMethod), ["POST", "GET"], "the first read was made and missed before the wait")
+        let requested = try XCTUnwrap(clock.requested, "the wait went through the injected clock")
+        XCTAssertGreaterThanOrEqual(requested, .seconds(59), "the wait is the poster's recheckDelay, not a constant")
         sending.cancel()
         let verdict = await sending.value
         XCTAssertEqual(verdict, .uncertain, "a wait cut short never says 'not there'")
