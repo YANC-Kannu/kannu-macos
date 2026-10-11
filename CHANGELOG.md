@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - A finished Clock timer closes with its 1 s ease again, and the timer notes say what a closed notch drops
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review follow-up on the timer lifecycle fix: the Clock-timer close's animation, and two notes that overstated what the fix keeps
+- **Changes:**
+  - When the 3 s close fires for a finished Clock timer it now animates the live activity shut with
+    the same 1 s ease-in-out as before and then ends the session. The previous entry's fix ended the
+    session first, so that close ran with the reset's `.smooth` curve instead; the finished Clock
+    timer was the only path where the delayed close still animated anything.
+  - `NotchTimerView`'s resign-key note and the previous entry no longer say the typed name is kept:
+    dropping the focus lets the notch auto-close, and closing the notch removes the view and the
+    half-typed next-session name with it. Keeping it would mean holding the draft outside the view.
+  - `TimerLifecycleRulesTests`' doc comment no longer presents the re-arming close as something that
+    shipped: the old close was a bare `asyncAfter` block that stacked on repeated completion reports,
+    and re-arming is the shape the fix would have had without the rule.
+
 ### 2026-10-11 - A stopped timer no longer ends the next session, the alarm stops when a new session starts, and the name field no longer holds the notch open
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — timer lifecycle review: the stop's delayed close, the finished alarm, the countdown tick and the name field's focus each bound to their own session
@@ -29,7 +44,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `remainingTime == 0` as a finish and rings the alarm with no timer showing.
   - In the notch, focusing the "Name this session" field keeps the notch open while you type. A
     click into another app left the field focused, so the notch never auto-closed again; the window
-    going to the background, and the timer stopping, now drop the focus (the typed name is kept).
+    going to the background, and the timer stopping, now drop the focus (a half-typed name is
+    dropped with the closed notch).
   - Tests: `TimerLifecycleRulesTests` pins each rule from the source, with planted offenders for the
     manager (including a close that re-arms and a tick that checks outside its main-actor job), the
     bridge and the notch view.

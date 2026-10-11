@@ -118,8 +118,8 @@ struct NotchTimerView: View {
             vm.setAutoCloseSuppression(false, token: nameEditingToken)
         }
         // A click into another app leaves the field focused in a window that is no longer key: save
-        // the rename and drop the focus, which lets the notch auto-close again (the typed name is
-        // state, so nothing is lost).
+        // the rename and drop the focus, which lets the notch auto-close again. A half-typed
+        // next-session name goes with this view when the notch closes.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             commitRename()

@@ -422,14 +422,14 @@ class TimerManager: ObservableObject {
             self.smoothCloseWork = nil
             self.smoothCloseSession = nil
             guard self.sessionID == session else { return }
+            withAnimation(.easeInOut(duration: 1.0)) {
+                self.isTimerActive = false
+            }
             if self.activeSource == .external {
                 // A finished Clock timer: the close also ends its session, otherwise `activeSource`
-                // stays `.external` and Start and pause stay disabled until the next Clock timer.
+                // stays `.external` and Start and pause stay disabled until the next Clock timer. The
+                // close above already animated `isTimerActive`, so the reset's own close is a no-op.
                 self.resetTimer()
-            } else {
-                withAnimation(.easeInOut(duration: 1.0)) {
-                    self.isTimerActive = false
-                }
             }
         }
         smoothCloseWork = work

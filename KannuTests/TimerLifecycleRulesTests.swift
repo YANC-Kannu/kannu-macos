@@ -22,12 +22,13 @@ import XCTest
 
 /// `TimerManager`, the Clock-app bridge and the notch timer view are not in the logic target, so the
 /// timer's lifecycle rules are read from their source (the `TimerNamingRulesTests` idiom). Each rule
-/// is a bug that was in the code once: a stop's delayed smooth close ending the session started
-/// inside its 3 s, a finished Clock timer's close re-armed by every repeated completion report (so it
-/// never fired) or leaving the session `.external` (so Start stayed disabled), a Clock timer
-/// restarted inside that close's 3 s closed or ended by it, the finished alarm looping on under a new
-/// session, a countdown tick ringing after a stop, and a focused name field holding the notch open
-/// after a click into another app.
+/// is a bug that was in the code once, or a shape the fix would have had without it: a stop's delayed
+/// smooth close ending the session started inside its 3 s, a close that cancels and re-arms on every
+/// repeated completion report (a finished Clock timer is reported each second while it rings, so such
+/// a close would never fire), a finished Clock timer's close leaving the session `.external` (so Start
+/// stayed disabled), a Clock timer restarted inside that close's 3 s closed or ended by it, the
+/// finished alarm looping on under a new session, a countdown tick ringing after a stop, and a focused
+/// name field holding the notch open after a click into another app.
 final class TimerLifecycleRulesTests: XCTestCase {
     private static let repoRoot = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // KannuTests/
