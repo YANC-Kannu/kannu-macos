@@ -416,8 +416,9 @@ final class TasksManager: ObservableObject {
     }
 
     /// Refresh, Allow Keychain Access, and Return or Reset on the issue filter: the user asked, so
-    /// the Keychain may ask them too. During a sync the request is kept, not dropped: that sync
-    /// fetches the filter it started with, and runs again for the new one when it finishes.
+    /// the Keychain may ask them too. During a sync only the filter row can get here (Refresh is
+    /// disabled and the Keychain row hidden while one runs), and its request is kept, not dropped:
+    /// that sync fetches the filter it started with, and runs again for the new one when it finishes.
     func refreshJira(now: Date = Date()) {
         guard isJiraSyncOn, isReady else { return }
         if case .rateLimited(let until) = jiraSync, until > now { return }

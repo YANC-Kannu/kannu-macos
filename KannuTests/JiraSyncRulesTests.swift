@@ -25,8 +25,9 @@ import XCTest
 ///
 /// - Refresh during a sync is kept, not dropped. A sync carries the filter it started with, so
 ///   Return or Reset on the issue filter while one runs would otherwise end with "Synced" for the
-///   old filter and tasks marked gone against it. `finishJiraSync` runs the kept refresh; Connect
-///   and Disconnect drop it with the sync they replace.
+///   old filter and tasks marked gone against it. `finishJiraSync` runs the kept refresh, after it
+///   has cleared the in-flight sync and published that sync's state (`refreshJira`'s guards read
+///   both); Connect and Disconnect drop it with the sync they replace.
 /// - Every write to `jiraSync` outside Connect, Disconnect and the sync's own start sits behind
 ///   `guard generation == jiraGeneration`, and every `finishJiraSync(` call passes the generation
 ///   its sync captured at the start, so a late answer — a 401 for a token that has since been
@@ -80,6 +81,18 @@ final class JiraSyncRulesTests: XCTestCase {
         let problems = Self.refreshProblems(in: original)
         XCTAssertEqual(problems.count, 4, "the original shape: dropped, never run, kept across Connect and Disconnect: \(problems)")
         XCTAssertEqual(Self.refreshProblems(in: Self.fixedRefresh), [])
+        // The kept refresh run while the sync it waited for still counts as in flight, or before
+        // the ended sync's state is published: both pass a scanner that only looks for the calls.
+        let beforeInFlight = Self.fixedRefresh
+            .replacingOccurrences(of: "    refreshJira()\n", with: "")
+            .replacingOccurrences(of: "    jiraSyncInFlight = nil\n", with: "    refreshJira()\n    jiraSyncInFlight = nil\n")
+        XCTAssertEqual(Self.refreshProblems(in: beforeInFlight),
+                       ["finishJiraSync: runs the kept refresh before jiraSyncInFlight = nil, jiraSync = state, pendingJiraRefresh = false"])
+        let beforeState = Self.fixedRefresh
+            .replacingOccurrences(of: "    refreshJira()\n", with: "")
+            .replacingOccurrences(of: "    jiraSync = state\n", with: "    refreshJira()\n    jiraSync = state\n")
+        XCTAssertEqual(Self.refreshProblems(in: beforeState),
+                       ["finishJiraSync: runs the kept refresh before jiraSync = state, pendingJiraRefresh = false"])
         XCTAssertFalse(Self.refreshProblems(in: "func somethingElse() {}").isEmpty, "a missing function is a problem")
     }
 
@@ -202,8 +215,9 @@ final class JiraSyncRulesTests: XCTestCase {
 
     // MARK: - Scanners
 
-    /// Refresh during a sync is kept in `pendingJiraRefresh`, run by `finishJiraSync`, and dropped
-    /// by Connect and Disconnect with the sync they replace.
+    /// Refresh during a sync is kept in `pendingJiraRefresh`, run by `finishJiraSync` once the ended
+    /// sync is out of flight and its state published, and dropped by Connect and Disconnect with the
+    /// sync they replace.
     static func refreshProblems(in source: String) -> [String] {
         guard let refresh = functionBody("refreshJira", in: source) else { return ["refreshJira: not found"] }
         var problems: [String] = []
@@ -211,7 +225,19 @@ final class JiraSyncRulesTests: XCTestCase {
             problems.append("refreshJira: drops a refresh asked during a sync")
         }
         if let finish = functionBody("finishJiraSync", in: source) {
-            if !(finish.contains("pendingJiraRefresh = false") && finish.contains("refreshJira(")) {
+            if let run = finish.range(of: "refreshJira("), finish.contains("pendingJiraRefresh = false") {
+                // The kept refresh goes through `refreshJira`'s own guards, which read the sync this
+                // finish is ending: still in flight, the refresh is kept again and stuck until some
+                // later sync; still `.syncing`, the rate-limit guard passes, a new sync starts, and
+                // `jiraSync = state` then overwrites its `.syncing` with the ended sync's result.
+                let late = ["jiraSyncInFlight = nil", "jiraSync = state", "pendingJiraRefresh = false"].filter { statement in
+                    guard let range = finish.range(of: statement) else { return true }
+                    return range.lowerBound > run.lowerBound
+                }
+                if !late.isEmpty {
+                    problems.append("finishJiraSync: runs the kept refresh before \(late.joined(separator: ", "))")
+                }
+            } else {
                 problems.append("finishJiraSync: does not run the kept refresh")
             }
         } else {

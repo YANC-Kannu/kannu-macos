@@ -4,13 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - Jira sync review follow-up: the refresh pin checks the order inside finishJiraSync, and the notes name the filter row
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync review follow-up: finishJiraSync ordering pin, wording fix
+- **Changes:**
+  - `JiraSyncRulesTests.refreshProblems` now requires `finishJiraSync` to clear the in-flight sync, publish
+    its state and consume `pendingJiraRefresh` before it calls `refreshJira()`. Run earlier, `refreshJira`'s
+    guards read the sync that is ending: the refresh is kept again and stuck until some later sync, or the
+    rate-limit guard still sees `.syncing`, a new sync starts, and `jiraSync = state` overwrites its
+    `.syncing` with the ended sync's result. Two planted offenders — the call moved above
+    `jiraSyncInFlight = nil`, and above `jiraSync = state` — pin the problem text.
+  - The entry below and the `refreshJira` doc comment no longer say Refresh can be pressed during a sync:
+    the Refresh button is disabled and the Keychain row hidden while one runs, so the Issue filter's
+    Return and Reset are the only way into the kept refresh.
+
 ### 2026-10-11 - Jira sync: a filter edited mid-sync is not lost, a late 401 cannot reject a fresh connection, and Remove Token waits for a Connect
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — Jira sync race review: pending refresh, generation-pinned finish, Connect in-flight count
 - **Changes:**
-  - Return or Reset on the Issue filter (and Refresh) during a running sync is kept instead of dropped:
+  - Return or Reset on the Issue filter during a running sync is kept instead of dropped (Refresh is
+    disabled and the Keychain row hidden while one runs, so the filter row is the only way in):
     `refreshJira` records `pendingJiraRefresh` while a sync is in flight, `finishJiraSync` consumes it
-    and runs the refresh for the new filter once that sync ends, and Connect and Disconnect clear it with
+    and runs the refresh for the new filter once that sync ends — after clearing the in-flight sync and
+    publishing its state, which `refreshJira`'s guards read — and Connect and Disconnect clear it with
     the sync they replace. Not after `.authFailed`, `.needsReconnect` or `.needsKeychainApproval`: a new
     filter changes none of those answers, re-sending a refused token can lock the account, and the user
     just declined the Keychain dialog — Allow Keychain Access carries that retry with the current filter.
@@ -24,7 +40,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     and the display copies.
   - New `KannuTests/JiraSyncRulesTests.swift`: source pins for all three rules, each with a
     planted-offender test, including a `finishJiraSync(jiraGeneration, …)` call that would make the
-    guard inside hold vacuously.
+    guard inside hold vacuously, and a `finishJiraSync` that runs the kept refresh before clearing the
+    in-flight sync or publishing its state.
 
 ### 2026-10-04 - Brain › Tasks: Jira Cloud as a source, with your Jira issues in the task order
 - **Developer label:** "what about jira page, i want a section in main brain in productivity for task management"
