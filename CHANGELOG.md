@@ -4,6 +4,40 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - The Set End Time picker keeps a live clock and only mentions a later session when there is one
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the interrupted-session end bound: live picker ceiling, conditional explanation
+- **Changes:**
+  - `TaskTimeMath.nextStart(after:in:)` (pure, logic target): the earliest start of any segment on the
+    task that began after the given one, or nil. Clock-free; `endBound` is now expressed through it.
+  - `InterruptedSession` carries that `nextSessionStart` instead of an `endBound` stamped with the
+    `Date()` of the last task-list render, and the Set End Time… sheet caps it at its own `Date()` when
+    it renders. A Brain window left open no longer forbids the stretch between the list's last render
+    and now; `setEndTime` still clamps with fresh segments and a fresh now.
+  - The sheet's explanation says "It cannot end after a later session on this task began." only when a
+    later session exists; with none, the two-sentence text is back.
+  - Tests: `TaskTimeMathTests` covers `nextStart` (nil with no later segment, the earliest later
+    start otherwise, earlier ones ignored); the source pin now requires `nextSessionStart` and a live
+    `Date()` on the picker's range line.
+
+### 2026-10-11 - Interrupted sessions cannot end past a later session on the same task
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on PR #79: `TaskTimeMath.endBound`, `setEndTime` clamp, Set End Time picker range and copy
+- **Changes:**
+  - `TaskTimeMath.endBound(for:in:now:)` (pure, logic target): the latest end an interrupted segment
+    may be given is the earliest start of any segment on the task that began after it, capped at now
+    and never before its own start. A segment that began before it is an earlier session and does not
+    bound it.
+  - `TasksManager.setEndTime` clamps to that bound instead of to now alone, so after a crash at
+    10:00, re-timing 10:05–11:00, then ending the interrupted session at 11:00, the tracked total and
+    the folded log drafts count 10:05–11:00 once. `InterruptedSession` carries the bound; the Set End
+    Time… sheet uses it as the picker's upper limit and its explanation says why the picker stops
+    there.
+  - Tests: `TaskTimeMathTests` covers no later segment (now), a later segment (its start, whatever
+    the array order, live or ended), an earlier segment (ignored), the now and start caps, and that
+    ending at the bound counts the re-timed work once; a source pin checks that `setEndTime` clamps
+    through the helper and the picker's range stops at the bound.
+
 ### 2026-10-11 - Jira sync review follow-up: the refresh pin checks the order inside finishJiraSync, and the notes name the filter row
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — Jira sync review follow-up: finishJiraSync ordering pin, wording fix
