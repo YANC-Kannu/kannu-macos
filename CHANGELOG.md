@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - The timer tab's page swipe yields to the ruler by geometry, not by hover
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review finding R-G on the timer tab's page swipe: the ruler's `ScrollWheelMonitor` owns the sideways scroll and the swipe's monitor yields over the owner's live frame before an event is offered, so a sideways scroll over the ruler sets minutes even before the hover-derived `isSuspended` has caught up; the rule pinned by a new test
+- **Changes:**
+  - `ScrollWheelMonitor` gains `ownsSidewaysScroll` and `yieldsToOwners`, with a weak, main-actor
+    `sidewaysScrollOwners` registry. An owning monitor registers its `NSView` while installed and
+    unregisters it in `removeMonitor`; a yielding monitor's `shouldOffer` converts the pointer to
+    window coordinates and hands back any event that lies inside an owner's view in the same window,
+    before `onScroll` sees it. The frame is read live off the owner's view at event time, so no hover
+    callback, `@State` or re-render has to have run first. The ruler (`RulerTimerPicker`) owns the
+    sideways scroll; the page swipe (`HorizontalSwipeMonitor`) yields.
+  - Before, the swipe stood aside over the ruler only through `isSuspended`, which `NotchTimerView`
+    sets from the ruler's `onScrollAreaHover` and which reaches the monitor through `@State` and a
+    re-render. Both monitors are local `NSEvent` monitors that AppKit runs in no promised order, so a
+    sideways scroll that arrived before that chain completed, or over a ruler that appeared under a
+    still pointer (no hover event at all), could be consumed by the swipe and turn the page instead
+    of setting minutes. `isSuspended` stays as the second guard.
+  - Doc comments in `ScrollWheelMonitor`, `HorizontalSwipeMonitor`, `NotchTimerView` and
+    `RulerTimerPicker` state the geometry-first order and why the hover is only the second guard.
+  - Tests: `TimerSideColumnRulesTests` gains a rule that the ruler's monitor owns the sideways
+    scroll, the swipe's monitor yields, an owner's view is registered under the `ownsSidewaysScroll`
+    guard only (an unguarded registration would make the swipe yield to its own view, tab-wide) and
+    unregistered on removal, and `shouldOffer` contains the whole yield statement, handing the event
+    back, ahead of the `return true` that offers it. Its scanner is checked against planted
+    offenders: no ownership, no yield, no registration, unguarded registration, no unregistration,
+    the check missing, the check in a later helper, the check with an empty body, the check after
+    `return true`, and the offer before `shouldOffer`. The existing `isSuspended` rule now matches
+    the yielding monitor's call.
+
 ### 2026-10-10 - A two-finger swipe turns the timer tab's page over the preset cards too
 - **Developer label:** "swiping on any part of the tab shoulw work, current i think swipe does not work on top of preset capsules"
 - **Agent label:** Claude Code (Opus 5.5) — timer tab page swipe over the Presets page: the preset cards scroll in a `ScrollView` of a `LazyVStack` instead of a `List`, so the trackpad gesture reaches the tab's swipe monitor there too; the rule pinned by a new test

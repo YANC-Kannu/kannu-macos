@@ -57,7 +57,9 @@ struct NotchTimerView: View {
     /// appears, never persisted.
     @State private var pickedSidePage: TimerSidePage?
     /// The pointer is over the ruler strip (`RulerTimerPicker.onScrollAreaHover`): a sideways
-    /// scroll there sets the minutes, so the tab-wide page swipe leaves it alone.
+    /// scroll there sets the minutes, so the tab-wide page swipe leaves it alone. A second guard:
+    /// the swipe yields over the ruler by its live frame first (`ScrollWheelMonitor`), since this
+    /// state reaches the monitor only after a re-render, which a scroll can beat.
     @State private var isOverRuler = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -89,7 +91,8 @@ struct NotchTimerView: View {
                 )
 #if canImport(AppKit)
                 // A two-finger swipe anywhere on the tab (composer, divider or column) turns the
-                // side column's page, except over the ruler, whose sideways scroll sets minutes.
+                // side column's page, except over the ruler, whose sideways scroll sets minutes:
+                // the monitor yields there by the ruler's frame, and by its hover as well.
                 .background {
                     if hasPageSwipe {
                         HorizontalSwipeMonitor(current: shownSidePage, isSuspended: isOverRuler, onSwipe: selectSidePage)

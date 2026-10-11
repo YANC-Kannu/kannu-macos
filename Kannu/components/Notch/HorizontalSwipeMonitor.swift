@@ -30,8 +30,25 @@ import SwiftUI
 ///
 /// Two users: the ruler (`RulerTimerPicker`) turns sideways trackpad scrolls into minutes, and the
 /// timer tab (`HorizontalSwipeMonitor`) turns a two-finger swipe into a side-column page change.
+///
+/// Both are local monitors, and AppKit runs local monitors in no promised order, so when the two
+/// views overlap (the ruler sits on the tab) the one that runs first and consumes decides. The ruler
+/// wins by geometry: its monitor `ownsSidewaysScroll`, which registers its view in
+/// `sidewaysScrollOwners` for as long as the monitor is installed, and the tab's monitor
+/// `yieldsToOwners`, which hands back every event whose pointer is inside an owner's view in the
+/// same window. The frame is read live, off the owner's `NSView`, at the moment the event arrives:
+/// no hover callback, `@State` or re-render has to have happened first, so the first sideways
+/// scroll over a ruler that appeared under a still pointer sets minutes rather than turning the page.
 struct ScrollWheelMonitor: NSViewRepresentable {
+    /// This view's sideways scroll is its own: monitors that `yieldsToOwners` stand aside over it.
+    var ownsSidewaysScroll = false
+    /// Hand back any event whose pointer is over an owner's view in this window.
+    var yieldsToOwners = false
     let onScroll: (NSEvent) -> Bool
+
+    /// The views whose sideways scroll is their own (the ruler), while their monitor is installed.
+    /// Weak, so a view that goes away without `dismantleNSView` is forgotten rather than kept.
+    @MainActor static let sidewaysScrollOwners = NSHashTable<NSView>.weakObjects()
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -48,23 +65,28 @@ struct ScrollWheelMonitor: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onScroll: onScroll)
+        Coordinator(ownsSidewaysScroll: ownsSidewaysScroll, yieldsToOwners: yieldsToOwners, onScroll: onScroll)
     }
 
     @MainActor
     final class Coordinator: NSObject {
         var onScroll: (NSEvent) -> Bool
+        private let ownsSidewaysScroll: Bool
+        private let yieldsToOwners: Bool
         private var monitor: Any?
         private weak var observedView: NSView?
         private var lastEventTimestamp: TimeInterval = 0
 
-        init(onScroll: @escaping (NSEvent) -> Bool) {
+        init(ownsSidewaysScroll: Bool, yieldsToOwners: Bool, onScroll: @escaping (NSEvent) -> Bool) {
+            self.ownsSidewaysScroll = ownsSidewaysScroll
+            self.yieldsToOwners = yieldsToOwners
             self.onScroll = onScroll
         }
 
         func installMonitor(on view: NSView) {
             removeMonitor()
             observedView = view
+            if ownsSidewaysScroll { ScrollWheelMonitor.sidewaysScrollOwners.add(view) }
             monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self, weak view] event in
                 guard let self, let view else { return event }
                 guard self.shouldOffer(event, view: view) else { return event }
@@ -77,6 +99,7 @@ struct ScrollWheelMonitor: NSViewRepresentable {
                 NSEvent.removeMonitor(monitor)
                 self.monitor = nil
             }
+            if let observedView { ScrollWheelMonitor.sidewaysScrollOwners.remove(observedView) }
             observedView = nil
             lastEventTimestamp = 0
         }
@@ -87,15 +110,26 @@ struct ScrollWheelMonitor: NSViewRepresentable {
             if let eventWindow = event.window, eventWindow !== view.window { return false }
             guard lastEventTimestamp != event.timestamp else { return false }
             lastEventTimestamp = event.timestamp
-            return isCursorOverView(view)
+            guard let window = view.window else { return false }
+            let windowPoint = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+            guard Self.isPoint(windowPoint, over: view) else { return false }
+            // By geometry, before anything is offered: over an owner (the ruler) the event is the
+            // owner's, whichever monitor AppKit happens to run first.
+            if yieldsToOwners && Self.isPoint(windowPoint, overAnOwnerIn: window) { return false }
+            return true
         }
 
-        private func isCursorOverView(_ view: NSView) -> Bool {
-            guard let window = view.window else { return false }
-            let screenPoint = NSEvent.mouseLocation
-            let windowPoint = window.convertPoint(fromScreen: screenPoint)
-            let localPoint = view.convert(windowPoint, from: nil)
-            return view.bounds.contains(localPoint)
+        /// Whether `windowPoint` (window coordinates) falls inside `view`.
+        static func isPoint(_ windowPoint: NSPoint, over view: NSView) -> Bool {
+            guard view.window != nil, !view.isHiddenOrHasHiddenAncestor else { return false }
+            return view.bounds.contains(view.convert(windowPoint, from: nil))
+        }
+
+        /// Whether `windowPoint` falls inside a registered owner's view that lives in `window`.
+        static func isPoint(_ windowPoint: NSPoint, overAnOwnerIn window: NSWindow) -> Bool {
+            ScrollWheelMonitor.sidewaysScrollOwners.allObjects.contains { owner in
+                owner.window === window && isPoint(windowPoint, over: owner)
+            }
         }
     }
 }
@@ -126,8 +160,11 @@ extension NSEvent {
 /// that follows a trackpad gesture in a loop of its own (a SwiftUI `List`'s table view) keeps the
 /// swipe from it. The side column's pages are `ScrollView`s for that reason (`TimerSideColumn`).
 ///
-/// While `isSuspended` is true it hands every event back untouched: the pointer is over the ruler,
-/// whose own sideways scroll sets the minutes.
+/// Over the ruler, whose own sideways scroll sets the minutes, it hands every event back untouched.
+/// That is decided by geometry: its `ScrollWheelMonitor` `yieldsToOwners`, so an event whose pointer
+/// is inside the ruler's view is never offered here (`ScrollWheelMonitor.sidewaysScrollOwners`).
+/// `isSuspended` (the ruler's hover, as `NotchTimerView` tracks it) is a second guard on top, not
+/// the first: it reaches this view through `@State` and a re-render, which a scroll can beat.
 struct HorizontalSwipeMonitor: View {
     let current: TimerSidePage
     var isSuspended = false
@@ -137,7 +174,7 @@ struct HorizontalSwipeMonitor: View {
     @State private var tracker = Tracker()
 
     var body: some View {
-        ScrollWheelMonitor { event in
+        ScrollWheelMonitor(yieldsToOwners: true) { event in
             guard !isSuspended else { return false }
             if event.momentumPhase == [] {
                 if let page = tracker.handle(event, current: current) {

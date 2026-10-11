@@ -34,6 +34,10 @@ import XCTest
 /// - the column has no "All tasks ›" link into Brain any more;
 /// - the page swipe sits behind the whole tab (`NotchTimerView`), not the column, reaches down into
 ///   the footer, and stands aside over the ruler, whose own sideways scroll sets the minutes;
+/// - it stands aside by geometry first: the ruler's `ScrollWheelMonitor` owns the sideways scroll
+///   and registers its view, and the swipe's monitor checks the pointer against the owners' live
+///   frames before it offers an event, so the hover-derived `isSuspended` (a `@State`, one re-render
+///   late) is only the second guard;
 /// - the column hosts no `List`: a `List`'s scroll view keeps the trackpad gesture from the tab's
 ///   swipe monitor, so a swipe over its rows (the preset cards, once) does not turn the page;
 /// - "Tasks · Presets" is a bottom overlay pushed into the footer, never part of the column's stack;
@@ -115,6 +119,16 @@ final class TimerSideColumnRulesTests: XCTestCase {
     func testTheRulerKeepsItsSidewaysScroll() throws {
         XCTAssertEqual(Self.rulerExclusionProblems(
             notch: Self.code(try Self.raw(Self.notchTimerPath)),
+            ruler: Self.code(try Self.raw(Self.rulerPath)),
+            monitor: Self.code(try Self.raw(Self.swipeMonitorPath))
+        ), [])
+    }
+
+    /// Two local monitors run in no promised order, and only consuming an event keeps it from the
+    /// other, so the swipe must decide "over the ruler" from the ruler's live frame, at event time,
+    /// not from a hover that reaches it through `@State` and a re-render.
+    func testTheSwipeYieldsToTheRulerByGeometry() throws {
+        XCTAssertEqual(Self.rulerGeometryProblems(
             ruler: Self.code(try Self.raw(Self.rulerPath)),
             monitor: Self.code(try Self.raw(Self.swipeMonitorPath))
         ), [])
@@ -286,7 +300,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
                 }
             """
         let monitor = """
-                ScrollWheelMonitor { event in
+                ScrollWheelMonitor(yieldsToOwners: true) { event in
                     guard !isSuspended else { return false }
                     if event.momentumPhase == [] {
                         if let page = tracker.handle(event, current: current) {
@@ -310,6 +324,77 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertNotEqual(late, monitor)
         XCTAssertEqual(Self.rulerExclusionProblems(notch: notch, ruler: ruler, monitor: late),
                        ["HorizontalSwipeMonitor does not honour isSuspended before it counts a swipe"])
+    }
+
+    func testTheRulerGeometryScannerCatchesPlantedOffenders() {
+        let ruler = """
+                ScrollWheelMonitor(ownsSidewaysScroll: true) { event in
+                    guard event.isHorizontalTrackpadScroll else { return false }
+            """
+        let monitor = """
+                func installMonitor(on view: NSView) {
+                    if ownsSidewaysScroll { ScrollWheelMonitor.sidewaysScrollOwners.add(view) }
+                    monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self, weak view] event in
+                        guard self.shouldOffer(event, view: view) else { return event }
+                        return self.onScroll(event) ? nil : event
+                    }
+                }
+                func removeMonitor() {
+                    if let observedView { ScrollWheelMonitor.sidewaysScrollOwners.remove(observedView) }
+                }
+                private func shouldOffer(_ event: NSEvent, view: NSView) -> Bool {
+                    if yieldsToOwners && Self.isPoint(windowPoint, overAnOwnerIn: window) { return false }
+                    return true
+                }
+                static func isPoint(_ windowPoint: NSPoint, over view: NSView) -> Bool {
+            struct HorizontalSwipeMonitor: View {
+                var body: some View {
+                    ScrollWheelMonitor(yieldsToOwners: true) { event in
+                        guard !isSuspended else { return false }
+            """
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: monitor), [])
+        let disowned = ruler.replacingOccurrences(of: "ScrollWheelMonitor(ownsSidewaysScroll: true) {", with: "ScrollWheelMonitor {")
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: disowned, monitor: monitor),
+                       ["the ruler's monitor does not own the sideways scroll"])
+        let unyielding = monitor.replacingOccurrences(of: "ScrollWheelMonitor(yieldsToOwners: true) {", with: "ScrollWheelMonitor {")
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: unyielding),
+                       ["the page swipe's monitor does not yield to the ruler"])
+        let unregistered = monitor.replacingOccurrences(of: "if ownsSidewaysScroll { ScrollWheelMonitor.sidewaysScrollOwners.add(view) }", with: "")
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: unregistered),
+                       ["an owner's view is never registered"])
+        // The guard dropped: the swipe's own view becomes an owner, and its yield kills it tab-wide.
+        let greedy = monitor.replacingOccurrences(of: "if ownsSidewaysScroll { ScrollWheelMonitor.sidewaysScrollOwners.add(view) }", with: "ScrollWheelMonitor.sidewaysScrollOwners.add(view)")
+        XCTAssertNotEqual(greedy, monitor)
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: greedy),
+                       ["every monitor's view is registered as an owner"])
+        let leaking = monitor.replacingOccurrences(of: "if let observedView { ScrollWheelMonitor.sidewaysScrollOwners.remove(observedView) }", with: "")
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: leaking),
+                       ["an owner's view is never unregistered"])
+        let geometryLine = "if yieldsToOwners && Self.isPoint(windowPoint, overAnOwnerIn: window) { return false }"
+        let blind = monitor.replacingOccurrences(of: geometryLine, with: "")
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: blind),
+                       ["ScrollWheelMonitor does not check the owners' frames before it offers an event"])
+        // The check outside shouldOffer (here, in a later helper) is not before the offer.
+        let elsewhere = blind.replacingOccurrences(of: "over view: NSView) -> Bool {", with: "over view: NSView) -> Bool {\n    \(geometryLine)")
+        XCTAssertNotEqual(elsewhere, blind)
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: elsewhere),
+                       ["ScrollWheelMonitor does not check the owners' frames before it offers an event"])
+        // The condition kept but the event not handed back: the swipe consumes the ruler's scroll.
+        let toothless = monitor.replacingOccurrences(of: geometryLine, with: "if yieldsToOwners && Self.isPoint(windowPoint, overAnOwnerIn: window) { }")
+        XCTAssertNotEqual(toothless, monitor)
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: toothless),
+                       ["ScrollWheelMonitor does not check the owners' frames before it offers an event"])
+        // The check after the `return true` that offers the event is never reached.
+        let late = blind.replacingOccurrences(of: "return true", with: "return true\n    \(geometryLine)")
+        XCTAssertNotEqual(late, blind)
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: late),
+                       ["ScrollWheelMonitor does not check the owners' frames before it offers an event"])
+        let hasty = monitor
+            .replacingOccurrences(of: "guard self.shouldOffer(event, view: view) else { return event }\n", with: "")
+            .replacingOccurrences(of: "return self.onScroll(event) ? nil : event", with: "return self.onScroll(event) ? nil : event\n    guard self.shouldOffer(event, view: view) else { return event }")
+        XCTAssertNotEqual(hasty, monitor)
+        XCTAssertEqual(Self.rulerGeometryProblems(ruler: ruler, monitor: hasty),
+                       ["ScrollWheelMonitor offers an event before shouldOffer has checked it"])
     }
 
     func testTheMirrorScannerCatchesPlantedOffenders() {
@@ -462,7 +547,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
     /// `HorizontalSwipeMonitor` hands the event back before its tracker counts anything.
     private static func rulerExclusionProblems(notch: String, ruler: String, monitor: String) -> [String] {
         var problems: [String] = []
-        let honoured = monitor.range(of: "ScrollWheelMonitor { event in").flatMap { closure -> Bool? in
+        let honoured = monitor.range(of: "ScrollWheelMonitor(yieldsToOwners: true) { event in").flatMap { closure -> Bool? in
             guard let guardLine = monitor.range(of: "guard !isSuspended else { return false }", range: closure.upperBound..<monitor.endIndex),
                   let handle = monitor.range(of: "tracker.handle(", range: closure.upperBound..<monitor.endIndex) else { return nil }
             return guardLine.lowerBound < handle.lowerBound
@@ -477,6 +562,54 @@ final class TimerSideColumnRulesTests: XCTestCase {
         }
         if !honoured { problems.append("HorizontalSwipeMonitor does not honour isSuspended before it counts a swipe") }
         return problems
+    }
+
+    /// The swipe stands aside over the ruler by geometry, read at event time: the ruler's monitor
+    /// owns the sideways scroll and registers its view (only an owner's) while installed; the swipe's
+    /// monitor yields to the owners; and `shouldOffer` hands back an event over an owner's frame,
+    /// ahead of the `return true` that lets the handler offer it to `onScroll`.
+    private static func rulerGeometryProblems(ruler: String, monitor: String) -> [String] {
+        var problems: [String] = []
+        if !ruler.contains("ScrollWheelMonitor(ownsSidewaysScroll: true) {") {
+            problems.append("the ruler's monitor does not own the sideways scroll")
+        }
+        let swipe = monitor.range(of: "struct HorizontalSwipeMonitor").map { monitor[$0.upperBound...] } ?? ""
+        if !swipe.contains("ScrollWheelMonitor(yieldsToOwners: true) {") {
+            problems.append("the page swipe's monitor does not yield to the ruler")
+        }
+        // Registered under the guard, exactly: an unguarded `add(view)` would register the swipe's
+        // own view, which its yield would then find under the pointer on every event, tab-wide.
+        let install = body(of: "installMonitor", in: monitor)
+        if !(install?.contains("if ownsSidewaysScroll { ScrollWheelMonitor.sidewaysScrollOwners.add(view) }") ?? false) {
+            problems.append(install?.contains("sidewaysScrollOwners.add(") == true
+                ? "every monitor's view is registered as an owner"
+                : "an owner's view is never registered")
+        }
+        if !(body(of: "removeMonitor", in: monitor)?.contains("sidewaysScrollOwners.remove(") ?? false) {
+            problems.append("an owner's view is never unregistered")
+        }
+        // The whole statement, handing the event back, and ahead of the `return true` that offers it.
+        let yields = body(of: "shouldOffer", in: monitor).flatMap { offer -> Bool? in
+            guard let check = offer.range(of: "if yieldsToOwners && Self.isPoint(windowPoint, overAnOwnerIn: window) { return false }"),
+                  let offered = offer.range(of: "return true") else { return nil }
+            return check.lowerBound < offered.lowerBound
+        } ?? false
+        if !yields {
+            problems.append("ScrollWheelMonitor does not check the owners' frames before it offers an event")
+        }
+        let checkedFirst = monitor.range(of: "addLocalMonitorForEvents").flatMap { install -> Bool? in
+            guard let offerCall = monitor.range(of: "self.onScroll(event)", range: install.upperBound..<monitor.endIndex) else { return nil }
+            return monitor[install.upperBound..<offerCall.lowerBound].contains("shouldOffer(")
+        } ?? false
+        if !checkedFirst { problems.append("ScrollWheelMonitor offers an event before shouldOffer has checked it") }
+        return problems
+    }
+
+    /// The text from `func <name>(` up to the next `func`, or nil when there is no such function.
+    private static func body(of name: String, in code: String) -> Substring? {
+        guard let start = code.range(of: "func \(name)(") else { return nil }
+        let end = code.range(of: "func ", range: start.upperBound..<code.endIndex)?.lowerBound ?? code.endIndex
+        return code[start.upperBound..<end]
     }
 
     /// What `NotchTimerView` must take from the metrics rather than spell out.
