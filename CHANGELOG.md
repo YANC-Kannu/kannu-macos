@@ -4,6 +4,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-11 - A stopped timer no longer ends the next session, the alarm stops when a new session starts, and the name field no longer holds the notch open
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — timer lifecycle review: the stop's delayed close, the finished alarm, the countdown tick and the name field's focus each bound to their own session
+- **Changes:**
+  - Stopping a timer arms a 3 s smooth close of the live activity. It used to be a bare `asyncAfter`
+    block that ended whichever session it found running, so a timer started inside those 3 s (a
+    preset card, Start, or an adopted Clock timer) kept counting with its controls dead. The close is
+    now a `DispatchWorkItem` armed for one session: `startTimer` and `adoptExternalTimer` cancel it,
+    and the block re-checks the session before closing anything.
+  - A close already pending for a session is kept, not re-armed: a finished Clock timer is reported
+    again every second while it rings, and re-arming on each report would have held the live
+    activity open until the Clock timer was dismissed.
+  - When the close fires for a finished Clock timer it also ends the session, so Start and pause
+    work again. Before, `activeSource` stayed `.external` and the manual controls stayed disabled
+    until the next Clock timer was adopted.
+  - A Clock timer restarted inside the finished one's 3 s is left running: `updateExternalTimer`
+    cancels the pending close, and the bridge's 3.2 s cleanup ends only a timer that is still
+    finished.
+  - `startTimer` stops the finished alarm, which loops until stopped and used to keep ringing under
+    the new session.
+  - Each countdown tick queues its work on the main actor; the job now checks that its session is
+    still the current one, so a tick that fires just before a stop no longer reads the reset's
+    `remainingTime == 0` as a finish and rings the alarm with no timer showing.
+  - In the notch, focusing the "Name this session" field keeps the notch open while you type. A
+    click into another app left the field focused, so the notch never auto-closed again; the window
+    going to the background, and the timer stopping, now drop the focus (the typed name is kept).
+  - Tests: `TimerLifecycleRulesTests` pins each rule from the source, with planted offenders for the
+    manager (including a close that re-arms and a tick that checks outside its main-actor job), the
+    bridge and the notch view.
+
 ### 2026-10-10 - The timer popover's "Click to rename" hint shows on hover
 - **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
 - **Agent label:** Claude Code (Opus 5.5) — tooltip principle follow-up: a dead .help on the timer popover's session title, found by the new tooltip coverage scan
