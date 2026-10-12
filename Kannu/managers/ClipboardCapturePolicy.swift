@@ -122,7 +122,7 @@ enum ClipboardCapturePolicy {
     /// Hugging Face token, which is letters only. The hook trades those for fewer false alarms;
     /// here a missed token is persisted in plain text while a false alarm only drops one history
     /// entry. So a body with both cases counts too, which still turns away lower-case words
-    /// ("glpat-your-token-goes-here", "sk-learn-…"), and an AWS key ID, whose format has no lower
+    /// ("glpat-your-token-here", "sk-learn-…"), and an AWS key ID, whose format has no lower
     /// case, needs neither.
     private static func isSecret(at range: NSRange, kind: String, in string: NSString) -> Bool {
         if kind == privateKeyKind {

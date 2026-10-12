@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-12 - A doc comment's token placeholder no longer reads as a leaked GitLab token
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on a blocker it took for a leaked GitLab token
+- **Changes:**
+  - `ClipboardCapturePolicy.isSecret`'s doc comment used `glpat-your-token-goes-here` as its example
+    of a lower-case word the rule turns away. That is exactly 20 characters after `glpat-`, the shape
+    of a real GitLab token, so SonarCloud's secret scanner reported it as one. The example is now
+    `glpat-your-token-here`, which the rule turns away for the same reason. No code changed.
+
 ### 2026-10-04 - Kannu's clipboard history skips copied access tokens
 - **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
 - **Agent label:** Clipboard history skips token-shaped text — the hook script's secret formats plus Atlassian
