@@ -178,7 +178,8 @@ private struct SettingsSearchEntry: Identifiable {
     let tab: SettingsTab
     let title: String
     let keywords: [String]
-    let highlightID: String?
+    /// A `var` so a search can redirect it (`landingOnABuiltRow`).
+    var highlightID: String?
 
     var id: String { "\(tab.rawValue)-\(title)" }
 }
@@ -738,6 +739,25 @@ struct SettingsView: View {
                 entry.title.localizedCaseInsensitiveContains(trimmed) ||
                 entry.keywords.contains { $0.localizedCaseInsensitiveContains(trimmed) }
             }
+            .map(landingOnABuiltRow)
+    }
+
+    /// Brain › Tasks builds these rows only while their source is connected (`TaskSourcesSection`).
+    /// `SettingsHighlightInventoryTests` keeps both lists equal to the rows it builds that way.
+    private static let jiraRowsWhileConnected = ["Sync Jira", "Jira colour", "Jira issues", "Issue filter"]
+    private static let gitLabRowsWhileConnected = ["Sync GitLab", "GitLab colour", "Include merge requests", "GitLab items"]
+
+    /// An entry for one of those rows, while its source is disconnected, lands on the source's own
+    /// row, which is always there, instead of scrolling to a row that was never built.
+    private func landingOnABuiltRow(_ entry: SettingsSearchEntry) -> SettingsSearchEntry {
+        let names = { (titles: [String]) in titles.contains { entry.highlightID == SettingsTab.tasks.highlightID(for: $0) } }
+        var landed = entry
+        if Defaults[.jiraSiteHost].isEmpty, names(Self.jiraRowsWhileConnected) {
+            landed.highlightID = SettingsDeepLink.tasksSourcesHighlightID
+        } else if Defaults[.gitlabHost].isEmpty, names(Self.gitLabRowsWhileConnected) {
+            landed.highlightID = SettingsTab.tasks.highlightID(for: "GitLab")
+        }
+        return landed
     }
 
     private var settingsSearchIndex: [SettingsSearchEntry] {

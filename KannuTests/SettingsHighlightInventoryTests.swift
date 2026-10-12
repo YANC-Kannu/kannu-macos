@@ -136,6 +136,28 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         XCTAssertEqual(withoutRow, [])
     }
 
+    func testRowsBuiltOnlyWhileConnectedAreRedirectedUntilThen() throws {
+        // Jira's and GitLab's rows past Connect exist only while that source is connected, so search
+        // lands their entries on the source's own row until then (`landingOnABuiltRow`). Each list
+        // must name exactly the rows `TaskSourcesSection` builds inside its connected block, or a
+        // new row would scroll to nothing again (CodeRabbit on #90: Jira colour, GitLab colour).
+        let sources = try Self.sources()
+        let settingsView = try XCTUnwrap(sources["SettingsView.swift"])
+        let tasks = try XCTUnwrap(sources["TasksSettings.swift"])
+        for (list, opening, indent) in [("jiraRowsWhileConnected", "if isConnected {", "            "),
+                                        ("gitLabRowsWhileConnected", "if isGitLabConnected {", "        ")] {
+            let listed = try XCTUnwrap(Self.matches(#"static let \#(list) = \[([^\]]*)\]"#, in: settingsView).first, list)[1]
+            let titles = Set(Self.matches(#""([^"]+)""#, in: listed).map { $0[1] })
+            let start = try XCTUnwrap(tasks.range(of: "\n\(indent)\(opening)\n"), opening)
+            let end = try XCTUnwrap(tasks.range(of: "\n\(indent)}\n", range: start.upperBound..<tasks.endIndex), opening)
+            let block = String(tasks[start.upperBound..<end.lowerBound])
+            let built = Set(Self.matches(#"settingsHighlight\(id: highlightID\("([^"]+)"\)\)"#, in: block).map { $0[1] })
+            XCTAssertFalse(built.isEmpty, "no rows found inside `\(opening)`")
+            XCTAssertEqual(titles, built, "\(list) must name the rows built inside `\(opening)`")
+        }
+        XCTAssertTrue(settingsView.contains(".map(landingOnABuiltRow)"), "search no longer redirects them")
+    }
+
     // MARK: - Parsing
 
     private static func sources() throws -> [String: String] {

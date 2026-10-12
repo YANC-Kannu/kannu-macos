@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-12 - Searching Brain for a Jira or GitLab setting lands on that source while it is disconnected
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: CodeRabbit on this PR, search entries whose rows are not built while their source is disconnected
+- **Changes:**
+  - Brain › Tasks builds Sync Jira, Jira colour, Jira issues and the Issue filter only while Jira is
+    connected, and Sync GitLab, GitLab colour, Include merge requests and GitLab items only while
+    GitLab is. Searching for one of them while its source was disconnected opened Tasks and scrolled
+    to nothing. Search now lands those entries on the source's own row (Jira Cloud, GitLab), which
+    is always there, and on the row itself once the source is connected.
+  - `SettingsHighlightInventoryTests` keeps the two lists in `SettingsView` equal to the rows
+    `TaskSourcesSection` builds inside its connected blocks, so a new connected-only row cannot
+    scroll to nothing again.
+
 ### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Opus 5.5) — concurrency audit risk R-B, found when the stack's merge-up brought `JiraSyncRulesTests` (#80) next to the worklog send (#83)
