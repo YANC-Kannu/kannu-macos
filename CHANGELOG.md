@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-12 - The timer rules tests share one modifier scanner
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on duplicated new lines (4.2%, limit 3%)
+- **Changes:**
+  - `TimerNamingRulesTests` and `TimerLifecycleRulesTests` each carried the same 24-line
+    `modifiers(_:in:)` scanner, which reads a SwiftUI modifier and its closure out of a view's
+    source. It now lives once, in `KannuTests/SwiftModifierScan.swift`, and both tests call it.
+    No test changes what it checks.
+
 ### 2026-10-11 - A finished Clock timer closes with its 1 s ease again, and the timer notes say what a closed notch drops
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — review follow-up on the timer lifecycle fix: the Clock-timer close's animation, and two notes that overstated what the fix keeps

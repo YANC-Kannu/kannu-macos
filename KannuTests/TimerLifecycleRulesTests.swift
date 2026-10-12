@@ -270,14 +270,14 @@ final class TimerLifecycleRulesTests: XCTestCase {
     private static func notchProblems(in text: String) -> [String] {
         let source = code(text)
         var problems: [String] = []
-        let resigns = modifiers(".onReceive", in: source).filter { $0.contains("didResignKeyNotification") }
+        let resigns = SwiftModifierScan.modifiers(".onReceive", in: source).filter { $0.contains("didResignKeyNotification") }
         if resigns.isEmpty {
             problems.append("no didResignKeyNotification observer found")
         }
         for _ in resigns.filter({ !$0.contains("focusedNameField = nil") }) {
             problems.append("a click into another app leaves the name field focused, so the notch never auto-closes")
         }
-        let stops = modifiers(".onChange", in: source).filter { $0.hasPrefix(".onChange(of: timerManager.isTimerActive)") }
+        let stops = SwiftModifierScan.modifiers(".onChange", in: source).filter { $0.hasPrefix(".onChange(of: timerManager.isTimerActive)") }
         if stops.isEmpty {
             problems.append("no isTimerActive observer found")
         }
@@ -354,28 +354,5 @@ final class TimerLifecycleRulesTests: XCTestCase {
             index = text.index(after: index)
         } while index < text.endIndex && depth > 0
         return String(text[open..<index])
-    }
-
-    /// Each use of a modifier: its name, its balanced argument list if any, then its trailing closure if any.
-    private static func modifiers(_ name: String, in text: String) -> [String] {
-        var found: [String] = []
-        var searchStart = text.startIndex
-        while let range = text.range(of: name, range: searchStart..<text.endIndex) {
-            var index = range.upperBound
-            for (open, close) in [(Character("("), Character(")")), (Character("{"), Character("}"))] {
-                var probe = index
-                while probe < text.endIndex, text[probe] == " " { probe = text.index(after: probe) }
-                guard probe < text.endIndex, text[probe] == open else { continue }
-                var depth = 0
-                repeat {
-                    if text[probe] == open { depth += 1 } else if text[probe] == close { depth -= 1 }
-                    probe = text.index(after: probe)
-                } while probe < text.endIndex && depth > 0
-                index = probe
-            }
-            found.append(String(text[range.lowerBound..<index]))
-            searchStart = range.upperBound
-        }
-        return found
     }
 }
