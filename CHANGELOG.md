@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `FullscreenFallbackVerdict.swift`'s two `project.pbxproj` ids moved from `…00E2`/`…00E3` to
+    `…05A2`/`…05A3`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
 ### 2026-10-15 - The notch hides over fullscreen video again: detection re-checks when playback starts, and survives a missing Accessibility grant
 - **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
 - **Agent label:** Claude Code (Fable 5) — fullscreen media detection re-checked on its real inputs, with a menu-bar fallback when `AXFullScreen` cannot be read
