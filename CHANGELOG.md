@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-15 - The new gate file's project ids stay unique next to the task branches
+- **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `TrafficLightPersistenceGate.swift`'s two `project.pbxproj` ids moved from `…00E0`/`…00E1` to
+    `…05A0`/`…05A1`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
 ### 2026-10-15 - A green chat no longer pins the notch out, and a momentary blip never flickers the light
 - **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen … the minimum a transition state is shown in notch only if it is persisted for 1 second or more, else we have to retain the continous one"
 - **Agent label:** Claude Code (Fable 5) — a 1 s persistence gate at the traffic light's single publish point, and reveal windows re-armed only by a published change
