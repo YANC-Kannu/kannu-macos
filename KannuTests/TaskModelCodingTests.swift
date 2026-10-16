@@ -103,7 +103,9 @@ final class TaskModelCodingTests: XCTestCase {
                 gitlabWebURL: "https://gitlab.example.com/group/app/-/merge_requests/12",
                 statusCategory: "indeterminate", labels: ["bug"],
                 weight: 3, milestone: "Sprint 42", dueDate: start, assignee: "Dana Example",
-                parentTitle: "Login epic", priority: "High", issueType: "Bug"
+                parentTitle: "Login epic", priority: "High", issueType: "Bug",
+                updatedAt: start, commentCount: 4, checklistDone: 1, checklistTotal: 3, linkedMergeRequests: 2,
+                iteration: "Iteration 5", healthStatus: "on_track", isDraft: true, hasConflicts: false, author: "Kim Lee"
             ),
             createdAt: start
         )
@@ -113,7 +115,9 @@ final class TaskModelCodingTests: XCTestCase {
         let text = String(decoding: data, as: UTF8.self)
         XCTAssertTrue(text.contains(#""gitlabKind" : "mergeRequest""#))
         // A property left out of CodingKeys is silently never written: every standard fact is.
-        for key in ["weight", "milestone", "dueDate", "assignee", "parentTitle", "priority", "issueType"] {
+        for key in ["weight", "milestone", "dueDate", "assignee", "parentTitle", "priority", "issueType",
+                    "updatedAt", "commentCount", "checklistDone", "checklistTotal", "linkedMergeRequests",
+                    "iteration", "healthStatus", "isDraft", "hasConflicts", "author"] {
             XCTAssertTrue(text.contains("\"\(key)\" :"), "\(key) is not written to the file")
         }
     }
@@ -146,6 +150,19 @@ final class TaskModelCodingTests: XCTestCase {
         XCTAssertNil(RemoteTaskInfo.dayDate("", calendar: calendar))
         XCTAssertNil(RemoteTaskInfo.dayDate("2026-13-01", calendar: calendar), "no thirteenth month")
         XCTAssertNil(RemoteTaskInfo.dayDate("2026-10-20T10:00:00Z", calendar: calendar), "date-only, as both servers send it")
+    }
+
+    func testServerTimestampsInBothServersShapes() {
+        let expected = Date(timeIntervalSince1970: 1_792_141_954.567)   // 2026-10-16T09:12:34.567Z
+        let gitlab = RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34.567Z")
+        XCTAssertEqual(gitlab?.timeIntervalSince1970 ?? 0, expected.timeIntervalSince1970, accuracy: 0.001)
+        let jira = RemoteTaskInfo.serverTimestamp("2026-10-16T14:42:34.567+0530")
+        XCTAssertEqual(jira?.timeIntervalSince1970 ?? 0, expected.timeIntervalSince1970, accuracy: 0.001,
+                       "Jira's offset has no colon")
+        XCTAssertEqual(RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34Z")?.timeIntervalSince1970 ?? 0,
+                       1_792_141_954, accuracy: 0.001, "no fractions")
+        XCTAssertNil(RemoteTaskInfo.serverTimestamp("yesterday"))
+        XCTAssertNil(RemoteTaskInfo.serverTimestamp(nil))
     }
 
     func testAKindFromANewerKannuDoesNotCostTheFile() throws {

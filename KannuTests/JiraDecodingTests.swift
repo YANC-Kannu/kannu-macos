@@ -49,6 +49,7 @@ final class JiraDecodingTests: XCTestCase {
                          "issuetype":{"id":"10004","name":"Bug","subtask":false},
                          "parent":{"id":"10000","key":"PROJ-100","fields":{"summary":"Login epic","status":{"name":"In Progress"}}},
                          "labels":["backend","auth"],
+                         "updated":"2026-10-16T09:12:34.567+0000",
                          "timetracking":{"originalEstimate":"2h","remainingEstimate":"1h","timeSpent":"3h",
                                          "originalEstimateSeconds":7200,"remainingEstimateSeconds":3600,"timeSpentSeconds":10800}}},
               {"id":"10002","key":"PROJ-2",
@@ -65,7 +66,9 @@ final class JiraDecodingTests: XCTestCase {
                                           isDoneRemotely: false, estimateSeconds: 7200, spentSeconds: 10800,
                                           statusCategory: "indeterminate", labels: ["backend", "auth"],
                                           dueDate: RemoteTaskInfo.dayDate("2026-10-20"), assignee: "Dana Example",
-                                          parentTitle: "Login epic", priority: "High", issueType: "Bug"))
+                                          parentTitle: "Login epic", priority: "High", issueType: "Bug",
+                                          updatedAt: RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34.567Z")))
+        XCTAssertNotNil(first.updatedAt, "Jira's colon-less offset parses")
         let second = JiraAPI.remoteIssue(from: page.issues[1])
         XCTAssertEqual(second.statusCategory, "new", "the category is kept for the Task list's Status filter")
         XCTAssertNil(second.labels, "no labels field: none, not an empty list")

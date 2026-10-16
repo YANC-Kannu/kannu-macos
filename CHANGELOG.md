@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - The sync keeps what a ticket's activity says: updated, comments, checklist, linked MRs, iteration, health, and an MR's draft, conflicts and author
+- **Developer label:** "see if some other valid info is there to show"
+- **Agent label:** Claude Code (Opus 5.5) — fields the same GitLab responses already carry, now decoded leniently and kept; Jira adds `updated`
+- **Changes:**
+  - `RemoteTaskInfo` gains `updatedAt`, `commentCount`, `checklistDone` / `checklistTotal`,
+    `linkedMergeRequests`, `iteration`, `healthStatus`, `isDraft`, `hasConflicts` and `author`,
+    all optional, written to the tasks file and read leniently like the facts before them.
+  - GitLab: `updated_at`, `user_notes_count`, `task_completion_status`, `merge_requests_count`,
+    `iteration` (an untitled one reads "Iteration 5"), `health_status`, and for merge requests
+    `draft`, `has_conflicts` and `author` — all already in the issue and merge-request lists, so no
+    request is added. Each is read on its own (`LenientField`): a value in a shape this version
+    does not expect costs that field, never the item or the page.
+  - Jira: the search also asks for `updated`, whose offset has no colon (`+0000`);
+    `RemoteTaskInfo.serverTimestamp` reads both servers' timestamps.
+  - A sync refreshes each of them, and one the server cleared is cleared here.
+  - Guards: `GitLabDecodingTests` (including a malformed-field item), `JiraDecodingTests`,
+    `JiraRequestTests`, `TaskMergeTests`, `TaskModelCodingTests` (round trip, the timestamp parser).
+
 ### 2026-10-17 - The task card reads like its ticket: the title first, then a short key, status and labels as chips, the standard facts, and its time beside Start
 - **Developer label:** "THIS IS NOT WHAT WE WANT TO SHOW … we need to show the proper title, and standard informations with a clean ux and proper design in the space"
 - **Agent label:** Claude Code (Fable 5.1) — the card and row redesigned around the issue's own title and the facts the sync now keeps

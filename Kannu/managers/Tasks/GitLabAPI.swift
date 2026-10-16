@@ -84,6 +84,41 @@ struct GitLabItem: Decodable, Equatable {
     let assignees: Assignees?
     /// Issues only, and only on Premium servers; null or absent elsewhere.
     let epic: Epic?
+    // The rest is read leniently, each on its own: a field in a shape this version does not
+    // expect costs that field, never the item (and so never the page).
+    let updatedAt: LenientField<String>?
+    let userNotesCount: LenientField<Int>?
+    let taskCompletionStatus: LenientField<TaskCompletion>?
+    /// Issues only.
+    let mergeRequestsCount: LenientField<Int>?
+    /// Issues only, Premium.
+    let iteration: LenientField<Iteration>?
+    /// Issues only, Premium: "on_track", "needs_attention", "at_risk".
+    let healthStatus: LenientField<String>?
+    /// Merge requests only.
+    let draft: LenientField<Bool>?
+    let hasConflicts: LenientField<Bool>?
+    let author: LenientField<Person>?
+
+    struct TaskCompletion: Decodable, Equatable {
+        let count: Int?
+        let completedCount: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case count
+            case completedCount = "completed_count"
+        }
+    }
+
+    struct Iteration: Decodable, Equatable {
+        /// Null for an iteration a cadence made on its own.
+        let title: String?
+        let sequence: Int?
+    }
+
+    struct Person: Decodable, Equatable {
+        let name: String?
+    }
 
     struct Labels: Decodable, Equatable {
         let names: [String]
@@ -128,10 +163,27 @@ struct GitLabItem: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, iid, title, state, references, labels, weight, milestone, assignees, epic
+        case iteration, draft, author
         case projectID = "project_id"
         case webURL = "web_url"
         case timeStats = "time_stats"
         case dueDate = "due_date"
+        case updatedAt = "updated_at"
+        case userNotesCount = "user_notes_count"
+        case taskCompletionStatus = "task_completion_status"
+        case mergeRequestsCount = "merge_requests_count"
+        case healthStatus = "health_status"
+        case hasConflicts = "has_conflicts"
+    }
+}
+
+/// One field of a server answer read on its own: a value in a shape this version does not expect
+/// becomes nil instead of failing the object around it.
+struct LenientField<Value: Decodable & Equatable>: Decodable, Equatable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? decoder.singleValueContainer().decode(Value.self)
     }
 }
 
@@ -352,6 +404,7 @@ enum GitLabAPI {
         }
         let webURL = item.webURL.flatMap { GitLabHost.isWebURL($0, onServer: base) ? $0 : nil }
         let labels = TaskFacets.keptLabels(item.labels?.names ?? [])
+        let checklist = checklistCounts(item.taskCompletionStatus?.value)
         return RemoteIssue(
             remoteID: remoteID(kind: kind, id: item.id),
             key: key,
@@ -368,8 +421,30 @@ enum GitLabAPI {
             milestone: kind == .issue ? item.milestone?.title.flatMap(TaskItem.cleanedTitle) : nil,
             dueDate: kind == .issue ? RemoteTaskInfo.dayDate(item.dueDate) : nil,
             assignee: item.assignees?.names.first.flatMap(TaskItem.cleanedTitle),
-            parentTitle: kind == .issue ? item.epic?.title.flatMap(TaskItem.cleanedTitle) : nil
+            parentTitle: kind == .issue ? item.epic?.title.flatMap(TaskItem.cleanedTitle) : nil,
+            updatedAt: RemoteTaskInfo.serverTimestamp(item.updatedAt?.value),
+            commentCount: item.userNotesCount?.value,
+            checklistDone: checklist?.done,
+            checklistTotal: checklist?.total,
+            linkedMergeRequests: kind == .issue ? item.mergeRequestsCount?.value.flatMap { $0 > 0 ? $0 : nil } : nil,
+            iteration: kind == .issue ? iterationName(item.iteration?.value) : nil,
+            healthStatus: kind == .issue ? item.healthStatus?.value.flatMap(TaskItem.cleanedTitle) : nil,
+            isDraft: kind == .mergeRequest ? item.draft?.value : nil,
+            hasConflicts: kind == .mergeRequest ? item.hasConflicts?.value : nil,
+            author: kind == .mergeRequest ? item.author?.value?.name.flatMap(TaskItem.cleanedTitle) : nil
         )
+    }
+
+    /// The item's task list as done-of-total; nil without one (a total of 0).
+    private static func checklistCounts(_ status: GitLabItem.TaskCompletion?) -> (done: Int, total: Int)? {
+        guard let total = status?.count, total > 0 else { return nil }
+        return (min(max(status?.completedCount ?? 0, 0), total), total)
+    }
+
+    /// An iteration's title, or "Iteration 5" for one a cadence made without a title.
+    private static func iterationName(_ iteration: GitLabItem.Iteration?) -> String? {
+        if let title = iteration?.title.flatMap(TaskItem.cleanedTitle) { return title }
+        return iteration?.sequence.map { String(localized: "Iteration \($0)") }
     }
 }
 

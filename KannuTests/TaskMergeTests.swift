@@ -95,7 +95,28 @@ final class TaskMergeTests: XCTestCase {
         first.parentTitle = "Login epic"
         first.priority = "High"
         first.issueType = "Bug"
+        first.updatedAt = now
+        first.commentCount = 3
+        first.checklistDone = 2
+        first.checklistTotal = 5
+        first.linkedMergeRequests = 1
+        first.iteration = "Iteration 5"
+        first.healthStatus = "at_risk"
+        first.isDraft = true
+        first.hasConflicts = true
+        first.author = "Kim Lee"
         let created = merge([first], into: [])
+        let createdRemote = created.tasks.first?.remote
+        XCTAssertEqual(createdRemote?.updatedAt, now)
+        XCTAssertEqual(createdRemote?.commentCount, 3)
+        XCTAssertEqual(createdRemote?.checklistDone, 2)
+        XCTAssertEqual(createdRemote?.checklistTotal, 5)
+        XCTAssertEqual(createdRemote?.linkedMergeRequests, 1)
+        XCTAssertEqual(createdRemote?.iteration, "Iteration 5")
+        XCTAssertEqual(createdRemote?.healthStatus, "at_risk")
+        XCTAssertEqual(createdRemote?.isDraft, true)
+        XCTAssertEqual(createdRemote?.hasConflicts, true)
+        XCTAssertEqual(createdRemote?.author, "Kim Lee")
         let remote = created.tasks.first?.remote
         XCTAssertEqual(remote?.weight, 8)
         XCTAssertEqual(remote?.milestone, "Sprint 42")
@@ -116,6 +137,9 @@ final class TaskMergeTests: XCTestCase {
         XCTAssertNil(after?.weight, "cleared on the server, cleared here")
         XCTAssertNil(after?.dueDate)
         XCTAssertNil(after?.priority)
+        XCTAssertNil(after?.commentCount)
+        XCTAssertNil(after?.hasConflicts, "a resolved conflict clears")
+        XCTAssertNil(after?.author)
         XCTAssertEqual(after?.assignee, "Dana Example")
         XCTAssertEqual(refreshed.updated, 1)
     }

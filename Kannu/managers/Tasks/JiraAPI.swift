@@ -77,6 +77,8 @@ struct JiraIssue: Decodable, Equatable {
         let parent: Parent?
         /// Read leniently: another shape costs the labels, never the issue.
         let labels: Labels?
+        /// `2026-10-16T09:12:34.567+0000`.
+        let updated: String?
     }
 
     /// A Jira object Kannu reads only the name of (a priority, an issue type).
@@ -220,7 +222,7 @@ enum JiraAPI {
     /// What the search asks for: the task's words, its time, and the standard facts its card shows.
     /// Never `description` (an ADF document, heavy and private) and never a sprint (a custom field
     /// whose id differs per site).
-    static let fields = ["summary", "status", "timetracking", "priority", "assignee", "duedate", "issuetype", "parent", "labels"]
+    static let fields = ["summary", "status", "timetracking", "priority", "assignee", "duedate", "issuetype", "parent", "labels", "updated"]
     /// Where an Atlassian account makes an API token.
     static let createTokenURL = URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!
 
@@ -494,7 +496,8 @@ enum JiraAPI {
             assignee: fields.assignee?.displayName.flatMap(TaskItem.cleanedTitle),
             parentTitle: fields.parent?.fields?.summary.flatMap(TaskItem.cleanedTitle),
             priority: fields.priority?.name.flatMap(TaskItem.cleanedTitle),
-            issueType: fields.issuetype?.name.flatMap(TaskItem.cleanedTitle)
+            issueType: fields.issuetype?.name.flatMap(TaskItem.cleanedTitle),
+            updatedAt: RemoteTaskInfo.serverTimestamp(fields.updated)
         )
     }
 }

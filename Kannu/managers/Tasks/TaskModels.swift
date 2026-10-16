@@ -106,11 +106,49 @@ struct RemoteTaskInfo: Codable, Equatable {
     var priority: String? = nil
     /// Jira only: the issue type's name ("Bug").
     var issueType: String? = nil
+    /// When the server last changed the item (GitLab `updated_at`, Jira `updated`).
+    var updatedAt: Date? = nil
+    /// GitLab only: comments by people (`user_notes_count`), system notes excluded.
+    var commentCount: Int? = nil
+    /// GitLab only: the item's task list, "2 of 5 done" (`task_completion_status`). Both nil
+    /// when it has none.
+    var checklistDone: Int? = nil
+    var checklistTotal: Int? = nil
+    /// GitLab issues only: merge requests that close or mention it (`merge_requests_count`).
+    var linkedMergeRequests: Int? = nil
+    /// GitLab issues only, Premium: the iteration's title, or "Iteration 5" for an untitled one.
+    var iteration: String? = nil
+    /// GitLab issues only, Premium: "on_track", "needs_attention" or "at_risk".
+    var healthStatus: String? = nil
+    /// GitLab merge requests only.
+    var isDraft: Bool? = nil
+    var hasConflicts: Bool? = nil
+    /// GitLab merge requests only: who opened it.
+    var author: String? = nil
 
     private enum CodingKeys: String, CodingKey {
         case remoteID, key, hostScope, status, isDoneRemotely, remoteEstimateSeconds, remoteSpentSeconds
         case gitlabProjectID, gitlabIID, lastSeenAt, gitlabKind, gitlabWebURL, statusCategory, labels
         case weight, milestone, dueDate, assignee, parentTitle, priority, issueType
+        case updatedAt, commentCount, checklistDone, checklistTotal, linkedMergeRequests, iteration, healthStatus
+        case isDraft, hasConflicts, author
+    }
+
+    /// A server timestamp: GitLab's `2026-10-16T09:12:34.567Z`, Jira's `2026-10-16T09:12:34.567+0000`
+    /// (its offset has no colon, which ISO 8601 parsing wants), with or without fractions. Nil for
+    /// anything else.
+    static func serverTimestamp(_ text: String?) -> Date? {
+        guard var text = text?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        if let range = text.range(of: #"[+-]\d{4}$"#, options: .regularExpression) {
+            let offset = text[range]
+            text.replaceSubrange(range, with: offset.prefix(3) + ":" + offset.suffix(2))
+        }
+        let formatter = ISO8601DateFormatter()
+        for options: ISO8601DateFormatter.Options in [[.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime]] {
+            formatter.formatOptions = options
+            if let date = formatter.date(from: text) { return date }
+        }
+        return nil
     }
 
     /// A server's date-only field (`2026-10-20`) as the start of that day in `calendar`'s time
@@ -151,6 +189,16 @@ extension RemoteTaskInfo {
         parentTitle = try? container.decodeIfPresent(String.self, forKey: .parentTitle)
         priority = try? container.decodeIfPresent(String.self, forKey: .priority)
         issueType = try? container.decodeIfPresent(String.self, forKey: .issueType)
+        updatedAt = try? container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        commentCount = try? container.decodeIfPresent(Int.self, forKey: .commentCount)
+        checklistDone = try? container.decodeIfPresent(Int.self, forKey: .checklistDone)
+        checklistTotal = try? container.decodeIfPresent(Int.self, forKey: .checklistTotal)
+        linkedMergeRequests = try? container.decodeIfPresent(Int.self, forKey: .linkedMergeRequests)
+        iteration = try? container.decodeIfPresent(String.self, forKey: .iteration)
+        healthStatus = try? container.decodeIfPresent(String.self, forKey: .healthStatus)
+        isDraft = try? container.decodeIfPresent(Bool.self, forKey: .isDraft)
+        hasConflicts = try? container.decodeIfPresent(Bool.self, forKey: .hasConflicts)
+        author = try? container.decodeIfPresent(String.self, forKey: .author)
     }
 }
 

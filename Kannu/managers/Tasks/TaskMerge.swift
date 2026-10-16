@@ -43,6 +43,16 @@ struct RemoteIssue: Equatable {
     var parentTitle: String? = nil
     var priority: String? = nil
     var issueType: String? = nil
+    var updatedAt: Date? = nil
+    var commentCount: Int? = nil
+    var checklistDone: Int? = nil
+    var checklistTotal: Int? = nil
+    var linkedMergeRequests: Int? = nil
+    var iteration: String? = nil
+    var healthStatus: String? = nil
+    var isDraft: Bool? = nil
+    var hasConflicts: Bool? = nil
+    var author: String? = nil
 
     /// Where a GitLab item lives: what the next PR needs to log time to it, and its page.
     struct GitLabRef: Equatable {
@@ -137,6 +147,16 @@ enum TaskMerge {
                 remote.parentTitle = issue.parentTitle
                 remote.priority = issue.priority
                 remote.issueType = issue.issueType
+                remote.updatedAt = issue.updatedAt
+                remote.commentCount = issue.commentCount
+                remote.checklistDone = issue.checklistDone
+                remote.checklistTotal = issue.checklistTotal
+                remote.linkedMergeRequests = issue.linkedMergeRequests
+                remote.iteration = issue.iteration
+                remote.healthStatus = issue.healthStatus
+                remote.isDraft = issue.isDraft
+                remote.hasConflicts = issue.hasConflicts
+                remote.author = issue.author
                 if let gitlab = issue.gitlab {
                     remote.gitlabKind = gitlab.kind
                     remote.gitlabProjectID = gitlab.projectID
@@ -172,7 +192,17 @@ enum TaskMerge {
                     assignee: issue.assignee,
                     parentTitle: issue.parentTitle,
                     priority: issue.priority,
-                    issueType: issue.issueType
+                    issueType: issue.issueType,
+                    updatedAt: issue.updatedAt,
+                    commentCount: issue.commentCount,
+                    checklistDone: issue.checklistDone,
+                    checklistTotal: issue.checklistTotal,
+                    linkedMergeRequests: issue.linkedMergeRequests,
+                    iteration: issue.iteration,
+                    healthStatus: issue.healthStatus,
+                    isDraft: issue.isDraft,
+                    hasConflicts: issue.hasConflicts,
+                    author: issue.author
                 )
                 appended.append(TaskItem(id: newID(), source: source, title: title, remote: remote, createdAt: now))
                 added += 1

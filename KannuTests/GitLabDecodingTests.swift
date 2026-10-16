@@ -35,6 +35,10 @@ final class GitLabDecodingTests: XCTestCase {
         "due_date": "2026-10-20",
         "assignees": [{"id": 1, "username": "dana", "name": "Dana Example"}, {"id": 2, "username": "kim", "name": "Kim"}],
         "epic": {"id": 5, "iid": 2, "title": "Health Check Migration ( AI )"},
+        "updated_at": "2026-10-16T09:12:34.567Z", "user_notes_count": 3, "merge_requests_count": 1,
+        "task_completion_status": {"count": 5, "completed_count": 2},
+        "iteration": {"id": 9, "iid": 5, "title": null, "sequence": 5, "start_date": "2026-10-13", "due_date": "2026-10-26"},
+        "health_status": "needs_attention",
         "web_url": "https://gitlab.example.com/group/app/-/issues/45",
         "references": {"short": "#45", "relative": "app#45", "full": "group/app#45"},
         "time_stats": {"time_estimate": 7200, "total_time_spent": 10800, "human_time_estimate": "2h", "human_total_time_spent": "3h"}
@@ -42,6 +46,7 @@ final class GitLabDecodingTests: XCTestCase {
       {
         "id": 77, "iid": 46, "project_id": 8,
         "title": "", "state": "opened",
+        "user_notes_count": "three", "task_completion_status": "none", "health_status": 7,
         "web_url": "https://evil.example/group/app/-/issues/46",
         "references": {"full": "group/app#46"},
         "time_stats": {"time_estimate": 0, "total_time_spent": 0}
@@ -62,6 +67,9 @@ final class GitLabDecodingTests: XCTestCase {
         "references": {"short": "!12", "relative": "!12", "full": "group/app!12"},
         "time_stats": {"time_estimate": 1800, "total_time_spent": 0},
         "assignees": [{"id": 1, "username": "dana", "name": "Dana Example"}],
+        "author": {"id": 2, "username": "kim", "name": "Kim Lee"}, "has_conflicts": true,
+        "user_notes_count": 4, "updated_at": "2026-10-16T08:00:00Z",
+        "task_completion_status": {"count": 0, "completed_count": 0},
         "reviewers": [{"id": 1, "username": "dana"}]
       }
     ]
@@ -103,6 +111,22 @@ final class GitLabDecodingTests: XCTestCase {
         XCTAssertEqual(issue.parentTitle, "Health Check Migration ( AI )")
         XCTAssertNil(issue.priority, "Jira's words, not GitLab's")
         XCTAssertNil(issue.issueType)
+        XCTAssertEqual(issue.updatedAt, RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34.567Z"))
+        XCTAssertNotNil(issue.updatedAt)
+        XCTAssertEqual(issue.commentCount, 3)
+        XCTAssertEqual(issue.checklistDone, 2)
+        XCTAssertEqual(issue.checklistTotal, 5)
+        XCTAssertEqual(issue.linkedMergeRequests, 1)
+        XCTAssertEqual(issue.iteration, "Iteration 5", "an untitled iteration reads by its number")
+        XCTAssertEqual(issue.healthStatus, "needs_attention")
+        XCTAssertNil(issue.isDraft, "merge-request facts are not an issue's")
+        XCTAssertNil(issue.hasConflicts)
+        XCTAssertNil(issue.author)
+
+        let odd = GitLabAPI.remoteIssue(from: page[1], kind: .issue, base: base, reviewRequested: false)
+        XCTAssertNil(odd.commentCount, "a field in an unexpected shape costs that field, never the item")
+        XCTAssertNil(odd.checklistTotal)
+        XCTAssertNil(odd.healthStatus)
 
         let bare = GitLabAPI.remoteIssue(from: page[2], kind: .issue, base: base, reviewRequested: false)
         XCTAssertNil(bare.weight, "an older server sends none of them")
@@ -120,6 +144,15 @@ final class GitLabDecodingTests: XCTestCase {
         XCTAssertNil(request.dueDate)
         XCTAssertNil(request.parentTitle)
         XCTAssertEqual(request.assignee, "Dana Example")
+        XCTAssertEqual(request.isDraft, true)
+        XCTAssertEqual(request.hasConflicts, true)
+        XCTAssertEqual(request.author, "Kim Lee")
+        XCTAssertEqual(request.commentCount, 4)
+        XCTAssertNotNil(request.updatedAt)
+        XCTAssertNil(request.checklistTotal, "an empty task list is no checklist")
+        XCTAssertNil(request.linkedMergeRequests, "an issue's fact")
+        XCTAssertNil(request.iteration)
+        XCTAssertNil(request.healthStatus)
     }
 
     func testWhatAnAnswerCannotSlipIn() throws {
