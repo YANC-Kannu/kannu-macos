@@ -86,6 +86,40 @@ final class TaskMergeTests: XCTestCase {
         XCTAssertEqual(result.gone, 0)
     }
 
+    func testTheStandardFactsAreSetAndRefreshedLikeTheRest() {
+        var first = issue("1")
+        first.weight = 8
+        first.milestone = "Sprint 42"
+        first.dueDate = then
+        first.assignee = "Dana Example"
+        first.parentTitle = "Login epic"
+        first.priority = "High"
+        first.issueType = "Bug"
+        let created = merge([first], into: [])
+        let remote = created.tasks.first?.remote
+        XCTAssertEqual(remote?.weight, 8)
+        XCTAssertEqual(remote?.milestone, "Sprint 42")
+        XCTAssertEqual(remote?.dueDate, then)
+        XCTAssertEqual(remote?.assignee, "Dana Example")
+        XCTAssertEqual(remote?.parentTitle, "Login epic")
+        XCTAssertEqual(remote?.priority, "High")
+        XCTAssertEqual(remote?.issueType, "Bug")
+
+        // The server owns them: a changed one changes, a dropped one is dropped, and either is a
+        // change worth saving.
+        var second = issue("1")
+        second.milestone = "Sprint 43"
+        second.assignee = "Dana Example"
+        let refreshed = merge([second], into: created.tasks)
+        let after = refreshed.tasks.first?.remote
+        XCTAssertEqual(after?.milestone, "Sprint 43")
+        XCTAssertNil(after?.weight, "cleared on the server, cleared here")
+        XCTAssertNil(after?.dueDate)
+        XCTAssertNil(after?.priority)
+        XCTAssertEqual(after?.assignee, "Dana Example")
+        XCTAssertEqual(refreshed.updated, 1)
+    }
+
     func testAnUnchangedIssueIsNotAChange() {
         let task = jiraTask("1")
         let result = merge([issue("1")], into: [task])

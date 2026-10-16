@@ -74,6 +74,16 @@ struct GitLabItem: Decodable, Equatable {
     let timeStats: TimeStats?
     /// The label names. Read leniently: another shape costs the labels, never the item.
     let labels: Labels?
+    /// Issues only; absent on merge requests and null on servers without weights.
+    let weight: Int?
+    /// Issues only; null when none is set.
+    let milestone: Milestone?
+    /// `YYYY-MM-DD`; issues only.
+    let dueDate: String?
+    /// The people assigned, names only. Read leniently, like the labels.
+    let assignees: Assignees?
+    /// Issues only, and only on Premium servers; null or absent elsewhere.
+    let epic: Epic?
 
     struct Labels: Decodable, Equatable {
         let names: [String]
@@ -81,6 +91,24 @@ struct GitLabItem: Decodable, Equatable {
         init(from decoder: Decoder) throws {
             names = (try? decoder.singleValueContainer().decode([String].self)) ?? []
         }
+    }
+
+    struct Assignees: Decodable, Equatable {
+        let names: [String]
+
+        init(from decoder: Decoder) throws {
+            struct Person: Decodable { let name: String? }
+            let people = (try? decoder.singleValueContainer().decode([Person].self)) ?? []
+            names = people.compactMap(\.name)
+        }
+    }
+
+    struct Milestone: Decodable, Equatable {
+        let title: String?
+    }
+
+    struct Epic: Decodable, Equatable {
+        let title: String?
     }
 
     struct References: Decodable, Equatable {
@@ -99,10 +127,11 @@ struct GitLabItem: Decodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, iid, title, state, references, labels
+        case id, iid, title, state, references, labels, weight, milestone, assignees, epic
         case projectID = "project_id"
         case webURL = "web_url"
         case timeStats = "time_stats"
+        case dueDate = "due_date"
     }
 }
 
@@ -333,7 +362,13 @@ enum GitLabAPI {
             spentSeconds: item.timeStats?.totalTimeSpent.flatMap { $0 > 0 ? $0 : nil },
             gitlab: RemoteIssue.GitLabRef(kind: kind, projectID: item.projectID, iid: item.iid, webURL: webURL),
             statusCategory: TaskFacets.gitlabCategory(kind: kind, labels: labels),
-            labels: labels
+            labels: labels,
+            // Weight, milestone, due date and epic belong to issues; a merge request has none.
+            weight: kind == .issue ? item.weight : nil,
+            milestone: kind == .issue ? item.milestone?.title.flatMap(TaskItem.cleanedTitle) : nil,
+            dueDate: kind == .issue ? RemoteTaskInfo.dayDate(item.dueDate) : nil,
+            assignee: item.assignees?.names.first.flatMap(TaskItem.cleanedTitle),
+            parentTitle: kind == .issue ? item.epic?.title.flatMap(TaskItem.cleanedTitle) : nil
         )
     }
 }

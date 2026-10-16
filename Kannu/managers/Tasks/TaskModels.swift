@@ -84,13 +84,43 @@ struct RemoteTaskInfo: Codable, Equatable {
     /// Progress) or "done". Jira's own `status.statusCategory.key`; for GitLab, set by
     /// `GitLabAPI.remoteIssue` (`TaskFacets.gitlabCategory`). Nil in a file written before it.
     var statusCategory: String? = nil
-    /// GitLab only: the item's labels, as the server sent them. Read for the In Progress facet and
-    /// never sent anywhere. Nil for Jira, and in a file written before it.
+    /// The item's labels, as the server sent them (GitLab labels; Jira labels). Read for the
+    /// In Progress facet and shown on the task's card; never sent anywhere. Nil in a file written
+    /// before them.
     var labels: [String]? = nil
+    /// The standard facts the ticket page shows, so the task's card can too. Each is nil where the
+    /// source has no such thing (a merge request has no weight) and in a file written before them.
+    /// Like titles they sit in the 0600 tasks file, are never logged, and are never sent.
+    /// GitLab issues only: the weight.
+    var weight: Int? = nil
+    /// GitLab issues only: the milestone's title.
+    var milestone: String? = nil
+    /// The due date (GitLab `due_date`, Jira `duedate`): date-only on both, kept as the start of
+    /// that day in the local time zone (`dayDate`).
+    var dueDate: Date? = nil
+    /// The assignee's display name — the first one, when GitLab lists several.
+    var assignee: String? = nil
+    /// The parent's title: a GitLab epic, a Jira parent issue.
+    var parentTitle: String? = nil
+    /// Jira only: the priority's name ("High").
+    var priority: String? = nil
+    /// Jira only: the issue type's name ("Bug").
+    var issueType: String? = nil
 
     private enum CodingKeys: String, CodingKey {
         case remoteID, key, hostScope, status, isDoneRemotely, remoteEstimateSeconds, remoteSpentSeconds
         case gitlabProjectID, gitlabIID, lastSeenAt, gitlabKind, gitlabWebURL, statusCategory, labels
+        case weight, milestone, dueDate, assignee, parentTitle, priority, issueType
+    }
+
+    /// A server's date-only field (`2026-10-20`) as the start of that day in `calendar`'s time
+    /// zone; nil for anything else. No `DateFormatter`: three integers and the calendar suffice.
+    static func dayDate(_ text: String?, calendar: Calendar = .current) -> Date? {
+        guard let text else { return nil }
+        let parts = text.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
+        guard parts.count == 3, let year = parts[0], let month = parts[1], let day = parts[2],
+              (1...12).contains(month), (1...31).contains(day) else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
     }
 }
 
@@ -114,6 +144,13 @@ extension RemoteTaskInfo {
         gitlabWebURL = try container.decodeIfPresent(String.self, forKey: .gitlabWebURL)
         statusCategory = try? container.decodeIfPresent(String.self, forKey: .statusCategory)
         labels = try? container.decodeIfPresent([String].self, forKey: .labels)
+        weight = try? container.decodeIfPresent(Int.self, forKey: .weight)
+        milestone = try? container.decodeIfPresent(String.self, forKey: .milestone)
+        dueDate = try? container.decodeIfPresent(Date.self, forKey: .dueDate)
+        assignee = try? container.decodeIfPresent(String.self, forKey: .assignee)
+        parentTitle = try? container.decodeIfPresent(String.self, forKey: .parentTitle)
+        priority = try? container.decodeIfPresent(String.self, forKey: .priority)
+        issueType = try? container.decodeIfPresent(String.self, forKey: .issueType)
     }
 }
 

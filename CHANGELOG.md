@@ -4,6 +4,26 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - The sync keeps a ticket's standard facts: weight, milestone, due date, assignee, parent, priority and type
+- **Developer label:** "we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the data half of the task card redesign: fields the servers already send, now decoded, merged and stored
+- **Changes:**
+  - `RemoteTaskInfo` gains `weight`, `milestone`, `dueDate`, `assignee`, `parentTitle`, `priority`
+    and `issueType`, all optional, written to the tasks file and read leniently, so a file from
+    before them still reads and a newer file never costs the list. A due date is the server's
+    date-only value kept as the start of that day in the local time zone (`RemoteTaskInfo.dayDate`).
+  - GitLab: the issue and merge-request lists already carry `weight`, `milestone`, `due_date`,
+    `assignees` and `epic`; they are decoded now (assignees leniently, like labels). A merge
+    request keeps only its assignee — it has no weight, milestone, due date or epic.
+  - Jira: the search asks for `priority`, `assignee`, `duedate`, `issuetype`, `parent` and
+    `labels` as well, and keeps each. Never `description` (heavy, private) and never a sprint
+    (a per-site custom field). Jira labels now reach the task like GitLab's.
+  - A sync refreshes every one of them: a value the server changed changes, one it cleared is
+    cleared, and either counts as a change worth saving (`TaskMerge`).
+  - Like titles, these sit in the 0600 tasks file, are never logged and are never sent anywhere.
+  - Guards: `GitLabDecodingTests`, `JiraDecodingTests`, `JiraRequestTests` (the new fields list),
+    `TaskMergeTests`, `TaskModelCodingTests` (round trip, old file, the day-date parser).
+
 ### 2026-10-16 - A task capsule in the timer tab expands into its card: detail, Start, close, and delete for local tasks
 - **Developer label:** "on clicking the task it should expand into that area and show full detail of a task with start option and the top right having a cross button, local tasks should have a delete icon at botton right"
 - **Agent label:** Claude Code (Fable 5.1) — an in-place task card in the side column, its words from a pure summary, delete confirmed inline

@@ -31,6 +31,10 @@ final class GitLabDecodingTests: XCTestCase {
         "id": 76, "iid": 45, "project_id": 8,
         "title": "Login  redirect\\nloops", "state": "opened",
         "description": "ignored", "labels": ["bug"],
+        "weight": 8, "milestone": {"id": 3, "iid": 1, "title": "Sprint  42", "state": "active"},
+        "due_date": "2026-10-20",
+        "assignees": [{"id": 1, "username": "dana", "name": "Dana Example"}, {"id": 2, "username": "kim", "name": "Kim"}],
+        "epic": {"id": 5, "iid": 2, "title": "Health Check Migration ( AI )"},
         "web_url": "https://gitlab.example.com/group/app/-/issues/45",
         "references": {"short": "#45", "relative": "app#45", "full": "group/app#45"},
         "time_stats": {"time_estimate": 7200, "total_time_spent": 10800, "human_time_estimate": "2h", "human_total_time_spent": "3h"}
@@ -57,6 +61,7 @@ final class GitLabDecodingTests: XCTestCase {
         "web_url": "https://gitlab.example.com/group/app/-/merge_requests/12",
         "references": {"short": "!12", "relative": "!12", "full": "group/app!12"},
         "time_stats": {"time_estimate": 1800, "total_time_spent": 0},
+        "assignees": [{"id": 1, "username": "dana", "name": "Dana Example"}],
         "reviewers": [{"id": 1, "username": "dana"}]
       }
     ]
@@ -90,6 +95,31 @@ final class GitLabDecodingTests: XCTestCase {
         XCTAssertEqual(issue.spentSeconds, 10800)
         XCTAssertEqual(issue.gitlab, RemoteIssue.GitLabRef(kind: .issue, projectID: 8, iid: 45,
                                                            webURL: "https://gitlab.example.com/group/app/-/issues/45"))
+        // The standard facts the card shows, as the page sends them.
+        XCTAssertEqual(issue.weight, 8)
+        XCTAssertEqual(issue.milestone, "Sprint 42", "one clean line, like a title")
+        XCTAssertEqual(issue.dueDate, RemoteTaskInfo.dayDate("2026-10-20"))
+        XCTAssertEqual(issue.assignee, "Dana Example", "the first assignee")
+        XCTAssertEqual(issue.parentTitle, "Health Check Migration ( AI )")
+        XCTAssertNil(issue.priority, "Jira's words, not GitLab's")
+        XCTAssertNil(issue.issueType)
+
+        let bare = GitLabAPI.remoteIssue(from: page[2], kind: .issue, base: base, reviewRequested: false)
+        XCTAssertNil(bare.weight, "an older server sends none of them")
+        XCTAssertNil(bare.milestone)
+        XCTAssertNil(bare.dueDate)
+        XCTAssertNil(bare.assignee)
+        XCTAssertNil(bare.parentTitle)
+    }
+
+    func testAMergeRequestKeepsOnlyItsAssignee() throws {
+        let page = try items(Self.mergeRequestsPage)
+        let request = GitLabAPI.remoteIssue(from: page[0], kind: .mergeRequest, base: base, reviewRequested: true)
+        XCTAssertNil(request.weight, "a merge request has no weight, milestone, due date or epic")
+        XCTAssertNil(request.milestone)
+        XCTAssertNil(request.dueDate)
+        XCTAssertNil(request.parentTitle)
+        XCTAssertEqual(request.assignee, "Dana Example")
     }
 
     func testWhatAnAnswerCannotSlipIn() throws {

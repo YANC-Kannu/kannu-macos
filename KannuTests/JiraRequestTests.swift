@@ -53,13 +53,13 @@ final class JiraRequestTests: XCTestCase {
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
         XCTAssertEqual(request.timeoutInterval, 20)
         let body = try XCTUnwrap(request.httpBody.flatMap { String(data: $0, encoding: .utf8) })
-        XCTAssertEqual(body, #"{"fields":["summary","status","timetracking"],"jql":"assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC","maxResults":100}"#)
+        XCTAssertEqual(body, #"{"fields":["summary","status","timetracking","priority","assignee","duedate","issuetype","parent","labels"],"jql":"assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC","maxResults":100}"#)
     }
 
     func testALaterSearchPageCarriesItsToken() throws {
         let request = try XCTUnwrap(JiraAPI.searchRequest(credential, jql: #"project = "ABC" ORDER BY rank"#, nextPageToken: "CAEaAggD"))
         let body = try XCTUnwrap(request.httpBody.flatMap { String(data: $0, encoding: .utf8) })
-        XCTAssertEqual(body, #"{"fields":["summary","status","timetracking"],"jql":"project = \"ABC\" ORDER BY rank","maxResults":100,"nextPageToken":"CAEaAggD"}"#)
+        XCTAssertEqual(body, #"{"fields":["summary","status","timetracking","priority","assignee","duedate","issuetype","parent","labels"],"jql":"project = \"ABC\" ORDER BY rank","maxResults":100,"nextPageToken":"CAEaAggD"}"#)
         XCTAssertEqual(request.url?.absoluteString, "https://acme.atlassian.net/rest/api/3/search/jql", "the page token is in the body, not the URL")
     }
 

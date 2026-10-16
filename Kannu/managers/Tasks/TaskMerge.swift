@@ -33,8 +33,16 @@ struct RemoteIssue: Equatable {
     var gitlab: GitLabRef? = nil
     /// "new", "indeterminate" or "done" (`RemoteTaskInfo.statusCategory`).
     var statusCategory: String? = nil
-    /// GitLab only: the item's labels.
+    /// The item's labels; nil when the source sent none.
     var labels: [String]? = nil
+    /// The standard facts (`RemoteTaskInfo`'s of the same names), refreshed on every sync.
+    var weight: Int? = nil
+    var milestone: String? = nil
+    var dueDate: Date? = nil
+    var assignee: String? = nil
+    var parentTitle: String? = nil
+    var priority: String? = nil
+    var issueType: String? = nil
 
     /// Where a GitLab item lives: what the next PR needs to log time to it, and its page.
     struct GitLabRef: Equatable {
@@ -122,6 +130,13 @@ enum TaskMerge {
                 remote.remoteSpentSeconds = issue.spentSeconds
                 remote.statusCategory = issue.statusCategory
                 remote.labels = issue.labels
+                remote.weight = issue.weight
+                remote.milestone = issue.milestone
+                remote.dueDate = issue.dueDate
+                remote.assignee = issue.assignee
+                remote.parentTitle = issue.parentTitle
+                remote.priority = issue.priority
+                remote.issueType = issue.issueType
                 if let gitlab = issue.gitlab {
                     remote.gitlabKind = gitlab.kind
                     remote.gitlabProjectID = gitlab.projectID
@@ -150,7 +165,14 @@ enum TaskMerge {
                     gitlabKind: issue.gitlab?.kind,
                     gitlabWebURL: issue.gitlab?.webURL,
                     statusCategory: issue.statusCategory,
-                    labels: issue.labels
+                    labels: issue.labels,
+                    weight: issue.weight,
+                    milestone: issue.milestone,
+                    dueDate: issue.dueDate,
+                    assignee: issue.assignee,
+                    parentTitle: issue.parentTitle,
+                    priority: issue.priority,
+                    issueType: issue.issueType
                 )
                 appended.append(TaskItem(id: newID(), source: source, title: title, remote: remote, createdAt: now))
                 added += 1

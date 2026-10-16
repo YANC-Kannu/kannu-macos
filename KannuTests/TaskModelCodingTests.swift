@@ -100,14 +100,22 @@ final class TaskModelCodingTests: XCTestCase {
                 remoteID: "mr:31", key: "group/app!12", hostScope: "https://gitlab.example.com", status: "review requested",
                 isDoneRemotely: false, remoteEstimateSeconds: 1800, remoteSpentSeconds: nil,
                 gitlabProjectID: 8, gitlabIID: 12, lastSeenAt: start, gitlabKind: .mergeRequest,
-                gitlabWebURL: "https://gitlab.example.com/group/app/-/merge_requests/12"
+                gitlabWebURL: "https://gitlab.example.com/group/app/-/merge_requests/12",
+                statusCategory: "indeterminate", labels: ["bug"],
+                weight: 3, milestone: "Sprint 42", dueDate: start, assignee: "Dana Example",
+                parentTitle: "Login epic", priority: "High", issueType: "Bug"
             ),
             createdAt: start
         )
         let file = TasksFile(tasks: [mergeRequest], drafts: [])
         let data = try TasksFile.makeEncoder().encode(file)
         XCTAssertEqual(try TasksFile.makeDecoder().decode(TasksFile.self, from: data), file)
-        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains(#""gitlabKind" : "mergeRequest""#))
+        let text = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(text.contains(#""gitlabKind" : "mergeRequest""#))
+        // A property left out of CodingKeys is silently never written: every standard fact is.
+        for key in ["weight", "milestone", "dueDate", "assignee", "parentTitle", "priority", "issueType"] {
+            XCTAssertTrue(text.contains("\"\(key)\" :"), "\(key) is not written to the file")
+        }
     }
 
     func testAFileWrittenBeforeGitLabStillReads() throws {
@@ -125,6 +133,19 @@ final class TaskModelCodingTests: XCTestCase {
         XCTAssertNil(remote.gitlabWebURL)
         XCTAssertNil(remote.gitlabProjectID)
         XCTAssertNil(remote.remoteSpentSeconds)
+        XCTAssertNil(remote.weight, "the standard facts came later still")
+        XCTAssertNil(remote.dueDate)
+        XCTAssertNil(remote.assignee)
+    }
+
+    func testADayDateIsTheStartOfThatDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(RemoteTaskInfo.dayDate("2026-10-20", calendar: calendar), Date(timeIntervalSince1970: 1_792_454_400))
+        XCTAssertNil(RemoteTaskInfo.dayDate(nil, calendar: calendar))
+        XCTAssertNil(RemoteTaskInfo.dayDate("", calendar: calendar))
+        XCTAssertNil(RemoteTaskInfo.dayDate("2026-13-01", calendar: calendar), "no thirteenth month")
+        XCTAssertNil(RemoteTaskInfo.dayDate("2026-10-20T10:00:00Z", calendar: calendar), "date-only, as both servers send it")
     }
 
     func testAKindFromANewerKannuDoesNotCostTheFile() throws {
