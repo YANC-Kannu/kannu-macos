@@ -250,6 +250,12 @@ private struct TimerTasksPage: View {
     let started: () -> Void
     /// Whether the list has scrolled past its first row (`SideListEdgeFades`).
     @State private var isScrolled = false
+    /// The task whose card has replaced the list (`TimerTaskDetail`); nil shows the rows. Cleared
+    /// when that task leaves the list, so a deleted or resynced-away task never strands the card.
+    @State private var expandedTaskID: UUID?
+    /// The card's inline delete confirmation; reset whenever the card closes.
+    @State private var confirmsDelete = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -262,13 +268,31 @@ private struct TimerTasksPage: View {
                 let tasks = manager.activeTasks
                 if tasks.isEmpty {
                     statusRow(String(localized: "No tasks"))
+                } else if let expanded = tasks.first(where: { $0.id == expandedTaskID }) {
+                    TimerTaskDetail(
+                        manager: manager,
+                        task: expanded,
+                        height: height,
+                        confirmsDelete: $confirmsDelete,
+                        close: collapse,
+                        start: { start(expanded) }
+                    )
+                    .id(expanded.id)
+                    .transition(.opacity)
                 } else {
                     rows(tasks)
+                        .transition(.opacity)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height, alignment: .top)
+        .onChange(of: manager.activeTasks.map(\.id)) { _, ids in
+            if let expandedTaskID, !ids.contains(expandedTaskID) {
+                self.expandedTaskID = nil
+                confirmsDelete = false
+            }
+        }
         // The latest order, as the Tasks popover does it: a source syncs only when its last sync is
         // over 5 minutes old and no rate limit runs, and never with the Keychain dialog.
         .onAppear {
@@ -302,20 +326,28 @@ private struct TimerTasksPage: View {
         .frame(height: listHeight)
     }
 
-    /// Key and title on one line, "42m of 2h" under it, then ▶.
+    /// Key and title on one line, "42m of 2h" under it, then ▶. The text is a button of its own:
+    /// clicking it expands the task into its card, in the column's own frame.
     private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
         return HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                (keyText(task) + Text(verbatim: task.title))
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                (Text(verbatim: progress.text) + overText(progress.over))
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            Button {
+                expand(task)
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    (sideKeyText(task) + Text(verbatim: task.title))
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                    (Text(verbatim: progress.text) + overText(progress.over))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .accessibilityHint(Text(verbatim: String(localized: "Shows the task's details")))
             Button {
                 start(task)
             } label: {
@@ -334,13 +366,24 @@ private struct TimerTasksPage: View {
         .background(TaskGlassBackground(color: manager.color(of: task)))
     }
 
-    /// "PROJ-123 " in a quiet monospaced face, for a Jira or GitLab task; nothing for a local one.
-    private func keyText(_ task: TaskItem) -> Text {
-        guard let key = task.remote?.key else { return Text(verbatim: "") }
-        return Text(verbatim: key)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(.secondary)
-            + Text(verbatim: " ")
+    /// Opens the task's card in place of the list; the page switch's animation and reduced-motion
+    /// rule (`NotchTimerView.selectSidePage`).
+    private func expand(_ task: TaskItem) {
+        confirmsDelete = false
+        if reduceMotion {
+            expandedTaskID = task.id
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { expandedTaskID = task.id }
+        }
+    }
+
+    private func collapse() {
+        confirmsDelete = false
+        if reduceMotion {
+            expandedTaskID = nil
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { expandedTaskID = nil }
+        }
     }
 
     /// " · 10m over", in orange, once a task is a minute or more past its estimate (as the popover).
@@ -423,6 +466,160 @@ private extension View {
                     withAnimation(.easeInOut(duration: 0.15)) { isScrolled.wrappedValue = scrolled }
                 }
             }
+    }
+}
+
+/// "PROJ-123 " in a quiet monospaced face, for a Jira or GitLab task; nothing for a local one.
+/// Shared by the row and its card, so the key reads the same in both.
+private func sideKeyText(_ task: TaskItem) -> Text {
+    guard let key = task.remote?.key else { return Text(verbatim: "") }
+    return Text(verbatim: key)
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .foregroundStyle(.secondary)
+        + Text(verbatim: " ")
+}
+
+/// One task, expanded in the column's own frame in place of the list: its key and title, where it
+/// comes from and stands, its time, then Start — and, for a local task, delete; for a Jira or
+/// GitLab task, a link to open it, since deleting one would only have the next sync bring it
+/// back. The × at the top right collapses it. Delete confirms inline, in the card's bottom row:
+/// no modal, since alerts under the notch have misbehaved (docs/REGRESSIONS.md entry 14).
+///
+/// Takes the manager it is handed: `TasksManager.shared` is read by `TimerTasksPage` alone, so
+/// the manager exists only while the Tasks page shows. The words come from `TaskDetailSummary`.
+private struct TimerTaskDetail: View {
+    private typealias M = TimerComposerMetrics
+
+    @ObservedObject var manager: TasksManager
+    let task: TaskItem
+    let height: CGFloat
+    @Binding var confirmsDelete: Bool
+    let close: () -> Void
+    let start: () -> Void
+
+    var body: some View {
+        let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date())
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 6) {
+                TaskColorDot(color: manager.color(of: task))
+                    .padding(.top, 3)
+                (sideKeyText(task) + Text(verbatim: summary.title))
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    close()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(5)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(verbatim: String(localized: "Close")))
+                .hoverTooltip(String(localized: "Close"), edge: .below)
+            }
+            Text(verbatim: summary.identity)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            timeLine(summary)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            bottomRow(summary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: height, alignment: .top)
+        .background(TaskGlassBackground(color: manager.color(of: task), base: 0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    /// "42m of 2h · 10m over · Jira logged 3h · Due Today 15:00 · #tag": overtime and an overdue
+    /// date in orange, as Brain's caption shows them.
+    private func timeLine(_ summary: TaskDetailSummary) -> Text {
+        var text = Text(verbatim: summary.time)
+        if let overtime = summary.overtime {
+            text = text + Text(verbatim: " · ") + Text(verbatim: overtime).foregroundStyle(.orange)
+        }
+        for extra in summary.extras {
+            let isOverdue = summary.isOverdue && extra.hasPrefix(String(localized: "Overdue "))
+            text = text + Text(verbatim: " · ")
+                + Text(verbatim: extra).foregroundStyle(isOverdue ? Color.orange : Color.secondary)
+        }
+        return text
+    }
+
+    @ViewBuilder
+    private func bottomRow(_ summary: TaskDetailSummary) -> some View {
+        if confirmsDelete {
+            HStack(spacing: 6) {
+                Text("Delete? Its recorded time goes too.")
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+                Button(String(localized: "Keep")) {
+                    confirmsDelete = false
+                }
+                .buttonStyle(.bordered)
+                Button(String(localized: "Delete"), role: .destructive) {
+                    manager.delete(task.id)
+                    close()
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.small)
+        } else {
+            HStack(spacing: 8) {
+                Button {
+                    start()
+                } label: {
+                    Label(String(localized: "Start"), systemImage: "play.fill")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(!manager.isReady)
+                Spacer(minLength: 0)
+                if summary.canDelete {
+                    Button {
+                        confirmsDelete = true
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(5)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(verbatim: String(localized: "Delete task")))
+                    .hoverTooltip(String(localized: "Delete task"), edge: .above)
+                } else if let label = summary.browseLabel, let url = browseURL {
+                    Button {
+                        NSWorkspace.shared.open(url)
+                    } label: {
+                        Image(systemName: "arrow.up.right.square")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(5)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(verbatim: label))
+                    .hoverTooltip(label, edge: .above)
+                }
+            }
+        }
+    }
+
+    /// The issue's page on its own server; nil for a local task or an unverifiable URL.
+    private var browseURL: URL? {
+        switch task.source {
+        case .local: return nil
+        case .jira: return manager.jiraBrowseURL(for: task)
+        case .gitlab: return manager.gitlabBrowseURL(for: task)
+        }
     }
 }
 

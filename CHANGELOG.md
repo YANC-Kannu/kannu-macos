@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-16 - A task capsule in the timer tab expands into its card: detail, Start, close, and delete for local tasks
+- **Developer label:** "on clicking the task it should expand into that area and show full detail of a task with start option and the top right having a cross button, local tasks should have a delete icon at botton right"
+- **Agent label:** Claude Code (Fable 5.1) — an in-place task card in the side column, its words from a pure summary, delete confirmed inline
+- **Changes:**
+  - Clicking a task's text in the timer tab's Tasks page replaces the list with that task's card,
+    in the column's own frame (the notch does not grow): key and title with its colour dot, where it
+    comes from and stands ("Jira · PROJ · In Progress", "GitLab · group/app · Merge request · Open",
+    "Local"), its time ("42m of 2h", "10m over" in orange, "Jira logged 3h", "Due Today 15:00",
+    "#tags"), then Start. The ▶ on the row still starts the task without opening the card.
+  - A × at the card's top right collapses it. A local task gets a trash icon at the bottom right;
+    the card's bottom row then asks "Delete? Its recorded time goes too." with Keep and Delete —
+    inline, no alert, since modals under the notch have misbehaved before. A Jira or GitLab task
+    cannot be deleted (the next sync would bring it back), so it gets an open-in-browser icon in
+    that spot instead.
+  - A task that leaves the list while its card is open (deleted, done, resynced away) collapses
+    the card; swiping to Presets does too. Expanding and collapsing use the page switch's animation
+    and respect Reduce Motion. Every icon-only button carries a hover tooltip.
+  - New `TaskDetailSummary` (pure, in the logic test target) holds the card's words, mirroring
+    Brain's row caption; `TaskDetailSummaryTests` pins them. `TimerTaskDetailRulesTests` pins the
+    wiring: the card takes the manager as a parameter, delete is local-only and inline-confirmed,
+    the icon buttons carry tooltips, reduced motion is honoured, and a vanished task collapses it.
+
 ### 2026-10-16 - The timer tab's first task capsule sits level with the name field
 - **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
 - **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
