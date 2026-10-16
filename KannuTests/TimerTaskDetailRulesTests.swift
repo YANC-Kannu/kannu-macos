@@ -93,6 +93,21 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         XCTAssertTrue(page.contains("expandedTaskID"))
     }
 
+    func testTheTitleIsNeverPrefixedByTheKey() throws {
+        // A GitLab path key in front of the title ate both lines of the first card; the title is
+        // the issue's own, and the key is a short chip of its own.
+        let column = try Self.column()
+        XCTAssertFalse(column.contains("sideKeyText"), "the key-prefixed text helper must stay gone")
+        let card = try Self.declaration("private struct TimerTaskDetail", in: column)
+        XCTAssertTrue(card.contains("Text(verbatim: summary.title)"), "the card's title is summary.title alone")
+        XCTAssertTrue(card.contains("summary.shortKey"), "the key shows as its own short chip")
+        XCTAssertTrue(card.contains(".fixedSize(horizontal: false, vertical: true)"),
+                      "a two-line title must not collapse (no notch title protects itself)")
+        XCTAssertTrue(card.contains(".zIndex(1)"), "the top row paints above the chips so the × tooltip is never covered")
+        let page = try Self.declaration("private struct TimerTasksPage", in: column)
+        XCTAssertTrue(page.contains("Text(verbatim: task.title)"), "the row's title is the title alone too")
+    }
+
     func testATaskLeavingTheListCollapsesTheCard() throws {
         let page = try Self.declaration("private struct TimerTasksPage", in: try Self.column())
         XCTAssertTrue(page.contains("expandedTaskID = nil"), "nothing clears the expanded task")

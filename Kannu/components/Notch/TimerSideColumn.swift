@@ -17,6 +17,7 @@
  */
 
 import Defaults
+import Defaults
 import SwiftUI
 
 /// The timer tab's right-hand column, beside the composer, while no timer runs. It has up to two
@@ -335,10 +336,12 @@ private struct TimerTasksPage: View {
                 expand(task)
             } label: {
                 VStack(alignment: .leading, spacing: 1) {
-                    (sideKeyText(task) + Text(verbatim: task.title))
+                    // The title alone: a GitLab path key in front of it ate the whole line.
+                    Text(verbatim: task.title)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
-                    (Text(verbatim: progress.text) + overText(progress.over))
+                    (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
+                        + overText(progress.over))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -469,21 +472,13 @@ private extension View {
     }
 }
 
-/// "PROJ-123 " in a quiet monospaced face, for a Jira or GitLab task; nothing for a local one.
-/// Shared by the row and its card, so the key reads the same in both.
-private func sideKeyText(_ task: TaskItem) -> Text {
-    guard let key = task.remote?.key else { return Text(verbatim: "") }
-    return Text(verbatim: key)
-        .font(.system(size: 11, weight: .medium, design: .monospaced))
-        .foregroundStyle(.secondary)
-        + Text(verbatim: " ")
-}
-
-/// One task, expanded in the column's own frame in place of the list: its key and title, where it
-/// comes from and stands, its time, then Start — and, for a local task, delete; for a Jira or
-/// GitLab task, a link to open it, since deleting one would only have the next sync bring it
-/// back. The × at the top right collapses it. Delete confirms inline, in the card's bottom row:
-/// no modal, since alerts under the notch have misbehaved (docs/REGRESSIONS.md entry 14).
+/// One task, expanded in the column's own frame in place of the list, laid out like its ticket
+/// page: the title first, then a row of chips (the short key, where it stands, its labels), the
+/// standard facts (due date, milestone, weight, assignee, parent, priority, type), and a bottom
+/// row with Start, its time and — for a local task — delete; for a Jira or GitLab task a link to
+/// open it, since deleting one would only have the next sync bring it back. The × at the top
+/// right collapses it. Delete confirms inline, in that bottom row: no modal, since alerts under
+/// the notch have misbehaved (docs/REGRESSIONS.md entry 14).
 ///
 /// Takes the manager it is handed: `TasksManager.shared` is read by `TimerTasksPage` alone, so
 /// the manager exists only while the Tasks page shows. The words come from `TaskDetailSummary`.
@@ -497,15 +492,21 @@ private struct TimerTaskDetail: View {
     let close: () -> Void
     let start: () -> Void
 
+    /// About what fits beside the key and status chips at caption size on 220 pt.
+    private static let chipCharacterBudget = 26
+
     var body: some View {
-        let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date())
+        let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: Self.selfNames)
         VStack(alignment: .leading, spacing: 4) {
+            // Drawn above the rows below it, so the × tooltip (opening downward) is never
+            // painted over by the chips — siblings paint in order, zIndex decides between them.
             HStack(alignment: .top, spacing: 6) {
                 TaskColorDot(color: manager.color(of: task))
-                    .padding(.top, 3)
-                (sideKeyText(task) + Text(verbatim: summary.title))
-                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.top, 4)
+                Text(verbatim: summary.title)
+                    .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
                     close()
@@ -519,14 +520,14 @@ private struct TimerTaskDetail: View {
                 .accessibilityLabel(Text(verbatim: String(localized: "Close")))
                 .hoverTooltip(String(localized: "Close"), edge: .below)
             }
-            Text(verbatim: summary.identity)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            timeLine(summary)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            .zIndex(1)
+            chipRow(summary)
+            if !summary.facts.isEmpty {
+                factsLine(summary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Spacer(minLength: 0)
             bottomRow(summary)
         }
@@ -538,17 +539,44 @@ private struct TimerTaskDetail: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    /// "42m of 2h · 10m over · Jira logged 3h · Due Today 15:00 · #tag": overtime and an overdue
-    /// date in orange, as Brain's caption shows them.
-    private func timeLine(_ summary: TaskDetailSummary) -> Text {
+    /// The connected accounts, so an assignee that is the user reads "you".
+    private static var selfNames: Set<String> {
+        Set([Defaults[.gitlabAccountDisplayName], Defaults[.gitlabUsername], Defaults[.jiraAccountDisplayName]]
+            .filter { !$0.isEmpty })
+    }
+
+    /// The key (or "Local"), where the task stands, then as many labels as fit and a "+N".
+    private func chipRow(_ summary: TaskDetailSummary) -> some View {
+        let chips = summary.chips(fitting: Self.chipCharacterBudget)
+        return HStack(spacing: 4) {
+            SideChip(summary.shortKey ?? String(localized: "Local"), monospaced: summary.shortKey != nil)
+            SideChip(summary.status.name, tint: summary.status.phase == .inProgress ? Color.blue : nil)
+            ForEach(Array(chips.shown.enumerated()), id: \.offset) { _, label in
+                SideChip(label)
+            }
+            if chips.hidden > 0 {
+                SideChip("+\(chips.hidden)")
+                    .accessibilityLabel(Text(verbatim: String(localized: "\(chips.hidden) more labels")))
+            }
+        }
+        .lineLimit(1)
+    }
+
+    /// "Due 20 Oct · Sprint 42 · Weight 8 · you": an overdue date in orange.
+    private func factsLine(_ summary: TaskDetailSummary) -> Text {
+        var text = Text(verbatim: "")
+        for (index, fact) in summary.facts.enumerated() {
+            if index > 0 { text = text + Text(verbatim: " · ") }
+            text = text + Text(verbatim: fact.text).foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
+        }
+        return text
+    }
+
+    /// "42m of 2h · 10m over", the overtime in orange, beside Start.
+    private func timeText(_ summary: TaskDetailSummary) -> Text {
         var text = Text(verbatim: summary.time)
         if let overtime = summary.overtime {
             text = text + Text(verbatim: " · ") + Text(verbatim: overtime).foregroundStyle(.orange)
-        }
-        for extra in summary.extras {
-            let isOverdue = summary.isOverdue && extra.hasPrefix(String(localized: "Overdue "))
-            text = text + Text(verbatim: " · ")
-                + Text(verbatim: extra).foregroundStyle(isOverdue ? Color.orange : Color.secondary)
         }
         return text
     }
@@ -583,6 +611,10 @@ private struct TimerTaskDetail: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!manager.isReady)
+                timeText(summary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer(minLength: 0)
                 if summary.canDelete {
                     Button {
@@ -620,6 +652,30 @@ private struct TimerTaskDetail: View {
         case .jira: return manager.jiraBrowseURL(for: task)
         case .gitlab: return manager.gitlabBrowseURL(for: task)
         }
+    }
+}
+
+/// A small capsule for the card's chip row: the house neutral chip (caption size, white 0.12), or
+/// a tinted one for a state (tint text on a 0.15 wash), never wider than its text.
+private struct SideChip: View {
+    let text: String
+    var tint: Color? = nil
+    var monospaced = false
+
+    init(_ text: String, tint: Color? = nil, monospaced: Bool = false) {
+        self.text = text
+        self.tint = tint
+        self.monospaced = monospaced
+    }
+
+    var body: some View {
+        Text(verbatim: text)
+            .font(.system(size: 10, weight: .semibold, design: monospaced ? .monospaced : .default))
+            .foregroundStyle(tint ?? Color.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(tint?.opacity(0.15) ?? Color.white.opacity(0.12)))
+            .fixedSize()
     }
 }
 

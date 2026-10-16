@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - The task card reads like its ticket: the title first, then a short key, status and labels as chips, the standard facts, and its time beside Start
+- **Developer label:** "THIS IS NOT WHAT WE WANT TO SHOW … we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the card and row redesigned around the issue's own title and the facts the sync now keeps
+- **Changes:**
+  - The first card put the full GitLab path key in front of the title inside a two-line text, so
+    `discern_security/applications/ds-vendors#4264` ate both lines and the title never showed.
+    The title is now the issue's own, alone, 13 pt on up to two lines that cannot collapse; the
+    key is a short chip of its own — `ds-vendors #4264`, `app !12`, `PROJ-123` — and the list's
+    rows lead with the title too, with the short key in their caption.
+  - A chip row under the title: the key (or "Local"), where the task stands as a tinted capsule
+    (To Do neutral, In Progress blue, in the source's own word: "Open", "In Review"), then as many
+    labels as fit and a "+N" for the rest — GitLab and Jira labels first, the user's tags as
+    "#tag" after.
+  - A facts line in the order they matter on 240 pt: the due date ("Due 20 Oct", "Due today",
+    "Overdue 14 Oct" in orange; a local reminder keeps Brain's words), milestone, "Weight 8", the
+    assignee ("you" when it is the connected account), the parent, Jira's priority and type, then
+    "Jira logged 3h" / "GitLab spent 3h".
+  - The bottom row keeps Start, with the time against the estimate beside it ("42m of 2h ·
+    10m over"), and the trash or open-in icon at the right; the inline delete confirm is unchanged.
+    The top row paints above the chips so the × tooltip is never covered.
+  - `TaskDetailSummary` rewritten for these words (`shortKey(for:)`, `chips(fitting:)`, the facts
+    order, `dueDayText`), pinned by `TaskDetailSummaryTests`; `TimerTaskDetailRulesTests` adds the
+    rule that the title is never prefixed by the key and the row leads with the title.
+
 ### 2026-10-17 - The sync keeps a ticket's standard facts: weight, milestone, due date, assignee, parent, priority and type
 - **Developer label:** "we need to show the proper title, and standard informations with a clean ux and proper design in the space"
 - **Agent label:** Claude Code (Fable 5.1) — the data half of the task card redesign: fields the servers already send, now decoded, merged and stored
