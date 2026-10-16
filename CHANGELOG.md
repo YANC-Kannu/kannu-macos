@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-16 - The timer tab's first task capsule sits level with the name field
+- **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
+- **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
+- **Changes:**
+  - The Tasks and Presets lists in the timer tab's side column started their first row 2 pt down
+    and painted a 16 pt black fade over its top even when nothing had scrolled, so the first
+    capsule looked lower than the "Do you want to name this session?" field with a black band
+    above it. The top inset is gone (the bottom one stays, so the list height is unchanged and the
+    notch does not grow), and the top fade now appears only once rows have scrolled under it,
+    tracked through a scroll-offset preference (macOS 14 has no `onScrollGeometryChange`).
+  - The bottom fade, the row heights, the pager footer and every `TimerComposerMetrics` value are
+    untouched; `TimerSideColumnRulesTests` and `TimerComposerMetricsTests` pin them as before.
+
 ### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Opus 5.5) — concurrency audit risk R-B, found when the stack's merge-up brought `JiraSyncRulesTests` (#80) next to the worklog send (#83)

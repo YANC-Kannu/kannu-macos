@@ -67,6 +67,8 @@ struct TimerSideColumn: View {
     /// `@State`, so the token survives a re-render and the release names the token that was set.
     @State private var scrollSuppressionToken = UUID()
     @State private var isSuppressingScroll = false
+    /// Whether the Presets list has scrolled past its first card (`SideListEdgeFades`).
+    @State private var presetsScrolled = false
 
     /// The pages that exist, left to right.
     static func pages(tasksAvailable: Bool, presetsAvailable: Bool) -> [TimerSidePage] {
@@ -201,13 +203,17 @@ struct TimerSideColumn: View {
                             TimerPresetCard(preset: preset, isActive: activePresetID == preset.id) {
                                 startPreset(preset)
                             }
-                            .padding(.vertical, 2)
+                            // Below only: the first card's top sits level with the composer's
+                            // name field, instead of 2 pt under a black band.
+                            .padding(.bottom, 4)
                         }
                     }
+                    .sideListOffsetProbe()
                 }
                 .scrollIndicators(.never)
+                .sideListScrollTracking(isScrolled: $presetsScrolled)
 
-                SideListEdgeFades()
+                SideListEdgeFades(showsTop: presetsScrolled)
             }
             .frame(height: listHeight)
         }
@@ -242,6 +248,8 @@ private struct TimerTasksPage: View {
     /// The page's height (`TimerComposerMetrics.sidePageHeight`).
     let height: CGFloat
     let started: () -> Void
+    /// Whether the list has scrolled past its first row (`SideListEdgeFades`).
+    @State private var isScrolled = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -282,11 +290,14 @@ private struct TimerTasksPage: View {
                         row(task, tooltipEdge: index == 0 ? .below : .above)
                     }
                 }
-                .padding(.vertical, M.sideRowSpacing / 2)
+                // Below only: the first row's top sits level with the composer's name field.
+                .padding(.bottom, M.sideRowSpacing / 2)
+                .sideListOffsetProbe()
             }
             .scrollIndicators(.never)
+            .sideListScrollTracking(isScrolled: $isScrolled)
 
-            SideListEdgeFades()
+            SideListEdgeFades(showsTop: isScrolled)
         }
         .frame(height: listHeight)
     }
@@ -363,14 +374,21 @@ private struct TimerTasksPage: View {
     }
 }
 
-/// The dark fades at a list's top and bottom edges, over the rows.
+/// The dark fades at a list's top and bottom edges, over the rows. The bottom one always says
+/// "more below"; the top one appears only once rows have scrolled under it — at rest it darkened
+/// the first row's top 16 pt, which read as a black gap above a misaligned list.
 private struct SideListEdgeFades: View {
+    let showsTop: Bool
+
     var body: some View {
         ZStack {
-            LinearGradient(colors: [Color.black.opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 16)
-                .alignmentGuide(.top) { d in d[.top] }
-                .frame(maxHeight: .infinity, alignment: .top)
+            if showsTop {
+                LinearGradient(colors: [Color.black.opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: 16)
+                    .alignmentGuide(.top) { d in d[.top] }
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .transition(.opacity)
+            }
 
             LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
                 .frame(height: 16)
@@ -378,6 +396,36 @@ private struct SideListEdgeFades: View {
                 .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// How far a side list has scrolled, for `SideListEdgeFades`. A preference, not
+/// `onScrollGeometryChange`: the deployment target is macOS 14.
+private struct SideListOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private let sideListSpace = "sideList"
+
+private extension View {
+    /// On a ScrollView's content: reports where the content's top edge is in the list's space.
+    func sideListOffsetProbe() -> some View {
+        background(GeometryReader { proxy in
+            Color.clear.preference(key: SideListOffsetKey.self, value: proxy.frame(in: .named(sideListSpace)).minY)
+        })
+    }
+
+    /// On the ScrollView: names the space the probe measures in, and flips `isScrolled` once rows
+    /// have gone under the top edge (with a 1 pt allowance for bounce and rounding).
+    func sideListScrollTracking(isScrolled: Binding<Bool>) -> some View {
+        coordinateSpace(name: sideListSpace)
+            .onPreferenceChange(SideListOffsetKey.self) { offset in
+                let scrolled = offset < -1
+                if scrolled != isScrolled.wrappedValue {
+                    withAnimation(.easeInOut(duration: 0.15)) { isScrolled.wrappedValue = scrolled }
+                }
+            }
     }
 }
 
