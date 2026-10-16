@@ -84,7 +84,11 @@ enum SyncOutcome: Equatable {
 ///   refreshes what the source owns (key, title, status and its category, labels, estimate, logged
 ///   time, last seen, and a GitLab item's kind, project, number and page) and keeps what the user
 ///   owns: Kannu's id, the place in the order, the local estimate, the recorded time, the log
-///   policy, the tags and whether it is done or hidden. A task that had gone and came back is active again.
+///   policy, the tags and whether it is done or archived by the user. A task that had gone, or was
+///   archived on its own after going, and came back is active again. A task the user archived stays
+///   archived, but is marked as still listed (`closedAt` cleared), so the archive never clears it.
+/// - A task turning `.gone` is stamped `closedAt` (when the source stopped listing it). An
+///   archived one the fetch no longer returns is stamped too, if it was not already.
 /// - A new issue is appended at the end of the order. An issue listed twice counts once: the first.
 /// - A complete fetch turns the *active* tasks it did not return into `.gone`. A capped one marks
 ///   nothing gone. A failed one changes nothing.
@@ -164,7 +168,22 @@ enum TaskMerge {
                     remote.gitlabWebURL = gitlab.webURL
                 }
                 task.title = title
-                if task.visibility == .gone { task.visibility = .active }
+                switch task.visibility {
+                case .gone:
+                    task.visibility = .active
+                    task.closedAt = nil
+                case .archived where !task.archivedByUser:
+                    // Archived on its own after it went (merge requests switched off, unassigned):
+                    // listed again, it returns with its time, as a gone one always has.
+                    task.visibility = .active
+                    task.closedAt = nil
+                    task.archivedAt = nil
+                case .archived:
+                    // The user put it away: it stays. Still listed, so the archive never clears it.
+                    task.closedAt = nil
+                case .active, .done:
+                    break
+                }
                 task.remote = remote
                 // Last seen moves on every sync; on its own it is not a change worth saving.
                 if task != before { updated += 1 }
@@ -210,14 +229,22 @@ enum TaskMerge {
         }
 
         var gone = 0
-        for index in result.indices where result[index].source == source && result[index].visibility == .active
-            && !keepingActive.contains(result[index].id) {
+        for index in result.indices where result[index].source == source && !keepingActive.contains(result[index].id) {
             let remote = result[index].remote
             let otherSite = remote?.hostScope != hostScope
             let missing = fetch.complete && !otherSite && !(remote.map { seen.contains($0.remoteID) } ?? false)
-            if otherSite || missing {
+            guard otherSite || missing else { continue }
+            switch result[index].visibility {
+            case .active:
                 result[index].visibility = .gone
+                result[index].closedAt = now
                 gone += 1
+            case .archived where result[index].closedAt == nil:
+                // No longer listed: from here the archive may clear it.
+                result[index].closedAt = now
+                updated += 1
+            case .gone, .done, .archived:
+                break
             }
         }
 

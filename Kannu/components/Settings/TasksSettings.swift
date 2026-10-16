@@ -708,8 +708,8 @@ private struct TaskOverviewSections: View {
     }
 }
 
-/// The Task list: a back row, the filters, Add a task, the task order, Done and hidden, and Tag
-/// colours. It lists every task Kannu holds — local, Jira and GitLab, synced or paused
+/// The Task list: a back row, the filters, Add a task, the task order, Recently closed, the
+/// Archive, and Tag colours. It lists every task Kannu holds — local, Jira and GitLab, synced or paused
 /// (`TasksManager.activeTasks`).
 ///
 /// The filters are this page's own, a view filter only: they persist in Defaults
@@ -733,7 +733,8 @@ private struct TaskListPage: View {
     @Binding private var newTitle: String
     @Binding private var newEstimate: Int?
     private let close: () -> Void
-    @State private var showsDoneAndHidden = false
+    @State private var showsRecentlyClosed = false
+    @State private var showsArchive = false
     /// The row being dragged, once the drag has begun: it says which edge the insertion line takes.
     @State private var draggingID: UUID?
     /// The row the pointer is over during a drag.
@@ -780,7 +781,8 @@ private struct TaskListPage: View {
         }
         filtersSection
         tasksSection
-        doneAndHiddenSection
+        recentlyClosedSection
+        archiveSection
         tagColorsSection
     }
 
@@ -1069,11 +1071,12 @@ private struct TaskListPage: View {
         Divider()
         if task.source == .local {
             Button("Mark Done") { manager.markDone(task.id) }
+            Button("Archive") { manager.archive(task.id) }
             Button("Delete", role: .destructive) { pendingDelete = task }
                 .disabled(isTimed)
         } else {
-            // A remote task is finished in its source, and hidden here; deleting it would only
-            // bring it back on the next sync.
+            // A remote task is finished in its source, and archived here: that is its delete,
+            // since a deleted one would only come back on the next sync.
             if let link = openLink(for: task) {
                 Button(link.title) { NSWorkspace.shared.open(link.url) }
             }
@@ -1083,7 +1086,7 @@ private struct TaskListPage: View {
             } else {
                 Button("Ask to Log") { manager.setAsksToLogTime(true, for: task.id) }
             }
-            Button("Hide") { manager.hide(task.id) }
+            Button("Archive") { manager.archive(task.id) }
         }
     }
 
@@ -1170,56 +1173,107 @@ private struct TaskListPage: View {
         }
     }
 
-    // MARK: - Done and hidden
+    // MARK: - Recently closed and Archive
 
-    private var doneAndHiddenSection: some View {
-        let finished = manager.doneAndHiddenTasks
+    /// Done and gone tasks, for `TaskArchive.closedDays`, then the archive takes them.
+    private var recentlyClosedSection: some View {
+        let closed = manager.recentlyClosedTasks
         return Section {
-            DisclosureGroup(isExpanded: $showsDoneAndHidden) {
-                if finished.isEmpty {
-                    SettingsNoteRow("Nothing here yet", description: "Tasks you mark done appear here.")
+            DisclosureGroup(isExpanded: $showsRecentlyClosed) {
+                if closed.isEmpty {
+                    SettingsNoteRow("Nothing closed lately", description: "Tasks you mark done, and tickets closed in Jira or GitLab, appear here.")
                 }
-                ForEach(finished) { task in
-                    doneRow(task)
+                ForEach(closed) { task in
+                    closedRow(task)
                 }
             } label: {
-                SettingsRowLabel("Done and hidden", description: "Finished tasks keep their time.")
+                SettingsRowLabel("Recently closed", description: "Moved to the archive after \(TaskArchive.closedDays) days.")
             }
         }
     }
 
-    private func doneRow(_ task: TaskItem) -> some View {
-        let tracked = WorkDuration.format(manager.trackedSeconds(of: task))
-        let state: String
-        switch task.visibility {
-        case .done: state = String(localized: "Done · \(tracked) recorded")
-        case .hidden: state = String(localized: "Hidden · \(tracked) recorded")
-        case .gone, .active: state = String(localized: "No longer listed by its source · \(tracked) recorded")
+    /// Archived tasks: out of every other list. A Jira or GitLab task clears itself
+    /// `TaskArchive.clearDays` after it was archived, never while it holds time to log.
+    private var archiveSection: some View {
+        let archived = manager.archivedTasks
+        return Section {
+            DisclosureGroup(isExpanded: $showsArchive) {
+                if archived.isEmpty {
+                    SettingsNoteRow("The archive is empty", description: "Archived tasks keep their time here.")
+                }
+                ForEach(archived) { task in
+                    archivedRow(task)
+                }
+            } label: {
+                SettingsRowLabel("Archive", description: "Jira and GitLab tasks clear after \(TaskArchive.clearDays) days; yours stay.")
+            }
         }
-        // A remote task's key comes first, so a hidden PROJ-123 is found by its key.
-        let line = task.remote.map { "\($0.key) · \(state)" } ?? state
-        let link = openLink(for: task)
-        // Every row ends in the same pair, Reopen or Show then ⋯, so the trailing edges line up. A
-        // task its source no longer lists comes back only with the source; a remote task with no
-        // page Kannu would open has nothing in its ⋯.
+    }
+
+    private func closedRow(_ task: TaskItem) -> some View {
+        let tracked = WorkDuration.format(manager.trackedSeconds(of: task))
+        let state = task.visibility == .done
+            ? String(localized: "Done · \(tracked) recorded")
+            : String(localized: "No longer listed by its source · \(tracked) recorded")
+        let days = TaskArchive.daysUntilArchive(task, now: Date()) ?? TaskArchive.closedDays
+        let when = days == 0 ? String(localized: "archiving now") : String(localized: "archives in \(days)d")
+        // A remote task's key comes first, so a closed PROJ-123 is found by its key.
+        let line = [task.remote?.key, state, when].compactMap { $0 }.joined(separator: " · ")
+        // Every row ends in the same pair, a button then ⋯, so the trailing edges line up. A task
+        // its source no longer lists comes back only with the source: it can be archived now.
         return LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                Button(task.visibility == .done ? String(localized: "Reopen") : String(localized: "Show")) {
-                    manager.reopen(task.id)
+                if task.visibility == .done {
+                    Button("Reopen") { manager.reopen(task.id) }
+                } else {
+                    Button("Archive") { manager.archive(task.id) }
                 }
-                .disabled(task.visibility != .done && task.visibility != .hidden)
-                SettingsMoreMenu {
-                    if task.source == .local {
-                        Button("Delete", role: .destructive) { pendingDelete = task }
-                    } else if let link {
-                        Button(link.title) { NSWorkspace.shared.open(link.url) }
-                    }
-                }
-                .disabled(task.source != .local && link == nil)
+                moreMenu(for: task, archiveItem: task.visibility == .done)
             }
         } label: {
             SettingsRowLabel(Text(verbatim: task.title), description: Text(verbatim: line))
         }
+    }
+
+    private func archivedRow(_ task: TaskItem) -> some View {
+        let tracked = WorkDuration.format(manager.trackedSeconds(of: task))
+        let fate: String
+        if task.source == .local {
+            fate = String(localized: "Archived · \(tracked) recorded")
+        } else if TaskArchive.holdsTimeToLog(task, drafts: manager.drafts) {
+            fate = String(localized: "Archived · kept until its time is logged")
+        } else if let days = TaskArchive.daysUntilClear(task, now: Date()) {
+            fate = days == 0 ? String(localized: "Archived · clearing now") : String(localized: "Archived · clears in \(days)d")
+        } else {
+            // Still open on its server: clearing it would only bring it back as new.
+            fate = String(localized: "Archived · kept while still open in its source")
+        }
+        let line = [task.remote?.key, fate].compactMap { $0 }.joined(separator: " · ")
+        return LabeledContent {
+            HStack(spacing: SettingsMetrics.rowContent) {
+                Button("Restore") { manager.reopen(task.id) }
+                moreMenu(for: task, archiveItem: false)
+            }
+        } label: {
+            SettingsRowLabel(Text(verbatim: task.title), description: Text(verbatim: line))
+        }
+    }
+
+    /// The ⋯ on a closed or archived row: Archive (a done task), Delete (a local task), or the
+    /// task's page (a remote one). Disabled when there is nothing in it.
+    private func moreMenu(for task: TaskItem, archiveItem: Bool) -> some View {
+        let link = openLink(for: task)
+        return SettingsMoreMenu {
+            if archiveItem {
+                Button("Archive") { manager.archive(task.id) }
+            }
+            if task.source == .local {
+                Button("Delete", role: .destructive) { pendingDelete = task }
+            } else if let link {
+                Button(link.title) { NSWorkspace.shared.open(link.url) }
+            }
+        }
+        .disabled(!archiveItem && task.source != .local && link == nil)
     }
 
     // MARK: - Tag colours

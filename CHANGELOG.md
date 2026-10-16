@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - Tasks have an archive: closed ones move there after 3 days, archived Jira and GitLab tasks clear after 7, and nothing with time to log is ever lost
+- **Developer label:** "after a few days of being closed tikcet should go in to archive and not show up in any other list other than archive, user can alos immediately archive or delete the tasks, archice other than local tasks can auto clear in 7 days"
+- **Agent label:** Claude Code (Opus 5.5) — a new archived state with its own clock (`TaskArchive`), merge rules that keep it, and Brain's Recently closed and Archive sections
+- **Changes:**
+  - New `.archived` state. A task marked done, or one its source stops listing (closed, unassigned,
+    out of the filter), is Recently closed for 3 days, then archived; the archive is out of every
+    list but its own. Any task can be archived at once (Brain's ⋯ › Archive); for a Jira or GitLab
+    task that is its delete, since a deleted one would only come back on the next sync. Local tasks
+    keep Delete. Hide is gone: tasks hidden before read as archived by the user.
+  - An archived Jira or GitLab task clears itself 7 days after it was archived — never while it
+    holds time not yet logged (an open Time to log entry, an interrupted session, or finished time
+    that would round to something loggable), never while its server still lists it (it would only
+    come back as new), never the task being timed. Local tasks are never cleared.
+  - Sync: a task turning "no longer listed" is stamped with when; one archived on its own that the
+    source lists again comes back to the order with its time, as a gone one always has; one the
+    user archived stays archived.
+  - `TaskArchive` (pure, logic target) holds the rules; `TasksManager` runs it after loading and
+    after each sync — no timer. The tasks file is version 2 and reads its state leniently: a state
+    a build does not know reads as active instead of costing the whole list.
+  - Brain › Tasks › Task list: "Done and hidden" is now "Recently closed" ("archives in 2d",
+    Reopen or Archive) and a new "Archive" ("clears in 5d", "kept until its time is logged", "kept
+    while still open in its source"; Restore, and Delete for local tasks). Search finds both.
+  - Guards: `TaskArchiveTests` (both boundaries, the seed for older files, every reason clearing
+    waits, drafts that go with a task), `TaskMergeTests`, `TaskModelCodingTests`,
+    `TaskReminderPlanTests`, `SettingsHighlightInventoryTests`.
+
 ### 2026-10-17 - The task card stays inside its column, lines up, and fills its space with an icon grid of facts
 - **Developer label:** "fix allignemets and also see if some other valid info is there to show , plan how we can show things there in proper spacing but contained in the tab itself"
 - **Agent label:** Claude Code (Opus 5.5) — a fixed-size card, a chip row that gives way, a two-column fact grid sized to the height left over, and the noise removed

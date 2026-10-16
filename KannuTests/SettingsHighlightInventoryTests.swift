@@ -69,7 +69,9 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // Jira colour, GitLab colour), each with its own id and entry (three more of each); the Task
         // list's "Tag colours" section is a sub-page row, so it registers nothing and its new entry
         // lands on the "Task list" row (four entries in all).
-        XCTAssertEqual(inventory.entries.count, 232, "search entries")
+        // 2026-10-17: the archive. "Done and hidden tasks" became "Recently closed tasks", and a
+        // new "Archived tasks" entry lands on the same visible "Task list" row (one more entry).
+        XCTAssertEqual(inventory.entries.count, 233, "search entries")
         XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
         XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
     }

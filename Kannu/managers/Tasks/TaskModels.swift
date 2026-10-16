@@ -38,15 +38,22 @@ enum LogPolicy: String, Codable, Equatable {
     case localOnly
 }
 
+/// Where a task stands in its life. Only `.active` is in the task order and every list in the
+/// notch; the rest are Brain's: done and gone are "Recently closed" for `TaskArchive.closedDays`,
+/// then archived (`TaskArchive`).
 enum TaskVisibility: String, Codable, Equatable {
     /// In the task order.
     case active
-    /// Marked done.
+    /// A local task marked done.
     case done
-    /// Hidden by the user (a remote task cannot be deleted, only hidden).
-    case hidden
-    /// A remote task the last complete sync no longer returned.
+    /// A remote task the last complete sync no longer returned: closed, unassigned, or out of the
+    /// connected filter. It returns to `.active` if a sync lists it again.
     case gone
+    /// In the archive: out of every list but the archive. The user archives a task at once (a
+    /// remote task's delete), or a done or gone one is archived after `TaskArchive.closedDays`.
+    /// Files written before the archive said "hidden" for a remote task the user put away; that
+    /// reads as archived by the user (`TaskItem.init(from:)`).
+    case archived
 }
 
 /// Which kind of GitLab item a task is. Issues and merge requests number their global ids
@@ -254,6 +261,14 @@ struct TaskItem: Codable, Identifiable, Equatable {
     var tags: [String]
     /// When a local task's reminder is due. Nil when it has none; never set on a remote task.
     var scheduledAt: Date?
+    /// When it was marked done, or its source stopped listing it. Nil while it is listed: an
+    /// archived remote task the server still lists is never cleared (`TaskArchive`).
+    var closedAt: Date?
+    /// When it went into the archive.
+    var archivedAt: Date?
+    /// True when the user archived it (or, before the archive, hid it). A task the user archived
+    /// stays archived if its source lists it again; one archived on its own returns to the order.
+    var archivedByUser: Bool
 
     init(
         id: UUID = UUID(),
@@ -266,7 +281,10 @@ struct TaskItem: Codable, Identifiable, Equatable {
         visibility: TaskVisibility = .active,
         createdAt: Date = Date(),
         tags: [String] = [],
-        scheduledAt: Date? = nil
+        scheduledAt: Date? = nil,
+        closedAt: Date? = nil,
+        archivedAt: Date? = nil,
+        archivedByUser: Bool = false
     ) {
         self.id = id
         self.source = source
@@ -279,6 +297,9 @@ struct TaskItem: Codable, Identifiable, Equatable {
         self.createdAt = createdAt
         self.tags = tags
         self.scheduledAt = scheduledAt
+        self.closedAt = closedAt
+        self.archivedAt = archivedAt
+        self.archivedByUser = archivedByUser
     }
 
     var effectiveEstimateSeconds: Int? { localEstimateSeconds ?? remote?.remoteEstimateSeconds }
@@ -324,11 +345,13 @@ struct TaskItem: Codable, Identifiable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, source, title, localEstimateSeconds, remote, segments, logPolicy, visibility, createdAt
-        case tags, scheduledAt
+        case tags, scheduledAt, closedAt, archivedAt, archivedByUser
     }
 
     /// Fields added after the first version default instead of failing, so an older file still
-    /// reads. Unknown keys are ignored, so a newer file reads too.
+    /// reads. Unknown keys are ignored, so a newer file reads too. The visibility reads leniently:
+    /// "hidden" (before the archive) is archived by the user, and a word this version does not know
+    /// reads as active — costing that one task its state, never the user their whole list.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -338,10 +361,19 @@ struct TaskItem: Codable, Identifiable, Equatable {
         remote = try container.decodeIfPresent(RemoteTaskInfo.self, forKey: .remote)
         segments = try container.decodeIfPresent([WorkSegment].self, forKey: .segments) ?? []
         logPolicy = try container.decodeIfPresent(LogPolicy.self, forKey: .logPolicy) ?? .ask
-        visibility = try container.decodeIfPresent(TaskVisibility.self, forKey: .visibility) ?? .active
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
         tags = Self.cleanedTags((try? container.decodeIfPresent([String].self, forKey: .tags)) ?? [])
         scheduledAt = try? container.decodeIfPresent(Date.self, forKey: .scheduledAt)
+        closedAt = try? container.decodeIfPresent(Date.self, forKey: .closedAt)
+        archivedAt = try? container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        archivedByUser = ((try? container.decodeIfPresent(Bool.self, forKey: .archivedByUser)) ?? nil) ?? false
+        let raw = (try? container.decodeIfPresent(String.self, forKey: .visibility)) ?? nil
+        if raw == "hidden" {
+            visibility = .archived
+            archivedByUser = true
+        } else {
+            visibility = raw.flatMap(TaskVisibility.init(rawValue:)) ?? .active
+        }
     }
 }
 
@@ -404,7 +436,8 @@ struct WorklogDraft: Codable, Identifiable, Equatable {
 
 /// The whole of `tasks.json`. The order of `tasks` is the order the user set.
 struct TasksFile: Codable, Equatable {
-    static let currentVersion = 1
+    /// 2: the archive (`TaskVisibility.archived`, a task's `closedAt` / `archivedAt`).
+    static let currentVersion = 2
     static let empty = TasksFile(version: currentVersion, tasks: [], drafts: [])
 
     var version: Int

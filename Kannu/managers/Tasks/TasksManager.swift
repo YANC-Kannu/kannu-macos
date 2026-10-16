@@ -244,7 +244,11 @@ final class TasksManager: ObservableObject {
         )
     }
 
-    var doneAndHiddenTasks: [TaskItem] { tasks.filter { $0.visibility != .active } }
+    /// Done and gone tasks, until `TaskArchive` archives them: Brain's Recently closed.
+    var recentlyClosedTasks: [TaskItem] { tasks.filter { $0.visibility == .done || $0.visibility == .gone } }
+
+    /// Brain's Archive: out of every other list.
+    var archivedTasks: [TaskItem] { tasks.filter { $0.visibility == .archived } }
 
     /// The Task list's rows: the task order narrowed by its filters, which are the Task list's own.
     func listedTasks(_ filter: TaskFilter) -> [TaskItem] {
@@ -573,22 +577,37 @@ final class TasksManager: ObservableObject {
         }
     }
 
-    /// Marking the task being timed done stops the timer first, which ends its time.
+    /// Marking the task being timed done stops the timer first, which ends its time. Done tasks
+    /// are Recently closed until `TaskArchive` archives them.
     func markDone(_ taskID: UUID) {
         if timing?.taskID == taskID { stopTiming() }
-        update(taskID) { $0.visibility = .done }
+        update(taskID) {
+            $0.visibility = .done
+            $0.closedAt = Date()
+        }
     }
 
-    /// Out of the task order, into Done and hidden; Show puts it back. A remote task is hidden, never
-    /// deleted: the next sync would only bring it back.
-    func hide(_ taskID: UUID) {
+    /// Into the archive at once, whatever the source: for a remote task this is its delete, since
+    /// a deleted one would only come back on the next sync. Stops the timer first if it is timed.
+    /// It stays archived even if its source lists it again; Restore puts it back.
+    func archive(_ taskID: UUID) {
         if timing?.taskID == taskID { stopTiming() }
-        update(taskID) { $0.visibility = .hidden }
+        update(taskID) {
+            $0.visibility = .archived
+            $0.archivedAt = Date()
+            $0.archivedByUser = true
+        }
     }
 
-    /// Back into the task order, where it was.
+    /// Out of the archive or Recently closed, back into the task order where it was. A remote
+    /// task its source no longer lists goes back to Recently closed at the next complete sync.
     func reopen(_ taskID: UUID) {
-        update(taskID) { $0.visibility = .active }
+        update(taskID) {
+            $0.visibility = .active
+            $0.closedAt = nil
+            $0.archivedAt = nil
+            $0.archivedByUser = false
+        }
     }
 
     /// Local tasks only, and never the one being timed.
@@ -618,6 +637,19 @@ final class TasksManager: ObservableObject {
 
     func discardInterruptedSession(segmentID: UUID, taskID: UUID) {
         update(taskID) { task in task.segments.removeAll { $0.id == segmentID && $0.isInterrupted } }
+    }
+
+    /// `TaskArchive` over the list as it is now, after a sync. True when something changed (the
+    /// caller saves). The task being timed, or about to be, is never archived or cleared.
+    private func applyArchive(now: Date, protected: Set<UUID>) -> Bool {
+        let archive = TaskArchive.apply(tasks, drafts: drafts, protected: protected, now: now)
+        guard archive.changed else { return false }
+        tasks = archive.tasks
+        drafts = archive.drafts
+        if archive.archived + archive.cleared > 0 {
+            logger.info("Archive: \(archive.archived, privacy: .public) archived, \(archive.cleared, privacy: .public) cleared")
+        }
+        return true
     }
 
     private func update(_ taskID: UUID, _ change: (inout TaskItem) -> Void) {
@@ -1130,7 +1162,8 @@ final class TasksManager: ObservableObject {
         let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
         let merged = TaskMerge.apply(outcome, source: .jira, hostScope: host, to: tasks, now: now, keepingActive: timed)
         tasks = merged.tasks
-        if merged.changed { persist() }
+        let archived = applyArchive(now: now, protected: timed)
+        if merged.changed || archived { persist() }
         lastJiraSync = now
         finishJiraSync(generation, .synced(at: now, count: fetch.issues.count, complete: fetch.complete))
         logger.info("Jira sync: \(fetch.issues.count, privacy: .public) issues, complete \(fetch.complete, privacy: .public), \(merged.added, privacy: .public) added, \(merged.updated, privacy: .public) updated, \(merged.gone, privacy: .public) gone")
@@ -1423,7 +1456,8 @@ final class TasksManager: ObservableObject {
         let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
         let merged = TaskMerge.apply(fetched.outcome, source: .gitlab, hostScope: base, to: tasks, now: now, keepingActive: timed)
         tasks = merged.tasks
-        if merged.changed { persist() }
+        let archived = applyArchive(now: now, protected: timed)
+        if merged.changed || archived { persist() }
         lastGitLabSync = now
         finishGitLabSync(generation, .synced(at: now, count: fetch.issues.count, complete: fetch.complete))
         logger.info("GitLab sync: \(fetched.issueCount, privacy: .public) issues, \(fetched.mergeRequestCount, privacy: .public) merge requests, complete \(fetch.complete, privacy: .public), \(merged.added, privacy: .public) added, \(merged.updated, privacy: .public) updated, \(merged.gone, privacy: .public) gone")
@@ -1542,13 +1576,18 @@ final class TasksManager: ObservableObject {
         tasks = loadedTasks
         drafts = normalized
         tagColors = file.tagColors
+        // Closed tasks that waited long enough move to the archive, and archived remote ones whose
+        // time is settled clear. Nothing is timed at launch, so nothing is protected.
+        let archive = TaskArchive.apply(tasks, drafts: drafts, protected: [], now: Date())
+        tasks = archive.tasks
+        drafts = archive.drafts
         loadState = .ready
         // What earlier launches told macOS. It may not hold all of it (notifications turned on
         // since, a file replaced), so `checkReminderPermission` below checks with macOS.
         reminderBaseline = TaskReminderPlan.wanted(loadedTasks)
         let uncertain = normalized.filter { $0.state == .uncertain }.count
         logger.info("Loaded \(file.tasks.count, privacy: .public) tasks, \(interrupted, privacy: .public) interrupted sessions, \(uncertain, privacy: .public) uncertain entries")
-        if interrupted > 0 || normalized != file.drafts || loadedTasks != file.tasks { persist() }
+        if interrupted > 0 || normalized != file.drafts || loadedTasks != file.tasks || archive.changed { persist() }
         if pendingJiraSyncWhenReady {
             pendingJiraSyncWhenReady = false
             syncJiraIfStale()

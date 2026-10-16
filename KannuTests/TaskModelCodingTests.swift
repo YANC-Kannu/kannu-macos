@@ -165,6 +165,32 @@ final class TaskModelCodingTests: XCTestCase {
         XCTAssertNil(RemoteTaskInfo.serverTimestamp(nil))
     }
 
+    func testTheArchiveReadsBackAndOlderWordsReadSafely() throws {
+        var archived = TaskItem(source: .jira, title: "Put away", visibility: .archived, createdAt: start)
+        archived.closedAt = start
+        archived.archivedAt = start.addingTimeInterval(60)
+        archived.archivedByUser = true
+        let file = TasksFile(tasks: [archived], drafts: [])
+        let data = try TasksFile.makeEncoder().encode(file)
+        XCTAssertEqual(try TasksFile.makeDecoder().decode(TasksFile.self, from: data), file)
+        XCTAssertEqual(file.version, 2, "the archive is version 2")
+
+        let ids = (UUID(), UUID(), UUID())
+        let json = """
+        {"version": 1, "tasks": [
+          {"id": "\(ids.0.uuidString)", "source": "jira", "title": "Hidden before the archive", "visibility": "hidden"},
+          {"id": "\(ids.1.uuidString)", "title": "From a newer Kannu", "visibility": "snoozed"},
+          {"id": "\(ids.2.uuidString)", "title": "Plain done", "visibility": "done"}]}
+        """
+        let decoded = try TasksFile.makeDecoder().decode(TasksFile.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.tasks.count, 3, "one unknown word never costs the list")
+        XCTAssertEqual(decoded.tasks[0].visibility, .archived, "hidden is archived now")
+        XCTAssertTrue(decoded.tasks[0].archivedByUser, "the user put it away: it stays put away")
+        XCTAssertEqual(decoded.tasks[1].visibility, .active, "a state this version does not know reads as active")
+        XCTAssertEqual(decoded.tasks[2].visibility, .done)
+        XCTAssertNil(decoded.tasks[2].closedAt, "seeded later, by TaskArchive")
+    }
+
     func testAKindFromANewerKannuDoesNotCostTheFile() throws {
         let id = UUID()
         let json = """
