@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - The task card shows status as the key pill's colour, and archives at a tap
+- **Developer label:** "open, in progress and closed can be colors, no need to show mnaybe in card … open and to do can be yellow,. in progress can be green and closed or ended can be red"
+- **Agent label:** Claude Code (Opus 5.5) — the status chip folded into the key pill as a colour, a closed phase, and an archive button on the card
+- **Changes:**
+  - The card no longer spells the status out in a chip of its own. The task number's pill
+    (`ds-vendors #42`, or "Local") takes its colour: yellow for To Do or Open, green for In
+    Progress, red for closed or ended. The word stays as the pill's hover tooltip and is what
+    VoiceOver reads ("ds-vendors #42, In Progress").
+  - A closed phase: a task is red when its server says it is done, or it has left the task order
+    (marked done, no longer listed by its source, archived), reading "Closed" ("Done" for a local
+    task marked done).
+  - An archive button (archive box, tooltip "Archive") sits at the card's bottom right before the
+    trash or open-in icon: any task goes to the archive at once, and the card closes as the task
+    leaves the list.
+  - The chip row paints above the fact grid, so the status tooltip opening downward is never
+    covered; the title row stays above both for the ×.
+  - Guards: `TaskDetailSummaryTests` (the closed phase from every cause), `TimerTaskDetailRulesTests`
+    (no status chip, the pill's colour and tooltip, the colour for each phase, archive on the card).
+
 ### 2026-10-17 - Tasks have an archive: closed ones move there after 3 days, archived Jira and GitLab tasks clear after 7, and nothing with time to log is ever lost
 - **Developer label:** "after a few days of being closed tikcet should go in to archive and not show up in any other list other than archive, user can alos immediately archive or delete the tasks, archice other than local tasks can auto clear in 7 days"
 - **Agent label:** Claude Code (Opus 5.5) — a new archived state with its own clock (`TaskArchive`), merge rules that keep it, and Brain's Recently closed and Archive sections

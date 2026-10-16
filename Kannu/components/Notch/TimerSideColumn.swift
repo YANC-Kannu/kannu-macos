@@ -530,9 +530,12 @@ private struct TimerTaskDetail: View {
                 .accessibilityLabel(Text(verbatim: String(localized: "Close")))
                 .hoverTooltip(String(localized: "Close"), edge: .below)
             }
-            .zIndex(1)
+            .zIndex(2)
+            // Above the fact grid, so the key pill's status tooltip (opening downward) is never
+            // covered by it; below the title row, whose × tooltip opens over this row.
             chipRow(summary)
                 .padding(.top, 5)
+                .zIndex(1)
             factGrid(summary.facts)
                 .padding(.top, 6)
                 // The flexible child: the grid gets the height the rows above and below leave.
@@ -554,9 +557,9 @@ private struct TimerTaskDetail: View {
             .filter { !$0.isEmpty })
     }
 
-    /// The key (or "Local"), where the task stands, a draft, then as many labels as fit and a "+N"
-    /// for the rest. Tries every label first and gives way one label at a time; when even the key
-    /// and status do not fit, the key truncates in the middle.
+    /// The key (or "Local") coloured by where the task stands, a draft, then as many labels as fit
+    /// and a "+N" for the rest. Tries every label first and gives way one label at a time; when
+    /// even the key does not fit, it truncates in the middle.
     private func chipRow(_ summary: TaskDetailSummary) -> some View {
         let labels = summary.labels
         return ViewThatFits(in: .horizontal) {
@@ -569,8 +572,12 @@ private struct TimerTaskDetail: View {
 
     private func chips(_ summary: TaskDetailSummary, labels: [String], hidden: Int, keyTruncates: Bool) -> some View {
         HStack(spacing: 4) {
-            SideChip(summary.shortKey ?? String(localized: "Local"), monospaced: summary.shortKey != nil, truncates: keyTruncates)
-            SideChip(summary.status.name, tint: summary.status.phase == .inProgress ? Color.blue : nil)
+            // The status is the key pill's colour, not a word of its own: yellow to do, green in
+            // progress, red closed. The word is its tooltip and what VoiceOver reads.
+            let key = summary.shortKey ?? String(localized: "Local")
+            SideChip(key, tint: Self.phaseColor(summary.status.phase), monospaced: summary.shortKey != nil, truncates: keyTruncates)
+                .accessibilityLabel(Text(verbatim: "\(key), \(summary.status.name)"))
+                .hoverTooltip(summary.status.name, edge: .below)
             if summary.isDraft {
                 SideChip(String(localized: "Draft"))
             }
@@ -608,6 +615,15 @@ private struct TimerTaskDetail: View {
                     }
                 }
             }
+        }
+    }
+
+    /// The key pill's colour for where the task stands.
+    static func phaseColor(_ phase: TaskDetailSummary.Phase) -> Color {
+        switch phase {
+        case .toDo: return .yellow
+        case .inProgress: return .green
+        case .closed: return .red
         }
     }
 
@@ -659,6 +675,19 @@ private struct TimerTaskDetail: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
+                // Into the archive at once, any task: a remote task's delete. It leaves the task
+                // order, so the card collapses on its own (`TimerTasksPage`'s onChange).
+                Button {
+                    manager.archive(task.id)
+                } label: {
+                    Image(systemName: "archivebox")
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(5)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(verbatim: String(localized: "Archive")))
+                .hoverTooltip(String(localized: "Archive"), edge: .above)
                 if summary.canDelete {
                     Button {
                         confirmsDelete = true

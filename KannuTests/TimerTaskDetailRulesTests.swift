@@ -80,14 +80,28 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         XCTAssertTrue(card.contains("role: .destructive"), "the final Delete is a destructive button")
     }
 
+    func testStatusIsTheKeyPillsColourAndArchiveIsAtHand() throws {
+        // David: the status is a colour, not a word — yellow to do, green in progress, red closed —
+        // on the task number's pill; the word stays as its tooltip and what VoiceOver reads.
+        let column = try Self.column()
+        let card = try Self.declaration("private struct TimerTaskDetail", in: column)
+        XCTAssertFalse(card.contains("SideChip(summary.status.name"), "no status chip: the key pill's colour is the status")
+        XCTAssertTrue(card.contains("tint: Self.phaseColor(summary.status.phase)"), "the key pill takes the status colour")
+        XCTAssertTrue(card.contains(".hoverTooltip(summary.status.name"), "the status word is the pill's tooltip")
+        for colour in ["case .toDo: return .yellow", "case .inProgress: return .green", "case .closed: return .red"] {
+            XCTAssertTrue(card.contains(colour), "missing \(colour)")
+        }
+        XCTAssertTrue(card.contains("manager.archive(task.id)"), "the card archives at once")
+    }
+
     func testTheIconButtonsCarryTooltipsAndTheExpandRespectsReducedMotion() throws {
         let column = try Self.column()
         let card = try Self.declaration("private struct TimerTaskDetail", in: column)
-        for tooltip in ["\"Close\"", "\"Delete task\""] {
+        for tooltip in ["\"Close\"", "\"Delete task\"", "\"Archive\""] {
             XCTAssertTrue(card.contains(tooltip), "missing tooltip text \(tooltip)")
         }
-        XCTAssertGreaterThanOrEqual(card.components(separatedBy: ".hoverTooltip(").count - 1, 3,
-                                    "the ×, the trash and the open-in button each carry a hover tooltip")
+        XCTAssertGreaterThanOrEqual(card.components(separatedBy: ".hoverTooltip(").count - 1, 5,
+                                    "the ×, the key pill, archive, trash and open-in each carry a hover tooltip")
         let page = try Self.declaration("private struct TimerTasksPage", in: column)
         XCTAssertTrue(page.contains("accessibilityReduceMotion"), "the expand must respect reduced motion")
         XCTAssertTrue(page.contains("expandedTaskID"))

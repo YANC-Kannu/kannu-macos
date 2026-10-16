@@ -83,6 +83,20 @@ final class TaskDetailSummaryTests: XCTestCase {
         XCTAssertEqual(summary(started).status, .init(name: "In Progress", phase: .inProgress))
     }
 
+    func testAClosedTaskIsClosedWhateverItsSourceSaid() {
+        var closedRemotely = remote(key: "P-2", status: "Done", category: "done")
+        closedRemotely.isDoneRemotely = true
+        XCTAssertEqual(summary(TaskItem(source: .jira, title: "J", remote: closedRemotely)).status,
+                       .init(name: "Closed", phase: .closed), "its server says so")
+        let gone = TaskItem(source: .gitlab, title: "G", remote: remote(key: "g/a#2", status: "opened", kind: .issue, iid: 2),
+                            visibility: .gone)
+        XCTAssertEqual(summary(gone).status, .init(name: "Closed", phase: .closed), "no longer listed is ended")
+        let archived = TaskItem(source: .gitlab, title: "A", remote: remote(key: "g/a#3", status: "opened", kind: .issue, iid: 3),
+                                visibility: .archived)
+        XCTAssertEqual(summary(archived).status.phase, .closed)
+        XCTAssertEqual(summary(TaskItem(title: "Mine", visibility: .done)).status, .init(name: "Done", phase: .closed))
+    }
+
     func testADraftMergeRequestSaysSo() {
         var info = remote(key: "g/a!3", status: "review requested", kind: .mergeRequest, iid: 3)
         info.isDraft = true

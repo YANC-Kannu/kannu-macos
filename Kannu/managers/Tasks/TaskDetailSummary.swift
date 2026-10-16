@@ -25,11 +25,22 @@ import Foundation
 /// Wording follows Brain › Tasks' row caption (`TasksSettings.progressText`) so the same task
 /// reads the same everywhere: "42m of 2h", "10m over", "Jira logged 3h", "Due Today 15:00".
 struct TaskDetailSummary: Equatable {
+    /// Where a task stands, as the card colours its key pill: to do yellow, in progress green,
+    /// closed or ended red.
+    enum Phase: Equatable {
+        /// To Do, Open, a merge request waiting: not started.
+        case toDo
+        case inProgress
+        /// Closed on its server, marked done, no longer listed by its source, or archived.
+        case closed
+    }
+
     struct Status: Equatable {
-        /// "To Do", "In Progress", "Open", "Review requested" — the source's own word, or the
-        /// facet's for a local task.
+        /// "To Do", "In Progress", "Open", "Review requested", "Closed" — the source's own word,
+        /// or the facet's for a local task. Not shown on the card (its colour is); it is the key
+        /// pill's tooltip and what VoiceOver reads.
         let name: String
-        let phase: TaskStatusFacet
+        let phase: Phase
     }
 
     /// One cell of the card's fact grid: an SF Symbol and a few words. `isAlert` reads in orange
@@ -71,9 +82,7 @@ struct TaskDetailSummary: Equatable {
         title = task.title
         shortKey = Self.shortKey(for: task)
 
-        let phase = TaskFacets.status(for: task)
-        let phaseName = phase == .inProgress ? TaskStatusFilter.inProgress.localizedName : TaskStatusFilter.toDo.localizedName
-        status = Status(name: TaskFacets.statusName(for: task) ?? phaseName, phase: phase)
+        status = Self.status(of: task)
         isDraft = task.remote?.isDraft == true
 
         labels = (task.remote?.labels ?? []).map(Self.labelDisplay) + task.tags.map { "#\($0)" }
@@ -92,6 +101,20 @@ struct TaskDetailSummary: Equatable {
         case .jira: browseLabel = String(localized: "Open in Jira")
         case .gitlab: browseLabel = String(localized: "Open in GitLab")
         }
+    }
+
+    /// Closed when its server says so (`isDoneRemotely`) or it has left the task order (done,
+    /// gone, archived); otherwise the facet's To Do or In Progress. The word is the source's own
+    /// while it is open; a closed task reads "Done" (local) or "Closed".
+    static func status(of task: TaskItem) -> Status {
+        if task.visibility != .active || task.remote?.isDoneRemotely == true {
+            let word = task.source == .local && task.visibility == .done ? String(localized: "Done") : String(localized: "Closed")
+            return Status(name: word, phase: .closed)
+        }
+        let facet = TaskFacets.status(for: task)
+        let phase: Phase = facet == .inProgress ? .inProgress : .toDo
+        let phaseName = facet == .inProgress ? TaskStatusFilter.inProgress.localizedName : TaskStatusFilter.toDo.localizedName
+        return Status(name: TaskFacets.statusName(for: task) ?? phaseName, phase: phase)
     }
 
     // MARK: - Facts
