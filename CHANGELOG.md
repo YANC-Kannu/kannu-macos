@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-17 - The task card stays inside its column, lines up, and fills its space with an icon grid of facts
+- **Developer label:** "fix allignemets and also see if some other valid info is there to show , plan how we can show things there in proper spacing but contained in the tab itself"
+- **Agent label:** Claude Code (Opus 5.5) — a fixed-size card, a chip row that gives way, a two-column fact grid sized to the height left over, and the noise removed
+- **Changes:**
+  - Contained: the card is exactly the column's width and the page's height. A long label
+    (`workflow::sprint_backlog`) made the chip row wider than the column, the card grew with it,
+    and the × and the open icon were pushed off the notch. The chip row now tries every label and
+    gives way one at a time through `ViewThatFits`, with a "+N" for the rest; when even the key and
+    status do not fit, the key truncates in the middle.
+  - Aligned: the colour dot is gone — it drew nothing for plain glass yet still took its width,
+    indenting the title past the chips — and the card's own tint carries the colour. Title, chips
+    and facts share one leading edge; the × sits in the corner.
+  - Filled: the facts are a two-column grid of an icon and a few words, up to four, most important
+    first — due date, conflicts, health, milestone, iteration, weight, parent, someone else's name,
+    checklist ("2 of 5 done"), linked MRs, comments, updated ("Updated 2d ago"), then Jira's
+    priority and type and logged time. A local task shows its reminder, when it was last timed and
+    how many sessions it has. The grid takes the height left over and shows two rows, one, or none,
+    so a two-line title never pushes Start out of the card.
+  - Quieter: the user's own name is never a fact (every issue on the list is assigned to them, so
+    "you" said nothing); "No estimate" no longer sits beside Start when there is no estimate and
+    nothing tracked; a scoped label shows its value (`sprint_backlog`); a draft merge request gets
+    a "Draft" chip; conflicts and an at-risk health read in orange.
+  - Guards: `TaskDetailSummaryTests` (facts and icons in order, the user's own name, health words,
+    relative times, scoped labels, draft, local facts, when time shows) and
+    `TimerTaskDetailRulesTests` (the card's fixed frame, `ViewThatFits` on both axes, no dot).
+
 ### 2026-10-17 - The sync keeps what a ticket's activity says: updated, comments, checklist, linked MRs, iteration, health, and an MR's draft, conflicts and author
 - **Developer label:** "see if some other valid info is there to show"
 - **Agent label:** Claude Code (Opus 5.5) — fields the same GitLab responses already carry, now decoded leniently and kept; Jira adds `updated`

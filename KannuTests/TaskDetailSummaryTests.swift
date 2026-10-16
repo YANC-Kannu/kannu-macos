@@ -21,8 +21,8 @@
 import XCTest
 
 /// The words on the timer tab's expanded task card. The title is the issue's own and is never
-/// prefixed by a key (a GitLab path key once ate the whole card); the key is short; the facts
-/// come in the order they matter on 240 pt; "you" is the connected account.
+/// prefixed by a key (a GitLab path key once ate the whole card); the key is short; the facts come
+/// most important first, each with its icon; the user's own name is never a fact.
 final class TaskDetailSummaryTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_760_000_000)   // 2025-10-09 08:53:20 UTC
     private var calendar: Calendar {
@@ -59,98 +59,148 @@ final class TaskDetailSummaryTests: XCTestCase {
         XCTAssertEqual(card.shortKey, "ds-vendors #4264", "the project's last path component and the number")
     }
 
-    func testAMergeRequestKeyUsesItsMark() {
-        let task = TaskItem(source: .gitlab, title: "Add tests",
-                            remote: remote(key: "group/app!12", status: "opened", kind: .mergeRequest, iid: 12))
-        XCTAssertEqual(summary(task).shortKey, "app !12")
-    }
-
-    func testAnIDOnlyProjectAndAJiraKeyAndALocalTask() {
+    func testShortKeysForAMergeRequestAnIDOnlyProjectJiraAndLocal() {
+        let request = TaskItem(source: .gitlab, title: "Add tests",
+                               remote: remote(key: "group/app!12", status: "opened", kind: .mergeRequest, iid: 12))
+        XCTAssertEqual(summary(request).shortKey, "app !12")
         var byID = TaskItem(source: .gitlab, title: "Known by id", remote: remote(key: "#7", kind: .issue, iid: 7))
         byID.remote?.gitlabProjectID = 42
         XCTAssertEqual(summary(byID).shortKey, "Project 42 #7")
-        let jira = TaskItem(source: .jira, title: "Fix login", remote: remote(key: "PROJ-123"))
-        XCTAssertEqual(summary(jira).shortKey, "PROJ-123")
+        XCTAssertEqual(summary(TaskItem(source: .jira, title: "J", remote: remote(key: "PROJ-123"))).shortKey, "PROJ-123")
         XCTAssertNil(summary(TaskItem(title: "Mine")).shortKey)
     }
 
-    // MARK: - Status and labels
+    // MARK: - Status, draft and labels
 
     func testStatusReadsTheSourcesWordWithTheFacetsPhase() {
         let jira = TaskItem(source: .jira, title: "J", remote: remote(key: "P-1", status: "In Review", category: "indeterminate"))
         XCTAssertEqual(summary(jira).status, .init(name: "In Review", phase: .inProgress))
         let gitlab = TaskItem(source: .gitlab, title: "G", remote: remote(key: "g/a#1", status: "opened", kind: .issue, iid: 1))
         XCTAssertEqual(summary(gitlab).status, .init(name: "Open", phase: .toDo))
-        let fresh = TaskItem(title: "Local")
-        XCTAssertEqual(summary(fresh).status, .init(name: "To Do", phase: .toDo))
+        XCTAssertEqual(summary(TaskItem(title: "Local")).status, .init(name: "To Do", phase: .toDo))
         var started = TaskItem(title: "Started")
         started.segments = [WorkSegment(start: now, end: now.addingTimeInterval(60), origin: .timer)]
         XCTAssertEqual(summary(started).status, .init(name: "In Progress", phase: .inProgress))
     }
 
-    func testLabelsComeBeforeTagsAndChipsFitABudget() {
-        let task = TaskItem(source: .gitlab, title: "L", remote: remote(key: "g/a#1", kind: .issue, iid: 1,
-                                                                           labels: ["workflow::sprint_backlog", "backend", "needs-review"]),
+    func testADraftMergeRequestSaysSo() {
+        var info = remote(key: "g/a!3", status: "review requested", kind: .mergeRequest, iid: 3)
+        info.isDraft = true
+        XCTAssertTrue(summary(TaskItem(source: .gitlab, title: "D", remote: info)).isDraft)
+        XCTAssertFalse(summary(TaskItem(title: "Local")).isDraft)
+    }
+
+    func testScopedLabelsShowTheirValueAndTagsComeAfter() {
+        let task = TaskItem(source: .gitlab, title: "L",
+                            remote: remote(key: "g/a#1", kind: .issue, iid: 1, labels: ["workflow::sprint_backlog", "backend", "a::b::c", "odd::"]),
                             tags: ["urgent"])
-        let labelled = summary(task)
-        XCTAssertEqual(labelled.labels, ["workflow::sprint_backlog", "backend", "needs-review", "#urgent"])
-        let fitted = labelled.chips(fitting: 36)
-        XCTAssertEqual(fitted.shown, ["workflow::sprint_backlog", "backend"], "24+2 then 7+2 fit in 36; the next (12+2) does not")
-        XCTAssertEqual(fitted.hidden, 2)
-        let tight = labelled.chips(fitting: 5)
-        XCTAssertEqual(tight.shown, ["workflow::sprint_backlog"], "the first chip always shows")
-        XCTAssertEqual(tight.hidden, 3)
-        XCTAssertEqual(summary(TaskItem(title: "Bare")).chips(fitting: 30).shown, [])
+        XCTAssertEqual(summary(task).labels, ["sprint_backlog", "backend", "c", "odd::", "#urgent"])
+        XCTAssertEqual(TaskDetailSummary.labelDisplay("plain"), "plain")
     }
 
     // MARK: - Facts
 
-    func testTheFactsComeInTheOrderTheyMatter() {
-        var info = remote(key: "PROJ-9", status: "To Do", spent: 3 * 3600)
+    func testTheFactsComeMostImportantFirstEachWithItsIcon() {
+        var info = remote(key: "g/a#9", status: "opened", kind: .issue, iid: 9)
         info.dueDate = RemoteTaskInfo.dayDate("2025-10-20", calendar: calendar)
+        info.healthStatus = "at_risk"
         info.milestone = "Sprint 42"
+        info.iteration = "Iteration 5"
         info.weight = 8
-        info.assignee = "Dana Example"
-        info.parentTitle = "Login epic"
-        info.priority = "High"
-        info.issueType = "Bug"
-        let task = TaskItem(source: .jira, title: "All of it", remote: info)
-        XCTAssertEqual(summary(task).facts.map(\.text),
-                       ["Due \(day("2025-10-20"))", "Sprint 42", "Weight 8", "Dana Example", "Login epic", "High", "Bug", "Jira logged 3h"])
-        XCTAssertEqual(summary(task, selfNames: ["dana example"]).facts[3].text, "you", "the connected account, case-insensitively")
+        info.parentTitle = "Health Check Migration"
+        info.assignee = "Kim Lee"
+        info.checklistDone = 2
+        info.checklistTotal = 5
+        info.linkedMergeRequests = 2
+        info.commentCount = 1
+        info.updatedAt = now.addingTimeInterval(-3 * 3600)
+        let facts = summary(TaskItem(source: .gitlab, title: "All of it", remote: info)).facts
+        XCTAssertEqual(facts.map(\.text), [
+            "Due \(day("2025-10-20"))", "At risk", "Sprint 42", "Iteration 5", "Weight 8", "Health Check Migration",
+            "Kim Lee", "2 of 5 done", "2 linked MRs", "1 comment", "Updated 3h ago",
+        ])
+        XCTAssertEqual(facts.map(\.icon), [
+            "calendar", "heart.text.square", "flag", "arrow.triangle.2.circlepath", "scalemass", "square.stack",
+            "person", "checklist", "arrow.triangle.pull", "bubble.left", "clock",
+        ])
+        XCTAssertEqual(facts.filter(\.isAlert).map(\.text), ["At risk"], "only what needs attention is orange")
+    }
+
+    func testTheUsersOwnNameIsNeverAFactButSomeoneElsesIs() {
+        var mine = remote(key: "g/a#1", status: "opened", kind: .issue, iid: 1)
+        mine.assignee = "David Mundackal"
+        XCTAssertEqual(summary(TaskItem(source: .gitlab, title: "Mine", remote: mine), selfNames: ["david mundackal"]).facts, [],
+                       "every issue on the list is assigned to the user: their name says nothing")
+
+        var review = remote(key: "g/a!4", status: "review requested", kind: .mergeRequest, iid: 4)
+        review.assignee = "David Mundackal"
+        review.author = "Kim Lee"
+        review.hasConflicts = true
+        let facts = summary(TaskItem(source: .gitlab, title: "Review", remote: review), selfNames: ["David Mundackal"]).facts
+        XCTAssertEqual(facts.map(\.text), ["Conflicts", "Kim Lee"], "the author asking for review, and the conflicts first")
+        XCTAssertEqual(facts.first, .init(icon: "exclamationmark.triangle", text: "Conflicts", isAlert: true))
+    }
+
+    func testHealthWords() {
+        XCTAssertEqual(TaskDetailSummary.healthText("on_track")?.text, "On track")
+        XCTAssertEqual(TaskDetailSummary.healthText("on_track")?.isAlert, false)
+        XCTAssertEqual(TaskDetailSummary.healthText("needs_attention")?.isAlert, true)
+        XCTAssertNil(TaskDetailSummary.healthText("unknown"), "a word this version does not know is not shown")
+    }
+
+    func testRelativeTimes() {
+        func ago(_ seconds: TimeInterval) -> String { TaskDetailSummary.ago(now.addingTimeInterval(-seconds), now: now, calendar: calendar) }
+        XCTAssertEqual(ago(30), "just now")
+        XCTAssertEqual(ago(5 * 60), "5m ago")
+        XCTAssertEqual(ago(3 * 3600), "3h ago")
+        XCTAssertEqual(ago(12 * 3600), "yesterday", "08:53 minus 12 h is the evening before")
+        XCTAssertEqual(ago(4 * 86_400), "4d ago")
+        XCTAssertEqual(ago(20 * 86_400), "2w ago")
+        XCTAssertEqual(ago(90 * 86_400), now.addingTimeInterval(-90 * 86_400).formatted(TaskDetailSummary.dayStyle(calendar)))
     }
 
     func testARemoteDueDateIsOverdueFromTheNextDay() {
         var info = remote(key: "g/a#1", kind: .issue, iid: 1)
         info.dueDate = RemoteTaskInfo.dayDate("2025-10-09", calendar: calendar)   // today
-        let today = summary(TaskItem(source: .gitlab, title: "T", remote: info))
-        XCTAssertEqual(today.facts.first, .init(text: "Due today", isAlert: false))
-
+        XCTAssertEqual(summary(TaskItem(source: .gitlab, title: "T", remote: info)).facts.first,
+                       .init(icon: "calendar", text: "Due today", isAlert: false))
         info.dueDate = RemoteTaskInfo.dayDate("2025-10-08", calendar: calendar)
-        let yesterday = summary(TaskItem(source: .gitlab, title: "Y", remote: info))
-        XCTAssertEqual(yesterday.facts.first, .init(text: "Overdue \(day("2025-10-08"))", isAlert: true))
+        XCTAssertEqual(summary(TaskItem(source: .gitlab, title: "Y", remote: info)).facts.first,
+                       .init(icon: "calendar", text: "Overdue \(day("2025-10-08"))", isAlert: true))
     }
 
-    func testALocalScheduleKeepsBrainsWords() {
-        let due = TaskItem(title: "Due", scheduledAt: now.addingTimeInterval(2 * 3600))
-        XCTAssertTrue(summary(due).facts[0].text.hasPrefix("Due Today "), summary(due).facts[0].text)
-        XCTAssertFalse(summary(due).facts[0].isAlert)
+    func testALocalTaskShowsItsReminderAndItsOwnTime() {
+        var task = TaskItem(title: "Local", scheduledAt: now.addingTimeInterval(2 * 3600))
+        task.segments = [
+            WorkSegment(start: now.addingTimeInterval(-3 * 86_400), end: now.addingTimeInterval(-3 * 86_400 + 600), origin: .timer),
+            WorkSegment(start: now.addingTimeInterval(-26 * 3600), end: now.addingTimeInterval(-25 * 3600), origin: .timer),
+        ]
+        let facts = summary(task).facts
+        XCTAssertEqual(facts.count, 3)
+        XCTAssertTrue(facts[0].text.hasPrefix("Due Today "), facts[0].text)
+        XCTAssertEqual(facts[1], .init(icon: "clock.arrow.circlepath", text: "Timed yesterday"))
+        XCTAssertEqual(facts[2], .init(icon: "repeat", text: "2 sessions"))
         let late = TaskItem(title: "Late", scheduledAt: now.addingTimeInterval(-3600))
-        XCTAssertTrue(summary(late).facts[0].text.hasPrefix("Overdue "), summary(late).facts[0].text)
         XCTAssertTrue(summary(late).facts[0].isAlert)
     }
 
     // MARK: - Time, delete, open
 
-    func testTimeOvertimeAndTheSourceRules() {
+    func testTimeShowsOnlyWhenItSaysSomething() {
         let local = TaskItem(title: "Over", localEstimateSeconds: 30 * 60)
         let over = summary(local, tracked: 40 * 60)
         XCTAssertEqual(over.time, "40m of 30m")
         XCTAssertEqual(over.overtime, "10m over")
-        XCTAssertTrue(over.canDelete)
-        XCTAssertNil(over.browseLabel)
-        XCTAssertEqual(summary(TaskItem(title: "Fresh")).time, "No estimate")
+        XCTAssertTrue(over.showsTime)
+        XCTAssertFalse(summary(TaskItem(title: "Fresh")).showsTime, "no estimate and nothing tracked: nothing beside Start")
+        XCTAssertTrue(summary(TaskItem(title: "Tracked"), tracked: 300).showsTime)
+        XCTAssertTrue(summary(TaskItem(title: "Estimated", localEstimateSeconds: 3600)).showsTime)
+    }
 
+    func testOnlyALocalTaskCanBeDeletedAndARemoteOneOpens() {
+        let local = summary(TaskItem(title: "Mine"))
+        XCTAssertTrue(local.canDelete)
+        XCTAssertNil(local.browseLabel)
         let jira = summary(TaskItem(source: .jira, title: "J", remote: remote(key: "P-1")))
         XCTAssertFalse(jira.canDelete, "a remote task would come back on the next sync")
         XCTAssertEqual(jira.browseLabel, "Open in Jira")

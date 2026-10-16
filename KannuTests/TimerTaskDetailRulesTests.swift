@@ -108,6 +108,18 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         XCTAssertTrue(page.contains("Text(verbatim: task.title)"), "the row's title is the title alone too")
     }
 
+    func testTheCardIsContainedWhateverItsWords() throws {
+        // A long label once widened the card past the column and pushed the × and the open icon
+        // off the notch; a two-line title must never push Start out of the page either.
+        let card = try Self.declaration("private struct TimerTaskDetail", in: try Self.column())
+        XCTAssertTrue(card.contains(".frame(width: M.sideColumnWidth, height: height"),
+                      "the card is exactly the column's width and the page's height")
+        XCTAssertTrue(card.contains("ViewThatFits(in: .horizontal)"), "the chip row gives way instead of overflowing")
+        XCTAssertTrue(card.contains("ViewThatFits(in: .vertical)"), "the fact grid fits the height left over")
+        XCTAssertFalse(card.contains("TaskColorDot("),
+                       "no dot: it drew nothing for plain glass yet indented the title past the chips")
+    }
+
     func testATaskLeavingTheListCollapsesTheCard() throws {
         let page = try Self.declaration("private struct TimerTasksPage", in: try Self.column())
         XCTAssertTrue(page.contains("expandedTaskID = nil"), "nothing clears the expanded task")

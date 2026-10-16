@@ -473,12 +473,18 @@ private extension View {
 }
 
 /// One task, expanded in the column's own frame in place of the list, laid out like its ticket
-/// page: the title first, then a row of chips (the short key, where it stands, its labels), the
-/// standard facts (due date, milestone, weight, assignee, parent, priority, type), and a bottom
-/// row with Start, its time and — for a local task — delete; for a Jira or GitLab task a link to
-/// open it, since deleting one would only have the next sync bring it back. The × at the top
-/// right collapses it. Delete confirms inline, in that bottom row: no modal, since alerts under
-/// the notch have misbehaved (docs/REGRESSIONS.md entry 14).
+/// page: the title first, a row of chips (the short key, where it stands, a draft, its labels), up
+/// to four facts in a two-column grid (each an icon and a few words: due date, health, milestone,
+/// weight, parent, who, checklist, linked MRs, comments, updated…), and a bottom row with Start,
+/// its time and — for a local task — delete; for a Jira or GitLab task a link to open it, since
+/// deleting one would only have the next sync bring it back. The × at the top right collapses it.
+/// Delete confirms inline, in that bottom row: no modal, since alerts under the notch have
+/// misbehaved (docs/REGRESSIONS.md entry 14).
+///
+/// **Contained, always.** The card is exactly the column's width and the page's height: it never
+/// grows, whatever its words. A chip row too wide for it (a long label once pushed the × and the
+/// open icon off the notch) drops labels, then truncates the key, through `ViewThatFits`; the
+/// fact grid takes the height left over and shows two rows, one, or none to fit it.
 ///
 /// Takes the manager it is handed: `TasksManager.shared` is read by `TimerTasksPage` alone, so
 /// the manager exists only while the Tasks page shows. The words come from `TaskDetailSummary`.
@@ -492,17 +498,19 @@ private struct TimerTaskDetail: View {
     let close: () -> Void
     let start: () -> Void
 
-    /// About what fits beside the key and status chips at caption size on 220 pt.
-    private static let chipCharacterBudget = 26
+    private static let horizontalPadding: CGFloat = 10
+    private static let factColumnSpacing: CGFloat = 10
+    /// Two columns across what the padding leaves of the column: 105 pt each.
+    private static let factColumnWidth = (M.sideColumnWidth - 2 * horizontalPadding - factColumnSpacing) / 2
 
     var body: some View {
         let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: Self.selfNames)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             // Drawn above the rows below it, so the × tooltip (opening downward) is never
             // painted over by the chips — siblings paint in order, zIndex decides between them.
+            // No colour dot: the card's own tint is the colour, and a dot that draws nothing for
+            // plain glass still took its width and indented the title past the chips.
             HStack(alignment: .top, spacing: 6) {
-                TaskColorDot(color: manager.color(of: task))
-                    .padding(.top, 4)
                 Text(verbatim: summary.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
@@ -517,59 +525,90 @@ private struct TimerTaskDetail: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                .padding(.top, -3)
+                .padding(.trailing, -5)
                 .accessibilityLabel(Text(verbatim: String(localized: "Close")))
                 .hoverTooltip(String(localized: "Close"), edge: .below)
             }
             .zIndex(1)
             chipRow(summary)
-            if !summary.facts.isEmpty {
-                factsLine(summary)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
+                .padding(.top, 5)
+            factGrid(summary.facts)
+                .padding(.top, 6)
+                // The flexible child: the grid gets the height the rows above and below leave.
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             bottomRow(summary)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: height, alignment: .top)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.top, 8)
+        .padding(.bottom, 7)
+        // Exactly the column's width and the page's height: no word on the card can widen it.
+        .frame(width: M.sideColumnWidth, height: height, alignment: .topLeading)
         .background(TaskGlassBackground(color: manager.color(of: task), base: 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    /// The connected accounts, so an assignee that is the user reads "you".
+    /// The connected accounts, so the user's own name never takes a fact.
     private static var selfNames: Set<String> {
         Set([Defaults[.gitlabAccountDisplayName], Defaults[.gitlabUsername], Defaults[.jiraAccountDisplayName]]
             .filter { !$0.isEmpty })
     }
 
-    /// The key (or "Local"), where the task stands, then as many labels as fit and a "+N".
+    /// The key (or "Local"), where the task stands, a draft, then as many labels as fit and a "+N"
+    /// for the rest. Tries every label first and gives way one label at a time; when even the key
+    /// and status do not fit, the key truncates in the middle.
     private func chipRow(_ summary: TaskDetailSummary) -> some View {
-        let chips = summary.chips(fitting: Self.chipCharacterBudget)
-        return HStack(spacing: 4) {
-            SideChip(summary.shortKey ?? String(localized: "Local"), monospaced: summary.shortKey != nil)
-            SideChip(summary.status.name, tint: summary.status.phase == .inProgress ? Color.blue : nil)
-            ForEach(Array(chips.shown.enumerated()), id: \.offset) { _, label in
-                SideChip(label)
+        let labels = summary.labels
+        return ViewThatFits(in: .horizontal) {
+            ForEach((0...labels.count).reversed(), id: \.self) { shown in
+                chips(summary, labels: Array(labels.prefix(shown)), hidden: labels.count - shown, keyTruncates: false)
             }
-            if chips.hidden > 0 {
-                SideChip("+\(chips.hidden)")
-                    .accessibilityLabel(Text(verbatim: String(localized: "\(chips.hidden) more labels")))
-            }
+            chips(summary, labels: [], hidden: labels.count, keyTruncates: true)
         }
-        .lineLimit(1)
     }
 
-    /// "Due 20 Oct · Sprint 42 · Weight 8 · you": an overdue date in orange.
-    private func factsLine(_ summary: TaskDetailSummary) -> Text {
-        var text = Text(verbatim: "")
-        for (index, fact) in summary.facts.enumerated() {
-            if index > 0 { text = text + Text(verbatim: " · ") }
-            text = text + Text(verbatim: fact.text).foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
+    private func chips(_ summary: TaskDetailSummary, labels: [String], hidden: Int, keyTruncates: Bool) -> some View {
+        HStack(spacing: 4) {
+            SideChip(summary.shortKey ?? String(localized: "Local"), monospaced: summary.shortKey != nil, truncates: keyTruncates)
+            SideChip(summary.status.name, tint: summary.status.phase == .inProgress ? Color.blue : nil)
+            if summary.isDraft {
+                SideChip(String(localized: "Draft"))
+            }
+            ForEach(Array(labels.enumerated()), id: \.offset) { _, label in
+                SideChip(label)
+            }
+            if hidden > 0 {
+                SideChip("+\(hidden)")
+                    .accessibilityLabel(Text(verbatim: String(localized: "\(hidden) more labels")))
+            }
         }
-        return text
+    }
+
+    /// Up to four facts, two per row, in the height left over: two rows when they fit, one when
+    /// a two-line title leaves room for only one, none when even that would crowd Start.
+    private func factGrid(_ facts: [TaskDetailSummary.Fact]) -> some View {
+        ViewThatFits(in: .vertical) {
+            if facts.count > 2 {
+                factRows(Array(facts.prefix(4)))
+            }
+            if !facts.isEmpty {
+                factRows(Array(facts.prefix(2)))
+            }
+            Color.clear.frame(height: 0)
+        }
+    }
+
+    private func factRows(_ facts: [TaskDetailSummary.Fact]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(Array(stride(from: 0, to: facts.count, by: 2)), id: \.self) { first in
+                HStack(spacing: Self.factColumnSpacing) {
+                    FactCell(fact: facts[first], width: Self.factColumnWidth)
+                    if first + 1 < facts.count {
+                        FactCell(fact: facts[first + 1], width: Self.factColumnWidth)
+                    }
+                }
+            }
+        }
     }
 
     /// "42m of 2h · 10m over", the overtime in orange, beside Start.
@@ -611,10 +650,14 @@ private struct TimerTaskDetail: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!manager.isReady)
-                timeText(summary)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                // Only once there is something to say: "No estimate" beside every untimed
+                // GitLab issue was noise.
+                if summary.showsTime {
+                    timeText(summary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer(minLength: 0)
                 if summary.canDelete {
                     Button {
@@ -656,26 +699,58 @@ private struct TimerTaskDetail: View {
 }
 
 /// A small capsule for the card's chip row: the house neutral chip (caption size, white 0.12), or
-/// a tinted one for a state (tint text on a 0.15 wash), never wider than its text.
+/// a tinted one for a state (tint text on a 0.15 wash). Exactly as wide as its text, unless it is
+/// the chip allowed to give way (`truncates`), which shortens in the middle instead.
 private struct SideChip: View {
     let text: String
     var tint: Color? = nil
     var monospaced = false
+    var truncates = false
 
-    init(_ text: String, tint: Color? = nil, monospaced: Bool = false) {
+    init(_ text: String, tint: Color? = nil, monospaced: Bool = false, truncates: Bool = false) {
         self.text = text
         self.tint = tint
         self.monospaced = monospaced
+        self.truncates = truncates
     }
 
     var body: some View {
-        Text(verbatim: text)
+        let chip = Text(verbatim: text)
             .font(.system(size: 10, weight: .semibold, design: monospaced ? .monospaced : .default))
             .foregroundStyle(tint ?? Color.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(tint?.opacity(0.15) ?? Color.white.opacity(0.12)))
-            .fixedSize()
+        if truncates {
+            chip.fixedSize(horizontal: false, vertical: true)
+        } else {
+            chip.fixedSize()
+        }
+    }
+}
+
+/// One cell of the card's fact grid: a small icon and a few words, one line, a fixed column width
+/// so the two columns line up. Orange when the fact needs attention.
+private struct FactCell: View {
+    let fact: TaskDetailSummary.Fact
+    let width: CGFloat
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: fact.icon)
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 12)
+                .accessibilityHidden(true)
+            Text(verbatim: fact.text)
+                .font(.system(size: 11, weight: .medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
+        .frame(width: width, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 
