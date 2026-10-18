@@ -41,6 +41,7 @@
 		AA1000000000000000000020 /* LoginItemPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000019 /* LoginItemPolicy.swift */; };
 		AA1000000000000000000039 /* HoverDwell.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000038 /* HoverDwell.swift */; };
 		AA10000000000000000000AE /* NotchInteractionGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000AD /* NotchInteractionGeometry.swift */; };
+		AA10000000000000000000CB /* ClosedMusicWingLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000CA /* ClosedMusicWingLayout.swift */; };
 		AA1000000000000000000022 /* ColorSpectrumMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000021 /* ColorSpectrumMath.swift */; };
 		AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */; };
 		AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */; };
@@ -78,6 +79,7 @@
 		AA100000000000000000008F /* DiagnosticScrub.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000008E /* DiagnosticScrub.swift */; };
 		AA1000000000000000000091 /* DisplayPlacementResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000090 /* DisplayPlacementResolver.swift */; };
 		AA10000000000000000000B1 /* ClosedNotchVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000AF /* ClosedNotchVisibility.swift */; };
+		AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BA /* ClipboardCapturePolicy.swift */; };
 		AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */; };
 		AA10000000000000000000B9 /* HostedContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B8 /* HostedContent.swift */; };
 		AA10000000000000000000B3 /* AgentSecurityFindingGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B2 /* AgentSecurityFindingGroup.swift */; };
@@ -140,6 +142,7 @@
 		AA1000000000000000000019 /* LoginItemPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LoginItemPolicy.swift; path = Kannu/helpers/LoginItemPolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000038 /* HoverDwell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverDwell.swift; path = Kannu/helpers/HoverDwell.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000AD /* NotchInteractionGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchInteractionGeometry.swift; path = Kannu/helpers/NotchInteractionGeometry.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000000CA /* ClosedMusicWingLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClosedMusicWingLayout.swift; path = Kannu/sizing/ClosedMusicWingLayout.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000021 /* ColorSpectrumMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ColorSpectrumMath.swift; path = Kannu/helpers/ColorSpectrumMath.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeUsageSnapshot.swift; path = Kannu/managers/AgentStatus/ClaudeUsageSnapshot.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeDesktopUsageHistory.swift; path = Kannu/managers/AgentStatus/ClaudeDesktopUsageHistory.swift; sourceTree = SOURCE_ROOT; };
@@ -177,6 +180,7 @@
 		AA100000000000000000008E /* DiagnosticScrub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DiagnosticScrub.swift; path = Kannu/managers/DiagnosticScrub.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000090 /* DisplayPlacementResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DisplayPlacementResolver.swift; path = Kannu/managers/Display/DisplayPlacementResolver.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000AF /* ClosedNotchVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClosedNotchVisibility.swift; path = Kannu/managers/Display/ClosedNotchVisibility.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000000BA /* ClipboardCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardCapturePolicy.swift; path = Kannu/managers/ClipboardCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardPanelPlacement.swift; path = Kannu/managers/Display/ClipboardPanelPlacement.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B8 /* HostedContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostedContent.swift; path = Kannu/helpers/HostedContent.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B2 /* AgentSecurityFindingGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentSecurityFindingGroup.swift; path = Kannu/managers/AgentStatus/AgentSecurityFindingGroup.swift; sourceTree = SOURCE_ROOT; };
@@ -589,6 +593,7 @@
 				AA1000000000000000000020 /* LoginItemPolicy.swift in Sources */,
 				AA1000000000000000000039 /* HoverDwell.swift in Sources */,
 				AA10000000000000000000AE /* NotchInteractionGeometry.swift in Sources */,
+				AA10000000000000000000CB /* ClosedMusicWingLayout.swift in Sources */,
 				AA1000000000000000000022 /* ColorSpectrumMath.swift in Sources */,
 				AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */,
 				AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */,
@@ -626,6 +631,7 @@
 				AA100000000000000000008F /* DiagnosticScrub.swift in Sources */,
 				AA1000000000000000000091 /* DisplayPlacementResolver.swift in Sources */,
 				AA10000000000000000000B1 /* ClosedNotchVisibility.swift in Sources */,
+				AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */,
 				AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */,
 				AA10000000000000000000B9 /* HostedContent.swift in Sources */,
 				AA100000000000000000F008 /* TermsOfUse.swift in Sources */,
