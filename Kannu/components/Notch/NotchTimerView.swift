@@ -36,6 +36,8 @@ struct NotchTimerView: View {
     @Default(.showTimerPresetsInNotchTab) private var showTimerPresetsInNotchTab
     @Default(.timerInputStyle) private var timerInputStyle
     @Default(.enableTasks) private var enableTasks
+    /// Read so a new width in Settings lays the columns out again (`sideColumnWidth`).
+    @Default(.openNotchWidth) private var openNotchWidth
 
     @AppStorage("customTimerDuration") private var customTimerDuration: Double = 600
     @State private var customHours: Int = 0
@@ -78,8 +80,9 @@ struct NotchTimerView: View {
                 HStack(alignment: .top, spacing: timerManager.isTimerActive ? 0 : TimerComposerMetrics.tabColumnSpacing) {
                     leftColumn
                     if shouldShowSideColumn {
+                        // Ends where the composer and the page do.
                         Divider()
-                            .frame(height: max(0, maxTabContentHeight - 8))
+                            .frame(height: sidePageHeight)
                             .opacity(0.2)
                         sideColumn
                     }
@@ -209,6 +212,8 @@ struct NotchTimerView: View {
             tasksAvailable: isTasksPageAvailable,
             presetsAvailable: showTimerPresetsInNotchTab,
             budget: maxTabContentHeight,
+            pageHeight: sidePageHeight,
+            columnWidth: sideColumnWidth,
             presets: timerPresets,
             activePresetID: timerManager.activePresetId,
             startPreset: { preset in
@@ -499,6 +504,23 @@ struct NotchTimerView: View {
 
     /// The side column shows when it has a page. The composer's stacked layout and narrow fields
     /// follow it, so the column always fits beside them without the notch growing.
+    /// The side column's width: the golden split of the open notch's width
+    /// (`TimerComposerMetrics.sideColumnWidth`). The open notch's own width (`openNotchSize`), not
+    /// `vm.notchSize`, which shrinks to the closed size before this tab fades out.
+    private var sideColumnWidth: CGFloat {
+        TimerComposerMetrics.sideColumnWidth(notchWidth: openNotchSize.width)
+    }
+
+    /// The composer beside the column: the ruler, or the stacked fields.
+    private var composerStyle: TimerComposerMetrics.Style {
+        timerInputStyle == .ruler ? .ruler : .manualWithPresets
+    }
+
+    /// The column's page ends where the composer does (`TimerComposerMetrics.sidePageHeight`).
+    private var sidePageHeight: CGFloat {
+        TimerComposerMetrics.sidePageHeight(budget: maxTabContentHeight, style: composerStyle)
+    }
+
     private var hasSideColumn: Bool {
         showTimerPresetsInNotchTab || isTasksPageAvailable
     }

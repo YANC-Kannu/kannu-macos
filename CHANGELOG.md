@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The timer tab's columns split in the golden ratio and end on one line
+- **Developer label:** "fix allignements, keeo golden ratio wherever possible ... golden ratio is the goal"
+- **Agent label:** Claude Code (Opus 5.5) — the composer and the task column share the notch's width 1.618 : 1, the column ends where Start and Reset do, and the task form's rows split in the golden ratio
+- **Changes:**
+  - The composer and the side column split the tab's width in the golden ratio around the 41 pt
+    gap, at every notch width (`TimerComposerMetrics.sideColumnWidth(notchWidth:)`): 327 : 202 in
+    the narrowest notch, 349 : 215 in a 675 pt one, instead of a fixed 240 pt column. The notch
+    never grows for it; the columns share what it has. The width comes from the open notch's own
+    width, not the view model's, which shrinks to the closed size before the tab fades out.
+  - The width is passed down to the task list, the task card (its two fact columns follow) and the
+    Time to log page.
+  - The side page is the composer's height, name field included (`sidePageHeight(budget:style:)`),
+    so the list, the card and the divider end on the line Start and Reset end on, at every notch
+    height; three task rows fit beside the stacked composer.
+  - The task form is exactly the composer's height (rows 8 pt apart: 122), so the two swap without
+    anything moving. Its estimate and tags, and Add and Add & Start, split 1 : φ (`GoldenRow`, a
+    small `Layout`); Save alone fills its row. The reminder row is inset like the fields' text.
+  - Tests: `TimerComposerMetricsTests` (the golden split at five widths, the floor, the split
+    adding up, the page ending with the composer, the form equal to the composer);
+    `TimerSideColumnRulesTests` (the open notch's width, the divider and page ending together, the
+    form's golden rows); `TimerTaskDetailRulesTests` (the card takes the column's width).
+
 ### 2026-10-18 - The timer's duration digits always show whole
 - **Developer label:** "also ui in timer broken randomly"
 - **Agent label:** Claude Code (Opus 5.5) — the composer's Hours, Minutes and Seconds boxes are an NSTextField of Kannu's own, sized to the box, under no clip

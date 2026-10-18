@@ -159,7 +159,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
     /// toolbar at `sideListHeight`.
     func testTheToolbarSitsOverTheListOnly() throws {
         let column = Self.code(try Self.raw(Self.sideColumnPath))
-        XCTAssertTrue(column.contains("listHeight: M.sideListHeight(budget: budget)"))
+        XCTAssertTrue(column.contains("listHeight: M.sideListHeight(pageHeight: pageHeight)"))
         let page = try Self.declaration("private struct TimerTasksPage", in: column)
         XCTAssertTrue(page.contains("TimerLogTimePage(asking: asking"))
         XCTAssertTrue(page.contains("height: height,"), "the card takes the page's whole height")
@@ -183,6 +183,23 @@ final class TimerSideColumnRulesTests: XCTestCase {
         let notch = Self.code(try Self.raw(Self.notchTimerPath))
         XCTAssertTrue(notch.contains("TimerTaskForm(mode: taskForm, close: closeTaskForm, started: taskStarted)"))
         XCTAssertTrue(notch.contains("if isTasksPageAvailable {\n                newTaskButton"), "the New task button shows only with tasks on")
+        XCTAssertTrue(form.contains("GoldenRow(spacing: M.taskFormRowSpacing) {\n                estimateMenu\n                tagsField"),
+                      "the estimate and the tags in the golden ratio")
+        XCTAssertTrue(form.contains("GoldenRow(spacing: 10) {"), "Add and Add & Start in the golden ratio")
+    }
+
+    /// The columns are the golden split of the open notch's own width (not `vm.notchSize`, which
+    /// shrinks to the closed size before the tab fades out), and the page, the divider and the
+    /// composer end on one line.
+    func testTheColumnsAreTheGoldenSplitAndEndTogether() throws {
+        let notch = Self.code(try Self.raw(Self.notchTimerPath))
+        XCTAssertTrue(notch.contains("TimerComposerMetrics.sideColumnWidth(notchWidth: openNotchSize.width)"))
+        XCTAssertFalse(notch.contains("sideColumnWidth(notchWidth: vm.notchSize"), "the closing notch's size would squash the columns")
+        XCTAssertTrue(notch.contains("TimerComposerMetrics.sidePageHeight(budget: maxTabContentHeight, style: composerStyle)"))
+        XCTAssertTrue(notch.contains(".frame(height: sidePageHeight)"), "the divider ends where the page does")
+        let column = Self.code(try Self.raw(Self.sideColumnPath))
+        XCTAssertTrue(column.contains(".frame(width: columnWidth, alignment: .leading)"))
+        XCTAssertFalse(column.contains("M.sideColumnWidth"), "a fixed column width is back")
     }
 
     func testTheSwipeCoversTheWholeTab() throws {

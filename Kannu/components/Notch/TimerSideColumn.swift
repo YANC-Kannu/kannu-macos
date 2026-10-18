@@ -59,8 +59,13 @@ struct TimerSideColumn: View {
     let select: (TimerSidePage) -> Void
     let tasksAvailable: Bool
     let presetsAvailable: Bool
-    /// The tab's height budget (`NotchTimerView.maxTabContentHeight`).
+    /// The tab's height budget (`NotchTimerView.maxTabContentHeight`): the labels hang from its
+    /// bottom line.
     let budget: CGFloat
+    /// The shown page's height, ending where the composer does (`TimerComposerMetrics.sidePageHeight`).
+    let pageHeight: CGFloat
+    /// The column's width, the golden split of the notch (`TimerComposerMetrics.sideColumnWidth`).
+    let columnWidth: CGFloat
     let presets: [TimerPreset]
     let activePresetID: UUID?
     let startPreset: (TimerPreset) -> Void
@@ -108,15 +113,11 @@ struct TimerSideColumn: View {
 
     private var hasPager: Bool { pages.count > 1 }
 
-    private var pageHeight: CGFloat {
-        M.sidePageHeight(budget: budget)
-    }
-
     var body: some View {
         pageView
             .id(shownPage)
             .transition(.opacity)
-            .frame(width: M.sideColumnWidth, alignment: .leading)
+            .frame(width: columnWidth, alignment: .leading)
             .frame(maxHeight: budget, alignment: .top)
             // Hangs below the tab's bottom line, into the footer: an overlay takes no room.
             .overlay(alignment: .bottom) {
@@ -176,7 +177,8 @@ struct TimerSideColumn: View {
     private var pageView: some View {
         switch shownPage {
         case .tasks:
-            TimerTasksPage(height: pageHeight, listHeight: M.sideListHeight(budget: budget), started: taskStarted, edit: editTask)
+            TimerTasksPage(height: pageHeight, listHeight: M.sideListHeight(pageHeight: pageHeight), width: columnWidth,
+                           started: taskStarted, edit: editTask)
         case .presets:
             presetsPage
         }
@@ -275,6 +277,8 @@ private struct TimerTasksPage: View {
     let height: CGFloat
     /// The list's height under the toolbar (`TimerComposerMetrics.sideListHeight`).
     let listHeight: CGFloat
+    /// The column's width (`TimerComposerMetrics.sideColumnWidth`): the card's and the Log page's.
+    let width: CGFloat
     let started: () -> Void
     /// Opens the left panel's task form on a task (`TimerTaskForm`).
     let edit: (UUID) -> Void
@@ -364,6 +368,7 @@ private struct TimerTasksPage: View {
             TimerTaskDetail(
                 manager: manager,
                 task: expanded,
+                width: width,
                 height: height,
                 confirmsDelete: $confirmsDelete,
                 close: collapse,
@@ -373,7 +378,7 @@ private struct TimerTasksPage: View {
             .id(expanded.id)
             .transition(.opacity)
         } else if showsLogTime && !asking.isEmpty {
-            TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, height: height, close: closeLogTime)
+            TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, width: width, height: height, close: closeLogTime)
                 .environment(\.worklogFieldFocus, draftFocusChanged)
                 .transition(.opacity)
         } else {
@@ -761,6 +766,7 @@ private struct TimerLogTimePage: View {
 
     let asking: [WorklogDraft]
     let maxCards: Int
+    let width: CGFloat
     let height: CGFloat
     let close: () -> Void
     @State private var isScrolled = false
@@ -799,7 +805,7 @@ private struct TimerLogTimePage: View {
                 SideListEdgeFades(showsTop: isScrolled)
             }
         }
-        .frame(width: M.sideColumnWidth, height: height, alignment: .topLeading)
+        .frame(width: width, height: height, alignment: .topLeading)
     }
 }
 
@@ -879,6 +885,8 @@ private struct TimerTaskDetail: View {
 
     @ObservedObject var manager: TasksManager
     let task: TaskItem
+    /// The column's width (`TimerComposerMetrics.sideColumnWidth`).
+    let width: CGFloat
     let height: CGFloat
     @Binding var confirmsDelete: Bool
     let close: () -> Void
@@ -888,8 +896,10 @@ private struct TimerTaskDetail: View {
 
     private static let horizontalPadding: CGFloat = 10
     private static let factColumnSpacing: CGFloat = 10
-    /// Two columns across what the padding leaves of the column: 105 pt each.
-    private static let factColumnWidth = (M.sideColumnWidth - 2 * horizontalPadding - factColumnSpacing) / 2
+    /// Two columns across what the padding leaves of the column: 86 pt each in the narrowest notch.
+    private var factColumnWidth: CGFloat {
+        max(0, (width - 2 * Self.horizontalPadding - Self.factColumnSpacing) / 2)
+    }
 
     var body: some View {
         let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: Self.selfNames)
@@ -946,7 +956,7 @@ private struct TimerTaskDetail: View {
         .padding(.top, 8)
         .padding(.bottom, 7)
         // Exactly the column's width and the page's height: no word on the card can widen it.
-        .frame(width: M.sideColumnWidth, height: height, alignment: .topLeading)
+        .frame(width: width, height: height, alignment: .topLeading)
         .background(TaskGlassBackground(color: manager.color(of: task), base: 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
@@ -1031,9 +1041,9 @@ private struct TimerTaskDetail: View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(stride(from: 0, to: facts.count, by: 2)), id: \.self) { first in
                 HStack(spacing: Self.factColumnSpacing) {
-                    FactCell(fact: facts[first], width: Self.factColumnWidth)
+                    FactCell(fact: facts[first], width: factColumnWidth)
                     if first + 1 < facts.count {
-                        FactCell(fact: facts[first + 1], width: Self.factColumnWidth)
+                        FactCell(fact: facts[first + 1], width: factColumnWidth)
                     }
                 }
             }

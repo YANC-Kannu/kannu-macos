@@ -80,7 +80,8 @@ struct TimerTaskForm: View {
             titleRow
                 .frame(height: M.nameFieldHeight)
                 .zIndex(3)
-            HStack(spacing: M.taskFormRowSpacing) {
+            // The estimate and the tags in the golden ratio, 1 : φ.
+            GoldenRow(spacing: M.taskFormRowSpacing) {
                 estimateMenu
                 tagsField
             }
@@ -154,8 +155,7 @@ struct TimerTaskForm: View {
             .font(.system(size: 12, weight: .medium))
             .padding(.horizontal, 10)
             .frame(maxHeight: .infinity)
-            .background(Color.white.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
 
             Button(action: close) {
                 Image(systemName: "xmark")
@@ -184,10 +184,9 @@ struct TimerTaskForm: View {
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .padding(.horizontal, 8)
-        .frame(maxHeight: .infinity)
-        .background(Color.white.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
         .accessibilityLabel(Text("Estimate"))
         .hoverTooltip(String(localized: "Estimate"), edge: .below)
     }
@@ -202,17 +201,22 @@ struct TimerTaskForm: View {
             .onSubmit(submit)
             .onExitCommand(perform: close)
             .padding(.horizontal, 10)
-            .frame(maxHeight: .infinity)
-            .background(Color.white.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
             .accessibilityLabel(Text("Tags"))
     }
 
     /// A local task's reminder: "Add a reminder", or the date and time and a ×. A field date
     /// picker, never the compact one: its calendar is a popover window, and the notch would close
-    /// under it. While macOS blocks Kannu's notifications an orange bell says so.
-    @ViewBuilder
+    /// under it. While macOS blocks Kannu's notifications an orange bell says so. Inset like the
+    /// fields' text above it, so the row's first glyph lines up with theirs.
     private var reminderRow: some View {
+        reminderContent
+            .padding(.horizontal, 10)
+    }
+
+    @ViewBuilder
+    private var reminderContent: some View {
         if draft.canSchedule {
             HStack(spacing: 6) {
                 if draft.reminder != nil {
@@ -275,9 +279,10 @@ struct TimerTaskForm: View {
         )
     }
 
-    /// The composer's Start and Reset, in their look: Add & Start green, Add grey; Save green.
+    /// The composer's Start and Reset, in their look: Add & Start green, Add grey; Save green. Add
+    /// and Add & Start in the golden ratio, 1 : φ; Save alone fills the row.
     private var buttonRow: some View {
-        HStack(spacing: 10) {
+        GoldenRow(spacing: 10) {
             if draft.isNew {
                 formButton(String(localized: "Add"), systemImage: "plus", prominent: false) { add(andStart: false) }
                 formButton(String(localized: "Add & Start"), systemImage: "play.fill", prominent: true) { add(andStart: true) }
