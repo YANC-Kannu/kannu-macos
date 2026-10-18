@@ -54,10 +54,37 @@ enum ClaudeUsageRefresh {
         signInProcess.withLock { $0 }?.terminate()
     }
 
-    /// One refresh, start to finish, on a worker thread. Returns what the card should say, or
-    /// nil when new numbers landed. Logs each step's outcome and duration, never its output: that
-    /// carries plan and spend figures and the account's name.
+    /// What one refresh ended as.
+    struct Outcome {
+        /// What the card should say; nil when new numbers landed.
+        var status: ClaudeRefreshStatus?
+        /// After a fetch: the organization Claude Code fetched for, as its own profile fetch left
+        /// it in `~/.claude.json` the moment the run ended.
+        var fetchedOrganization: String? = nil
+    }
+
+    /// One refresh, start to finish, on a worker thread. Logs each step's outcome and duration,
+    /// never its output: that carries plan and spend figures and the account's name.
     static func run(
+        binary: ClaudeCodeBinary.Candidate,
+        allowSignIn: Bool,
+        signInStarted: () -> Void
+    ) -> Outcome {
+        let status = runSteps(binary: binary, allowSignIn: allowSignIn, signInStarted: signInStarted)
+        return Outcome(status: status, fetchedOrganization: status == nil ? claudeCodeOrganization() : nil)
+    }
+
+    /// Read straight after Claude Code's own run, which rewrites `oauthAccount` from its token's
+    /// profile — later, a desktop-hosted session may rewrite it with the desktop's organization.
+    private static func claudeCodeOrganization() -> String? {
+        guard let data = try? Data(contentsOf: ClaudeCachedUsage.defaultURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let account = json["oauthAccount"] as? [String: Any],
+              let organization = account["organizationUuid"] as? String, !organization.isEmpty else { return nil }
+        return organization
+    }
+
+    private static func runSteps(
         binary: ClaudeCodeBinary.Candidate,
         allowSignIn: Bool,
         signInStarted: () -> Void

@@ -392,6 +392,39 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
             now: now, cacheObservedAt: nil, lastFetch: now.addingTimeInterval(-900)))
     }
 
+    // MARK: - One organization per card
+
+    func testClaudeCodeOnAnotherOrganizationIsLeftOutWhole() {
+        let statusline = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 5, resetsIn: 300)], observedAt: now)
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)],
+                                          observedAt: now.addingTimeInterval(-3_000))
+        let split = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                    desktopOrganization: "max", claudeCodeOrganization: "team")
+        XCTAssertTrue(split.claudeCodeOnAnotherOrganization)
+        XCTAssertEqual(split.sources, [desktop])
+        // A fresher Team reading must not displace the Max one: that was the measured card.
+        XCTAssertEqual(ClaudeUsageSnapshot.merged(split.sources, now: now)?.sevenDayPercent, 43)
+    }
+
+    func testOneOrganizationOrAnUnknownOneMergesAsBefore() {
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)], observedAt: now)
+        for (desktopOrg, codeOrg) in [("max", "max"), (nil, "team"), ("max", nil)] as [(String?, String?)] {
+            let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
+                                                       desktopOrganization: desktopOrg, claudeCodeOrganization: codeOrg)
+            XCTAssertFalse(card.claudeCodeOnAnotherOrganization)
+            XCTAssertEqual(card.sources, [nil, cache, desktop])
+        }
+    }
+
+    func testHintNamesTheOtherOrganizationFirst() {
+        // Even with hooks off and a live cache: the cache is someone else's limits.
+        let live = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)], observedAt: now)
+        XCTAssertEqual(ClaudeUsageSnapshot.hint(hooksInstalled: false, statusline: live, cache: live,
+                                                claudeCodeOnAnotherOrganization: true, now: now), .otherOrganization)
+    }
+
     // MARK: - Sign-in hint
 
     func testHintIsNeverShownWithoutClaudeHooks() {

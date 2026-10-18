@@ -59,6 +59,12 @@ struct ClaudeUsageProvider: UsageProvider {
     /// when nothing usable is cached.
     @MainActor
     private func applyRateLimitWindows(to snapshot: inout UsageSnapshot, now: Date) {
+        // The tier badge is Claude Code's plan. When Claude Code is on another organization than
+        // the one the bars follow, that badge would name the wrong plan beside them.
+        if CursorAgentStatusMonitor.shared.claudeUsageHint == .otherOrganization {
+            snapshot.accountTier = nil
+            snapshot.accountNote = nil
+        }
         guard let usage = CursorAgentStatusMonitor.shared.claudeUsage else { return }
 
         for window in usage.displayWindows(now: now) {

@@ -45,10 +45,20 @@ enum ClaudeCachedUsage {
         read(from: url).snapshot
     }
 
-    /// What the desktop history needs from this file to be read honestly: which organization's
-    /// samples are this account's, and where the weekly window resets. The cache's own weekly
-    /// reset stays useful long after its percentages have lapsed — the window resets on a fixed
-    /// weekly anchor, so a reset weeks old still says which hour of which weekday it falls on.
+    /// What the desktop history needs from this file to be read honestly: the organization
+    /// Claude Code is signed in to, and where that organization's weekly window resets. The
+    /// cache's own weekly reset stays useful long after its percentages have lapsed — each
+    /// organization resets on its own fixed weekly anchor (measured 2026-10-18: a Max plan on
+    /// Wednesday 00:00Z, a Team plan of the same person on Monday 05:00Z), so a reset weeks old
+    /// still says which hour of which weekday that organization's week ends.
+    /// The organization Claude Code's own sign-in is on: what Kannu recorded straight after its
+    /// last successful fetch, else what the file says now. The file alone flips — measured
+    /// 2026-10-18, it read Max after a sign-in, Team after Claude Code's next `/usage`, and Max
+    /// again once a desktop-hosted session had run.
+    static func claudeCodeOrganization(recordedAtFetch: String?, inConfigNow: String?) -> String? {
+        recordedAtFetch ?? inConfigNow
+    }
+
     struct AccountContext: Equatable {
         var organizationUUID: String?
         var weeklyResetAnchor: Date?
@@ -132,6 +142,8 @@ enum ClaudeCachedUsage {
         return ClaudeUsageSnapshot(
             windows: windows,
             observedAt: Date(timeIntervalSince1970: fetchedAtMs / 1000)
+            // No organization: the cache records the account, and `oauthAccount` is rewritten by
+            // every Claude Code process (see `claudeCodeOrganization(recordedAtFetch:inConfigNow:)`).
         )
     }
 

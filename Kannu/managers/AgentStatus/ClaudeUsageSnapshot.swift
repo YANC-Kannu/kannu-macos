@@ -43,6 +43,9 @@ struct ClaudeUsageSnapshot: Equatable {
     let windows: [Window]
     /// When the values were observed (the file's `ts`, milliseconds).
     let observedAt: Date
+    /// The organization the numbers belong to, when the source says. One person can belong to
+    /// several (a Max plan and a Team plan), each with its own limits and its own weekly reset.
+    var organizationUUID: String? = nil
 
     static let fiveHourKey = "five_hour"
     static let sevenDayKey = "seven_day"
@@ -215,6 +218,28 @@ struct ClaudeUsageSnapshot: Equatable {
         return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
     }
 
+    /// Which sources one card may combine.
+    ///
+    /// The card follows the organization Claude Desktop records usage for — its history's newest
+    /// sample — because that is what desktop-hosted agents spend (the user's call, 2026-10-18).
+    /// Claude Code's own sources, its statusline and its cache, describe the organization its
+    /// sign-in is bound to. When that is a different one they are left out whole, never merged
+    /// per key, so a card never shows one organization's five-hour bar beside another's week.
+    /// With no desktop history at all, Claude Code's organization is the only one there is.
+    static func cardSources(
+        statusline: ClaudeUsageSnapshot?,
+        cache: ClaudeUsageSnapshot?,
+        desktop: ClaudeUsageSnapshot?,
+        desktopOrganization: String?,
+        claudeCodeOrganization: String?
+    ) -> (sources: [ClaudeUsageSnapshot?], claudeCodeOnAnotherOrganization: Bool) {
+        guard let desktopOrganization, let claudeCodeOrganization,
+              desktopOrganization != claudeCodeOrganization else {
+            return ([statusline, cache, desktop], false)
+        }
+        return ([desktop], true)
+    }
+
     /// Why the card may be showing less than it should.
     enum Hint: Equatable {
         /// Claude hooks are installed, so Claude Code is in use, yet neither server-backed source
@@ -225,6 +250,11 @@ struct ClaudeUsageSnapshot: Equatable {
         /// Sessions inside the desktop app run on a host token without that scope, which is why
         /// those sessions alone never fill the cache.
         case signInNeeded
+        /// Claude Code is signed in to a different organization than the one Claude Desktop
+        /// records usage for, so its exact numbers belong to someone else's limits and the bars
+        /// come from the desktop history alone. Signing Claude Code in to the same organization
+        /// brings the exact numbers back.
+        case otherOrganization
     }
 
     /// Desktop-only users (no Claude hooks) are never nagged: the desktop history is the source
@@ -233,8 +263,10 @@ struct ClaudeUsageSnapshot: Equatable {
         hooksInstalled: Bool,
         statusline: ClaudeUsageSnapshot?,
         cache: ClaudeUsageSnapshot?,
+        claudeCodeOnAnotherOrganization: Bool = false,
         now: Date
     ) -> Hint? {
+        if claudeCodeOnAnotherOrganization { return .otherOrganization }
         guard hooksInstalled else { return nil }
         let serverBacked = [statusline, cache].compactMap { $0 }.contains { !$0.isEmpty(now: now) }
         return serverBacked ? nil : .signInNeeded

@@ -422,8 +422,16 @@ struct NotchLLMUsageView: View {
             case .fetchFailed where !agentMonitor.isRefreshingClaudeUsage:
                 claudeStatusText(String(localized: "Couldn't fetch the latest limits. Try ↻ again in a moment."))
             default:
-                if agentMonitor.claudeUsageHint == .signInNeeded, !agentMonitor.isRefreshingClaudeUsage {
-                    claudeStatusText(String(localized: "Exact limits need a Claude Code sign-in. Press ↻ to fetch them."))
+                if !agentMonitor.isRefreshingClaudeUsage {
+                    switch agentMonitor.claudeUsageHint {
+                    case .signInNeeded:
+                        claudeStatusText(String(localized: "Exact limits need a Claude Code sign-in. Press ↻ to fetch them."))
+                    case .otherOrganization:
+                        claudeStatusText(String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's own readings. Sign Claude Code in to this one for exact limits."),
+                                         action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
+                    case nil:
+                        EmptyView()
+                    }
                 }
             }
         }

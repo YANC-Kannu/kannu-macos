@@ -68,10 +68,10 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
     func testFiveHourSampleOlderThanTheWindowIsDropped() {
         // A 10-hour-old "0 %" used to render as a live reading. Older than the window itself, the
         // sample cannot say anything about the window running now.
-        let stale = ClaudeDesktopUsageHistory.parse(json: series([(-301, 0, 50)]), now: now)
+        let stale = ClaudeDesktopUsageHistory.parse(json: series([(-301.0, 0.0, 50.0)]), now: now)
         XCTAssertNil(stale?.window("five_hour"))
         XCTAssertEqual(stale?.window("seven_day")?.percent, 50)
-        let recent = ClaudeDesktopUsageHistory.parse(json: series([(-299, 0, 50)]), now: now)
+        let recent = ClaudeDesktopUsageHistory.parse(json: series([(-299.0, 0.0, 50.0)]), now: now)
         XCTAssertEqual(recent?.window("five_hour")?.percent, 0)
     }
 
@@ -118,7 +118,7 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         // percentage belongs to a window that no longer exists. It used to lose only its
         // countdown and keep showing the number as if it were current.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
-            (-8 * 24 * 60 - 30, 1, 40), (-8 * 24 * 60, 1, 3)
+            (-8.0 * 24 * 60 - 30, 1.0, 40.0), (-8.0 * 24 * 60, 1.0, 3.0)
         ]), now: now)
         XCTAssertNil(snapshot?.window("seven_day"))
     }
@@ -134,7 +134,7 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
     }
 
     func testNoRolloverAndAWeekOldSampleIsDropped() {
-        let snapshot = ClaudeDesktopUsageHistory.parse(json: series([(-7 * 24 * 60 - 1, nil, 52)]), now: now)
+        let snapshot = ClaudeDesktopUsageHistory.parse(json: series([(-7.0 * 24 * 60 - 1, nil, 52.0)]), now: now)
         XCTAssertNil(snapshot)
     }
 
@@ -190,19 +190,45 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
          "u": ["fh": NSNumber(value: fh)]]
     }
 
-    func testSamplesFromAnotherOrganizationAreIgnored() {
+    func testTheDesktopsCurrentOrganizationIsTheOneRead() {
+        // The card follows the organization the desktop app is on now — its newest sample's —
+        // whatever Claude Code is signed in to. Older samples of another organization are other
+        // limits entirely.
         let json: [String: Any] = ["samples": [
-            orgSample(-60, "mine", fh: 40),
-            orgSample(-10, "someone-else", fh: 95)
+            orgSample(-60, "team", fh: 40),
+            orgSample(-10, "max", fh: 95)
         ]]
-        let mine = ClaudeDesktopUsageHistory.parse(
-            json: json, now: now, account: .init(organizationUUID: "mine"))
-        XCTAssertEqual(mine?.fiveHourPercent, 40)
-        // No account to go by: the newest sample's organization, alone.
         XCTAssertEqual(ClaudeDesktopUsageHistory.parse(json: json, now: now)?.fiveHourPercent, 95)
-        // An account the file has never seen is no guide either.
         XCTAssertEqual(ClaudeDesktopUsageHistory.parse(
-            json: json, now: now, account: .init(organizationUUID: "unknown"))?.fiveHourPercent, 95)
+            json: json, now: now, account: .init(organizationUUID: "team"))?.fiveHourPercent, 95)
+        XCTAssertEqual(ClaudeDesktopUsageHistory.parse(json: json, now: now)?.organizationUUID, "max")
+        XCTAssertEqual(ClaudeDesktopUsageHistory.organization(json: json), "max")
+    }
+
+    func testTheOrganizationIsKnownEvenWhenNoWindowIsCurrent() throws {
+        // A day-old 5-hour sample shows nothing, but the card still follows this organization.
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("plan-usage-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let json: [String: Any] = ["samples": [orgSample(-24 * 60, "max", fh: 40)]]
+        try JSONSerialization.data(withJSONObject: json).write(to: url)
+        let read = ClaudeDesktopUsageHistory.read(from: url, now: now)
+        XCTAssertNil(read.snapshot)
+        XCTAssertEqual(read.organizationUUID, "max")
+    }
+
+    func testAnotherOrganizationsWeeklyResetIsNotApplied() throws {
+        // Measured 2026-10-18: one person, a Max plan resetting Wednesday 00:00Z and a Team plan
+        // resetting Monday 05:00Z. Claude Code on Team must not date the Max week.
+        let sample: [String: Any] = ["samples": [[
+            "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
+            "org": "max", "u": ["sd": NSNumber(value: 43)]
+        ]]]
+        let teamAnchor = ClaudeCachedUsage.AccountContext(organizationUUID: "team",
+                                                          weeklyResetAnchor: utc("2026-10-20T05:00:00Z"))
+        let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(
+            json: sample, now: utc("2026-10-18T00:13:00Z"), account: teamAnchor))
+        XCTAssertNil(snapshot.window("seven_day")?.resetsAt, "no rollover seen, and the anchor is Team's")
+        XCTAssertEqual(snapshot.window("seven_day")?.percent, 43)
     }
 
     func testRejectsUnusableInput() {

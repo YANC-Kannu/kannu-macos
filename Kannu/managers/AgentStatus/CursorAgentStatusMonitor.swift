@@ -86,6 +86,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
     private var lastStatuslineModifiedAt: Date?
     private var claudeUsageCache: ClaudeUsageSnapshot?
     private var claudeUsageDesktop: ClaudeUsageSnapshot?
+    /// Which organization each side was on at the last full read: Claude Desktop's (its history's
+    /// newest sample) and Claude Code's (`oauthAccount`). The card follows the desktop's.
+    private var claudeUsageOrganizations = ClaudeUsageOrganizations()
     /// Chats that went red and then ended, kept on the list for a while (see
     /// `AgentTrafficLightMapper.retainEndedSessions`).
     private var endedRetention: [String: AgentTrafficLightMapper.RetainedEndedSession] = [:]
@@ -455,7 +458,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
         lastStatuslineReadAt = now
         lastStatuslineModifiedAt = statuslineModifiedAt
         let statusline = ClaudeUsageSnapshot.load(from: statuslineURL)
-        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop, now: now))
+        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop,
+                                    organizations: claudeUsageOrganizations, now: now))
+    }
+
+    private struct ClaudeUsageOrganizations {
+        var desktop: String?
+        var claudeCode: String?
     }
 
     private struct ClaudeUsageLoad {
@@ -463,11 +472,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
         let hint: ClaudeUsageSnapshot.Hint?
         let cache: ClaudeUsageSnapshot?
         let desktop: ClaudeUsageSnapshot?
+        let organizations: ClaudeUsageOrganizations
     }
 
     private func apply(_ load: ClaudeUsageLoad) {
         claudeUsageCache = load.cache
         claudeUsageDesktop = load.desktop
+        claudeUsageOrganizations = load.organizations
         if load.snapshot != claudeUsage { claudeUsage = load.snapshot }
         if load.hint != claudeUsageHint { claudeUsageHint = load.hint }
     }
@@ -487,13 +498,25 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // One read of ~/.claude.json for the cache and for what the desktop history needs from
         // it: this account's organization and the weekly reset anchor.
         let claude = ClaudeCachedUsage.read()
-        return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot,
-                                desktop: ClaudeDesktopUsageHistory.load(now: now, account: claude.context), now: now)
+        // Claude Code's organization as recorded at Kannu's own last fetch; `oauthAccount` only
+        // until there is one, because desktop-hosted sessions keep rewriting it.
+        var context = claude.context
+        context.organizationUUID = ClaudeCachedUsage.claudeCodeOrganization(
+            recordedAtFetch: Defaults[.claudeCodeUsageOrganization], inConfigNow: context.organizationUUID)
+        let desktop = ClaudeDesktopUsageHistory.read(now: now, account: context)
+        return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot, desktop: desktop.snapshot,
+                                organizations: .init(desktop: desktop.organizationUUID,
+                                                     claudeCode: context.organizationUUID),
+                                now: now)
     }
 
     private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
-                                         desktop: ClaudeUsageSnapshot?, now: Date) -> ClaudeUsageLoad {
-        let sources = [statusline, cache, desktop]
+                                         desktop: ClaudeUsageSnapshot?, organizations: ClaudeUsageOrganizations,
+                                         now: Date) -> ClaudeUsageLoad {
+        let card = ClaudeUsageSnapshot.cardSources(
+            statusline: statusline, cache: cache, desktop: desktop,
+            desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode)
+        let sources = card.sources
         // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
         // shouldRefresh keeps its cadence gate (a nil snapshot re-reads on every rescan tick).
         let snapshot = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
@@ -501,9 +524,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
             hooksInstalled: AgentHookInstaller.shared.isInstalled(.claude),
             statusline: statusline,
             cache: cache,
+            claudeCodeOnAnotherOrganization: card.claudeCodeOnAnotherOrganization,
             now: now
         )
-        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop)
+        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop,
+                               organizations: organizations)
     }
 
     /// Re-reads the usage sources immediately, bypassing the cadence gate. For the manual button,
@@ -558,7 +583,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // Task would pin a cooperative-pool thread for up to the sign-in's five minutes.
         DispatchQueue.global(qos: .userInitiated).async {
             let started = Date()
-            let status = ClaudeUsageRefresh.run(binary: binary, allowSignIn: allowSignIn) {
+            let outcome = ClaudeUsageRefresh.run(binary: binary, allowSignIn: allowSignIn) {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { self.claudeRefreshStatus = .signingIn }
                 }
@@ -573,11 +598,15 @@ final class CursorAgentStatusMonitor: ObservableObject {
                     if remembered != Defaults[.claudeUsageProbeConversationIDs] {
                         Defaults[.claudeUsageProbeConversationIDs] = remembered
                     }
+                    if let organization = outcome.fetchedOrganization,
+                       organization != Defaults[.claudeCodeUsageOrganization] {
+                        Defaults[.claudeCodeUsageOrganization] = organization
+                    }
                     // Order matters: refresh the cache first, then re-run the providers so the
                     // card renders the new numbers. Doing this at press time would race the fetch.
                     self.reloadClaudeUsageNow()
                     LLMUsageManager.shared.refreshAll(force: true)
-                    self.claudeRefreshStatus = status
+                    self.claudeRefreshStatus = outcome.status
                     self.isRefreshingClaudeUsage = false
                 }
             }
@@ -586,10 +615,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
     /// The card's poll calls this while the Usage tab is on screen. It fetches only when Claude
     /// Code's cache is older than `ClaudeUsageSnapshot.autoFetchInterval` and no fetch ran in that
-    /// long, never starts a sign-in, and stands down while the last refresh is waiting on the user.
+    /// long, never starts a sign-in, and stands down while the last refresh is waiting on the user
+    /// or while Claude Code is on another organization than the card's.
     func refreshClaudeUsageIfStale(now: Date = Date()) {
         guard !isRefreshingClaudeUsage,
               claudeRefreshStatus?.holdsAutomaticRefresh != true,
+              // Claude Code is on another organization: what it would fetch is not on the card.
+              claudeUsageHint != .otherOrganization,
               ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
                                                   lastFetch: lastClaudeUsageFetchAt) else { return }
         refreshClaudeUsageFromCLI(allowSignIn: false)

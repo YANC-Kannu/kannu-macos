@@ -1238,6 +1238,11 @@ extension Defaults.Keys {
     /// Conversation ids of Kannu's own `/usage` probe sessions, so they never show as chats —
     /// persisted because the probe's dead session file outlives the process that spawned it.
     static let claudeUsageProbeConversationIDs = Key<[String]>("claudeUsageProbeConversationIDs", default: [])
+    /// The organization Claude Code's own sign-in fetched usage for, read right after Kannu's last
+    /// successful `/usage` fetch. `oauthAccount` in `~/.claude.json` cannot say it: every Claude
+    /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
+    /// and Claude Code's own sign-in with its token's, so it flips between them.
+    static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
 
     // MARK: Security findings (connection to a separately installed ADR — github.com/uber/ADR)
     /// Extra directory searched for the `adr-discovery` / `adr-sensor` executables, before the

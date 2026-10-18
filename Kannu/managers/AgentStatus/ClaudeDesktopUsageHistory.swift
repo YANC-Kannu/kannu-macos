@@ -46,9 +46,29 @@ enum ClaudeDesktopUsageHistory {
 
     static func load(from url: URL = defaultURL, now: Date = Date(),
                      account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
+        read(from: url, now: now, account: account).snapshot
+    }
+
+    /// The snapshot, and the organization the desktop app records usage for even when none of
+    /// its windows is current any more — the card follows that organization either way.
+    static func read(from url: URL = defaultURL, now: Date = Date(),
+                     account: ClaudeCachedUsage.AccountContext = .init())
+        -> (snapshot: ClaudeUsageSnapshot?, organizationUUID: String?) {
         guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return parse(json: json, now: now, account: account)
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, nil) }
+        return (parse(json: json, now: now, account: account), organization(json: json))
+    }
+
+    /// The organization of the newest sample that names one: the one the desktop app is on now.
+    static func organization(json: [String: Any]) -> String? {
+        guard let rawSamples = json["samples"] as? [[String: Any]] else { return nil }
+        return rawSamples
+            .compactMap { sample -> (tMs: Double, org: String)? in
+                guard let tMs = (sample["t"] as? NSNumber)?.doubleValue,
+                      let org = sample["org"] as? String, !org.isEmpty else { return nil }
+                return (tMs, org)
+            }
+            .max { $0.tMs < $1.tMs }?.org
     }
 
     private struct Sample {
@@ -68,9 +88,10 @@ enum ClaudeDesktopUsageHistory {
     ///   reset cannot be recovered from samples. No countdown, and the bar is dropped once the
     ///   sample is older than the window itself.
     /// - **Weekly**: the window resets on a fixed weekly anchor, taken from Claude Code's cached
-    ///   reset when there is one, however old (`ClaudeCachedUsage.AccountContext`). The reset
-    ///   after the sample is exact; once it has passed, the bar is dropped. Without an anchor the
-    ///   last rollover seen in the samples stands in for it, as before.
+    ///   reset when there is one, however old — but only when Claude Code is on the same
+    ///   organization, since each organization has its own anchor (`ClaudeCachedUsage.AccountContext`).
+    ///   The reset after the sample is exact; once it has passed, the bar is dropped. Without an
+    ///   anchor the last rollover seen in the samples stands in for it, as before.
     /// - **Anything else**: kept for at most a week after the sample, with no countdown.
     static func parse(json: [String: Any], now: Date = Date(),
                       account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
@@ -84,12 +105,14 @@ enum ClaudeDesktopUsageHistory {
             return Sample(tMs: tMs, org: org, usage: usage)
         }.sorted { $0.tMs < $1.tMs }
 
-        // One organization's usage only: a second account once signed in to the desktop app is
-        // someone else's numbers. The account Claude Code is signed in with wins; failing that,
-        // the organization of the newest sample that names one.
-        let organization = account.organizationUUID.flatMap { id in all.contains { $0.org == id } ? id : nil }
-            ?? all.last(where: { $0.org != nil })?.org
+        // One organization's usage only: the one the desktop app is on now, its newest sample's.
+        // Samples from another organization (a second plan, or another account once signed in)
+        // are other limits entirely.
+        let organization = all.last(where: { $0.org != nil })?.org
         let samples = organization.map { id in all.filter { $0.org == id } } ?? all
+        // Another organization's weekly reset says nothing about this one's.
+        let anchor = account.organizationUUID == nil || organization == nil || account.organizationUUID == organization
+            ? account.weeklyResetAnchor : nil
 
         guard let newest = samples.last else { return nil }
         let observedAt = Date(timeIntervalSince1970: newest.tMs / 1000)
@@ -106,7 +129,7 @@ enum ClaudeDesktopUsageHistory {
                 guard age < week else { return nil }
                 return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
             }
-            let reset = account.weeklyResetAnchor.map { weeklyReset(after: observedAt, anchor: $0) }
+            let reset = anchor.map { weeklyReset(after: observedAt, anchor: $0) }
                 ?? lastRollover(for: code, in: samples).map { $0.addingTimeInterval(week) }
             if let reset {
                 guard reset > now else { return nil }
@@ -118,7 +141,7 @@ enum ClaudeDesktopUsageHistory {
         }
         guard !windows.isEmpty else { return nil }
 
-        return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
+        return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt, organizationUUID: organization)
     }
 
     /// The first weekly reset strictly after `date`, stepping from `anchor` in whole weeks in

@@ -177,4 +177,10 @@ final class ClaudeCachedUsageTests: XCTestCase {
     func testNoAccountNoContext() {
         XCTAssertEqual(ClaudeCachedUsage.accountContext(json: [:]), .init())
     }
+
+    func testTheOrganizationRecordedAtFetchBeatsTheFlippingConfig() {
+        XCTAssertEqual(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: "team", inConfigNow: "max"), "team")
+        XCTAssertEqual(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: "max"), "max")
+        XCTAssertNil(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: nil))
+    }
 }

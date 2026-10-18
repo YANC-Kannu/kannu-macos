@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The Claude card follows the organization Claude Desktop is on
+- **Developer label:** "Desktop's org (Max)" — the answer to which organization the Claude card should follow when Claude Code and Claude Desktop are on different ones
+- **Agent label:** Follow-up 64, organization rule — one organization per card, recorded at fetch
+- **Changes:**
+  - One person can belong to several organizations, each with its own limits and weekly reset.
+    Measured on this Mac: Claude Desktop records usage for a Max plan (weekly reset Wednesday
+    00:00Z), while Claude Code's own sign-in is bound to a Team plan of the same person (Monday
+    05:00Z). The card merged them, so a fresh Team "0 %" replaced Max's 43 %.
+  - The card now follows the organization of the desktop history's newest sample — what
+    desktop-hosted agents spend. Claude Code's statusline and cache join only when Claude Code is
+    on that same organization; otherwise they are left out whole, the plan badge (Claude Code's
+    plan) is hidden, the card says Claude Code is signed in to another organization and offers
+    **Sign in in Terminal**, and the automatic refresh stands down, since what it would fetch is
+    not on the card. Another organization's weekly reset is never used to date this one's week.
+  - Which organization Claude Code is on is recorded by Kannu straight after its own fetch.
+    `oauthAccount` in `~/.claude.json` cannot be trusted for it: measured, it read Max before a
+    `claude -p "/usage"`, Team right after it and 90 seconds later, and had read Max again earlier
+    after a desktop-hosted session ran. New `Defaults` key `claudeCodeUsageOrganization`.
+  - Tests: one organization per card, merging as before for one or an unknown organization, the
+    hint, the newest-sample organization, the organization known with no current window, another
+    organization's anchor not applied, and the recorded organization winning over the file.
+  - The desktop-history tests spell their sample offsets as `Double` literals: Swift 6.1 (CI's
+    macos-15 image) cannot convert an integer tuple literal to `(mins: Double, fh: Double?, sd:
+    Double?)`, which failed PR #96's macos-15 build while Xcode's newer compiler accepted it.
+
 ### 2026-10-18 - The Claude card's Refresh fetches again, and signs Claude Code in when it has to
 - **Developer label:** "I think the usage tab is broken for claude or is not upto date , check what can be done and if any newer easier way to get usage stat has come up" — then "cant we trigger that / login command also in refresh button so user can get that prompt to enter rest of details easily"
 - **Agent label:** Follow-up 64 — `claude -p "/usage"` probe, sign-in from Refresh, an honest Claude card
