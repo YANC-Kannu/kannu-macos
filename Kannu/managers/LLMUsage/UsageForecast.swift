@@ -56,7 +56,9 @@ struct UsageWindowReading: Equatable {
         return snapshot.displayWindows(now: now).map { window in
             UsageWindowReading(provider: "claude", key: window.key, label: claudeLabel(window),
                                percent: window.percent, resetsAt: window.resetsAt, severity: window.severity,
-                               observedAt: snapshot.observedAt)
+                               // The window's own reading time: a merged snapshot's `observedAt`
+                               // is its newest source's, which would date an old weekly sample now.
+                               observedAt: window.observedAt ?? snapshot.observedAt)
         }
     }
 

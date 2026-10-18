@@ -4,6 +4,7 @@ import CoreServices
 import Darwin
 import Defaults
 import Foundation
+import os
 
 /// The closed notch's narrow window onto the monitor: the traffic-light verdict and the reveal
 /// pulse, nothing else. `ContentView` observes THIS, never the monitor itself — the monitor
@@ -483,8 +484,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
             .appendingPathComponent(AgentHookInstaller.usageFileName)
         // All three are local reads on a 600 s cadence, so reading every one is cheap.
         let statusline = ClaudeUsageSnapshot.load(from: url)
-        return mergeClaudeUsage(statusline: statusline, cache: ClaudeCachedUsage.load(),
-                                desktop: ClaudeDesktopUsageHistory.load(now: now), now: now)
+        // One read of ~/.claude.json for the cache and for what the desktop history needs from
+        // it: this account's organization and the weekly reset anchor.
+        let claude = ClaudeCachedUsage.read()
+        return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot,
+                                desktop: ClaudeDesktopUsageHistory.load(now: now, account: claude.context), now: now)
     }
 
     private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
@@ -511,157 +515,111 @@ final class CursorAgentStatusMonitor: ObservableObject {
         apply(Self.loadClaudeUsageSnapshot(now: now))
     }
 
-    /// Triggers Claude Code's own usage fetch, which writes `cachedUsageUtilization` to
-    /// `~/.claude.json` — the only local source for the per-model (e.g. Fable) weekly window.
-    ///
-    /// Runs the installed CLI under a pseudo-terminal issuing `/usage`, because that slash command
-    /// only runs in an interactive session (headless `-p` treats it as prompt text). The spawn uses
-    /// the credential Claude already stored in the keychain: silent after a one-time "Always Allow",
-    /// and it reads only limit metadata — no message, no tokens, no cost. Kannu never sees the
-    /// credential; it only re-reads the file the CLI writes.
-    /// True while a user-triggered usage fetch is running; drives the button's spinner and stops
-    /// a second press from spawning a concurrent process.
+    /// True while a refresh (and any sign-in it started) is running; drives the button's spinner
+    /// and stops a second press from spawning a concurrent process.
     @Published private(set) var isRefreshingClaudeUsage = false
 
-    /// Runs Claude Code's own `/usage`, the only thing that refreshes the per-model (Fable) weekly
-    /// window, then reloads the display from what it wrote.
+    /// What the last refresh needs the user to know, when anything. The card renders it.
+    @Published private(set) var claudeRefreshStatus: ClaudeRefreshStatus?
+
+    /// The binary the last refresh resolved, for the Terminal fallback.
+    private var lastClaudeBinary: URL?
+    /// When the last refresh started, for the automatic cadence.
+    private var lastClaudeUsageFetchAt: Date?
+
+    /// Refreshes the Claude limits with Claude Code's own `/usage`, then reloads the card from
+    /// what it wrote to `~/.claude.json` — the only local source with exact resets and the
+    /// per-model (e.g. Fable) weekly window.
     ///
-    /// `/usage` is declared `requires: {ink}`, so it only runs in an interactive session — headless
-    /// `--print` treats it as prompt text. An interactive session normally registers itself as a
-    /// remote-control device (which showed up as a phantom chat and a new-device sign-in warning),
-    /// so the spawn disables that explicitly and persists no session.
+    /// `claude -p "/usage"` runs it without a model turn (see `ClaudeUsageFetchCommand.printProbe`).
+    /// A clean run with no plan rows means Claude Code is not signed in to claude.ai, or its
+    /// sign-in lacks the `user:profile` scope the fetch needs. On a press — never on the automatic
+    /// refresh — Kannu then starts Claude Code's own sign-in, which opens claude.ai in the browser,
+    /// and fetches again once it finishes. Only when `claude auth status` says Claude Code is
+    /// signed out or on claude.ai already: an API key or cloud provider is never switched over.
+    /// Kannu never reads the sign-in; Claude Code keeps it in the keychain.
     ///
-    /// The spawn inherits no `CLAUDE_CODE_OAUTH_*` variables, so the CLI uses its keychain sign-in.
-    /// That sign-in must carry the `user:profile` scope or the CLI's fetch returns nothing and the
-    /// cache stays as it was; `claudeUsageHint` tells the user when that is the case.
-    func refreshClaudeUsageFromCLI() {
+    /// The interactive pty spawn below stays as the fallback for a probe that fails outright.
+    func refreshClaudeUsageFromCLI(allowSignIn: Bool = true) {
         guard !isRefreshingClaudeUsage else { return }
-        guard let binary = Self.resolveClaudeBinary() else {
+        guard let binary = ClaudeCodeBinary.resolve() else {
+            ClaudeUsageRefresh.log.info("Usage refresh: no Claude Code binary found")
+            claudeRefreshStatus = .notInstalled
             reloadClaudeUsageNow()
             return
         }
+        lastClaudeBinary = binary.url
+        lastClaudeUsageFetchAt = Date()
+        claudeRefreshStatus = nil
         isRefreshingClaudeUsage = true
+        let statusDirectory = AgentHookInstaller.statusDirectory
 
-        // A GCD worker, not a Task: runUsageFetch is up to ~55 s of Thread.sleep, and a
-        // detached Task would pin one cooperative-pool thread (sized to core count) for the
-        // whole fetch, starving every other Task in the process on a small machine.
+        // A GCD worker, not a Task: every step blocks (process waits, sleeps), and a detached
+        // Task would pin a cooperative-pool thread for up to the sign-in's five minutes.
         DispatchQueue.global(qos: .userInitiated).async {
-            Self.runUsageFetch(binary: binary)
+            let started = Date()
+            let status = ClaudeUsageRefresh.run(binary: binary, allowSignIn: allowSignIn) {
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self.claudeRefreshStatus = .signingIn }
+                }
+            }
+            let probeIDs = ClaudeUsageRefresh.probeHookConversationIDs(in: statusDirectory, since: started)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    var remembered = Defaults[.claudeUsageProbeConversationIDs]
+                    for id in probeIDs {
+                        remembered = AgentTrafficLightMapper.rememberingProbeConversationID(id, in: remembered)
+                    }
+                    if remembered != Defaults[.claudeUsageProbeConversationIDs] {
+                        Defaults[.claudeUsageProbeConversationIDs] = remembered
+                    }
                     // Order matters: refresh the cache first, then re-run the providers so the
                     // card renders the new numbers. Doing this at press time would race the fetch.
                     self.reloadClaudeUsageNow()
                     LLMUsageManager.shared.refreshAll(force: true)
+                    self.claudeRefreshStatus = status
                     self.isRefreshingClaudeUsage = false
                 }
             }
         }
     }
 
-    /// Newest installed Claude Code binary, so this keeps working across version bumps.
-    private nonisolated static func resolveClaudeBinary() -> URL? {
-        let base = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Claude/claude-code")
-        guard let versions = try? FileManager.default.contentsOfDirectory(
-            at: base, includingPropertiesForKeys: nil) else { return nil }
-        return versions
-            .map { $0.appendingPathComponent("claude.app/Contents/MacOS/claude") }
-            .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
-            .sorted { $0.path.compare($1.path, options: .numeric) == .orderedAscending }
-            .last
+    /// The card's poll calls this while the Usage tab is on screen. It fetches only when Claude
+    /// Code's cache is older than `ClaudeUsageSnapshot.autoFetchInterval` and no fetch ran in that
+    /// long, never starts a sign-in, and stands down while the last refresh is waiting on the user.
+    func refreshClaudeUsageIfStale(now: Date = Date()) {
+        guard !isRefreshingClaudeUsage,
+              claudeRefreshStatus?.holdsAutomaticRefresh != true,
+              ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
+                                                  lastFetch: lastClaudeUsageFetchAt) else { return }
+        refreshClaudeUsageFromCLI(allowSignIn: false)
     }
 
-    private nonisolated static func runUsageFetch(binary: URL) {
-        // Two attempts. The first suppresses the remote-control device registration (the phantom
-        // chat); if that flag turns out to be rejected or ineffective and no fetch lands, fall back
-        // to the bare invocation, which is proven to fetch. Better a working refresh than a clean
-        // one that does nothing.
-        for arguments in ClaudeUsageFetchCommand.attempts {
-            guard ClaudeUsageFetchCommand.isValidForInteractiveSession(arguments: arguments) else { continue }
-            if attemptUsageFetch(binary: binary, arguments: arguments) { return }
-        }
+    /// Stops a sign-in that is waiting on the browser. The refresh then ends as `.signInNeeded`.
+    func cancelClaudeSignIn() {
+        ClaudeUsageRefresh.cancelSignIn()
     }
 
-    /// One `/usage` run. Returns true when the on-disk fetch stamp advanced, i.e. it worked.
-    private nonisolated static func attemptUsageFetch(binary: URL, arguments: [String]) -> Bool {
-        let configURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude.json")
-        func fetchedAtMs() -> Double? {
-            guard let data = try? Data(contentsOf: configURL),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let cache = json["cachedUsageUtilization"] as? [String: Any] else { return nil }
-            return (cache["fetchedAtMs"] as? NSNumber)?.doubleValue
+    /// Opens Terminal running Claude Code's sign-in, for the case the browser route cannot finish
+    /// (a code to paste, a browser that never opened). A `.command` file opened with `open` needs
+    /// no Automation permission. The card's next Refresh picks the result up.
+    func openClaudeSignInInTerminal() {
+        guard let binary = lastClaudeBinary ?? ClaudeCodeBinary.resolve()?.url else {
+            claudeRefreshStatus = .notInstalled
+            return
         }
-        let before = fetchedAtMs()
-
-        let process = Process()
-        process.executableURL = binary
-        process.arguments = arguments
-        process.environment = ClaudeUsageFetchCommand.environment()
-        // Deliberately NOT setting `process.environment`: plain inheritance, exactly as the
-        // version that was proven to fetch. Setting CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC here
-        // suppressed nonessential network traffic — which is what the usage fetch is — so the
-        // session started, `/usage` ran, and nothing was ever fetched.
-
-        // A pty is required: `/usage` is declared `requires: {ink}` and only runs interactively.
-        var master: Int32 = 0, slave: Int32 = 0
-        guard openpty(&master, &slave, nil, nil, nil) == 0 else { return false }
-        let masterHandle = FileHandle(fileDescriptor: master, closeOnDealloc: true)
-        let slaveHandle = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
-        process.standardInput = slaveHandle
-        process.standardOutput = slaveHandle
-        process.standardError = slaveHandle
-        // Drain the pty so the child never blocks on a full buffer; the output itself is unused.
-        masterHandle.readabilityHandler = { _ = $0.availableData }
-
-        do { try process.run() } catch {
-            // Reachable: Claude Code self-updates by reaping old version directories, so the
-            // binary resolved a moment ago can be gone. Every other exit path clears the
-            // handler before the handle is dropped — an armed readability source on a
-            // closing descriptor is FileHandle's documented crash — so this one must too.
-            masterHandle.readabilityHandler = nil
-            try? masterHandle.close()
-            try? slaveHandle.close()
-            return false
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Kannu", isDirectory: true)
+        let script = directory.appendingPathComponent("claude-sign-in.command")
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try ClaudeUsageFetchCommand.terminalSignInScript(binary: binary)
+                .write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        } catch {
+            ClaudeUsageRefresh.log.error("Usage refresh: could not write the Terminal sign-in script")
+            return
         }
-
-        // Give the TUI time to come up before typing, then issue the command.
-        Thread.sleep(forTimeInterval: 3)
-        if !process.isRunning {
-            // Rejected argument or instant exit — nothing was typed, so report failure and let the
-            // caller try the next invocation.
-            masterHandle.readabilityHandler = nil
-            try? masterHandle.close()
-            return false
-        }
-        masterHandle.write(Data("/usage\r".utf8))
-
-        var fetched = false
-        let deadline = Date().addingTimeInterval(20)
-        while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.25)
-            if let now = fetchedAtMs(), now != before { fetched = true; break }
-            if !process.isRunning { break }
-        }
-
-        if process.isRunning && fetched {
-            masterHandle.write(Data("/exit\r".utf8))
-            let quitDeadline = Date().addingTimeInterval(2)
-            while process.isRunning && Date() < quitDeadline { Thread.sleep(forTimeInterval: 0.1) }
-        }
-        if process.isRunning {
-            // terminate() only signals and the TUI can trap SIGTERM; escalate so waitUntilExit()
-            // can never block this task and strand the spinner.
-            process.terminate()
-            let killDeadline = Date().addingTimeInterval(2)
-            while process.isRunning && Date() < killDeadline { Thread.sleep(forTimeInterval: 0.1) }
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            process.waitUntilExit()
-        }
-        masterHandle.readabilityHandler = nil
-        try? masterHandle.close()
-        return fetched
+        NSWorkspace.shared.open(script)
     }
 
     /// Keeps a still-running agent visible to time-boxed consumers.

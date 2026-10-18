@@ -4,6 +4,54 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The Claude card's Refresh fetches again, and signs Claude Code in when it has to
+- **Developer label:** "I think the usage tab is broken for claude or is not upto date , check what can be done and if any newer easier way to get usage stat has come up" — then "cant we trigger that / login command also in refresh button so user can get that prompt to enter rest of details easily"
+- **Agent label:** Follow-up 64 — `claude -p "/usage"` probe, sign-in from Refresh, an honest Claude card
+- **Changes:**
+  - Refresh had run nothing since 2026-10-02: Claude Desktop moved its bundled CLI to
+    `claude-code/<version>/<build>/claude.app`, the lookup expected `<version>/claude.app`, found no
+    binary and silently re-read disk. `ClaudeCodeBinary` reads both layouts and `~/.local/bin/claude`
+    and takes the highest version (the terminal copy only updates when `claude` runs). The Homebrew
+    npm shim is not a candidate.
+  - Refresh now runs `claude -p "/usage"`, the non-interactive form of `/usage`: no model turn, no
+    pty, nothing typed, and it writes the same `cachedUsageUtilization` the card reads. The
+    interactive pty spawn stays as the fallback when the probe fails outright, with its guards.
+  - When the probe runs cleanly but prints no plan rows, Claude Code is not signed in to claude.ai
+    (or its sign-in lacks the `user:profile` scope). On a press Kannu then starts Claude Code's own
+    `claude auth login --claudeai`: the browser opens claude.ai, the card says "Finish signing in in
+    your browser…" with Cancel, and Kannu fetches again when it finishes — no second click. Only
+    when `claude auth status` says signed out or claude.ai; an API key, key helper, cloud provider or
+    gateway is never switched over. If the browser route cannot finish, **Sign in in Terminal**
+    opens a `.command` file that runs the same sign-in where its prompt is visible. Kannu never reads
+    or stores the sign-in.
+  - Measured on this Mac with the shipped code in a harness: signed out, the probe exits 0 in 1 s with
+    only the cost summary; sign-in took 49 s including the browser; the fetch after it advanced
+    `fetchedAtMs` from 2 September to now. A rerun inside Claude Code's 60 s write throttle prints
+    plan rows without advancing the stamp and counts as fetched.
+  - The spawn drops every `CLAUDE*` and `ANTHROPIC*` variable it inherits, and adds none. A normal
+    launch has none (plain inheritance, as before); from inside an agent session the inherited
+    desktop-host proxy made the probe fetch on the host session's credentials instead of Claude
+    Code's own — measured with and without them. REGRESSIONS entry 8 has the addendum.
+  - While the Usage tab is on screen, Kannu runs the probe itself when Claude Code's cache is older
+    than 15 minutes and no fetch ran in 15 minutes. It never starts a sign-in, and stands down while
+    the last Refresh is waiting on the user.
+  - The desktop history no longer shows numbers it cannot vouch for: a 5-hour value older than five
+    hours is dropped instead of reading as a live 0 %, and the inferred 5-hour countdown is gone (that
+    window has no fixed grid). The weekly reset comes from Claude Code's cached weekly reset projected
+    in whole weeks, however old, instead of a guess from sampling gaps; a week that ended since the
+    sample is dropped. Only one organization's samples are read: the signed-in account's, else the
+    newest sample's.
+  - Each Claude window keeps its own reading time through the merge. A section whose oldest reading
+    is over ten minutes old says "updated 3h ago" and dims its bars; the forecast uses the real time.
+  - The sign-in line under the bars no longer says "Limits unavailable" or points at Terminal: it
+    says Refresh will fetch them, and the Refresh outcomes have one line each.
+  - Every refresh step is logged under `com.kannu.app` / `ClaudeUsage`: step, Claude Code version,
+    outcome, seconds. Never the output (plan figures, account name) or a path.
+  - Tests: probe classification, plan-row detection, the sign-in decision, `auth status` parsing,
+    the Terminal script's quoting, the environment scrub, binary layouts and version order, the
+    5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
+    organization filter, per-window reading times and the automatic-fetch cadence.
+
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
 - **Agent label:** Settings Quit row + search entry, pinned by the highlight inventory

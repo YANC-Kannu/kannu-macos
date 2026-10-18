@@ -418,6 +418,43 @@ environment whitelist as data, `ADRDetectionCommandTests` pins both, and the emb
 tested identical to `scripts/adr-analyze-session.py`. Permission and tool flags never pass
 through Kannu — the adapter alone decides how upstream runs its Claude session.
 
+**2026-10-18 addendum — a third silent failure, and the print probe.** From 2026-10-02 Refresh ran
+nothing at all: Claude Desktop moved its bundled CLI from `claude-code/<version>/claude.app` to
+`claude-code/<version>/<build>/claude.app`, `resolveClaudeBinary` found no binary, and the button
+quietly re-read disk. Same signature as the first two — no error, a spinner, an unmoved
+`fetchedAtMs` — and nothing logged that it had happened. `ClaudeCodeBinary` now reads both layouts
+and `~/.local/bin/claude`, picks the highest version, and every refresh step is logged (category
+`ClaudeUsage`: step, Claude Code version, outcome, seconds — never the output or a path), so the
+next move shows up in `/usr/bin/log`.
+
+The refresh now runs `claude -p "/usage"` (`ClaudeUsageFetchCommand.printProbe`), which needs no
+pty and no typed keystrokes; the interactive spawn stays as its fallback, with its guards
+unchanged. Measured on this Mac, from a launchd-like clean environment (`env -i` with HOME, USER,
+PATH): the probe exits 0 in 1 s and, signed out, prints only the cost summary — no plan rows, no
+`fetchedAtMs` advance — while `claude auth status` reports `loggedIn: false`. That case now starts
+Claude Code's own `auth login --claudeai` on a press, and only when `auth status` says signed out
+or claude.ai, so an API-key or cloud-provider setup is never switched. **Guard:**
+`ClaudeUsageFetchCommandTests` pins the probe and sign-in arguments, the classifier, the sign-in
+decision and the binary layouts; `ClaudeUsageRefresh` is Foundation-only so a harness can run the
+shipped code against the real CLI, which is how the measurements here were taken.
+
+**Inherited variables decide whose sign-in is used.** Run from inside a Claude Desktop agent
+session, the probe inherits that session's `ANTHROPIC_BASE_URL` (the desktop host's proxy) and its
+`CLAUDE_CODE_ACCOUNT_UUID` / `CLAUDE_CODE_ORGANIZATION_UUID`. Measured 2026-10-18 from such a
+process: with them the probe fetched; with them removed the same process found no sign-in of its
+own and fetched nothing. So the inherited proxy quietly substitutes the host session's credentials
+for Claude Code's, and the fetch writes whatever account that is into `~/.claude.json`. A Kannu
+launched normally has none of these names; one started from an agent does. So
+`ClaudeUsageFetchCommand.environment(inheriting:)` drops the `CLAUDE*` and `ANTHROPIC*`
+namespaces, and returns nil (plain inheritance) when there is nothing to drop. It only ever
+removes; adding is still regression 2. Pinned by `testEnvironmentIsPlainInheritanceForANormalLaunch`
+and `testAnAgentSessionsVariablesAreRemovedAndNothingIsAdded`.
+
+Also measured, so nobody leans on it: `claude auth status` printed `loggedIn: false` in the same
+clean environment where `claude -p "/usage"` fetched plan rows. Refresh consults it only after a
+probe finds no plan data, to tell an API-key or cloud-provider setup (never switched) from a
+missing claude.ai sign-in — never to decide that a fetch failed.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -1000,7 +1037,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
-| `CursorAgentStatusMonitor.swift` (usage spawn) | — | The `/usage` fetch invocation. Two silent breakages in one day from added flags/env (entry 8). |
+| `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
 | `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |

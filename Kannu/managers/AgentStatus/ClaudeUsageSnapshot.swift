@@ -34,6 +34,10 @@ struct ClaudeUsageSnapshot: Equatable {
         /// reset and infers one from the last rollover it saw. `merged` never lets such a reset
         /// displace an exact one for the same key, whatever their ages.
         var resetIsInferred: Bool = false
+        /// When this window's value was read, where it differs from the snapshot's: `merged`
+        /// takes each key from a different source, and a weekly percent from days ago must not
+        /// borrow the age of a five-hour value from a minute ago. Nil means `observedAt`.
+        var observedAt: Date? = nil
     }
 
     let windows: [Window]
@@ -48,9 +52,10 @@ struct ClaudeUsageSnapshot: Equatable {
 
     /// How often the usage sources are re-read while an agent is on screen.
     ///
-    /// Both update on their own slow cadence — the statusline hook only when a session makes an
-    /// API call, the desktop history every few minutes — so reading faster than this re-parses
-    /// identical bytes. The monitor's rescan runs every second, which is why the gate exists.
+    /// Each updates on its own slow cadence — the statusline hook only when a session makes an
+    /// API call, Claude Code's cache only on a usage fetch, the desktop history only while its
+    /// menu-bar panel is in use — so reading faster than this re-parses identical bytes. The
+    /// monitor's rescan runs every second, which is why the gate exists.
     static let refreshInterval: TimeInterval = 600
 
     /// Whether the caller should re-read its usage sources now.
@@ -79,6 +84,17 @@ struct ClaudeUsageSnapshot: Equatable {
         guard let modifiedAt, modifiedAt != lastSeenModifiedAt else { return false }
         guard let lastRead else { return true }
         return now.timeIntervalSince(lastRead) >= statuslineReadInterval
+    }
+
+    /// How old Claude Code's cached usage may get, while the Usage tab is on screen, before Kannu
+    /// runs `/usage` for it — and how long it then waits before trying again. Nothing else
+    /// refreshes that cache for someone who uses Claude only in the desktop app.
+    static let autoFetchInterval: TimeInterval = 900
+
+    static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?) -> Bool {
+        if let lastFetch, now.timeIntervalSince(lastFetch) < autoFetchInterval { return false }
+        guard let cacheObservedAt else { return true }
+        return now.timeIntervalSince(cacheObservedAt) >= autoFetchInterval
     }
 
     enum Freshness: Equatable {
@@ -151,7 +167,8 @@ struct ClaudeUsageSnapshot: Equatable {
     /// gives it precedence, so a stale "normal" would suppress the red band on a fresher value.
     /// Output order follows the winning sources in rank order, then each source's own order, so
     /// the gauges do not reshuffle between reads. `observedAt` is the newest among the sources
-    /// that contributed a window.
+    /// that contributed a window; each window also keeps its own source's time, so an old
+    /// reading still shows its age next to a fresh one.
     ///
     /// One exception to "the winning window is taken whole": an *inferred* reset never beats an
     /// exact one. The desktop history derives its reset from the last rollover it happened to
@@ -184,12 +201,13 @@ struct ClaudeUsageSnapshot: Equatable {
         var observedAt: Date?
         for (index, source) in present.enumerated() {
             for window in source.displayWindows(now: now) where winnerIndex[window.key] == index {
-                if window.resetIsInferred, let exact = exactResets[window.key] {
-                    windows.append(Window(key: window.key, percent: window.percent, resetsAt: exact,
-                                          label: window.label, severity: window.severity, resetIsInferred: false))
-                } else {
-                    windows.append(window)
+                var taken = window
+                if taken.resetIsInferred, let exact = exactResets[taken.key] {
+                    taken = Window(key: taken.key, percent: taken.percent, resetsAt: exact,
+                                   label: taken.label, severity: taken.severity, resetIsInferred: false)
                 }
+                taken.observedAt = window.observedAt ?? source.observedAt
+                windows.append(taken)
                 observedAt = max(observedAt ?? source.observedAt, source.observedAt)
             }
         }
@@ -199,12 +217,13 @@ struct ClaudeUsageSnapshot: Equatable {
 
     /// Why the card may be showing less than it should.
     enum Hint: Equatable {
-        /// Claude hooks are installed, so the CLI is in use, yet neither server-backed source
-        /// (statusline file, Claude Code's usage cache) has a live window. The CLI's usage fetch
-        /// returns nothing when its keychain sign-in lacks the `user:profile` scope, and the same
-        /// gate leaves the statusline's `rate_limits` null — one `/login` from a Terminal `claude`
-        /// fixes both. Sessions inside the desktop app run on a host token without that scope,
-        /// so `/login` there does not help.
+        /// Claude hooks are installed, so Claude Code is in use, yet neither server-backed source
+        /// (statusline file, Claude Code's usage cache) has a live window. Claude Code's usage
+        /// fetch returns nothing when its sign-in lacks the `user:profile` scope, and the same
+        /// gate leaves the statusline's `rate_limits` null. Refresh fixes both: it runs `/usage`
+        /// and, when that finds no plan data, starts Claude Code's own claude.ai sign-in.
+        /// Sessions inside the desktop app run on a host token without that scope, which is why
+        /// those sessions alone never fill the cache.
         case signInNeeded
     }
 

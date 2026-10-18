@@ -42,9 +42,43 @@ enum ClaudeCachedUsage {
     }
 
     static func load(from url: URL = defaultURL) -> ClaudeUsageSnapshot? {
+        read(from: url).snapshot
+    }
+
+    /// What the desktop history needs from this file to be read honestly: which organization's
+    /// samples are this account's, and where the weekly window resets. The cache's own weekly
+    /// reset stays useful long after its percentages have lapsed — the window resets on a fixed
+    /// weekly anchor, so a reset weeks old still says which hour of which weekday it falls on.
+    struct AccountContext: Equatable {
+        var organizationUUID: String?
+        var weeklyResetAnchor: Date?
+    }
+
+    /// One read of `~/.claude.json` for both the cached usage and the account context — the file
+    /// is large, and the usage cadence must not parse it twice.
+    static func read(from url: URL = defaultURL) -> (snapshot: ClaudeUsageSnapshot?, context: AccountContext) {
         guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return parse(json: json)
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, AccountContext())
+        }
+        return (parse(json: json), accountContext(json: json))
+    }
+
+    static func accountContext(json: [String: Any]) -> AccountContext {
+        let account = json["oauthAccount"] as? [String: Any]
+        let organization = (account?["organizationUuid"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        var anchor: Date?
+        if let cache = json["cachedUsageUtilization"] as? [String: Any],
+           let utilization = cache["utilization"] as? [String: Any],
+           let weekly = utilization["seven_day"] as? [String: Any] {
+            // Only this account's cache may set the anchor, as for the percentages.
+            let cached = cache["accountUuid"] as? String
+            let current = account?["accountUuid"] as? String
+            if cached == nil || current == nil || cached == current {
+                anchor = isoDate(weekly["resets_at"])
+            }
+        }
+        return AccountContext(organizationUUID: organization, weeklyResetAnchor: anchor)
     }
 
     static func parse(json: [String: Any]) -> ClaudeUsageSnapshot? {

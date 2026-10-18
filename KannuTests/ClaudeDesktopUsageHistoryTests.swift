@@ -6,11 +6,14 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
          "u": usage.mapValues { NSNumber(value: $0) }]
     }
 
+    /// A minute after the fixture samples below, so their windows are still current.
+    private let justAfter = Date(timeIntervalSince1970: 1_788_027_991.573 + 60)
+
     func testUsesNewestSampleRegardlessOfPosition() {
         let snapshot = ClaudeDesktopUsageHistory.parse(json: ["version": 2, "samples": [
             sample(t: 1_788_027_991_573, ["fh": 38, "sd": 61]),
             sample(t: 1_788_000_000_000, ["fh": 4, "sd": 12])
-        ]])
+        ]], now: justAfter)
         XCTAssertEqual(snapshot?.fiveHourPercent, 38)
         XCTAssertEqual(snapshot?.sevenDayPercent, 61)
         XCTAssertEqual(snapshot?.observedAt, Date(timeIntervalSince1970: 1_788_027_991.573))
@@ -19,7 +22,7 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
     func testMapsShortCodesToWindowKeysInDisplayOrder() {
         let snapshot = ClaudeDesktopUsageHistory.parse(json: ["samples": [
             sample(t: 1_788_027_991_573, ["sn": 10, "sd": 61, "so": 88, "fh": 38])
-        ]])
+        ]], now: justAfter)
         XCTAssertEqual(snapshot?.windows.map(\.key),
                        ["five_hour", "seven_day", "seven_day_opus", "seven_day_sonnet"])
     }
@@ -28,46 +31,59 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         // `xu` tracks extra-usage spend, not a rate limit; rendering it as a gauge would be a lie.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: ["samples": [
             sample(t: 1_788_027_991_573, ["fh": 38, "xu": 5])
-        ]])
+        ]], now: justAfter)
         XCTAssertEqual(snapshot?.windows.map(\.key), ["five_hour"])
     }
 
-    // MARK: - Reset times derived from rollovers
+    // MARK: - What a sample can still vouch for
 
-    /// Fixed clock so the future-only rule is deterministic: 2026-08-30 08:00 UTC.
+    /// Fixed clock so the age rules are deterministic: 2026-08-30 08:00 UTC.
     private let now = Date(timeIntervalSince1970: 1_788_076_800)
 
-    private func series(_ points: [(mins: Double, fh: Double?, sd: Double?)]) -> [String: Any] {
+    private func series(_ points: [(mins: Double, fh: Double?, sd: Double?)], org: String? = nil) -> [String: Any] {
         let base = 1_788_076_800_000.0
         return ["samples": points.map { p -> [String: Any] in
             var u: [String: Double] = [:]
             if let fh = p.fh { u["fh"] = fh }
             if let sd = p.sd { u["sd"] = sd }
-            return ["t": NSNumber(value: base + p.mins * 60_000),
-                    "u": u.mapValues { NSNumber(value: $0) }]
+            var entry: [String: Any] = ["t": NSNumber(value: base + p.mins * 60_000),
+                                        "u": u.mapValues { NSNumber(value: $0) }]
+            if let org { entry["org"] = org }
+            return entry
         }]
     }
 
-    func testFiveHourResetIsFiveHoursAfterTheRollover() {
-        // Drops 40 -> 7 at t-60min, so the running window ends 5h after that point.
+    func testFiveHourHasNoCountdown() {
+        // The 5-hour window starts with the first message after the last one ended, so a rollover
+        // in the samples says nothing about when the running window ends. Showing a countdown
+        // derived from it was a guess presented as a fact.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
             (-120, 30, 50), (-90, 40, 51), (-60, 7, 51), (-30, 9, 52)
         ]), now: now)
-        XCTAssertEqual(snapshot?.window("five_hour")?.resetsAt,
-                       now.addingTimeInterval(-60 * 60 + 5 * 3600))
+        XCTAssertEqual(snapshot?.window("five_hour")?.percent, 9)
+        XCTAssertNil(snapshot?.window("five_hour")?.resetsAt)
+        XCTAssertEqual(snapshot?.window("five_hour")?.resetIsInferred, false)
+    }
+
+    func testFiveHourSampleOlderThanTheWindowIsDropped() {
+        // A 10-hour-old "0 %" used to render as a live reading. Older than the window itself, the
+        // sample cannot say anything about the window running now.
+        let stale = ClaudeDesktopUsageHistory.parse(json: series([(-301, 0, 50)]), now: now)
+        XCTAssertNil(stale?.window("five_hour"))
+        XCTAssertEqual(stale?.window("seven_day")?.percent, 50)
+        let recent = ClaudeDesktopUsageHistory.parse(json: series([(-299, 0, 50)]), now: now)
+        XCTAssertEqual(recent?.window("five_hour")?.percent, 0)
     }
 
     func testADerivedResetIsMarkedInferred() throws {
         // Because it is derived, `ClaudeUsageSnapshot.merged` lets an exact reset from another
-        // source replace it; a window with no rollover has no reset and nothing to mark.
-        // fh drops 30 -> 7 (a rollover); sd only rises (none).
+        // source replace it. sd drops 50 -> 2 (a rollover); fh never carries a reset.
         let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(json: series([
-            (-120, 30, 50), (-60, 7, 51), (-30, 9, 52)
+            (-120, 30, 50), (-60, 7, 2), (-30, 9, 4)
         ]), now: now))
-        XCTAssertEqual(snapshot.window("five_hour")?.resetIsInferred, true)
-        XCTAssertNotNil(snapshot.window("five_hour")?.resetsAt)
-        XCTAssertEqual(snapshot.window("seven_day")?.resetIsInferred, false)
-        XCTAssertNil(snapshot.window("seven_day")?.resetsAt)
+        XCTAssertEqual(snapshot.window("seven_day")?.resetIsInferred, true)
+        XCTAssertNotNil(snapshot.window("seven_day")?.resetsAt)
+        XCTAssertEqual(snapshot.window("five_hour")?.resetIsInferred, false)
     }
 
     func testWeeklyResetIsSevenDaysAfterTheRollover() {
@@ -79,33 +95,32 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
     }
 
     func testSmallDecayIsNotTreatedAsARollover() {
-        // A rolling window sheds a point or two as old usage ages out; that is not a reset, so the
-        // earlier real rollover must remain the anchor.
+        // A point or two shed between samples is not a reset, so the earlier real rollover must
+        // remain the anchor.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
-            (-120, 40, 50), (-90, 6, 50), (-60, 17, 50), (-30, 14, 50)
+            (-120, 1, 40), (-90, 1, 6), (-60, 1, 17), (-30, 1, 14)
         ]), now: now)
-        XCTAssertEqual(snapshot?.window("five_hour")?.resetsAt,
-                       now.addingTimeInterval(-90 * 60 + 5 * 3600))
+        XCTAssertEqual(snapshot?.window("seven_day")?.resetsAt,
+                       now.addingTimeInterval(-90 * 60 + 7 * 24 * 3600))
     }
 
     func testAnyDecreaseLandingOnZeroIsARollover() {
         // 4 -> 0 is a two-point drop but unmistakably a reset.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
-            (-120, 30, 50), (-90, 4, 50), (-45, 0, 50), (-30, 2, 50)
+            (-120, 1, 30), (-90, 1, 4), (-45, 1, 0), (-30, 1, 2)
         ]), now: now)
-        XCTAssertEqual(snapshot?.window("five_hour")?.resetsAt,
-                       now.addingTimeInterval(-45 * 60 + 5 * 3600))
+        XCTAssertEqual(snapshot?.window("seven_day")?.resetsAt,
+                       now.addingTimeInterval(-45 * 60 + 7 * 24 * 3600))
     }
 
-    func testResetAlreadyPastIsDroppedAndTheWindowSurvives() {
-        // A stale history would otherwise put the reset behind us, and a past reset hides the
-        // window entirely. No countdown is the correct degradation, not a vanished bar.
+    func testAWeeklyWindowWhoseResetPassedIsDropped() {
+        // The rollover was eight days ago, so the week it began ended yesterday: the sample's
+        // percentage belongs to a window that no longer exists. It used to lose only its
+        // countdown and keep showing the number as if it were current.
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
-            (-600, 40, 50), (-540, 3, 50)
+            (-8 * 24 * 60 - 30, 1, 40), (-8 * 24 * 60, 1, 3)
         ]), now: now)
-        XCTAssertNil(snapshot?.window("five_hour")?.resetsAt)
-        XCTAssertEqual(snapshot?.window("five_hour")?.percent, 3)
-        XCTAssertFalse(snapshot?.isEmpty(now: now) ?? true)
+        XCTAssertNil(snapshot?.window("seven_day"))
     }
 
     func testNoRolloverMeansNoResetButStillReportsPercentages() {
@@ -115,6 +130,79 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         XCTAssertNil(snapshot?.window("five_hour")?.resetsAt)
         XCTAssertEqual(snapshot?.window("five_hour")?.percent, 38)
         XCTAssertEqual(snapshot?.window("seven_day")?.percent, 52)
+        XCTAssertNil(snapshot?.window("seven_day")?.resetsAt)
+    }
+
+    func testNoRolloverAndAWeekOldSampleIsDropped() {
+        let snapshot = ClaudeDesktopUsageHistory.parse(json: series([(-7 * 24 * 60 - 1, nil, 52)]), now: now)
+        XCTAssertNil(snapshot)
+    }
+
+    // MARK: - The weekly anchor
+
+    private func utc(_ text: String) -> Date {
+        ISO8601DateFormatter().date(from: text)!
+    }
+
+    func testWeeklyResetFollowsTheAnchorHoweverOld() throws {
+        // Measured on 2026-10-18: Claude Code's cache last fetched on Sep 2 with the weekly reset at
+        // Wed Sep 9 00:00Z, and the desktop sample of Oct 17 23:45Z belongs to the week ending
+        // Wed Oct 21 00:00Z. The rollover-gap guess put that reset 18.6 hours late.
+        let sample: [String: Any] = ["samples": [[
+            "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
+            "org": "org-uuid", "u": ["fh": NSNumber(value: 0), "sd": NSNumber(value: 43)]
+        ]]]
+        let account = ClaudeCachedUsage.AccountContext(organizationUUID: "org-uuid",
+                                                       weeklyResetAnchor: utc("2026-09-09T00:00:00Z"))
+        let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(
+            json: sample, now: utc("2026-10-18T00:13:00Z"), account: account))
+        XCTAssertEqual(snapshot.window("seven_day")?.resetsAt, utc("2026-10-21T00:00:00Z"))
+        XCTAssertEqual(snapshot.window("seven_day")?.percent, 43)
+        XCTAssertEqual(snapshot.window("seven_day")?.resetIsInferred, true)
+    }
+
+    func testAnchoredWeekThatEndedSinceTheSampleIsDropped() {
+        let sample: [String: Any] = ["samples": [[
+            "t": NSNumber(value: utc("2026-10-13T20:00:00Z").timeIntervalSince1970 * 1000),
+            "u": ["sd": NSNumber(value: 72)]
+        ]]]
+        let account = ClaudeCachedUsage.AccountContext(weeklyResetAnchor: utc("2026-09-09T00:00:00Z"))
+        XCTAssertNil(ClaudeDesktopUsageHistory.parse(json: sample, now: utc("2026-10-14T01:00:00Z"),
+                                                     account: account))
+    }
+
+    func testWeeklyResetStepsBothWaysAndIsStrictlyAfter() {
+        let anchor = utc("2026-09-09T00:00:00Z")
+        XCTAssertEqual(ClaudeDesktopUsageHistory.weeklyReset(after: utc("2026-10-17T23:45:00Z"), anchor: anchor),
+                       utc("2026-10-21T00:00:00Z"))
+        // An anchor still ahead (a live cache) steps backwards to the week the sample is in.
+        XCTAssertEqual(ClaudeDesktopUsageHistory.weeklyReset(after: utc("2026-08-31T10:00:00Z"), anchor: anchor),
+                       utc("2026-09-02T00:00:00Z"))
+        // On the boundary itself the next week's reset is the one ahead.
+        XCTAssertEqual(ClaudeDesktopUsageHistory.weeklyReset(after: utc("2026-10-14T00:00:00Z"), anchor: anchor),
+                       utc("2026-10-21T00:00:00Z"))
+    }
+
+    // MARK: - One organization
+
+    private func orgSample(_ minutes: Double, _ org: String, fh: Double) -> [String: Any] {
+        ["t": NSNumber(value: 1_788_076_800_000 + minutes * 60_000), "org": org,
+         "u": ["fh": NSNumber(value: fh)]]
+    }
+
+    func testSamplesFromAnotherOrganizationAreIgnored() {
+        let json: [String: Any] = ["samples": [
+            orgSample(-60, "mine", fh: 40),
+            orgSample(-10, "someone-else", fh: 95)
+        ]]
+        let mine = ClaudeDesktopUsageHistory.parse(
+            json: json, now: now, account: .init(organizationUUID: "mine"))
+        XCTAssertEqual(mine?.fiveHourPercent, 40)
+        // No account to go by: the newest sample's organization, alone.
+        XCTAssertEqual(ClaudeDesktopUsageHistory.parse(json: json, now: now)?.fiveHourPercent, 95)
+        // An account the file has never seen is no guide either.
+        XCTAssertEqual(ClaudeDesktopUsageHistory.parse(
+            json: json, now: now, account: .init(organizationUUID: "unknown"))?.fiveHourPercent, 95)
     }
 
     func testRejectsUnusableInput() {

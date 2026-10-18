@@ -361,6 +361,37 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         XCTAssertEqual(ClaudeUsageSnapshot.merged([older, newerLive], now: now)?.observedAt, now)
     }
 
+    func testMergeKeepsEachWindowsOwnObservationTime() {
+        // A weekly percent from a desktop sample days old must not borrow the age of a five-hour
+        // value read a minute ago: the card shows each reading's age, the forecast uses it.
+        let fresh = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)],
+                                        observedAt: now.addingTimeInterval(-60))
+        let old = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 31, resetsIn: 86_400)],
+                                      observedAt: now.addingTimeInterval(-3 * 86_400))
+        let merged = ClaudeUsageSnapshot.merged([fresh, old], now: now)
+        XCTAssertEqual(merged?.window("five_hour")?.observedAt, now.addingTimeInterval(-60))
+        XCTAssertEqual(merged?.window("seven_day")?.observedAt, now.addingTimeInterval(-3 * 86_400))
+        XCTAssertEqual(merged?.observedAt, now.addingTimeInterval(-60))
+    }
+
+    // MARK: - Automatic fetch
+
+    func testAutoFetchRunsWhenTheCacheIsOldOrMissing() {
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: nil, lastFetch: nil))
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: now.addingTimeInterval(-900), lastFetch: nil))
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: now.addingTimeInterval(-899), lastFetch: nil))
+    }
+
+    func testAutoFetchWaitsAfterAnyFetch() {
+        // A run that left the cache as it was (no sign-in) must not repeat every poll tick.
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: nil, lastFetch: now.addingTimeInterval(-899)))
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: nil, lastFetch: now.addingTimeInterval(-900)))
+    }
+
     // MARK: - Sign-in hint
 
     func testHintIsNeverShownWithoutClaudeHooks() {

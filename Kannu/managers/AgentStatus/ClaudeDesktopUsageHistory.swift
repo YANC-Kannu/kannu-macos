@@ -2,8 +2,10 @@ import Foundation
 
 /// Reads the usage history the Claude desktop app keeps for itself.
 ///
-/// The app records a rate-limit sample every few minutes into
-/// `~/Library/Application Support/Claude/plan-usage-history.json`, retaining roughly 30 days:
+/// The app records rate-limit samples into
+/// `~/Library/Application Support/Claude/plan-usage-history.json`, retaining roughly 30 days —
+/// but only while its menu-bar panel has been opened within the last day, so gaps of days are
+/// normal and the newest sample can be very old:
 ///
 /// ```json
 /// {"version": 2, "samples": [{"t": 1788027991573, "org": "…", "u": {"fh": 38, "sd": 61}}]}
@@ -13,7 +15,7 @@ import Foundation
 /// percentages the statusline hook receives. This is a fallback: it fills the gauges when no
 /// statusline snapshot exists — a user who only ever runs Claude in the desktop app never triggers
 /// the hook — while the hook stays primary because it reports reset times outright, where this file
-/// forces them to be recovered from the shape of the history (see `resetDate(for:in:now:)`).
+/// records none (see `parse(json:now:account:)` for what a sample can still vouch for).
 ///
 /// Nothing about this file is documented, so parsing is defensive throughout: any surprise yields
 /// nil and the caller shows no usage, exactly as if the file were absent.
@@ -39,73 +41,100 @@ enum ClaudeDesktopUsageHistory {
     /// Display order for the windows above, so the gauges do not reshuffle between reads.
     private static let codeOrder = ["fh", "sd", "so", "sn", "cw", "oa", "om", "op"]
 
-    /// How long each window runs, taken from its name rather than fitted to the data.
-    private static let windowDurations: [String: TimeInterval] = [
-        "fh": 5 * 3600,
-        "sd": 7 * 24 * 3600
-    ]
+    private static let fiveHours: TimeInterval = 5 * 3600
+    private static let week: TimeInterval = 7 * 24 * 3600
 
-    static func load(from url: URL = defaultURL, now: Date = Date()) -> ClaudeUsageSnapshot? {
+    static func load(from url: URL = defaultURL, now: Date = Date(),
+                     account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return parse(json: json, now: now)
+        return parse(json: json, now: now, account: account)
     }
 
-    static func parse(json: [String: Any], now: Date = Date()) -> ClaudeUsageSnapshot? {
+    private struct Sample {
+        let tMs: Double
+        let org: String?
+        let usage: [String: Any]
+    }
+
+    /// The newest sample of one organization, with only the windows it can still vouch for.
+    ///
+    /// The app samples only while its menu-bar panel has been opened in the last day, so a sample
+    /// can be days old. A percentage is only shown while its window provably has not rolled over
+    /// since it was sampled; an unknown answer drops the window rather than showing it, because a
+    /// stale number on a gauge reads as a live one:
+    ///
+    /// - **5 hour**: the window starts with the first message after the last one ended, so its
+    ///   reset cannot be recovered from samples. No countdown, and the bar is dropped once the
+    ///   sample is older than the window itself.
+    /// - **Weekly**: the window resets on a fixed weekly anchor, taken from Claude Code's cached
+    ///   reset when there is one, however old (`ClaudeCachedUsage.AccountContext`). The reset
+    ///   after the sample is exact; once it has passed, the bar is dropped. Without an anchor the
+    ///   last rollover seen in the samples stands in for it, as before.
+    /// - **Anything else**: kept for at most a week after the sample, with no countdown.
+    static func parse(json: [String: Any], now: Date = Date(),
+                      account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
         guard let rawSamples = json["samples"] as? [[String: Any]] else { return nil }
 
         // Trust the timestamps rather than the append order.
-        let samples = rawSamples.compactMap { sample -> (tMs: Double, usage: [String: Any])? in
+        let all = rawSamples.compactMap { sample -> Sample? in
             guard let tMs = (sample["t"] as? NSNumber)?.doubleValue, tMs > 0,
                   let usage = sample["u"] as? [String: Any] else { return nil }
-            return (tMs, usage)
+            let org = (sample["org"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            return Sample(tMs: tMs, org: org, usage: usage)
         }.sorted { $0.tMs < $1.tMs }
 
+        // One organization's usage only: a second account once signed in to the desktop app is
+        // someone else's numbers. The account Claude Code is signed in with wins; failing that,
+        // the organization of the newest sample that names one.
+        let organization = account.organizationUUID.flatMap { id in all.contains { $0.org == id } ? id : nil }
+            ?? all.last(where: { $0.org != nil })?.org
+        let samples = organization.map { id in all.filter { $0.org == id } } ?? all
+
         guard let newest = samples.last else { return nil }
+        let observedAt = Date(timeIntervalSince1970: newest.tMs / 1000)
+        let age = now.timeIntervalSince(observedAt)
 
         let windows = codeOrder.compactMap { code -> ClaudeUsageSnapshot.Window? in
             guard let key = windowKeysByCode[code],
                   let percent = (newest.usage[code] as? NSNumber)?.doubleValue else { return nil }
-            let reset = resetDate(for: code, in: samples, now: now)
-            return ClaudeUsageSnapshot.Window(
-                key: key,
-                percent: percent,
-                resetsAt: reset,
-                // Derived from the last rollover, not reported: `merged` must not let it displace
-                // the server's own reset for the same key.
-                resetIsInferred: reset != nil
-            )
+            if key == ClaudeUsageSnapshot.fiveHourKey {
+                guard age < fiveHours else { return nil }
+                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
+            }
+            guard key.hasPrefix("seven_day") else {
+                guard age < week else { return nil }
+                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
+            }
+            let reset = account.weeklyResetAnchor.map { weeklyReset(after: observedAt, anchor: $0) }
+                ?? lastRollover(for: code, in: samples).map { $0.addingTimeInterval(week) }
+            if let reset {
+                guard reset > now else { return nil }
+                // Derived, not reported: `merged` must not let it displace the server's own reset.
+                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: reset, resetIsInferred: true)
+            }
+            guard age < week else { return nil }
+            return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
         }
         guard !windows.isEmpty else { return nil }
 
-        return ClaudeUsageSnapshot(
-            windows: windows,
-            observedAt: Date(timeIntervalSince1970: newest.tMs / 1000)
-        )
+        return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
     }
 
-    /// Recovers when a window next rolls over, since this file records no reset times.
-    ///
-    /// A rollover is visible as a drop in utilization, so the window that is running now began at the
-    /// most recent one and ends a window-length later. Two things make that approximate, and the
-    /// result is only ever used when it survives both:
-    ///
-    /// The app samples only while it is running, so a rollover is noticed some minutes after it
-    /// happened and the derived reset lands slightly late. Late is the safe direction — an early
-    /// guess would push the window past its reset, and `displayWindows` hides those.
-    ///
-    /// The 5-hour window is rolling, so its utilization also decays a point or two as old usage ages
-    /// out. Those small decays are not rollovers, hence the threshold; but a decrease landing on zero
-    /// is a rollover no matter how small, which is how `1 -> 0` and `4 -> 0` are caught.
-    ///
-    /// Returning nil simply means no countdown, which is the behaviour before any of this existed.
-    private static func resetDate(
-        for code: String,
-        in samples: [(tMs: Double, usage: [String: Any])],
-        now: Date
-    ) -> Date? {
-        guard let duration = windowDurations[code] else { return nil }
+    /// The first weekly reset strictly after `date`, stepping from `anchor` in whole weeks in
+    /// either direction.
+    static func weeklyReset(after date: Date, anchor: Date) -> Date {
+        let weeks = (date.timeIntervalSince(anchor) / week).rounded(.down) + 1
+        return anchor.addingTimeInterval(weeks * week)
+    }
 
+    /// When a window last rolled over, as seen in the samples — the stand-in for a weekly anchor
+    /// when Claude Code has never cached one.
+    ///
+    /// A rollover is visible as a drop in utilization. The app samples only while it runs, so a
+    /// rollover is noticed late and the derived reset lands late too. Small decays are not
+    /// rollovers, hence the threshold; a decrease landing on zero is one however small.
+    private static func lastRollover(for code: String, in samples: [Sample]) -> Date? {
         var rolloverMs: Double?
         var previous: Double?
         for sample in samples {
@@ -115,9 +144,6 @@ enum ClaudeDesktopUsageHistory {
             }
             previous = value
         }
-
-        guard let rolloverMs else { return nil }
-        let reset = Date(timeIntervalSince1970: rolloverMs / 1000 + duration)
-        return reset > now ? reset : nil
+        return rolloverMs.map { Date(timeIntervalSince1970: $0 / 1000) }
     }
 }

@@ -69,10 +69,16 @@ struct NotchLLMUsageView: View {
         // Deliberately not forced: this fires on every open of the tab, and forcing bypasses
         // the refresh floor entirely — which is how the quota API ends up rate-limiting us.
         // The Refresh button above still forces, because a user pressing it means it.
-        .onAppear { manager.refreshAll() }
+        .onAppear {
+            manager.refreshAll()
+            refreshClaudeLimitsIfStale()
+        }
         // Keep the card current while it stays open; the manager's floor still paces the
         // actual work, so this can never poll harder than once a minute.
-        .onReceive(Self.pollTimer) { _ in manager.refreshAll() }
+        .onReceive(Self.pollTimer) { _ in
+            manager.refreshAll()
+            refreshClaudeLimitsIfStale()
+        }
     }
 
     @ViewBuilder
@@ -157,7 +163,7 @@ struct NotchLLMUsageView: View {
                     Text("quota unavailable").font(.caption2).foregroundStyle(.secondary.opacity(0.7))
                 }
                 quotaActionButton(snap.quotaAction)
-                claudeSignInHint(provider: provider)
+                claudeRefreshStatusRow(provider: provider)
             } else {
                 // A minute tick: "resets in" is computed from `now` at render, and without a clock
                 // this view only re-rendered when something republished (the 180s refresh floor
@@ -194,7 +200,7 @@ struct NotchLLMUsageView: View {
                         )
                     }
                 }
-                claudeSignInHint(provider: provider)
+                claudeRefreshStatusRow(provider: provider)
                 // Claude's Session/Week quota gauges above already cover this ground —
                 // the compact Today/Week token counts were redundant for Claude specifically.
                 // Other providers (e.g. Cursor, Codex) keep them.
@@ -335,6 +341,8 @@ struct NotchLLMUsageView: View {
         /// `UsageWindowReading.id` of this bar, for its forecast line.
         let windowID: String?
         let resetsAt: Date?
+        /// When the value was read, when the provider says.
+        let observedAt: Date?
 
         init(_ limit: UsageLimit, label: String? = nil, windowID: String? = nil) {
             self.label = label
@@ -343,6 +351,7 @@ struct NotchLLMUsageView: View {
             self.tint = NotchLLMUsageView.accent(severity: limit.severity, fraction: limit.fraction)
             self.windowID = windowID
             self.resetsAt = limit.resetsAt
+            self.observedAt = limit.observedAt
         }
     }
 
@@ -358,9 +367,16 @@ struct NotchLLMUsageView: View {
         return UsageWindowReading.id(provider: provider.rawValue, key: key)
     }
 
-    /// Re-reads the usage the Claude card displays. It cannot fetch the per-model weekly window
-    /// itself — that needs `/usage`, which requires Claude Code's interactive session — so the help
-    /// text points there. Sits top-right of the Claude card.
+    /// Claude Code's cache is the only source with exact resets and the per-model weekly bars, and
+    /// nothing refreshes it for someone who uses Claude only in the desktop app. While this tab is
+    /// on screen the monitor runs `/usage` for it when it is old; the monitor paces that itself.
+    private func refreshClaudeLimitsIfStale() {
+        guard isEnabled(.claude) else { return }
+        agentMonitor.refreshClaudeUsageIfStale()
+    }
+
+    /// Fetches the latest Claude limits with Claude Code's own `/usage`, and starts Claude Code's
+    /// claude.ai sign-in when that finds no plan data. Sits top-right of the Claude card.
     @ViewBuilder
     private var claudeRefreshButton: some View {
         Button {
@@ -382,21 +398,63 @@ struct NotchLLMUsageView: View {
         .accessibilityLabel(String(localized: "Fetch latest usage"))
         // Native .help() is dead in the notch: Kannu is an LSUIElement accessory app whose panel
         // never becomes active, so AppKit's tooltip manager never runs. This draws its own.
-        .hoverTooltip("Fetch latest usage (runs /usage)")
+        .hoverTooltip("Fetch latest usage")
     }
 
-    /// One line explaining why the Claude bars may be thinner than expected. The fix is a
-    /// Terminal `/login`, not anything Kannu can do, so this is text only — no button, no tooltip.
-    /// Hidden while a manual fetch runs so it cannot flash between the press and the reload.
+    /// What the last Refresh needs the user to know, with the one action that resolves it.
+    /// Silent while a fetch runs, except for the sign-in, which is the user's to finish.
     @ViewBuilder
-    private func claudeSignInHint(provider: ProviderID) -> some View {
-        if provider == .claude,
-           agentMonitor.claudeUsageHint == .signInNeeded,
-           !agentMonitor.isRefreshingClaudeUsage {
-            Text(String(localized: "Limits unavailable — in Terminal run claude, then /login"))
+    private func claudeRefreshStatusRow(provider: ProviderID) -> some View {
+        if provider == .claude {
+            switch agentMonitor.claudeRefreshStatus {
+            case .signingIn:
+                claudeStatusText(String(localized: "Finish signing in in your browser…"),
+                                 detail: String(localized: "This is Claude Code's own sign-in, the same as /login. Kannu never sees it."),
+                                 action: (String(localized: "Cancel"), { agentMonitor.cancelClaudeSignIn() }))
+            case .signInNeeded where !agentMonitor.isRefreshingClaudeUsage:
+                claudeStatusText(String(localized: "Exact limits need Claude Code signed in to claude.ai. Press ↻ to sign in."),
+                                 action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
+            case .otherSignInMethod where !agentMonitor.isRefreshingClaudeUsage:
+                claudeStatusText(String(localized: "Claude Code here signs in with an API key or a cloud provider. Plan limits need a claude.ai sign-in."),
+                                 action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
+            case .notInstalled where !agentMonitor.isRefreshingClaudeUsage:
+                claudeStatusText(String(localized: "Claude Code isn't installed, so exact limits can't be fetched."))
+            case .fetchFailed where !agentMonitor.isRefreshingClaudeUsage:
+                claudeStatusText(String(localized: "Couldn't fetch the latest limits. Try ↻ again in a moment."))
+            default:
+                if agentMonitor.claudeUsageHint == .signInNeeded, !agentMonitor.isRefreshingClaudeUsage {
+                    claudeStatusText(String(localized: "Exact limits need a Claude Code sign-in. Press ↻ to fetch them."))
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func claudeStatusText(_ text: String, detail: String? = nil,
+                                  action: (title: String, run: () -> Void)? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(text)
                 .font(.caption2)
                 .foregroundStyle(.orange)
-                .lineLimit(2)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+            if let detail {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let action {
+                Button(action: action.run) {
+                    Text(action.title)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
@@ -405,16 +463,35 @@ struct NotchLLMUsageView: View {
     /// `now` comes from the enclosing TimelineView so the countdown and the expiry agree.
     @ViewBuilder
     private func quotaSection(title: String, reset: Date?, bars: [QuotaBar], now: Date) -> some View {
+        // The oldest reading in the group speaks for it: a value days old is shown with its age
+        // and dimmed, never passed off as current (a desktop sample can be that old).
+        let stale = Self.staleAge(bars.compactMap(\.observedAt).min(), now: now)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                if let stale {
+                    Text(stale).font(.caption2).foregroundStyle(.orange.opacity(0.9))
+                }
                 Spacer(minLength: 0)
                 if let resets = resetsIn(reset, now: now) {
                     Text(resets).font(.caption2).foregroundStyle(.secondary).monospacedDigit()
                 }
             }
             ForEach(bars) { bar in quotaBar(bar, now: now) }
+                .opacity(stale == nil ? 1 : 0.55)
         }
+    }
+
+    /// "updated 3h ago" once a reading is older than `ClaudeUsageSnapshot.freshInterval`, else nil.
+    static func staleAge(_ observedAt: Date?, now: Date) -> String? {
+        guard let observedAt else { return nil }
+        let seconds = now.timeIntervalSince(observedAt)
+        guard seconds > ClaudeUsageSnapshot.freshInterval else { return nil }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return String(localized: "updated \(minutes)m ago") }
+        let hours = minutes / 60
+        if hours < 48 { return String(localized: "updated \(hours)h ago") }
+        return String(localized: "updated \(hours / 24)d ago")
     }
 
     @ViewBuilder
