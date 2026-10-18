@@ -98,7 +98,7 @@ enum ADRDiscoveryCommand {
         finding; "approved" and "approved_indicators" are the allowed counterparts and raise none. Leave all four \
         out unless I ask, and use only those fields: ADR rejects an indicator with an unknown kind or an extra \
         field, and a policy it cannot read fails every scan. Finish by telling me to choose the file in Kannu: \
-        Settings, Agent Security, ADR scans, Advanced, ADR scan policy, Choose.
+        Brain, Agent Security, ADR scans, Advanced, ADR scan policy, Choose.
         """
 }
 
