@@ -275,6 +275,24 @@ highest-value missing test in the repo** — five regressions, no coverage.
    The last title a tail window found now sticks (`AgentSessionLogParserTests.testTheTitleSticksWhenALongTurnPushesItPastTheTailWindows`,
    verified to fail when the sticky title is removed).
 
+**2026-10-18 addendum: a source moved and nothing failed.** Cursor 3.x moved composer headers out
+of the `ItemTable` key `composer.composerHeaders` and into a `composerHeaders` table. On Cursor
+3.19.19 the key has 0 rows. `CursorComposerStore` read only the key, so the composer-metadata
+source went empty with no error. Names fell back to glass and transcript titles, and every id went
+to the workspace-database scan. The real name was on disk and never read. `CursorComposerStore`
+now reads the table by primary key and keeps the key as a fallback; `CursorComposerStoreTests`
+covers both layouts. When a provider updates, check the store's schema (read-only, schema and
+key names only) before assuming a name source still exists.
+
+The same change first re-broke the merge seam. A 3.19 header has no `status`, and its
+`lastUpdatedAt` can move with no agent activity (1 of the 25 newest chats on this Mac: 178 s
+ahead of its `composerData`). The merge kept whichever whole record was newer, so that header
+replaced `composerData` and the chat lost its status. Caught in review, before merge. Rule: a
+header is a name and a backing record, never a status or an activity time; `composerData` keeps
+its own and the header fills only what it lacks (`CursorComposerStore.combine`). Guard:
+`CursorComposerStoreTests.testANewerHeaderKeepsComposerDataStatusAndActivity`, checked to fail
+with the old merge.
+
 ---
 
 ## 6. Migration coverage must equal install coverage must equal uninstall coverage

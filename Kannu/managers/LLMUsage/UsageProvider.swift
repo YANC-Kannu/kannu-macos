@@ -77,7 +77,13 @@ struct UsageSnapshot: Equatable {
     var today: UsageTotals = .init()
     var week: UsageTotals = .init()
     var sessionLimit: UsageLimit? = nil // 5h window quota
-    var weekLimit: UsageLimit? = nil // 7d all-models window quota
+    var weekLimit: UsageLimit? = nil // 7d all-models window quota (Cursor: the billing cycle)
+    /// The provider's own name for the `weekLimit` bar (Cursor's "Auto" pool); nil keeps the
+    /// view's default.
+    var weekLimitLabel: String? = nil
+    /// The alert and forecast reading key of the `weekLimit` bar. Cursor's Auto pool reads as
+    /// "auto", so its forecast never continues a series of blended totals.
+    var weekLimitKey: String = "week"
     /// Additional rate-limit windows beyond the 5h/7d pair, in the order the provider reported them.
     var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil // billing-cycle on-demand spend from usage-summary
@@ -120,6 +126,12 @@ struct UsageSnapshot: Equatable {
 struct QuotaFetchResult: Equatable {
     var session: UsageLimit?
     var week: UsageLimit?
+    /// Becomes `UsageSnapshot.weekLimitLabel`.
+    var weekLabel: String? = nil
+    /// Becomes `UsageSnapshot.weekLimitKey`.
+    var weekKey: String = "week"
+    /// Becomes `UsageSnapshot.extraLimits` (Cursor's API pool).
+    var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil
     var accountTier: String? = nil
     var errorMessage: String?

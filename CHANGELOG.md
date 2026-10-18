@@ -4,6 +4,64 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Cursor chat names come back, and the Cursor card splits Auto from API
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P2 Cursor storage and quota
+- **Changes:**
+  - Cursor 3.x moved its composer headers (chat name, timestamps) out of the `ItemTable` key
+    `composer.composerHeaders` into a `composerHeaders` table. `CursorComposerStore` now reads
+    that table by primary key, one row per requested id, and uses the old key when the table is
+    missing or does not hold an id. Same read-only, bounded queries as before; no table scan.
+    **Verified on this Mac (Cursor 3.19.19):** the table exists and the old key has 0 rows. A
+    read-only harness asked the new reader for the 10 newest transcript ids and got 10 headers,
+    all with names and timestamps, in 5 ms. Only schema, JSON key names and counts were printed.
+  - A header fills only what a chat's `composerData` lacks (the name, mostly); `composerData`
+    keeps its status and activity time, and a header alone still backs a chat with no
+    `composerData`. Before, the newer whole record won the merge. **Verified on this Mac,
+    read-only, counts only:** none of the 25 newest headers has a `status`, all 25
+    `composerData` records do, and 1 header was 178 s newer than its `composerData`, so the old
+    merge dropped that chat's status. By the mapper's rules an aborted chat could then light
+    green; that was not observed. On a pre-table profile a legacy header no longer overrides
+    `composerData`'s status or time either.
+  - The 3 s header cache adds the ids it has not read yet instead of replacing them, so the
+    different id sets of one rescan (transcript ids, chat-title ids, one hook session's id) do
+    not each reread the database or re-parse the legacy blob. `ComposerHeaderCache` is a plain
+    struct with a test.
+  - The Cursor quota's main bar is the Auto pool (`autoPercentUsed`). The API pool
+    (`apiPercentUsed`) is a second bar labelled "API". When Cursor sends no split, the bar
+    falls back to the blended `totalPercentUsed` (or a percent derived from spend and limit). The
+    split is read from both `usage-summary` and `GetCurrentPeriodUsage`. On a single-pool plan
+    (`membershipType` "start" or "express", after paseo PR 3717) the blended total is the bar even
+    when the split is sent, and there is no API bar. If an enterprise account has no `plan` and a
+    null `overall.limit`, the parser returns no bar (and no fake 0 %); on-demand spend is still
+    read. **Unverified:** the split field names come from third-party reports (ClaudeBar issue
+    303, paseo PR 3717). Paseo matches the single-pool names against `GetPlanInfo`'s `planName`,
+    and whether `membershipType` spells them the same way is unknown. The enterprise shape (no
+    `plan`, null `overall.limit`) is synthetic, taken from the task description; neither source
+    shows it. This change reads no live Cursor response and calls no Cursor API.
+  - Which bar is main, its key and its label ("auto"/"Auto", "api"/"API", "week" and the default
+    label for the blend) are decided in `CursorPlanUsage` and pinned by tests. The Auto pool
+    reads as alert and forecast key `cursor:auto`, so its forecast never continues the saved
+    `cursor:week` series of blended totals, and its near-limit push says "Cursor Auto limit".
+  - The Cursor card's long-window section is titled "Billing cycle", not "Weekly". Claude and
+    Codex still say "Weekly".
+  - The background quota poll now passes the extra limits and the main bar's key and label
+    through, as the Usage tab does.
+  - **Untested and not seen (app not launched):** the card layout, the "Billing cycle" title,
+    copying the bars into the snapshot in `CursorUsageProvider`, and the background poll's
+    pass-through. Those files are not in the test target.
+  - The vestigial fallback `GET cursor.com/api/usage?user=<id>` and its decoder are removed.
+    Only `CursorUsageProvider` used them. The usage-events, quota-only and not-configured
+    branches are unchanged.
+  - New `CursorPlanUsage.swift` (Foundation-only) replaces `CursorAPIHelpers.parsePercent`.
+    `CursorComposerStore.swift` and `CursorPlanUsage.swift` join the test target.
+    `CursorComposerStoreTests` (11) and `CursorPlanUsageTests` (14) use temp SQLite fixtures in
+    both layouts, the header/`composerData` merge, the header cache, and quota fixtures: split
+    present, split absent, single-pool, enterprise (synthetic), and the bars. The merge and cache
+    tests were checked to fail with the old merge and the old replace-on-miss cache.
+  - `docs/REGRESSIONS.md` entry 5 has a 2026-10-18 addendum on the moved name source and on the
+    header that won the merge.
+
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
 - **Agent label:** Settings Quit row + search entry, pinned by the highlight inventory

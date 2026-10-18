@@ -175,19 +175,20 @@ struct NotchLLMUsageView: View {
                         localSessionRow(snap)
                     }
                     if let week = snap.weekLimit, Self.isLive(week, now: now) {
-                        // The word "Weekly" and the shared reset live once on the header; the bars
-                        // below are just "All models" and each per-model name. Per-model windows
-                        // share the week's reset, so the header countdown covers them.
+                        // The word "Weekly" (Cursor: "Billing cycle") and the shared reset live once
+                        // on the header; the bars below are just "All models" (Cursor, when split: "Auto") and
+                        // each per-model or per-pool name. Those windows share the week's reset, so
+                        // the header countdown covers them.
                         quotaSection(
-                            title: String(localized: "Weekly"),
+                            title: Self.longWindowTitle(provider),
                             reset: week.resetsAt,
-                            bars: [.init(week, label: String(localized: "All models"), windowID: Self.windowID(provider, slot: "week"))]
+                            bars: [.init(week, label: snap.weekLimitLabel ?? String(localized: "All models"), windowID: Self.windowID(provider, slot: snap.weekLimitKey))]
                                 + liveExtras.map { .init($0.limit, label: $0.label ?? Self.extraLimitLabel($0), windowID: Self.windowID(provider, slot: $0.key)) },
                             now: now
                         )
                     } else if !liveExtras.isEmpty {
                         quotaSection(
-                            title: String(localized: "Weekly"),
+                            title: Self.longWindowTitle(provider),
                             reset: liveExtras.first?.limit.resetsAt,
                             bars: liveExtras.map { .init($0.limit, label: $0.label ?? Self.extraLimitLabel($0), windowID: Self.windowID(provider, slot: $0.key)) },
                             now: now
@@ -322,6 +323,12 @@ struct NotchLLMUsageView: View {
                 ? String(localized: "Weekly (\(name))")
                 : name
         }
+    }
+
+    /// The header over the long-window bars. Claude's and Codex's reset weekly; Cursor's included
+    /// usage resets with the billing cycle, so calling it "Weekly" there was wrong.
+    static func longWindowTitle(_ provider: ProviderID) -> String {
+        provider == .cursor ? String(localized: "Billing cycle") : String(localized: "Weekly")
     }
 
     /// One bar in a quota section: an optional label (nil for a single-bar section), the value,
