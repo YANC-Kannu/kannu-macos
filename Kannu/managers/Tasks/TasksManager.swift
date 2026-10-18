@@ -146,6 +146,9 @@ final class TasksManager: ObservableObject {
     private var gitlabGeneration = 0
     private var gitlabSyncInFlight: Int?
     private var pendingGitLabSyncWhenReady = false
+    /// Connects between their first await and their return, as `jiraConnectsInFlight`:
+    /// `isGitLabConnected` stays false until a Connect's save has landed.
+    private var gitlabConnectsInFlight = 0
     /// The reminders macOS was last told about (`TaskReminderPlan.wanted`). Taken from the file at
     /// load; each save after that sends only what changed; emptied when Tasks is turned off, which
     /// takes them all back. `checkReminderPermission` checks it against what macOS actually holds.
@@ -1201,6 +1204,10 @@ final class TasksManager: ObservableObject {
         }
         let credential = GitLabCredential(baseURL: base, token: token)
         let server = GitLabHost.displayName(base)
+        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
+        let generation = gitlabGeneration
+        gitlabConnectsInFlight += 1
+        defer { gitlabConnectsInFlight -= 1 }
         let user: GitLabUser
         let access: GitLabAccess
         switch await GitLabClient().verify(credential) {
@@ -1216,7 +1223,11 @@ final class TasksManager: ObservableObject {
         guard GitLabAPI.isUsername(user.username) else {
             return String(localized: "\(server) answered, but not the way GitLab does. Check the server.")
         }
-        guard !Task.isCancelled else { return String(localized: "Cancelled.") }
+        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
+        // Keychain item now: nothing is saved over it, and a Disconnect is not undone. After the
+        // save the connect is committed — the Keychain and the display copies change together,
+        // below, with no await between.
+        guard !Task.isCancelled, generation == gitlabGeneration else { return String(localized: "Cancelled.") }
         guard await GitLabCredentialStore.save(credential) else {
             return String(localized: "GitLab accepted the token, but Kannu could not save it in your Keychain.")
         }
@@ -1272,8 +1283,10 @@ final class TasksManager: ObservableObject {
     }
 
     /// Disconnect could not delete the saved token: the user asks again, off the main actor.
+    /// Not while a Connect is in flight: the display copies still say disconnected until its save
+    /// lands, and a delete queued behind that save would take the new token with it.
     func retryRemovingGitLabToken() {
-        guard !isGitLabConnected else { return }
+        guard !isGitLabConnected, gitlabConnectsInFlight == 0 else { return }
         removeGitLabToken()
     }
 
