@@ -80,9 +80,10 @@ enum KeychainReader {
             // the background (usage refreshes, task syncs), where no prompt can be answered, so
             // the item stays readable while the Mac is unlocked, on this device only, with an
             // access list that trusts only Kannu: the same protection every Kannu item had before.
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly // NOSONAR
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
-        return SecItemAdd(item as CFDictionary, nil)
+        // Sonar reports S6288 on this call; the reason is on the accessibility attribute above.
+        return SecItemAdd(item as CFDictionary, nil) // NOSONAR
     }
 
     /// True when nothing is left at this service and account. Refuses (false) for a service

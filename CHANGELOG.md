@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The Sonar note sits on the line Sonar reports
+- **Developer label:** SonarCloud on #84 still failed after the `// NOSONAR`: S6288 is reported on the `SecItemAdd` call, not on the accessibility attribute
+- **Agent label:** Claude Code (Opus 5.5) — `// NOSONAR` moves to the `SecItemAdd` line; the reason stays on the attribute; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword`: `// NOSONAR` moves from the `kSecAttrAccessible` line to the
+    `return SecItemAdd(…)` line, where SonarCloud reports S6288, with a one-line pointer to the
+    reason above it. No behaviour change.
+
 ### 2026-10-18 - The Keychain's accessibility choice says why it skips user authentication
 - **Developer label:** SonarCloud on #84: S6288, "iOS and macOS Keychain keys should require user authentication", at `KeychainReader.swift:81`
 - **Agent label:** Claude Code (Opus 5.5) — a written reason and `// NOSONAR` on the one flagged line; no behaviour change
