@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - A local task never timed says so on its card
+- **Developer label:** "for local taks without no logs, just maybe show a greyed out text that goes like no time logged , please start task to see or something more proffessiona"
+- **Agent label:** Claude Code (Opus 5.5) — a muted note on the timer tab's task card for a local task with no recorded time
+- **Changes:**
+  - `TaskDetailSummary` gains `note`: "No time recorded yet. Start the task to track it." for a
+    local task with no sessions and nothing running. A reminder is not time, so a reminded task
+    still says it; a Jira or GitLab task never does, since its facts and its server's time speak
+    for it.
+  - The card shows the note in grey where the facts go, after any facts, and gives way before
+    them when a two-line title leaves less room (`ViewThatFits`), so the card stays contained.
+  - Tests: `TaskDetailSummaryTests.testALocalTaskNeverTimedSaysSo`,
+    `TimerTaskDetailRulesTests.testANeverTimedLocalTaskShowsItsNote`.
+
 ### 2026-10-18 - Clipped text on the task card slides into view on hover, the status pill no longer looks clickable, and no fact wears a refresh icon
 - **Developer label:** "the open hint text shows but nothing happens on clicking the ticket pill, refresh symbol near iteration is confusing , user might feel some refresh is intended, also none of the clipped text shows on hover, ideally they should slide and show that clipped .. text"
 - **Agent label:** Claude Code (Opus 5.5) — a hover-only reveal for clipped text, the pill's tooltip reworded, three icons replaced

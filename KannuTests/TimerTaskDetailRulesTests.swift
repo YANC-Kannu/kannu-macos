@@ -140,6 +140,14 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         XCTAssertEqual(page.components(separatedBy: "HoverRevealText(").count - 1, 2, "title and caption")
     }
 
+    func testANeverTimedLocalTaskShowsItsNote() throws {
+        // David: a local task with no time showed nothing between its title and Start; it says
+        // so in grey now, where the facts go, and gives way before them.
+        let card = try Self.declaration("private struct TimerTaskDetail", in: try Self.column())
+        XCTAssertTrue(card.contains("factGrid(summary.facts, note: summary.note)"), "the card shows the summary's note")
+        XCTAssertTrue(card.contains(".foregroundStyle(.tertiary)"), "the note is muted, not an alert")
+    }
+
     func testTheCardIsContainedWhateverItsWords() throws {
         // A long label once widened the card past the column and pushed the × and the open icon
         // off the notch; a two-line title must never push Start out of the page either.

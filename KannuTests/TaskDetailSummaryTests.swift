@@ -198,6 +198,19 @@ final class TaskDetailSummaryTests: XCTestCase {
         XCTAssertTrue(summary(late).facts[0].isAlert)
     }
 
+    func testALocalTaskNeverTimedSaysSo() {
+        // David: a local task with no time showed nothing between its title and Start.
+        XCTAssertEqual(summary(TaskItem(title: "Fresh")).note, "No time recorded yet. Start the task to track it.")
+        XCTAssertEqual(summary(TaskItem(title: "Reminded", scheduledAt: now.addingTimeInterval(3600))).note,
+                       "No time recorded yet. Start the task to track it.", "a reminder is not time")
+        var timed = TaskItem(title: "Timed")
+        timed.segments = [WorkSegment(start: now.addingTimeInterval(-600), end: now, origin: .timer)]
+        XCTAssertNil(summary(timed).note)
+        XCTAssertNil(summary(TaskItem(title: "Running"), tracked: 30).note, "time running now is time")
+        XCTAssertNil(summary(TaskItem(source: .jira, title: "J", remote: remote(key: "P-1"))).note,
+                     "a remote task has its own facts; its time may live on the server")
+    }
+
     // MARK: - Time, delete, open
 
     func testTimeShowsOnlyWhenItSaysSomething() {

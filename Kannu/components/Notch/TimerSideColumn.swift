@@ -546,7 +546,7 @@ private struct TimerTaskDetail: View {
             chipRow(summary)
                 .padding(.top, 5)
                 .zIndex(1)
-            factGrid(summary.facts)
+            factGrid(summary.facts, note: summary.note)
                 .padding(.top, 6)
                 // The flexible child: the grid gets the height the rows above and below leave.
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -603,17 +603,38 @@ private struct TimerTaskDetail: View {
     }
 
     /// Up to four facts, two per row, in the height left over: two rows when they fit, one when
-    /// a two-line title leaves room for only one, none when even that would crowd Start.
-    private func factGrid(_ facts: [TaskDetailSummary.Fact]) -> some View {
+    /// a two-line title leaves room for only one, none when even that would crowd Start. A
+    /// never-timed local task's note comes after its facts and gives way before them.
+    private func factGrid(_ facts: [TaskDetailSummary.Fact], note: String?) -> some View {
         ViewThatFits(in: .vertical) {
+            if let note {
+                VStack(alignment: .leading, spacing: 4) {
+                    if !facts.isEmpty {
+                        factRows(Array(facts.prefix(2)))
+                    }
+                    noteText(note)
+                }
+            }
             if facts.count > 2 {
                 factRows(Array(facts.prefix(4)))
             }
             if !facts.isEmpty {
                 factRows(Array(facts.prefix(2)))
             }
+            if let note {
+                noteText(note)
+            }
             Color.clear.frame(height: 0)
         }
+    }
+
+    /// Muted, not an alert: nothing is wrong with a task that has not been started.
+    private func noteText(_ note: String) -> some View {
+        Text(verbatim: note)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.tertiary)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func factRows(_ facts: [TaskDetailSummary.Fact]) -> some View {

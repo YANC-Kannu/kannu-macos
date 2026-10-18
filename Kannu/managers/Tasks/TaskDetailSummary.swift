@@ -71,6 +71,9 @@ struct TaskDetailSummary: Equatable {
     let showsTime: Bool
     /// "10m over" once a minute or more past the estimate; the view shows it in orange.
     let overtime: String?
+    /// A muted line where the facts go, for a local task never timed: without it the card had
+    /// nothing between its title and Start.
+    let note: String?
     /// Only a local task can be deleted: a remote one would come back on the next sync.
     let canDelete: Bool
     /// "Open in Jira" / "Open in GitLab"; nil for a local task.
@@ -94,6 +97,9 @@ struct TaskDetailSummary: Equatable {
         overtime = progress.over.map { String(localized: "\(WorkDuration.format($0)) over") }
 
         facts = Self.facts(for: task, now: now, selfNames: selfNames, calendar: calendar)
+        note = task.source == .local && task.segments.isEmpty && tracked == 0
+            ? String(localized: "No time recorded yet. Start the task to track it.")
+            : nil
 
         canDelete = task.source == .local
         switch task.source {
