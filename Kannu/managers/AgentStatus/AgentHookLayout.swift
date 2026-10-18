@@ -171,6 +171,84 @@ struct AgentHookLayout: Equatable {
 
     // MARK: - Events each hook file registers (the state is the no-python fallback's)
 
+    /// Cursor hook events (lowerCamelCase) mapped to traffic-light states.
+    /// Cursor emits `afterAgentThought` while reasoning and between tool calls, so we map it
+    /// to thinking. The script keeps yellow sticky during active approval windows to avoid
+    /// repainting green too early.
+    static let cursorEvents: [(event: String, state: String)] = [
+        ("beforeSubmitPrompt", "thinking"),
+        ("afterAgentThought", "thinking"),
+        ("afterAgentResponse", "executing"),
+        // Fires for every shell command, including auto-approved ones — so it cannot mean
+        // "waiting for you". Genuine approvals still surface via afterAgentResponse's
+        // gated-payload check and via the transcript.
+        ("beforeShellExecution", "executing"),
+        ("preToolUse", "executing"),
+        ("postToolUse", "thinking"),
+        ("postToolUseFailure", "thinking"),
+        ("beforeMCPExecution", "executing"),
+        ("stop", "stopped"),
+        // v45: the chat is gone (Cursor sends it on window_close and user_close): the card goes
+        // with it, as Claude's SessionEnd does.
+        ("sessionEnd", "session_end"),
+        // v45: both fire in the parent's conversation. The script files them under the subagent's
+        // own id with `parent_id` naming the chat, so Kannu folds them into that chat's card.
+        ("subagentStart", "thinking"),
+        ("subagentStop", "stopped")
+    ]
+
+    /// The subset that defines "Cursor hooks are installed": the table as it was before v45. Kept
+    /// fixed, as Claude's is, so the table can grow without an older install reading as not
+    /// installed — the version migration reinstalls it and adds the new events.
+    static let cursorCoreInstalledEvents = [
+        "beforeSubmitPrompt", "afterAgentThought", "afterAgentResponse", "beforeShellExecution",
+        "preToolUse", "postToolUse", "postToolUseFailure", "beforeMCPExecution", "stop"
+    ]
+
+    /// Claude Code hook coverage. Richer than `claudeStyleEvents` because Claude supports
+    /// matcher-scoped groups, which is the only way to reach the states that matter:
+    /// `Notification/agent_completed` is the real "it's done", and matching `PreToolUse` on
+    /// the plan-approval tools is the only signal for "waiting on you to approve a plan".
+    ///
+    /// `matcherKey` is a short token handed to the script so it knows the state is already
+    /// unambiguous and does not re-derive it from the event name.
+    static let claudeHookEntries: [(event: String, matcher: String?, matcherKey: String, state: String)] = [
+        // idle, not thinking: opening a session must not paint the green "running" light.
+        ("SessionStart", nil, "", "idle"),
+        ("UserPromptSubmit", nil, "", "thinking"),
+        // v45: a typed slash command or MCP prompt expanding. UserPromptSubmit has already set the
+        // light; this one is here so the prompt checks (secrets, hidden text) see the command too.
+        ("UserPromptExpansion", nil, "", "thinking"),
+        // Must come before the generic PreToolUse entry for readability; Claude runs matcher
+        // groups in parallel with no ordering guarantee, so the script also derives this
+        // state from tool_name as a backstop. A host that ignores matchers (VS Code) runs this
+        // group for every tool, so the script honours the key only for these tools (v45).
+        ("PreToolUse", "ExitPlanMode|AskUserQuestion", "gated", "awaiting_input"),
+        ("PreToolUse", nil, "", "executing"),
+        // `thinking`, matching what the script derives for this event and what
+        // `claudeStyleEvents` passes. The argument is only a fallback for the no-python
+        // branch, but a value the script contradicts is a trap for the next reader.
+        ("PostToolUse", nil, "", "thinking"),
+        // Counted into `tool_errors` (reset on UserPromptSubmit) for diagnostics only: a failure
+        // the agent recovered from is not the turn's outcome. The card's verdict comes from
+        // StopFailure below and from the transcript's API-error record, never from this count.
+        ("PostToolUseFailure", nil, "", "thinking"),
+        ("PermissionRequest", nil, "", "awaiting_input"),
+        ("Notification", "agent_completed", "completed", "stopped"),
+        ("Notification", "permission_prompt|idle_prompt|agent_needs_input", "needs_input", "awaiting_input"),
+        ("Stop", nil, "", "stopped"),
+        ("StopFailure", nil, "", "stopped"),
+        // A subagent's own start and end, in its own file (v38 `parent_id` names the chat). Without
+        // SubagentStop a finished agent's file said "thinking" until the stale cap.
+        ("SubagentStart", nil, "", "thinking"),
+        ("SubagentStop", nil, "", "stopped"),
+        ("SessionEnd", nil, "", "session_end")
+    ]
+
+    /// The subset that defines "Claude hooks are installed". Kept intentionally small so the
+    /// table above can grow without invalidating existing installs — see `checkInstalled`.
+    static let claudeCoreInstalledEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"]
+
     /// VS Code Copilot and Codex, Claude-compatible PascalCase names. Codex validates strictly,
     /// so it keeps exactly this list.
     static let claudeStyleEvents: [(event: String, state: String)] = [
@@ -247,6 +325,73 @@ struct AgentHookLayout: Equatable {
             hooks[event] = groups.isEmpty ? nil : groups
         }
         return hooks
+    }
+
+    // MARK: - Cursor's flat entries (~/.cursor/hooks.json)
+
+    /// Adds one `{"command": …}` per event (relative to `~/.cursor`, as Cursor resolves it) after
+    /// removing any earlier Kannu entry. Every other entry is kept.
+    static func mergingKannuEntries(into hooks: [String: Any], events: [(event: String, state: String)]) -> [String: Any] {
+        var hooks = strippingKannuEntries(from: hooks)
+        for (event, state) in events {
+            var entries = hooks[event] as? [[String: Any]] ?? []
+            entries.append(["command": "hooks/\(scriptName) \(state) cursor \(event)"])
+            hooks[event] = entries
+        }
+        return hooks
+    }
+
+    /// Removes every entry that runs Kannu's script (or the pre-rename one), whatever the event;
+    /// events left with no entries are removed too.
+    static func strippingKannuEntries(from hooks: [String: Any]) -> [String: Any] {
+        var hooks = hooks
+        for (event, value) in hooks {
+            guard var entries = value as? [[String: Any]] else { continue }
+            entries.removeAll { entry in
+                let command = entry["command"] as? String ?? ""
+                return command.contains(scriptName) || command.contains("atoll-agent-status")
+            }
+            hooks[event] = entries.isEmpty ? nil : entries
+        }
+        return hooks
+    }
+
+    // MARK: - Codex's feature flag (~/.codex/config.toml, shared with the user)
+
+    /// The file with `hooks = true` added under `[features]`, or nil to leave it untouched. Codex
+    /// runs hooks by default now and skips each one until the user trusts it in `/hooks`; older
+    /// builds needed the flag, so install still adds it when the file says nothing. A value the
+    /// user wrote — `hooks = false` included, or the deprecated alias `codex_hooks` — is theirs:
+    /// install used to flip `false` to `true`. An inline `features = { … }` table is left alone
+    /// too, since adding a `[features]` table beside it would make the whole file invalid.
+    static func codexConfigEnablingHooks(_ text: String) -> String? {
+        let alreadySaid = [
+            #"(?m)^[ \t]*features[ \t]*\.[ \t]*(codex_)?hooks[ \t]*="#,
+            #"(?m)^[ \t]*features[ \t]*="#
+        ]
+        if alreadySaid.contains(where: { text.range(of: $0, options: .regularExpression) != nil }) { return nil }
+        var text = text
+        if let headerEnd = text.range(of: #"(?m)^[ \t]*\[[ \t]*features[ \t]*\][^\n]*\n?"#, options: .regularExpression) {
+            // The section runs to the next table header, not to the next "[": a bracket in a comment
+            // or an array value before the key hid a `hooks = false`, and a second `hooks` key made
+            // the file invalid TOML. A line this misses as a header only widens the section, which
+            // can only leave the file untouched.
+            let section = text[headerEnd.upperBound...]
+            let nextTable = #"(?m)^[ \t]*\[\[?[ \t]*[A-Za-z0-9_."' -]+[ \t]*\]\]?[ \t]*(#[^\n]*)?$"#
+            let sectionEnd = section.range(of: nextTable, options: .regularExpression)?.lowerBound ?? section.endIndex
+            if section[..<sectionEnd].range(of: #"(?m)^[ \t]*(codex_)?hooks[ \t]*="#, options: .regularExpression) != nil {
+                return nil
+            }
+            // A header on the file's last line has no newline to insert after.
+            let line = text[headerEnd].hasSuffix("\n") ? "hooks = true\n" : "\nhooks = true\n"
+            text.insert(contentsOf: line, at: headerEnd.upperBound)
+            return text
+        }
+        if !text.isEmpty && !text.hasSuffix("\n") {
+            text += "\n"
+        }
+        text += "\n[features]\nhooks = true\n"
+        return text
     }
 
     /// The shape of any file a provider's entries can be in; nil for a file no provider uses.

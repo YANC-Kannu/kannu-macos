@@ -4,6 +4,64 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P3 Hook contracts v45
+- **Changes:**
+  - Hook v45: a payload carrying `cursor_version` is never filed under another provider. Cursor runs
+    `~/.claude/settings.json` hooks as third-party configs, so Kannu's Claude hook fired inside Cursor
+    and filed Cursor chats as Claude sessions. Such a call now writes nothing, but it still gives the
+    Claude answer, including the agent-policy deny when blocking is on: Cursor maps Claude's
+    `permissionDecision` to its own `permission`, so an enforced rule keeps refusing the tool inside
+    Cursor, as it did under v44. Cursor chats are tracked, and their secret, hidden-text and
+    sensitive-file findings recorded, only when Kannu's Cursor hook is installed; with only the
+    Claude hook installed, Kannu no longer records them. Verified on this Mac: Cursor's own hook log
+    shows it running Kannu's Claude hook with `cursor_version` in the payload. Unverified: that a JSON
+    deny from a third-party hook blocks the tool in Cursor (the docs give the field mapping, not that).
+  - Cursor's `preToolUse`, `beforeShellExecution`, `beforeMCPExecution` and the new `subagentStart`
+    now answer exactly `{"permission":"allow"}`, with no `continue` key, as Cursor's schema documents.
+    The deny shape and every other Cursor event are unchanged.
+  - The Cursor table gains three events. `sessionEnd` removes the chat's card. `subagentStart` and
+    `subagentStop` write a file of the subagent's own (`subagent_id`, with `parent_conversation_id`
+    as `parent_id`), which Kannu folds into the parent chat. A `subagentStop` without a subagent id
+    writes nothing. Cursor documents no id on `subagentStop`, so a Cursor subagent's file stays
+    `thinking` until the stale cap; it never outranks a working or waiting chat, and the fold ignores
+    it once the chat's turn ends. A Cursor `stop` with `status: "error"` sets `ended_on_error`;
+    `aborted` does not.
+    The installed check reads a fixed core, as Claude's does, so a v44 install still reports
+    installed and upgrades through the version migration. Verified on this Mac: Cursor's log shows
+    the `sessionEnd` reasons (`window_close`, `user_close`) and the `stop` status values.
+    Unverified: the subagent payloads come from Cursor's docs and forum reports only, because Kannu
+    never registered those events before.
+  - The `gated` Claude group (ExitPlanMode, AskUserQuestion) counts as a prompt only when the tool
+    really is one of those. VS Code with `chat.useClaudeHooks` ignores matchers, so the group ran for
+    every tool and turned each one yellow. Unverified on this Mac (VS Code docs only).
+  - Claude `StopFailure` with `error: "rate_limit"` sets `quota_exceeded`, as Antigravity's quota
+    stop does. The Claude chat keeps its own title: only Antigravity, which has no log title, gets
+    "Quota exceeded" as its name, and that label is no longer carried into later writes.
+    Claude's new `UserPromptExpansion` event is registered, and its prompt goes through the secret and
+    hidden-text checks. Claude fires `UserPromptSubmit` and then `UserPromptExpansion` with the same
+    typed line, so the second check adds only a finding that is not recorded yet and never counts
+    the same prompt twice. Unverified on this Mac (Claude Code hooks docs only).
+  - Codex: install no longer flips a user's `features.hooks = false` (or the `codex_hooks` alias,
+    or an inline `features` table) to true. It adds the key only when the file has none. The
+    `[features]` section now runs to the next table header, not to the next `[`, so a bracket in a
+    comment or an array before `hooks = false` can no longer lead to a second `hooks` key (invalid
+    TOML), and an indented `[features]` header is found instead of duplicated. A
+    config.toml that exists but cannot be read now fails the install instead of being overwritten.
+    Settings shows "Open Codex and run /hooks to trust Kannu's hooks." under an installed Codex row,
+    because Codex skips a hook until the user trusts it. Unverified on this Mac (Codex docs only).
+  - The Cursor and Claude event tables and the Cursor and Codex config edits moved into
+    `AgentHookLayout`, so tests can reach them. `scripts/install-cursor-hooks.sh` registers the three
+    new Cursor events too, and `docs/REGRESSIONS.md` entry 1 has a v45 addendum.
+  - Tests: eleven `HookScriptTests` cases, run again under `/usr/bin/python3` 3.9 (seven of the first
+    eight behaviour cases fail against the v44 script; `sessionEnd` removal already worked through
+    the state argument). The policy deny inside Cursor and the once-only slash-command count both
+    fail against the first v45 draft (checked by hand: it printed allow and counted 2). Five
+    `AgentHookLayoutTests` cases cover the tables, the merge and strip, and the TOML edit, and
+    `BackgroundWorkTests` reads the Claude table directly. Full suite: 887 tests, 0 failures. Not
+    verified live: that needs Kannu running, and this change was not run in the app.
+
 ### 2026-10-04 - A chat stays lit while the agents it started are still running
 - **Developer label:** "now we have background taks right, but kannu doesnt show that as chat still running"
 - **Agent label:** Background-agent detection: hook v44 counts what a Stop leaves running, Claude's session record confirms it

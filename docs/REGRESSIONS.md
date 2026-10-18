@@ -153,6 +153,36 @@ The turn carries `turn_bg_agents` (entry 5, 2026-10-04 addendum). Two rules:
   outlives its turn.
 - Nothing from `background_tasks` but a count is written.
 
+**v45 addendum — other hosts read Kannu's Claude file.** Cursor runs `~/.claude/settings.json` as a
+"third-party config" (seen in Cursor's own hook log on 2026-09-10), and VS Code does too with
+`chat.useClaudeHooks` on. Cursor sent its chats through the Claude hook, which filed them as Claude
+sessions. VS Code ignores matchers, so it ran the `gated` group for every tool and turned each one
+yellow. Rules:
+- A payload with `cursor_version` is only ever filed by Kannu's Cursor hook. Any other provider writes
+  nothing, and still gives its usual answer, the policy deny included: Cursor maps a Claude
+  `permissionDecision` to its own `permission` (cursor.com/docs/reference/third-party-hooks), so the
+  skip goes after the policy check, never before it. The first v45 draft skipped first and allowed
+  what an enforced rule had refused under v44. So a Cursor chat is tracked, and its secret,
+  hidden-text and sensitive-file sightings recorded, only when Kannu's Cursor hook is installed.
+- A matcher key in the script holds only for the tools its group names.
+- A label is never written as a chat's name where a log title exists. The hook's name outranks
+  `ai-title` on the card (entry 5), so "Quota exceeded" is Antigravity's only.
+- One thing the user typed is one sighting. Claude fires `UserPromptSubmit` and then
+  `UserPromptExpansion` for a slash command, both with the typed `prompt`; the second look
+  (`SEC_RECHECK_EVENTS`) adds a sighting not yet on disk, never a count.
+
+Cursor's permission hooks answer the documented `{"permission":"allow"}`, with no `continue`; the
+deny shape is unchanged. The Cursor table gains `sessionEnd`, `subagentStart` and `subagentStop`.
+The installed check now reads a fixed `cursorCoreInstalledEvents`, as Claude's always has (entry 6).
+Both tables moved into `AgentHookLayout`, so the logic target pins them. Cursor fires its subagent
+events in the parent's conversation, so they go to a file of the subagent's own (`subagent_id`, with
+`parent_id`). A `subagentStop` without an id writes nothing: in the parent's file it would have
+shown a running chat as finished. Cursor's documented `subagentStop` carries no id, so today a Cursor
+subagent's file stays `thinking` until the stale cap. That leftover never outranks a chat that is
+working or waiting, the fold ignores it once the chat's turn ends, and only Claude files outlive the
+cap. Guards: the `HookScriptTests` v45
+group, run again under `/usr/bin/python3` 3.9, and the v45 cases in `AgentHookLayoutTests`.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call

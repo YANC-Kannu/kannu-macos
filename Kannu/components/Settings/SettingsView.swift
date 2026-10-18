@@ -7666,7 +7666,11 @@ struct AgentStatusSettings: View {
                 .frame(width: SettingsMetrics.statusDot, height: SettingsMetrics.statusDot)
                 .accessibilityHidden(true)
             AgentProviderIconView(source: .init(hookProvider: provider), size: 18)
-            Text(provider.displayName)
+            // Codex skips a hook until the user trusts it in /hooks, so an install alone reports nothing.
+            SettingsRowLabel(verbatim: provider.displayName,
+                             description: provider == .codex && installed
+                                ? String(localized: "Open Codex and run /hooks to trust Kannu's hooks.")
+                                : nil)
             Spacer()
             if !installed && !present {
                 Text("Not found on this Mac")
