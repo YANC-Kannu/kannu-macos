@@ -186,15 +186,15 @@ struct KannuHeader: View {
                                 .fill(.black)
                                 .frame(width: 30, height: 30)
                                 .overlay {
-                                    Image(systemName: "gear")
+                                    Image(systemName: "brain")
                                         .foregroundColor(.white)
                                         .padding()
                                         .imageScale(.medium)
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .hoverTooltip(String(localized: "Settings"), edge: .below)
-                        .accessibilityLabel(String(localized: "Settings"))
+                        .accessibilityLabel("Brain")
+                        .hoverTooltip(String(localized: "Brain"), edge: .below)
                     }
                     
                     // Screen Recording Indicator
