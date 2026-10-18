@@ -143,6 +143,16 @@ older hooks keep their category and wording, never re-graded after the fact. Gua
 `HookScriptTests.testAKeychainLookupIsNotAPasswordRead` (fails 4 times against v42),
 `SensitivePathSightingTests`.
 
+**v44 addendum — two new events, one new turn key.** `SubagentStart` and `SubagentStop` join the
+Claude table. They arrive through the version migration, which reinstalls any provider whose script
+is behind. `claudeCoreInstalledEvents` is unchanged, so an older install still reports installed
+and upgrades itself.
+
+The turn carries `turn_bg_agents` (entry 5, 2026-10-04 addendum). Two rules:
+- A new turn key goes into `TURN_KEYS`, or the write path never clears it and a stale value
+  outlives its turn.
+- Nothing from `background_tasks` but a count is written.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call
@@ -274,6 +284,40 @@ highest-value missing test in the repo** — five regressions, no coverage.
    newest title record beyond the 1 MiB window; the name fell back to an older title or the prompt.
    The last title a tail window found now sticks (`AgentSessionLogParserTests.testTheTitleSticksWhenALongTurnPushesItPastTheTailWindows`,
    verified to fail when the sticky title is removed).
+
+**2026-10-04 addendum — a finished turn is not a finished chat while its agents run.** The
+09-11 fold rule above ("nothing once it has ended") hid real work. A turn that ends with background
+agents or a workflow still running looks finished in Claude, yet Claude Code goes on working, and
+the user's tokens go on being spent, while Kannu showed the chat red. Claude Code says so itself,
+in two places:
+- **The Stop hook's `background_tasks`** lists the work still in flight.
+- **Its session record** (`~/.claude/sessions/<pid>.json`) says `busy` until the last agent or
+  workflow finishes, then `idle`. In the 2.1.281 binary, `busy` is `isLoading || delegatedActive`,
+  and the SDK schema calls `idle` the "authoritative turn-over signal".
+
+Hook v44 counts the agents and workflows at the Stop into the ended turn (`turn_bg_agents`). It
+writes the count only: a task's description and command are free text and never reach the file.
+The chat is background work (`isClaudeBackgroundWork`) while that count is above zero **and** the
+record says the work goes on. Then:
+- the chat stays lit;
+- its subagents' lights count again, so a background agent waiting on permission shows yellow;
+- its clock ticks from the user's prompt;
+- its file outlives the stale cap.
+
+Neither signal alone is enough: the count is a snapshot, and `busy` also covers the moment before
+Claude writes `idle`. A fresh `idle` counts for 3 s, so the chat does not flash finished between an
+agent ending and Claude waking to read its result, and the monitor rescans when that grace ends.
+
+v44 also hooks `SubagentStart`/`SubagentStop`. A finished agent's own file now says `stopped`
+instead of `thinking` until the stale cap, which was the leftover this entry's rule was written
+against.
+
+**The rule now:** a leftover subagent file never relights a finished chat; Claude's own word that
+agents are still running does.
+
+Guards: `BackgroundWorkTests` (the reconciler arm, the fold, the clock, the stale cap and the
+parse), and `HookScriptTests.testAStopCountsTheAgentsItLeavesRunningAndNothingElse` with its
+siblings.
 
 ---
 
@@ -597,6 +641,34 @@ was reverted exactly as in the forced-refresh case above; the parameter doc's "n
 interleave" was true only for a caller that collects on main. It reads the counter on main first
 now, and the doc says `nil` is for main-thread callers only. Guards unchanged: the revert half by
 `BluetoothLiveBatteryWritesTests`, the spawn half by the manual `sample` check — still missing.
+
+**2026-10-04 addendum — the rescan itself is the I/O.** With three parallel agents, the user's
+Mac measured 4–13 full rescans a second on the main actor. Each one reads every hook file, session
+record and live transcript tail, and walks Claude Desktop's audit logs. Nothing in a rescan was on
+the main actor by mistake. There were simply too many rescans, and three causes produced them:
+- **Folder depth.** FSEvents on `~/.claude/projects` is recursive, so every subagent message,
+  tool-output spill and workflow script inside a session's folder cost a full rescan. Kannu reads
+  none of them.
+- **Double watching.** The hook status folder was watched twice: kqueue for a quick rescan, and
+  FSEvents for a full one, for the same write.
+- **The debounce.** It re-armed on every event, so a steady storm postponed the light rather than
+  bounding the work.
+
+The fix:
+- `AgentWatchEvents.worthARescan` drops files three or more levels under the Claude root, and
+  per-file writes in the status folder. Lost-event flags always count.
+- `AgentRescanPacing` keeps rescans at least 0.3 s (hook-only) or 0.5 s (full) apart, and a request
+  never postpones the pending one.
+- The Desktop audit-log listing is cached for 2 s and dropped when a log is added, removed or
+  renamed.
+
+Trap found on the way: a cached `URL` keeps the resource values it has read. Handing the same
+instances back made a grown log report its old size, and the parse cache never saw it change
+(`ClaudeDesktopAgentSessionStoreTests.testParsedLogsAreCachedButInvalidateWhenTheFileGrows`
+caught it). Return fresh `URL`s from any listing cache.
+
+Guards: `RescanStormTests`, including a simulated 20 ms write storm that must keep rescanning,
+boundedly. The memory half of the same report was the usage aggregator, fixed on its own branch.
 
 ---
 
