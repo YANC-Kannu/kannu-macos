@@ -366,24 +366,13 @@ private struct TimerTasksPage: View {
 
     @ViewBuilder
     private var readyContent: some View {
-        if let expanded = manager.activeTasks.first(where: { $0.id == expandedTaskID }) {
-            TimerTaskDetail(
-                manager: manager,
-                task: expanded,
-                width: width,
-                height: height,
-                confirmsDelete: $confirmsDelete,
-                close: collapse,
-                start: { start(expanded) },
-                edit: { edit(expanded.id) }
-            )
-            .id(expanded.id)
-            .transition(.opacity)
-        } else if showsLogTime && !asking.isEmpty {
-            TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, width: width, height: height, close: closeLogTime)
-                .environment(\.worklogFieldFocus, draftFocusChanged)
-                .transition(.opacity)
-        } else {
+        let expanded = manager.activeTasks.first(where: { $0.id == expandedTaskID })
+        let showsLog = expanded == nil && showsLogTime && !asking.isEmpty
+        let isCovered = expanded != nil || showsLog
+        // The list stays in the tree under a card or the Log page, hidden and inert, never rebuilt:
+        // closing the card finds it scrolled exactly where it was. Swapped out, it came back at the
+        // top (David: "not acceptable").
+        ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: M.sideToolbarSpacing) {
                 if isSearching {
                     // Drawn above the list, so its × tooltip opening downward is never painted over.
@@ -393,7 +382,28 @@ private struct TimerTasksPage: View {
                 }
                 list
             }
-            .transition(.opacity)
+            .opacity(isCovered ? 0 : 1)
+            .allowsHitTesting(!isCovered)
+            .accessibilityHidden(isCovered)
+
+            if let expanded {
+                TimerTaskDetail(
+                    manager: manager,
+                    task: expanded,
+                    width: width,
+                    height: height,
+                    confirmsDelete: $confirmsDelete,
+                    close: collapse,
+                    start: { start(expanded) },
+                    edit: { edit(expanded.id) }
+                )
+                .id(expanded.id)
+                .transition(.opacity)
+            } else if showsLog {
+                TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, width: width, height: height, close: closeLogTime)
+                    .environment(\.worklogFieldFocus, draftFocusChanged)
+                    .transition(.opacity)
+            }
         }
     }
 
@@ -743,6 +753,8 @@ private struct TimerTasksPage: View {
     /// Opens the task's card in place of the list.
     private func expand(_ task: TaskItem) {
         confirmsDelete = false
+        // The row under the pointer would go on sliding its text, out of sight under the card.
+        hoveredRowID = nil
         animate { expandedTaskID = task.id }
     }
 

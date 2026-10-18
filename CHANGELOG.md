@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Closing a task card finds the list where it was
+- **Developer label:** "the close button of a task should keep the list at previously scrolled position or at the position of closed task , see which is easy but the current way how they close back to top is not acceptable"
+- **Agent label:** Claude Code (Opus 5.5) — the task list stays in the view tree under a card or the Log page, hidden and inert, so its scroll position survives
+- **Changes:**
+  - Opening a card used to swap the task list out for it, so closing the card rebuilt the list at
+    the top. The list now stays under the card (and under the Time to log page), hidden, taking no
+    clicks or hovers and skipped by VoiceOver, and is never rebuilt: closing returns to exactly the
+    place it was scrolled to, with no jump. Keeping the list was both easier and exact, against
+    scrolling back to the closed task.
+  - Opening a card clears the hovered row, so no row goes on sliding its text under the card.
+  - Test: `TimerTaskDetailRulesTests.testClosingACardKeepsTheListsPlace`.
+
 ### 2026-10-18 - Clipped text on the task card and rows slides into view on hover again
 - **Developer label:** "the animation to reveal the clipped text on hover is not working"
 - **Agent label:** Claude Code (Opus 5.5) — the reveal measures its sizes into state instead of through preference keys, and starts once they arrive; found and checked with a rendering harness

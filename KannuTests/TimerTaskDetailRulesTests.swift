@@ -162,6 +162,19 @@ final class TimerTaskDetailRulesTests: XCTestCase {
                        "no dot: it drew nothing for plain glass yet indented the title past the chips")
     }
 
+    /// David: closing a card brought the list back at the top, "not acceptable". The list stays in
+    /// the tree under the card (and the Log page), hidden and inert, so its scroll offset survives.
+    func testClosingACardKeepsTheListsPlace() throws {
+        let page = try Self.declaration("private struct TimerTasksPage", in: try Self.column())
+        XCTAssertTrue(page.contains("ZStack(alignment: .topLeading) {"), "the card draws over the list, not instead of it")
+        XCTAssertTrue(page.contains(".opacity(isCovered ? 0 : 1)"), "the covered list is hidden, not removed")
+        XCTAssertTrue(page.contains(".allowsHitTesting(!isCovered)"), "the covered list takes no clicks or hovers")
+        XCTAssertTrue(page.contains(".accessibilityHidden(isCovered)"), "VoiceOver skips the covered list")
+        XCTAssertFalse(page.contains("} else {\n            VStack(alignment: .leading, spacing: M.sideToolbarSpacing)"),
+                       "the list is an else branch again: it would be rebuilt at the top")
+        XCTAssertTrue(page.contains("hoveredRowID = nil"), "no row slides its text under the card")
+    }
+
     func testATaskLeavingTheListCollapsesTheCard() throws {
         let page = try Self.declaration("private struct TimerTasksPage", in: try Self.column())
         XCTAssertTrue(page.contains("expandedTaskID = nil"), "nothing clears the expanded task")
