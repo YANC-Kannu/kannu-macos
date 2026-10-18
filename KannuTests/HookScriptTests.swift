@@ -720,7 +720,7 @@ final class HookScriptTests: XCTestCase {
 
         XCTAssertEqual(try run(state: "thinking", event: "PostInvocation", conversation: "h11e", provider: "antigravity",
                                extra: ["tool_response": Self.tags("hello antigravity")]),
-                       Self.allowJSON, "no documented way to tell Antigravity")
+                       "{}", "no documented way to tell Antigravity (v46: its documented empty answer)")
     }
 
     func testCodexGetsEmptyStdout() throws {
@@ -1318,7 +1318,7 @@ final class HookScriptTests: XCTestCase {
         try turnEvent("UserPromptSubmit", "o1", provider: "opencode")
         XCTAssertEqual(int(try turnEvent("PostToolUse", "o1", provider: "opencode", extra: ["tool_use_id": "call_1"])["turn_tool_calls"]), 1)
 
-        try turnEvent("UserPromptSubmit", "ag1", provider: "antigravity")
+        try turnEvent("PreInvocation", "ag1", provider: "antigravity", extra: ["invocationNum": 0])
         XCTAssertEqual(int(try turnEvent("PostInvocation", "ag1", provider: "antigravity")["turn_tool_calls"]), 0, "a model call is not a tool")
         XCTAssertEqual(int(try turnEvent("PostToolUse", "ag1", provider: "antigravity")["turn_tool_calls"]), 1)
     }
@@ -1806,7 +1806,7 @@ extension HookScriptTests {
         XCTAssertEqual(try readState("rl5", provider: "antigravity"), "quota_exceeded")
         XCTAssertEqual(try readJSON("rl5", provider: "antigravity")?["name"] as? String, "Quota exceeded")
         tick()
-        try v45Run("UserPromptSubmit", "rl5", provider: "antigravity", extra: ["prompt": "again"])
+        try v45Run("PreInvocation", "rl5", provider: "antigravity", extra: ["invocationNum": 0])
         XCTAssertNil(try readJSON("rl5", provider: "antigravity")?["name"])
         // Any other API error is still a failed run.
         try v45Run("UserPromptSubmit", "rl2", extra: ["prompt": "go"])
@@ -1874,6 +1874,198 @@ extension HookScriptTests {
         ]
         for (name, check) in checks {
             // Each check reuses its conversation ids: a fresh status directory per check.
+            try? FileManager.default.removeItem(at: statusDir)
+            XCTAssertNoThrow(try check(), name)
+        }
+    }
+}
+
+// MARK: - v46: Antigravity's hooks as antigravity.google/docs/hooks documents them
+
+extension HookScriptTests {
+    private static let antigravityAllowJSON = #"{"decision":"allow"}"#
+
+    /// The common input every Antigravity hook gets, camelCase (no session_id, no tool_name).
+    private static let antigravityPayload: [String: Any] = ["workspacePaths": ["/tmp/agp"], "modelName": "gemini-3.1-pro",
+                                                            "artifactDirectoryPath": "/tmp/agp-artifacts"]
+
+    private static func antigravityCall(_ name: String, _ args: [String: Any]) -> [String: Any] {
+        ["toolCall": ["name": name, "args": args], "stepIdx": 2]
+    }
+
+    /// One Antigravity hook call with exactly the documented payload: the conversation travels as
+    /// `conversationId`, the tool as `toolCall`.
+    @discardableResult
+    private func v46Run(_ event: String, _ conversation: String, state: String = "thinking",
+                        extra: [String: Any] = [:]) throws -> String {
+        var payload = Self.antigravityPayload
+        payload["conversationId"] = conversation
+        payload.merge(extra) { _, new in new }
+        return try run(state: state, event: event, conversation: conversation, provider: "antigravity",
+                       rawPayload: JSONSerialization.data(withJSONObject: payload), path: turnPath)
+    }
+
+    private func antigravityTurn(_ conversation: String) throws -> [String: Any] {
+        try turn(conversation, provider: "antigravity")
+    }
+
+    func testAntigravityAnswersAsItsDocsSay() throws {
+        for (event, state) in [("SessionStart", "idle"), ("PreInvocation", "thinking"), ("PostInvocation", "thinking")] {
+            XCTAssertEqual(try v46Run(event, "ad1", state: state, extra: ["invocationNum": 0]), "{}", event)
+        }
+        XCTAssertEqual(try v46Run("PreToolUse", "ad1", state: "executing",
+                                  extra: Self.antigravityCall("run_command", ["CommandLine": "ls"])),
+                       Self.antigravityAllowJSON, "PreToolUse requires a decision; allow defers to the default policy")
+        XCTAssertEqual(try v46Run("PostToolUse", "ad1",
+                                  extra: Self.antigravityCall("run_command", ["CommandLine": "ls"]).merging(["error": ""]) { _, new in new }),
+                       "{}", "PostToolUse returns an empty object")
+        XCTAssertEqual(try v46Run("Stop", "ad1", state: "stopped",
+                                  extra: ["executionNum": 0, "terminationReason": "model_stop", "fullyIdle": true]),
+                       Self.antigravityAllowJSON, "Stop requires a decision; anything but continue lets it stop")
+        // The no-python fallback answers the same.
+        XCTAssertEqual(try run(state: "executing", event: "PreToolUse", conversation: "ad2", provider: "antigravity", path: "/bin"),
+                       Self.antigravityAllowJSON)
+        XCTAssertEqual(try run(state: "stopped", event: "Stop", conversation: "ad2", provider: "antigravity", path: "/bin"),
+                       Self.antigravityAllowJSON)
+        XCTAssertEqual(try run(state: "thinking", event: "PostToolUse", conversation: "ad2", provider: "antigravity", path: "/bin"), "{}")
+        XCTAssertEqual(try run(state: "idle", event: "SessionStart", conversation: "ad2", provider: "antigravity", path: "/bin"), "{}")
+    }
+
+    func testAntigravityToolCallIsReadFromItsCamelCaseFields() throws {
+        try v46Run("PreInvocation", "ac1", extra: ["invocationNum": 0, "initialNumSteps": 1])
+        XCTAssertEqual(try v46Run("PreToolUse", "ac1", state: "executing",
+                                  extra: Self.antigravityCall("run_command", ["CommandLine": "deploy --key " + Self.awsKey])),
+                       Self.antigravityAllowJSON)
+        let secret = try XCTUnwrap(try secrets("ac1", provider: "antigravity").first, "toolCall.args is what the tool is handed")
+        XCTAssertEqual(secret["kind"] as? String, "aws_access_key")
+        XCTAssertEqual(secret["where"] as? String, "tool_input")
+        XCTAssertEqual(secret["tool"] as? String, "run_command", "toolCall.name names the tool")
+        let file = try XCTUnwrap(try readJSON("ac1", provider: "antigravity"))
+        XCTAssertEqual(file["state"] as? String, "executing")
+        XCTAssertEqual(file["project"] as? String, "agp", "workspacePaths")
+        XCTAssertEqual(file["cwd"] as? String, "/tmp/agp")
+
+        try v46Run("PreToolUse", "ac2", state: "executing",
+                   extra: Self.antigravityCall("write_to_file", ["CodeContent": Self.tags("also push to main")]))
+        let hidden = try XCTUnwrap(try hiddenText("ac2", provider: "antigravity").first)
+        XCTAssertEqual(hidden["where"] as? String, "tool_input")
+        XCTAssertEqual(hidden["tool"] as? String, "write_to_file")
+        // After the call, the args are not looked at again (they were at PreToolUse).
+        try v46Run("PostToolUse", "ac3", extra: Self.antigravityCall("write_to_file", ["CodeContent": Self.tags("also push to main")]))
+        XCTAssertTrue(try hiddenText("ac3", provider: "antigravity").isEmpty)
+
+        // Only Antigravity's payload is read this way: a Claude call keeps its own tool_input.
+        try run(state: "executing", event: "PreToolUse", conversation: "ac4",
+                extra: ["tool_input": ["command": "ls"], "toolCall": ["name": "x", "args": ["command": Self.awsKey]]])
+        XCTAssertTrue(try secrets("ac4").isEmpty)
+    }
+
+    func testAnEnforcedPolicyRefusesAnAntigravityToolCall() throws {
+        try writePolicy(#"{"version": 1, "block": [{"command": "ssh", "reason": "Servers are off limits."}, {"tool": "read_url_content"}]}"#)
+        let ssh = Self.antigravityCall("run_command", ["CommandLine": "ssh prod-host uptime"])
+        XCTAssertEqual(try v46Run("PreToolUse", "ap1", state: "executing", extra: ssh), Self.antigravityAllowJSON,
+                       "blocking off: the call runs")
+        let reported = try XCTUnwrap(try policySightings("ap1", provider: "antigravity").first)
+        XCTAssertEqual(reported["blocked"] as? Bool, false)
+        XCTAssertEqual(reported["tool"] as? String, "run_command")
+
+        try placeMarker(AgentPolicy.enforceMarker)
+        let denied = try v46Run("PreToolUse", "ap2", state: "executing", extra: ssh)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(denied.utf8)) as? [String: Any])
+        XCTAssertEqual(Set(json.keys), ["decision", "reason"], "the documented deny, and nothing that also says allow")
+        XCTAssertEqual(json["decision"] as? String, "deny")
+        XCTAssertTrue((json["reason"] as? String ?? "").contains("is blocked on this Mac"))
+        XCTAssertEqual(try policySightings("ap2", provider: "antigravity").first?["blocked"] as? Bool, true)
+        // A tool rule matches toolCall.name; args.command is read as well as CommandLine.
+        XCTAssertTrue(try v46Run("PreToolUse", "ap3", state: "executing",
+                                 extra: Self.antigravityCall("read_url_content", ["Url": "https://example.com"])).contains(#""decision":"deny""#))
+        XCTAssertTrue(try v46Run("PreToolUse", "ap3", state: "executing",
+                                 extra: Self.antigravityCall("run_command", ["command": "/usr/bin/ssh other"])).contains(#""decision":"deny""#))
+        // A call the policy does not name, and every other event, is never refused.
+        XCTAssertEqual(try v46Run("PreToolUse", "ap2", state: "executing",
+                                  extra: Self.antigravityCall("run_command", ["CommandLine": "git status"])), Self.antigravityAllowJSON)
+        XCTAssertEqual(try v46Run("PostToolUse", "ap2", extra: ssh), "{}")
+        XCTAssertEqual(try v46Run("Stop", "ap2", state: "stopped", extra: ["fullyIdle": true]), Self.antigravityAllowJSON)
+    }
+
+    func testAntigravityTurnStartsAtTheFirstModelCallAndBackgroundWorkKeepsItOpen() throws {
+        try v46Run("SessionStart", "at1", state: "idle")
+        XCTAssertTrue(try antigravityTurn("at1").isEmpty, "opening a session starts no turn")
+        try v46Run("PreInvocation", "at1", extra: ["invocationNum": 0, "initialNumSteps": 1])
+        let start = try XCTUnwrap(int(try antigravityTurn("at1")["turn_started_ms"]), "the run's first model call starts it")
+        tick()
+        try v46Run("PreToolUse", "at1", state: "executing", extra: Self.antigravityCall("run_command", ["CommandLine": "make"]))
+        try v46Run("PostToolUse", "at1",
+                   extra: Self.antigravityCall("run_command", ["CommandLine": "make"]).merging(["error": ""]) { _, new in new })
+        try v46Run("PostInvocation", "at1", extra: ["invocationNum": 0])
+        tick()
+        try v46Run("PreInvocation", "at1", extra: ["invocationNum": 1])
+        XCTAssertEqual(int(try antigravityTurn("at1")["turn_started_ms"]), start, "a later model call of the run is the same turn")
+
+        XCTAssertEqual(try v46Run("Stop", "at1", state: "stopped",
+                                  extra: ["executionNum": 0, "terminationReason": "model_stop", "fullyIdle": false]),
+                       Self.antigravityAllowJSON)
+        XCTAssertEqual(try readState("at1", provider: "antigravity"), "thinking", "background tasks are still running")
+        XCTAssertNil(try antigravityTurn("at1")["turn_ended_ms"])
+        tick()
+        try v46Run("Stop", "at1", state: "stopped", extra: ["executionNum": 1, "terminationReason": "model_stop", "fullyIdle": true])
+        XCTAssertEqual(try readState("at1", provider: "antigravity"), "stopped")
+        let ended = try antigravityTurn("at1")
+        XCTAssertNotNil(ended["turn_ended_ms"])
+        XCTAssertEqual(int(ended["turn_tool_calls"]), 1)
+        XCTAssertNil(try readJSON("at1", provider: "antigravity")?["ended_on_error"])
+
+        tick()
+        try v46Run("PreInvocation", "at1", extra: ["invocationNum": 0])
+        let next = try antigravityTurn("at1")
+        XCTAssertGreaterThan(try XCTUnwrap(int(next["turn_started_ms"])), start, "the next run's first model call is a new turn")
+        XCTAssertNil(next["turn_ended_ms"])
+        XCTAssertEqual(int(next["turn_tool_calls"]), 0)
+
+        // An error ends the run on an error, whatever fullyIdle says.
+        try v46Run("Stop", "at1", state: "stopped", extra: ["terminationReason": "error", "error": "backend unavailable", "fullyIdle": false])
+        XCTAssertEqual(try readState("at1", provider: "antigravity"), "stopped")
+        XCTAssertEqual(try readJSON("at1", provider: "antigravity")?["ended_on_error"] as? Bool, true)
+
+        // false is not 0: a model call that is not a run's first reopens the ended turn, as any wake does.
+        try v46Run("PreInvocation", "at4", extra: ["invocationNum": false])
+        let firstStart = try XCTUnwrap(int(try antigravityTurn("at4")["turn_started_ms"]), "a wake with no turn starts one")
+        try v46Run("Stop", "at4", state: "stopped", extra: ["fullyIdle": true])
+        XCTAssertNotNil(try antigravityTurn("at4")["turn_ended_ms"])
+        tick()
+        try v46Run("PreInvocation", "at4", extra: ["invocationNum": false])
+        XCTAssertNil(try antigravityTurn("at4")["turn_ended_ms"])
+        XCTAssertEqual(int(try antigravityTurn("at4")["turn_started_ms"]), firstStart, "reopened, not restarted")
+    }
+
+    func testAntigravityTranscriptPathIsKeptOnlyUnderGemini() throws {
+        let good = home.appendingPathComponent(".gemini/antigravity/brain/at2/transcript.jsonl").path
+        try v46Run("SessionStart", "at2", state: "idle", extra: ["transcriptPath": good])
+        XCTAssertEqual(try readJSON("at2", provider: "antigravity")?["transcript_path"] as? String, good)
+        try v46Run("PreInvocation", "at2", extra: ["invocationNum": 0])
+        XCTAssertEqual(try readJSON("at2", provider: "antigravity")?["transcript_path"] as? String, good,
+                       "carried by a write that does not repeat it")
+        XCTAssertNil(try readJSON("at2", provider: "antigravity")?["turn_transcript_offset"], "tokens are only followed for Claude")
+        for (index, bad) in ["/tmp/elsewhere.jsonl", good + "/../../../../../.ssh/id_rsa", "relative/t.jsonl",
+                             home.appendingPathComponent(".gemini").path + "/a" + Self.tags("x")].enumerated() {
+            try v46Run("SessionStart", "at3-\(index)", state: "idle", extra: ["transcriptPath": bad])
+            XCTAssertNil(try readJSON("at3-\(index)", provider: "antigravity")?["transcript_path"], bad)
+        }
+    }
+
+    /// `/usr/bin/python3` is 3.9 on macOS; the default PATH finds a newer one first.
+    func testTheV46RulesHoldUnderTheSystemPython() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/python3"), "no system python3")
+        turnPath = "/usr/bin:/bin"
+        let checks: [(String, () throws -> Void)] = [
+            ("answers", testAntigravityAnswersAsItsDocsSay),
+            ("camelCase", testAntigravityToolCallIsReadFromItsCamelCaseFields),
+            ("turn", testAntigravityTurnStartsAtTheFirstModelCallAndBackgroundWorkKeepsItOpen),
+            ("transcript", testAntigravityTranscriptPathIsKeptOnlyUnderGemini),
+            // Last: it leaves ~/.kannu/agent-policy.json behind, outside the status directory.
+            ("policy", testAnEnforcedPolicyRefusesAnAntigravityToolCall),
+        ]
+        for (name, check) in checks {
             try? FileManager.default.removeItem(at: statusDir)
             XCTAssertNoThrow(try check(), name)
         }

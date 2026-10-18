@@ -36,7 +36,7 @@ struct NotchLLMUsageView: View {
     private func isEnabled(_ provider: ProviderID) -> Bool { Defaults[provider.enabledKey] }
 
     /// A provider is "active" (shows full card) when:
-    /// - Antigravity: always shown (session info instead of token counts)
+    /// - Antigravity: always shown (its quota bars when `agy` reports them, else session info)
     /// - Others: show unless result is a hard .failure, OR a .success where the provider
     ///   has neither local logs nor quota limits (e.g. Claude with a dead OAuth token, Codex
     ///   not installed — both return .success but have nothing useful to display).
@@ -107,7 +107,7 @@ struct NotchLLMUsageView: View {
             case .failure(let reason):
                 Text(reason).font(.caption).foregroundStyle(.secondary).lineLimit(4)
             case .success(let snap):
-                if provider == .antigravity {
+                if provider == .antigravity && snap.sessionLimit == nil && snap.weekLimit == nil && snap.extraLimits.isEmpty {
                     antigravitySessionInfo(snap)
                 } else {
                     success(snap, provider: provider)
@@ -167,10 +167,19 @@ struct NotchLLMUsageView: View {
                 // the countdown silently gone until then.
                 TimelineView(.periodic(from: .now, by: 60)) { context in
                     let now = context.date
-                    let liveExtras = snap.extraLimits.filter { Self.isLive($0.limit, now: now) }
+                    // Another pool's 5-hour window (Antigravity) sits with the 5-hour bar, not under Weekly.
+                    let sessionExtras = snap.extraLimits.filter { $0.isSessionWindow && Self.isLive($0.limit, now: now) }
+                    let liveExtras = snap.extraLimits.filter { !$0.isSessionWindow && Self.isLive($0.limit, now: now) }
+                    let sessionExtraBars: [QuotaBar] = sessionExtras.map {
+                        .init($0.limit, label: $0.label ?? Self.extraLimitLabel($0), windowID: Self.windowID(provider, slot: $0.key))
+                    }
                     if let limit = snap.sessionLimit, Self.isLive(limit, now: now) {
                         quotaSection(title: String(localized: "5 hour"), reset: limit.resetsAt,
-                                     bars: [.init(limit, windowID: Self.windowID(provider, slot: "session"))], now: now)
+                                     bars: [.init(limit, label: snap.limitsLabel, windowID: Self.windowID(provider, slot: "session"))]
+                                        + sessionExtraBars, now: now)
+                    } else if !sessionExtraBars.isEmpty {
+                        quotaSection(title: String(localized: "5 hour"), reset: sessionExtras.first?.limit.resetsAt,
+                                     bars: sessionExtraBars, now: now)
                     } else {
                         localSessionRow(snap)
                     }
@@ -181,7 +190,7 @@ struct NotchLLMUsageView: View {
                         quotaSection(
                             title: String(localized: "Weekly"),
                             reset: week.resetsAt,
-                            bars: [.init(week, label: String(localized: "All models"), windowID: Self.windowID(provider, slot: "week"))]
+                            bars: [.init(week, label: snap.limitsLabel ?? String(localized: "All models"), windowID: Self.windowID(provider, slot: "week"))]
                                 + liveExtras.map { .init($0.limit, label: $0.label ?? Self.extraLimitLabel($0), windowID: Self.windowID(provider, slot: $0.key)) },
                             now: now
                         )
@@ -198,7 +207,8 @@ struct NotchLLMUsageView: View {
                 // Claude's Session/Week quota gauges above already cover this ground —
                 // the compact Today/Week token counts were redundant for Claude specifically.
                 // Other providers (e.g. Cursor, Codex) keep them.
-                if provider != .claude {
+                // Antigravity keeps no token log at all, so there is no "unavailable" to report.
+                if provider != .claude && provider != .antigravity {
                     if snap.logsUnavailable {
                         Text("Token totals unavailable").font(.caption2).foregroundStyle(.secondary)
                     } else {

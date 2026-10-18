@@ -183,6 +183,36 @@ working or waiting, the fold ignores it once the chat's turn ends, and only Clau
 cap. Guards: the `HookScriptTests` v45
 group, run again under `/usr/bin/python3` 3.9, and the v45 cases in `AgentHookLayoutTests`.
 
+**v46 addendum — Antigravity's hooks, from its docs only.** Antigravity changed its hooks.json:
+the top level maps a hook's name to its configuration, only `PreToolUse` and `PostToolUse` take
+matcher groups, and `UserPromptSubmit` is not an event. Since 2.6.0 it rejects a configuration that
+can never run instead of ignoring it. Kannu's v45 file was Claude-shaped, so Antigravity read it as a
+hook named "hooks" with no runnable handler. Kannu now writes one `kannu-agent-status` entry to
+`~/.gemini/config/hooks.json`, the one global file the docs list. `AgentHookLayout` gives Antigravity's
+files the `.namedHooks` shape. The two files an older Kannu also wrote are `.stripOnly`: install and
+uninstall remove Kannu's entries from them, old shape and new, and never write there (entry 6).
+The script reads `toolCall.name`/`toolCall.args`, `transcriptPath` and `fullyIdle`. `PreToolUse` and
+`Stop` answer `{"decision":"allow"}`, because the docs mark `decision` required on both. `allow`
+defers to the next hook or the default policy. Every other event answers `{}`. Rules:
+- The Antigravity deny (`{"decision":"deny","reason":…}`) widens `POLICY_DENY_EVENTS` on the docs
+  alone. That breaks the v42 rule "only after a live check". The deny is the documented one, and the
+  host now requires a decision on every call anyway. Run a live check before widening it further.
+  A change to `POLICY_DENY_EVENTS` changes what the user opts into, so the **Block matching tool
+  calls** row, the `enforceAgentPolicy` doc comment and `docs/ADR.md` section 9 must name the same
+  hosts. The first v46 draft widened the table and left the row saying only Claude Code and Cursor
+  refuse (caught in review). Guard: `ADRDocsTests.testEveryHostThatCanRefuseIsNamedWhereTheUserOptsIn`
+  reads the mirror's table and the three texts from the source tree.
+- Antigravity has no prompt event, so a turn starts at the first model call of a run
+  (`PreInvocation` with `invocationNum` 0, never `false`). A `Stop` with `fullyIdle: false` and no
+  error keeps the light green and the turn open.
+- The installed check reads the fixed `antigravityCoreInstalledEvents`, as Claude's and Cursor's do.
+  A v45 file fails it and upgrades through the version migration, which is gated on the script.
+  `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script.
+
+Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9, and the v46 cases
+in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
+changelog. None of it has run against a real Antigravity.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call

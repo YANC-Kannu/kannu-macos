@@ -4,6 +4,100 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Antigravity hooks use the shape Antigravity documents, and its card can show model quotas
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P6 Antigravity hooks v46 and agy /usage
+- **Changes:**
+  - Hook v46: Antigravity's hooks.json now maps a hook name to its configuration
+    (antigravity.google/docs/hooks). Kannu writes one `kannu-agent-status` entry to
+    `~/.gemini/config/hooks.json`, the one global file the docs list. `SessionStart`, `PreInvocation`,
+    `PostInvocation` and `Stop` hold flat lists of handlers; `PreToolUse` and `PostToolUse` hold one
+    matcher group with matcher `""` (every tool). `UserPromptSubmit` is gone: it is not an
+    Antigravity event, and Antigravity 2.6.0 rejects hook configurations that can never run. If the
+    user sets `enabled: false` on Kannu's entry, a reinstall keeps it. UNVERIFIED: built from the docs
+    and changelog only; Antigravity is not installed on this Mac.
+  - Migration: install removes the v45 Claude-style `hooks.<event>` groups Kannu wrote, from all
+    three files (`~/.gemini/config/hooks.json`, `~/.gemini/antigravity-ide/hooks.json`,
+    `~/.gemini/hooks.json`). The user's own groups and hooks stay. A file that holds nothing of
+    Kannu's is not rewritten. The two older files are now cleanup-only, because the docs no longer
+    name them. Install never writes there, and uninstall strips both shapes from all three files. A
+    v45 install upgrades through the script-version migration. A new
+    `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script. The
+    installed check reads a fixed core (`PreInvocation`, `PreToolUse`, `Stop`), as Claude's and
+    Cursor's do. UNVERIFIED on a real install.
+  - The hook script reads Antigravity's camelCase payload: `toolCall.name` and `toolCall.args` (so
+    the secret, hidden-text and agent-policy checks see the tool call), `transcriptPath` (kept as the
+    chat's `transcript_path`, only as a canonical path under `~/.gemini`; nothing reads it yet) and
+    `fullyIdle`. A `Stop` with `fullyIdle: false` and no error keeps the light green and the turn
+    open, because background tasks are still running. Antigravity has no prompt event, so the first
+    model call of a run (`PreInvocation` with `invocationNum` 0) starts a turn; the docs do not say
+    whether that count restarts for each user message. `CommandLine` is read as a command too, the
+    key `run_command` is believed to take; undocumented. UNVERIFIED.
+  - Antigravity answers: `PreToolUse` and `Stop` print `{"decision":"allow"}`, since the docs mark
+    `decision` required on both. On `PreToolUse`, `allow` passes the call to the next hook or the
+    default policy, so nothing is auto-approved. Every other event prints `{}` (the documented
+    `PostToolUse` answer). The no-python fallback answers the same. With agent-policy blocking on, a
+    matched `PreToolUse` gets the documented deny, `{"decision":"deny","reason":…}`. That widens
+    `POLICY_DENY_EVENTS` on the docs alone, so `docs/REGRESSIONS.md` entry 1 has a v46 addendum
+    naming the exception. UNVERIFIED that Antigravity honours either answer.
+  - What the user opts into changed with it, so the Settings › Agents › **Block matching tool calls**
+    row now reads "On: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell
+    the agent why." The `enforceAgentPolicy` doc comment, the row's search keywords (`antigravity`)
+    and `docs/ADR.md` section 9 name Antigravity too, so a user turning blocking on is told that
+    Antigravity calls are refused, not only flagged. `ADRDocsTests` now fails when a host in
+    `POLICY_DENY_EVENTS` is missing from the row, the doc comment or the section 9 heading.
+  - Usage: the Antigravity card reads `agy -p "/usage" --output-format json`, which CLI v1.1.11
+    (2026-08-07) answers without an agent turn. `agy` is looked for in `~/.local/bin` (the official
+    installer), `/opt/homebrew/bin` and `/usr/local/bin`. No public source shows an `agy` inside
+    Antigravity.app, so no bundle path is guessed. Only a binary with a valid Developer ID signature
+    from team `EQHXZ8M8AV` (Google LLC) is run. That team ID comes from Antigravity.app's published
+    signature (third-party sources) and from Google Chrome on this Mac, where the requirement string
+    was checked: Chrome and GoogleUpdater pass, `/bin/ls` and Cursor fail. How the `agy` binary
+    itself is signed is UNVERIFIED; if it is signed any other way, the reader never runs.
+  - The run goes through `BoundedProcessRunner` on a utility queue, with a 20 s timeout, stdin from
+    `/dev/null`, the temporary folder as working directory and Kannu's environment unchanged. Its
+    output is never logged; the log says only how the run ended. Kannu never reads Antigravity's
+    OAuth files and never calls its local language server.
+  - After a run that gives no quota, Kannu leaves `agy` alone for 15 minutes. Only the Usage tab's
+    Refresh button lifts that wait (`LLMUsageManager.refreshRequestedByUser`). The 30 s tick, opening
+    the tab and the Claude refresh paths wait it out. The wait is not keyed on `interactive`:
+    Refresh never sets it, and only Claude's keychain button does. UNVERIFIED with a real `agy`.
+  - One failed run does not blank the bars. The last quota `agy` gave stays on the card for up to
+    540 s, the same bound `LLMUsageManager` keeps a last-good result for, after a run that gives none
+    (a timeout, a non-zero exit, a run the wait skipped). A window whose reset has passed is dropped.
+    Kept bars carry the time `agy` reported them, so the manager's own bound does not add to it.
+    UNVERIFIED with a real `agy`.
+  - A signature verdict, pass or fail, is reused while the file's device, inode, size, mtime and
+    ctime are unchanged. A same-user rewrite in place with the mtime put back still changes the ctime,
+    so it is checked again. An `agy` signed some other way is not hashed again on every refresh.
+    Not closed: a swap between the check and the exec. That needs a suspended spawn checked by pid,
+    which `BoundedProcessRunner` does not do.
+  - The JSON field names are undocumented, so `AntigravityUsageReport` (new, Foundation-only, in
+    the test target) accepts the plausible shapes and ignores the rest. A pool is any object with a
+    5-hour or weekly window, wherever it sits, including the headless envelope's `response` given
+    as JSON text. A window is a used or remaining percentage, fraction or count, with an optional
+    ISO 8601 or epoch reset. A failed headless `status`, token `usage`, daily caps and unnamed
+    per-model fractions give nothing. The first pool with a 5-hour window fills the 5-hour and
+    weekly bars. Every other pool's windows become extra bars labelled with its name. Another
+    pool's 5-hour bar sits under "5 hour" (`NamedLimit.isSessionWindow`), and the primary pool's
+    name replaces "All models" when there is more than one (`UsageSnapshot.limitsLabel`). The hook
+    session line stays as the card's secondary text, or the whole card without quotas. UNVERIFIED
+    against a real `agy`.
+  - Because `/usage` reaches Google's backend, the Antigravity provider is no longer a local-file
+    provider: it refreshes on the network floor (180 s, 10 s for Refresh), not on every 30 s tick
+    of the Usage tab. Its hook session line now refreshes on that floor too. The Providers footer in
+    Settings › Usage says Kannu runs `agy /usage`.
+  - Tests: a v46 `HookScriptTests` group (answers, camelCase fields, the enforced deny, turns and
+    `fullyIdle`, the transcript path), run again under `/usr/bin/python3` 3.9. Three existing cases
+    moved off `UserPromptSubmit` and the old answer. `AgentHookLayoutTests` cases cover the
+    documented shape, the v45 migration, uninstall of both shapes and a kept `enabled: false`.
+    `AntigravityUsageReportTests` covers the pinned invocation and plausible fixtures. Fixtures,
+    not captured output. It also pins the network floor (`AntigravityUsageCommand.reachesNetwork`).
+    It checks that the code requirement compiles, refuses `/bin/ls` and `/usr/bin/python3`, and
+    accepts Google Chrome (skipped where Chrome is not installed). It covers the verdict cache, the
+    ctime catching an in-place rewrite, and the kept last quota. Chrome stands in for `agy`, which is
+    not installed here.
+
 ### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
 - **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
 - **Agent label:** P3 Hook contracts v45

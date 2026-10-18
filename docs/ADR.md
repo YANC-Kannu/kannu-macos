@@ -214,7 +214,7 @@ and, only with triage on, to OpenAI. Nothing else, nothing automatic, nothing wi
 The adapter Kannu runs is its own GPL script (`scripts/adr-analyze-session.py`, written to
 `~/.kannu/adr/detection/` at run time); it imports ADR from your checkout and copies nothing.
 
-## 9. Agent policy (opt-in; blocking on Claude Code and Cursor)
+## 9. Agent policy (opt-in; blocking on Claude Code, Cursor and Antigravity)
 
 A JSON file you write, `~/.kannu/agent-policy.json`, naming commands and tools an agent may not use:
 
@@ -255,13 +255,15 @@ and Copy for agent work. Both sit on the **Get a policy** row, next to the statu
 Every match is recorded as a finding (`policy_command` / `policy_tool`) with the rule, the tool,
 and whether the call was refused or ran. **Block matching tool calls** (off by default) is what
 turns a report into a refusal: on Claude Code (`PreToolUse`, through `permissionDecision: deny`,
-whose reason reaches the model and the transcript) and on Cursor (`beforeShellExecution`,
-`beforeMCPExecution`, `preToolUse`, through `permission: deny`), the hook refuses the call and tells
+whose reason reaches the model and the transcript), on Cursor (`beforeShellExecution`,
+`beforeMCPExecution`, `preToolUse`, through `permission: deny`) and on Antigravity (`PreToolUse`,
+through `decision: deny` with a `reason`), the hook refuses the call and tells
 the agent `Kannu policy: "ssh" is blocked on this Mac by the user's agent policy. <reason> Ask the
 user before trying another way.` A refused call is a medium finding — the policy working; a call
-that ran is high. Codex, VS Code, Gemini CLI, Qwen Code, Copilot CLI, Antigravity and opencode get
-the finding only: their hook contracts either have no verified deny or no pre-tool event at all,
-and Kannu does not guess at a host's protocol.
+that ran is high. Antigravity's deny (hook v46) follows antigravity.google/docs/hooks and has not
+been tested on a real install; the Settings row says so. Codex, VS Code, Gemini CLI, Qwen Code,
+Copilot CLI and opencode get the finding only: their hook contracts either have no verified deny or
+no pre-tool event at all, and Kannu does not guess at a host's protocol.
 
 Real enforcement for an agent Kannu cannot refuse lives in that agent's own permission system —
 for Claude Code, `"permissions": {"deny": ["Bash(ssh *)"]}` in `settings.json`, which Kannu neither

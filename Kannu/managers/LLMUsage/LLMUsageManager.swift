@@ -96,8 +96,9 @@ final class LLMUsageManager: ObservableObject {
         let enabledIDs = Set(allEnabled.map { $0.id })
         results = results.filter { enabledIDs.contains($0.key) }
 
-        // Local file providers (Antigravity) read from disk: no network, nothing that can be
-        // rate-limited, so they refresh on every open and never gate on `isRefreshing`.
+        // Local file providers read from disk: no network, nothing that can be rate-limited, so
+        // they refresh on every open and never gate on `isRefreshing`. (Antigravity was one until
+        // it learned to ask `agy` for its quotas, which reaches Google's backend.)
         if !localProviders.isEmpty {
             for provider in localProviders {
                 // Keep the current card — success or failure — while refreshing; only a
@@ -144,6 +145,14 @@ final class LLMUsageManager: ObservableObject {
         Task { await runRefresh(providers: networkProviders, interactive: interactive, ownsRefreshFlag: true) }
     }
 
+    /// The Usage tab's Refresh button. The user asked for fresh figures, so it also lifts
+    /// Antigravity's failure backoff: someone who has just signed in to `agy` should not wait out
+    /// 15 minutes. Every other caller of `refreshAll` leaves the backoff alone.
+    func refreshRequestedByUser() {
+        AntigravityQuotaReader.shared.clearBackoff()
+        refreshAll(force: true)
+    }
+
     /// Retries a provider's quota with prompts allowed, after the user taps the card's fix-it button.
     func resolveQuotaAction(_ action: QuotaAction) {
         switch action {
@@ -152,7 +161,7 @@ final class LLMUsageManager: ObservableObject {
     }
 
     /// `ownsRefreshFlag` is true only for the network pass. The local pass must leave
-    /// `isRefreshing` alone: Antigravity reads a file and finishes almost immediately, so
+    /// `isRefreshing` alone: a local provider reads a file and finishes almost immediately, so
     /// clearing the flag there would unblock the UI mid-network-request.
     private func runRefresh(providers: [UsageProvider], interactive: Bool, ownsRefreshFlag: Bool) async {
         let now = Date()

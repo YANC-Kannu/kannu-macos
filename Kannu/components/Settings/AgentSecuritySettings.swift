@@ -362,7 +362,7 @@ struct AgentSecuritySettings: View {
             if let importError = findingsStore.agentPolicyImportError {
                 SettingsErrorText(String(localized: "Not imported — \(importError)"))
             }
-            SettingsRow("Block matching tool calls", description: Text("Off: matches are only flagged.\nOn: Claude Code and Cursor refuse the call and tell the agent why.\nOther agents are only flagged either way.")) {
+            SettingsRow("Block matching tool calls", description: Text("Off: matches are only flagged.\nOn: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell the agent why.\nOther agents are only flagged either way.")) {
                 Defaults.Toggle(key: .enforceAgentPolicy) {
                     Text("Block matching tool calls")
                 }

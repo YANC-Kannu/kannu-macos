@@ -67,7 +67,7 @@ struct UsageSettings: View {
                 } header: {
                     SettingsSectionHeader("Providers")
                 } footer: {
-                    SettingsFooter("Choose which AI providers appear in the Usage tab. Claude reads everything from local files and needs no permission; the gauge button on its card hides or shows the rate-limit bars. Codex and Cursor need each CLI signed in locally. Full Disk Access is not required.")
+                    SettingsFooter("Choose which AI providers appear in the Usage tab. Claude reads everything from local files and needs no permission; the gauge button on its card hides or shows the rate-limit bars. Codex and Cursor need each CLI signed in locally. Antigravity shows its model quotas when the Antigravity CLI (agy) is installed and signed in; Kannu asks it for /usage while the Usage tab is open, at most every 3 minutes unless you press Refresh. Full Disk Access is not required.")
                 }
 
                 Section {

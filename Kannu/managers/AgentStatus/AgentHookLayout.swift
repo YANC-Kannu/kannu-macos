@@ -56,17 +56,23 @@ struct AgentHookLayout: Equatable {
     enum Shape: Equatable {
         /// Cursor: `hooks.<event>` is a list of `{"command": …}`.
         case flatEntries
-        /// Claude, Codex, Antigravity: `hooks.<event>` is a list of `{"hooks": [{"command": …}]}`.
+        /// Claude, Codex: `hooks.<event>` is a list of `{"hooks": [{"command": …}]}`.
         case matcherGroups
         /// VS Code: a file that is entirely Kannu's, deleted on uninstall.
         case ownFile
+        /// Antigravity (hook v46): the top level maps a hook's name to its configuration, and
+        /// Kannu's is `kannu-agent-status`. Kannu before v46 wrote `hooks.<event>` matcher groups
+        /// here instead; stripping removes those too.
+        case namedHooks
     }
 
     enum WritePolicy: Equatable {
         /// Install writes it, creating it when needed.
         case always
-        /// Install merges into it only when it already exists; uninstall still strips it.
-        case onlyIfPresent
+        /// Install never writes Kannu's entries here, only removes an older Kannu's; uninstall
+        /// strips it too. A file the tool no longer documents, where an earlier Kannu wrote. (It
+        /// replaced `onlyIfPresent`, a merge into the file when it existed, which only Antigravity used.)
+        case stripOnly
     }
 
     struct ConfigFile: Equatable {
@@ -97,8 +103,9 @@ struct AgentHookLayout: Equatable {
     var codexScript: URL { home.appendingPathComponent(".codex/\(Self.scriptName)") }
     var claudeSettings: URL { home.appendingPathComponent(".claude/settings.json") }
     var claudeScript: URL { home.appendingPathComponent(".claude/\(Self.scriptName)") }
-    /// Antigravity reads whichever of its three hook files exists; this documented one is the
-    /// file install always writes.
+    /// The global hook file antigravity.google/docs/hooks lists for the App, the IDE and the CLI
+    /// alike, and the only one install writes. The two below are where Kannu before v46 also wrote
+    /// when they existed; the docs no longer name either, so they are only cleaned.
     var antigravityConfigHooks: URL { home.appendingPathComponent(".gemini/config/hooks.json") }
     var antigravityIDEHooks: URL { home.appendingPathComponent(".gemini/antigravity-ide/hooks.json") }
     var antigravityRootHooks: URL { home.appendingPathComponent(".gemini/hooks.json") }
@@ -132,9 +139,9 @@ struct AgentHookLayout: Equatable {
                          sharedSettings: [])
         case .antigravity:
             return Files(script: antigravityScript,
-                         configs: [ConfigFile(url: antigravityConfigHooks, shape: .matcherGroups, write: .always),
-                                   ConfigFile(url: antigravityIDEHooks, shape: .matcherGroups, write: .onlyIfPresent),
-                                   ConfigFile(url: antigravityRootHooks, shape: .matcherGroups, write: .onlyIfPresent)],
+                         configs: [ConfigFile(url: antigravityConfigHooks, shape: .namedHooks, write: .always),
+                                   ConfigFile(url: antigravityIDEHooks, shape: .namedHooks, write: .stripOnly),
+                                   ConfigFile(url: antigravityRootHooks, shape: .namedHooks, write: .stripOnly)],
                          sharedSettings: [])
         case .gemini:
             return Files(script: geminiScript,
@@ -288,8 +295,79 @@ struct AgentHookLayout: Equatable {
         ("SessionEnd", "session_end")
     ]
 
-    /// Kannu's name on its Gemini CLI handlers (Gemini shows it while a hook runs).
+    /// Kannu's name on its Gemini CLI handlers (Gemini shows it while a hook runs), and the name of
+    /// its entry in Antigravity's hooks.json.
     static let handlerName = "kannu-agent-status"
+
+    // MARK: - Antigravity's named hooks (~/.gemini/config/hooks.json, hook v46)
+
+    /// The six events antigravity.google/docs/hooks lists. `UserPromptSubmit` is not one of them:
+    /// Kannu registered it until v45, and Antigravity 2.6.0 rejects a configuration that can never
+    /// run instead of ignoring it. The script reads the first model call of a run as its start.
+    static let antigravityEvents: [(event: String, state: String)] = [
+        ("SessionStart", "idle"),
+        ("PreInvocation", "thinking"),
+        ("PostInvocation", "thinking"),
+        ("PreToolUse", "executing"),
+        ("PostToolUse", "thinking"),
+        ("Stop", "stopped")
+    ]
+
+    /// Only these two take matcher groups; the others take their handlers as a flat list.
+    static let antigravityMatcherEvents: Set<String> = ["PreToolUse", "PostToolUse"]
+
+    /// The subset that defines "Antigravity hooks are installed", fixed for the reason Claude's is:
+    /// the table can grow without an older install reading as not installed.
+    static let antigravityCoreInstalledEvents = ["PreInvocation", "PreToolUse", "Stop"]
+
+    /// The file with Kannu's named entry, in the documented shape, after removing every earlier
+    /// Kannu entry (the pre-v46 `hooks` groups included). The user's own hooks and the rest of the
+    /// file are kept, and so is an `enabled: false` the user set on Kannu's entry.
+    static func mergingAntigravityEntry(into config: [String: Any], script: URL, timeout: Int = 10) -> [String: Any] {
+        let wasEnabled = (config[handlerName] as? [String: Any])?["enabled"] as? Bool
+        var config = strippingAntigravityEntries(from: config)
+        var entry: [String: Any] = ["enabled": wasEnabled ?? true]
+        for (event, state) in antigravityEvents {
+            let handler: [String: Any] = ["type": "command", "command": "\(script.path) \(state) antigravity \(event)",
+                                          "timeout": timeout]
+            // An empty matcher is every tool, and the one spelling that is also a valid regex.
+            entry[event] = antigravityMatcherEvents.contains(event) ? [["matcher": "", "hooks": [handler]]] : [handler]
+        }
+        config[handlerName] = entry
+        return config
+    }
+
+    /// Removes Kannu's named entry and the groups a pre-v46 Kannu left under `hooks`; a `hooks` left
+    /// empty goes too. Anything else under `hooks` is the user's (in the new shape it is just a hook
+    /// named "hooks") and stays.
+    static func strippingAntigravityEntries(from config: [String: Any]) -> [String: Any] {
+        var config = config
+        config.removeValue(forKey: handlerName)
+        if let legacy = config["hooks"] as? [String: Any] {
+            let kept = strippingKannuGroups(from: legacy)
+            config["hooks"] = kept.isEmpty ? nil : kept
+        }
+        return config
+    }
+
+    /// True when the file still holds a pre-v46 Kannu group under `hooks`. Antigravity reads that
+    /// as a hook named "hooks" whose handlers have no command, a configuration that can never run.
+    static func hasLegacyAntigravityGroups(_ config: [String: Any]) -> Bool {
+        guard let legacy = config["hooks"] as? [String: Any] else { return false }
+        return NSDictionary(dictionary: strippingKannuGroups(from: legacy)) != NSDictionary(dictionary: legacy)
+    }
+
+    /// True when Kannu's named entry runs Kannu's script for every one of `events`.
+    static func antigravityEntryCovers(_ config: [String: Any], events: [String]) -> Bool {
+        guard let entry = config[handlerName] as? [String: Any] else { return false }
+        func isOurs(_ handler: [String: Any]) -> Bool { ((handler["command"] as? String)?.contains(scriptName)) == true }
+        return events.allSatisfy { event in
+            guard let items = entry[event] as? [[String: Any]] else { return false }
+            return items.contains { item in
+                isOurs(item) || ((item["hooks"] as? [[String: Any]])?.contains(where: isOurs) == true)
+            }
+        }
+    }
 
     // MARK: - Settings files Kannu shares with the tool (Gemini CLI, Qwen Code)
 

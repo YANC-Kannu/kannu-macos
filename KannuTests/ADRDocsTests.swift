@@ -72,4 +72,45 @@ final class ADRDocsTests: XCTestCase {
             XCTAssertTrue(card.contains(phrase), phrase)
         }
     }
+
+    /// The hosts the hook can refuse a call on (`POLICY_DENY_EVENTS`) are what a user agrees to when
+    /// turning blocking on, so the Settings row, its `Defaults` doc comment and section 9 must name
+    /// every one of them (docs/REGRESSIONS.md entry 1, v46 addendum: the table grew and the row did not).
+    func testEveryHostThatCanRefuseIsNamedWhereTheUserOptsIn() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        func read(_ path: String) throws -> String {
+            try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+        }
+        // Wrapped prose and doc comments compared on the words.
+        func words(_ text: String) -> String {
+            text.replacingOccurrences(of: "///", with: " ").replacingOccurrences(of: "*", with: "")
+                .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+        }
+
+        let script = try read("scripts/kannu-agent-status.sh")
+        let start = try XCTUnwrap(script.range(of: "POLICY_DENY_EVENTS = {"), "the deny table is gone")
+        let end = try XCTUnwrap(script.range(of: "\nPOLICY_", range: start.upperBound..<script.endIndex))
+        let table = String(script[start.upperBound..<end.lowerBound])
+        let keyPattern = try NSRegularExpression(pattern: "\"([a-z]+)\": \\{")
+        let providers = keyPattern.matches(in: table, range: NSRange(table.startIndex..., in: table)).compactMap {
+            Range($0.range(at: 1), in: table).map { String(table[$0]) }
+        }
+        XCTAssertEqual(Set(providers), ["claude", "cursor", "antigravity"], "a new host: name it below and in the row")
+        let names = ["claude": "Claude Code", "cursor": "Cursor", "antigravity": "Antigravity"]
+
+        let settings = try read("Kannu/components/Settings/AgentSecuritySettings.swift")
+        let row = try XCTUnwrap(settings.components(separatedBy: "\n").first { $0.contains("SettingsRow(\"Block matching tool calls\"") })
+        let constants = try read("Kannu/models/Constants.swift")
+        let docEnd = try XCTUnwrap(constants.range(of: "static let enforceAgentPolicy"))
+        let docStart = try XCTUnwrap(constants.range(of: "/// The agent policy", options: .backwards,
+                                                     range: constants.startIndex..<docEnd.lowerBound))
+        let comment = words(String(constants[docStart.lowerBound..<docEnd.lowerBound]))
+        let heading = try XCTUnwrap(Self.doc.components(separatedBy: "\n").first { $0.hasPrefix("## 9. Agent policy") })
+        for provider in providers {
+            let name = try XCTUnwrap(names[provider], "no display name for \(provider)")
+            XCTAssertTrue(row.contains(name), "the Block matching tool calls row does not name \(name)")
+            XCTAssertTrue(comment.contains(name), "the enforceAgentPolicy doc comment does not name \(name)")
+            XCTAssertTrue(heading.contains(name), "docs/ADR.md section 9 does not name \(name)")
+        }
+    }
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installed by Kannu: reports AI agent status for the notch traffic light.
-# KANNU_HOOK_SCRIPT_VERSION=45
+# KANNU_HOOK_SCRIPT_VERSION=46
 # Usage: kannu-agent-status.sh <state> <provider> [hook_event] [matcher_key]
 #        (hook JSON arrives on stdin)
 
@@ -31,6 +31,12 @@ if ! command -v python3 >/dev/null 2>&1; then
     gemini|qwen) echo '{}' ;;
     vscode) if [ -n "$COPILOT_CLI" ]; then echo '{}'; else echo '{"permission":"allow","continue":true}'; fi ;;
     # Cursor's permission hooks document exactly {"permission": ...}; "continue" is not in their schema.
+    # Antigravity: PreToolUse and Stop require a decision (allow defers to the next hook or the
+    # default policy); every other event takes an empty object.
+    antigravity) case "$KANNU_HOOK_EVENT" in
+                   PreToolUse|Stop) echo '{"decision":"allow"}' ;;
+                   *) echo '{}' ;;
+                 esac ;;
     cursor) case "$KANNU_HOOK_EVENT" in
               preToolUse|beforeShellExecution|beforeMCPExecution|subagentStart) echo '{"permission":"allow"}' ;;
               *) echo '{"permission":"allow","continue":true}' ;;
@@ -133,13 +139,13 @@ HT_WARN_MARKER = ".kannu-hidden-text-warn-agent"
 HT_SKIP_EVENTS = {"SessionStart", "SessionEnd", "sessionEnd", "Notification", "PermissionRequest",
                   "beforeShellExecution", "beforeMCPExecution"}
 HT_POST_EVENTS = {"PostToolUse", "postToolUse", "PostToolUseFailure", "postToolUseFailure", "AfterTool"}
-HT_POST_SKIP_KEYS = {"tool_input", "input", "arguments", "tool"}
+HT_POST_SKIP_KEYS = {"tool_input", "input", "arguments", "tool", "toolCall"}
 HT_WHERE = {
     "tool_response": "tool_result", "tool_output": "tool_result", "result_json": "tool_result",
     "output": "tool_result", "error": "tool_result", "error_message": "tool_result",
     "prompt": "prompt",
     "tool_input": "tool_input", "input": "tool_input", "arguments": "tool_input",
-    "tool": "tool_input", "command": "tool_input", "edits": "tool_input",
+    "tool": "tool_input", "command": "tool_input", "edits": "tool_input", "toolCall": "tool_input",
     "last_assistant_message": "agent_reply", "text": "agent_reply", "prompt_response": "agent_reply",
 }
 HT_KIND_RANK = {"tags": 4, "variation_selectors": 3, "bidi": 2, "zero_width": 1}
@@ -402,6 +408,12 @@ HT_NOTE_EVENTS = {
 }
 
 EMPTY_OBJECT_PROVIDERS = {"gemini", "qwen", "copilot"}
+# v46: Antigravity documents its own answers (antigravity.google/docs/hooks). PreToolUse and Stop
+# each require a decision. On PreToolUse "allow" hands the call to the next hook or the default
+# policy, so it never approves what the user's settings would ask about; on Stop any value but
+# "continue" lets the agent stop. PostToolUse returns an empty object, and so does every other event.
+ANTIGRAVITY_DECISION_EVENTS = {"PreToolUse", "Stop"}
+ANTIGRAVITY_ALLOW_JSON = '{"decision":"allow"}'
 
 def emit(notes=("", "")):
     # The only stdout this script writes. Codex rejects unknown keys ("permission") and takes
@@ -415,6 +427,8 @@ def emit(notes=("", "")):
     if policy_deny and hook_event in POLICY_DENY_EVENTS.get(provider, ()):
         if provider == "cursor":
             out = {"permission": "deny", "user_message": policy_deny, "agent_message": policy_deny}
+        elif provider == "antigravity":
+            out = {"decision": "deny", "reason": policy_deny}
         else:
             out = {"hookSpecificOutput": {"hookEventName": hook_event, "permissionDecision": "deny",
                                           "permissionDecisionReason": policy_deny}}
@@ -422,6 +436,9 @@ def emit(notes=("", "")):
         return
     if provider == "cursor" and hook_event in CURSOR_PERMISSION_EVENTS:
         print(CURSOR_ALLOW_JSON)
+        return
+    if provider == "antigravity":
+        print(ANTIGRAVITY_ALLOW_JSON if hook_event in ANTIGRAVITY_DECISION_EVENTS else "{}")
         return
     if provider in EMPTY_OBJECT_PROVIDERS:
         print("{}")
@@ -911,7 +928,9 @@ POLICY_MAX_BYTES = 65536
 POLICY_MAX_RULES = 200
 POLICY_MAX_LEN = 200
 POLICY_MAX_ENTRIES = 3
-POLICY_DENY_EVENTS = {"claude": {"PreToolUse"},
+# v46: Antigravity documents a PreToolUse deny ({"decision": "deny", "reason": ...}). Docs only: no
+# live check on that host yet.
+POLICY_DENY_EVENTS = {"claude": {"PreToolUse"}, "antigravity": {"PreToolUse"},
                       "cursor": {"beforeShellExecution", "beforeMCPExecution", "preToolUse"}}
 POLICY_SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 
@@ -1019,7 +1038,8 @@ def policy_commands(payload, tool_input, event, tool_name):
             except Exception:
                 pass
         if isinstance(item, dict):
-            for key in ("command", "cmd", "commandLine"):
+            # CommandLine: what Antigravity's run_command is believed to take (undocumented).
+            for key in ("command", "cmd", "commandLine", "CommandLine"):
                 value = item.get(key)
                 if isinstance(value, str):
                     out.append(value)
@@ -1213,6 +1233,14 @@ def turn_path(value):
         return ""
     return value
 
+def antigravity_transcript(value):
+    # v46: an Antigravity transcript is recorded only as a plain, canonical path under ~/.gemini.
+    if not isinstance(value, str) or not value or len(value) > TURN_PATH_MAX:
+        return ""
+    if printable_ascii(value, TURN_PATH_MAX) != value or os.path.normpath(value) != value:
+        return ""
+    return value if value.startswith(os.path.expanduser("~") + "/.gemini/") else ""
+
 def turn_size(path):
     # The transcript's size, without following a symlink: None while it does not exist yet,
     # -1 when it is not a plain file or cannot be read (then no offset is recorded).
@@ -1309,7 +1337,8 @@ def next_turn(existing, now_ms):
     # and the host submitting a background task's result as a prompt (Claude Code does), are not new
     # requests. Only a prompt to an agent that has stopped starts one.
     open_turn = bool(turn) and "turn_ended_ms" not in turn
-    starts = (hook_event in TURN_PROMPT_EVENTS and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
+    prompted = hook_event in TURN_PROMPT_EVENTS or antigravity_first_call
+    starts = (prompted and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
     if parent_id and turn and hook_event in TURN_WAKE_EVENTS and parent_turn_start() > turn["turn_started_ms"]:
         # A subagent resumed in a later request of its chat.
         starts = True
@@ -1333,7 +1362,8 @@ def next_turn(existing, now_ms):
         if not seen:
             turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
             turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
-    if turn and hook_event in TURN_END_EVENTS and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True):
+    if (turn and hook_event in TURN_END_EVENTS and not antigravity_busy_stop
+            and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True)):
         # The first Stop ends the turn; a Stop after a stop hook's continuation moves the end.
         turn["turn_ended_ms"] = now_ms
     if turn and main_thread and hook_event == "Stop" and "turn_ended_ms" in turn:
@@ -1352,7 +1382,13 @@ def next_turn(existing, now_ms):
 # permissionDecision to its own permission, so a user's enforced rule keeps holding inside Cursor.
 foreign_host = provider != "cursor" and "cursor_version" in data
 
+# v46: Antigravity names the call in toolCall (name and args), camelCase like its whole payload.
+antigravity_call = data.get("toolCall") if provider == "antigravity" else None
+if not isinstance(antigravity_call, dict):
+    antigravity_call = None
+
 tool = pick_str(
+    antigravity_call.get("name") if antigravity_call else None,
     data.get("tool_name"),
     data.get("toolName"),
     data.get("name"),
@@ -1362,7 +1398,9 @@ nested_tool = data.get("tool") if isinstance(data.get("tool"), dict) else None
 if nested_tool:
     tool = tool or pick_str(nested_tool.get("name"), nested_tool.get("tool_name"))
 
-tool_input = data.get("tool_input")
+tool_input = antigravity_call.get("args") if antigravity_call else None
+if tool_input is None:
+    tool_input = data.get("tool_input")
 if tool_input is None:
     tool_input = data.get("input") or data.get("arguments")
     if tool_input is None and nested_tool:
@@ -1377,6 +1415,14 @@ if not tool and isinstance(tool_input, dict):
         tool = tool or "AskQuestion"
     elif any(key in tool_input for key in ("command", "working_directory", "description")):
         tool = tool or "Shell"
+
+# v46: Antigravity has no prompt event. The first model call of a run (invocationNum 0) is the
+# nearest it documents, so it starts the turn; whether the count restarts for every user message
+# is not stated. A Stop with fullyIdle false leaves background tasks running: set below.
+_invocation = data.get("invocationNum")
+antigravity_first_call = (provider == "antigravity" and hook_event == "PreInvocation"
+                          and isinstance(_invocation, int) and not isinstance(_invocation, bool) and _invocation == 0)
+antigravity_busy_stop = False
 
 def is_approval_gated_tool() -> bool:
     # ExitPlanMode means "here is the plan, approve it" — a wait on the user, not work.
@@ -1542,6 +1588,11 @@ elif hook_event in {"stop", "Stop", "StopFailure", "SubagentStop", "subagentStop
         quota_signal = (termination_reason + " " + stop_error).lower()
         if any(marker in quota_signal for marker in ("quota", "rate_limit", "rate limit", "resource_exhausted")):
             state = "quota_exceeded"
+        # v46: fullyIdle is false while the agent's background tasks still run. It has not
+        # finished: the light stays green and the turn open until a Stop that says idle.
+        elif data.get("fullyIdle") is False and not stop_error:
+            state = "thinking"
+            antigravity_busy_stop = True
     # v45: Claude Code names the API error in StopFailure's `error`; a rate limit is the same end.
     if provider == "claude" and hook_event == "StopFailure" and pick_str(data.get("error")).lower() == "rate_limit":
         state = "quota_exceeded"
@@ -1741,7 +1792,7 @@ antigravity_stop_error = provider == "antigravity" and hook_event == "Stop" and 
 # v45: Cursor's stop says how the loop ended: "completed", "aborted" (the user stopped it: not an error)
 # or "error".
 cursor_stop_error = provider == "cursor" and hook_event == "stop" and pick_str(data.get("status")).lower() == "error"
-if hook_event in {"UserPromptSubmit", "beforeSubmitPrompt", "BeforeAgent"}:
+if hook_event in {"UserPromptSubmit", "beforeSubmitPrompt", "BeforeAgent"} or antigravity_first_call:
     tool_errors = 0
 elif hook_event in {"PostToolUseFailure", "postToolUseFailure", "StopFailure"}:
     if data.get("is_interrupt") is not True:
@@ -1797,6 +1848,11 @@ except Exception:
     except Exception:
         turn = {}
     transcript = ""
+if provider == "antigravity" and not transcript:
+    # v46: Antigravity's documented transcriptPath, kept as the chat's locator. Nothing in Kannu
+    # reads it yet (only Claude's transcripts are followed for tokens); checked like any path here.
+    transcript = (antigravity_transcript(data.get("transcriptPath"))
+                  or antigravity_transcript(existing.get("transcript_path")))
 
 roots = data.get("workspace_roots") or data.get("workspacePaths") or data.get("workspace_paths")
 project = ""

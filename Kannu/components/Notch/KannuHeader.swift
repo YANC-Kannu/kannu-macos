@@ -124,7 +124,7 @@ struct KannuHeader: View {
                     // shown while the Usage tab is the active view.
                     if coordinator.currentView == .llmUsage {
                         Button(action: {
-                            llmUsageManager.refreshAll(force: true)
+                            llmUsageManager.refreshRequestedByUser()
                         }) {
                             Capsule()
                                 .fill(.black)
