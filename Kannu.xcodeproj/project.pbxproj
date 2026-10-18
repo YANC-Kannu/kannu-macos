@@ -97,6 +97,7 @@
 		AA10000000000000000002A3 /* TaskReminderPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000002A2 /* TaskReminderPlan.swift */; };
 		AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A4 /* TaskDetailSummary.swift */; };
 		AA10000000000000000005A7 /* TaskArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A6 /* TaskArchive.swift */; };
+		AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A8 /* HoverRevealMotion.swift */; };
 		AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A0 /* TaskTagEditing.swift */; };
 		AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000003A0 /* TimerComposerMetrics.swift */; };
 		AA10000000000000000004A3 /* TimerSidePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A2 /* TimerSidePage.swift */; };
@@ -219,6 +220,7 @@
 		AA10000000000000000002A2 /* TaskReminderPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskReminderPlan.swift; path = Kannu/managers/Tasks/TaskReminderPlan.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A4 /* TaskDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskDetailSummary.swift; path = Kannu/managers/Tasks/TaskDetailSummary.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A6 /* TaskArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskArchive.swift; path = Kannu/managers/Tasks/TaskArchive.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005A8 /* HoverRevealMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealMotion.swift; path = Kannu/components/Notch/HoverRevealMotion.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A0 /* TaskTagEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskTagEditing.swift; path = Kannu/managers/Tasks/TaskTagEditing.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000003A0 /* TimerComposerMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerComposerMetrics.swift; path = Kannu/sizing/TimerComposerMetrics.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A2 /* TimerSidePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerSidePage.swift; path = Kannu/managers/TimerSidePage.swift; sourceTree = SOURCE_ROOT; };
@@ -691,6 +693,7 @@
 				AA10000000000000000002A3 /* TaskReminderPlan.swift in Sources */,
 				AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */,
 				AA10000000000000000005A7 /* TaskArchive.swift in Sources */,
+				AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */,
 				AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */,
 				AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */,
 				AA10000000000000000004A3 /* TimerSidePage.swift in Sources */,

@@ -87,7 +87,8 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         let card = try Self.declaration("private struct TimerTaskDetail", in: column)
         XCTAssertFalse(card.contains("SideChip(summary.status.name"), "no status chip: the key pill's colour is the status")
         XCTAssertTrue(card.contains("tint: Self.phaseColor(summary.status.phase)"), "the key pill takes the status colour")
-        XCTAssertTrue(card.contains(".hoverTooltip(summary.status.name"), "the status word is the pill's tooltip")
+        XCTAssertTrue(card.contains(#".hoverTooltip(String(localized: "Status: \(summary.status.name)")"#),
+                      "the status word is the pill's tooltip, named as a status")
         for colour in ["case .toDo: return .yellow", "case .inProgress: return .green", "case .closed: return .red"] {
             XCTAssertTrue(card.contains(colour), "missing \(colour)")
         }
@@ -113,13 +114,30 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         let column = try Self.column()
         XCTAssertFalse(column.contains("sideKeyText"), "the key-prefixed text helper must stay gone")
         let card = try Self.declaration("private struct TimerTaskDetail", in: column)
-        XCTAssertTrue(card.contains("Text(verbatim: summary.title)"), "the card's title is summary.title alone")
+        XCTAssertTrue(card.contains("HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)"),
+                      "the card's title is summary.title alone, two lines, sliding up when longer")
         XCTAssertTrue(card.contains("summary.shortKey"), "the key shows as its own short chip")
         XCTAssertTrue(card.contains(".fixedSize(horizontal: false, vertical: true)"),
                       "a two-line title must not collapse (no notch title protects itself)")
         XCTAssertTrue(card.contains(".zIndex(1)"), "the top row paints above the chips so the × tooltip is never covered")
         let page = try Self.declaration("private struct TimerTasksPage", in: column)
-        XCTAssertTrue(page.contains("Text(verbatim: task.title)"), "the row's title is the title alone too")
+        XCTAssertTrue(page.contains("HoverRevealText(task.title"), "the row's title is the title alone too")
+    }
+
+    func testClippedTextSlidesIntoViewAndThePillIsALabel() throws {
+        // David: clipped text showed nothing on hover; it slides now. The pill's bare "Open"
+        // tooltip read as an action that did nothing: it says "Status:" and is not a button.
+        let column = try Self.column()
+        let card = try Self.declaration("private struct TimerTaskDetail", in: column)
+        XCTAssertTrue(card.contains(#"String(localized: "Status: \(summary.status.name)")"#), "the pill's tooltip names the status as one")
+        XCTAssertFalse(card.contains(".hoverTooltip(summary.status.name"), "never the bare status word")
+        XCTAssertTrue(card.contains("HoverRevealText(timeText(summary)"), "the time beside Start slides when clipped")
+        let factCell = try Self.declaration("private struct FactCell", in: column)
+        XCTAssertTrue(factCell.contains("HoverRevealText(fact.text"), "a clipped fact slides into view")
+        XCTAssertFalse(factCell.contains("Text(verbatim: fact.text)"))
+        let page = try Self.declaration("private struct TimerTasksPage", in: column)
+        XCTAssertTrue(page.contains("isActive: isHovered"), "the row's one hover drives both its lines")
+        XCTAssertEqual(page.components(separatedBy: "HoverRevealText(").count - 1, 2, "title and caption")
     }
 
     func testTheCardIsContainedWhateverItsWords() throws {

@@ -139,7 +139,7 @@ struct TaskDetailSummary: Equatable {
             facts.append(Fact(icon: "heart.text.square", text: health.text, isAlert: health.isAlert))
         }
         if let milestone = remote?.milestone { facts.append(Fact(icon: "flag", text: milestone)) }
-        if let iteration = remote?.iteration { facts.append(Fact(icon: "arrow.triangle.2.circlepath", text: iteration)) }
+        if let iteration = remote?.iteration { facts.append(Fact(icon: "hourglass", text: iteration)) }
         if let weight = remote?.weight { facts.append(Fact(icon: "scalemass", text: String(localized: "Weight \(weight)"))) }
         if let parent = remote?.parentTitle { facts.append(Fact(icon: "square.stack", text: parent)) }
         // Someone else's name is worth a line; the user's own is not (the list is theirs).
@@ -169,11 +169,11 @@ struct TaskDetailSummary: Equatable {
             }
         }
         if task.source == .local, let last = task.segments.map({ $0.end ?? $0.start }).max() {
-            facts.append(Fact(icon: "clock.arrow.circlepath", text: String(localized: "Timed \(ago(last, now: now, calendar: calendar))")))
+            facts.append(Fact(icon: "stopwatch", text: String(localized: "Timed \(ago(last, now: now, calendar: calendar))")))
         }
         if task.source == .local, !task.segments.isEmpty {
             let count = task.segments.count
-            facts.append(Fact(icon: "repeat", text: count == 1 ? String(localized: "1 session") : String(localized: "\(count) sessions")))
+            facts.append(Fact(icon: "list.number", text: count == 1 ? String(localized: "1 session") : String(localized: "\(count) sessions")))
         }
         return facts
     }

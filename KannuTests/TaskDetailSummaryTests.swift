@@ -134,7 +134,7 @@ final class TaskDetailSummaryTests: XCTestCase {
             "Kim Lee", "2 of 5 done", "2 linked MRs", "1 comment", "Updated 3h ago",
         ])
         XCTAssertEqual(facts.map(\.icon), [
-            "calendar", "heart.text.square", "flag", "arrow.triangle.2.circlepath", "scalemass", "square.stack",
+            "calendar", "heart.text.square", "flag", "hourglass", "scalemass", "square.stack",
             "person", "checklist", "arrow.triangle.pull", "bubble.left", "clock",
         ])
         XCTAssertEqual(facts.filter(\.isAlert).map(\.text), ["At risk"], "only what needs attention is orange")
@@ -192,8 +192,8 @@ final class TaskDetailSummaryTests: XCTestCase {
         let facts = summary(task).facts
         XCTAssertEqual(facts.count, 3)
         XCTAssertTrue(facts[0].text.hasPrefix("Due Today "), facts[0].text)
-        XCTAssertEqual(facts[1], .init(icon: "clock.arrow.circlepath", text: "Timed yesterday"))
-        XCTAssertEqual(facts[2], .init(icon: "repeat", text: "2 sessions"))
+        XCTAssertEqual(facts[1], .init(icon: "stopwatch", text: "Timed yesterday"))
+        XCTAssertEqual(facts[2], .init(icon: "list.number", text: "2 sessions"))
         let late = TaskItem(title: "Late", scheduledAt: now.addingTimeInterval(-3600))
         XCTAssertTrue(summary(late).facts[0].isAlert)
     }

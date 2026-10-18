@@ -256,6 +256,8 @@ private struct TimerTasksPage: View {
     @State private var expandedTaskID: UUID?
     /// The card's inline delete confirmation; reset whenever the card closes.
     @State private var confirmsDelete = false
+    /// The row under the pointer: its one hover slides its clipped title and caption together.
+    @State private var hoveredRowID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -335,19 +337,28 @@ private struct TimerTasksPage: View {
             Button {
                 expand(task)
             } label: {
+                // The title alone: a GitLab path key in front of it ate the whole line. Clipped,
+                // both lines slide into view while the row is hovered — one hover for the row.
+                let isHovered = hoveredRowID == task.id
                 VStack(alignment: .leading, spacing: 1) {
-                    // The title alone: a GitLab path key in front of it ate the whole line.
-                    Text(verbatim: task.title)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                    (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
-                        + overText(progress.over))
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
+                    HoverRevealText(
+                        (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
+                            + overText(progress.over))
+                            .font(.system(size: 11, weight: .medium)),
+                        isActive: isHovered
+                    )
+                    .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
+                .onHover { hovering in
+                    if hovering {
+                        hoveredRowID = task.id
+                    } else if hoveredRowID == task.id {
+                        hoveredRowID = nil
+                    }
+                }
             }
             .buttonStyle(.plain)
             .accessibilityHint(Text(verbatim: String(localized: "Shows the task's details")))
@@ -511,9 +522,8 @@ private struct TimerTaskDetail: View {
             // No colour dot: the card's own tint is the colour, and a dot that draws nothing for
             // plain glass still took its width and indented the title past the chips.
             HStack(alignment: .top, spacing: 6) {
-                Text(verbatim: summary.title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(2)
+                // Two lines; a longer title slides up into view while hovered, then settles.
+                HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
@@ -576,8 +586,9 @@ private struct TimerTaskDetail: View {
             // progress, red closed. The word is its tooltip and what VoiceOver reads.
             let key = summary.shortKey ?? String(localized: "Local")
             SideChip(key, tint: Self.phaseColor(summary.status.phase), monospaced: summary.shortKey != nil, truncates: keyTruncates)
-                .accessibilityLabel(Text(verbatim: "\(key), \(summary.status.name)"))
-                .hoverTooltip(summary.status.name, edge: .below)
+                // A label, not a button: "Status: Open", never a bare "Open" that reads as an action.
+                .accessibilityLabel(Text(verbatim: String(localized: "\(key), status \(summary.status.name)")))
+                .hoverTooltip(String(localized: "Status: \(summary.status.name)"), edge: .below)
             if summary.isDraft {
                 SideChip(String(localized: "Draft"))
             }
@@ -669,10 +680,8 @@ private struct TimerTaskDetail: View {
                 // Only once there is something to say: "No estimate" beside every untimed
                 // GitLab issue was noise.
                 if summary.showsTime {
-                    timeText(summary)
-                        .font(.system(size: 11, weight: .medium))
+                    HoverRevealText(timeText(summary).font(.system(size: 11, weight: .medium)))
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
                 Spacer(minLength: 0)
                 // Into the archive at once, any task: a remote task's delete. It leaves the task
@@ -772,10 +781,8 @@ private struct FactCell: View {
                 .font(.system(size: 9, weight: .semibold))
                 .frame(width: 12)
                 .accessibilityHidden(true)
-            Text(verbatim: fact.text)
-                .font(.system(size: 11, weight: .medium))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // Clipped at the column's width, it slides into view while hovered.
+            HoverRevealText(fact.text, font: .system(size: 11, weight: .medium))
         }
         .foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
         .frame(width: width, alignment: .leading)

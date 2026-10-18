@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Clipped text on the task card slides into view on hover, the status pill no longer looks clickable, and no fact wears a refresh icon
+- **Developer label:** "the open hint text shows but nothing happens on clicking the ticket pill, refresh symbol near iteration is confusing , user might feel some refresh is intended, also none of the clipped text shows on hover, ideally they should slide and show that clipped .. text"
+- **Agent label:** Claude Code (Opus 5.5) — a hover-only reveal for clipped text, the pill's tooltip reworded, three icons replaced
+- **Changes:**
+  - New `HoverRevealText`: text that is clipped slides into view while the pointer rests on it,
+    once, then settles back — one line sideways, the card's two-line title upward, line by line.
+    The truncated text still defines the frame, so nothing around it moves; whether it is clipped
+    is measured, not guessed. It waits 0.4 s (brushing past starts nothing), runs only while
+    hovered and only when clipped, does nothing at rest, and stays still under Reduce Motion. The
+    timing lives in `HoverRevealMotion` (pure, tested). Kannu's `MarqueeText` is left as it is: a
+    wrap-around ticker for the music title, not a hover reveal.
+  - Used for the card's title, every fact, the time beside Start, and each list row's title and
+    caption (one hover per row drives both).
+  - The task-number pill's tooltip said only the status word, and GitLab's "Open" read as an
+    action that did nothing. It now says "Status: Open"; VoiceOver reads "ds-vendors #42, status
+    Open". The pill stays a label.
+  - The iteration fact used Kannu's sync arrows and read as a refresh button; it shows an
+    hourglass. "Timed …" (a circular clock arrow) shows a stopwatch, and sessions (the music
+    repeat glyph) a numbered list.
+  - Guards: `HoverRevealMotionTests`, `TaskDetailSummaryTests` (the new icons),
+    `TimerTaskDetailRulesTests` (each clipped text uses the reveal, the row's one hover, the pill's
+    "Status:" tooltip).
+
 ### 2026-10-17 - The task card shows status as the key pill's colour, and archives at a tap
 - **Developer label:** "open, in progress and closed can be colors, no need to show mnaybe in card … open and to do can be yellow,. in progress can be green and closed or ended can be red"
 - **Agent label:** Claude Code (Opus 5.5) — the status chip folded into the key pill as a colour, a closed phase, and an archive button on the card
