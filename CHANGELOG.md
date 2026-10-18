@@ -4,6 +4,40 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The timer tab's task column has search, the filter, Refresh and Time to log
+- **Developer label:** "instead of tasks buttons,keep the refrsh button and on hover show the integrations last synced time, refrsh should trigger resync, search , filter will be icons, taking up a row similar to the name session ... in right the row will have search and filter option, possibly load the search dynamically ... also do we miss anything else from the task icon click feauture, check and make sure no feature is lost in this overhaul"
+- **Agent label:** Claude Code (Opus 5.5) — a toolbar on the Tasks page, the popover's Refresh rule and Time to log cards shared, the header button shown only where the column cannot be
+- **Changes:**
+  - The Tasks page has a toolbar level with the session name field (same height, same gap):
+    search, the Show in notch filter (the popover's `TaskSourceMenu`, with Connect and Manage
+    tasks…), Refresh while Jira or GitLab syncs, and Time to log, a clock with the yellow dot,
+    while an entry asks. "Filtered · Show all" leads the row while the filter hides a source.
+  - Search turns the row into a field that narrows the list as you type, in memory
+    (`TaskSearch`: title, key, short key, tags and labels, every word, case and accents
+    ignored). The × or Escape ends it.
+  - Refresh's tooltip says when each source last synced ("Jira: Synced 10:42 · GitLab: Offline");
+    a click resyncs both, with a spinner while syncing, off while rate limited. The rule is the
+    popover's, now one place (`TaskSyncSummary`), and the popover uses it too.
+  - The clock opens the Time to log cards in the column, with a × back; they are the popover's
+    cards (`LogTimeCards`, moved out of the popover with `StackedCardStyle`), so Log goes the one
+    way it does everywhere. The page closes when the last entry is answered.
+  - The list honours Show in notch, as the popover does, then the search; empty, it says "No
+    tasks", "No matching tasks" or "Nothing to show". An expanded card and the Log page take the
+    whole page; the list sits under the toolbar (`sideListHeight`, two rows at the smallest
+    notch).
+  - The search field, a Time to log card's fields (through `worklogFieldFocus`, nil in Brain) and
+    an open menu hold the notch open, each under its own token, released when the focus goes, the
+    page goes, or the notch's window stops being key.
+  - The header's Tasks button shows only where the column cannot: on the timer tab while a timer
+    runs, and on every tab with no timer tab (timer off, or a popover). Nothing the popover has is
+    lost: the running task's clock, pause and stop, Up next and Time to log stay there while
+    timing, and with no timer tab everything stays there.
+  - Tests: `TaskSearchTests`; `TasksHeaderVisibilityTests` (16-row table, the running-timer case);
+    `TasksPopoverLogicTests` (sync lines, tooltip, refresh rule); `TimerComposerMetricsTests`
+    (toolbar level with the name field, two rows under it); `TimerSideColumnRulesTests` (filter
+    and search, focus and menu holds, Refresh's rule, the toolbar over the list only);
+    `TasksPopoverRulesTests` (the header gate passes the running timer).
+
 ### 2026-10-18 - A local task never timed says so on its card
 - **Developer label:** "for local taks without no logs, just maybe show a greyed out text that goes like no time logged , please start task to see or something more proffessiona"
 - **Agent label:** Claude Code (Opus 5.5) — a muted note on the timer tab's task card for a local task with no recorded time

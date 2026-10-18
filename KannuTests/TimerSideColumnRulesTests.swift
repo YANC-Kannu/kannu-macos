@@ -62,6 +62,14 @@ final class TimerSideColumnRulesTests: XCTestCase {
         try String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8)
     }
 
+    /// A column-0 declaration through its closing brace at column 0.
+    private static func declaration(_ name: String, in text: String) throws -> String {
+        let start = try XCTUnwrap(text.range(of: "\n\(name)"), "\(name) not found at column 0")
+        let end = try XCTUnwrap(text.range(of: "\n}\n", range: start.upperBound..<text.endIndex),
+                                "\(name) has no closing brace at column 0")
+        return String(text[start.lowerBound..<end.upperBound])
+    }
+
     // MARK: - The rules, on the real sources
 
     func testNotchTimerViewNeverTouchesTasksManager() throws {
@@ -104,9 +112,57 @@ final class TimerSideColumnRulesTests: XCTestCase {
         }
     }
 
-    /// "All tasks ›" is gone: the header's Tasks button shows on the same tab.
+    /// "All tasks ›" is gone, and Brain is not linked from the column itself: the toolbar's filter
+    /// (`TaskSourceMenu`) has Manage tasks…, and the Time to log page its "more in Brain".
     func testTheColumnHasNoAllTasksLink() throws {
         XCTAssertEqual(Self.allTasksLinkProblems(in: Self.code(try Self.raw(Self.sideColumnPath))), [])
+    }
+
+    /// The toolbar's list honours Show in notch as the popover does (`TaskSourceMenu` is the same
+    /// menu), then the search, both over the connected baseline.
+    func testTheListHonoursShowInNotchAndTheSearch() throws {
+        let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
+        XCTAssertTrue(page.contains("TaskSearch.filter(TaskOrdering.active(manager.activeTasks, listed: notchFilter), query: searchText)"))
+        XCTAssertTrue(page.contains("TaskSourceMenu(openBrain:"), "the filter is the popover's menu")
+        XCTAssertTrue(page.contains("TaskOrdering.viewFilter(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab"))
+    }
+
+    /// The search field holds the notch open only while it has focus, under a `@State` token, and
+    /// lets go when the page goes or the notch's window stops being key; so do the Time to log
+    /// cards' fields, each under its entry's id.
+    func testTheTextFieldsHoldTheNotchOnlyWhileFocused() throws {
+        let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
+        XCTAssertTrue(page.contains("@State private var searchEditingToken = UUID()"))
+        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(isFocused, token: searchEditingToken)"))
+        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(false, token: searchEditingToken)"), "the page going never releases it")
+        XCTAssertTrue(page.contains("NSWindow.didResignKeyNotification") && page.contains("note.object is KannuWindow"))
+        XCTAssertTrue(page.contains(".environment(\\.worklogFieldFocus, draftFocusChanged)"), "the Log page's fields hold the notch")
+        XCTAssertTrue(page.contains("releaseDraftFocus()"))
+        XCTAssertTrue(page.contains("NSMenu.didBeginTrackingNotification") && page.contains("NSMenu.didEndTrackingNotification"),
+                      "the filter menu is a window of its own: the notch must stay open while it tracks")
+        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(false, token: menuTrackingToken)"))
+    }
+
+    /// Refresh follows the popover's one rule (`TaskSyncSummary`) and tells when each source last
+    /// synced in its tooltip; the header button hides where this column shows.
+    func testRefreshFollowsThePopoversRule() throws {
+        let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
+        XCTAssertTrue(page.contains("TaskSyncSummary.canRefresh(isReady: manager.isReady"))
+        XCTAssertTrue(page.contains("TaskSyncSummary.tooltip("))
+        XCTAssertTrue(page.contains("manager.refreshJira()") && page.contains("manager.refreshGitLab()"))
+        XCTAssertTrue(page.contains("TimelineView(.explicit("), "a rate limit ending redraws it, without polling")
+        let popover = Self.code(try Self.raw("Kannu/components/Notch/TasksPopover.swift"))
+        XCTAssertTrue(popover.contains("TaskSyncSummary.canRefresh("), "the popover's Refresh drifted from the column's")
+    }
+
+    /// The Time to log page and an expanded card take the whole page; the list sits under the
+    /// toolbar at `sideListHeight`.
+    func testTheToolbarSitsOverTheListOnly() throws {
+        let column = Self.code(try Self.raw(Self.sideColumnPath))
+        XCTAssertTrue(column.contains("listHeight: M.sideListHeight(budget: budget)"))
+        let page = try Self.declaration("private struct TimerTasksPage", in: column)
+        XCTAssertTrue(page.contains("TimerLogTimePage(asking: asking"))
+        XCTAssertTrue(page.contains("height: height,"), "the card takes the page's whole height")
     }
 
     func testTheSwipeCoversTheWholeTab() throws {

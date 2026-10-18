@@ -81,6 +81,25 @@ final class TimerComposerMetricsTests: XCTestCase {
         XCTAssertEqual(M.sideTaskRowsHeight(count: 2), 2 * (M.sideTaskRowHeight + M.sideRowSpacing))
     }
 
+    /// The Tasks page's toolbar lines up with the session name field across the tab: the same
+    /// height, and the same gap to what comes under it.
+    func testTheToolbarIsLevelWithTheNameField() {
+        XCTAssertEqual(M.sideToolbarHeight, M.nameFieldHeight)
+        XCTAssertEqual(M.sideToolbarSpacing, M.nameFieldSpacing)
+        XCTAssertLessThanOrEqual(M.sideToolbarButtonSize, M.sideToolbarHeight, "a button taller than its row")
+    }
+
+    /// Under the toolbar, at the smallest budget, the list still holds two whole rows (the first
+    /// row's ▶ tooltip needs the second's room), and four icons and "Filtered · Show all" fit across.
+    func testTheListUnderTheToolbarHoldsTwoRows() {
+        let list = M.sideListHeight(budget: M.minimumTabBudget)
+        XCTAssertEqual(list, M.sidePageHeight(budget: M.minimumTabBudget) - M.sideToolbarHeight - M.sideToolbarSpacing)
+        XCTAssertGreaterThanOrEqual(list, M.sideTaskRowsHeight(count: 2), "two task rows do not fit under the toolbar")
+        XCTAssertEqual(M.sideListHeight(budget: 10), 0, "never negative")
+        let filteredLabel: CGFloat = 100
+        XCTAssertLessThanOrEqual(filteredLabel + 4 * (M.sideToolbarButtonSize + 2), M.sideColumnWidth)
+    }
+
     func testTheSideRowsStayReadable() {
         XCTAssertGreaterThanOrEqual(M.sideTaskRowHeight, 32, "two lines of text and a ▶ need the room")
     }
@@ -90,7 +109,7 @@ final class TimerComposerMetricsTests: XCTestCase {
     /// 13 pt past the row, and the bottom fade is 16 pt. Checked at the smallest budget.
     func testOneTaskLeavesRoomForItsTooltip() {
         XCTAssertGreaterThanOrEqual(M.sideTaskMinimumRows, 2)
-        let page = M.sidePageHeight(budget: M.minimumTabBudget)
+        let page = M.sideListHeight(budget: M.minimumTabBudget)
         let list = min(page, M.sideTaskRowsHeight(count: M.sideTaskMinimumRows))
         let bubbleOverflow: CGFloat = 13
         let bottomFade: CGFloat = 16

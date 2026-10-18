@@ -111,6 +111,20 @@ enum TimerComposerMetrics {
         max(0, budget - sideBottomInset)
     }
 
+    /// The Tasks page's toolbar (search, filter, Refresh, Time to log): as tall as the session name
+    /// field and as far above the list as the field is above the composer, so the two rows line up
+    /// across the tab.
+    static let sideToolbarHeight: CGFloat = nameFieldHeight
+    static let sideToolbarSpacing: CGFloat = nameFieldSpacing
+    /// One toolbar button's square hit area.
+    static let sideToolbarButtonSize: CGFloat = 24
+
+    /// The task list's height under the toolbar: the page less the toolbar and its spacing. An
+    /// expanded task card and the Time to log page take the whole page instead.
+    static func sideListHeight(budget: CGFloat) -> CGFloat {
+        max(0, sidePageHeight(budget: budget) - sideToolbarHeight - sideToolbarSpacing)
+    }
+
     /// Every row's height plus the spacing around it, so a short list ends where its last row does.
     static func sideTaskRowsHeight(count: Int) -> CGFloat {
         CGFloat(max(0, count)) * (sideTaskRowHeight + sideRowSpacing)
