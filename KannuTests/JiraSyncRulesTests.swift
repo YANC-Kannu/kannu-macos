@@ -63,6 +63,13 @@ final class JiraSyncRulesTests: XCTestCase {
         XCTAssertEqual(Self.connectProblems(in: try Self.manager()), [])
     }
 
+    /// CodeRabbit (#87): every hazard #80 closed for Jira was still open for GitLab — a Remove
+    /// Token click during a Connect deleted the new token, and a Disconnect during the verify was
+    /// undone. GitLab's connect now has the same guards, held by the same scanner.
+    func testGitLabRemoveTokenRefusesWhileAConnectIsInFlight() throws {
+        XCTAssertEqual(Self.connectProblems(in: try Self.manager(), source: "GitLab"), [])
+    }
+
     // MARK: - The scanners catch planted offenders
 
     func testTheRefreshScannerCatchesPlantedOffenders() {
@@ -285,34 +292,37 @@ final class JiraSyncRulesTests: XCTestCase {
     /// A Connect counts itself in flight before its first await and uncounts on every return; it
     /// re-checks cancellation and the generation in one guard right before the save; and Remove
     /// Token refuses while the count is above zero.
-    static func connectProblems(in source: String) -> [String] {
+    static func connectProblems(in source: String, source name: String = "Jira") -> [String] {
+        let lower = name.prefix(1).lowercased() + name.dropFirst().replacingOccurrences(of: "Lab", with: "lab")
+        let retryName = "retryRemoving\(name)Token", connectName = "connect\(name)"
+        let inFlight = "\(lower)ConnectsInFlight", generation = "\(lower)Generation"
         var problems: [String] = []
-        if let retry = functionBody("retryRemovingJiraToken", in: source) {
-            if !retry.contains("jiraConnectsInFlight == 0") {
-                problems.append("retryRemovingJiraToken: does not refuse while a Connect is in flight")
+        if let retry = functionBody(retryName, in: source) {
+            if !retry.contains("\(inFlight) == 0") {
+                problems.append("\(retryName): does not refuse while a Connect is in flight")
             }
         } else {
-            problems.append("retryRemovingJiraToken: not found")
+            problems.append("\(retryName): not found")
         }
-        guard let connect = functionBody("connectJira", in: source) else { return problems + ["connectJira: not found"] }
-        if let count = connect.range(of: "jiraConnectsInFlight += 1") {
+        guard let connect = functionBody(connectName, in: source) else { return problems + ["\(connectName): not found"] }
+        if let count = connect.range(of: "\(inFlight) += 1") {
             if let firstAwait = connect.range(of: "await "), firstAwait.lowerBound < count.lowerBound {
-                problems.append("connectJira: counts itself in flight only after its first await")
+                problems.append("\(connectName): counts itself in flight only after its first await")
             }
         } else {
-            problems.append("connectJira: does not count itself in flight")
+            problems.append("\(connectName): does not count itself in flight")
         }
-        if !connect.contains("defer { jiraConnectsInFlight -= 1 }") {
-            problems.append("connectJira: never uncounts itself")
+        if !connect.contains("defer { \(inFlight) -= 1 }") {
+            problems.append("\(connectName): never uncounts itself")
         }
-        if let save = connect.range(of: "JiraCredentialStore.save(") {
+        if let save = connect.range(of: "\(name)CredentialStore.save(") {
             let lines = connect[..<save.lowerBound].components(separatedBy: "\n")
             let check = lines.last { $0.contains("guard ") && $0.contains("Task.isCancelled") }
-            if check?.contains("generation == jiraGeneration") != true {
-                problems.append("connectJira: saves without re-checking cancellation and the generation together")
+            if check?.contains("generation == \(generation)") != true {
+                problems.append("\(connectName): saves without re-checking cancellation and the generation together")
             }
         } else {
-            problems.append("connectJira: never saves the credential")
+            problems.append("\(connectName): never saves the credential")
         }
         return problems
     }

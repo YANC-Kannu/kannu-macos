@@ -17,6 +17,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - The bottom fade, the row heights, the pager footer and every `TimerComposerMetrics` value are
     untouched; `TimerSideColumnRulesTests` and `TimerComposerMetricsTests` pin them as before.
 
+### 2026-10-18 - GitLab's Connect has Jira's race guards, and Brain paths name the right tab
+- **Developer label:** CodeRabbit's full review of the task stack (#87): "`connectGitLab` and `retryRemovingGitLabToken` need the race guards that `connectJira` has", and "Include the Agents section in this path"
+- **Agent label:** Claude Code (Opus 5.5) — the GitLab connect counts itself in flight and re-checks the generation before saving; three security messages point at Brain › Agent Security
+- **Changes:**
+  - `connectGitLab` counts itself in flight before its first await (`gitlabConnectsInFlight`), and
+    re-checks cancellation and the generation together right before the save, as `connectJira`
+    does. A Disconnect that finishes during the verify is no longer undone by the Connect saving
+    anyway.
+  - `retryRemovingGitLabToken` refuses while a Connect is in flight: the display copies still say
+    disconnected until its save lands, and a delete queued behind that save took the new token
+    with it, leaving GitLab shown as connected with an empty Keychain.
+  - "Session analysis is off" now says Brain › Agent Security › Analyze chats with ADR Detection
+    (it said Brain › Security findings, a section). Two other messages said Brain › Agents › for
+    rows in the Agent Security tab: Security findings and Agent policy now name Agent Security.
+  - Tests: `JiraSyncRulesTests.testGitLabRemoveTokenRefusesWhileAConnectIsInFlight` (the Jira
+    connect scanner, now for either source); new `BrainPathRulesTests` (every "Brain › …" in the
+    app's strings starts at a tab or section the sidebar has; the three messages pinned).
+
 ### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Opus 5.5) — concurrency audit risk R-B, found when the stack's merge-up brought `JiraSyncRulesTests` (#80) next to the worklog send (#83)
