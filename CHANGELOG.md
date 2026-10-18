@@ -78,6 +78,70 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - The upcoming cloud-session relay copies its key with the concealed marker, which is why this
     lands first.
 
+### 2026-10-04 - Kannu stays light while several agents work at once
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Rescan storm: filter watched-file events, pace rescans, cache the Desktop audit-log walk
+- **Changes:**
+  - Changes inside a Claude session's own folder no longer trigger a rescan: subagent
+    transcripts, tool-output spills and workflow files, which Kannu never reads. Neither do the
+    hook status folder's per-file writes, which its kqueue watcher already handles; before, each
+    write cost two rescans. Lost-event flags still always rescan (`AgentWatchEvents`).
+  - Rescans are at least 0.3 s apart (hook-only) or 0.5 s apart (full), and a new request never
+    postpones the one already pending (`AgentRescanPacing`). A steady storm of writes used to
+    postpone the light instead of bounding the work.
+  - Claude Desktop's audit-log listing is cached for 2 s, and dropped when a log is added, removed
+    or renamed. The cache hands out fresh `URL`s, so a grown log is never read with its old size.
+  - `docs/REGRESSIONS.md` entry 11: a dated addendum.
+  - Tests: `RescanStormTests` (the filter, the pacing, and a simulated 20 ms write storm that must
+    keep rescanning, at a bounded rate).
+
+### 2026-10-04 - The paired-activity badge sits beside the album art, not over it
+- **Developer label:** "if you look at the timer placing, its over the small thumbnail adjust that"
+- **Agent label:** Closed music wing: badge beside the art via `ClosedMusicWingLayout`, hidden during inline sneak peek
+- **Changes:**
+  - In the closed notch, while music plays alongside a timer, a recording, Focus, Caps Lock, an
+    extension or the shelf, that activity's badge now sits 4 pt to the right of the album art,
+    vertically centred. It used to cover the art's bottom-right quarter. The left wing grows by the
+    badge and its gap (17 pt at the default notch height) only while a badge is shown.
+  - The art keeps its size and position from the wing's edge, so the open/close animation and the
+    pull-down gesture are unchanged.
+  - New `ClosedMusicWingLayout` (`Kannu/sizing/`) gives one width to both the wing's frame and the
+    notch, so the black shape always fits what it holds. It is in the logic test target
+    (pbxproj ids CA/CB).
+  - No badge during an inline sneak peek: that window is a fixed 460 pt, and a wider wing would be
+    cut off at both edges.
+  - Removed the unused `badgeOverlayOffset` and `badgeDisplaySize`.
+  - Tests: `ClosedMusicWingLayoutTests` (the art never moves, the badge never overlaps it, widths
+    and sizes) and `ClosedMusicWingRulesTests` (source pins: the badge is a child of the art's
+    HStack with no `.offset`, and the notch and the wing share one width), with planted offenders
+    including the old shape.
+
+### 2026-10-04 - A chat stays lit while the agents it started are still running
+- **Developer label:** "now we have background taks right, but kannu doesnt show that as chat still running"
+- **Agent label:** Background-agent detection: hook v44 counts what a Stop leaves running, Claude's session record confirms it
+- **Changes:**
+  - A Claude chat whose turn ended with background agents or a workflow still running stays green,
+    with "agents in background" beside its state and its clock still running from your prompt. It
+    turns red the moment Claude reports all of them finished. Before, it went red at the turn's
+    end while Claude went on working and spending tokens.
+  - Hook v44 records how many agents and workflows a Claude `Stop` leaves running (its
+    `background_tasks`), as a count only: the tasks' descriptions and commands are never written.
+    Kannu reads Claude Code's own session record (`~/.claude/sessions/<pid>.json`), which says
+    `busy` until the last of them finishes. Neither signal alone lights the chat. A fresh `idle`
+    counts for 3 s, and Kannu rescans when that ends, so the chat never flashes finished between
+    an agent ending and Claude reading its result.
+  - While that background work runs, a background agent's own light counts again: one waiting on
+    permission turns the chat yellow. The chat's status file is kept past the stale cap, so a long
+    workflow does not lose its card.
+  - Hook v44 also listens for `SubagentStart` and `SubagentStop`, so a finished agent's file says
+    `stopped` instead of "thinking" until the stale cap. Existing installs upgrade through the
+    hook version migration.
+  - `docs/REGRESSIONS.md`: a dated addendum to entry 5, whose rule changes on purpose, and a v44
+    note on entry 1.
+  - Tests: `BackgroundWorkTests` (Claude's status, the reconciler, the fold, the clock, the stale
+    cap and the turn parse) and four `HookScriptTests` cases (the count, what clears it, an older
+    Claude, and a subagent's own start and stop).
+
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
 - **Agent label:** Settings Quit row + search entry, pinned by the highlight inventory
