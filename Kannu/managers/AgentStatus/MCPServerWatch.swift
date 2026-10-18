@@ -27,7 +27,8 @@ enum MCPServerWatch {
     /// One settings file that can declare MCP servers.
     struct Location: Equatable {
         enum Format: Equatable {
-            /// `{"mcpServers": {...}}` — Claude Desktop, Cursor, Gemini CLI, Qwen Code, `.mcp.json`.
+            /// `{"mcpServers": {...}}` — Claude Desktop, Cursor, Gemini CLI, Qwen Code, Cline, `.mcp.json`
+            /// and Claude Code's `managed-mcp.json`.
             case mcpServers
             /// `{"servers": {...}}` — VS Code's `mcp.json`.
             case vsCodeServers
@@ -57,6 +58,11 @@ enum MCPServerWatch {
         var key: String { (scope ?? "") + "|" + name }
     }
 
+    /// Every macOS MCP file ADR Discovery added in a1b433c (`CONFIG_FILE_TEMPLATES` in
+    /// `enumerator/markers.py`) is here: Claude Desktop and VS Code were already, Cline and Claude
+    /// Code's `managed-mcp.json` (the administrator's file, outside the home folder, readable by
+    /// every user) are new. Its `~/.claude/settings*.json` are not: Claude Code declares no servers
+    /// there. Nor is `managed-settings.json`, whose `managedMcpServers` upstream does not read.
     static func globalLocations(home: String) -> [Location] {
         let support = home + "/Library/Application Support"
         return [
@@ -65,10 +71,12 @@ enum MCPServerWatch {
             Location(path: support + "/Claude/claude_desktop_config.json", appName: "Claude Desktop", format: .mcpServers, json5: false, projectRoot: nil),
             Location(path: home + "/.cursor/mcp.json", appName: "Cursor", format: .mcpServers, json5: false, projectRoot: nil),
             Location(path: support + "/Code/User/mcp.json", appName: "VS Code", format: .vsCodeServers, json5: true, projectRoot: nil),
+            Location(path: support + "/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json", appName: "Cline", format: .mcpServers, json5: false, projectRoot: nil),
             Location(path: home + "/.codex/config.toml", appName: "Codex", format: .codexTOML, json5: false, projectRoot: nil),
             Location(path: home + "/.gemini/settings.json", appName: "Gemini CLI", format: .mcpServers, json5: true, projectRoot: nil),
             Location(path: home + "/.qwen/settings.json", appName: "Qwen Code", format: .mcpServers, json5: true, projectRoot: nil),
             Location(path: home + "/.config/opencode/opencode.json", appName: "opencode", format: .opencode, json5: true, projectRoot: nil),
+            Location(path: "/Library/Application Support/ClaudeCode/managed-mcp.json", appName: "Claude Code", format: .mcpServers, json5: false, projectRoot: nil),
         ]
     }
 

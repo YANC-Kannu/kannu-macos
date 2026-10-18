@@ -53,6 +53,19 @@ final class ADRDocsTests: XCTestCase {
         XCTAssertTrue(flowed.contains("24 hours"))
     }
 
+    /// The install lines a user copies from the page are the ones Settings copies: the same
+    /// pinned commit, so the two can never send people to different code.
+    func testTheDocumentedInstallLinesAreThePinnedOnes() throws {
+        let install = try section("## 1. Install ADR Discovery")
+        XCTAssertTrue(install.contains(ADRUpstream.discoveryInstallCommand))
+        XCTAssertTrue(install.contains(ADRUpstream.discoveryPipxCommand))
+        let detection = try section("## 8. Session analysis with ADR Detection")
+        XCTAssertTrue(detection.contains(ADRUpstream.detectionCloneCommand))
+        XCTAssertTrue(detection.contains(ADRUpstream.detectionUpdateCommand))
+        XCTAssertFalse(Self.doc.contains("github.com/uber/ADR#subdirectory"), "an unpinned install line is left somewhere")
+        XCTAssertFalse(Self.doc.contains("cd ADR/Detection && uv sync"), "an unpinned clone line is left somewhere")
+    }
+
     func testTheSensorIsDocumentedAsUnusedAndTheSectionsAreInOrder() throws {
         let sensor = try section("## 7. ADR Sensor")
         XCTAssertTrue(sensor.contains("Kannu does not use it"))

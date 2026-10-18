@@ -4,6 +4,77 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - ADR installs are pinned to upstream 6b33dff, and Kannu reads ADR's new forbidden-asset finding
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P4 ADR refresh — pin to uber/ADR 6b33dff, forbidden_asset, Cline and managed MCP files, schema 1.2, stale Detection checkout
+- **Changes:**
+  - Every ADR install line Kannu hands out (Settings and `docs/ADR.md`) is pinned to uber/ADR `main`
+    at `6b33dffecd719708c435f772c9e93f1210944e31` (2026-10-16): `uv tool install "adr-discovery @
+    git+https://github.com/uber/ADR@<sha>#subdirectory=Discovery"`, the pipx line, and
+    `git clone … && git checkout <sha> && cd Detection && uv sync`. The pin lives once, in
+    `ADRUpstream` (`ADRDiscoveryCommand.swift`); `ADRDiscoveryCommandTests` and `ADRDocsTests` pin
+    the lines and that the page carries the same ones, and a source scan pins that `ADRConnection`
+    (what Settings' Copy buttons and the Detection checkout row read, outside the test target) uses
+    those constants and calls the stale-checkout check, and that no app source carries an unpinned
+    install line. Upstream still calls Discovery 0.2.0, so the version shown cannot tell an old
+    install from a pinned one.
+  - ADR's policy: since upstream a3ab5f7 (2026-10-12) `forbidden` and the new `forbidden_indicators`
+    (`mcp_endpoint`, `package`, `name`, `skill_sha256`, `file_sha256`) raise a high
+    `forbidden_asset` finding, MCP servers included. The drafting prompt and `docs/ADR.md` §6 said
+    these lists never flag an MCP server and raise no finding; both now describe them (kept opt-in in
+    the prompt, with the warning that a bad indicator fails every scan), and the test that pinned the
+    old wording now pins the new. An `mcp_endpoint` url is to hold scheme, host, port and path only:
+    upstream's `normalize_url` drops user info, query and fragment before comparing, so copying them
+    from an MCP config would only put a URL's key in `policy.json`; a server whose path carries a key
+    is to be named with a `name` indicator instead.
+  - `forbidden_asset` has a title ("Forbidden by your ADR policy") and its own guide family with
+    what-it-means and what-to-do text; ADR's own summary stays the summary.
+  - Kannu's new-MCP-server watch, and the scan trigger built on it, read the two macOS MCP files
+    upstream Discovery added in a1b433c: Cline's
+    `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+    and `/Library/Application Support/ClaudeCode/managed-mcp.json` (format checked against Cline's
+    and Claude Code's docs: `mcpServers`). The first read of each is learned silently, as for every
+    file. Claude Desktop's and VS Code's macOS paths were already watched; `~/.claude/settings*.json`
+    are not added (Claude Code declares no servers there). Upstream reads Cline only under stock VS
+    Code, and so does Kannu, so Settings and `docs/ADR.md` say "Cline in VS Code": Cline in Cursor,
+    another editor or the Cline CLI is not watched.
+  - Snapshot schema 1.2 (84ed18c, ff3028b) decodes unchanged — no field Kannu reads moved — and a
+    new test decodes a 1.2 snapshot with a `forbidden_asset` finding. Settings' newest-scan line
+    shows the schema version next to the catalog version.
+  - **Acknowledgements reset once.** Discovery schema 1.1 puts the declaring file into an MCP
+    server's (and a skill's) identity, so the asset ids Kannu keys Discovery findings and
+    acknowledgements on change once when Discovery is upgraded past 2026-10-12; those findings show
+    again and need one more Acknowledge.
+  - ADR Detection: a checkout without upstream's Claude Code 2.1 fix (1c8ecd6, 2026-09-22, which added
+    `if isinstance(claude_result, list):` after both `claude_result = json.loads(` lines in
+    `guardrail/adr_agent/adr_baseline.py`) is reported on the Detection checkout row as stale, with
+    the update line, instead of failing every analysis. Only the old code counts: the file must have
+    the `json.loads` line and no `isinstance(claude_result` check, true of all three upstream
+    revisions before the fix and false of both since (checked in a scratch clone). A later rewrite
+    without that line, or an empty file, is not called stale, so the update line never moves a
+    newer checkout back to the pin.
+  - ADR Detection's verdict carries no tactic at the pinned commit (`DetectionResult` has no field
+    for one; the only `threat_tactic` upstream writes is triage's prior suspicion, in its debug log),
+    so the docs stop promising one: a malicious chat reads "malicious · 0.91" and "Malicious activity
+    in this chat". The adapter is not changed to read the debug log.
+  - Adapter v6 drops `reasoning_agent.max_tokens`, which upstream has never read; the run is bounded
+    by `--max-turns` and `--timeout`. Embedded copy and `scripts/adr-analyze-session.py` stay
+    byte-identical.
+  - The Detection run's environment whitelist gains `PYTHON_DOTENV_DISABLED=1`: at the pinned commit
+    upstream's `guardrail` package imports a detector (a6076aa) that calls `load_dotenv()` at import,
+    which would load the first `.env` found in or above the checkout into the run and the Claude CLI.
+    Verified against python-dotenv 1.2.2's source (the version in upstream's `uv.lock`).
+  - `docs/ADR.md` §8 now says where upstream writes inside the checkout
+    (`Detection/ads_reasoning_workspace/`, `debug_logs*/conversation_*.json`, overwritten each run,
+    holding the raw Claude output and, when the hidden-Unicode check fires, the decoded text) and
+    that the Claude CLI keeps the reasoning session under `~/.claude/projects/`.
+  - `adr-discovery`'s new `--resolve` (DNS lookups) and `--archive-skills` flags join the arguments
+    Kannu refuses to pass.
+  - Verified on this Mac: the Debug build and the full `KannuTests` suite (858 tests, 0 failures).
+    Unverified: ADR is not installed here, and installing it is the user's call, so no Discovery
+    scan, no Detection run and no pinned install line was executed; every upstream fact above is
+    from uber/ADR's source at `6b33dff`, read in a scratch clone.
+
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
 - **Agent label:** Settings Quit row + search entry, pinned by the highlight inventory

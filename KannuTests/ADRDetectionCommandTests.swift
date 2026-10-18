@@ -61,7 +61,10 @@ final class ADRDetectionCommandTests: XCTestCase {
 
     func testEnvironmentIsAWhitelistNotTheInheritedOne() {
         let none = ADRDetectionCommand.environment(openAIKey: nil, anthropicKey: nil, path: "/opt/homebrew/bin:/usr/bin", home: "/Users/dev")
-        XCTAssertEqual(Set(none.keys), ["PATH", "HOME", "LANG"])
+        XCTAssertEqual(Set(none.keys), ["PATH", "HOME", "LANG", "PYTHON_DOTENV_DISABLED"])
+        // Upstream's guardrail package loads a .env at import time (a6076aa) unless this is set; a
+        // stray ANTHROPIC_BASE_URL there would otherwise reach the Claude run past this whitelist.
+        XCTAssertEqual(none[ADRDetectionCommand.dotenvDisabledKey], "1")
         let both = ADRDetectionCommand.environment(openAIKey: " sk-test ", anthropicKey: "ant-test", path: "/usr/bin", home: "/Users/dev")
         XCTAssertEqual(both["OPENAI_API_KEY"], "sk-test", "trimmed")
         XCTAssertEqual(both["ANTHROPIC_API_KEY"], "ant-test")
