@@ -51,6 +51,9 @@ struct JSONLUsageScanStats: Equatable {
 /// Only lines containing the bytes `"usage"` are parsed. `ClaudeUsageLine.parse` reads tokens only
 /// from a `usage` object (under `message` for Claude, top level for the Codex shape), so a line
 /// without that key can never produce a record, and the filter changes nothing but the work done.
+/// JSON may also spell the key with an escaped letter (`"us\u0061ge"`): no transcript writer is known
+/// to, but such a line is parsed too rather than skipped. Only the five escapes of the key's own
+/// letters count, so the `\u001b` of a tool output's terminal colours never costs a parse.
 ///
 /// Cross-file de-duplication is unchanged: files in listing order, lines in file order, the week
 /// guard first, then the first record of each `dedupKey` (message id + request id) wins.
@@ -60,6 +63,9 @@ struct JSONLUsageScanStats: Equatable {
 final class JSONLUsageCache: @unchecked Sendable {
     static let chunkSize = 4 << 20
     private static let usageMarker = Array(#""usage""#.utf8)
+    /// Where a JSON escape of a letter of "usage" would start, then the five of them.
+    private static let letterEscapePrefix = Array(#"\u00"#.utf8)
+    private static let usageLetterEscapes = [#"\u0075"#, #"\u0073"#, #"\u0061"#, #"\u0067"#, #"\u0065"#].map { Array($0.utf8) }
     // Qualified: the app module has its own `Logger` struct.
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "UsageAggregator")
 
@@ -226,13 +232,17 @@ final class JSONLUsageCache: @unchecked Sendable {
     private func consume(_ line: UnsafeRawBufferPointer, into records: inout [UsageRecord], weekStart: Date,
                          stats: inout JSONLUsageScanStats) {
         guard let base = line.baseAddress, !line.isEmpty else { return }
-        let hasMarker = Self.usageMarker.withUnsafeBytes { marker in
-            memmem(base, line.count, marker.baseAddress, marker.count) != nil
-        }
-        guard hasMarker else { return }
+        let mayHaveUsage = Self.contains(Self.usageMarker, in: base, count: line.count)
+            || (Self.contains(Self.letterEscapePrefix, in: base, count: line.count)
+                && Self.usageLetterEscapes.contains { Self.contains($0, in: base, count: line.count) })
+        guard mayHaveUsage else { return }
         stats.linesParsed += 1
         guard let record = ClaudeUsageLine.parse(Data(bytes: base, count: line.count)),
               record.timestamp >= weekStart else { return }
         records.append(record)
+    }
+
+    private static func contains(_ needle: [UInt8], in base: UnsafeRawPointer, count: Int) -> Bool {
+        needle.withUnsafeBytes { memmem(base, count, $0.baseAddress, needle.count) != nil }
     }
 }

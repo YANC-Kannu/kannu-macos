@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - A usage line whose key is spelled with an escape still counts
+- **Developer label:** CodeRabbit on #74: the quick filter skips a valid JSON line whose `usage` key is escaped (`"usage"`), undercounting usage
+- **Agent label:** Claude Code (Opus 5.5) — the usage pre-filter also lets through a line with an escape of one of the key's letters, and nothing else extra
+- **Changes:**
+  - `JSONLUsageCache.consume()` parses a line that has the bytes `"usage"`, or, failing that, a
+    JSON escape of one of the key's own letters (`u`, `s`, `a`, `g`,
+    `e`). No transcript writer is known to escape plain letters, but such a line now counts
+    instead of being skipped.
+  - Only those five escapes: the `\u001b` of a tool output's terminal colours, common in
+    transcripts, is still never parsed, so the memory fix's saving holds.
+  - Test: `JSONLUsageCacheTests.testAKeySpelledWithAnEscapeStillCountsAndColourEscapesAreNotParsed`
+    (the escaped line counts and matches the parse-every-line oracle; the colour line is not parsed).
+
 ### 2026-10-04 - Token usage no longer drives Kannu past a gigabyte: transcripts are read once, then only what was appended
 - **Developer label:** "how did we end up using so much memory i had to restart app"
 - **Agent label:** Incremental usage aggregator — per-file offset cache, `"usage"` pre-filter, chunked reads off the cooperative pool

@@ -295,6 +295,22 @@ final class JSONLUsageCacheTests: XCTestCase {
         XCTAssertEqual(result.stats.linesParsed, 13)
     }
 
+    /// CodeRabbit on #74: JSON may spell the key with an escaped letter. Such a line still counts;
+    /// a tool output's terminal colours (`\u001b`) are still never parsed.
+    func testAKeySpelledWithAnEscapeStillCountsAndColourEscapesAreNotParsed() throws {
+        let plain = String(decoding: claude("esc", request: "esc"), as: UTF8.self)
+        let escaped = Data(plain.replacingOccurrences(of: #""usage""#, with: #""us\u0061ge""#).utf8)
+        XCTAssertFalse(escaped.contains(Data(#""usage""#.utf8)), "the fixture lost its escape")
+        let colours = toolResult("\u{1b}[31mred\u{1b}[0m")
+        XCTAssertTrue(String(decoding: colours, as: UTF8.self).contains(#"\u001b"#), "the fixture lost its escape")
+
+        let a = try file("a.jsonl", [escaped, colours])
+        let result = refresh(JSONLUsageCache(label: "test"), [a])
+        XCTAssertEqual(result.records, everyLineParse([a], now: now))
+        XCTAssertEqual(result.records.count, 1, "the escaped key's line counts")
+        XCTAssertEqual(result.stats.linesParsed, 1, "the colour escapes are never parsed")
+    }
+
     // MARK: - De-duplication
 
     func testDeduplicationAcrossFilesKeepsTheFirstInListingOrder() throws {
