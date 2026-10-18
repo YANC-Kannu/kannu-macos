@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The pieces for a Brain › Tasks tree: counts per source and project, Find, and a short row caption
+- **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
+- **Agent label:** Claude Code (Opus 5.5) — pure helpers for the Source › Project › Task tree, tested before any view uses them
+- **Changes:**
+  - `TaskFacets.sourceCounts` and `TaskFacets.projectCounts(in:)` give each source and each project its number of tasks; projects sort by their short name, then by full key, with "No project" last.
+  - `TaskFacets.projectShortName` ("ds-vendors" for "discern_security/applications/ds-vendors") and `projectGroup` (the group path that tells two "app" projects apart). `TaskDetailSummary.shortKey` now uses the short name and can drop the project ("#4326") where a page already names it.
+  - `TaskSourceFilter(_:)` turns a source into its filter.
+  - `TaskFilter.query` holds what All tasks' Find field will hold. It is matched with `TaskSearch` alongside the four filters and is never saved; spaces alone hide nothing.
+  - `TaskRowCaption` is the one line under a task's title: the short key, the status unless it is GitLab's "Open", timing now or paused, time against the estimate and any overtime (orange), when it is due (orange once overdue), and the tags. With nothing tracked and no estimate it says nothing about time, instead of "No estimate" on every new task.
+  - Tests: `TaskRowCaptionTests` (new), and four `TaskFacetsTests` for counts, short names, project pages and Find.
+
 ### 2026-10-18 - The notch's estimate is typed, in minutes, hours or days, with the presets one click away
 - **Developer label:** "in notch ability to add estimate is drop down, change it to allow hours days and minutes, or something with more flexibility without breaking our design"
 - **Agent label:** Claude Code (Opus 5.5) — typed estimate field in the timer tab's task form; a day unit for typed lengths
