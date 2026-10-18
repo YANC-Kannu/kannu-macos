@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The Keychain's accessibility choice says why it skips user authentication
+- **Developer label:** SonarCloud on #84: S6288, "iOS and macOS Keychain keys should require user authentication", at `KeychainReader.swift:81`
+- **Agent label:** Claude Code (Opus 5.5) — a written reason and `// NOSONAR` on the one flagged line; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword` keeps `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, now
+    with the reason beside it: Kannu reads these tokens in the background (usage refreshes, task
+    syncs), where an authentication prompt could never be answered, and the item is this-device
+    only with an access list that trusts only Kannu. The same value was already in use before
+    this branch; moving it into the new `SecItemAdd` call made SonarCloud count it as new code.
+  - `// NOSONAR` on that line, so the quality gate reflects the decision instead of failing on it.
+
 ### 2026-10-04 - A saved secret always gets a fresh keychain item that only Kannu can read
 - **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
 - **Agent label:** Keychain saves delete-then-add through `KeychainWritePlan`; other apps' items stay read-only

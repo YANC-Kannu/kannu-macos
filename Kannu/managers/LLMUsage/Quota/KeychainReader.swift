@@ -76,7 +76,11 @@ enum KeychainReader {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
             kSecValueData as String: Data(value.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            // Sonar S6288 asks for user authentication on every read. Kannu reads these tokens in
+            // the background (usage refreshes, task syncs), where no prompt can be answered, so
+            // the item stays readable while the Mac is unlocked, on this device only, with an
+            // access list that trusts only Kannu: the same protection every Kannu item had before.
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly // NOSONAR
         ]
         return SecItemAdd(item as CFDictionary, nil)
     }
