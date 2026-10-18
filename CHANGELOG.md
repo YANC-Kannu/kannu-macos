@@ -4,6 +4,34 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - New task and Edit task turn the timer tab's left panel into a task form
+- **Developer label:** "a seperate add taks doesnt make sense, the left part does that, for a detailed task edit, keep a small icon by reducing that pills width, keep a minimal size button with hover tool tip and that converts that one full notch patch to a editable task form with a close button and controls to add a task"
+- **Agent label:** Claude Code (Opus 5.5) — a New task button beside the session name field, a pencil on the task card, and one form in the composer's place for both
+- **Changes:**
+  - Beside the session name field, with tasks on, a small New task button (tooltip "New task").
+    The field is 30 pt narrower for it and keeps 259 pt at the smallest notch.
+  - The button turns the left panel into a task form in the composer's frame (116 pt, under the
+    composer's 122, so the notch never grows): the title with a × where the button was; the
+    estimate (Brain's choices) and tags, comma separated; a local task's reminder, a field date
+    picker (a compact one's calendar is a popover window the notch would close under), with an
+    orange bell while macOS blocks Kannu's notifications; then Add and Add & Start.
+  - The pencil on an expanded task card opens the same form on that task, with Save. Only what
+    changed is saved (`TaskFormDraft.edits`). A Jira or GitLab task's title shows but stays the
+    server's, and reminders are for local tasks.
+  - Add & Start starts the task the way its ▶ does; the typed session name gives way to it. Add
+    puts Local back in the notch if it was hidden, as the popover's Add does.
+  - The form's fields and its estimate menu hold the notch open while in use, under tokens of
+    their own, released when the focus goes, the form goes, or the notch's window stops being key.
+    Escape and the × leave without saving. A timer starting or stopping, the tab appearing, or
+    tasks going off brings the composer back.
+  - `TasksManager.addTask` returns the new task's id (its two callers check for nil), and
+    `renameTask` renames a local task; Brain's add row shares the estimate choices.
+  - Tests: `TaskFormDraftTests`; `TimerComposerMetricsTests` (the form fits, the name field keeps
+    its room); `TimerSideColumnRulesTests.testTheTaskFormOwnsTheManagerAndLetsTheNotchGo`;
+    `TimerLifecycleRulesTests` (the form is cleared when a timer starts or stops);
+    `TimerTaskDetailRulesTests` (the pencil's tooltip); `TasksPopoverRulesTests` (the form is a
+    notch task view: no `.help`, no Keychain, no tickers).
+
 ### 2026-10-18 - The timer tab's task column has search, the filter, Refresh and Time to log
 - **Developer label:** "instead of tasks buttons,keep the refrsh button and on hover show the integrations last synced time, refrsh should trigger resync, search , filter will be icons, taking up a row similar to the name session ... in right the row will have search and filter option, possibly load the search dynamically ... also do we miss anything else from the task icon click feauture, check and make sure no feature is lost in this overhaul"
 - **Agent label:** Claude Code (Opus 5.5) — a toolbar on the Tasks page, the popover's Refresh rule and Time to log cards shared, the header button shown only where the column cannot be

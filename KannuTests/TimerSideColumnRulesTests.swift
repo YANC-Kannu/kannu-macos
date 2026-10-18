@@ -165,6 +165,26 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(page.contains("height: height,"), "the card takes the page's whole height")
     }
 
+    /// The task form is a view of its own that reads `TasksManager.shared`, so `NotchTimerView`
+    /// never touches it; Add & Start starts through the manager and does nothing more when nothing
+    /// starts; its fields and menu hold the notch open only while in use; Escape and the × leave.
+    func testTheTaskFormOwnsTheManagerAndLetsTheNotchGo() throws {
+        let form = Self.code(try Self.raw("Kannu/components/Notch/TimerTaskForm.swift"))
+        XCTAssertTrue(form.contains("@ObservedObject private var manager = TasksManager.shared"))
+        XCTAssertTrue(form.contains("guard andStart, manager.start(id) else {"), "a failed start must not report one")
+        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(field != nil, token: editingToken)"))
+        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(false, token: editingToken)"), "the form going never releases it")
+        XCTAssertTrue(form.contains("NSWindow.didResignKeyNotification") && form.contains("note.object is KannuWindow"))
+        XCTAssertTrue(form.contains("NSMenu.didBeginTrackingNotification") && form.contains("NSMenu.didEndTrackingNotification"))
+        XCTAssertTrue(form.contains(".onExitCommand(perform: close)"))
+        XCTAssertTrue(form.contains(".datePickerStyle(.field)"), "a compact picker's calendar is a popover window the notch closes under")
+        XCTAssertFalse(form.contains(".alert(") || form.contains("confirmationDialog("), "no modal under the notch (REGRESSIONS entry 14)")
+        XCTAssertEqual(Self.helpCalls(in: try Self.raw("Kannu/components/Notch/TimerTaskForm.swift")), [])
+        let notch = Self.code(try Self.raw(Self.notchTimerPath))
+        XCTAssertTrue(notch.contains("TimerTaskForm(mode: taskForm, close: closeTaskForm, started: taskStarted)"))
+        XCTAssertTrue(notch.contains("if isTasksPageAvailable {\n                newTaskButton"), "the New task button shows only with tasks on")
+    }
+
     func testTheSwipeCoversTheWholeTab() throws {
         XCTAssertEqual(Self.swipeHostProblems(
             notch: Self.code(try Self.raw(Self.notchTimerPath)),

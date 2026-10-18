@@ -61,6 +61,10 @@ struct NotchTimerView: View {
     /// the swipe yields over the ruler by its live frame first (`ScrollWheelMonitor`), since this
     /// state reaches the monitor only after a re-render, which a scroll can beat.
     @State private var isOverRuler = false
+    /// The task form in place of the name field and the composer (`TimerTaskForm`): a new task, or
+    /// one task's edit. Nil shows them. Cleared when a timer starts or stops and each time the tab
+    /// appears, never persisted.
+    @State private var taskForm: TimerTaskFormMode?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum NameField: Hashable {
@@ -116,10 +120,12 @@ struct NotchTimerView: View {
         }
         .onAppear {
             lockAccentColorIfNeeded()
-            // Each time the tab appears it opens on the initial page again.
+            // Each time the tab appears it opens on the initial page again, with the composer.
             pickedSidePage = nil
+            taskForm = nil
         }
         .onChange(of: timerManager.isTimerActive) { _, isActive in
+            taskForm = nil
             if isActive {
                 lockAccentColorIfNeeded()
             } else {
@@ -133,6 +139,10 @@ struct NotchTimerView: View {
             if previous == .rename, current != .rename {
                 commitRename()
             }
+        }
+        // Tasks or the timer switched off under the form: the composer comes back.
+        .onChange(of: isTasksPageAvailable) { _, isAvailable in
+            if !isAvailable { taskForm = nil }
         }
         .onChange(of: pendingSessionName) { _, newValue in
             if newValue.count > TimerSessionName.maxLength {
@@ -171,9 +181,16 @@ struct NotchTimerView: View {
                 activeTimerCard
                 Spacer(minLength: 0)
             } else {
-                VStack(alignment: .leading, spacing: TimerComposerMetrics.nameFieldSpacing) {
-                    sessionNameField
-                    customTimerComposer
+                if let taskForm, isTasksPageAvailable {
+                    TimerTaskForm(mode: taskForm, close: closeTaskForm, started: taskStarted)
+                        .id(taskForm)
+                        .transition(.opacity)
+                } else {
+                    VStack(alignment: .leading, spacing: TimerComposerMetrics.nameFieldSpacing) {
+                        nameRow
+                        customTimerComposer
+                    }
+                    .transition(.opacity)
                 }
                 Spacer(minLength: 0)
             }
@@ -200,14 +217,38 @@ struct NotchTimerView: View {
                     coordinator.currentView = .timer
                 }
             },
-            taskStarted: {
-                pendingSessionName = ""
-                focusedNameField = nil
-                if !enableMinimalisticUI {
-                    coordinator.currentView = .timer
-                }
-            }
+            taskStarted: taskStarted,
+            editTask: { openTaskForm(.edit($0)) }
         )
+    }
+
+    /// A task started from its ▶ or the form's Add & Start: its name wins over a typed one, so the
+    /// typed name is dropped, and the composer comes back for when the timer stops.
+    private func taskStarted() {
+        pendingSessionName = ""
+        focusedNameField = nil
+        taskForm = nil
+        if !enableMinimalisticUI {
+            coordinator.currentView = .timer
+        }
+    }
+
+    /// The form in the composer's place; the page switch's animation and reduced-motion rule.
+    private func openTaskForm(_ mode: TimerTaskFormMode) {
+        focusedNameField = nil
+        if reduceMotion {
+            taskForm = mode
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { taskForm = mode }
+        }
+    }
+
+    private func closeTaskForm() {
+        if reduceMotion {
+            taskForm = nil
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { taskForm = nil }
+        }
     }
 
     private var activeTimerCard: some View {
@@ -651,6 +692,36 @@ struct NotchTimerView: View {
                 coordinator.currentView = .timer
             }
         }
+    }
+
+    /// The session name field, and beside it, with tasks on, the New task button. Drawn above the
+    /// composer, so the button's tooltip (opening downward) is never painted over.
+    private var nameRow: some View {
+        HStack(spacing: TimerComposerMetrics.nameFieldSpacing) {
+            sessionNameField
+            if isTasksPageAvailable {
+                newTaskButton
+            }
+        }
+        .zIndex(1)
+    }
+
+    /// Turns the left panel into the task form (`TimerTaskForm`). The name field's look, square.
+    private var newTaskButton: some View {
+        Button {
+            openTaskForm(.add)
+        } label: {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: TimerComposerMetrics.newTaskButtonSize, height: TimerComposerMetrics.newTaskButtonSize)
+                .background(Color.white.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("New task"))
+        .hoverTooltip(String(localized: "New task"), edge: .below)
     }
 
     /// One line above the composer: the name the next session starts with, from a preset or Start.

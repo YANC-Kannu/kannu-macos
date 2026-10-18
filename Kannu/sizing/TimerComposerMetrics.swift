@@ -125,6 +125,16 @@ enum TimerComposerMetrics {
         max(0, sidePageHeight(budget: budget) - sideToolbarHeight - sideToolbarSpacing)
     }
 
+    // The task form (`TimerTaskForm`), in the composer's place: the title row where the name field
+    // is, the estimate and tags, the reminder, then the buttons.
+    static let taskFormRowHeight: CGFloat = 24
+    static let taskFormRowSpacing: CGFloat = 6
+    static var taskFormHeight: CGFloat {
+        nameFieldHeight + 2 * taskFormRowHeight + buttonHeight + 3 * taskFormRowSpacing
+    }
+    /// The New task button beside the session name field: a square as tall as the field.
+    static var newTaskButtonSize: CGFloat { nameFieldHeight }
+
     /// Every row's height plus the spacing around it, so a short list ends where its last row does.
     static func sideTaskRowsHeight(count: Int) -> CGFloat {
         CGFloat(max(0, count)) * (sideTaskRowHeight + sideRowSpacing)

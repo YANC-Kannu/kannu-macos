@@ -426,12 +426,27 @@ final class TasksManager: ObservableObject {
 
     // MARK: - Editing
 
+    /// A local task at the top of the order; its id, so a caller can tag, schedule or start it.
+    /// Nil when there is no title or the task list cannot change.
     @discardableResult
-    func addTask(title: String, estimateSeconds: Int?) -> Bool {
-        guard isReady, let title = TaskItem.cleanedTitle(title) else { return false }
+    func addTask(title: String, estimateSeconds: Int?) -> UUID? {
+        guard isReady, let title = TaskItem.cleanedTitle(title) else { return nil }
         let task = TaskItem(title: title, localEstimateSeconds: estimateSeconds.flatMap { $0 > 0 ? $0 : nil })
         tasks = TaskOrdering.inserting(task, into: tasks)
         persist()
+        return task.id
+    }
+
+    /// A local task's new title (`TaskItem.cleanedTitle`). A Jira or GitLab title is the server's,
+    /// and the next sync would put it back, so it is never renamed here. The save sends a scheduled
+    /// reminder again under the new title (`syncReminders`).
+    @discardableResult
+    func renameTask(_ taskID: UUID, to title: String) -> Bool {
+        guard let title = TaskItem.cleanedTitle(title),
+              let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return false }
+        if title != task.title {
+            update(taskID) { $0.title = title }
+        }
         return true
     }
 

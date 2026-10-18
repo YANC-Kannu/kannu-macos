@@ -66,6 +66,8 @@ struct TimerSideColumn: View {
     let startPreset: (TimerPreset) -> Void
     /// A task started from its ▶: its name wins over a typed session name.
     let taskStarted: () -> Void
+    /// The pencil on a task's card: the left panel becomes the task form for it.
+    let editTask: (UUID) -> Void
 
     /// `@State`, so the token survives a re-render and the release names the token that was set.
     @State private var scrollSuppressionToken = UUID()
@@ -174,7 +176,7 @@ struct TimerSideColumn: View {
     private var pageView: some View {
         switch shownPage {
         case .tasks:
-            TimerTasksPage(height: pageHeight, listHeight: M.sideListHeight(budget: budget), started: taskStarted)
+            TimerTasksPage(height: pageHeight, listHeight: M.sideListHeight(budget: budget), started: taskStarted, edit: editTask)
         case .presets:
             presetsPage
         }
@@ -274,6 +276,8 @@ private struct TimerTasksPage: View {
     /// The list's height under the toolbar (`TimerComposerMetrics.sideListHeight`).
     let listHeight: CGFloat
     let started: () -> Void
+    /// Opens the left panel's task form on a task (`TimerTaskForm`).
+    let edit: (UUID) -> Void
     /// Whether the list has scrolled past its first row (`SideListEdgeFades`).
     @State private var isScrolled = false
     /// The task whose card has replaced the list (`TimerTaskDetail`); nil shows the rows. Cleared
@@ -363,7 +367,8 @@ private struct TimerTasksPage: View {
                 height: height,
                 confirmsDelete: $confirmsDelete,
                 close: collapse,
-                start: { start(expanded) }
+                start: { start(expanded) },
+                edit: { edit(expanded.id) }
             )
             .id(expanded.id)
             .transition(.opacity)
@@ -878,6 +883,8 @@ private struct TimerTaskDetail: View {
     @Binding var confirmsDelete: Bool
     let close: () -> Void
     let start: () -> Void
+    /// The pencil: the left panel's task form, on this task.
+    let edit: () -> Void
 
     private static let horizontalPadding: CGFloat = 10
     private static let factColumnSpacing: CGFloat = 10
@@ -896,6 +903,19 @@ private struct TimerTaskDetail: View {
                 HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    edit()
+                } label: {
+                    Image(systemName: "pencil")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(5)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, -3)
+                .padding(.trailing, -6)
+                .accessibilityLabel(Text(verbatim: String(localized: "Edit task")))
+                .hoverTooltip(String(localized: "Edit task"), edge: .below)
                 Button {
                     close()
                 } label: {

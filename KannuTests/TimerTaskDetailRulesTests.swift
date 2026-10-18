@@ -98,11 +98,12 @@ final class TimerTaskDetailRulesTests: XCTestCase {
     func testTheIconButtonsCarryTooltipsAndTheExpandRespectsReducedMotion() throws {
         let column = try Self.column()
         let card = try Self.declaration("private struct TimerTaskDetail", in: column)
-        for tooltip in ["\"Close\"", "\"Delete task\"", "\"Archive\""] {
+        for tooltip in ["\"Close\"", "\"Delete task\"", "\"Archive\"", "\"Edit task\""] {
             XCTAssertTrue(card.contains(tooltip), "missing tooltip text \(tooltip)")
         }
-        XCTAssertGreaterThanOrEqual(card.components(separatedBy: ".hoverTooltip(").count - 1, 5,
-                                    "the ×, the key pill, archive, trash and open-in each carry a hover tooltip")
+        XCTAssertGreaterThanOrEqual(card.components(separatedBy: ".hoverTooltip(").count - 1, 6,
+                                    "the pencil, the ×, the key pill, archive, trash and open-in each carry a hover tooltip")
+        XCTAssertTrue(card.contains("edit()"), "the pencil opens the left panel's task form")
         let page = try Self.declaration("private struct TimerTasksPage", in: column)
         XCTAssertTrue(page.contains("accessibilityReduceMotion"), "the expand must respect reduced motion")
         XCTAssertTrue(page.contains("expandedTaskID"))

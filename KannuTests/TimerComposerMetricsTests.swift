@@ -100,6 +100,23 @@ final class TimerComposerMetricsTests: XCTestCase {
         XCTAssertLessThanOrEqual(filteredLabel + 4 * (M.sideToolbarButtonSize + 2), M.sideColumnWidth)
     }
 
+    /// The task form takes the composer's place without the notch growing: no taller than the
+    /// stacked composer beside the column, and inside the smallest budget.
+    func testTheTaskFormFitsTheComposersFrame() {
+        XCTAssertEqual(M.taskFormHeight, M.nameFieldHeight + 2 * M.taskFormRowHeight + M.buttonHeight + 3 * M.taskFormRowSpacing)
+        XCTAssertLessThanOrEqual(M.taskFormHeight, M.totalHeight(.manualWithPresets))
+        XCTAssertLessThanOrEqual(M.taskFormHeight, M.minimumTabBudget - M.bottomClearance)
+        XCTAssertGreaterThanOrEqual(M.taskFormRowHeight, 22, "a field row stays comfortably clickable")
+    }
+
+    /// Beside the New task button the session name field keeps room for its prompt at the
+    /// narrowest notch: the composer's width less the button and its gap.
+    func testTheNameFieldKeepsItsRoomBesideTheNewTaskButton() {
+        XCTAssertEqual(M.newTaskButtonSize, M.nameFieldHeight, "a square as tall as the field")
+        let field = M.composerWidthBesideSideColumn(notchWidth: M.smallestOpenNotchWidth) - M.nameFieldSpacing - M.newTaskButtonSize
+        XCTAssertGreaterThanOrEqual(field, 240, "\"Do you want to name this session?\" at 12 pt needs about 210 pt and its padding")
+    }
+
     func testTheSideRowsStayReadable() {
         XCTAssertGreaterThanOrEqual(M.sideTaskRowHeight, 32, "two lines of text and a ▶ need the room")
     }

@@ -406,7 +406,7 @@ struct TasksPopover: View {
     /// The new task is always local: with Local hidden it would vanish as it is added, so adding one
     /// puts Local back in the notch.
     private func addTask() {
-        if manager.addTask(title: newTitle, estimateSeconds: nil) {
+        if manager.addTask(title: newTitle, estimateSeconds: nil) != nil {
             newTitle = ""
             if !showLocal { showLocal = true }
         }
