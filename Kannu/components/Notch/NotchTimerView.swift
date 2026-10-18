@@ -464,8 +464,9 @@ struct NotchTimerView: View {
         }
         // Sized by TimerComposerMetrics so it fits the tab without the notch growing.
         .padding(TimerComposerMetrics.composerPadding)
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        // A filled shape behind, never a clip over the fields: a clip is a mask on the AppKit
+        // fields' layers, and one computed mid-animation can cut their digits.
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.04)))
     }
 
     private var inactiveTimerPlaceholder: some View {
@@ -911,32 +912,17 @@ private struct DurationField: View {
 
     var body: some View {
         VStack(spacing: TimerComposerMetrics.captionGap) {
-            TextField("00", text: binding)
-                .font(.system(size: TimerComposerMetrics.fieldDigitSize, weight: .semibold, design: .monospaced))
-                .multilineTextAlignment(.center)
-                .textFieldStyle(.plain)
-                .foregroundColor(.white)
-                .tint(.white)
+            // Our own field, sized to the box and centred: SwiftUI's TextField could be measured
+            // for the default font mid-animation and show only the digits' top half.
+            DurationDigitField(value: $value, range: range, width: width, accessibilityLabel: label)
                 .frame(width: width, height: TimerComposerMetrics.fieldBoxHeight)
-                .background(Color.white.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.08)))
 
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(Color.white.opacity(0.65))
                 .frame(height: TimerComposerMetrics.captionHeight)
         }
-    }
-
-    private var binding: Binding<String> {
-        Binding<String>(
-            get: { String(format: "%02d", value) },
-            set: { newValue in
-                let digits = newValue.filter { $0.isNumber }
-                let number = min(max(range.lowerBound, Int(digits) ?? 0), range.upperBound)
-                value = number
-            }
-        )
     }
 }
 

@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The timer's duration digits always show whole
+- **Developer label:** "also ui in timer broken randomly"
+- **Agent label:** Claude Code (Opus 5.5) — the composer's Hours, Minutes and Seconds boxes are an NSTextField of Kannu's own, sized to the box, under no clip
+- **Changes:**
+  - The duration boxes sometimes showed only the top half of their 22 pt digits. Each was a SwiftUI
+    `TextField`, which sizes itself from its text; rebuilt mid-animation (switching tabs, a timer
+    stopping, and since the task form, every time it closes) it could be measured for the default
+    13 pt font, about 16 pt tall, and it sat under two clip masks. The cause is likely, not
+    confirmed on screen, so both suspects go.
+  - New `DurationDigitField`: an `NSTextField` with the font set when it is made, the box's size
+    always (`sizeThatFits`), and a cell that centres the digits. While the user types, an update
+    never overwrites their text unless it no longer says the value.
+  - Typing works like a clock's display (`TimerDurationDigits`): digits only, a digit typed past two
+    pushes the first one out (typing 5 into "00" reads "05"), never past the range.
+  - The box and the composer draw a filled shape behind instead of a clip over the fields.
+  - Tests: `TimerDurationDigitsTests`; `TimerDurationFieldRulesTests` (the wrapper, no clip over
+    the boxes or the composer, the font and size fixed, the digits' line height fits the box,
+    planted offenders).
+
 ### 2026-10-18 - New task and Edit task turn the timer tab's left panel into a task form
 - **Developer label:** "a seperate add taks doesnt make sense, the left part does that, for a detailed task edit, keep a small icon by reducing that pills width, keep a minimal size button with hover tool tip and that converts that one full notch patch to a editable task form with a close button and controls to add a task"
 - **Agent label:** Claude Code (Opus 5.5) — a New task button beside the session name field, a pencil on the task card, and one form in the composer's place for both
