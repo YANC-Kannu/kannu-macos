@@ -162,6 +162,30 @@ final class TimerTaskDetailRulesTests: XCTestCase {
                        "no dot: it drew nothing for plain glass yet indented the title past the chips")
     }
 
+    /// David: the "linked MRs" fact opens a list of them, with back on the left, close on the right,
+    /// and each one clickable through.
+    func testTheLinkedMergeRequestsPage() throws {
+        let column = try Self.column()
+        let card = try Self.declaration("private struct TimerTaskDetail", in: column)
+        XCTAssertTrue(card.contains("case .linkedMergeRequests:"), "the fact with the action is a button")
+        XCTAssertTrue(card.contains(#".hoverTooltip(String(localized: "Show linked merge requests")"#))
+        XCTAssertTrue(card.contains("TimerLinkedMRsPage("), "the page swaps in for the card, in its frame")
+        XCTAssertTrue(card.contains("back: { showLinkedMRs(false) }") && card.contains("close: close"),
+                      "Back returns to the card; Close returns to the list")
+
+        let page = try Self.declaration("private struct TimerLinkedMRsPage", in: column)
+        XCTAssertTrue(page.contains("@ObservedObject var manager: TasksManager") && !page.contains("TasksManager.shared"),
+                      "the page reads the manager it is handed")
+        XCTAssertTrue(page.contains("manager.linkedMergeRequests(for: task.id)"))
+        let back = try XCTUnwrap(page.range(of: "Button(action: back)"))
+        let close = try XCTUnwrap(page.range(of: "Button(action: close)"))
+        XCTAssertLessThan(back.lowerBound, close.lowerBound, "Back on the left, Close on the right")
+        XCTAssertTrue(page.contains(#".hoverTooltip(String(localized: "Back")"#) && page.contains(#".hoverTooltip(String(localized: "Close")"#))
+        XCTAssertTrue(page.contains("NSWorkspace.shared.open(url)"), "each merge request opens in the browser")
+        XCTAssertTrue(page.contains("ScrollView(.vertical)") && !page.contains("List {"), "a ScrollView, never a List")
+        XCTAssertTrue(page.contains("attempt += 1"), "a failed load can be tried again")
+    }
+
     /// David: closing a card brought the list back at the top, "not acceptable". The list stays in
     /// the tree under the card (and the Log page), hidden and inert, so its scroll offset survives.
     func testClosingACardKeepsTheListsPlace() throws {

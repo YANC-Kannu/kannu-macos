@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - A task card's linked merge requests open as a list
+- **Developer label:** "We need text about linked mr's inside the task to open a list of linked mr's and that page should have back on left and close on right and list of linked mr's with click through"
+- **Agent label:** Claude Code (Opus 5.5) — the "linked MRs" fact becomes a button that opens a page of the merge requests closing the issue (`closed_by`), each opening in the browser
+- **Changes:**
+  - On a GitLab issue's card, "2 linked MRs" is a button (a chevron after it, tooltip "Show
+    linked merge requests"), and ranks right after the due date, conflicts and health, so it is
+    always among the four facts the card has room for.
+  - It opens a page in the card's frame: Back on the left (to the card), "Linked merge requests",
+    Close on the right (to the list, which kept its place). Each merge request is a row with its
+    state as a dot (open green, merged purple, closed red), its title (sliding when clipped), and
+    "!12 · Merged · Kim Lee" (with Draft when it is one); a click opens it in the browser. While
+    loading, a spinner; then no merge requests, a failure with Try Again, the Keychain refused
+    with Try Again, or Reconnect GitLab. More than a page of them offers "More on GitLab".
+  - The list is GitLab's `closed_by` for the issue: the merge requests that close it when merged,
+    the same set its `merge_requests_count` counts, so the card's number and the list agree.
+    `GitLabAPI.closingMergeRequestsRequest` (read-only, the token in its header only),
+    `LinkedMergeRequest`, `GitLabReader.closingMergeRequests`, and
+    `TasksManager.linkedMergeRequests(for:)`: a click asks, so the Keychain may be read with its
+    dialog, as Refresh does; a loaded list is kept until the task's next sync or a new connection;
+    a refused token marks GitLab as needing reconnecting. Logs carry counts only.
+  - Tests: new `LinkedMergeRequestTests` (the request, the cases that send nothing, each answer as
+    a row: references, a page on another server dropped, an unknown state); `GitLabReaderTests`
+    (the list, more than a page, 401, rate limit, redirect, a server Kannu would not use);
+    `TaskDetailSummaryTests` (the fact is the only one with an action, within the first four);
+    `TimerTaskDetailRulesTests.testTheLinkedMergeRequestsPage`.
+
 ### 2026-10-18 - Closing a task card finds the list where it was
 - **Developer label:** "the close button of a task should keep the list at previously scrolled position or at the position of closed task , see which is easy but the current way how they close back to top is not acceptable"
 - **Agent label:** Claude Code (Opus 5.5) — the task list stays in the view tree under a card or the Log page, hidden and inert, so its scroll position survives

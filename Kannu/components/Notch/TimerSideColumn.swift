@@ -861,6 +861,215 @@ private struct TimerLogTimePage: View {
     }
 }
 
+/// The merge requests that close a GitLab issue, in place of its card, in the card's frame: a row
+/// level with the session name field with Back (to the card) on the left and Close (to the list,
+/// which kept its place) on the right; then the merge requests, each opening its page in the
+/// browser. Loaded when it appears (`TasksManager.linkedMergeRequests`, which may ask for the
+/// Keychain: the user clicked), kept by the manager until the task's next sync.
+///
+/// Takes the manager it is handed, like the card. Each row is one button whose label owns the
+/// row's one hover (its clipped title slides), so it carries no tooltip: an arrow says it opens.
+private struct TimerLinkedMRsPage: View {
+    private typealias M = TimerComposerMetrics
+
+    @ObservedObject var manager: TasksManager
+    let task: TaskItem
+    let width: CGFloat
+    let height: CGFloat
+    let back: () -> Void
+    let close: () -> Void
+
+    private enum Load: Equatable {
+        case loading
+        case done(TasksManager.LinkedMergeRequestsResult)
+    }
+
+    @State private var load: Load = .loading
+    /// Try again bumps it, which runs the load again.
+    @State private var attempt = 0
+    @State private var isScrolled = false
+    @State private var hoveredID: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: M.sideToolbarSpacing) {
+            header
+                .frame(height: M.sideToolbarHeight)
+                .zIndex(1)
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(width: width, height: height, alignment: .topLeading)
+        .task(id: attempt) {
+            load = .loading
+            load = .done(await manager.linkedMergeRequests(for: task.id))
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 2) {
+            Button(action: back) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: M.sideToolbarHeight, height: M.sideToolbarHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: String(localized: "Back to the task")))
+            .hoverTooltip(String(localized: "Back"), edge: .below)
+
+            Text("Linked merge requests")
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+
+            Button(action: close) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .frame(width: M.sideToolbarHeight, height: M.sideToolbarHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: String(localized: "Close")))
+            .hoverTooltip(String(localized: "Close"), edge: .below)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch load {
+        case .loading:
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Loading…")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 10)
+        case .done(.loaded(let items, let complete)):
+            if items.isEmpty {
+                note(String(localized: "No merge requests close this issue."))
+            } else {
+                mergeRequestRows(items, complete: complete)
+            }
+        case .done(.failed(let reason)):
+            note(reason, retry: true)
+        case .done(.needsKeychainApproval):
+            note(String(localized: "macOS did not let Kannu read the saved GitLab token."), retry: true)
+        case .done(.needsReconnect):
+            note(String(localized: "Reconnect GitLab in Brain › Tasks to see them."))
+        }
+    }
+
+    private func note(_ text: String, retry: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(verbatim: text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if retry {
+                Button(String(localized: "Try Again")) { attempt += 1 }
+                    .buttonStyle(.link)
+                    .font(.system(size: 11, weight: .medium))
+            }
+        }
+        .padding(.horizontal, 10)
+    }
+
+    private func mergeRequestRows(_ items: [LinkedMergeRequest], complete: Bool) -> some View {
+        ZStack {
+            ScrollView(.vertical) {
+                LazyVStack(spacing: M.sideRowSpacing) {
+                    ForEach(items) { item in
+                        row(item)
+                    }
+                    if !complete, let url = manager.gitlabBrowseURL(for: task) {
+                        // GitLab has more than one page of them: the issue lists them all.
+                        Button(String(localized: "More on GitLab")) { NSWorkspace.shared.open(url) }
+                            .buttonStyle(.link)
+                            .font(.system(size: 11, weight: .medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10)
+                    }
+                }
+                .padding(.bottom, M.sideRowSpacing / 2)
+                .sideListOffsetProbe()
+            }
+            .scrollIndicators(.never)
+            .sideListScrollTracking(isScrolled: $isScrolled)
+
+            SideListEdgeFades(showsTop: isScrolled)
+        }
+    }
+
+    /// The state as a dot, the title (sliding when clipped), "!12 · Merged · Kim Lee", and an arrow:
+    /// a click opens it in the browser.
+    private func row(_ item: LinkedMergeRequest) -> some View {
+        let caption = [item.reference, Self.stateName(item.state), item.isDraft ? String(localized: "Draft") : nil, item.author]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+        return Button {
+            if let url = item.webURL { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(Self.stateColor(item.state))
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
+                    HoverRevealText(item.title, font: .system(size: 12, weight: .semibold), isActive: hoveredID == item.id)
+                    Text(verbatim: caption)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if item.webURL != nil {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: M.sideTaskRowHeight)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.06)))
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                if hovering {
+                    hoveredID = item.id
+                } else if hoveredID == item.id {
+                    hoveredID = nil
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(item.webURL == nil)
+        .accessibilityLabel(Text(verbatim: "\(item.title), \(caption)"))
+        .accessibilityHint(Text(verbatim: String(localized: "Opens it in GitLab")))
+    }
+
+    static func stateName(_ state: LinkedMergeRequest.State?) -> String? {
+        switch state {
+        case .opened: return String(localized: "Open")
+        case .merged: return String(localized: "Merged")
+        case .closed: return String(localized: "Closed")
+        case .locked: return String(localized: "Locked")
+        case nil: return nil
+        }
+    }
+
+    /// Open green, merged purple, closed red, as GitLab colours them; locked or unknown grey.
+    static func stateColor(_ state: LinkedMergeRequest.State?) -> Color {
+        switch state {
+        case .opened: return .green
+        case .merged: return .purple
+        case .closed: return .red
+        case .locked, nil: return .gray
+        }
+    }
+}
+
 /// The dark fades at a list's top and bottom edges, over the rows. The bottom one always says
 /// "more below"; the top one appears only once rows have scrolled under it — at rest it darkened
 /// the first row's top 16 pt, which read as a black gap above a misaligned list.
@@ -945,6 +1154,9 @@ private struct TimerTaskDetail: View {
     let start: () -> Void
     /// The pencil: the left panel's task form, on this task.
     let edit: () -> Void
+    /// The linked merge requests page, in place of the card (`TimerLinkedMRsPage`).
+    @State private var showsLinkedMRs = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let horizontalPadding: CGFloat = 10
     private static let factColumnSpacing: CGFloat = 10
@@ -954,6 +1166,35 @@ private struct TimerTaskDetail: View {
     }
 
     var body: some View {
+        ZStack(alignment: .topLeading) {
+            if showsLinkedMRs {
+                TimerLinkedMRsPage(
+                    manager: manager,
+                    task: task,
+                    width: width,
+                    height: height,
+                    back: { showLinkedMRs(false) },
+                    close: close
+                )
+                .transition(.opacity)
+            } else {
+                card
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    /// The linked page in, or the card back; the page switch's animation and reduced-motion rule.
+    private func showLinkedMRs(_ shows: Bool) {
+        if reduceMotion {
+            showsLinkedMRs = shows
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { showsLinkedMRs = shows }
+        }
+    }
+
+    @ViewBuilder
+    private var card: some View {
         let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: Self.selfNames)
         VStack(alignment: .leading, spacing: 0) {
             // Drawn above the rows below it, so the × tooltip (opening downward) is never
@@ -1093,12 +1334,31 @@ private struct TimerTaskDetail: View {
         VStack(alignment: .leading, spacing: 3) {
             ForEach(Array(stride(from: 0, to: facts.count, by: 2)), id: \.self) { first in
                 HStack(spacing: Self.factColumnSpacing) {
-                    FactCell(fact: facts[first], width: factColumnWidth)
+                    factCell(facts[first])
                     if first + 1 < facts.count {
-                        FactCell(fact: facts[first + 1], width: factColumnWidth)
+                        factCell(facts[first + 1])
                     }
                 }
             }
+        }
+    }
+
+    /// A fact that opens something is a button: the linked merge requests open their page.
+    @ViewBuilder
+    private func factCell(_ fact: TaskDetailSummary.Fact) -> some View {
+        switch fact.action {
+        case .linkedMergeRequests:
+            Button {
+                showLinkedMRs(true)
+            } label: {
+                FactCell(fact: fact, width: factColumnWidth, opens: true)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(verbatim: String(localized: "\(fact.text), show them")))
+            .hoverTooltip(String(localized: "Show linked merge requests"), edge: .above)
+        case nil:
+            FactCell(fact: fact, width: factColumnWidth)
         }
     }
 
@@ -1247,6 +1507,9 @@ private struct SideChip: View {
 private struct FactCell: View {
     let fact: TaskDetailSummary.Fact
     let width: CGFloat
+    /// It opens something: a chevron says so, and the button around it owns the one hover (its
+    /// tooltip), so the text does not slide.
+    var opens = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -1254,8 +1517,15 @@ private struct FactCell: View {
                 .font(.system(size: 9, weight: .semibold))
                 .frame(width: 12)
                 .accessibilityHidden(true)
-            // Clipped at the column's width, it slides into view while hovered.
-            HoverRevealText(fact.text, font: .system(size: 11, weight: .medium))
+            if opens {
+                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium), isActive: false)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .accessibilityHidden(true)
+            } else {
+                // Clipped at the column's width, it slides into view while hovered.
+                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium))
+            }
         }
         .foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
         .frame(width: width, alignment: .leading)

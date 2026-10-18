@@ -1406,6 +1406,87 @@ final class TasksManager: ObservableObject {
         }
     }
 
+    // MARK: - Linked merge requests
+
+    /// What the task card's linked merge requests page shows.
+    enum LinkedMergeRequestsResult: Equatable {
+        case loaded([LinkedMergeRequest], complete: Bool)
+        case failed(String)
+        /// macOS did not let Kannu read the saved token.
+        case needsKeychainApproval
+        /// Disconnected, connected to another server, or the token was refused.
+        case needsReconnect
+    }
+
+    /// The connection and the task's last sync a list was read under: a newer either reads again.
+    private struct LinkedMergeRequestsStamp: Equatable {
+        let generation: Int
+        let lastSeenAt: Date
+    }
+
+    private var linkedMergeRequestsCache: [UUID: (stamp: LinkedMergeRequestsStamp, result: LinkedMergeRequestsResult)] = [:]
+    private var linkedMergeRequestsInFlight: [UUID: Task<LinkedMergeRequestsResult, Never>] = [:]
+
+    /// The merge requests that close a GitLab issue (`closed_by`), for the task card's linked page.
+    /// A click asks, so the Keychain may be read with its dialog, as Refresh does. Read-only. A
+    /// loaded list is kept until the task's next sync or a new connection; two asks at once share
+    /// one request.
+    func linkedMergeRequests(for taskID: UUID) async -> LinkedMergeRequestsResult {
+        guard isReady, let task = tasks.first(where: { $0.id == taskID }), task.source == .gitlab,
+              let remote = task.remote, remote.gitlabKind == .issue,
+              let projectID = remote.gitlabProjectID, let iid = remote.gitlabIID,
+              remote.hostScope == Defaults[.gitlabHost] else { return .needsReconnect }
+        let stamp = LinkedMergeRequestsStamp(generation: gitlabGeneration, lastSeenAt: remote.lastSeenAt)
+        if let cached = linkedMergeRequestsCache[taskID], cached.stamp == stamp { return cached.result }
+        if let running = linkedMergeRequestsInFlight[taskID] { return await running.value }
+        let host = remote.hostScope
+        let work = Task { [weak self] () -> LinkedMergeRequestsResult in
+            guard let self else { return .needsReconnect }
+            return await self.fetchLinkedMergeRequests(projectID: projectID, iid: iid, host: host)
+        }
+        linkedMergeRequestsInFlight[taskID] = work
+        let result = await work.value
+        linkedMergeRequestsInFlight[taskID] = nil
+        if case .loaded = result, stamp.generation == gitlabGeneration {
+            linkedMergeRequestsCache[taskID] = (stamp, result)
+        }
+        return result
+    }
+
+    private func fetchLinkedMergeRequests(projectID: Int, iid: Int, host: String) async -> LinkedMergeRequestsResult {
+        let credential: GitLabCredential
+        switch await GitLabCredentialStore.load(allowInteraction: true) {
+        case .found(let stored) where stored.baseURL == host && GitLabHost.isValidBase(stored.baseURL):
+            credential = stored
+        case .found, .missing, .broken:
+            return .needsReconnect
+        case .needsApproval:
+            return .needsKeychainApproval
+        }
+        let generation = gitlabGeneration
+        let read = await GitLabClient().closingMergeRequests(credential, projectID: projectID, iid: iid)
+        // Disconnected, or connected again, while the list was on its way: it is not this one's.
+        guard generation == gitlabGeneration else { return .needsReconnect }
+        switch read {
+        case .success(let list):
+            return .loaded(list.items, complete: list.complete)
+        case .failure(.http(.auth(let status))):
+            markGitLabRejected(generation, status: status)
+            return .needsReconnect
+        case .failure(let failure):
+            switch Self.gitlabSyncState(for: failure, now: Date()) {
+            case .failed(let reason):
+                return .failed(reason)
+            case .offline:
+                return .failed(String(localized: "Kannu is offline. Try again when you are back online."))
+            case .rateLimited(let until):
+                return .failed(String(localized: "GitLab asked Kannu to wait until \(until.formatted(date: .omitted, time: .shortened))."))
+            default:
+                return .needsReconnect
+            }
+        }
+    }
+
     /// The item's page, only when it is on the server the task came from.
     func gitlabBrowseURL(for task: TaskItem) -> URL? {
         guard task.source == .gitlab, let remote = task.remote, let link = remote.gitlabWebURL,

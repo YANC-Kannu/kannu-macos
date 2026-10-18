@@ -130,13 +130,16 @@ final class TaskDetailSummaryTests: XCTestCase {
         info.updatedAt = now.addingTimeInterval(-3 * 3600)
         let facts = summary(TaskItem(source: .gitlab, title: "All of it", remote: info)).facts
         XCTAssertEqual(facts.map(\.text), [
-            "Due \(day("2025-10-20"))", "At risk", "Sprint 42", "Iteration 5", "Weight 8", "Health Check Migration",
-            "Kim Lee", "2 of 5 done", "2 linked MRs", "1 comment", "Updated 3h ago",
+            "Due \(day("2025-10-20"))", "At risk", "2 linked MRs", "Sprint 42", "Iteration 5", "Weight 8",
+            "Health Check Migration", "Kim Lee", "2 of 5 done", "1 comment", "Updated 3h ago",
         ])
         XCTAssertEqual(facts.map(\.icon), [
-            "calendar", "heart.text.square", "flag", "hourglass", "scalemass", "square.stack",
-            "person", "checklist", "arrow.triangle.pull", "bubble.left", "clock",
+            "calendar", "heart.text.square", "arrow.triangle.pull", "flag", "hourglass", "scalemass",
+            "square.stack", "person", "checklist", "bubble.left", "clock",
         ])
+        // David: the linked MRs open their list, so the fact is a button within the four shown.
+        XCTAssertEqual(facts.filter { $0.action != nil }.map(\.text), ["2 linked MRs"])
+        XCTAssertEqual(facts[2].action, .linkedMergeRequests)
         XCTAssertEqual(facts.filter(\.isAlert).map(\.text), ["At risk"], "only what needs attention is orange")
     }
 
