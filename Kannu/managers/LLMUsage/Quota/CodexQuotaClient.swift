@@ -31,8 +31,21 @@ struct CodexQuotaClient {
     }
 
     // Never throws: any credential/network/parse failure yields (nil, nil).
-    func fetchLimits() async -> QuotaFetchResult {
-        guard let creds = loadCredentials() else {
+    /// `interactive` is true only for a refresh the user asked for; only then may the keychain
+    /// read show macOS's "allow access" dialog. Automatic refreshes and the background poll read
+    /// silently.
+    func fetchLimits(interactive: Bool = false) async -> QuotaFetchResult {
+        let creds: (accessToken: String, accountId: String?)
+        switch loadCredentials(interactive: interactive) {
+        case .found(let accessToken, let accountId):
+            creds = (accessToken, accountId)
+        case .keychainNeedsApproval:
+            Self.log.notice("Codex Auth keychain item needs approval; not prompting outside a user-initiated refresh")
+            return QuotaFetchResult(
+                errorMessage: String(localized: "Codex keeps its sign-in in the keychain. Allow access to show usage limits."),
+                action: .grantCodexKeychainAccess
+            )
+        case .missing:
             Self.log.notice("no credentials: auth.json/Keychain missing or unparseable")
             return QuotaFetchResult(errorMessage: "Codex not signed in", isAuthFailure: true)
         }
@@ -98,14 +111,31 @@ struct CodexQuotaClient {
         return plan.capitalized
     }
 
+    private enum Credentials {
+        case found(accessToken: String, accountId: String?)
+        /// The keychain item exists but macOS wants the user to approve the read.
+        case keychainNeedsApproval
+        case missing
+    }
+
     // auth.json ($CODEX_HOME, ~/.codex, ~/.config/codex), then Keychain "Codex Auth" holding the same JSON payload.
-    private func loadCredentials() -> (accessToken: String, accountId: String?)? {
+    // Kannu is not on the item's access list, so a read allowed to prompt raised an unasked dialog
+    // on every automatic refresh. `KeychainReadPolicy` reads it silently and lets only a
+    // user-initiated refresh prompt, once.
+    private func loadCredentials(interactive: Bool) -> Credentials {
         for path in authPaths() {
-            if let data = try? Data(contentsOf: path), let creds = parseAuth(data) { return creds }
+            if let data = try? Data(contentsOf: path), let creds = parseAuth(data) {
+                return .found(accessToken: creds.accessToken, accountId: creds.accountId)
+            }
         }
-        guard let value = KeychainReader.genericPassword(service: "Codex Auth"),
-              let creds = parseAuth(Data(value.utf8)) else { return nil }
-        return creds
+        let resolution = KeychainReadPolicy.resolve(interactive: interactive) { allowInteraction in
+            let read = KeychainReader.read(service: "Codex Auth", allowInteraction: allowInteraction)
+            return .init(value: read.value, needsApproval: KeychainReader.needsUserApproval(read.status))
+        }
+        if let value = resolution.value, let creds = parseAuth(Data(value.utf8)) {
+            return .found(accessToken: creds.accessToken, accountId: creds.accountId)
+        }
+        return resolution == .needsApproval ? .keychainNeedsApproval : .missing
     }
 
     private func authPaths() -> [URL] {

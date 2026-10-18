@@ -6,8 +6,24 @@ struct CursorQuotaClient {
     let session: URLSession
     init(session: URLSession = URLSession(configuration: .ephemeral)) { self.session = session }
 
-    func fetchLimits() async -> QuotaFetchResult {
+    /// `interactive` is true only for a refresh the user asked for (see `CursorTokenStore`). The
+    /// background poll calls this directly, so it opens its own single-read scope; inside the
+    /// provider's refresh that scope is reused.
+    func fetchLimits(interactive: Bool = false) async -> QuotaFetchResult {
+        await CursorTokenStore.withSingleRead(interactive: interactive) { await limits() }
+    }
+
+    private func limits() async -> QuotaFetchResult {
         guard CursorTokenStore.accessToken() != nil else {
+            // Without this a cursor-agent user whose only sign-in is the keychain item had no way
+            // to approve the read: nothing else asks for an interactive Cursor refresh.
+            if CursorTokenStore.keychainNeedsApproval() {
+                Self.log.notice("cursor-access-token keychain item needs approval; not prompting outside a user-initiated refresh")
+                return QuotaFetchResult(
+                    errorMessage: String(localized: "Cursor keeps its sign-in in the keychain. Allow access to show usage limits."),
+                    action: .grantCursorKeychainAccess
+                )
+            }
             Self.log.notice("no Cursor access token in Keychain or state.vscdb")
             return QuotaFetchResult(errorMessage: "Cursor not signed in")
         }

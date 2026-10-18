@@ -2,11 +2,12 @@ import Foundation
 
 struct CodexUsageProvider: UsageProvider {
     let id: ProviderID = .codex
-    let root: URL
+    /// `$CODEX_HOME` or `~/.codex`; rollouts are read from its `sessions` and `archived_sessions`.
+    let codexHome: URL
     let quotaClient: CodexQuotaClient
 
-    init(root: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions"), quotaClient: CodexQuotaClient = CodexQuotaClient()) {
-        self.root = root
+    init(codexHome: URL = CodexRolloutFiles.codexHome(), quotaClient: CodexQuotaClient = CodexQuotaClient()) {
+        self.codexHome = codexHome
         self.quotaClient = quotaClient
     }
 
@@ -14,31 +15,32 @@ struct CodexUsageProvider: UsageProvider {
         var snapshot = UsageSnapshot()
         snapshot.lastUpdated = now
 
-        if FileManager.default.fileExists(atPath: root.path),
-           let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) {
-            let files = en.compactMap { $0 as? URL }.filter { $0.pathExtension == "jsonl" }
-            if !files.isEmpty {
-                // Same rule as the Claude provider, from the same constant: skip files too old to
-                // contribute, but decide `logsUnavailable` from the unfiltered listing.
-                snapshot = JSONLUsageParser.aggregate(
-                    files: UsageWindows.recentlyModified(files, now: now),
-                    now: now
-                )
-            } else {
-                snapshot.logsUnavailable = true
-            }
+        let listing = CodexRolloutFiles.listing(codexHome: codexHome)
+        if listing.hasLogs {
+            // Same rule as the Claude provider, from the same constant: skip files too old to
+            // contribute, but decide `logsUnavailable` from the unfiltered listing, compressed
+            // rollouts included.
+            snapshot = JSONLUsageParser.aggregate(
+                records: CodexRolloutFiles.recentRecords(in: listing, now: now),
+                now: now
+            )
         } else {
             snapshot.logsUnavailable = true
         }
+        // Tokens only, as for Claude. The pricing table has one input rate and no cached-input
+        // rate, and most of a Codex request's input is cached, so an estimate would bill that
+        // cached bulk at the full rate; on a ChatGPT plan no dollars are billed per token at all.
+        snapshot.billedCostOnly = true
 
-        let quota = await quotaClient.fetchLimits()
+        let quota = await quotaClient.fetchLimits(interactive: interactive)
         snapshot.sessionLimit = quota.session
         snapshot.weekLimit = quota.week
         snapshot.quotaError = quota.errorMessage
+        snapshot.quotaAction = quota.action
         snapshot.accountTier = quota.accountTier
         snapshot.isAuthFailure = quota.isAuthFailure
 
-        if snapshot.logsUnavailable && !quota.hasLimits {
+        if snapshot.logsUnavailable && !quota.hasLimits && quota.action == nil {
             throw UsageError.notConfigured("Sign in to Codex locally (~/.codex/auth.json) to show quota.")
         }
 
