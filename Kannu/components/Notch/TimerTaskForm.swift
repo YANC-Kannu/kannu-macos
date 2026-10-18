@@ -54,6 +54,9 @@ struct TimerTaskForm: View {
     /// `@State`, so the release names the token that was set.
     @State private var editingToken = UUID()
     @State private var menuTrackingToken = UUID()
+    /// The pointer is on the tag chips: they stay while a click lands, even if the field lets go of
+    /// focus on the way.
+    @State private var chipsHovered = false
 
     private enum Field: Hashable { case title, tags, reminder }
 
@@ -87,9 +90,16 @@ struct TimerTaskForm: View {
             }
             .frame(height: M.taskFormRowHeight)
             .zIndex(2)
-            reminderRow
-                .frame(height: M.taskFormRowHeight)
-                .zIndex(1)
+            // While tags are typed, the tags in use take the reminder's row.
+            Group {
+                if showsTagChips {
+                    tagChips
+                } else {
+                    reminderRow
+                }
+            }
+            .frame(height: M.taskFormRowHeight)
+            .zIndex(1)
             buttonRow
         }
         .frame(height: M.taskFormHeight, alignment: .top)
@@ -270,6 +280,72 @@ struct TimerTaskForm: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    // MARK: - Tags in use
+
+    /// Brain's suggestions for the tag being typed, among every task's tags (`TaskFacets.tags`).
+    private var tagPicks: [TaskTagEditing.Suggestion] {
+        draft.tagSuggestions(existing: TaskFacets.tags(in: manager.tasks))
+    }
+
+    private var showsTagChips: Bool {
+        (focused == .tags || chipsHovered) && !tagPicks.isEmpty
+    }
+
+    /// The tags in use for what is being typed, as chips with their colours, in one row: the ones
+    /// that do not fit are left off the end, never wrapped. Inset like the fields' text.
+    private var tagChips: some View {
+        let picks = tagPicks
+        return ViewThatFits(in: .horizontal) {
+            ForEach((1...max(1, picks.count)).reversed(), id: \.self) { shown in
+                HStack(spacing: 6) {
+                    ForEach(Array(picks.prefix(shown)), id: \.self) { pick in
+                        tagChip(pick)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        // The row's one hover; the chips carry no tooltip.
+        .onHover { chipsHovered = $0 }
+    }
+
+    /// One tag in use (its colour dot; none for plain glass, so no empty gap), or the typed text as
+    /// a new tag (a +). A click completes it into the field and keeps the field's focus.
+    private func tagChip(_ pick: TaskTagEditing.Suggestion) -> some View {
+        Button {
+            draft.completeTag(pick.tag)
+            focused = .tags
+        } label: {
+            HStack(spacing: 4) {
+                switch pick {
+                case .use(let tag):
+                    if let tint = manager.tagColor(for: tag).tint {
+                        Circle()
+                            .fill(tint)
+                            .frame(width: 7, height: 7)
+                    }
+                    Text(verbatim: tag)
+                case .create(let tag):
+                    Image(systemName: "plus")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(verbatim: tag)
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.9))
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, 8)
+            .frame(height: 20)
+            .background(Capsule().fill(Color.white.opacity(0.12)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .accessibilityLabel(Text(verbatim: String(localized: "Add tag \(pick.tag)")))
     }
 
     private var reminderBinding: Binding<Date> {

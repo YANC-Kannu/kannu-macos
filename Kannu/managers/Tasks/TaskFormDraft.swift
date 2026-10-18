@@ -114,6 +114,38 @@ struct TaskFormDraft: Equatable {
         return (Self.estimateChoices + [estimateSeconds]).sorted()
     }
 
+    // MARK: - Tags in use, offered while typing
+
+    /// Where the tag being typed starts: after the last comma or line break.
+    private var fragmentStart: String.Index {
+        tagsText.lastIndex { $0 == "," || $0 == "\n" }.map { tagsText.index(after: $0) } ?? tagsText.startIndex
+    }
+
+    /// The tag being typed: the text after the last comma, trimmed.
+    var tagFragment: String {
+        String(tagsText[fragmentStart...]).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The tags typed before it.
+    var tagsBeforeFragment: [String] {
+        TaskItem.parsedTags(String(tagsText[..<fragmentStart]))
+    }
+
+    /// Brain's own suggestions (`TaskTagEditing.suggestions`) for the tag being typed, among the tags
+    /// in use: the first few with nothing typed, else those that start with it, then those that
+    /// contain it, then a new one. Never one already typed; nothing once ten are.
+    func tagSuggestions(existing: [String]) -> [TaskTagEditing.Suggestion] {
+        TaskTagEditing.suggestions(for: tagFragment, existing: existing, current: tagsBeforeFragment)
+    }
+
+    /// A suggestion picked: it takes the place of what was being typed, and a comma follows, ready
+    /// for the next one.
+    mutating func completeTag(_ tag: String) {
+        guard let cleaned = TaskTagEditing.cleaned(tag) else { return }
+        let before = String(tagsText[..<fragmentStart]).trimmingCharacters(in: .whitespaces)
+        tagsText = (before.isEmpty ? cleaned : before + " " + cleaned) + ", "
+    }
+
     /// Where a new reminder starts: the next whole hour.
     static func defaultReminder(now: Date, calendar: Calendar) -> Date {
         calendar.dateInterval(of: .hour, for: now)?.end ?? now.addingTimeInterval(3600)

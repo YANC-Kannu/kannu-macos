@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The notch's task form offers the tags already in use
+- **Developer label:** "also is adding tags in a task from notch does not provide existing tags ?"
+- **Agent label:** Claude Code (Opus 5.5) — while tags are typed in the timer tab's task form, the tags in use show as chips with their colours, from Brain's own suggestions
+- **Changes:**
+  - While the form's tags field has focus, the reminder's row shows the tags in use as chips, each
+    with its colour dot (none for plain glass): Brain's own suggestions
+    (`TaskTagEditing.suggestions`), so the first few with nothing typed, then those that start with
+    what is typed, then those that contain it, then the typed text as a new tag (a +). A tag
+    already typed is never offered; nothing is once ten are.
+  - A click completes the tag in place of what was being typed and adds a comma, ready for the
+    next; the field keeps its focus (chips are not focusable, and stay while the pointer is on them
+    so a click always lands). Chips that do not fit are left off the end, never wrapped, so the
+    row stays 24 pt. The reminder row comes back when the field lets go.
+  - `TaskFormDraft` gains `tagFragment`, `tagsBeforeFragment`, `tagSuggestions(existing:)` and
+    `completeTag(_:)`.
+  - Tests: `TaskFormDraftTests` (the fragment, completion, Brain's suggestions skipping typed
+    tags, nothing at ten); `TimerSideColumnRulesTests` (the form uses the suggestions, chips are
+    not focusable and never wrap).
+
 ### 2026-10-18 - The task icons sit in a small rail between the timer tab's two columns
 - **Developer label:** "how would moving the 3 icons in the third picture to go vertically between the 2 sides of the tab work, also make them smaller and go in with genereal design"
 - **Agent label:** Claude Code (Opus 5.5) — search, filter, Refresh and the Time to log clock move from the Tasks page's top row into a vertical rail on the divider's line, with the hairline continuing below

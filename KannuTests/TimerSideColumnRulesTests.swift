@@ -222,6 +222,12 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(form.contains("GoldenRow(spacing: M.taskFormRowSpacing) {\n                estimateMenu\n                tagsField"),
                       "the estimate and the tags in the golden ratio")
         XCTAssertTrue(form.contains("GoldenRow(spacing: 10) {"), "Add and Add & Start in the golden ratio")
+        // David: the notch did not offer existing tags. Brain's own suggestions, as chips that
+        // never take the field's focus and never wrap.
+        XCTAssertTrue(form.contains("draft.tagSuggestions(existing: TaskFacets.tags(in: manager.tasks))"))
+        XCTAssertTrue(form.contains(".focusable(false)"), "a chip must not take the tags field's focus")
+        XCTAssertTrue(form.contains("ViewThatFits(in: .horizontal)"), "chips that do not fit are left off, never wrapped")
+        XCTAssertTrue(form.contains("draft.completeTag(pick.tag)"))
     }
 
     /// The columns are the golden split of the open notch's own width (not `vm.notchSize`, which

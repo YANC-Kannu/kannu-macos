@@ -114,4 +114,50 @@ final class TaskFormDraftTests: XCTestCase {
         XCTAssertEqual(TaskFormDraft.defaultReminder(now: now, calendar: calendar),
                        Date(timeIntervalSince1970: 1_760_000_000 + 400), "08:53:20 is 400 s before 09:00")
     }
+
+    // MARK: - Tags in use, offered while typing (David: the notch did not offer existing tags)
+
+    func testTheFragmentFollowsTheLastComma() {
+        var draft = TaskFormDraft()
+        XCTAssertEqual(draft.tagFragment, "")
+        XCTAssertEqual(draft.tagsBeforeFragment, [])
+        draft.tagsText = "docs, #Urgent,  rev"
+        XCTAssertEqual(draft.tagFragment, "rev")
+        XCTAssertEqual(draft.tagsBeforeFragment, ["docs", "Urgent"])
+        draft.tagsText = "docs, "
+        XCTAssertEqual(draft.tagFragment, "", "a comma ends a tag")
+        XCTAssertEqual(draft.tagsBeforeFragment, ["docs"])
+    }
+
+    func testCompletingATagReplacesWhatWasBeingTyped() {
+        var draft = TaskFormDraft()
+        draft.tagsText = "docs, rev"
+        draft.completeTag("review")
+        XCTAssertEqual(draft.tagsText, "docs, review, ", "a comma follows, ready for the next")
+        XCTAssertEqual(draft.tags, ["docs", "review"])
+        draft.completeTag("#deep work")
+        XCTAssertEqual(draft.tags, ["docs", "review", "deep work"], "cleaned as a task keeps it")
+        var empty = TaskFormDraft()
+        empty.completeTag("docs")
+        XCTAssertEqual(empty.tagsText, "docs, ")
+        empty.completeTag("   ")
+        XCTAssertEqual(empty.tagsText, "docs, ", "nothing left of it: nothing changes")
+    }
+
+    func testSuggestionsAreBrainsAndSkipTagsAlreadyTyped() {
+        let existing = ["backend", "docs", "review", "urgent"]
+        var draft = TaskFormDraft()
+        XCTAssertEqual(draft.tagSuggestions(existing: existing).map(\.tag), existing, "the quick picks with nothing typed")
+        draft.tagsText = "docs, "
+        XCTAssertFalse(draft.tagSuggestions(existing: existing).map(\.tag).contains("docs"), "never one already typed")
+        draft.tagsText = "docs, re"
+        XCTAssertEqual(draft.tagSuggestions(existing: existing), [.use("review"), .create("re")],
+                       "those that start with it, then a new one")
+    }
+
+    func testNothingIsOfferedOnceTenTagsAreTyped() {
+        var draft = TaskFormDraft()
+        draft.tagsText = (1...10).map { "t\($0)" }.joined(separator: ", ") + ", "
+        XCTAssertEqual(draft.tagSuggestions(existing: ["other"]), [])
+    }
 }
