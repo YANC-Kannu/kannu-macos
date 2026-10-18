@@ -62,7 +62,9 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         ]), now: now)
         XCTAssertEqual(snapshot?.window("five_hour")?.percent, 9)
         XCTAssertNil(snapshot?.window("five_hour")?.resetsAt)
-        XCTAssertEqual(snapshot?.window("five_hour")?.resetIsInferred, false)
+        // Marked inferred so `merged` lends it the server's exact reset when there is one.
+        XCTAssertEqual(snapshot?.window("five_hour")?.resetIsInferred, true)
+        XCTAssertEqual(snapshot?.window("five_hour")?.notAfter, now.addingTimeInterval(-30 * 60 + 5 * 3600))
     }
 
     func testFiveHourSampleOlderThanTheWindowIsDropped() {
@@ -83,7 +85,7 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         ]), now: now))
         XCTAssertEqual(snapshot.window("seven_day")?.resetIsInferred, true)
         XCTAssertNotNil(snapshot.window("seven_day")?.resetsAt)
-        XCTAssertEqual(snapshot.window("five_hour")?.resetIsInferred, false)
+        XCTAssertNil(snapshot.window("five_hour")?.resetsAt)
     }
 
     func testWeeklyResetIsSevenDaysAfterTheRollover() {
@@ -123,6 +125,37 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         XCTAssertNil(snapshot?.window("seven_day"))
     }
 
+    func testARolloverFoundAfterALongGapGivesNoCountdown() {
+        // Measured: 72 % on Oct 11, then 0 % on Oct 14 — the rollover was somewhere in three
+        // days. A countdown from the far end ran up to that whole gap late, so there is none; the
+        // latest possible reset still bounds how long the value is shown.
+        let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
+            (-3.0 * 24 * 60, 1.0, 72.0), (-10.0, 1.0, 0.0)
+        ]), now: now)
+        XCTAssertNil(snapshot?.window("seven_day")?.resetsAt)
+        XCTAssertEqual(snapshot?.window("seven_day")?.notAfter, now.addingTimeInterval(-10 * 60 + 7 * 24 * 3600))
+    }
+
+    func testARolloverAnchorsLaterWeeksToo() {
+        // CodeRabbit on #96: the rollover was ten days ago, and the next reset (three days ago)
+        // went unseen because usage climbed past the last value before it. The sample is in the
+        // week that ends in four days, not in one that ended three days ago.
+        let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
+            (-10.0 * 24 * 60 - 30, 1.0, 80.0), (-10.0 * 24 * 60, 1.0, 2.0), (-60.0, 1.0, 60.0)
+        ]), now: now)
+        XCTAssertEqual(snapshot?.window("seven_day")?.percent, 60)
+        XCTAssertEqual(snapshot?.window("seven_day")?.resetsAt, now.addingTimeInterval(-10 * 86_400 + 14 * 86_400))
+    }
+
+    func testADesktopValueExpiresBetweenReads() throws {
+        // Read four hours after the sample, the 5-hour value is still possible; an hour and a
+        // minute later it is not, even with no new read in between.
+        let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(json: series([(-240.0, 30.0, 50.0)]), now: now))
+        XCTAssertEqual(snapshot.fiveHourDisplayPercent(now: now), 30)
+        XCTAssertNil(snapshot.fiveHourDisplayPercent(now: now.addingTimeInterval(61 * 60)))
+        XCTAssertEqual(snapshot.sevenDayDisplayPercent(now: now.addingTimeInterval(61 * 60)), 50)
+    }
+
     func testNoRolloverMeansNoResetButStillReportsPercentages() {
         let snapshot = ClaudeDesktopUsageHistory.parse(json: series([
             (-120, 10, 50), (-60, 20, 51), (-30, 38, 52)
@@ -145,9 +178,9 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
     }
 
     func testWeeklyResetFollowsTheAnchorHoweverOld() throws {
-        // Measured on 2026-10-18: Claude Code's cache last fetched on Sep 2 with the weekly reset at
-        // Wed Sep 9 00:00Z, and the desktop sample of Oct 17 23:45Z belongs to the week ending
-        // Wed Oct 21 00:00Z. The rollover-gap guess put that reset 18.6 hours late.
+        // Real data, one organization (a Max plan): Claude Code's cache last fetched on Sep 2 with
+        // the weekly reset at Wed Sep 9 00:00Z, so the desktop sample of Oct 17 23:45Z projects to
+        // the week ending Wed Oct 21 00:00Z. The rollover-gap guess put that reset 18.6 hours late.
         let sample: [String: Any] = ["samples": [[
             "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
             "org": "org-uuid", "u": ["fh": NSNumber(value: 0), "sd": NSNumber(value: 43)]

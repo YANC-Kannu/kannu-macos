@@ -336,6 +336,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // reparented to launchd. Synchronous on purpose: this is the last chance to signal it.
         MusicManager.shared.stopActiveControllerForTermination()
 
+        // Same for a Claude usage refresh: a sign-in left running would keep its localhost
+        // listener open after Kannu is gone.
+        ClaudeUsageRefresh.terminateForAppExit()
+
         // Restore Lunar's native OSD if integration was active
         LunarManager.shared.appWillTerminate()
 

@@ -422,38 +422,46 @@ through Kannu — the adapter alone decides how upstream runs its Claude session
 nothing at all: Claude Desktop moved its bundled CLI from `claude-code/<version>/claude.app` to
 `claude-code/<version>/<build>/claude.app`, `resolveClaudeBinary` found no binary, and the button
 quietly re-read disk. Same signature as the first two — no error, a spinner, an unmoved
-`fetchedAtMs` — and nothing logged that it had happened. `ClaudeCodeBinary` now reads both layouts
-and `~/.local/bin/claude`, picks the highest version, and every refresh step is logged (category
-`ClaudeUsage`: step, Claude Code version, outcome, seconds — never the output or a path), so the
-next move shows up in `/usr/bin/log`.
+`fetchedAtMs` — and nothing logged that it had happened. `ClaudeCodeBinary` now reads both layouts,
+`~/.local/bin/claude` and a Homebrew cask's link, picks the highest version among binaries signed by
+Anthropic (Developer ID, team Q6L2SF6YDW, identifier `com.anthropic.claude-code` — a child inherits
+Kannu's privacy permissions, and these folders are writable by any process of the user's), and
+every refresh step is logged at `notice` (category `ClaudeUsage`: step, Claude Code version,
+outcome, seconds — never the output or a path), which `/usr/bin/log show` keeps.
 
-The refresh now runs `claude -p "/usage"` (`ClaudeUsageFetchCommand.printProbe`), which needs no
-pty and no typed keystrokes; the interactive spawn stays as its fallback, with its guards
-unchanged. Measured on this Mac, from a launchd-like clean environment (`env -i` with HOME, USER,
-PATH): the probe exits 0 in 1 s and, signed out, prints only the cost summary — no plan rows, no
-`fetchedAtMs` advance — while `claude auth status` reports `loggedIn: false`. That case now starts
-Claude Code's own `auth login --claudeai` on a press, and only when `auth status` says signed out
-or claude.ai, so an API-key or cloud-provider setup is never switched. **Guard:**
-`ClaudeUsageFetchCommandTests` pins the probe and sign-in arguments, the classifier, the sign-in
-decision and the binary layouts; `ClaudeUsageRefresh` is Foundation-only so a harness can run the
-shipped code against the real CLI, which is how the measurements here were taken.
+The refresh now runs `claude --settings '{"disableAllHooks":true}' -p "/usage"`
+(`ClaudeUsageFetchCommand.printProbeAttempts`), which needs no pty and no typed keystrokes; the bare
+`-p "/usage"` runs only if that fails outright. Measured on this Mac from a launchd-like clean
+environment (`env -i` with HOME, USER, PATH): both fetch (`fetchedAtMs` advanced, three plan rows),
+the hooks-off one in 2.8 s with no hook status file, the bare one leaving a SessionStart file that
+SessionEnd then deleted. Signed out, the probe exits 0 in 1 s with only the cost summary. The
+interactive pty spawn is reached only on a press — for a probe that fails outright or a Claude Code
+older than 2.1.263, the oldest read to carry the non-interactive `/usage` — because it types blind
+into a terminal session; its guards are unchanged.
+
+What the refresh does after the probe is `ClaudeUsageFetchCommand`'s steps, all pinned by tests: a
+probe that still shows a claude.ai sign-in ("You are currently using your subscription…") but no
+limits is never answered with a browser sign-in — that can move Claude Code to another
+organization; only a probe with no claude.ai sign-in leads to `claude auth status`, and only a
+press, never the automatic refresh, then starts `claude auth login --claudeai`. An API-key,
+key-helper, cloud-provider or gateway setup is never switched.
 
 **Inherited variables decide whose sign-in is used.** Run from inside a Claude Desktop agent
 session, the probe inherits that session's `ANTHROPIC_BASE_URL` (the desktop host's proxy) and its
 `CLAUDE_CODE_ACCOUNT_UUID` / `CLAUDE_CODE_ORGANIZATION_UUID`. Measured 2026-10-18 from such a
 process: with them the probe fetched; with them removed the same process found no sign-in of its
 own and fetched nothing. So the inherited proxy quietly substitutes the host session's credentials
-for Claude Code's, and the fetch writes whatever account that is into `~/.claude.json`. A Kannu
-launched normally has none of these names; one started from an agent does. So
-`ClaudeUsageFetchCommand.environment(inheriting:)` drops the `CLAUDE*` and `ANTHROPIC*`
-namespaces, and returns nil (plain inheritance) when there is nothing to drop. It only ever
-removes; adding is still regression 2. Pinned by `testEnvironmentIsPlainInheritanceForANormalLaunch`
-and `testAnAgentSessionsVariablesAreRemovedAndNothingIsAdded`.
+for Claude Code's. `ClaudeUsageFetchCommand.environment(inheriting:)` therefore drops the `CLAUDE*`
+and `ANTHROPIC*` namespaces **only when the inherited environment is an agent session's** (it
+carries `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID`); every other launch,
+including a user's own `launchctl setenv` API key or gateway, is plain inheritance (nil), as before.
+It only ever removes; adding is still regression 2.
 
-Also measured, so nobody leans on it: `claude auth status` printed `loggedIn: false` in the same
-clean environment where `claude -p "/usage"` fetched plan rows. Refresh consults it only after a
-probe finds no plan data, to tell an API-key or cloud-provider setup (never switched) from a
-missing claude.ai sign-in — never to decide that a fetch failed.
+Also measured, so nobody leans on them: `claude auth status` printed `loggedIn: false` in the same
+clean environment where `claude -p "/usage"` fetched plan rows; and `oauthAccount` in
+`~/.claude.json` flips between organizations — Claude Code's own run writes its token's, a
+desktop-hosted session's run the desktop's — so Kannu records Claude Code's organization itself,
+straight after its own fetch (`claudeCodeUsageOrganization`).
 
 ---
 

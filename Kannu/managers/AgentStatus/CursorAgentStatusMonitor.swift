@@ -476,6 +476,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
     }
 
     private func apply(_ load: ClaudeUsageLoad) {
+        settleRefreshStatusIfCacheIsFresher(load.cache)
         claudeUsageCache = load.cache
         claudeUsageDesktop = load.desktop
         claudeUsageOrganizations = load.organizations
@@ -547,43 +548,38 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// What the last refresh needs the user to know, when anything. The card renders it.
     @Published private(set) var claudeRefreshStatus: ClaudeRefreshStatus?
 
-    /// The binary the last refresh resolved, for the Terminal fallback.
-    private var lastClaudeBinary: URL?
+    /// When the status above was found, so data turning fresh some other way can settle it.
+    private var claudeRefreshStatusSetAt: Date?
+    /// The automatic refresh stands down after a refresh that found something only the user can
+    /// change; a press, or data turning fresh some other way, lifts it.
+    private var claudeAutomaticRefreshHeld = false
     /// When the last refresh started, for the automatic cadence.
     private var lastClaudeUsageFetchAt: Date?
 
     /// Refreshes the Claude limits with Claude Code's own `/usage`, then reloads the card from
     /// what it wrote to `~/.claude.json` — the only local source with exact resets and the
-    /// per-model (e.g. Fable) weekly window.
+    /// per-model (e.g. Fable) weekly window. `manual` is a press of the card's Refresh.
     ///
-    /// `claude -p "/usage"` runs it without a model turn (see `ClaudeUsageFetchCommand.printProbe`).
-    /// A clean run with no plan rows means Claude Code is not signed in to claude.ai, or its
-    /// sign-in lacks the `user:profile` scope the fetch needs. On a press — never on the automatic
-    /// refresh — Kannu then starts Claude Code's own sign-in, which opens claude.ai in the browser,
-    /// and fetches again once it finishes. Only when `claude auth status` says Claude Code is
-    /// signed out or on claude.ai already: an API key or cloud provider is never switched over.
-    /// Kannu never reads the sign-in; Claude Code keeps it in the keychain.
-    ///
-    /// The interactive pty spawn below stays as the fallback for a probe that fails outright.
-    func refreshClaudeUsageFromCLI(allowSignIn: Bool = true) {
+    /// What runs is `ClaudeUsageFetchCommand`'s steps: `claude -p "/usage"` (no model turn), and,
+    /// when that shows no claude.ai sign-in, `claude auth status`; on a press only, Claude Code's
+    /// own sign-in, which opens claude.ai in the browser, and a fetch again once it finishes. A
+    /// working claude.ai sign-in, an API key or a cloud provider is never signed in over. Kannu
+    /// never reads the sign-in; Claude Code keeps it in the keychain.
+    func refreshClaudeUsageFromCLI(manual: Bool = true) {
         guard !isRefreshingClaudeUsage else { return }
-        guard let binary = ClaudeCodeBinary.resolve() else {
-            ClaudeUsageRefresh.log.info("Usage refresh: no Claude Code binary found")
-            claudeRefreshStatus = .notInstalled
-            reloadClaudeUsageNow()
-            return
-        }
-        lastClaudeBinary = binary.url
         lastClaudeUsageFetchAt = Date()
-        claudeRefreshStatus = nil
+        if manual {
+            claudeRefreshStatus = nil
+            claudeAutomaticRefreshHeld = false
+        }
         isRefreshingClaudeUsage = true
         let statusDirectory = AgentHookInstaller.statusDirectory
 
-        // A GCD worker, not a Task: every step blocks (process waits, sleeps), and a detached
-        // Task would pin a cooperative-pool thread for up to the sign-in's five minutes.
+        // A GCD worker, not a Task: every step blocks (process waits, sleeps, the signature check),
+        // and a detached Task would pin a cooperative-pool thread for up to the sign-in's five minutes.
         DispatchQueue.global(qos: .userInitiated).async {
             let started = Date()
-            let outcome = ClaudeUsageRefresh.run(binary: binary, allowSignIn: allowSignIn) {
+            let outcome = ClaudeUsageRefresh.run(manual: manual) {
                 DispatchQueue.main.async {
                     MainActor.assumeIsolated { self.claudeRefreshStatus = .signingIn }
                 }
@@ -602,11 +598,15 @@ final class CursorAgentStatusMonitor: ObservableObject {
                        organization != Defaults[.claudeCodeUsageOrganization] {
                         Defaults[.claudeCodeUsageOrganization] = organization
                     }
+                    let presented = ClaudeUsageFetchCommand.presentation(of: outcome.status, manual: manual)
+                    self.claudeRefreshStatus = presented.shown
+                    self.claudeRefreshStatusSetAt = Date()
+                    self.claudeAutomaticRefreshHeld = presented.holdsAutomaticRefresh
                     // Order matters: refresh the cache first, then re-run the providers so the
-                    // card renders the new numbers. Doing this at press time would race the fetch.
+                    // card renders the new numbers. The providers' refresh floor would drop this
+                    // one — the card's own poll ran a moment ago — so it bypasses the floor.
                     self.reloadClaudeUsageNow()
-                    LLMUsageManager.shared.refreshAll(force: true)
-                    self.claudeRefreshStatus = outcome.status
+                    LLMUsageManager.shared.refreshAll(force: true, bypassFloor: true)
                     self.isRefreshingClaudeUsage = false
                 }
             }
@@ -615,31 +615,54 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
     /// The card's poll calls this while the Usage tab is on screen. It fetches only when Claude
     /// Code's cache is older than `ClaudeUsageSnapshot.autoFetchInterval` and no fetch ran in that
-    /// long, never starts a sign-in, and stands down while the last refresh is waiting on the user
-    /// or while Claude Code is on another organization than the card's.
+    /// long, never starts a sign-in, and stands down while the last refresh found something only
+    /// the user can change, or while Claude Code is on another organization than the card's.
     func refreshClaudeUsageIfStale(now: Date = Date()) {
         guard !isRefreshingClaudeUsage,
-              claudeRefreshStatus?.holdsAutomaticRefresh != true,
+              !claudeAutomaticRefreshHeld,
               // Claude Code is on another organization: what it would fetch is not on the card.
               claudeUsageHint != .otherOrganization,
               ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
                                                   lastFetch: lastClaudeUsageFetchAt) else { return }
-        refreshClaudeUsageFromCLI(allowSignIn: false)
+        refreshClaudeUsageFromCLI(manual: false)
     }
 
-    /// Stops a sign-in that is waiting on the browser. The refresh then ends as `.signInNeeded`.
+    /// Once Claude Code's cache is newer than the refresh that found something, something else
+    /// fetched in the meantime (a sign-in in Terminal, Claude Code's own `/usage`): a "sign in"
+    /// status is settled, and the automatic refresh resumes.
+    private func settleRefreshStatusIfCacheIsFresher(_ cache: ClaudeUsageSnapshot?) {
+        guard let setAt = claudeRefreshStatusSetAt, let observedAt = cache?.observedAt, observedAt > setAt else { return }
+        if ClaudeUsageFetchCommand.freshCacheSettles(claudeRefreshStatus, setAt: setAt, cacheObservedAt: observedAt) {
+            claudeRefreshStatus = nil
+        }
+        claudeAutomaticRefreshHeld = false
+    }
+
+    /// Stops a sign-in that is waiting on the browser. The refresh then ends as `.signInDidNotFinish`.
     func cancelClaudeSignIn() {
         ClaudeUsageRefresh.cancelSignIn()
     }
 
     /// Opens Terminal running Claude Code's sign-in, for the case the browser route cannot finish
     /// (a code to paste, a browser that never opened). A `.command` file opened with `open` needs
-    /// no Automation permission. The card's next Refresh picks the result up.
+    /// no Automation permission. The binary is resolved again, off the main actor (the signature
+    /// check reads it), because the one a refresh found may since have been reaped by an update.
     func openClaudeSignInInTerminal() {
-        guard let binary = lastClaudeBinary ?? ClaudeCodeBinary.resolve()?.url else {
-            claudeRefreshStatus = .notInstalled
-            return
+        DispatchQueue.global(qos: .userInitiated).async {
+            let binary = ClaudeUsageRefresh.trustedBinaryURL()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let binary else {
+                        self.claudeRefreshStatus = .notInstalled
+                        return
+                    }
+                    self.writeAndOpenTerminalSignIn(binary: binary)
+                }
+            }
         }
+    }
+
+    private func writeAndOpenTerminalSignIn(binary: URL) {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Kannu", isDirectory: true)
         let script = directory.appendingPathComponent("claude-sign-in.command")
         do {

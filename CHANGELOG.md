@@ -4,6 +4,60 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Act on the review of #96: the automatic refresh never types, signs in or nags
+- **Developer label:** "The Claude card's Refresh fetches again, and signs Claude Code in when it has to" — review follow-up
+- **Agent label:** Follow-up 64 review — six lenses, two skeptics per finding, 37 findings confirmed, each fixed or answered
+- **Changes:**
+  - What a refresh runs is now a set of pure steps in `ClaudeUsageFetchCommand`, tested path by
+    path. The automatic refresh never reaches the interactive pty spawn (it types blind into a
+    terminal session) and never opens the browser; both happen only on a press.
+  - The probe is `claude --settings '{"disableAllHooks":true}' -p "/usage"`. Measured: it fetches
+    (`fetchedAtMs` advanced, three plan rows, 2.8 s) and, unlike the bare run, leaves no
+    SessionStart status file and fires none of the user's own hooks. The bare probe runs only if it
+    fails outright; Claude Code older than 2.1.263 gets no probe at all, so `/usage` can never reach
+    the model as a billed prompt.
+  - A probe that shows a claude.ai sign-in but returns no limits is answered with "signed in but
+    returned no limits" and Terminal, never a browser sign-in over a working one (that can move
+    Claude Code to another organization). New outcomes for a sign-in that did not finish and an
+    unreadable sign-in state, each with copy that says what a press will do.
+  - The automatic refresh only ever surfaces a missing sign-in; anything else it finds stays quiet
+    and holds it back until a press. A "sign in" line clears itself once Claude Code's cache turns
+    fresher some other way (a sign-in in Terminal, Claude Code's own `/usage`).
+  - Kannu runs only a `claude` signed by Anthropic (Developer ID, team Q6L2SF6YDW, identifier
+    `com.anthropic.claude-code`), checked off the main actor and cached per version: 0.2-0.5 s per
+    binary here, and the npm shim and an Apple-signed binary are rejected. A Homebrew cask's link is
+    now a candidate too. Resolution moved off the main actor.
+  - The environment scrub applies only to an inherited agent session (`CLAUDECODE`,
+    `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID` present). A user's own `launchctl setenv`
+    API key, gateway or cloud provider is inherited as before, so the auth-status gate sees it.
+  - Quitting Kannu stops a running refresh child (`ClaudeUsageRefresh.terminateForAppExit` from
+    `applicationWillTerminate`), so a sign-in no longer outlives the app with its localhost listener
+    open (entry 19). Cancel now escalates to SIGKILL like every other stop.
+  - The probe's own hook file is recognised by its transcript under `~/.claude/projects/-/`: the
+    hook strips a trailing slash, so a run from `/` records no cwd and the old `cwd == "/"` match
+    never fired.
+  - The Terminal sign-in resolves the binary again when pressed; the one a refresh found may have
+    been reaped by an update.
+  - Fresh numbers reach the card at once: the providers' refresh after a fetch bypasses the floor
+    that the card's own poll had just reset.
+  - Desktop values carry `notAfter` (five hours or a week after the sample) and expire at render
+    time, not only at the next read; they borrow the server's exact reset for the same
+    organization, so the 5-hour countdown no longer vanishes and the usage push no longer repeats.
+    A weekly rollover caught after a gap of more than an hour gives no countdown, only a bound: it
+    could have happened anywhere in that gap.
+  - The status line is one line with its action beside it (the stacked note pushed the button out
+    of the fixed-height card), the copy says "this card's ↻", and the "updated …" label waits 30
+    minutes, longer than the automatic fetch, so kept-current bars never dim between runs.
+  - Refresh steps log at `notice`, which `/usr/bin/log show` keeps; `info` was not persisted.
+  - CodeRabbit on #96: a weekly rollover seen in the desktop samples is now projected in whole
+    weeks to the week the newest sample is in, as the anchor is. A later reset can go unseen when
+    usage climbs past the last value before it, and `rollover + 7 days` then lay in the past and hid
+    a current bar. Its other two findings (Cancel against a trapped SIGTERM, an unreadable
+    `auth status` read as "sign in") are fixed above.
+  - Answered without a change: per-model weekly windows share the all-models reset (the cache's
+    Fable `resets_at` equals `seven_day`'s); the "moved" weekly anchor was two organizations'
+    anchors, now kept apart.
+
 ### 2026-10-18 - The Claude card follows the organization Claude Desktop is on
 - **Developer label:** "Desktop's org (Max)" — the answer to which organization the Claude card should follow when Claude Code and Claude Desktop are on different ones
 - **Agent label:** Follow-up 64, organization rule — one organization per card, recorded at fetch

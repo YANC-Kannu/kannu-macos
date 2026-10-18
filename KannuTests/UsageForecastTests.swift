@@ -178,4 +178,16 @@ final class UsageForecastTests: XCTestCase {
         XCTAssertEqual(readings.map(\.label), ["5-hour", "weekly", "Fable weekly"])
         XCTAssertEqual(UsageWindowReading.label(provider: "cursor", key: "week"), "billing-cycle")
     }
+
+    func testClaudeReadingsCarryEachWindowsOwnTime() {
+        // A merged snapshot's observedAt is its newest source's; a days-old weekly sample must not
+        // be dated now in the forecast.
+        let old = now.addingTimeInterval(-3 * 86_400)
+        let snapshot = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 42, resetsAt: now.addingTimeInterval(3600)),
+            .init(key: "seven_day", percent: 10, resetsAt: now.addingTimeInterval(86_400), observedAt: old)
+        ], observedAt: now)
+        let readings = UsageWindowReading.readings(fromClaude: snapshot, now: now)
+        XCTAssertEqual(readings.map(\.observedAt), [now, old])
+    }
 }

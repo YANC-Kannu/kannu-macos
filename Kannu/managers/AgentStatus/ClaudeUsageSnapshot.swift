@@ -38,6 +38,10 @@ struct ClaudeUsageSnapshot: Equatable {
         /// takes each key from a different source, and a weekly percent from days ago must not
         /// borrow the age of a five-hour value from a minute ago. Nil means `observedAt`.
         var observedAt: Date? = nil
+        /// The latest moment this value can still describe a running window, for a source that
+        /// knows no reset — the desktop history. Past it the value is from an earlier window for
+        /// certain, and `displayWindows` drops it, at render time as well as at the next read.
+        var notAfter: Date? = nil
     }
 
     let windows: [Window]
@@ -50,7 +54,8 @@ struct ClaudeUsageSnapshot: Equatable {
     static let fiveHourKey = "five_hour"
     static let sevenDayKey = "seven_day"
 
-    /// Age under which the snapshot is shown plainly; older snapshots render dimmed with age.
+    /// Age under which `freshness` reports `.fresh`. The card's own "updated …" label waits for
+    /// `staleLabelInterval`, which outlasts the automatic fetch.
     static let freshInterval: TimeInterval = 600
 
     /// How often the usage sources are re-read while an agent is on screen.
@@ -100,6 +105,22 @@ struct ClaudeUsageSnapshot: Equatable {
         return now.timeIntervalSince(cacheObservedAt) >= autoFetchInterval
     }
 
+    /// How old a reading may be before the card says so and dims it. Longer than the automatic
+    /// fetch interval, so bars the automatic refresh keeps current never dim between its runs.
+    static let staleLabelInterval: TimeInterval = 1800
+
+    /// "updated 3h ago" for a reading older than `staleLabelInterval`, else nil.
+    static func staleLabel(observedAt: Date?, now: Date) -> String? {
+        guard let observedAt else { return nil }
+        let seconds = now.timeIntervalSince(observedAt)
+        guard seconds > staleLabelInterval else { return nil }
+        let minutes = Int(seconds / 60)
+        if minutes < 60 { return String(localized: "updated \(minutes)m ago") }
+        let hours = minutes / 60
+        if hours < 48 { return String(localized: "updated \(hours)h ago") }
+        return String(localized: "updated \(hours / 24)d ago")
+    }
+
     enum Freshness: Equatable {
         case fresh
         /// Stale but still meaningful — show dimmed with relative age.
@@ -117,6 +138,7 @@ struct ClaudeUsageSnapshot: Equatable {
     /// fiction and must not be shown.
     func displayWindows(now: Date = Date()) -> [Window] {
         let live = windows.filter { window in
+            if let notAfter = window.notAfter, now >= notAfter { return false }
             guard let resetsAt = window.resetsAt else { return true }
             return now < resetsAt
         }
@@ -207,7 +229,8 @@ struct ClaudeUsageSnapshot: Equatable {
                 var taken = window
                 if taken.resetIsInferred, let exact = exactResets[taken.key] {
                     taken = Window(key: taken.key, percent: taken.percent, resetsAt: exact,
-                                   label: taken.label, severity: taken.severity, resetIsInferred: false)
+                                   label: taken.label, severity: taken.severity, resetIsInferred: false,
+                                   notAfter: taken.notAfter)
                 }
                 taken.observedAt = window.observedAt ?? source.observedAt
                 windows.append(taken)

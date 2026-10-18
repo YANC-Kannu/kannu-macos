@@ -425,6 +425,40 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
                                                 claudeCodeOnAnotherOrganization: true, now: now), .otherOrganization)
     }
 
+    func testADesktopWindowBorrowsTheExactResetForTheSameOrganization() {
+        // The desktop's 5-hour value is fresher but has no reset; taken whole, it removed the
+        // countdown and flipped the usage-alert key between the exact reset and none.
+        let cache = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 3_000)],
+                                        observedAt: now.addingTimeInterval(-600))
+        let desktop = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 45, resetsAt: nil, resetIsInferred: true,
+                  notAfter: now.addingTimeInterval(4 * 3600))
+        ], observedAt: now)
+        let merged = ClaudeUsageSnapshot.merged([nil, cache, desktop], now: now)
+        XCTAssertEqual(merged?.fiveHourPercent, 45)
+        XCTAssertEqual(merged?.fiveHourResetsAt, now.addingTimeInterval(3_000))
+    }
+
+    func testNotAfterHidesAWindowAtRenderTime() {
+        let snapshot = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 45, resetsAt: nil, notAfter: now.addingTimeInterval(60))
+        ], observedAt: now)
+        XCTAssertEqual(snapshot.fiveHourDisplayPercent(now: now), 45)
+        XCTAssertNil(snapshot.fiveHourDisplayPercent(now: now.addingTimeInterval(60)))
+    }
+
+    // MARK: - Stale label
+
+    func testTheStaleLabelWaitsLongerThanTheAutomaticFetch() {
+        // Bars the automatic refresh keeps current must never dim between its runs.
+        XCTAssertGreaterThan(ClaudeUsageSnapshot.staleLabelInterval, ClaudeUsageSnapshot.autoFetchInterval)
+        XCTAssertNil(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-1_800), now: now))
+        XCTAssertNil(ClaudeUsageSnapshot.staleLabel(observedAt: nil, now: now))
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-1_860), now: now), "updated 31m ago")
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-3 * 3600), now: now), "updated 3h ago")
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-3 * 86_400), now: now), "updated 3d ago")
+    }
+
     // MARK: - Sign-in hint
 
     func testHintIsNeverShownWithoutClaudeHooks() {

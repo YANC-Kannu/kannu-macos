@@ -80,18 +80,23 @@ enum ClaudeDesktopUsageHistory {
     /// The newest sample of one organization, with only the windows it can still vouch for.
     ///
     /// The app samples only while its menu-bar panel has been opened in the last day, so a sample
-    /// can be days old. A percentage is only shown while its window provably has not rolled over
-    /// since it was sampled; an unknown answer drops the window rather than showing it, because a
-    /// stale number on a gauge reads as a live one:
+    /// can be days old. A value older than its window is from an earlier window for certain and is
+    /// dropped; a younger one may still be current, and goes on screen with its age (the card says
+    /// "updated 3h ago") and a `notAfter` bound, so it also expires between reads. Every window
+    /// here is marked `resetIsInferred` — this file reports no reset — so `merged` lends it the
+    /// server's exact reset whenever Claude Code's cache has one for the same organization.
     ///
     /// - **5 hour**: the window starts with the first message after the last one ended, so its
-    ///   reset cannot be recovered from samples. No countdown, and the bar is dropped once the
-    ///   sample is older than the window itself.
-    /// - **Weekly**: the window resets on a fixed weekly anchor, taken from Claude Code's cached
-    ///   reset when there is one, however old — but only when Claude Code is on the same
-    ///   organization, since each organization has its own anchor (`ClaudeCachedUsage.AccountContext`).
-    ///   The reset after the sample is exact; once it has passed, the bar is dropped. Without an
-    ///   anchor the last rollover seen in the samples stands in for it, as before.
+    ///   reset cannot be recovered from samples. No countdown; `notAfter` is five hours after the
+    ///   sample.
+    /// - **Weekly**: the window resets on a fixed weekly anchor per organization, taken from Claude
+    ///   Code's cached reset when Claude Code is on the same organization, however old
+    ///   (`ClaudeCachedUsage.AccountContext`). The reset after the sample is exact; once it has
+    ///   passed, the bar is dropped. Without an anchor, a rollover seen in the samples stands in,
+    ///   projected the same way: a countdown only when it was caught within an hour, else just the
+    ///   latest possible reset as `notAfter` — a rollover found after a gap of days could have
+    ///   happened at any point in it, and a countdown measured from its far end ran up to that
+    ///   whole gap late.
     /// - **Anything else**: kept for at most a week after the sample, with no countdown.
     static func parse(json: [String: Any], now: Date = Date(),
                       account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
@@ -116,33 +121,47 @@ enum ClaudeDesktopUsageHistory {
 
         guard let newest = samples.last else { return nil }
         let observedAt = Date(timeIntervalSince1970: newest.tMs / 1000)
-        let age = now.timeIntervalSince(observedAt)
 
         let windows = codeOrder.compactMap { code -> ClaudeUsageSnapshot.Window? in
             guard let key = windowKeysByCode[code],
                   let percent = (newest.usage[code] as? NSNumber)?.doubleValue else { return nil }
+            var resetsAt: Date?
+            var notAfter: Date
             if key == ClaudeUsageSnapshot.fiveHourKey {
-                guard age < fiveHours else { return nil }
-                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
+                notAfter = observedAt.addingTimeInterval(fiveHours)
+            } else if key.hasPrefix("seven_day") {
+                notAfter = observedAt.addingTimeInterval(week)
+                if let anchor {
+                    resetsAt = weeklyReset(after: observedAt, anchor: anchor)
+                } else if let rollover = lastRollover(for: code, in: samples) {
+                    // A rollover is an anchor too: project it in whole weeks to the week the
+                    // sample is in. A later reset can go unseen — usage climbing past the last
+                    // value before it — and `rollover + 7 days` then lies in the past and hid a
+                    // current bar. `seenAt` is the latest moment the rollover can have happened.
+                    let latest = weeklyReset(after: observedAt, anchor: rollover.seenAt)
+                    if rollover.seenAt.timeIntervalSince(rollover.notBefore) <= precisionGap {
+                        resetsAt = latest
+                    } else {
+                        notAfter = min(notAfter, latest)
+                    }
+                }
+            } else {
+                notAfter = observedAt.addingTimeInterval(week)
             }
-            guard key.hasPrefix("seven_day") else {
-                guard age < week else { return nil }
-                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
-            }
-            let reset = anchor.map { weeklyReset(after: observedAt, anchor: $0) }
-                ?? lastRollover(for: code, in: samples).map { $0.addingTimeInterval(week) }
-            if let reset {
-                guard reset > now else { return nil }
-                // Derived, not reported: `merged` must not let it displace the server's own reset.
-                return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: reset, resetIsInferred: true)
-            }
-            guard age < week else { return nil }
-            return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: nil)
+            if let resetsAt { notAfter = min(notAfter, resetsAt) }
+            guard notAfter > now else { return nil }
+            // Nothing here is reported by the server: `merged` lends the exact reset when it has one.
+            return ClaudeUsageSnapshot.Window(key: key, percent: percent, resetsAt: resetsAt,
+                                              resetIsInferred: true, notAfter: notAfter)
         }
         guard !windows.isEmpty else { return nil }
 
         return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt, organizationUUID: organization)
     }
+
+    /// A rollover found within this long of the sample before it is dated precisely enough for a
+    /// countdown.
+    private static let precisionGap: TimeInterval = 3600
 
     /// The first weekly reset strictly after `date`, stepping from `anchor` in whole weeks in
     /// either direction.
@@ -152,21 +171,21 @@ enum ClaudeDesktopUsageHistory {
     }
 
     /// When a window last rolled over, as seen in the samples — the stand-in for a weekly anchor
-    /// when Claude Code has never cached one.
+    /// when Claude Code is on another organization or has never cached one. `seenAt` is the first
+    /// sample after the drop and `notBefore` the one before it: the rollover happened in between.
     ///
-    /// A rollover is visible as a drop in utilization. The app samples only while it runs, so a
-    /// rollover is noticed late and the derived reset lands late too. Small decays are not
-    /// rollovers, hence the threshold; a decrease landing on zero is one however small.
-    private static func lastRollover(for code: String, in samples: [Sample]) -> Date? {
-        var rolloverMs: Double?
-        var previous: Double?
+    /// A rollover is visible as a drop in utilization. Small decays are not rollovers, hence the
+    /// threshold; a decrease landing on zero is one however small.
+    private static func lastRollover(for code: String, in samples: [Sample]) -> (notBefore: Date, seenAt: Date)? {
+        var rollover: (notBefore: Double, seenAt: Double)?
+        var previous: (tMs: Double, value: Double)?
         for sample in samples {
             guard let value = (sample.usage[code] as? NSNumber)?.doubleValue else { continue }
-            if let previous, value < previous, previous - value > 5 || value == 0 {
-                rolloverMs = sample.tMs
+            if let previous, value < previous.value, previous.value - value > 5 || value == 0 {
+                rollover = (previous.tMs, sample.tMs)
             }
-            previous = value
+            previous = (sample.tMs, value)
         }
-        return rolloverMs.map { Date(timeIntervalSince1970: $0 / 1000) }
+        return rollover.map { (Date(timeIntervalSince1970: $0.notBefore / 1000), Date(timeIntervalSince1970: $0.seenAt / 1000)) }
     }
 }

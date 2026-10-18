@@ -19,59 +19,119 @@
 import Darwin
 import Foundation
 import os
-
-/// What the last refresh needs the user to know, when anything. The card renders it.
-enum ClaudeRefreshStatus: Equatable {
-    /// Claude Code's own sign-in is open in the browser; Kannu fetches again once it finishes.
-    case signingIn
-    /// A sign-in is needed and has not happened here. The card offers Refresh again and
-    /// Terminal, which shows the prompt when the browser route cannot finish.
-    case signInNeeded
-    /// Claude Code signs in some other way on this Mac (API key, key helper, cloud provider,
-    /// gateway) and plan limits need claude.ai. Kannu never switches that by itself.
-    case otherSignInMethod
-    /// No Claude Code binary was found.
-    case notInstalled
-    /// The fetch ran and failed: it timed out or exited with an error.
-    case fetchFailed
-
-    /// States the automatic refresh must leave alone until the user acts.
-    var holdsAutomaticRefresh: Bool { self != .fetchFailed }
-}
+import Security
 
 /// The process work behind the Claude card's Refresh, off the main actor: the `/usage` probe, the
-/// `claude auth status` check, Claude Code's own sign-in, and the interactive fallback. Foundation
-/// only, so a harness can run exactly this code against the real CLI (REGRESSIONS entry 8 asks
-/// for a measured fetch, not a reasoned one). `CursorAgentStatusMonitor` owns the state.
+/// `claude auth status` check, Claude Code's own sign-in, and the interactive fallback. Which of
+/// them runs, in what order, is decided by `ClaudeUsageFetchCommand`'s steps; this file only runs
+/// processes. Foundation and Security only, so a harness can run exactly this code against the
+/// real CLI (REGRESSIONS entry 8 asks for a measured fetch, not a reasoned one).
+/// `CursorAgentStatusMonitor` owns the state.
 enum ClaudeUsageRefresh {
-    /// The sign-in while it runs, so Cancel on the main actor can stop it.
-    private static let signInProcess = OSAllocatedUnfairLock<Process?>(initialState: nil)
-
     static let log = os.Logger(subsystem: "com.kannu.app", category: "ClaudeUsage")
 
-    /// Stops a sign-in that is waiting on the browser; `run` then ends as `.signInNeeded`.
-    static func cancelSignIn() {
-        signInProcess.withLock { $0 }?.terminate()
+    // MARK: The running child
+
+    private struct Running {
+        var process: Process?
+        var cancelled = false
     }
+
+    /// The one child a refresh runs at a time, so Cancel and app exit can reach it.
+    private static let running = OSAllocatedUnfairLock(initialState: Running())
+
+    private static var isCancelled: Bool { running.withLock { $0.cancelled } }
+
+    private static func register(_ process: Process) {
+        running.withLock { $0.process = process }
+    }
+
+    private static func unregister(_ process: Process) {
+        running.withLock { state in if state.process === process { state.process = nil } }
+    }
+
+    /// Stops a sign-in waiting on the browser (or whatever step is running); the refresh then
+    /// ends as `.signInDidNotFinish`.
+    static func cancelSignIn() {
+        running.withLock { $0.cancelled = true }
+    }
+
+    /// Called from `applicationWillTerminate`. macOS has no parent-death signal: a child left
+    /// running here is reparented to launchd, and a sign-in would keep its localhost listener open
+    /// (REGRESSIONS entry 19 — whoever starts a child stops it). Synchronous on purpose.
+    static func terminateForAppExit() {
+        let process = running.withLock { state -> Process? in
+            state.cancelled = true
+            return state.process
+        }
+        if let process, process.isRunning { stop(process, grace: 0.5) }
+    }
+
+    // MARK: One refresh
 
     /// What one refresh ended as.
     struct Outcome {
-        /// What the card should say; nil when new numbers landed.
+        /// What the refresh found; nil when new numbers landed. `ClaudeUsageFetchCommand.presentation`
+        /// decides whether the card shows it.
         var status: ClaudeRefreshStatus?
         /// After a fetch: the organization Claude Code fetched for, as its own profile fetch left
         /// it in `~/.claude.json` the moment the run ended.
         var fetchedOrganization: String? = nil
     }
 
-    /// One refresh, start to finish, on a worker thread. Logs each step's outcome and duration,
-    /// never its output: that carries plan and spend figures and the account's name.
-    static func run(
-        binary: ClaudeCodeBinary.Candidate,
-        allowSignIn: Bool,
-        signInStarted: () -> Void
-    ) -> Outcome {
-        let status = runSteps(binary: binary, allowSignIn: allowSignIn, signInStarted: signInStarted)
-        return Outcome(status: status, fetchedOrganization: status == nil ? claudeCodeOrganization() : nil)
+    /// One refresh, start to finish, on a worker thread. `manual` is a press of the card's
+    /// Refresh. Logs each step's outcome and duration at `notice`, so it is kept on disk — never
+    /// its output, which carries plan and spend figures and the account's name, nor a path.
+    static func run(manual: Bool, signInStarted: () -> Void) -> Outcome {
+        running.withLock { $0 = Running() }
+        guard let binary = trustedBinary() else {
+            log.notice("Usage refresh: no Claude Code binary signed by Anthropic was found")
+            return Outcome(status: .notInstalled)
+        }
+        var step = ClaudeUsageFetchCommand.firstStep(binaryVersion: binary.version, manual: manual)
+        var signedIn = false
+        var fetched = false
+        while true {
+            switch step {
+            case .probe:
+                let outcome = probeUsage(binary: binary)
+                fetched = outcome == .fetched
+                step = ClaudeUsageFetchCommand.step(afterProbe: outcome, manual: manual, afterSignIn: signedIn)
+            case .interactiveFetch:
+                let started = Date()
+                fetched = runInteractiveUsageFetch(binary: binary.url)
+                logStep("interactive /usage", binary: binary, outcome: fetched ? "fetched" : "failed", since: started)
+                step = ClaudeUsageFetchCommand.step(afterInteractiveFetch: fetched)
+            case .authStatus:
+                let started = Date()
+                let auth = ClaudeUsageFetchCommand.parseAuthStatus(
+                    runClaude(binary: binary.url, arguments: ClaudeUsageFetchCommand.authStatusArguments, timeout: 15).output)
+                let decision = ClaudeUsageFetchCommand.signInDecision(for: auth)
+                logStep("auth status", binary: binary, outcome: "\(decision)", since: started)
+                step = ClaudeUsageFetchCommand.step(afterAuth: decision, manual: manual)
+            case .signIn:
+                signInStarted()
+                let started = Date()
+                let signIn = runSignIn(binary: binary.url)
+                signedIn = true
+                logStep("sign-in", binary: binary,
+                        outcome: signIn.timedOut ? "timed out" : "exit \(signIn.status.map(String.init) ?? "-")",
+                        since: started)
+                step = ClaudeUsageFetchCommand.step(afterSignIn: signIn.status == 0 && !signIn.timedOut && !isCancelled)
+            case .finish(let status):
+                return Outcome(status: status, fetchedOrganization: fetched ? claudeCodeOrganization() : nil)
+            }
+        }
+    }
+
+    /// The binary for the Terminal fallback, resolved again when the button is pressed: the one
+    /// a refresh found earlier may have been reaped by an update since.
+    static func trustedBinaryURL() -> URL? {
+        trustedBinary()?.url
+    }
+
+    private static func trustedBinary() -> ClaudeCodeBinary.Candidate? {
+        ClaudeCodeBinary.resolve(isTrusted: isSignedByAnthropic)
     }
 
     /// Read straight after Claude Code's own run, which rewrites `oauthAccount` from its token's
@@ -84,66 +144,31 @@ enum ClaudeUsageRefresh {
         return organization
     }
 
-    private static func runSteps(
-        binary: ClaudeCodeBinary.Candidate,
-        allowSignIn: Bool,
-        signInStarted: () -> Void
-    ) -> ClaudeRefreshStatus? {
-        switch probeUsage(binary: binary) {
-        case .fetched:
-            return nil
-        case .failed:
-            // The probe is new; the interactive spawn has a track record, so it stays as the
-            // fallback until the probe has one too.
-            let started = Date()
-            let fetched = runInteractiveUsageFetch(binary: binary.url)
-            logStep("interactive /usage", binary: binary, outcome: fetched ? "fetched" : "failed", since: started)
-            return fetched ? nil : .fetchFailed
-        case .noPlanData:
-            break
-        }
-
-        let started = Date()
-        let auth = ClaudeUsageFetchCommand.parseAuthStatus(
-            runClaude(binary: binary.url, arguments: ClaudeUsageFetchCommand.authStatusArguments, timeout: 15).output)
-        let decision = ClaudeUsageFetchCommand.signInDecision(for: auth)
-        logStep("auth status", binary: binary, outcome: "\(decision)", since: started)
-        switch decision {
-        case .otherSignInMethod: return .otherSignInMethod
-        case .unknown: return .signInNeeded
-        case .startSignIn: break
-        }
-        guard allowSignIn else { return .signInNeeded }
-
-        signInStarted()
-        let signInStart = Date()
-        let signIn = runSignIn(binary: binary.url)
-        logStep("sign-in", binary: binary,
-                outcome: signIn.timedOut ? "timed out" : "exit \(signIn.status.map(String.init) ?? "-")",
-                since: signInStart)
-        guard signIn.status == 0, !signIn.timedOut else { return .signInNeeded }
-        return probeUsage(binary: binary) == .fetched ? nil : .signInNeeded
-    }
-
-    /// `claude -p "/usage"`, classified. Success is judged from disk (`fetchedAtMs`) first; the
+    /// `claude -p "/usage"`, classified, in `printProbeAttempts` order: the bare probe runs only
+    /// when the first fails outright. Success is judged from disk (`fetchedAtMs`) first; the
     /// printed rows only settle the case Claude Code's own write throttle leaves ambiguous.
     private static func probeUsage(binary: ClaudeCodeBinary.Candidate) -> ClaudeUsageFetchCommand.ProbeOutcome {
-        let started = Date()
-        let before = cachedUsageFetchedAtMs()
-        let run = runClaude(binary: binary.url, arguments: ClaudeUsageFetchCommand.printProbe,
-                            timeout: ClaudeUsageFetchCommand.printProbeTimeout)
-        let after = cachedUsageFetchedAtMs()
-        let outcome = ClaudeUsageFetchCommand.classifyProbe(
-            exitStatus: run.status, timedOut: run.timedOut,
-            fetchStampAdvanced: after != nil && after != before, output: run.output)
-        logStep("-p /usage", binary: binary, outcome: "\(outcome)", since: started)
+        var outcome = ClaudeUsageFetchCommand.ProbeOutcome.failed
+        for (index, arguments) in ClaudeUsageFetchCommand.printProbeAttempts.enumerated() {
+            let started = Date()
+            let before = cachedUsageFetchedAtMs()
+            let run = runClaude(binary: binary.url, arguments: arguments,
+                                timeout: ClaudeUsageFetchCommand.printProbeTimeout)
+            let after = cachedUsageFetchedAtMs()
+            outcome = ClaudeUsageFetchCommand.classifyProbe(
+                exitStatus: run.status, timedOut: run.timedOut,
+                fetchStampAdvanced: after != nil && after != before, output: run.output)
+            logStep(index == 0 ? "-p /usage (hooks off)" : "-p /usage", binary: binary,
+                    outcome: "\(outcome)", since: started)
+            if outcome != .failed || isCancelled { break }
+        }
         return outcome
     }
 
     private static func logStep(_ step: String, binary: ClaudeCodeBinary.Candidate,
-                                            outcome: String, since started: Date) {
+                                outcome: String, since started: Date) {
         let seconds = Date().timeIntervalSince(started)
-        log.info("Usage refresh \(step, privacy: .public): Claude Code \(binary.version, privacy: .public), \(outcome, privacy: .public), \(seconds, format: .fixed(precision: 1))s")
+        log.notice("Usage refresh \(step, privacy: .public): Claude Code \(binary.version, privacy: .public), \(outcome, privacy: .public), \(seconds, format: .fixed(precision: 1))s")
     }
 
     private static func cachedUsageFetchedAtMs() -> Double? {
@@ -152,6 +177,38 @@ enum ClaudeUsageRefresh {
               let cache = json["cachedUsageUtilization"] as? [String: Any] else { return nil }
         return (cache["fetchedAtMs"] as? NSNumber)?.doubleValue
     }
+
+    // MARK: Trust
+
+    /// Anthropic's Developer ID and Claude Code's identifier, read from the binaries on this Mac
+    /// (Desktop's bundled copies and the terminal install all carry exactly this). A child process
+    /// inherits Kannu's privacy permissions, and every folder Claude Code is found in is writable
+    /// by any process of the user's, so a binary that fails this is never run. The check and the
+    /// launch are separate moments: a process that can swap the file in between, keeping its size
+    /// and date, is not stopped by it.
+    static let anthropicRequirement = #"identifier "com.anthropic.claude-code" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "Q6L2SF6YDW""#
+
+    /// Verdicts by path, for as long as the file's size and modification date stand. Checking
+    /// reads the whole binary, so it is done once per version, not once per refresh.
+    private static let trustVerdicts = OSAllocatedUnfairLock(initialState: [String: (size: Int, modified: Date, trusted: Bool)]())
+
+    static func isSignedByAnthropic(_ url: URL) -> Bool {
+        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey])
+        guard let size = values?.fileSize, let modified = values?.contentModificationDate else { return false }
+        if let verdict = trustVerdicts.withLock({ $0[url.path] }), verdict.size == size, verdict.modified == modified {
+            return verdict.trusted
+        }
+        var code: SecStaticCode?
+        var requirement: SecRequirement?
+        let trusted = SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess
+            && SecRequirementCreateWithString(anthropicRequirement as CFString, [], &requirement) == errSecSuccess
+            && code.map { SecStaticCodeCheckValidity($0, [], requirement) == errSecSuccess } == true
+        trustVerdicts.withLock { $0[url.path] = (size, modified, trusted) }
+        if !trusted { log.notice("Usage refresh: skipped a claude binary not signed by Anthropic") }
+        return trusted
+    }
+
+    // MARK: Processes
 
     private struct ClaudeRun {
         let status: Int32?
@@ -200,8 +257,10 @@ enum ClaudeUsageRefresh {
             stderr.fileHandleForReading.readabilityHandler = nil
             return ClaudeRun(status: nil, timedOut: false, output: "")
         }
+        register(process)
+        defer { unregister(process) }
         let deadline = Date().addingTimeInterval(timeout)
-        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.1) }
+        while process.isRunning && Date() < deadline && !isCancelled { Thread.sleep(forTimeInterval: 0.1) }
         let timedOut = process.isRunning
         if timedOut { stop(process) }
         process.waitUntilExit()
@@ -239,11 +298,13 @@ enum ClaudeUsageRefresh {
             try? slaveHandle.close()
         }
         do { try process.run() } catch { return (nil, false) }
-        signInProcess.withLock { $0 = process }
-        defer { signInProcess.withLock { $0 = nil } }
+        register(process)
+        defer { unregister(process) }
 
+        // Cancel only raises a flag; the stop happens here, so a Claude Code that traps SIGTERM
+        // still goes, through `stop`'s SIGKILL, instead of holding the spinner for five minutes.
         let deadline = Date().addingTimeInterval(ClaudeUsageFetchCommand.signInTimeout)
-        while process.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.25) }
+        while process.isRunning && Date() < deadline && !isCancelled { Thread.sleep(forTimeInterval: 0.25) }
         let timedOut = process.isRunning
         if timedOut { stop(process) }
         process.waitUntilExit()
@@ -252,17 +313,17 @@ enum ClaudeUsageRefresh {
 
     /// terminate() only signals, and Claude Code can trap SIGTERM; escalate so waitUntilExit()
     /// can never block the worker and strand the spinner.
-    private static func stop(_ process: Process) {
+    private static func stop(_ process: Process, grace: TimeInterval = 2) {
         process.terminate()
-        let killDeadline = Date().addingTimeInterval(2)
-        while process.isRunning && Date() < killDeadline { Thread.sleep(forTimeInterval: 0.1) }
+        let killDeadline = Date().addingTimeInterval(grace)
+        while process.isRunning && Date() < killDeadline { Thread.sleep(forTimeInterval: 0.05) }
         if process.isRunning { kill(process.processIdentifier, SIGKILL) }
     }
 
-    /// The probe runs in `/` with no terminal, so its SessionStart hook can leave a status file
-    /// that would otherwise read as a chat. Any Claude hook file written in `/` during the refresh
-    /// is the probe's; its id is remembered so the next rescan drops it under the status lock, as
-    /// for the interactive probe.
+    /// A hook can still leave a status file for the probe (the bare fallback, or a Claude Code
+    /// that ignores `disableAllHooks`); its id is remembered so the next rescan drops it under the
+    /// status lock, as for the interactive probe. `ClaudeUsageFetchCommand.isProbeHookFile` says
+    /// which files are the probe's.
     static func probeHookConversationIDs(in directory: URL, since start: Date) -> [String] {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
@@ -273,13 +334,15 @@ enum ClaudeUsageRefresh {
                   modified >= start.addingTimeInterval(-1),
                   let data = try? Data(contentsOf: file),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  json["cwd"] as? String == "/" else { return nil }
+                  ClaudeUsageFetchCommand.isProbeHookFile(json: json) else { return nil }
             return String(name.dropFirst("claude-".count).dropLast(".json".count))
         }
     }
 
-    /// The interactive `/usage` spawn this predates the probe with: a pseudo-terminal, `/usage`
-    /// typed after the TUI comes up. Kept as the fallback for a probe that fails outright.
+    /// The interactive `/usage` spawn the probe replaced: a pseudo-terminal, `/usage` typed after
+    /// the TUI comes up. It types blind into a terminal session, so `ClaudeUsageFetchCommand`'s
+    /// steps reach it only on a press — for a probe that failed outright, or a Claude Code too old
+    /// for the probe. Unchanged otherwise, guards included (entry 8).
     private static func runInteractiveUsageFetch(binary: URL) -> Bool {
         // Two attempts. The first suppresses the remote-control device registration (the phantom
         // chat); if that flag turns out to be rejected or ineffective and no fetch lands, fall back
@@ -324,6 +387,8 @@ enum ClaudeUsageRefresh {
             return false
         }
 
+        register(process)
+        defer { unregister(process) }
         // Give the TUI time to come up before typing, then issue the command.
         Thread.sleep(forTimeInterval: 3)
         if !process.isRunning {
@@ -340,7 +405,7 @@ enum ClaudeUsageRefresh {
         while Date() < deadline {
             Thread.sleep(forTimeInterval: 0.25)
             if let now = cachedUsageFetchedAtMs(), now != before { fetched = true; break }
-            if !process.isRunning { break }
+            if !process.isRunning || isCancelled { break }
         }
 
         if process.isRunning && fetched {

@@ -401,34 +401,47 @@ struct NotchLLMUsageView: View {
         .hoverTooltip("Fetch latest usage")
     }
 
-    /// What the last Refresh needs the user to know, with the one action that resolves it.
-    /// Silent while a fetch runs, except for the sign-in, which is the user's to finish.
+    /// What the last Refresh needs the user to know, with the one action that resolves it. One
+    /// line each, the action beside it: the card is a fixed height inside the notch, and a
+    /// stacked note and button pushed the button out of view. Silent while a fetch runs, except
+    /// for the sign-in, which is the user's to finish.
     @ViewBuilder
     private func claudeRefreshStatusRow(provider: ProviderID) -> some View {
         if provider == .claude {
+            let refreshing = agentMonitor.isRefreshingClaudeUsage
+            let terminal = (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() })
             switch agentMonitor.claudeRefreshStatus {
             case .signingIn:
-                claudeStatusText(String(localized: "Finish signing in in your browser…"),
-                                 detail: String(localized: "This is Claude Code's own sign-in, the same as /login. Kannu never sees it."),
-                                 action: (String(localized: "Cancel"), { agentMonitor.cancelClaudeSignIn() }))
-            case .signInNeeded where !agentMonitor.isRefreshingClaudeUsage:
-                claudeStatusText(String(localized: "Exact limits need Claude Code signed in to claude.ai. Press ↻ to sign in."),
-                                 action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
-            case .otherSignInMethod where !agentMonitor.isRefreshingClaudeUsage:
-                claudeStatusText(String(localized: "Claude Code here signs in with an API key or a cloud provider. Plan limits need a claude.ai sign-in."),
-                                 action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
-            case .notInstalled where !agentMonitor.isRefreshingClaudeUsage:
-                claudeStatusText(String(localized: "Claude Code isn't installed, so exact limits can't be fetched."))
-            case .fetchFailed where !agentMonitor.isRefreshingClaudeUsage:
-                claudeStatusText(String(localized: "Couldn't fetch the latest limits. Try ↻ again in a moment."))
+                claudeStatusLine(String(localized: "Finish signing in in your browser…"),
+                                 action: (String(localized: "Cancel"), { agentMonitor.cancelClaudeSignIn() }),
+                                 tooltip: String(localized: "Claude Code's own sign-in, the same as /login. Kannu never sees it."))
+            case .signInNeeded where !refreshing:
+                claudeStatusLine(String(localized: "Exact limits need Claude Code signed in to claude.ai. Press this card's ↻ to sign in."),
+                                 action: terminal)
+            case .signInDidNotFinish where !refreshing:
+                claudeStatusLine(String(localized: "The sign-in didn't finish. Press this card's ↻ to try again."),
+                                 action: terminal)
+            case .noLimitsReturned where !refreshing:
+                claudeStatusLine(String(localized: "Claude Code is signed in but returned no limits. Try ↻ again later."),
+                                 action: terminal)
+            case .signInUnchecked where !refreshing:
+                claudeStatusLine(String(localized: "Couldn't check how Claude Code signs in on this Mac."),
+                                 action: terminal)
+            case .otherSignInMethod where !refreshing:
+                claudeStatusLine(String(localized: "Claude Code here uses an API key or a cloud provider. Signing in with claude.ai replaces that for Claude Code."),
+                                 action: terminal)
+            case .notInstalled where !refreshing:
+                claudeStatusLine(String(localized: "No Claude Code signed by Anthropic was found, so exact limits can't be fetched."))
+            case .fetchFailed where !refreshing:
+                claudeStatusLine(String(localized: "Couldn't fetch the latest limits. Try ↻ again in a moment."))
             default:
-                if !agentMonitor.isRefreshingClaudeUsage {
+                if !refreshing {
                     switch agentMonitor.claudeUsageHint {
                     case .signInNeeded:
-                        claudeStatusText(String(localized: "Exact limits need a Claude Code sign-in. Press ↻ to fetch them."))
+                        claudeStatusLine(String(localized: "Exact limits need a Claude Code sign-in. Press this card's ↻ to fetch them."))
                     case .otherOrganization:
-                        claudeStatusText(String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's own readings. Sign Claude Code in to this one for exact limits."),
-                                         action: (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() }))
+                        claudeStatusLine(String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings."),
+                                         action: terminal)
                     case nil:
                         EmptyView()
                     }
@@ -438,30 +451,30 @@ struct NotchLLMUsageView: View {
     }
 
     @ViewBuilder
-    private func claudeStatusText(_ text: String, detail: String? = nil,
-                                  action: (title: String, run: () -> Void)? = nil) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
+    private func claudeStatusLine(_ text: String, action: (title: String, run: () -> Void)? = nil,
+                                  tooltip: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(text)
                 .font(.caption2)
                 .foregroundStyle(.orange)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-            if let detail {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+                .lineLimit(2)
             if let action {
-                Button(action: action.run) {
+                Spacer(minLength: 0)
+                let button = Button(action: action.run) {
                     Text(action.title)
                         .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(.white.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(.plain)
+                .fixedSize()
+                if let tooltip {
+                    button.hoverTooltip(tooltip)
+                } else {
+                    button
+                }
             }
         }
     }
@@ -473,7 +486,7 @@ struct NotchLLMUsageView: View {
     private func quotaSection(title: String, reset: Date?, bars: [QuotaBar], now: Date) -> some View {
         // The oldest reading in the group speaks for it: a value days old is shown with its age
         // and dimmed, never passed off as current (a desktop sample can be that old).
-        let stale = Self.staleAge(bars.compactMap(\.observedAt).min(), now: now)
+        let stale = ClaudeUsageSnapshot.staleLabel(observedAt: bars.compactMap(\.observedAt).min(), now: now)
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
@@ -488,18 +501,6 @@ struct NotchLLMUsageView: View {
             ForEach(bars) { bar in quotaBar(bar, now: now) }
                 .opacity(stale == nil ? 1 : 0.55)
         }
-    }
-
-    /// "updated 3h ago" once a reading is older than `ClaudeUsageSnapshot.freshInterval`, else nil.
-    static func staleAge(_ observedAt: Date?, now: Date) -> String? {
-        guard let observedAt else { return nil }
-        let seconds = now.timeIntervalSince(observedAt)
-        guard seconds > ClaudeUsageSnapshot.freshInterval else { return nil }
-        let minutes = Int(seconds / 60)
-        if minutes < 60 { return String(localized: "updated \(minutes)m ago") }
-        let hours = minutes / 60
-        if hours < 48 { return String(localized: "updated \(hours)h ago") }
-        return String(localized: "updated \(hours / 24)d ago")
     }
 
     @ViewBuilder
