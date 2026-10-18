@@ -155,14 +155,50 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(popover.contains("TaskSyncSummary.canRefresh("), "the popover's Refresh drifted from the column's")
     }
 
-    /// The Time to log page and an expanded card take the whole page; the list sits under the
-    /// toolbar at `sideListHeight`.
-    func testTheToolbarSitsOverTheListOnly() throws {
-        let column = Self.code(try Self.raw(Self.sideColumnPath))
-        XCTAssertTrue(column.contains("listHeight: M.sideListHeight(pageHeight: pageHeight)"))
-        let page = try Self.declaration("private struct TimerTasksPage", in: column)
+    /// David: the icons go vertically between the two sides of the tab. The Tasks page hangs them
+    /// in the gap as an overlay offset onto the divider's line (it takes no room, so nothing moves
+    /// when the page changes), the divider steps aside while the page shows, the toolbar row stays
+    /// gone, and the icons keep their order — the ones that come and go at the bottom.
+    func testTheRailHangsInTheGap() throws {
+        let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
+        let notch = Self.code(try Self.raw(Self.notchTimerPath))
+        XCTAssertEqual(Self.railProblems(page: page, notch: notch), [])
         XCTAssertTrue(page.contains("TimerLogTimePage(asking: asking"))
         XCTAssertTrue(page.contains("height: height,"), "the card takes the page's whole height")
+        XCTAssertTrue(page.contains("isSearching ? M.sideListHeight(pageHeight: height) : height"),
+                      "the list has the whole page, less the search field while searching")
+    }
+
+    func testTheRailScannerCatchesPlantedOffenders() {
+        let page = """
+            .frame(height: height, alignment: .top)
+            .overlay(alignment: .topLeading) {
+                rail
+                    .offset(x: -M.railOffset)
+            }
+            private var rail: some View {
+                railSlot { Button(action: toggleSearch) { } }
+                railSlot { TaskSourceMenu(openBrain: { $0.open() }, style: .rail) }
+                if sync { railSlot { refreshControl } }
+                if asks { railSlot { logTimeButton } }
+            }
+            private func railSlot
+            """
+        let notch = "    Divider()\n        .opacity(shownSidePage == .tasks ? 0 : 0.2)"
+        XCTAssertEqual(Self.railProblems(page: page, notch: notch), [])
+        XCTAssertEqual(Self.railProblems(page: page.replacingOccurrences(of: ".offset(x: -M.railOffset)", with: ""), notch: notch),
+                       ["the rail is not hung into the gap"])
+        XCTAssertEqual(Self.railProblems(page: page.replacingOccurrences(of: ".overlay(alignment: .topLeading)", with: ".overlay(alignment: .top)"), notch: notch),
+                       ["the rail is not hung into the gap"])
+        XCTAssertEqual(Self.railProblems(page: page + "\nprivate var toolbar: some View {", notch: notch),
+                       ["the toolbar row is back"])
+        XCTAssertEqual(Self.railProblems(page: page, notch: "    if shownSidePage != .tasks { Divider() }"),
+                       ["the divider does not step aside for the rail"])
+        let swapped = page
+            .replacingOccurrences(of: "railSlot { Button(action: toggleSearch) { } }", with: "SEARCH")
+            .replacingOccurrences(of: "railSlot { TaskSourceMenu(openBrain: { $0.open() }, style: .rail) }", with: "railSlot { Button(action: toggleSearch) { } }")
+            .replacingOccurrences(of: "SEARCH", with: "railSlot { TaskSourceMenu(openBrain: { $0.open() }, style: .rail) }")
+        XCTAssertEqual(Self.railProblems(page: swapped, notch: notch), ["the rail's icons are out of order"])
     }
 
     /// The task form is a view of its own that reads `TasksManager.shared`, so `NotchTimerView`
@@ -520,6 +556,38 @@ final class TimerSideColumnRulesTests: XCTestCase {
 
     /// `TasksManager.shared` is read, and only inside `TimerTasksPage`, the view built only while the
     /// Tasks page shows. Top-level declarations start at column 0.
+    /// The rail hangs into the gap from the page's top leading corner, the divider steps aside on
+    /// the Tasks page, no toolbar row, and search < filter < Refresh < clock inside the rail.
+    private static func railProblems(page: String, notch: String) -> [String] {
+        var problems: [String] = []
+        if let overlay = page.range(of: ".overlay(alignment: .topLeading) {"),
+           let offset = page.range(of: ".offset(x: -M.railOffset)", range: overlay.upperBound..<page.endIndex),
+           page[overlay.upperBound..<offset.lowerBound].contains("rail") {
+            // Hung into the gap.
+        } else {
+            problems.append("the rail is not hung into the gap")
+        }
+        if page.contains("private var toolbar") {
+            problems.append("the toolbar row is back")
+        }
+        if !notch.contains(".opacity(shownSidePage == .tasks ? 0 : 0.2)") {
+            problems.append("the divider does not step aside for the rail")
+        }
+        if let start = page.range(of: "private var rail: some View {"),
+           let end = page.range(of: "private func railSlot", range: start.upperBound..<page.endIndex) {
+            let rail = page[start.upperBound..<end.lowerBound]
+            let order = ["toggleSearch", "TaskSourceMenu(", "refreshControl", "logTimeButton"]
+                .map { rail.range(of: $0)?.lowerBound }
+            let found = order.compactMap { $0 }
+            if found.count != order.count || found != found.sorted() {
+                problems.append("the rail's icons are out of order")
+            }
+        } else {
+            problems.append("no rail")
+        }
+        return problems
+    }
+
     private static func managerOwnerProblems(in code: String) -> [String] {
         var owner = ""
         var readers: [String] = []

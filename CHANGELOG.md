@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The task icons sit in a small rail between the timer tab's two columns
+- **Developer label:** "how would moving the 3 icons in the third picture to go vertically between the 2 sides of the tab work, also make them smaller and go in with genereal design"
+- **Agent label:** Claude Code (Opus 5.5) — search, filter, Refresh and the Time to log clock move from the Tasks page's top row into a vertical rail on the divider's line, with the hairline continuing below
+- **Changes:**
+  - The Tasks page's icons move out of its top row into a rail in the gap between the composer and
+    the list, centred on the divider's line: search, the filter, Refresh (while Jira or GitLab
+    syncs), and the Time to log clock (while an entry asks), top to bottom, the first level with
+    the session name field. Under them the divider's hairline runs to the page's bottom.
+  - Smaller and in the notch's own style (`TimerRailIcon`): 21 pt squares with a dim fill and a
+    10 pt glyph, brighter while what they open is open. The filter menu draws the same square
+    (`TaskSourceMenu` style `.rail`).
+  - The rail is an overlay hung into the gap (`TimerComposerMetrics.railOffset`), so it takes no
+    room: the gap stays 41 pt and nothing moves when the page changes. The divider steps aside
+    while the Tasks page shows; Presets keeps it.
+  - The list gets the whole page back: three rows, ending where Start and Reset do. Search opens
+    a field at the top of the page (the name field's look); opening it closes an open card or the
+    Log page. The clock toggles the Log page. The rail stays beside the card and the Log page.
+  - "Filtered · Show all" leaves with the row: the filter's square brightens while it hides a
+    source, its menu gains Show all (the popover's too), and "Nothing to show" offers Show all.
+  - Tests: `TimerSideColumnRulesTests` (the rail hangs in the gap, the divider steps aside, no
+    toolbar row, the icons' order, planted offenders); `TimerComposerMetricsTests` (the rail fits
+    the gap clear of both columns, centred on the divider, four slots fit; two rows under the
+    search field).
+
 ### 2026-10-18 - The timer tab's columns split in the golden ratio and end on one line
 - **Developer label:** "fix allignements, keeo golden ratio wherever possible ... golden ratio is the goal"
 - **Agent label:** Claude Code (Opus 5.5) — the composer and the task column share the notch's width 1.618 : 1, the column ends where Start and Reset do, and the task form's rows split in the golden ratio

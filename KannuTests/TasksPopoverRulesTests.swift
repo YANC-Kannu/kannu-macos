@@ -56,7 +56,9 @@ final class TasksPopoverRulesTests: XCTestCase {
     static let logTimeCardsPath = "Kannu/components/Notch/LogTimeCards.swift"
     /// The timer tab's task form, in the composer's place.
     static let taskFormPath = "Kannu/components/Notch/TimerTaskForm.swift"
-    static let newFiles = [buttonPath, popoverPath, menuPath, sideColumnPath, swipeMonitorPath, logTimeCardsPath, taskFormPath]
+    /// The timer tab's rail icons.
+    static let railIconPath = "Kannu/components/Notch/TimerRailIcon.swift"
+    static let newFiles = [buttonPath, popoverPath, menuPath, sideColumnPath, swipeMonitorPath, logTimeCardsPath, taskFormPath, railIconPath]
     static let notchDirectories = ["Kannu/components/Notch", "Kannu/components/AgentStatus"]
     static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "JiraCredentialStore", "GitLabCredentialStore"]
     static let tickers = ["Timer.publish", "Timer.scheduledTimer", "Timer(timeInterval", ".autoconnect()", "DispatchSourceTimer"]

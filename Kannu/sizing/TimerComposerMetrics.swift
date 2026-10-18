@@ -142,16 +142,27 @@ enum TimerComposerMetrics {
         max(0, min(budget - sideBottomInset, totalHeight(style)))
     }
 
-    /// The Tasks page's toolbar (search, filter, Refresh, Time to log): as tall as the session name
-    /// field and as far above the list as the field is above the composer, so the two rows line up
-    /// across the tab.
+    /// The Tasks page's search field, at the page's top while searching: as tall as the session
+    /// name field and as far above the list as the field is above the composer, so the two rows
+    /// line up across the tab.
     static let sideToolbarHeight: CGFloat = nameFieldHeight
     static let sideToolbarSpacing: CGFloat = nameFieldSpacing
-    /// One toolbar button's square hit area.
-    static let sideToolbarButtonSize: CGFloat = 24
 
-    /// The task list's height under the toolbar: the page less the toolbar and its spacing. An
-    /// expanded task card and the Time to log page take the whole page instead.
+    // The Tasks page's rail (`TimerTasksPage.rail`): its icons in the gap between the columns,
+    // centred on the divider's line, which it replaces while the page shows.
+    static let railButtonSize: CGFloat = 21
+    static let railGlyphSize: CGFloat = 10
+    static let railCornerRadius: CGFloat = 6
+    /// One icon's slot: the session name field's height, so the first icon is centred on it.
+    static var railSlotHeight: CGFloat { nameFieldHeight }
+    /// Between slots, and above the hairline: the name field's gap to the composer.
+    static var railSpacing: CGFloat { nameFieldSpacing }
+    /// How far left of the page the rail's leading edge sits: its centre on the divider's line,
+    /// half the gap in, so it keeps the same room from both columns.
+    static var railOffset: CGFloat { tabColumnSpacing + dividerWidth / 2 + railButtonSize / 2 }
+
+    /// The task list's height under the search field: the page less the field and its spacing.
+    /// Without the search the list has the whole page.
     static func sideListHeight(pageHeight: CGFloat) -> CGFloat {
         max(0, pageHeight - sideToolbarHeight - sideToolbarSpacing)
     }

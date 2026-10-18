@@ -115,23 +115,32 @@ final class TimerComposerMetricsTests: XCTestCase {
 
     /// The Tasks page's toolbar lines up with the session name field across the tab: the same
     /// height, and the same gap to what comes under it.
-    func testTheToolbarIsLevelWithTheNameField() {
+    func testTheSearchFieldIsLevelWithTheNameField() {
         XCTAssertEqual(M.sideToolbarHeight, M.nameFieldHeight)
         XCTAssertEqual(M.sideToolbarSpacing, M.nameFieldSpacing)
-        XCTAssertLessThanOrEqual(M.sideToolbarButtonSize, M.sideToolbarHeight, "a button taller than its row")
     }
 
-    /// Under the toolbar, at the smallest budget, the list still holds two whole rows (the first
-    /// row's ▶ tooltip needs the second's room), and four icons and "Filtered · Show all" fit across.
-    func testTheListUnderTheToolbarHoldsTwoRows() {
+    /// Under the search field, at the smallest budget, the list still holds two whole rows (the
+    /// first row's ▶ tooltip needs the second's room).
+    func testTheListUnderTheSearchFieldHoldsTwoRows() {
         let page = M.sidePageHeight(budget: M.minimumTabBudget, style: .manualWithPresets)
         let list = M.sideListHeight(pageHeight: page)
         XCTAssertEqual(list, page - M.sideToolbarHeight - M.sideToolbarSpacing)
-        XCTAssertGreaterThanOrEqual(list, M.sideTaskRowsHeight(count: 2), "two task rows do not fit under the toolbar")
+        XCTAssertGreaterThanOrEqual(list, M.sideTaskRowsHeight(count: 2), "two task rows do not fit under the search field")
         XCTAssertEqual(M.sideListHeight(pageHeight: 10), 0, "never negative")
-        let filteredLabel: CGFloat = 96   // "Filtered · Show all" at 11 pt measures about 94
-        XCTAssertLessThanOrEqual(filteredLabel + 4 * (M.sideToolbarButtonSize + 2),
-                                 M.sideColumnWidth(notchWidth: M.smallestOpenNotchWidth))
+    }
+
+    /// David: the icons go vertically between the two sides of the tab, smaller. The rail sits in
+    /// the 41 pt gap centred on the divider's line, clear of both columns; its first icon is
+    /// centred on the session name field; all four slots fit the page beside the stacked composer.
+    func testTheRailFitsTheGap() {
+        XCTAssertEqual(M.railOffset - M.railButtonSize / 2, M.tabColumnSpacing + M.dividerWidth / 2, "centred on the divider's line")
+        XCTAssertGreaterThanOrEqual(M.railOffset - M.railButtonSize, 8, "clear of the task column")
+        XCTAssertGreaterThanOrEqual(M.columnGap - M.railOffset, 8, "clear of the composer")
+        XCTAssertLessThan(M.railButtonSize, M.nameFieldHeight, "smaller than the name field's own button")
+        XCTAssertEqual(M.railSlotHeight, M.nameFieldHeight, "the first icon is centred on the name field")
+        let page = M.sidePageHeight(budget: M.minimumTabBudget, style: .manualWithPresets)
+        XCTAssertLessThanOrEqual(4 * M.railSlotHeight + 4 * M.railSpacing, page, "search, filter, Refresh and the clock, then the hairline")
     }
 
     /// The task form takes the composer's place exactly: the same height, so nothing around it

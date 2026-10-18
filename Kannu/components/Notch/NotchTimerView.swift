@@ -80,10 +80,11 @@ struct NotchTimerView: View {
                 HStack(alignment: .top, spacing: timerManager.isTimerActive ? 0 : TimerComposerMetrics.tabColumnSpacing) {
                     leftColumn
                     if shouldShowSideColumn {
-                        // Ends where the composer and the page do.
+                        // Ends where the composer and the page do. The Tasks page hangs its icon
+                        // rail on this line and draws the hairline under them itself.
                         Divider()
                             .frame(height: sidePageHeight)
-                            .opacity(0.2)
+                            .opacity(shownSidePage == .tasks ? 0 : 0.2)
                         sideColumn
                     }
                 }

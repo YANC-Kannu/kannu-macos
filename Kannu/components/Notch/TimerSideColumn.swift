@@ -177,8 +177,7 @@ struct TimerSideColumn: View {
     private var pageView: some View {
         switch shownPage {
         case .tasks:
-            TimerTasksPage(height: pageHeight, listHeight: M.sideListHeight(pageHeight: pageHeight), width: columnWidth,
-                           started: taskStarted, edit: editTask)
+            TimerTasksPage(height: pageHeight, width: columnWidth, started: taskStarted, edit: editTask)
         case .presets:
             presetsPage
         }
@@ -242,19 +241,19 @@ extension TimerSidePage {
     }
 }
 
-/// The Tasks page: a toolbar level with the composer's session name field, then the task list.
+/// The Tasks page: the task list, with its icons in a rail in the gap beside it.
 ///
-/// - **The toolbar**, right to left: search, which turns the row into a field that narrows the
-///   list as the user types (`TaskSearch`); the Show in notch filter (`TaskSourceMenu`, the
-///   popover's own, with Connect and Manage tasks… into Brain); Refresh, while Jira or GitLab
-///   syncs, whose tooltip says when each last synced; and Time to log, a clock with Kannu's yellow
-///   "needs your input" dot, while an entry asks. "Filtered · Show all" leads the row while the
-///   filter hides a source.
+/// - **The rail** (`rail`), an overlay hung into the gap between the composer and the page, where
+///   the divider was: search, which opens a field at the top of the page that narrows the list as
+///   the user types (`TaskSearch`); the Show in notch filter (`TaskSourceMenu`, the popover's own,
+///   with Show all, Connect and Manage tasks…); Refresh, while Jira or GitLab syncs, whose tooltip
+///   says when each last synced; and Time to log, a clock with Kannu's yellow "needs your input"
+///   dot, while an entry asks. An overlay takes no room, so the gap stays the divider's 41 pt and
+///   nothing moves when the page changes.
 /// - **The list**: the task order as it stands (`TasksManager.activeTasks`), narrowed by Show in
-///   notch and the search, so the first row is what the user ordered first. A row expands into
-///   its card (`TimerTaskDetail`), and the clock opens the Time to log cards (`TimerLogTimePage`).
-///   Both take the whole page, toolbar included: under the toolbar, at the smallest notch, a card
-///   would lose every fact.
+///   notch and the search, so the first row is what the user ordered first. The whole page tall,
+///   ending where Start and Reset do. A row expands into its card (`TimerTaskDetail`), and the
+///   clock opens the Time to log cards (`TimerLogTimePage`); the rail stays beside both.
 ///
 /// Appearing refreshes a stale Jira or GitLab sync, as the Tasks popover does. Its text fields —
 /// search, and a Time to log card's — hold the notch open while focused, each under a token of its
@@ -275,8 +274,6 @@ private struct TimerTasksPage: View {
     @Default(.gitlabHost) private var gitlabHost
     /// The page's height (`TimerComposerMetrics.sidePageHeight`): a card's and the Log page's.
     let height: CGFloat
-    /// The list's height under the toolbar (`TimerComposerMetrics.sideListHeight`).
-    let listHeight: CGFloat
     /// The column's width (`TimerComposerMetrics.sideColumnWidth`): the card's and the Log page's.
     let width: CGFloat
     let started: () -> Void
@@ -293,7 +290,7 @@ private struct TimerTasksPage: View {
     @State private var hoveredRowID: UUID?
     /// What the search has typed; kept while a card is open, so closing it returns to the results.
     @State private var searchText = ""
-    /// Whether the toolbar is the search field.
+    /// Whether the search field shows at the top of the page.
     @State private var isSearching = false
     @FocusState private var searchFocused: Bool
     /// `@State`, so the release names the token that was set.
@@ -322,6 +319,11 @@ private struct TimerTasksPage: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: height, alignment: .top)
+        // Hung into the gap, centred on the divider's line; it takes no room.
+        .overlay(alignment: .topLeading) {
+            rail
+                .offset(x: -M.railOffset)
+        }
         .onChange(of: manager.activeTasks.map(\.id)) { _, ids in
             if let expandedTaskID, !ids.contains(expandedTaskID) {
                 self.expandedTaskID = nil
@@ -383,14 +385,21 @@ private struct TimerTasksPage: View {
                 .transition(.opacity)
         } else {
             VStack(alignment: .leading, spacing: M.sideToolbarSpacing) {
-                // Drawn above the list, so a tooltip opening downward is never painted over.
-                toolbar
-                    .frame(height: M.sideToolbarHeight)
-                    .zIndex(1)
+                if isSearching {
+                    // Drawn above the list, so its × tooltip opening downward is never painted over.
+                    searchField
+                        .frame(height: M.sideToolbarHeight)
+                        .zIndex(1)
+                }
                 list
             }
             .transition(.opacity)
         }
+    }
+
+    /// The whole page; under the search field while searching (`TimerComposerMetrics.sideListHeight`).
+    private var listHeight: CGFloat {
+        isSearching ? M.sideListHeight(pageHeight: height) : height
     }
 
     // MARK: - Show in notch and search
@@ -421,8 +430,14 @@ private struct TimerTasksPage: View {
         TaskSearch.filter(TaskOrdering.active(manager.activeTasks, listed: notchFilter), query: searchText)
     }
 
+    /// Search shows the list: an open card or the Log page closes first.
     private func openSearch() {
-        animate { isSearching = true }
+        confirmsDelete = false
+        animate {
+            expandedTaskID = nil
+            showsLogTime = false
+            isSearching = true
+        }
         // After the field exists: focusing it in the same update finds nothing to focus.
         DispatchQueue.main.async { searchFocused = true }
     }
@@ -441,9 +456,14 @@ private struct TimerTasksPage: View {
         manager.openDrafts.filter(WorklogDrafts.isAskingNow)
     }
 
+    /// The Log page shows ahead of the list but behind a card: an open card closes first.
     private func openLogTime() {
         searchFocused = false
-        animate { showsLogTime = true }
+        confirmsDelete = false
+        animate {
+            expandedTaskID = nil
+            showsLogTime = true
+        }
     }
 
     private func closeLogTime() {
@@ -468,74 +488,85 @@ private struct TimerTasksPage: View {
         focusedDrafts.removeAll()
     }
 
-    // MARK: - Toolbar
+    // MARK: - Rail
 
-    /// Items that come and go sit left of the ones that stay, so search and the filter never move.
-    private var toolbar: some View {
-        HStack(spacing: 2) {
-            if isSearching {
-                searchField
-            } else {
-                if isFiltered {
-                    filteredLabel
+    /// The icons in the gap between the composer and this page, centred on the divider's line
+    /// (`NotchTimerView` hides its divider while this page shows): search, the filter, Refresh
+    /// while Jira or GitLab syncs, and the Time to log clock while an entry asks. The first sits
+    /// level with the session name field; items that come and go sit at the bottom, so search and
+    /// the filter never move. Under them the divider's hairline runs to the page's bottom.
+    ///
+    /// Each slot draws above the ones under it, so a tooltip opening downward is never painted over.
+    private var rail: some View {
+        VStack(spacing: M.railSpacing) {
+            railSlot {
+                Button(action: toggleSearch) {
+                    TimerRailIcon(systemName: "magnifyingglass", isActive: isSearching)
                 }
-                Spacer(minLength: 0)
-                if !asking.isEmpty {
-                    logTimeButton
-                }
-                if manager.isJiraSyncOn || manager.isGitLabSyncOn {
-                    refreshControl
-                }
-                TaskSourceMenu(openBrain: { $0.open() })
-                    .frame(width: M.sideToolbarButtonSize, height: M.sideToolbarButtonSize)
-                Button(action: openSearch) {
-                    toolbarIcon("magnifyingglass")
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(Text(verbatim: String(localized: "Search tasks")))
-                .hoverTooltip(String(localized: "Search tasks"), edge: .below)
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(verbatim: isSearching ? String(localized: "Close search") : String(localized: "Search tasks")))
+                .hoverTooltip(isSearching ? String(localized: "Close search") : String(localized: "Search tasks"), edge: .below)
             }
+            .zIndex(4)
+            railSlot {
+                TaskSourceMenu(openBrain: { $0.open() }, style: .rail)
+            }
+            .zIndex(3)
+            if manager.isJiraSyncOn || manager.isGitLabSyncOn {
+                railSlot { refreshControl }
+                    .zIndex(2)
+            }
+            if !asking.isEmpty {
+                railSlot { logTimeButton }
+                    .zIndex(1)
+            }
+            HStack(spacing: 0) {
+                Divider()
+            }
+            .opacity(0.2)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(width: M.railButtonSize, height: height, alignment: .top)
+    }
+
+    /// One icon's slot: as tall as the session name field, the icon centred in it.
+    private func railSlot<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(width: M.railButtonSize, height: M.railSlotHeight)
+    }
+
+    private func toggleSearch() {
+        if isSearching {
+            closeSearch()
+        } else {
+            openSearch()
         }
     }
 
-    private func toolbarIcon(_ name: String) -> some View {
-        Image(systemName: name)
-            .imageScale(.large)
-            .frame(width: M.sideToolbarButtonSize, height: M.sideToolbarButtonSize)
-            .contentShape(Rectangle())
-    }
-
-    /// "Filtered · Show all": Show in notch hides a source. Show all puts every source back.
-    private var filteredLabel: some View {
-        HStack(spacing: 4) {
-            Text("Filtered")
-                .foregroundStyle(.secondary)
-            Text(verbatim: "·")
-                .foregroundStyle(.secondary)
-            Button(String(localized: "Show all"), action: showAllSources)
-                .buttonStyle(.link)
+    private func toggleLogTime() {
+        if showsLogTime {
+            closeLogTime()
+        } else {
+            openLogTime()
         }
-        .font(.system(size: 11, weight: .medium))
-        .lineLimit(1)
-        .fixedSize()
     }
 
     /// The clock opens the cards; the dot says one waits for an answer (one being sent does not).
     private var logTimeButton: some View {
         let waiting = WorklogDrafts.waitingCount(manager.drafts)
-        return Button(action: openLogTime) {
-            toolbarIcon("clock")
+        return Button(action: toggleLogTime) {
+            TimerRailIcon(systemName: "clock", isActive: showsLogTime)
                 .overlay(alignment: .topTrailing) {
                     if waiting > 0 {
                         Circle()
                             .fill(Color.yellow)
-                            .frame(width: 7, height: 7)
-                            .padding(2)
+                            .frame(width: 6, height: 6)
+                            .offset(x: 2, y: -2)
                             .accessibilityHidden(true)
                     }
                 }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: Self.logTimeLabel(waiting: waiting)))
         .hoverTooltip(String(localized: "Time to log"), edge: .below)
     }
@@ -561,8 +592,9 @@ private struct TimerTasksPage: View {
             let summary = TaskSyncSummary.tooltip(jira: jiraState, gitlab: gitlabState, now: context.date)
             if manager.isJiraSyncing || manager.isGitLabSyncing {
                 ProgressView()
-                    .controlSize(.small)
-                    .frame(width: M.sideToolbarButtonSize, height: M.sideToolbarButtonSize)
+                    .controlSize(.mini)
+                    .frame(width: M.railButtonSize, height: M.railButtonSize)
+                    .background(RailIconBackground())
                     .accessibilityLabel(Text(verbatim: String(localized: "Syncing tasks")))
                     .hoverTooltip(summary, edge: .below)
             } else {
@@ -570,9 +602,9 @@ private struct TimerTasksPage: View {
                     manager.refreshJira()
                     manager.refreshGitLab()
                 } label: {
-                    toolbarIcon("arrow.clockwise")
+                    TimerRailIcon(systemName: "arrow.clockwise")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .disabled(!TaskSyncSummary.canRefresh(isReady: manager.isReady, jira: jiraState, gitlab: gitlabState, at: context.date))
                 .accessibilityLabel(Text(verbatim: String(localized: "Refresh tasks")))
                 .accessibilityValue(Text(verbatim: summary))
@@ -581,8 +613,9 @@ private struct TimerTasksPage: View {
         }
     }
 
-    /// The name field's look: the same height, fill and corners, so the two rows match across the
-    /// tab. Escape or the × ends the search; Return only leaves the field.
+    /// At the top of the page while searching: the name field's look — the same height, fill and
+    /// corners — so it lines up with the field across the tab. Escape or the × ends the search;
+    /// Return only leaves the field.
     private var searchField: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
@@ -608,8 +641,7 @@ private struct TimerTasksPage: View {
         .padding(.leading, 8)
         .padding(.trailing, 2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.white.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
     }
 
     // MARK: - List
@@ -618,7 +650,7 @@ private struct TimerTasksPage: View {
     private var list: some View {
         let tasks = shownTasks
         if tasks.isEmpty {
-            statusRow(emptyText)
+            statusRow(emptyText, showsShowAll: isFiltered && !manager.activeTasks.isEmpty)
         } else {
             rows(tasks)
                 .transition(.opacity)
@@ -645,7 +677,7 @@ private struct TimerTasksPage: View {
                         row(task, tooltipEdge: index == 0 ? .below : .above)
                     }
                 }
-                // Below only: the first row's top sits right under the toolbar's spacing.
+                // Below only: the first row's top sits level with the session name field.
                 .padding(.bottom, M.sideRowSpacing / 2)
                 .sideListOffsetProbe()
             }
@@ -742,23 +774,31 @@ private struct TimerTasksPage: View {
         started()
     }
 
-    private func statusRow(_ text: String) -> some View {
-        Text(verbatim: text)
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: M.sideTaskRowHeight)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
-            )
+    /// One quiet row in place of the list; "Show all" puts every source back when the filter is
+    /// what empties it.
+    private func statusRow(_ text: String, showsShowAll: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            Text(verbatim: text)
+                .foregroundStyle(.secondary)
+            if showsShowAll {
+                Button(String(localized: "Show all"), action: showAllSources)
+                    .buttonStyle(.link)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .lineLimit(1)
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: M.sideTaskRowHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.05))
+        )
     }
 }
 
-/// The Time to log cards in place of the task list, opened from the toolbar's clock: a "Log time?"
-/// row level with the toolbar, its × back to the list, then the cards (`LogTimeCards`, the popover's
+/// The Time to log cards in place of the task list, opened from the rail's clock: a "Log time?"
+/// row level with the session name field, its × back to the list, then the cards (`LogTimeCards`, the popover's
 /// own, so Log goes the one way it does everywhere) in a scrolling column, and "N more in Brain"
 /// for the rest. The page closes itself when the last entry is answered (`TimerTasksPage`).
 private struct TimerLogTimePage: View {
@@ -780,7 +820,7 @@ private struct TimerLogTimePage: View {
                 Button(action: close) {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .semibold))
-                        .frame(width: M.sideToolbarButtonSize, height: M.sideToolbarButtonSize)
+                        .frame(width: M.sideToolbarHeight, height: M.sideToolbarHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
