@@ -1476,7 +1476,7 @@ private struct TaskValueSheet: View {
     private var explanation: LocalizedStringKey {
         switch sheet {
         case .customEstimateForNewTask, .estimate:
-            return "Such as 1h 30m, 90m or 1.5h."
+            return "Such as 1h 30m, 90m, 1.5h or 2d."
         case .addTime:
             return "Time worked without the timer, ending now."
         case .endTime(_, _, _, _, .none):

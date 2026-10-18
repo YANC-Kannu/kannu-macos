@@ -58,7 +58,7 @@ struct TimerTaskForm: View {
     /// focus on the way.
     @State private var chipsHovered = false
 
-    private enum Field: Hashable { case title, tags, reminder }
+    private enum Field: Hashable { case title, estimate, tags, reminder }
 
     init(mode: TimerTaskFormMode, close: @escaping () -> Void, started: @escaping () -> Void) {
         self.mode = mode
@@ -85,7 +85,7 @@ struct TimerTaskForm: View {
                 .zIndex(3)
             // The estimate and the tags in the golden ratio, 1 : φ.
             GoldenRow(spacing: M.taskFormRowSpacing) {
-                estimateMenu
+                estimateField
                 tagsField
             }
             .frame(height: M.taskFormRowHeight)
@@ -112,8 +112,10 @@ struct TimerTaskForm: View {
             let first: Field = draft.canEditTitle ? .title : .tags
             DispatchQueue.main.async { focused = first }
         }
-        .onChange(of: focused) { _, field in
+        .onChange(of: focused) { previous, field in
             vm.setAutoCloseSuppression(field != nil, token: editingToken)
+            // Leaving the estimate: "90m" reads back as "1h 30m".
+            if previous == .estimate, field != .estimate { draft.settleEstimateText() }
         }
         // The task left the list (done, deleted, archived, resynced away) while being edited.
         .onChange(of: manager.activeTasks.map(\.id)) { _, ids in
@@ -182,23 +184,45 @@ struct TimerTaskForm: View {
         }
     }
 
-    private var estimateMenu: some View {
-        Menu {
-            Button(String(localized: "No estimate")) { draft.estimateSeconds = nil }
-            ForEach(draft.estimateMenuChoices, id: \.self) { seconds in
-                Button(WorkDuration.format(seconds)) { draft.estimateSeconds = seconds }
-            }
-        } label: {
-            Text(verbatim: draft.estimateLabel)
+    /// Typed, in minutes, hours or days ("45", "1.5h", "2d 3h", a day being a workday), with the
+    /// presets one click away on the chevron. While focused it shows what it understood ("= 19h");
+    /// text it cannot read turns orange, and Add waits until it is fixed.
+    private var estimateField: some View {
+        HStack(spacing: 4) {
+            TextField(draft.estimatePrompt, text: Binding(get: { draft.estimateText }, set: { draft.typeEstimate($0) }))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12, weight: .medium))
+                .foregroundColor(draft.estimateReading == .unreadable ? .orange : .white)
+                .tint(.white)
+                .focused($focused, equals: .estimate)
+                .onSubmit(submit)
+                .onExitCommand(perform: close)
+                .accessibilityLabel(Text("Estimate"))
+                .hoverTooltip(String(localized: "Type 45m, 1.5h or 2d 3h"), edge: .below)
+            if focused == .estimate, let echo = draft.estimateEcho {
+                Text(verbatim: echo)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+            Menu {
+                Button(String(localized: "No estimate")) { draft.chooseEstimate(nil) }
+                ForEach(draft.estimateMenuChoices, id: \.self) { seconds in
+                    Button(WorkDuration.format(seconds)) { draft.chooseEstimate(seconds) }
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .accessibilityLabel(Text("Estimate presets"))
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.08)))
-        .accessibilityLabel(Text("Estimate"))
-        .hoverTooltip(String(localized: "Estimate"), edge: .below)
     }
 
     private var tagsField: some View {

@@ -115,6 +115,62 @@ final class TaskFormDraftTests: XCTestCase {
                        Date(timeIntervalSince1970: 1_760_000_000 + 400), "08:53:20 is 400 s before 09:00")
     }
 
+    // MARK: - The typed estimate (David: hours, days and minutes, not only six presets)
+
+    func testATypedEstimateReadsMinutesHoursAndWorkdays() {
+        var draft = TaskFormDraft()
+        draft.typeEstimate("2d 3h")
+        XCTAssertEqual(draft.estimateReading, .length(19 * 3600), "a day is a workday")
+        XCTAssertEqual(draft.estimateSeconds, 19 * 3600)
+        XCTAssertEqual(draft.estimateEcho, "= 19h")
+        draft.typeEstimate("45")
+        XCTAssertEqual(draft.estimateSeconds, 45 * 60, "a bare number is minutes")
+        draft.typeEstimate("1.5h")
+        XCTAssertEqual(draft.estimateSeconds, 90 * 60)
+        draft.typeEstimate("1h 30m")
+        XCTAssertNil(draft.estimateEcho, "it reads as typed: nothing to echo")
+    }
+
+    func testAnUnreadableEstimateWaitsAndKeepsTheLastOne() {
+        var draft = TaskFormDraft()
+        draft.title = "Write"
+        draft.typeEstimate("2h")
+        draft.typeEstimate("2hx")
+        XCTAssertEqual(draft.estimateReading, .unreadable)
+        XCTAssertEqual(draft.estimateSeconds, 2 * 3600, "the last readable length stays")
+        XCTAssertFalse(draft.canSave, "fixed first, never dropped without a word")
+        draft.typeEstimate("20s")
+        XCTAssertEqual(draft.estimateReading, .unreadable, "under a minute")
+        draft.typeEstimate("")
+        XCTAssertEqual(draft.estimateReading, .none)
+        XCTAssertNil(draft.estimateSeconds, "emptied: no estimate")
+        XCTAssertTrue(draft.canSave)
+    }
+
+    func testPresetsAndLeavingTheFieldWriteItTheStandardWay() {
+        var draft = TaskFormDraft()
+        draft.chooseEstimate(2 * 3600)
+        XCTAssertEqual(draft.estimateText, "2h")
+        draft.chooseEstimate(nil)
+        XCTAssertEqual(draft.estimateText, "")
+        XCTAssertNil(draft.estimateSeconds)
+        draft.typeEstimate("90m")
+        draft.settleEstimateText()
+        XCTAssertEqual(draft.estimateText, "1h 30m")
+        draft.typeEstimate("0")
+        draft.settleEstimateText()
+        XCTAssertEqual(draft.estimateText, "", "0 is no estimate")
+    }
+
+    func testAnEditStartsWithItsEstimateTypedAndARemoteOneAsThePrompt() {
+        let local = TaskFormDraft(editing: TaskItem(title: "Local", localEstimateSeconds: 3600))
+        XCTAssertEqual(local.estimateText, "1h")
+        XCTAssertEqual(local.estimatePrompt, "Estimate")
+        let jira = TaskFormDraft(editing: TaskItem(source: .jira, title: "J", remote: remote(key: "P-1", estimate: 7200)))
+        XCTAssertEqual(jira.estimateText, "")
+        XCTAssertEqual(jira.estimatePrompt, "2h from Jira", "the source's own estimate shows until one is typed")
+    }
+
     // MARK: - Tags in use, offered while typing (David: the notch did not offer existing tags)
 
     func testTheFragmentFollowsTheLastComma() {

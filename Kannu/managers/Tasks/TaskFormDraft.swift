@@ -44,7 +44,10 @@ struct TaskFormDraft: Equatable {
     /// The source's own estimate, shown when Kannu has none of its own.
     let remoteEstimate: Int?
     var title: String
+    /// The estimate kept on Add or Save; what `estimateText` last said readably, or a preset.
     var estimateSeconds: Int?
+    /// The estimate as typed in the notch's field: "2d 3h", "90m", "1.5h", "45".
+    var estimateText: String
     /// Tags as typed, comma separated: "writing, #urgent".
     var tagsText: String
     var reminder: Date?
@@ -56,6 +59,7 @@ struct TaskFormDraft: Equatable {
         remoteEstimate = nil
         title = ""
         estimateSeconds = nil
+        estimateText = ""
         tagsText = ""
         reminder = nil
     }
@@ -66,6 +70,7 @@ struct TaskFormDraft: Equatable {
         remoteEstimate = task.remote?.remoteEstimateSeconds
         title = task.title
         estimateSeconds = task.localEstimateSeconds
+        estimateText = task.localEstimateSeconds.map(WorkDuration.format) ?? ""
         tagsText = task.tags.joined(separator: ", ")
         reminder = task.scheduledAt
     }
@@ -76,8 +81,11 @@ struct TaskFormDraft: Equatable {
 
     var tags: [String] { TaskItem.parsedTags(tagsText) }
 
-    /// A new task or a local one needs a title; a remote one keeps its server's.
-    var canSave: Bool { !canEditTitle || TaskItem.cleanedTitle(title) != nil }
+    /// A new task or a local one needs a title; a remote one keeps its server's. An estimate that
+    /// cannot be read is fixed first, never dropped without a word.
+    var canSave: Bool {
+        (!canEditTitle || TaskItem.cleanedTitle(title) != nil) && estimateReading != .unreadable
+    }
 
     /// What saving changes on `task`, in the order the manager applies it: only what differs.
     func edits(to task: TaskItem) -> [Edit] {
@@ -103,6 +111,68 @@ struct TaskFormDraft: Equatable {
             }
         }
         return String(localized: "No estimate")
+    }
+
+    // MARK: - The typed estimate
+
+    enum EstimateReading: Equatable {
+        /// Nothing typed, or 0: no estimate.
+        case none
+        case length(Int)
+        /// Not a length, or under a minute.
+        case unreadable
+    }
+
+    /// What the typed text says (`WorkDuration.parse`: "2d 3h" is 19 hours, a day being a workday).
+    var estimateReading: EstimateReading {
+        let trimmed = estimateText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return .none }
+        guard let seconds = WorkDuration.parse(trimmed) else { return .unreadable }
+        if seconds == 0 { return .none }
+        return seconds >= 60 ? .length(seconds) : .unreadable
+    }
+
+    /// Typing: the estimate follows the text whenever it reads; while it does not, the last readable
+    /// one stays and `canSave` waits.
+    mutating func typeEstimate(_ text: String) {
+        estimateText = text
+        switch estimateReading {
+        case .none: estimateSeconds = nil
+        case .length(let seconds): estimateSeconds = seconds
+        case .unreadable: break
+        }
+    }
+
+    /// A preset, or none: the field shows it the standard way.
+    mutating func chooseEstimate(_ seconds: Int?) {
+        estimateSeconds = seconds.flatMap { $0 > 0 ? $0 : nil }
+        estimateText = estimateSeconds.map(WorkDuration.format) ?? ""
+    }
+
+    /// "= 19h", what a length typed another way comes to; nil when it reads as typed.
+    var estimateEcho: String? {
+        guard case .length(let seconds) = estimateReading else { return nil }
+        let standard = WorkDuration.format(seconds)
+        let compact = { (text: String) in text.lowercased().filter { !$0.isWhitespace } }
+        return compact(standard) == compact(estimateText) ? nil : "= \(standard)"
+    }
+
+    /// Leaving the field: a readable length is written the standard way, nothing becomes empty, and
+    /// unreadable text stays to be fixed.
+    mutating func settleEstimateText() {
+        switch estimateReading {
+        case .none: estimateText = ""
+        case .length(let seconds): estimateText = WorkDuration.format(seconds)
+        case .unreadable: break
+        }
+    }
+
+    /// The field's prompt while empty: the source's own estimate when Kannu has none, else "Estimate".
+    var estimatePrompt: String {
+        if let remoteEstimate, remoteEstimate > 0, source != .local {
+            return estimateLabel
+        }
+        return String(localized: "Estimate")
     }
 
     /// The menu's choices with the current estimate among them, in order, when it is none of them

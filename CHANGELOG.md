@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - The notch's estimate is typed, in minutes, hours or days, with the presets one click away
+- **Developer label:** "in notch ability to add estimate is drop down, change it to allow hours days and minutes, or something with more flexibility without breaking our design"
+- **Agent label:** Claude Code (Opus 5.5) — typed estimate field in the timer tab's task form; a day unit for typed lengths
+- **Changes:**
+  - The timer tab's task form takes the estimate as typed text in the same golden-ratio slot the menu held: "45", "90m", "1.5h", "2d 3h". A chevron beside it still offers No estimate and the presets.
+  - While the field is focused it shows what it understood when that differs from what was typed ("= 19h"); leaving it writes the length the standard way ("90m" becomes "1h 30m").
+  - Text that is not a length, or is under a minute, turns orange and Add/Save waits until it is fixed, so a typo is never dropped silently. An emptied field or 0 means no estimate.
+  - A Jira or GitLab task with no Kannu estimate shows the source's own ("2h from Jira") as the field's prompt.
+  - `WorkDuration.parse` reads days (`d`, `day`, `days`). A day is a workday of 8 hours (`WorkDuration.hoursPerDay`), as GitLab and Jira count one by default, so "2d" is 16 hours. Lengths are still shown in hours. This also applies to Brain's Custom estimate sheet, Add Time and Time to log; the Custom sheet's hint now mentions "2d".
+  - Tests: `WorkDurationTests.testDaysAreWorkdays`; four `TaskFormDraftTests` for reading, echo, settling, presets and the remote prompt; `TimerSideColumnRulesTests` pins the field in the golden row and its settle-on-leave.
+
 ### 2026-10-18 - A task card's linked merge requests open as a list
 - **Developer label:** "We need text about linked mr's inside the task to open a list of linked mr's and that page should have back on left and close on right and list of linked mr's with click through"
 - **Agent label:** Claude Code (Opus 5.5) — the "linked MRs" fact becomes a button that opens a page of the merge requests closing the issue (`closed_by`), each opening in the browser

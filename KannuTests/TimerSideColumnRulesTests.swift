@@ -219,7 +219,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         let notch = Self.code(try Self.raw(Self.notchTimerPath))
         XCTAssertTrue(notch.contains("TimerTaskForm(mode: taskForm, close: closeTaskForm, started: taskStarted)"))
         XCTAssertTrue(notch.contains("if isTasksPageAvailable {\n                newTaskButton"), "the New task button shows only with tasks on")
-        XCTAssertTrue(form.contains("GoldenRow(spacing: M.taskFormRowSpacing) {\n                estimateMenu\n                tagsField"),
+        XCTAssertTrue(form.contains("GoldenRow(spacing: M.taskFormRowSpacing) {\n                estimateField\n                tagsField"),
                       "the estimate and the tags in the golden ratio")
         XCTAssertTrue(form.contains("GoldenRow(spacing: 10) {"), "Add and Add & Start in the golden ratio")
         // David: the notch did not offer existing tags. Brain's own suggestions, as chips that
@@ -228,6 +228,9 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(form.contains(".focusable(false)"), "a chip must not take the tags field's focus")
         XCTAssertTrue(form.contains("ViewThatFits(in: .horizontal)"), "chips that do not fit are left off, never wrapped")
         XCTAssertTrue(form.contains("draft.completeTag(pick.tag)"))
+        // David: the estimate takes minutes, hours or days, typed, with the presets one click away.
+        XCTAssertTrue(form.contains("draft.typeEstimate($0)") && form.contains("draft.chooseEstimate(seconds)"))
+        XCTAssertTrue(form.contains("if previous == .estimate, field != .estimate { draft.settleEstimateText() }"))
     }
 
     /// The columns are the golden split of the open notch's own width (not `vm.notchSize`, which
