@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Clipped text on the task card and rows slides into view on hover again
+- **Developer label:** "the animation to reveal the clipped text on hover is not working"
+- **Agent label:** Claude Code (Opus 5.5) — the reveal measures its sizes into state instead of through preference keys, and starts once they arrive; found and checked with a rendering harness
+- **Changes:**
+  - `HoverRevealText` never slid: it measured the truncated frame and the full text through two
+    preference keys, and in this view their `onPreferenceChange` reported zero sizes and never the
+    real ones (seen in a harness that renders the view and prints what it measured). With no
+    overflow, nothing counted as clipped.
+  - Each size is now written straight to state as it appears and whenever it changes
+    (`SizeReader`). The harness then measured every case (a fact, a two-line title, a row's title
+    and caption) and rendered each sliding.
+  - The slide also starts when the sizes arrive after the hover (`trigger`: the hover and whether
+    the text is clipped), so text that appears under the pointer slides too.
+  - Tests: new `HoverRevealTextTests` host the view in a window and compare its pixels: a clipped
+    line and a clipped title move while active; text that fits, or is not hovered, stays still;
+    and the sizes never go back through preferences. `HoverRevealText.swift` joins the logic
+    target (pbxproj ids 5B0/5B1).
+
 ### 2026-10-18 - The notch's task form offers the tags already in use
 - **Developer label:** "also is adding tags in a task from notch does not provide existing tags ?"
 - **Agent label:** Claude Code (Opus 5.5) — while tags are typed in the timer tab's task form, the tags in use show as chips with their colours, from Brain's own suggestions
