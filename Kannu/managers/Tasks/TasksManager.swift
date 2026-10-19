@@ -118,6 +118,8 @@ final class TasksManager: ObservableObject {
     private var isAsleep = false
     private var sleepObservers: [NSObjectProtocol] = []
     private var terminateObserver: NSObjectProtocol?
+    /// The archive's own clock: a new day archives what waited long enough, with no sync needed.
+    private var dayChangeObserver: NSObjectProtocol?
     private var revision = 0
     private var savedRevision = 0
     /// Drafts whose send is under way, so a second click cannot start another.
@@ -171,6 +173,15 @@ final class TasksManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveBeforeQuit() }
+        }
+        // A Mac that stays up for weeks, with no source to sync, still archives on time: the closed
+        // tasks' days are counted again each new day (CodeRabbit on #107).
+        dayChangeObserver = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshArchive() }
         }
         // What the views read through the manager depends on these data keys: the connected baseline
         // (`activeTasks`) and whether each source syncs (`isJiraSyncOn`, `isGitLabSyncOn`). No view
@@ -641,6 +652,16 @@ final class TasksManager: ObservableObject {
 
     /// `TaskArchive` over the list as it is now, after a sync. True when something changed (the
     /// caller saves). The task being timed, or about to be, is never archived or cleared.
+    /// The archive's clock outside a sync: when Brain's Task list appears and when the day changes.
+    /// Archives what waited `TaskArchive.closedDays`, and clears archived remote tasks after
+    /// `TaskArchive.clearDays`. Before, only a launch or a Jira or GitLab sync did: a local-only user's
+    /// done tasks sat in Recently closed, "archiving now", until the next launch.
+    func refreshArchive(now: Date = Date()) {
+        guard isReady else { return }
+        let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
+        if applyArchive(now: now, protected: timed) { persist() }
+    }
+
     private func applyArchive(now: Date, protected: Set<UUID>) -> Bool {
         let archive = TaskArchive.apply(tasks, drafts: drafts, protected: protected, now: now)
         guard archive.changed else { return false }

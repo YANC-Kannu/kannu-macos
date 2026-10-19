@@ -195,6 +195,21 @@ final class TaskListRulesTests: XCTestCase {
     ///   tasks off takes every reminder back;
     /// - "Show all in Brain" and a reminder's click open the Task list itself, and a Start that
     ///   cannot start falls back to it.
+    /// The archive keeps its own time (CodeRabbit on #107): a new day, and Brain's Task list
+    /// appearing, archive what waited long enough — not only a launch or a Jira or GitLab sync, which
+    /// a local-only user never has.
+    func testTheArchiveRunsOnANewDayAndWhenTheListAppears() throws {
+        let manager = try Self.read(Self.managerPath)
+        let observer = try XCTUnwrap(manager.range(of: "forName: .NSCalendarDayChanged"), "no day-change observer")
+        XCTAssertTrue(manager[observer.upperBound...].prefix(200).contains("self?.refreshArchive()"),
+                      "the day-change observer does not run the archive")
+        let refresh = try XCTUnwrap(Self.functionBody("refreshArchive", in: manager), "refreshArchive is gone")
+        XCTAssertTrue(refresh.contains("applyArchive(now: now, protected: timed)") && refresh.contains("persist()"))
+        var settings = ""
+        for path in try Self.swiftFiles(under: "Kannu/components/Settings") { settings += try Self.read(path) }
+        XCTAssertTrue(settings.contains("manager.refreshArchive()"), "Brain's Task list no longer runs the archive when it appears")
+    }
+
     func testRemindersAndTheTaskListLinkAreWired() throws {
         let manager = try Self.read(Self.managerPath)
         let reminders = try Self.read(Self.remindersPath)
