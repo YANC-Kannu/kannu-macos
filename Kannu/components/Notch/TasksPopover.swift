@@ -229,10 +229,11 @@ struct TasksPopover: View {
             .foregroundStyle(.secondary)
     }
 
-    /// The source's key ("PROJ-123", "group/app!12") over the title; both verbatim.
+    /// The task's short key ("PROJ-123", "app !12", `TaskDetailSummary.shortKey`) over the title;
+    /// both verbatim. The raw key ("group/sub/app!12") filled the line before its number.
     private func taskName(_ task: TaskItem) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            if let key = task.remote?.key {
+            if let key = TaskDetailSummary.shortKey(for: task) {
                 Text(verbatim: key)
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundStyle(.secondary)
@@ -392,7 +393,7 @@ struct TasksPopover: View {
 
     private func upNextRow(_ task: TaskItem) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
-        let caption = [task.remote?.key, progress.text].compactMap { $0 }.joined(separator: " · ")
+        let caption = [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · ")
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: task.title)
