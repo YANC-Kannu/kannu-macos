@@ -98,6 +98,8 @@ struct KannuHeader: View {
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Clipboard"), edge: .below)
+                        .accessibilityLabel(String(localized: "Clipboard"))
                         .popover(isPresented: $showClipboardPopover, arrowEdge: .bottom) {
                             ClipboardPopover()
                         }
@@ -161,6 +163,8 @@ struct KannuHeader: View {
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Timer"), edge: .below)
+                        .accessibilityLabel(String(localized: "Timer"))
                         .popover(isPresented: $showTimerPopover, arrowEdge: .bottom) {
                             TimerPopover()
                         }
@@ -182,13 +186,15 @@ struct KannuHeader: View {
                                 .fill(.black)
                                 .frame(width: 30, height: 30)
                                 .overlay {
-                                    Image(systemName: "gear")
+                                    Image(systemName: "brain")
                                         .foregroundColor(.white)
                                         .padding()
                                         .imageScale(.medium)
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .accessibilityLabel("Brain")
+                        .hoverTooltip(String(localized: "Brain"), edge: .below)
                     }
                     
                     // Screen Recording Indicator
