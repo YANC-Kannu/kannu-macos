@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - GitHub Issues is a task source, from github.com or GitHub Enterprise Server
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 5 of the task-sources PR: GitHub, read-only, including Enterprise Server
+- **Changes:**
+  - Brain › Tasks › Add a source › GitHub takes a server (github.com, or a GitHub Enterprise Server address; a pasted `/api/v3` is accepted) and a personal access token. Both are checked with `GET /user` before anything is saved, then kept together in the Keychain (`github-credential`).
+  - A sync reads the open issues assigned to the user (`GET /issues?filter=assigned`), at most two pages of 100. Kannu builds page 2 itself and never follows a URL from an answer. "Include pull requests" on GitHub's page adds the assigned pull requests; switching it drops a sync in flight and fetches again.
+  - Each issue's key is `owner/repo#7`, so its repository is its project ("repo #7" in captions). A pull request counts as In Progress; an issue is In Progress when a label says so. Its labels, milestone, assignee and comment count show on its page. Its link opens only when it is on the connected server.
+  - A 403 or 429 with `x-ratelimit-remaining: 0` or `Retry-After` is a rate limit, timed from GitHub's own reset. Any other 403 reads "needs read access to issues, or SSO authorisation".
+  - New `GitHubAPI.swift` (logic target): credential, host rules, requests, decoding, mapping and wording, plus `GitHubReader`. `GitHubClient.swift` holds the logging wrapper and the provider.
+  - Tests:
+    - New `GitHubAPITests` (36 tests) covers host forms, requests, decoding, mapping, the rate-limit remap, a two-page run through a stubbed `URLProtocol` and redaction.
+    - `IntegrationSecretRulesTests` now lets each source's own API file set its `Authorization` header and no other file.
+    - Inventory entry count re-pinned.
+
 ### 2026-10-19 - Apple Reminders is a task source
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 4 of the task-sources PR: Apple Reminders through EventKit, read-only

@@ -531,7 +531,11 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         switch task.source {
         case .jira: return jiraBrowseURL(for: task)
         case .gitlab: return gitlabBrowseURL(for: task)
-        case .local, .github, .linear, .todoist, .appleReminders: return nil
+        case .github:
+            guard let remote = task.remote, let link = remote.gitlabWebURL,
+                  GitHubHost.isWebURL(link, onServer: remote.hostScope) else { return nil }
+            return URL(string: link)
+        case .local, .linear, .todoist, .appleReminders: return nil
         }
     }
 
@@ -993,8 +997,25 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         host: self
     )
 
+    /// GitHub's, from github.com or a GitHub Enterprise Server: the open issues assigned to the user
+    /// and, with Include pull requests on, the pull requests.
+    private(set) lazy var github = SourceSync(
+        source: .github,
+        provider: GitHubTaskSource(),
+        store: TaskCredentials.github,
+        connection: { SourceConnection(scope: Defaults[.githubHost], syncOn: Defaults[.githubEnabled]) },
+        options: { Defaults[.githubIncludePullRequests] },
+        forget: {
+            Defaults[.githubEnabled] = false
+            Defaults[.githubHost] = ""
+            Defaults[.githubUsername] = ""
+            Defaults[.githubAccountDisplayName] = ""
+        },
+        host: self
+    )
+
     /// Every source's sync, in source order.
-    var syncs: [any SourceSyncing] { [jira, gitlab, appleReminders] }
+    var syncs: [any SourceSyncing] { [jira, gitlab, github, appleReminders] }
 
     /// Reminders' change notice is listened to only while Reminders is connected, its sync is on,
     /// and tasks are on; it asks for a quiet sync, never one with a dialog.
@@ -1061,7 +1082,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         switch source {
         case .appleReminders:
             return await connectAppleReminders()
-        case .local, .jira, .gitlab, .github, .linear, .todoist:
+        case .github:
+            return await connectGitHub(serverInput: server, token: token)
+        case .local, .jira, .gitlab, .linear, .todoist:
             return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
         }
     }
@@ -1083,7 +1106,41 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     /// The token page on a GitHub server typed so far; nil until it is one Kannu would connect to.
-    nonisolated static func githubCreateTokenURL(server: String) -> URL? { nil }
+    nonisolated static func githubCreateTokenURL(server: String) -> URL? {
+        guard case .success(let base) = GitHubHost.normalize(server) else { return nil }
+        return GitHubHost.createTokenURL(base: base)
+    }
+
+    /// Checks the server and token with GitHub, then stores them and syncs. Nil on success, or what
+    /// to tell the user. Nothing is stored until GitHub has accepted the token.
+    private func connectGitHub(serverInput: String, token: String) async -> String? {
+        let base: String
+        switch GitHubHost.normalize(serverInput) {
+        case .success(let normalized): base = normalized
+        case .failure(let error): return GitHubAPI.message(for: error)
+        }
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard GitHubAPI.isPlausibleToken(token) else {
+            return String(localized: "Paste a personal access token from your GitHub settings. It has no spaces in it.")
+        }
+        let credential = GitHubCredential(baseURL: base, token: token)
+        let server = GitHubHost.displayName(base)
+        let failure = await github.connect {
+            switch await GitHubClient().verify(credential) {
+            case .verified(let user):
+                return .accepted(credential) {
+                    Defaults[.githubHost] = base
+                    Defaults[.githubUsername] = user.login
+                    Defaults[.githubAccountDisplayName] = user.name ?? ""
+                    Defaults[.githubEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(GitHubAPI.connectMessage(for: failure, server: server))
+            }
+        }
+        if failure == nil { logger.info("GitHub connected") }
+        return failure
+    }
 
     /// Checks the site, email and token with Jira, then stores them and syncs. Nil on success, or
     /// what to tell the user. Nothing is stored until Jira has accepted the token.

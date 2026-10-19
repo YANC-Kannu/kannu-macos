@@ -239,6 +239,7 @@ private struct SourceOptionRows: View {
     @ObservedObject private var manager = TasksManager.shared
     @Default(.jiraJQL) private var jiraJQL
     @Default(.gitlabIncludeMergeRequests) private var gitlabIncludeMergeRequests
+    @Default(.githubIncludePullRequests) private var githubIncludePullRequests
     @State private var showsAdvanced = false
     let source: TaskSource
 
@@ -274,7 +275,17 @@ private struct SourceOptionRows: View {
             .onChange(of: gitlabIncludeMergeRequests) { _, _ in
                 manager.sourceOptionsChanged(.gitlab)
             }
-        case .local, .github, .linear, .todoist, .appleReminders:
+        case .github:
+            SettingsRow("Include pull requests", description: "Also show open pull requests assigned to you.") {
+                Defaults.Toggle(key: .githubIncludePullRequests) {
+                    Text("Include pull requests")
+                }
+            }
+            // A sync in flight asked for the old set: it is dropped, and the new one fetched.
+            .onChange(of: githubIncludePullRequests) { _, _ in
+                manager.sourceOptionsChanged(.github)
+            }
+        case .local, .linear, .todoist, .appleReminders:
             EmptyView()
         }
     }
@@ -294,7 +305,9 @@ enum TaskSourceStatus {
                 : String(localized: "Connected as @\(Defaults[.gitlabUsername]) · \(server) (read-only)")
         case .appleReminders:
             return String(localized: "Allowed")
-        case .local, .jira, .github, .linear, .todoist:
+        case .github:
+            return String(localized: "Connected as @\(Defaults[.githubUsername]) · \(GitHubHost.displayName(Defaults[.githubHost]))")
+        case .local, .jira, .linear, .todoist:
             let name = source.accountNameKey.map { Defaults[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return name.isEmpty ? String(localized: "Connected") : String(localized: "Connected as \(name)")
         }
@@ -311,7 +324,11 @@ enum TaskSourceStatus {
                 : String(localized: "Lists your open issues")
             let name = Defaults[.gitlabAccountDisplayName].trimmingCharacters(in: .whitespacesAndNewlines)
             return name.isEmpty ? lists : "\(name) · \(lists)"
-        case .github, .linear, .todoist, .appleReminders, .local:
+        case .github:
+            return Defaults[.githubIncludePullRequests]
+                ? String(localized: "Lists the open issues and pull requests assigned to you")
+                : String(localized: "Lists the open issues assigned to you")
+        case .linear, .todoist, .appleReminders, .local:
             return String(localized: "Lists your open \(source.name) \(source.itemNoun.many).")
         }
     }

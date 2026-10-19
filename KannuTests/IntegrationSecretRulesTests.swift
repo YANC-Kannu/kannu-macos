@@ -51,6 +51,8 @@ final class IntegrationSecretRulesTests: XCTestCase {
     /// changed (`SourceSync`). Every source runs through them.
     static let onAppearSyncs = ["syncIfStale", "externalChange"]
     private static let enginePath = "Kannu/managers/Tasks/SourceSync.swift"
+    /// The files that build a request with an `Authorization` header: each source's own API file.
+    static let authorizationHeaderOwners = ["GitHubAPI.swift", "JiraAPI.swift"]
     static let secretWords = ["token", "email", "jql", "title", "summary", "credential", "displayname", "password", "authorization"]
 
     private static func read(_ path: String) throws -> String {
@@ -105,9 +107,9 @@ final class IntegrationSecretRulesTests: XCTestCase {
         XCTAssertEqual(problems, [])
     }
 
-    func testOnlyJiraAPISetsTheAuthorizationHeader() throws {
-        let setters = try Self.sources().filter { $0.value.contains("\"Authorization\"") }.map(\.key)
-        XCTAssertEqual(setters, ["JiraAPI.swift"])
+    func testOnlyEachSourcesAPIFileSetsTheAuthorizationHeader() throws {
+        let setters = try Self.sources().filter { $0.value.contains("\"Authorization\"") }.map(\.key).sorted()
+        XCTAssertEqual(setters, Self.authorizationHeaderOwners, "each source's API file sets its own header, and no other file does")
     }
 
     func testOnlyGitLabAPISetsThePrivateTokenHeader() throws {

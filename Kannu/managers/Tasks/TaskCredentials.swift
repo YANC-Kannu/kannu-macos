@@ -42,4 +42,5 @@ extension SecretSlot {
 enum TaskCredentials {
     static let jira = CredentialStore<JiraCredential>(slot: .keychain(.jiraCredential), queueLabel: "com.kannu.app.tasks.jira-keychain")
     static let gitlab = CredentialStore<GitLabCredential>(slot: .keychain(.gitlabCredential), queueLabel: "com.kannu.app.tasks.gitlab-keychain")
+    static let github = CredentialStore<GitHubCredential>(slot: .keychain(.githubCredential), queueLabel: "com.kannu.app.tasks.github-keychain")
 }
