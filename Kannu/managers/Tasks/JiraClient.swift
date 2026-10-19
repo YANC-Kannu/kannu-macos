@@ -92,48 +92,85 @@ struct JiraClient {
     }
 }
 
-/// The Jira credential in the Keychain. Every call runs on one serial queue, never on the caller's
-/// thread: a Keychain read can show the SecurityAgent dialog (an interactive read, or an item whose
-/// access list no longer matches this build) and blocks until it is answered — on the main thread
-/// that freezes Kannu (docs/REGRESSIONS.md entry 11). Serial, so a save and a read cannot cross.
-enum JiraCredentialStore {
-    enum LoadResult: Equatable {
-        case found(JiraCredential)
-        case missing
-        /// The item is there, but macOS wants the user to approve the read.
-        case needsApproval
-        /// The item is there but could not be read or did not decode.
-        case broken
+/// Jira Cloud as a task source (`SourceSync`): the credential's site, checked again, and one fetch
+/// of the user's issues by the issue filter. Its failures read as the Jira page says them.
+struct JiraTaskSource: TaskSourceProvider {
+    func scope(of credential: JiraCredential) -> String? {
+        JiraSite.isValidHost(credential.site) ? credential.site : nil
     }
 
-    private static let queue = DispatchQueue(label: "com.kannu.app.tasks.jira-keychain", qos: .userInitiated)
+    func fetch(_ credential: JiraCredential, options jql: String) async -> SourceFetch {
+        let result = await JiraClient().fetchIssues(credential, jql: jql)
+        guard case .fetched(let fetch) = result.outcome else {
+            return .failed(Self.syncState(for: result.failure, now: Date()))
+        }
+        return .fetched(fetch)
+    }
 
-    private static func onQueue<T>(_ work: @escaping () -> T) async -> T {
-        await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: work()) }
+    static func syncState(for failure: JiraClient.Failure?, now: Date) -> SourceSyncState {
+        switch failure {
+        case .http(.offline):
+            return .offline
+        case .http(.rateLimited(let seconds)):
+            return .rateLimited(until: now.addingTimeInterval(seconds))
+        case .http(.auth(let status)):
+            return .authFailed(status: status)
+        case .http(.rejected(400)):
+            return .failed(String(localized: "Jira refused the issue filter (400). Check it under Advanced, or reset it."))
+        case .http(.rejected(let status)):
+            return .failed(String(localized: "Jira refused the request (\(status)). The account may have lost access to this site."))
+        case .http(.redirected(let status)):
+            return .failed(String(localized: "The site answered with a redirect (\(status)), which Kannu never follows."))
+        case .http(.failedBeforeSend):
+            return .failed(String(localized: "Kannu could not reach the Jira site. Check your connection."))
+        case .http(.ambiguous(let status?)):
+            return .failed(String(localized: "Jira did not answer properly (\(status)). Try again later."))
+        case .http(.ambiguous(nil)), .http(.ok):
+            return .failed(String(localized: "Jira did not answer in time. Try again later."))
+        case .decode:
+            return .failed(String(localized: "Jira's answer could not be read."))
+        case .badSite, nil:
+            return .needsReconnect
         }
     }
 
-    /// `allowInteraction: false` (a background sync) never shows the dialog; a read that would need
-    /// it comes back `.needsApproval`, and the user's own click retries with `true`.
-    static func load(allowInteraction: Bool) async -> LoadResult {
-        await onQueue {
-            let read = SecureSecretsStore.read(.jiraCredential, allowInteraction: allowInteraction)
-            if read.status == errSecItemNotFound { return .missing }
-            if KeychainReader.needsUserApproval(read.status) { return .needsApproval }
-            guard read.status == errSecSuccess, let value = read.value,
-                  let credential = JiraCredential.decoded(value) else { return .broken }
-            return .found(credential)
+    static func message(for error: JiraSiteError) -> String {
+        switch error {
+        case .empty:
+            return String(localized: "Type your Jira site, such as acme or acme.atlassian.net.")
+        case .notHTTPS:
+            return String(localized: "Kannu connects to Jira over HTTPS only.")
+        case .userInfo:
+            return String(localized: "The site has a name and @ before the host. Type just the site, such as acme.atlassian.net.")
+        case .port:
+            return String(localized: "Jira Cloud uses the standard HTTPS port. Remove the port from the site.")
+        case .notAtlassianCloud, .malformed:
+            return String(localized: "That is not a Jira Cloud site. It looks like acme.atlassian.net.")
         }
     }
 
-    static func save(_ credential: JiraCredential) async -> Bool {
-        guard let encoded = credential.encoded() else { return false }
-        return await onQueue { SecureSecretsStore.set(encoded, for: .jiraCredential) }
-    }
-
-    /// False when the item is still there. Never discard it: the user was told the token is gone.
-    static func remove() async -> Bool {
-        await onQueue { SecureSecretsStore.removeValue(for: .jiraCredential) }
+    static func connectMessage(for failure: JiraClient.Failure, host: String) -> String {
+        switch failure {
+        case .badSite:
+            return message(for: .notAtlassianCloud)
+        case .decode, .http(.ok):
+            return String(localized: "\(host) answered, but not the way Jira Cloud does. Check the site.")
+        case .http(.auth(let status)):
+            return String(localized: "Jira did not accept that email and token (\(status)). Check both, or create a new token.")
+        case .http(.rejected(404)):
+            return String(localized: "No Jira site answered at \(host) (404). Check the site.")
+        case .http(.rejected(let status)):
+            return String(localized: "Jira refused the request (\(status)).")
+        case .http(.redirected(let status)):
+            return String(localized: "\(host) answered with a redirect (\(status)), which Kannu never follows. Check the site.")
+        case .http(.rateLimited):
+            return String(localized: "Jira is limiting requests right now. Try again in a minute.")
+        case .http(.offline):
+            return String(localized: "This Mac is offline.")
+        case .http(.failedBeforeSend):
+            return String(localized: "Kannu could not reach \(host). Check the site and your connection.")
+        case .http(.ambiguous):
+            return String(localized: "Jira did not answer. Try again.")
+        }
     }
 }

@@ -46,6 +46,8 @@ struct JiraCredential: Codable, Equatable, CustomStringConvertible, CustomDebugS
     }
 }
 
+extension JiraCredential: StoredCredential {}
+
 /// `GET /rest/api/3/myself`: who the token belongs to. Only what Kannu shows.
 struct JiraMyself: Decodable, Equatable {
     let accountId: String
@@ -69,6 +71,41 @@ struct JiraIssue: Decodable, Equatable {
         let status: Status?
         /// Absent when time tracking is off for the project; `{}` when it is on but empty.
         let timetracking: TimeTracking?
+        let priority: Named?
+        let assignee: Assignee?
+        /// `YYYY-MM-DD`.
+        let duedate: String?
+        let issuetype: Named?
+        let parent: Parent?
+        /// Read leniently: another shape costs the labels, never the issue.
+        let labels: Labels?
+        /// `2026-10-16T09:12:34.567+0000`.
+        let updated: String?
+    }
+
+    /// A Jira object Kannu reads only the name of (a priority, an issue type).
+    struct Named: Decodable, Equatable {
+        let name: String?
+    }
+
+    struct Assignee: Decodable, Equatable {
+        let displayName: String?
+    }
+
+    struct Parent: Decodable, Equatable {
+        let fields: ParentFields?
+
+        struct ParentFields: Decodable, Equatable {
+            let summary: String?
+        }
+    }
+
+    struct Labels: Decodable, Equatable {
+        let names: [String]
+
+        init(from decoder: Decoder) throws {
+            names = (try? decoder.singleValueContainer().decode([String].self)) ?? []
+        }
     }
 
     struct Status: Decodable, Equatable {
@@ -184,7 +221,10 @@ enum JiraAPI {
     /// list can usefully hold. A bigger result is reported as incomplete, never silently cut.
     static let maxPages = 2
     static let requestTimeout: TimeInterval = 20
-    static let fields = ["summary", "status", "timetracking"]
+    /// What the search asks for: the task's words, its time, and the standard facts its card shows.
+    /// Never `description` (an ADF document, heavy and private) and never a sprint (a custom field
+    /// whose id differs per site).
+    static let fields = ["summary", "status", "timetracking", "priority", "assignee", "duedate", "issuetype", "parent", "labels", "updated"]
     /// Where an Atlassian account makes an API token.
     static let createTokenURL = URL(string: "https://id.atlassian.com/manage-profile/security/api-tokens")!
 
@@ -452,7 +492,14 @@ enum JiraAPI {
             isDoneRemotely: fields.status?.statusCategory?.key == "done",
             estimateSeconds: fields.timetracking?.originalEstimateSeconds,
             spentSeconds: fields.timetracking?.timeSpentSeconds,
-            statusCategory: fields.status?.statusCategory?.key.flatMap(TaskItem.cleanedTitle)
+            statusCategory: fields.status?.statusCategory?.key.flatMap(TaskItem.cleanedTitle),
+            labels: fields.labels.map { TaskFacets.keptLabels($0.names) },
+            dueDate: RemoteTaskInfo.dayDate(fields.duedate),
+            assignee: fields.assignee?.displayName.flatMap(TaskItem.cleanedTitle),
+            parentTitle: fields.parent?.fields?.summary.flatMap(TaskItem.cleanedTitle),
+            priority: fields.priority?.name.flatMap(TaskItem.cleanedTitle),
+            issueType: fields.issuetype?.name.flatMap(TaskItem.cleanedTitle),
+            updatedAt: RemoteTaskInfo.serverTimestamp(fields.updated)
         )
     }
 }

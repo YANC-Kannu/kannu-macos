@@ -178,7 +178,8 @@ private struct SettingsSearchEntry: Identifiable {
     let tab: SettingsTab
     let title: String
     let keywords: [String]
-    let highlightID: String?
+    /// A `var` so a search can redirect it (`landingOnABuiltRow`).
+    var highlightID: String?
 
     var id: String { "\(tab.rawValue)-\(title)" }
 }
@@ -188,13 +189,32 @@ private struct SettingsSearchEntry: Identifiable {
 enum SettingsDeepLink {
     static let smartCaffeinateHighlightID = SettingsTab.agentStatus.highlightID(for: "Smart caffeinate")
     static let securityFindingsHighlightID = SettingsTab.agentSecurity.highlightID(for: "Security findings")
-    /// Brain › Tasks › Sources, on its Jira Cloud row: where the notch Tasks popover's "Manage
-    /// tasks…", "Connect Jira…" / "Connect GitLab…" and Brain glyph land.
+    /// Brain › Tasks › Sources, on its first row, Local tasks, which is always there: where the notch
+    /// Tasks popover's "Manage tasks…", "Add a source…" and Brain glyph land.
     static let tasksSourcesHighlightID = SettingsTab.tasks.highlightID(for: "Sources")
-    /// Brain › Tasks › Task list, the row that opens the list: where search lands.
+    /// Brain › Tasks › Sources, each connected source's row: where going back from its page lands,
+    /// and where search lands for the rows on that page.
+    static let tasksJiraSourceHighlightID = SettingsTab.tasks.highlightID(for: "Jira Cloud")
+    static let tasksGitLabSourceHighlightID = SettingsTab.tasks.highlightID(for: "GitLab")
+    static let tasksGitHubSourceHighlightID = SettingsTab.tasks.highlightID(for: "GitHub")
+    static let tasksLinearSourceHighlightID = SettingsTab.tasks.highlightID(for: "Linear")
+    static let tasksTodoistSourceHighlightID = SettingsTab.tasks.highlightID(for: "Todoist")
+    static let tasksAppleRemindersSourceHighlightID = SettingsTab.tasks.highlightID(for: "Apple Reminders")
+    /// Brain › Tasks › Sources › Add a source: where search lands for a source not connected, whose
+    /// row is not there.
+    static let tasksAddSourceHighlightID = SettingsTab.tasks.highlightID(for: "Add a source")
+
+    /// Each source's row, by source.
+    static let taskSourceRows: [TaskSource: String] = [
+        .jira: tasksJiraSourceHighlightID, .gitlab: tasksGitLabSourceHighlightID, .github: tasksGitHubSourceHighlightID,
+        .linear: tasksLinearSourceHighlightID, .todoist: tasksTodoistSourceHighlightID,
+        .appleReminders: tasksAppleRemindersSourceHighlightID,
+    ]
+    /// Brain › Tasks › Your tasks, the All tasks row that opens the list: where search lands. The
+    /// id keeps its old "Task list" name, so no link breaks.
     static let tasksListHighlightID = SettingsTab.tasks.highlightID(for: "Task list")
-    /// The Task list sub-page itself, opened, on its back row: the popover's "Show all in Brain"
-    /// and a click on a task reminder. `TasksSettings` opens the sub-page for this id.
+    /// The All tasks page itself, opened, on its back row: the popover's "Show all in Brain" and a
+    /// click on a task reminder. `TasksSettings` opens the page for this id.
     static let tasksListOpenID = SettingsTab.tasks.highlightID(for: "Task list page")
     /// Brain › Tasks › Time to log, shown while an entry waits: the popover's "… more in Brain".
     static let tasksTimeToLogHighlightID = SettingsTab.tasks.highlightID(for: "Time to log")
@@ -738,6 +758,18 @@ struct SettingsView: View {
                 entry.title.localizedCaseInsensitiveContains(trimmed) ||
                 entry.keywords.contains { $0.localizedCaseInsensitiveContains(trimmed) }
             }
+            .map(landingOnABuiltRow)
+    }
+
+    /// Brain › Tasks builds a source's row only while the source is connected. An entry for that row
+    /// lands on Add a source until then, instead of scrolling to a row that was never built.
+    private func landingOnABuiltRow(_ entry: SettingsSearchEntry) -> SettingsSearchEntry {
+        guard let id = entry.highlightID,
+              let source = SettingsDeepLink.taskSourceRows.first(where: { $0.value == id })?.key,
+              !source.isConnected else { return entry }
+        var landed = entry
+        landed.highlightID = SettingsDeepLink.tasksAddSourceHighlightID
+        return landed
     }
 
     private var settingsSearchIndex: [SettingsSearchEntry] {
@@ -913,29 +945,42 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
             SettingsSearchEntry(tab: .timer, title: "Accent colour", keywords: ["accent", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Accent colour")),
 
-            // Tasks
+            // Tasks. A source page's rows exist only while it is open, so their entries land on the
+            // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
             SettingsSearchEntry(tab: .tasks, title: "Sources", keywords: ["tasks", "sources", "jira", "gitlab", "integrations", "connect", "issues"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Jira Cloud", keywords: ["jira", "atlassian", "connect", "disconnect", "api token", "issues", "integration"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Sync Jira", keywords: ["jira", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsTab.tasks.highlightID(for: "Sync Jira")),
-            SettingsSearchEntry(tab: .tasks, title: "Refresh Jira issues", keywords: ["jira", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsTab.tasks.highlightID(for: "Jira issues")),
-            SettingsSearchEntry(tab: .tasks, title: "Issue filter (JQL)", keywords: ["jira", "jql", "filter", "query", "advanced", "issues"], highlightID: SettingsTab.tasks.highlightID(for: "Issue filter")),
-            SettingsSearchEntry(tab: .tasks, title: "GitLab", keywords: ["gitlab", "connect", "disconnect", "personal access token", "self-managed", "issues", "merge requests", "integration"], highlightID: SettingsTab.tasks.highlightID(for: "GitLab")),
-            SettingsSearchEntry(tab: .tasks, title: "Sync GitLab", keywords: ["gitlab", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsTab.tasks.highlightID(for: "Sync GitLab")),
-            SettingsSearchEntry(tab: .tasks, title: "Include merge requests", keywords: ["gitlab", "merge requests", "mr", "review", "reviewer", "pull requests"], highlightID: SettingsTab.tasks.highlightID(for: "Include merge requests")),
-            SettingsSearchEntry(tab: .tasks, title: "Refresh GitLab items", keywords: ["gitlab", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsTab.tasks.highlightID(for: "GitLab items")),
+            SettingsSearchEntry(tab: .tasks, title: "Add a source", keywords: ["tasks", "sources", "add", "connect", "integrations", "jira", "gitlab", "github", "linear", "todoist", "reminders"], highlightID: SettingsDeepLink.tasksAddSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitHub", keywords: ["github", "github enterprise", "issues", "pull requests", "connect", "personal access token", "integration"], highlightID: SettingsDeepLink.tasksGitHubSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Linear", keywords: ["linear", "issues", "cycles", "api key", "connect", "integration"], highlightID: SettingsDeepLink.tasksLinearSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Todoist", keywords: ["todoist", "tasks", "projects", "filter", "api token", "connect", "integration"], highlightID: SettingsDeepLink.tasksTodoistSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Apple Reminders", keywords: ["reminders", "apple reminders", "lists", "to do", "integration", "connect"], highlightID: SettingsDeepLink.tasksAppleRemindersSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Local tasks", keywords: ["tasks", "local", "my tasks", "own tasks", "add"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Local tasks colour", keywords: ["tasks", "local", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Jira Cloud", keywords: ["jira", "atlassian", "connect", "disconnect", "api token", "issues", "integration"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Sync Jira", keywords: ["jira", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Jira colour", keywords: ["jira", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Refresh Jira issues", keywords: ["jira", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Issue filter (JQL)", keywords: ["jira", "jql", "filter", "query", "advanced", "issues"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitLab", keywords: ["gitlab", "connect", "disconnect", "personal access token", "self-managed", "issues", "merge requests", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Sync GitLab", keywords: ["gitlab", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitLab colour", keywords: ["gitlab", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Include merge requests", keywords: ["gitlab", "merge requests", "mr", "review", "reviewer", "pull requests"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Refresh GitLab items", keywords: ["gitlab", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsTab.tasks.highlightID(for: "Enable tasks")),
             SettingsSearchEntry(tab: .tasks, title: "Default session length", keywords: ["tasks", "session", "length", "minutes", "pomodoro", "timer"], highlightID: SettingsTab.tasks.highlightID(for: "Default session length")),
             SettingsSearchEntry(tab: .tasks, title: "Sound when the estimate is reached", keywords: ["tasks", "sound", "estimate", "alarm", "chime", "overtime"], highlightID: SettingsTab.tasks.highlightID(for: "Sound when the estimate is reached")),
             SettingsSearchEntry(tab: .tasks, title: "Time to log", keywords: ["tasks", "log time", "log work", "worklog", "time tracking", "spent", "timesheet", "jira", "gitlab"], highlightID: SettingsTab.tasks.highlightID(for: "Time to log")),
-            // The Task list sub-page's rows exist only while it is open, so their entries land on
-            // the visible row that opens it (the Advanced precedent, docs/SETTINGS.md).
-            SettingsSearchEntry(tab: .tasks, title: "Task list", keywords: ["tasks", "list", "to do", "in progress", "open tasks", "my tasks"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Task list filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            // All tasks' rows, and a task's own page, exist only while open, so their entries land on
+            // the overview's All tasks row, which opens it.
+            SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Find a task", keywords: ["tasks", "find", "search", "look up", "key", "title"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Task filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task order", keywords: ["tasks", "order", "reorder", "move", "drag", "priority", "list", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task tags", keywords: ["tasks", "tags", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Schedule a task", keywords: ["tasks", "schedule", "reminder", "notification", "remind me", "due"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Done and hidden tasks", keywords: ["tasks", "done", "finished", "completed", "hidden", "reopen"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Recently closed tasks", keywords: ["tasks", "done", "finished", "completed", "closed", "reopen"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Archived tasks", keywords: ["tasks", "archive", "archived", "hidden", "restore", "delete", "clear"], highlightID: SettingsDeepLink.tasksListHighlightID),
 
             // Stats
             SettingsSearchEntry(tab: .stats, title: "Enable system stats monitoring", keywords: ["stats", "monitoring"], highlightID: SettingsTab.stats.highlightID(for: "Enable system stats monitoring")),

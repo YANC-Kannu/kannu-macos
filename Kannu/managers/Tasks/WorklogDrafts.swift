@@ -52,7 +52,7 @@ enum WorklogDrafts {
         into drafts: [WorklogDraft],
         newID: () -> UUID = UUID.init
     ) -> (task: TaskItem, drafts: [WorklogDraft]) {
-        guard task.source != .local, let remote = task.remote, task.logPolicy == .ask else {
+        guard task.source.logsTime, let remote = task.remote, task.logPolicy == .ask else {
             return (task, drafts)
         }
         let pending = drafts.first { $0.taskID == task.id && $0.state == .awaiting }
@@ -140,7 +140,7 @@ enum WorklogDrafts {
             return String(localized: "May already be logged — check GitLab")
         case .jira:
             return String(localized: "Kannu stopped while sending this, so it may already be logged. Retry checks Jira first and logs it only if it is not there.")
-        case .local:
+        case .local, .github, .linear, .todoist, .appleReminders:
             return nil
         }
     }
@@ -214,7 +214,8 @@ enum WorklogDrafts {
     ) -> Availability {
         guard let task, task.id == draft.taskID, let remote = task.remote else { return .missingDetails }
         switch task.source {
-        case .local:
+        case .local, .github, .linear, .todoist, .appleReminders:
+            // Time is logged only where the source takes it (`TaskSource.logsTime`).
             return .missingDetails
         case .jira:
             guard !jiraHost.isEmpty, jiraHost == draft.hostScope else { return .notConnected }
@@ -308,7 +309,7 @@ enum WorklogDrafts {
             switch source {
             case .gitlab:
                 return (.ambiguous, String(localized: "May already be logged — check GitLab"))
-            case .jira, .local:
+            case .jira, .local, .github, .linear, .todoist, .appleReminders:
                 return (.ambiguous, String(localized: "\(name) did not answer, so this may already be logged. Retry checks \(name) first and logs it only if it is not there."))
             }
         }
@@ -344,11 +345,7 @@ enum WorklogDrafts {
 
     /// "Jira" or "GitLab": names, not words, so never translated.
     static func sourceName(_ source: TaskSource) -> String {
-        switch source {
-        case .jira: return "Jira"
-        case .gitlab: return "GitLab"
-        case .local: return String(localized: "this Mac")
-        }
+        source == .local ? String(localized: "this Mac") : source.name
     }
 
     /// "Log 1h 15m to PROJ-123?", "Log 45m to group/app!12?".

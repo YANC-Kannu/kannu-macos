@@ -31,10 +31,31 @@ struct RemoteIssue: Equatable {
     var spentSeconds: Int?
     /// GitLab only.
     var gitlab: GitLabRef? = nil
+    /// The item's page, for a source other than GitLab (GitHub, Linear, Todoist): already checked to
+    /// be on the connected site or server, nil otherwise. Kept in `RemoteTaskInfo.gitlabWebURL`.
+    var webURL: String? = nil
     /// "new", "indeterminate" or "done" (`RemoteTaskInfo.statusCategory`).
     var statusCategory: String? = nil
-    /// GitLab only: the item's labels.
+    /// The item's labels; nil when the source sent none.
     var labels: [String]? = nil
+    /// The standard facts (`RemoteTaskInfo`'s of the same names), refreshed on every sync.
+    var weight: Int? = nil
+    var milestone: String? = nil
+    var dueDate: Date? = nil
+    var assignee: String? = nil
+    var parentTitle: String? = nil
+    var priority: String? = nil
+    var issueType: String? = nil
+    var updatedAt: Date? = nil
+    var commentCount: Int? = nil
+    var checklistDone: Int? = nil
+    var checklistTotal: Int? = nil
+    var linkedMergeRequests: Int? = nil
+    var iteration: String? = nil
+    var healthStatus: String? = nil
+    var isDraft: Bool? = nil
+    var hasConflicts: Bool? = nil
+    var author: String? = nil
 
     /// Where a GitLab item lives: what the next PR needs to log time to it, and its page.
     struct GitLabRef: Equatable {
@@ -66,7 +87,11 @@ enum SyncOutcome: Equatable {
 ///   refreshes what the source owns (key, title, status and its category, labels, estimate, logged
 ///   time, last seen, and a GitLab item's kind, project, number and page) and keeps what the user
 ///   owns: Kannu's id, the place in the order, the local estimate, the recorded time, the log
-///   policy, the tags and whether it is done or hidden. A task that had gone and came back is active again.
+///   policy, the tags and whether it is done or archived by the user. A task that had gone, or was
+///   archived on its own after going, and came back is active again. A task the user archived stays
+///   archived, but is marked as still listed (`closedAt` cleared), so the archive never clears it.
+/// - A task turning `.gone` is stamped `closedAt` (when the source stopped listing it). An
+///   archived one the fetch no longer returns is stamped too, if it was not already.
 /// - A new issue is appended at the end of the order. An issue listed twice counts once: the first.
 /// - A complete fetch turns the *active* tasks it did not return into `.gone`. A capped one marks
 ///   nothing gone. A failed one changes nothing.
@@ -122,14 +147,48 @@ enum TaskMerge {
                 remote.remoteSpentSeconds = issue.spentSeconds
                 remote.statusCategory = issue.statusCategory
                 remote.labels = issue.labels
+                remote.weight = issue.weight
+                remote.milestone = issue.milestone
+                remote.dueDate = issue.dueDate
+                remote.assignee = issue.assignee
+                remote.parentTitle = issue.parentTitle
+                remote.priority = issue.priority
+                remote.issueType = issue.issueType
+                remote.updatedAt = issue.updatedAt
+                remote.commentCount = issue.commentCount
+                remote.checklistDone = issue.checklistDone
+                remote.checklistTotal = issue.checklistTotal
+                remote.linkedMergeRequests = issue.linkedMergeRequests
+                remote.iteration = issue.iteration
+                remote.healthStatus = issue.healthStatus
+                remote.isDraft = issue.isDraft
+                remote.hasConflicts = issue.hasConflicts
+                remote.author = issue.author
                 if let gitlab = issue.gitlab {
                     remote.gitlabKind = gitlab.kind
                     remote.gitlabProjectID = gitlab.projectID
                     remote.gitlabIID = gitlab.iid
                     remote.gitlabWebURL = gitlab.webURL
+                } else if source != .gitlab {
+                    remote.gitlabWebURL = issue.webURL
                 }
                 task.title = title
-                if task.visibility == .gone { task.visibility = .active }
+                switch task.visibility {
+                case .gone:
+                    task.visibility = .active
+                    task.closedAt = nil
+                case .archived where !task.archivedByUser:
+                    // Archived on its own after it went (merge requests switched off, unassigned):
+                    // listed again, it returns with its time, as a gone one always has.
+                    task.visibility = .active
+                    task.closedAt = nil
+                    task.archivedAt = nil
+                case .archived:
+                    // The user put it away: it stays. Still listed, so the archive never clears it.
+                    task.closedAt = nil
+                case .active, .done:
+                    break
+                }
                 task.remote = remote
                 // Last seen moves on every sync; on its own it is not a change worth saving.
                 if task != before { updated += 1 }
@@ -148,9 +207,26 @@ enum TaskMerge {
                     gitlabIID: issue.gitlab?.iid,
                     lastSeenAt: now,
                     gitlabKind: issue.gitlab?.kind,
-                    gitlabWebURL: issue.gitlab?.webURL,
+                    gitlabWebURL: issue.gitlab?.webURL ?? issue.webURL,
                     statusCategory: issue.statusCategory,
-                    labels: issue.labels
+                    labels: issue.labels,
+                    weight: issue.weight,
+                    milestone: issue.milestone,
+                    dueDate: issue.dueDate,
+                    assignee: issue.assignee,
+                    parentTitle: issue.parentTitle,
+                    priority: issue.priority,
+                    issueType: issue.issueType,
+                    updatedAt: issue.updatedAt,
+                    commentCount: issue.commentCount,
+                    checklistDone: issue.checklistDone,
+                    checklistTotal: issue.checklistTotal,
+                    linkedMergeRequests: issue.linkedMergeRequests,
+                    iteration: issue.iteration,
+                    healthStatus: issue.healthStatus,
+                    isDraft: issue.isDraft,
+                    hasConflicts: issue.hasConflicts,
+                    author: issue.author
                 )
                 appended.append(TaskItem(id: newID(), source: source, title: title, remote: remote, createdAt: now))
                 added += 1
@@ -158,14 +234,22 @@ enum TaskMerge {
         }
 
         var gone = 0
-        for index in result.indices where result[index].source == source && result[index].visibility == .active
-            && !keepingActive.contains(result[index].id) {
+        for index in result.indices where result[index].source == source && !keepingActive.contains(result[index].id) {
             let remote = result[index].remote
             let otherSite = remote?.hostScope != hostScope
             let missing = fetch.complete && !otherSite && !(remote.map { seen.contains($0.remoteID) } ?? false)
-            if otherSite || missing {
+            guard otherSite || missing else { continue }
+            switch result[index].visibility {
+            case .active:
                 result[index].visibility = .gone
+                result[index].closedAt = now
                 gone += 1
+            case .archived where result[index].closedAt == nil:
+                // No longer listed: from here the archive may clear it.
+                result[index].closedAt = now
+                updated += 1
+            case .gone, .done, .archived:
+                break
             }
         }
 

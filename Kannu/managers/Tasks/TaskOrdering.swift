@@ -40,30 +40,17 @@ enum TaskOrdering {
     static func connectedFilter(showGitLabMergeRequests: Bool, alwaysListed: UUID?) -> Listed {
         { task in
             if task.id == alwaysListed { return true }
-            switch task.source {
-            case .local, .jira: return true
-            case .gitlab: return showGitLabMergeRequests || task.remote?.gitlabKind != .mergeRequest
-            }
+            guard task.source == .gitlab else { return true }
+            return showGitLabMergeRequests || task.remote?.gitlabKind != .mergeRequest
         }
     }
 
     /// A view's own filter by source — the notch's Show in notch (`tasksPopoverShowLocal` and the
-    /// rest). It changes nothing but what that view shows: compose it with the connected baseline
-    /// (`active(_:listed:)` on `TasksManager.activeTasks`). The task being timed always passes.
-    static func viewFilter(showLocal: Bool, showJira: Bool, showGitLab: Bool, alwaysListed: UUID?) -> Listed {
-        { task in
-            if task.id == alwaysListed { return true }
-            switch task.source {
-            case .local: return showLocal
-            case .jira: return showJira
-            case .gitlab: return showGitLab
-            }
-        }
-    }
-
-    /// Whether that view filter hides a source, so the view says it is filtered.
-    static func isNarrowingView(showLocal: Bool, showJira: Bool, showGitLab: Bool) -> Bool {
-        !(showLocal && showJira && showGitLab)
+    /// rest): the sources it hides. It changes nothing but what that view shows: compose it with the
+    /// connected baseline (`active(_:listed:)` on `TasksManager.activeTasks`). The task being timed
+    /// always passes.
+    static func viewFilter(hidden: Set<TaskSource>, alwaysListed: UUID?) -> Listed {
+        { task in task.id == alwaysListed || !hidden.contains(task.source) }
     }
 
     /// The tasks in the task order, top first.

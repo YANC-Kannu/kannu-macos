@@ -34,20 +34,13 @@ import SwiftUI
 ///
 /// Live time ticks through a `TimelineView`, once a second, only while the Now card is on screen
 /// and running; the manager never publishes every second. Appearing asks each source for a sync
-/// only when its last one is stale, and never with the Keychain dialog (`syncJiraIfStale`). This
+/// only when its last one is stale, and never with the Keychain dialog (`SourceSync.syncIfStale`). This
 /// view reads no secret: titles and keys are the sources' own text and render verbatim.
 struct TasksPopover: View {
     @ObservedObject private var manager = TasksManager.shared
     @Default(.enableTimerFeature) private var enableTimerFeature
     // Show in notch (`TaskSourceMenu`): what Up next shows, and nothing else.
-    @Default(.tasksPopoverShowLocal) private var showLocal
-    @Default(.tasksPopoverShowJira) private var showJira
-    @Default(.tasksPopoverShowGitLab) private var showGitLab
-    // Sync Jira and Sync GitLab: data keys, read only to start a sync when one is switched on.
-    @Default(.jiraEnabled) private var jiraEnabled
-    @Default(.gitlabEnabled) private var gitlabEnabled
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.gitlabHost) private var gitlabHost
+    @ObservedObject private var preferences = TaskSourcePreferences.shared
     @State private var newTitle = ""
     /// Closes the popover: `TasksHeaderButton` owns whether it is shown.
     let close: () -> Void
@@ -85,39 +78,29 @@ struct TasksPopover: View {
                 .cornerRadius(12)
         )
         .onAppear {
-            manager.syncJiraIfStale()
-            manager.syncGitLabIfStale()
+            manager.syncAllIfStale()
         }
-        .onChange(of: jiraEnabled) { _, isOn in
-            if isOn { manager.syncJiraIfStale() }
-        }
-        .onChange(of: gitlabEnabled) { _, isOn in
-            if isOn { manager.syncGitLabIfStale() }
+        // A source's Sync switched on: its first sync, now.
+        .onChange(of: manager.syncOnSources) { old, new in
+            if !new.subtracting(old).isEmpty { manager.syncAllIfStale() }
         }
     }
 
     // MARK: - Show in notch
 
-    /// A source that is not connected has no check item in the menu, so its kept tasks always show.
-    private var showsJira: Bool { showJira || jiraSiteHost.isEmpty }
-    private var showsGitLab: Bool { showGitLab || gitlabHost.isEmpty }
-
-    private var isFiltered: Bool {
-        TaskOrdering.isNarrowingView(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab)
-    }
+    /// A source that is not connected has no check item in the menu, so its kept tasks always show
+    /// (`TaskSourcePreferences.hiddenInNotch`).
+    private var isFiltered: Bool { preferences.isNarrowing }
 
     /// Show in notch over the connected baseline (`TasksManager.activeTasks`). The task being timed
     /// always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab,
-                                alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
     }
 
     /// Show all: every source back in the notch.
     private func showAllSources() {
-        showLocal = true
-        showJira = true
-        showGitLab = true
+        preferences.showAll()
     }
 
     /// Closes the popover, then opens Brain › Tasks at `destination`.
@@ -144,7 +127,7 @@ struct TasksPopover: View {
                 }
                 Spacer(minLength: 0)
                 TaskSourceMenu(openBrain: openBrain)
-                if manager.isJiraSyncOn || manager.isGitLabSyncOn {
+                if !manager.syncStates.isEmpty {
                     refreshButton(at: context.date)
                 }
                 Button {
@@ -161,24 +144,17 @@ struct TasksPopover: View {
     }
 
     private var rateLimitEnds: [Date] {
-        [manager.jiraSync.rateLimitEnd, manager.gitlabSync.rateLimitEnd].compactMap { $0 }.sorted()
+        TaskSyncSummary.rateLimitEnds(manager.syncStates)
     }
 
     /// "Jira · Synced 10:42", "GitLab · Offline": one line per source that is synced.
     private func syncLines(at date: Date) -> [String] {
-        var lines: [String] = []
-        if manager.isJiraSyncOn {
-            lines.append(String(localized: "Jira · \(manager.jiraSync.shortCaption(now: date))"))
-        }
-        if manager.isGitLabSyncOn {
-            lines.append(String(localized: "GitLab · \(manager.gitlabSync.shortCaption(now: date))"))
-        }
-        return lines
+        TaskSyncSummary.lines(manager.syncStates, now: date)
     }
 
     @ViewBuilder
     private func refreshButton(at date: Date) -> some View {
-        if manager.isJiraSyncing || manager.isGitLabSyncing {
+        if manager.isAnySyncing {
             ProgressView()
                 .controlSize(.small)
                 .frame(width: 20, height: 20)
@@ -186,8 +162,7 @@ struct TasksPopover: View {
             // The user asked: each source may ask macOS for its Keychain item, and a source that
             // is off, syncing or rate limited is skipped by the manager.
             Button {
-                manager.refreshJira()
-                manager.refreshGitLab()
+                manager.refreshAll()
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .imageScale(.large)
@@ -195,19 +170,12 @@ struct TasksPopover: View {
             .buttonStyle(.borderless)
             .disabled(!canRefresh(at: date))
             .accessibilityLabel("Refresh tasks")
-            .hoverTooltip(String(localized: "Refresh Jira and GitLab"), edge: .below)
+            .hoverTooltip(String(localized: "Refresh every source"), edge: .below)
         }
     }
 
     private func canRefresh(at date: Date) -> Bool {
-        guard manager.isReady else { return false }
-        return canRefresh(manager.jiraSync, isOn: manager.isJiraSyncOn, at: date)
-            || canRefresh(manager.gitlabSync, isOn: manager.isGitLabSyncOn, at: date)
-    }
-
-    private func canRefresh(_ state: SourceSyncState, isOn: Bool, at date: Date) -> Bool {
-        guard isOn else { return false }
-        return state.rateLimitEnd.map { $0 <= date } ?? true
+        TaskSyncSummary.canRefresh(isReady: manager.isReady, manager.syncStates, at: date)
     }
 
     // MARK: - Loading
@@ -235,16 +203,16 @@ struct TasksPopover: View {
     private var readyContent: some View {
         let timed = timedTask
         let asking = manager.openDrafts.filter(WorklogDrafts.isAskingNow)
-        let cards = Array(asking.prefix(Self.maxCards))
-        let rows = TaskOrdering.upNextRows(showingNow: timed != nil, cards: cards.count)
+        let cards = min(asking.count, Self.maxCards)
+        let rows = TaskOrdering.upNextRows(showingNow: timed != nil, cards: cards)
         let shown = TaskOrdering.active(manager.activeTasks, listed: notchFilter)
         let waitingNext = TaskOrdering.upNext(shown, excluding: manager.timing?.taskID, limit: .max)
 
         if let timed, let timing = manager.timing {
             nowSection(timed, isPaused: timing.isPaused)
         }
-        if !cards.isEmpty {
-            logTimeSection(cards, more: asking.count - cards.count)
+        if cards > 0 {
+            logTimeSection(asking)
         }
         // Always: Add a task stays whatever the filter shows.
         upNextSection(Array(waitingNext.prefix(rows)), total: waitingNext.count, showsEmptyState: waitingNext.isEmpty && timed == nil)
@@ -317,7 +285,7 @@ struct TasksPopover: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.08))
+            .background(TaskGlassBackground(color: manager.color(of: task), base: 0.08))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
@@ -344,25 +312,10 @@ struct TasksPopover: View {
 
     // MARK: - Log time?
 
-    private func logTimeSection(_ cards: [WorklogDraft], more: Int) -> some View {
+    private func logTimeSection(_ asking: [WorklogDraft]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("Log time?")
-            ForEach(cards) { draft in
-                WorklogDraftCard(draft: draft)
-                    .labeledContentStyle(StackedCardStyle())
-                    .controlSize(.small)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            if more > 0 {
-                Button(more == 1 ? String(localized: "1 more in Brain") : String(localized: "\(more) more in Brain")) {
-                    openBrain(.timeToLog)
-                }
-                .buttonStyle(.link)
-                .font(.system(size: 12, weight: .medium))
-            }
+            LogTimeCards(asking: asking, maxCards: Self.maxCards, openBrain: openBrain)
         }
     }
 
@@ -431,9 +384,9 @@ struct TasksPopover: View {
     /// The new task is always local: with Local hidden it would vanish as it is added, so adding one
     /// puts Local back in the notch.
     private func addTask() {
-        if manager.addTask(title: newTitle, estimateSeconds: nil) {
+        if manager.addTask(title: newTitle, estimateSeconds: nil) != nil {
             newTitle = ""
-            if !showLocal { showLocal = true }
+            if preferences.hiddenInNotch.contains(.local) { preferences.shownBinding(for: .local).wrappedValue = true }
         }
     }
 
@@ -466,10 +419,7 @@ struct TasksPopover: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color.white.opacity(0.05))
-        )
+        .background(TaskGlassBackground(color: manager.color(of: task)))
     }
 
     /// " · 10m over", in orange, once a task is a minute or more past its estimate.
@@ -480,7 +430,7 @@ struct TasksPopover: View {
     }
 
     private var emptyState: some View {
-        let connected = !jiraSiteHost.isEmpty || !gitlabHost.isEmpty
+        let connected = !preferences.connected.isEmpty
         return VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: emptyTitle(connected: connected))
                 .font(.system(size: 13, weight: .semibold))
@@ -489,7 +439,7 @@ struct TasksPopover: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !connected {
-                Button("Connect Jira or GitLab…") { openBrain(.sources) }
+                Button("Add a source…") { openBrain(.sources) }
                     .controlSize(.small)
             }
         }
@@ -512,18 +462,7 @@ struct TasksPopover: View {
 
     private func emptyMessage(connected: Bool) -> LocalizedStringKey {
         if filterHidesEveryTask { return "The filter hides every open task." }
-        return connected ? "No open tasks. Add one above." : "Connect Jira or GitLab, or add a task above."
+        return connected ? "No open tasks. Add one above." : "Add a source in Brain, or add a task above."
     }
 }
 
-/// The Time to log card, stacked to fit the popover: what would be logged on top, then the length,
-/// the comment and the answers, trailing. In Brain the same card is a Form row.
-private struct StackedCardStyle: LabeledContentStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            configuration.label
-            configuration.content
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
