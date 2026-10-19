@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - The GitLab reconnect note ends its Brain path at the tab
+- **Developer label:** Bringing #106 up to date with development: `BrainPathRulesTests` (from #87's review) checks a note in the timer tab's Tasks page
+- **Agent label:** Claude Code (Opus 5.5) — "Reconnect GitLab in Brain › Tasks to see them." becomes "To see them, reconnect GitLab in Brain › Tasks."
+- **Changes:**
+  - The timer tab's GitLab reconnect note puts its Brain path last, so the path names the Tasks tab
+    and nothing after it. `BrainPathRulesTests.testEveryBrainPathStartsAtATabTheSidebarHas` reads
+    the words after "Brain ›" up to the next stop, and "Tasks to see them" is no tab.
+  - The rest of that review's commit (GitLab's Connect race guards) is already in the shared
+    `SourceSync` engine here: a Connect counts itself in flight before its first await, re-checks
+    the generation before and after saving, and Remove Token refuses while one is in flight
+    (`SourceSyncTests`). Its `JiraSyncRulesTests` edits stay out with the file, which
+    `SourceSyncTests` replaced.
+
 ### 2026-10-19 - Act on CodeRabbit's review of #108
 - **Developer label:** CodeRabbit's review of #108 (the review batch for #97, #103 and #106): four findings, all in the task sources
 - **Agent label:** Claude Code (Opus 5.5) — a Disconnect during a Connect's save wins; the user's own names come from every source; GitHub's "open" leaves the row caption; the Sync-switch scan catches the generic read
