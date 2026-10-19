@@ -230,6 +230,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Tests: `TaskDetailSummaryTests.testALocalTaskNeverTimedSaysSo`,
     `TimerTaskDetailRulesTests.testANeverTimedLocalTaskShowsItsNote`.
 
+### 2026-10-19 - The archive keeps its own time, and the usage Refresh tooltip is translatable
+- **Developer label:** CodeRabbit on #107 (covering this branch): "Archive processing never runs while the app stays open and no sync happens." and "Localize the Refresh tooltip."
+- **Agent label:** Claude Code (Opus 5.5) — `TasksManager.refreshArchive()` on a new day and when Brain's Task list appears; `String(localized:)` on the header's Refresh tooltip
+- **Changes:**
+  - Closed tasks move to the Archive after 3 days, and archived Jira and GitLab tasks clear after 7. Before, that ran only at launch and after a Jira or GitLab sync. A local-only user's done tasks could sit in Recently closed, reading "archiving now", until Kannu restarted. Now `refreshArchive()` runs when the day changes (`NSCalendarDayChanged`) and when Brain's Task list appears. It protects the task being timed, as a sync does.
+  - The header's "Refresh usage" tooltip goes through `String(localized:)`, like every user-facing string.
+  - `TaskListRulesTests.testTheArchiveRunsOnANewDayAndWhenTheListAppears` pins both triggers.
+
 ### 2026-10-18 - Clipped text on the task card slides into view on hover, the status pill no longer looks clickable, and no fact wears a refresh icon
 - **Developer label:** "the open hint text shows but nothing happens on clicking the ticket pill, refresh symbol near iteration is confusing , user might feel some refresh is intended, also none of the clipped text shows on hover, ideally they should slide and show that clipped .. text"
 - **Agent label:** Claude Code (Opus 5.5) — a hover-only reveal for clipped text, the pill's tooltip reworded, three icons replaced
