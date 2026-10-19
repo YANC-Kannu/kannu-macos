@@ -946,6 +946,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .tasks, title: "Add a source", keywords: ["tasks", "sources", "add", "connect", "integrations", "jira", "gitlab", "github", "linear", "todoist", "reminders"], highlightID: SettingsDeepLink.tasksAddSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "GitHub", keywords: ["github", "github enterprise", "issues", "pull requests", "connect", "personal access token", "integration"], highlightID: SettingsDeepLink.tasksGitHubSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Linear", keywords: ["linear", "issues", "cycles", "api key", "connect", "integration"], highlightID: SettingsDeepLink.tasksLinearSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Todoist", keywords: ["todoist", "tasks", "projects", "filter", "api token", "connect", "integration"], highlightID: SettingsDeepLink.tasksTodoistSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Apple Reminders", keywords: ["reminders", "apple reminders", "lists", "to do", "integration", "connect"], highlightID: SettingsDeepLink.tasksAppleRemindersSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Local tasks", keywords: ["tasks", "local", "my tasks", "own tasks", "add"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Local tasks colour", keywords: ["tasks", "local", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),

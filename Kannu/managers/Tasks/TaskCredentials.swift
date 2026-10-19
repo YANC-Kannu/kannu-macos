@@ -44,4 +44,5 @@ enum TaskCredentials {
     static let gitlab = CredentialStore<GitLabCredential>(slot: .keychain(.gitlabCredential), queueLabel: "com.kannu.app.tasks.gitlab-keychain")
     static let github = CredentialStore<GitHubCredential>(slot: .keychain(.githubCredential), queueLabel: "com.kannu.app.tasks.github-keychain")
     static let linear = CredentialStore<LinearCredential>(slot: .keychain(.linearCredential), queueLabel: "com.kannu.app.tasks.linear-keychain")
+    static let todoist = CredentialStore<TodoistCredential>(slot: .keychain(.todoistCredential), queueLabel: "com.kannu.app.tasks.todoist-keychain")
 }

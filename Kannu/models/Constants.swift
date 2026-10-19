@@ -1563,6 +1563,8 @@ extension Defaults.Keys {
     /// The connected account (`todoist:<user id>`); empty when not connected.
     static let todoistAccount = Key<String>("todoistAccount", default: "")
     static let todoistAccountDisplayName = Key<String>("todoistAccountDisplayName", default: "")
+    /// A Todoist filter ("today | overdue", "#Work"); empty lists every open task.
+    static let todoistFilter = Key<String>("todoistFilter", default: "")
     static let appleRemindersEnabled = Key<Bool>("appleRemindersEnabled", default: false)
     /// "reminders" once the user connected Reminders (and macOS allowed it); empty otherwise.
     static let appleRemindersScope = Key<String>("appleRemindersScope", default: "")

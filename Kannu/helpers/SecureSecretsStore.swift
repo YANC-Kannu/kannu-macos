@@ -22,6 +22,9 @@ enum SecureSecretKey: String, CaseIterable {
     /// Brain › Tasks › Linear: `LinearCredential` as JSON (`{apiKey, workspace}`), so the API key and
     /// the workspace it belongs to are stored together.
     case linearCredential = "linear-credential"
+    /// Brain › Tasks › Todoist: `TodoistCredential` as JSON (`{token, userID}`), so the API token and
+    /// the account it belongs to are stored together.
+    case todoistCredential = "todoist-credential"
 }
 
 enum SecureSecretsStore {

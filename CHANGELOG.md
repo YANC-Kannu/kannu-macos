@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Todoist is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 7 of the task-sources PR: Todoist, read-only, through its API v1
+- **Changes:**
+  - Brain › Tasks › Add a source › Todoist takes the API token from Todoist (Integrations › Developer). Kannu checks it with `GET /user`, which also says whose account it is. Token and account are kept together in the Keychain (`todoist-credential`).
+  - A sync reads the projects (for their names) and the open tasks through Todoist's unified API v1 (`api.todoist.com/api/v1`, cursor pages; the old REST v2 is shut down): at most two pages of 100 each. Tasks assigned to someone else are skipped.
+  - An optional Todoist filter on Todoist's page ("today | overdue", "#Work") narrows what is fetched. Return applies it.
+  - Each task's project is its Todoist project, so the source's page lists the projects. Priority 4/3/2 reads P1/P2/P3. A due date shows as the task's due date. Todoist's duration becomes the estimate, a day being 8 hours. A task opens at `app.todoist.com/app/task/<id>`.
+  - A refused token (401 or 403) reads as refused. A rate limit follows `Retry-After`. A 410 says Todoist retired the API Kannu uses.
+  - Linear's and Todoist's messages say "in Linear, under Security & access" and "in Todoist, under Integrations › Developer", so Brain's naming rule (never "Settings" for a page) holds.
+  - New `TodoistAPI.swift` (logic target), `TodoistClient.swift` (logging wrapper and provider), and the `todoistFilter` key.
+  - Tests: new `TodoistAPITests` (37 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
 ### 2026-10-19 - Linear is a task source
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 6 of the task-sources PR: Linear, read-only, by personal API key

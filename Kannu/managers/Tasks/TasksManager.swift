@@ -539,7 +539,10 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             guard let remote = task.remote, let link = remote.gitlabWebURL,
                   LinearAPI.isIssueURL(link, in: remote.hostScope) else { return nil }
             return URL(string: link)
-        case .local, .todoist, .appleReminders: return nil
+        case .todoist:
+            guard let link = task.remote?.gitlabWebURL, link.hasPrefix(TodoistAPI.taskPageBase) else { return nil }
+            return URL(string: link)
+        case .local, .appleReminders: return nil
         }
     }
 
@@ -1033,8 +1036,23 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         host: self
     )
 
+    /// Todoist's: the open tasks, or those the user's Todoist filter matches, not assigned to someone else.
+    private(set) lazy var todoist = SourceSync(
+        source: .todoist,
+        provider: TodoistTaskSource(),
+        store: TaskCredentials.todoist,
+        connection: { SourceConnection(scope: Defaults[.todoistAccount], syncOn: Defaults[.todoistEnabled]) },
+        options: { Defaults[.todoistFilter] },
+        forget: {
+            Defaults[.todoistEnabled] = false
+            Defaults[.todoistAccount] = ""
+            Defaults[.todoistAccountDisplayName] = ""
+        },
+        host: self
+    )
+
     /// Every source's sync, in source order.
-    var syncs: [any SourceSyncing] { [jira, gitlab, github, linear, appleReminders] }
+    var syncs: [any SourceSyncing] { [jira, gitlab, github, linear, todoist, appleReminders] }
 
     /// Reminders' change notice is listened to only while Reminders is connected, its sync is on,
     /// and tasks are on; it asks for a quiet sync, never one with a dialog.
@@ -1105,7 +1123,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             return await connectGitHub(serverInput: server, token: token)
         case .linear:
             return await connectLinear(apiKey: token)
-        case .local, .jira, .gitlab, .todoist:
+        case .todoist:
+            return await connectTodoist(token: token)
+        case .local, .jira, .gitlab:
             return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
         }
     }
@@ -1130,6 +1150,32 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     nonisolated static func githubCreateTokenURL(server: String) -> URL? {
         guard case .success(let base) = GitHubHost.normalize(server) else { return nil }
         return GitHubHost.createTokenURL(base: base)
+    }
+
+    /// Checks the token with Todoist, which also says whose account it is, then stores both and
+    /// syncs. Nil on success, or what to tell the user. Nothing is stored until Todoist accepted it.
+    private func connectTodoist(token: String) async -> String? {
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard TodoistAPI.isPlausibleToken(token) else {
+            return String(localized: "Paste your API token from Todoist, under Integrations › Developer. It has no spaces in it.")
+        }
+        let failure = await todoist.connect {
+            switch await TodoistClient().verify(token: token) {
+            case .verified(let user):
+                guard let account = TodoistAPI.scope(userID: user.id) else {
+                    return .refused(String(localized: "Todoist answered, but not with an account Kannu can use."))
+                }
+                return .accepted(TodoistCredential(userID: user.id, token: token)) {
+                    Defaults[.todoistAccount] = account
+                    Defaults[.todoistAccountDisplayName] = user.fullName ?? ""
+                    Defaults[.todoistEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(TodoistAPI.connectMessage(for: failure))
+            }
+        }
+        if failure == nil { logger.info("Todoist connected") }
+        return failure
     }
 
     /// Checks the API key with Linear, which also says the workspace, then stores both and syncs.

@@ -540,7 +540,7 @@ final class LinearAPITests: XCTestCase {
         let result = await reader.verify(apiKey: Self.key)
         XCTAssertEqual(result, .failed(.http(.auth(401))))
         XCTAssertEqual(LinearAPI.connectMessage(for: .http(.auth(401))),
-                       "Linear did not accept that API key (401). Create a new one in Linear's Settings › Security & access.")
+                       "Linear did not accept that API key (401). Create a new one in Linear, under Security & access.")
     }
 
     func testVerifyRefusesAWorkspaceKannuWouldNotUse() async throws {

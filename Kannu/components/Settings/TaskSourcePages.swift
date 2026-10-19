@@ -240,6 +240,7 @@ private struct SourceOptionRows: View {
     @Default(.jiraJQL) private var jiraJQL
     @Default(.gitlabIncludeMergeRequests) private var gitlabIncludeMergeRequests
     @Default(.githubIncludePullRequests) private var githubIncludePullRequests
+    @Default(.todoistFilter) private var todoistFilter
     @State private var showsAdvanced = false
     let source: TaskSource
 
@@ -285,7 +286,22 @@ private struct SourceOptionRows: View {
             .onChange(of: githubIncludePullRequests) { _, _ in
                 manager.sourceOptionsChanged(.github)
             }
-        case .local, .linear, .todoist, .appleReminders:
+        case .todoist:
+            LabeledContent {
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    TextField("Todoist filter", text: $todoistFilter, prompt: Text("today | overdue"))
+                        .labelsHidden()
+                        .onSubmit { manager.refresh(.todoist) }
+                    Button("Clear") {
+                        todoistFilter = ""
+                        manager.refresh(.todoist)
+                    }
+                    .disabled(todoistFilter.isEmpty)
+                }
+            } label: {
+                SettingsRowLabel("Filter", description: "A Todoist filter. Empty lists every open task. Return applies it.")
+            }
+        case .local, .linear, .appleReminders:
             EmptyView()
         }
     }
@@ -328,7 +344,12 @@ enum TaskSourceStatus {
             return Defaults[.githubIncludePullRequests]
                 ? String(localized: "Lists the open issues and pull requests assigned to you")
                 : String(localized: "Lists the open issues assigned to you")
-        case .linear, .todoist, .appleReminders, .local:
+        case .todoist:
+            let filter = Defaults[.todoistFilter].trimmingCharacters(in: .whitespacesAndNewlines)
+            return filter.isEmpty
+                ? String(localized: "Lists your open Todoist tasks")
+                : String(localized: "Lists your open Todoist tasks · Filter: \(filter)")
+        case .linear, .appleReminders, .local:
             return String(localized: "Lists your open \(source.name) \(source.itemNoun.many).")
         }
     }

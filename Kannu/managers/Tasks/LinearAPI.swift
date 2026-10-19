@@ -586,9 +586,9 @@ extension LinearAPI {
     static func connectMessage(for failure: LinearReader.Failure) -> String {
         switch failure {
         case .http(.auth(let status)):
-            return String(localized: "Linear did not accept that API key (\(status)). Create a new one in Linear's Settings › Security & access.")
+            return String(localized: "Linear did not accept that API key (\(status)). Create a new one in Linear, under Security & access.")
         case .http(.rejected(403)):
-            return String(localized: "Linear refused that API key (403). Create one with read access in Linear's Settings › Security & access.")
+            return String(localized: "Linear refused that API key (403). Create one with read access in Linear, under Security & access.")
         case .http(.rejected(let status)):
             return String(localized: "Linear refused the request (\(status)).")
         case .http(.redirected(let status)):
@@ -610,6 +610,6 @@ extension LinearAPI {
 
     /// What Connect says, before any request, about a key that cannot travel in a header.
     static var implausibleKeyMessage: String {
-        String(localized: "That is not a Linear API key. Copy it again from Linear's Settings › Security & access.")
+        String(localized: "That is not a Linear API key. Copy it again from Linear, under Security & access.")
     }
 }
