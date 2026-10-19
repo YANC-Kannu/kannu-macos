@@ -4,6 +4,26 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - The usage card's sizes add up in one place
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — `UsageCardMetrics`: the 142-pt slot, the golden split, the row heights, the worst case proven
+- **Changes:**
+  - Measured first: the open notch is a fixed 200 pt, and after its bottom padding, the header
+    (38 pt on a notched MacBook, 24 without a notch) and the stack spacing, the Usage tab gets
+    142 pt. The Claude card was about 157 pt in its base state, stacking the 5-hour and weekly
+    sections, plus 15 per forecast caption and 35 for a status line — so it ran into the shadow
+    band and the window clipped it, cutting a forecast line or the status button.
+  - New `Kannu/sizing/UsageCardMetrics.swift` (Foundation-only, in the test target): every size
+    of a provider card, the slot arithmetic, the timer's `goldenSplit` (copied while
+    `TimerComposerMetrics` is not on `development`; whichever lands second delegates), the card
+    widths a notch gives one, two or three cards, the 1 : φ columns and the width below which a
+    card stacks (88 pt), the row heights, and the most weekly bars a card may draw with and
+    without a status row (3 and 4).
+  - `UsageCardMetricsTests` pins the slot (142/148/156), the φ split at 640 and 690 pt with one
+    and two cards (210 : 340, 98 : 161, 229 : 371, 108 : 176), that three cards stack, and that
+    every worst case — three weekly bars with a status row (138), four without (136), the
+    stacked fallback (138) — fits under the 138-pt limit.
+
 ### 2026-10-19 - The Claude card's first look never shows one organization's numbers as another's
 - **Developer label:** "can we install this token fix onto the super build and see it locally working"
 - **Agent label:** Follow-up 65, the organization gap in #96

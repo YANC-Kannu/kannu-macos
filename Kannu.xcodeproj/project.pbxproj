@@ -47,6 +47,7 @@
 		AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */; };
 		AA1000000000000000000035 /* ClaudeCachedUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000034 /* ClaudeCachedUsage.swift */; };
 		AA1000000000000000000037 /* ClaudeUsageFetchCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000036 /* ClaudeUsageFetchCommand.swift */; };
+		AA10000000000000000006A1 /* UsageCardMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000006A0 /* UsageCardMetrics.swift */; };
 		AA1000000000000000000045 /* WarpAgentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000044 /* WarpAgentStore.swift */; };
 		AA1000000000000000000049 /* AgentSecurityFinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000048 /* AgentSecurityFinding.swift */; };
 		AA1000000000000000000051 /* ADRDiscoveryCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000050 /* ADRDiscoveryCommand.swift */; };
@@ -148,6 +149,7 @@
 		AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeDesktopUsageHistory.swift; path = Kannu/managers/AgentStatus/ClaudeDesktopUsageHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000034 /* ClaudeCachedUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeCachedUsage.swift; path = Kannu/managers/AgentStatus/ClaudeCachedUsage.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000036 /* ClaudeUsageFetchCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeUsageFetchCommand.swift; path = Kannu/managers/AgentStatus/ClaudeUsageFetchCommand.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000006A0 /* UsageCardMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UsageCardMetrics.swift; path = Kannu/sizing/UsageCardMetrics.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000044 /* WarpAgentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WarpAgentStore.swift; path = Kannu/managers/AgentStatus/WarpAgentStore.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000048 /* AgentSecurityFinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentSecurityFinding.swift; path = Kannu/managers/AgentStatus/AgentSecurityFinding.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000050 /* ADRDiscoveryCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ADRDiscoveryCommand.swift; path = Kannu/managers/AgentStatus/ADRDiscoveryCommand.swift; sourceTree = SOURCE_ROOT; };
@@ -599,6 +601,7 @@
 				AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */,
 				AA1000000000000000000035 /* ClaudeCachedUsage.swift in Sources */,
 				AA1000000000000000000037 /* ClaudeUsageFetchCommand.swift in Sources */,
+				AA10000000000000000006A1 /* UsageCardMetrics.swift in Sources */,
 				AA1000000000000000000045 /* WarpAgentStore.swift in Sources */,
 				AA1000000000000000000049 /* AgentSecurityFinding.swift in Sources */,
 				AA1000000000000000000051 /* ADRDiscoveryCommand.swift in Sources */,
