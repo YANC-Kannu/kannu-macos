@@ -35,7 +35,7 @@ struct NotchTimerView: View {
     @Default(.timerProgressStyle) private var progressStyle
     @Default(.showTimerPresetsInNotchTab) private var showTimerPresetsInNotchTab
     @Default(.timerInputStyle) private var timerInputStyle
-    
+    @Default(.enableTasks) private var enableTasks
 
     @AppStorage("customTimerDuration") private var customTimerDuration: Double = 600
     @State private var customHours: Int = 0
@@ -52,6 +52,16 @@ struct NotchTimerView: View {
     /// Keeps the notch open while a name is being typed (`KannuViewModel.setAutoCloseSuppression`).
     @State private var nameEditingToken = UUID()
     @FocusState private var focusedNameField: NameField?
+    /// The side column's page once one is picked (`TimerSideColumn`). Nil until then, so the tab
+    /// opens on `TimerSideColumn.initialPage` from its first frame; cleared each time the tab
+    /// appears, never persisted.
+    @State private var pickedSidePage: TimerSidePage?
+    /// The pointer is over the ruler strip (`RulerTimerPicker.onScrollAreaHover`): a sideways
+    /// scroll there sets the minutes, so the tab-wide page swipe leaves it alone. A second guard:
+    /// the swipe yields over the ruler by its live frame first (`ScrollWheelMonitor`), since this
+    /// state reaches the monitor only after a re-render, which a scroll can beat.
+    @State private var isOverRuler = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum NameField: Hashable {
         case pending
@@ -61,24 +71,39 @@ struct NotchTimerView: View {
     var body: some View {
         Group {
             if enableTimerFeature {
-                HStack(alignment: .top, spacing: timerManager.isTimerActive ? 0 : 20) {
+                HStack(alignment: .top, spacing: timerManager.isTimerActive ? 0 : TimerComposerMetrics.tabColumnSpacing) {
                     leftColumn
-                    if shouldShowPresetColumn {
+                    if shouldShowSideColumn {
                         Divider()
                             .frame(height: max(0, maxTabContentHeight - 8))
                             .opacity(0.2)
-                        presetColumn
+                        sideColumn
                     }
                 }
                 .frame(maxHeight: maxTabContentHeight, alignment: .top)
-                .padding(.horizontal, 16)
-                    .padding(.vertical, 6)
+                .padding(.horizontal, TimerComposerMetrics.tabHorizontalPadding)
+                .padding(.vertical, TimerComposerMetrics.tabVerticalPadding)
                 // A click anywhere in the tab that no control takes ends typing, which saves a rename.
                 .background(
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { focusedNameField = nil }
                 )
+#if canImport(AppKit)
+                // A two-finger swipe anywhere on the tab (composer, divider or column) turns the
+                // side column's page, except over the ruler, whose sideways scroll sets minutes:
+                // the monitor yields there by the ruler's frame, and by its hover as well.
+                .background {
+                    if hasPageSwipe {
+                        HorizontalSwipeMonitor(current: shownSidePage, isSuspended: isOverRuler, onSwipe: selectSidePage)
+                            // Down into the footer, so the "Tasks · Presets" labels hanging there
+                            // are swipeable too.
+                            .padding(.bottom, -TimerComposerMetrics.pageSwipeFooterReach)
+                            // It watches scroll events only; clicks stay with the tap layer above.
+                            .allowsHitTesting(false)
+                    }
+                }
+#endif
                 .transition(.opacity.combined(with: .blurReplace))
                 .onAppear { syncCustomDuration(with: customTimerDuration) }
                 .onChange(of: customTimerDuration) { _, newValue in syncCustomDuration(with: newValue) }
@@ -91,6 +116,8 @@ struct NotchTimerView: View {
         }
         .onAppear {
             lockAccentColorIfNeeded()
+            // Each time the tab appears it opens on the initial page again.
+            pickedSidePage = nil
         }
         .onChange(of: timerManager.isTimerActive) { _, isActive in
             if isActive {
@@ -151,55 +178,31 @@ struct NotchTimerView: View {
         .padding(.bottom, 2)
     }
 
-    private var presetColumn: some View {
-        VStack(spacing: 6) {
-            if timerPresets.isEmpty {
-                Text("Configure presets in Settings to see them here.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            } else {
-                let computedHeight = CGFloat(timerPresets.count) * 60 + 4
-                let listHeight = min(max(0, maxTabContentHeight - 16), computedHeight)
-                ZStack {
-                    List {
-                        ForEach(timerPresets) { preset in
-                            TimerPresetCard(preset: preset, isActive: timerManager.activePresetId == preset.id) {
-                                startSession(duration: preset.duration, preset: preset, fallback: preset.name)
-                                if !enableMinimalisticUI {
-                                    coordinator.currentView = .timer
-                                }
-                            }
-                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
-                            .listRowBackground(Color.clear)
-                            .listRowSeparator(.hidden)
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
-                    .scrollIndicators(.never)
-
-                    LinearGradient(colors: [Color.black.opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 16)
-                        .allowsHitTesting(false)
-                        .alignmentGuide(.top) { d in d[.top] }
-                        .frame(maxHeight: .infinity, alignment: .top)
-
-                    LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 16)
-                        .allowsHitTesting(false)
-                        .alignmentGuide(.bottom) { d in d[.bottom] }
-                        .frame(maxHeight: .infinity, alignment: .bottom)
+    /// Tasks · Presets beside the composer. A task's ▶ starts it there; its name wins over a typed
+    /// one, so the typed name is dropped.
+    private var sideColumn: some View {
+        TimerSideColumn(
+            page: shownSidePage,
+            select: selectSidePage,
+            tasksAvailable: isTasksPageAvailable,
+            presetsAvailable: showTimerPresetsInNotchTab,
+            budget: maxTabContentHeight,
+            presets: timerPresets,
+            activePresetID: timerManager.activePresetId,
+            startPreset: { preset in
+                startSession(duration: preset.duration, preset: preset, fallback: preset.name)
+                if !enableMinimalisticUI {
+                    coordinator.currentView = .timer
                 }
-                .frame(height: listHeight)
+            },
+            taskStarted: {
+                pendingSessionName = ""
+                focusedNameField = nil
+                if !enableMinimalisticUI {
+                    coordinator.currentView = .timer
+                }
             }
-        }
-        .frame(width: 210, alignment: .leading)
-        .frame(maxHeight: maxTabContentHeight, alignment: .top)
-        .padding(.bottom, 2)
+        )
     }
 
     private var activeTimerCard: some View {
@@ -227,7 +230,7 @@ struct NotchTimerView: View {
                         icon: pauseIconName,
                         foreground: .white.opacity(0.95),
                         background: timerAccentColor.opacity(0.32),
-                        accessibilityLabel: pauseAccessibilityLabel,
+                        tooltip: pauseAccessibilityLabel,
                         action: togglePauseAction
                     )
 
@@ -235,7 +238,7 @@ struct NotchTimerView: View {
                         icon: "xmark",
                         foreground: .white.opacity(0.95),
                         background: Color.white.opacity(0.16),
-                        accessibilityLabel: String(localized: "Cancel"),
+                        tooltip: String(localized: "Cancel"),
                         action: stopTimerAction
                     )
                 } else {
@@ -243,7 +246,7 @@ struct NotchTimerView: View {
                         icon: "stop.fill",
                         foreground: .white.opacity(0.95),
                         background: Color.white.opacity(0.16),
-                        accessibilityLabel: String(localized: "Stop"),
+                        tooltip: String(localized: "Stop"),
                         action: stopTimerAction
                     )
                 }
@@ -378,9 +381,10 @@ struct NotchTimerView: View {
                     minutes: $customMinutes,
                     seconds: $customSeconds,
                     tintColor: timerAccentColor,
-                    startAction: startCustomTimer
+                    startAction: startCustomTimer,
+                    onScrollAreaHover: { isOverRuler = $0 }
                 )
-            } else if showTimerPresetsInNotchTab {
+            } else if hasSideColumn {
                 VStack(alignment: .leading, spacing: TimerComposerMetrics.rowSpacing) {
                     DurationInputRow(
                         hours: $customHours,
@@ -433,7 +437,7 @@ struct NotchTimerView: View {
                 .font(.title2)
                 .fontWeight(.medium)
 
-            Text("Enable the timer feature in Settings to access this tab.")
+            Text("Enable the timer feature in Brain to access this tab.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -441,8 +445,50 @@ struct NotchTimerView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var shouldShowPresetColumn: Bool {
-        !timerManager.isTimerActive && showTimerPresetsInNotchTab
+    /// The Tasks page needs tasks and the timer; the Presets page, Show presets in the notch tab.
+    private var isTasksPageAvailable: Bool {
+        enableTasks && enableTimerFeature
+    }
+
+    /// The side column shows when it has a page. The composer's stacked layout and narrow fields
+    /// follow it, so the column always fits beside them without the notch growing.
+    private var hasSideColumn: Bool {
+        showTimerPresetsInNotchTab || isTasksPageAvailable
+    }
+
+    /// The side column's pages, left to right.
+    private var sidePages: [TimerSidePage] {
+        TimerSideColumn.pages(tasksAvailable: isTasksPageAvailable, presetsAvailable: showTimerPresetsInNotchTab)
+    }
+
+    /// The picked page, or the one the tab opens on (Tasks first when Jira or GitLab is
+    /// connected), or the only page there is.
+    private var shownSidePage: TimerSidePage {
+        let page = pickedSidePage ?? TimerSideColumn.initialPage(
+            tasksAvailable: isTasksPageAvailable,
+            presetsAvailable: showTimerPresetsInNotchTab
+        )
+        return TimerSideColumn.shownPage(page, in: sidePages)
+    }
+
+    /// The one way the side column's page changes: a label click, the VoiceOver picker, or a
+    /// swipe anywhere on the tab.
+    private func selectSidePage(_ target: TimerSidePage) {
+        guard target != shownSidePage, sidePages.contains(target) else { return }
+        if reduceMotion {
+            pickedSidePage = target
+        } else {
+            withAnimation(.smooth(duration: 0.2)) { pickedSidePage = target }
+        }
+    }
+
+    private var shouldShowSideColumn: Bool {
+        !timerManager.isTimerActive && hasSideColumn
+    }
+
+    /// The tab-wide page swipe: only with both pages, and only while no timer runs.
+    private var hasPageSwipe: Bool {
+        shouldShowSideColumn && sidePages.count > 1
     }
 
     private var resolvedNotchHeight: CGFloat {
@@ -540,7 +586,7 @@ struct NotchTimerView: View {
     }
 
     private var durationFieldWidth: CGFloat {
-        showTimerPresetsInNotchTab ? 64 : 78
+        hasSideColumn ? TimerComposerMetrics.stackedFieldWidth : TimerComposerMetrics.wideFieldWidth
     }
 
     private var buttonColumnWidth: CGFloat { 210 }
@@ -604,7 +650,7 @@ struct NotchTimerView: View {
 
     /// One line above the composer: the name the next session starts with, from a preset or Start.
     private var sessionNameField: some View {
-        TextField(String(localized: "Name this session (optional)"), text: $pendingSessionName)
+        TextField(String(localized: "Do you want to name this session?"), text: $pendingSessionName)
             .font(.system(size: 12, weight: .medium))
             .textFieldStyle(.plain)
             .foregroundColor(.white)
@@ -680,7 +726,8 @@ private struct TimerControlButton: View {
     let icon: String
     let foreground: Color
     let background: Color
-    let accessibilityLabel: String
+    /// Hover bubble text, doubling as the accessibility label (docs/TOOLTIPS.md).
+    let tooltip: String
     let action: () -> Void
 
     @State private var isHovering = false
@@ -697,8 +744,11 @@ private struct TimerControlButton: View {
         }
         .buttonStyle(.plain)
         .contentShape(Circle())
-        .hoverTooltip(accessibilityLabel, edge: .below)
+        // One hover source: this handler drives both the highlight and the bubble. The
+        // self-hovering `.hoverTooltip(_:edge:)` used to sit here too, a second handler.
         .onHover { hovering in isHovering = hovering }
+        .hoverTooltip(tooltip, edge: .below, isHovering: isHovering)
+        .accessibilityLabel(tooltip)
     }
 }
 
@@ -753,7 +803,7 @@ private struct DurationInputRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .center, spacing: TimerComposerMetrics.durationRowSpacing) {
             DurationField(label: String(localized: "Hours"), value: $hours, range: 0...23, width: fieldWidth)
             colon
             DurationField(label: String(localized: "Minutes"), value: $minutes, range: 0...59, width: fieldWidth)
@@ -815,52 +865,6 @@ private struct DurationField: View {
                 value = number
             }
         )
-    }
-}
-
-private struct TimerPresetCard: View {
-    let preset: TimerPreset
-    let isActive: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(preset.color.gradient)
-                    .frame(width: 30, height: 30)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
-                    Text(preset.formattedDuration)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                }
-                .foregroundStyle(preset.color)
-
-                Spacer()
-
-                Image(systemName: isActive ? "checkmark" : "play.fill")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(isActive ? preset.color : Color.secondary)
-                    .padding(6)
-                    .background(isActive ? preset.color.opacity(0.2) : Color.white.opacity(0.08))
-                    .clipShape(Circle())
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isActive ? preset.color.opacity(0.12) : Color.white.opacity(0.04))
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 

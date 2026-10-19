@@ -47,7 +47,7 @@ struct TimerPopover: View {
             if timerManager.isTimerActive {
                 ActiveTimerSection(timerManager: timerManager)
             } else {
-                TextField(String(localized: "Name this session (optional)"), text: $pendingSessionName)
+                TextField(String(localized: "Do you want to name this session?"), text: $pendingSessionName)
                     .textFieldStyle(.roundedBorder)
                     .onChange(of: pendingSessionName) { _, newValue in
                         if newValue.count > TimerSessionName.maxLength {
@@ -372,7 +372,7 @@ private struct PresetList: View {
                 .padding(.leading, 4)
             
             if presets.isEmpty {
-                Text("Configure presets in Settings")
+                Text("Configure presets in Brain")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .padding(12)
