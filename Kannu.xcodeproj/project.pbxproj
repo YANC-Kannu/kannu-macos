@@ -41,6 +41,7 @@
 		AA1000000000000000000020 /* LoginItemPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000019 /* LoginItemPolicy.swift */; };
 		AA1000000000000000000039 /* HoverDwell.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000038 /* HoverDwell.swift */; };
 		AA10000000000000000000AE /* NotchInteractionGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000AD /* NotchInteractionGeometry.swift */; };
+		AA10000000000000000000CB /* ClosedMusicWingLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000CA /* ClosedMusicWingLayout.swift */; };
 		AA1000000000000000000022 /* ColorSpectrumMath.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000021 /* ColorSpectrumMath.swift */; };
 		AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */; };
 		AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */; };
@@ -114,8 +115,10 @@
 		AA10000000000000000004A3 /* TimerSidePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A2 /* TimerSidePage.swift */; };
 		AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A4 /* TasksHeaderVisibility.swift */; };
 		AA10000000000000000004A7 /* TaskColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A6 /* TaskColor.swift */; };
+		AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BA /* ClipboardCapturePolicy.swift */; };
 		AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */; };
 		AA10000000000000000000B9 /* HostedContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B8 /* HostedContent.swift */; };
+		AA10000000000000000002B1 /* KeychainWritePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000002B0 /* KeychainWritePlan.swift */; };
 		AA10000000000000000000B3 /* AgentSecurityFindingGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B2 /* AgentSecurityFindingGroup.swift */; };
 		AA10000000000000000000B5 /* SecurityFindingAcknowledgement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B4 /* SecurityFindingAcknowledgement.swift */; };
 		AA1000000000000000000093 /* GitHubIssue.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000092 /* GitHubIssue.swift */; };
@@ -124,6 +127,7 @@
 		AA1000000000000000000099 /* ListeningModeNotificationFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000098 /* ListeningModeNotificationFilter.swift */; };
 		AA100000000000000000009B /* MediaRemoteAdapterOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009A /* MediaRemoteAdapterOwnership.swift */; };
 		AA100000000000000000009D /* UsageWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009C /* UsageWindows.swift */; };
+		AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000C8 /* JSONLUsageCache.swift */; };
 		AA100000000000000000009F /* AgentExecutionClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009E /* AgentExecutionClock.swift */; };
 		AA10000000000000000000A8 /* PolicySighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000A7 /* PolicySighting.swift */; };
 		AA10000000000000000000AA /* AgentPolicyWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000A9 /* AgentPolicyWatcher.swift */; };
@@ -175,6 +179,7 @@
 		AA1000000000000000000019 /* LoginItemPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LoginItemPolicy.swift; path = Kannu/helpers/LoginItemPolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000038 /* HoverDwell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverDwell.swift; path = Kannu/helpers/HoverDwell.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000AD /* NotchInteractionGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchInteractionGeometry.swift; path = Kannu/helpers/NotchInteractionGeometry.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000000CA /* ClosedMusicWingLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClosedMusicWingLayout.swift; path = Kannu/sizing/ClosedMusicWingLayout.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000021 /* ColorSpectrumMath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ColorSpectrumMath.swift; path = Kannu/helpers/ColorSpectrumMath.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeUsageSnapshot.swift; path = Kannu/managers/AgentStatus/ClaudeUsageSnapshot.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeDesktopUsageHistory.swift; path = Kannu/managers/AgentStatus/ClaudeDesktopUsageHistory.swift; sourceTree = SOURCE_ROOT; };
@@ -248,8 +253,10 @@
 		AA10000000000000000004A2 /* TimerSidePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerSidePage.swift; path = Kannu/managers/TimerSidePage.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A4 /* TasksHeaderVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TasksHeaderVisibility.swift; path = Kannu/managers/Tasks/TasksHeaderVisibility.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A6 /* TaskColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskColor.swift; path = Kannu/managers/Tasks/TaskColor.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000000BA /* ClipboardCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardCapturePolicy.swift; path = Kannu/managers/ClipboardCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardPanelPlacement.swift; path = Kannu/managers/Display/ClipboardPanelPlacement.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B8 /* HostedContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostedContent.swift; path = Kannu/helpers/HostedContent.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000002B0 /* KeychainWritePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeychainWritePlan.swift; path = Kannu/managers/LLMUsage/Quota/KeychainWritePlan.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B2 /* AgentSecurityFindingGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentSecurityFindingGroup.swift; path = Kannu/managers/AgentStatus/AgentSecurityFindingGroup.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B4 /* SecurityFindingAcknowledgement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SecurityFindingAcknowledgement.swift; path = Kannu/managers/AgentStatus/SecurityFindingAcknowledgement.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000092 /* GitHubIssue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GitHubIssue.swift; path = Kannu/managers/GitHubIssue.swift; sourceTree = SOURCE_ROOT; };
@@ -258,6 +265,7 @@
 		AA1000000000000000000098 /* ListeningModeNotificationFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ListeningModeNotificationFilter.swift; path = Kannu/managers/ListeningModeNotificationFilter.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009A /* MediaRemoteAdapterOwnership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MediaRemoteAdapterOwnership.swift; path = Kannu/managers/MediaRemoteAdapterOwnership.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009C /* UsageWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UsageWindows.swift; path = Kannu/managers/LLMUsage/UsageWindows.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000000C8 /* JSONLUsageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = JSONLUsageCache.swift; path = Kannu/managers/LLMUsage/JSONLUsageCache.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009E /* AgentExecutionClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentExecutionClock.swift; path = Kannu/managers/AgentStatus/AgentExecutionClock.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000A7 /* PolicySighting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PolicySighting.swift; path = Kannu/managers/AgentStatus/PolicySighting.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000A9 /* AgentPolicyWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentPolicyWatcher.swift; path = Kannu/managers/AgentStatus/AgentPolicyWatcher.swift; sourceTree = SOURCE_ROOT; };
@@ -659,6 +667,7 @@
 				AA1000000000000000000020 /* LoginItemPolicy.swift in Sources */,
 				AA1000000000000000000039 /* HoverDwell.swift in Sources */,
 				AA10000000000000000000AE /* NotchInteractionGeometry.swift in Sources */,
+				AA10000000000000000000CB /* ClosedMusicWingLayout.swift in Sources */,
 				AA1000000000000000000022 /* ColorSpectrumMath.swift in Sources */,
 				AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */,
 				AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */,
@@ -732,8 +741,10 @@
 				AA10000000000000000004A3 /* TimerSidePage.swift in Sources */,
 				AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */,
 				AA10000000000000000004A7 /* TaskColor.swift in Sources */,
+				AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */,
 				AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */,
 				AA10000000000000000000B9 /* HostedContent.swift in Sources */,
+				AA10000000000000000002B1 /* KeychainWritePlan.swift in Sources */,
 				AA100000000000000000F008 /* TermsOfUse.swift in Sources */,
 				AA10000000000000000000B3 /* AgentSecurityFindingGroup.swift in Sources */,
 				AA10000000000000000000B5 /* SecurityFindingAcknowledgement.swift in Sources */,
@@ -743,6 +754,7 @@
 				AA1000000000000000000099 /* ListeningModeNotificationFilter.swift in Sources */,
 				AA100000000000000000009B /* MediaRemoteAdapterOwnership.swift in Sources */,
 				AA100000000000000000009D /* UsageWindows.swift in Sources */,
+				AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */,
 				AA100000000000000000009F /* AgentExecutionClock.swift in Sources */,
 				AA10000000000000000000A8 /* PolicySighting.swift in Sources */,
 				AA10000000000000000000AA /* AgentPolicyWatcher.swift in Sources */,
