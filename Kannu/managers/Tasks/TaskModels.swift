@@ -90,8 +90,10 @@ struct RemoteTaskInfo: Codable, Equatable {
     var lastSeenAt: Date
     /// GitLab only: an issue or a merge request. Nil for Jira, and in a file written before GitLab.
     var gitlabKind: GitLabKind? = nil
-    /// GitLab only: the item's page, kept only when it is on the server the task came from
-    /// (`GitLabHost.isWebURL`), and checked again before it is opened.
+    /// The item's page, kept only when it is on the site or server the task came from
+    /// (`GitLabHost.isWebURL` and each source's own check), and checked again before it is opened.
+    /// Named for GitLab, the first source that had one; GitHub, Linear and Todoist keep theirs here
+    /// too, so the file's shape never changed.
     var gitlabWebURL: String? = nil
     /// Where the item stands, in Jira's status-category words: "new" (To Do), "indeterminate" (In
     /// Progress) or "done". Jira's own `status.statusCategory.key`; for GitLab, set by

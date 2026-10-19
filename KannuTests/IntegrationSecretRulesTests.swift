@@ -46,9 +46,11 @@ final class IntegrationSecretRulesTests: XCTestCase {
                                         "AllTasksPage", "TaskDetailPage"].map { "Kannu/components/Settings/\($0).swift" }
     private static let tasksDirectory = "Kannu/managers/Tasks"
 
-    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "JiraCredentialStore", "GitLabCredentialStore"]
-    /// The functions a row's appearance calls, one per source.
-    static let onAppearSyncs = ["syncJiraIfStale", "syncGitLabIfStale"]
+    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "CredentialStore", "TaskCredentials", "SecretSlot"]
+    /// The engine's syncs that run without the user asking: a page appearing, the source saying it
+    /// changed (`SourceSync`). Every source runs through them.
+    static let onAppearSyncs = ["syncIfStale", "externalChange"]
+    private static let enginePath = "Kannu/managers/Tasks/SourceSync.swift"
     static let secretWords = ["token", "email", "jql", "title", "summary", "credential", "displayname", "password", "authorization"]
 
     private static func read(_ path: String) throws -> String {
@@ -113,26 +115,42 @@ final class IntegrationSecretRulesTests: XCTestCase {
         XCTAssertEqual(setters, ["GitLabAPI.swift"])
     }
 
+    /// The engine's class, without the protocol that declares the same names first.
+    private static func engine() throws -> String {
+        let source = try read(enginePath)
+        guard let start = source.range(of: "final class SourceSync<") else { return "" }
+        return String(source[start.lowerBound...])
+    }
+
     func testTheSyncOnAppearNeverAsksForKeychainAccess() throws {
-        let manager = try Self.read("\(Self.tasksDirectory)/TasksManager.swift")
+        let engine = try Self.engine()
         for function in Self.onAppearSyncs {
-            XCTAssertEqual(Self.interactiveProblems(in: manager, function: function), [], function)
+            XCTAssertEqual(Self.interactiveProblems(in: engine, function: function), [], function)
         }
     }
 
     func testTheSyncOnAppearNeverRetriesARefusedToken() throws {
-        let manager = try Self.read("\(Self.tasksDirectory)/TasksManager.swift")
+        let engine = try Self.engine()
         for function in Self.onAppearSyncs {
-            XCTAssertEqual(Self.retryProblems(in: manager, function: function), [], function)
+            XCTAssertEqual(Self.retryProblems(in: engine, function: function), [], function)
         }
     }
 
     func testEachSourceRowSyncsOnAppear() throws {
         let page = try Self.read(Self.settingsPaths[0])
         let lifecycle = Self.lifecycleBlocks(in: page).joined(separator: "\n")
-        for function in Self.onAppearSyncs {
-            XCTAssertTrue(lifecycle.contains("\(function)()"), "\(function) is not called from a lifecycle block")
+        XCTAssertTrue(lifecycle.contains("manager.syncIfStale("), "no source row syncs from a lifecycle block")
+    }
+
+    /// The per-source sync state lives in `SourceSync`, one engine for every source: none of it may
+    /// grow back in the manager, where Jira's and GitLab's copies once drifted apart.
+    func testTheManagerKeepsNoSyncStateOfItsOwn() throws {
+        let manager = try Self.read("\(Self.tasksDirectory)/TasksManager.swift")
+        for name in ["Generation", "SyncInFlight", "SyncWhenReady", "pendingJiraRefresh", "ConnectsInFlight", "lastJiraSync", "lastGitLabSync"] {
+            XCTAssertFalse(manager.contains(name), "TasksManager keeps \(name) again")
         }
+        XCTAssertTrue(manager.contains("lazy var jira = SourceSync("), "Jira no longer runs on the engine")
+        XCTAssertTrue(manager.contains("lazy var gitlab = SourceSync("), "GitLab no longer runs on the engine")
     }
 
     func testTheTokenRemovalResultIsAlwaysUsed() throws {
@@ -164,7 +182,7 @@ final class IntegrationSecretRulesTests: XCTestCase {
         let lifecycle = Self.lifecycleBlocks(in: planted).joined(separator: "\n")
         XCTAssertEqual(Self.keychainUses(in: lifecycle), ["KeychainReader", "SecureSecretsStore"])
         XCTAssertEqual(Self.keychainUses(in: planted), ["KeychainReader", "SecItem", "SecureSecretsStore"])
-        XCTAssertEqual(Self.keychainUses(in: ".onAppear { manager.syncJiraIfStale() }"), [])
+        XCTAssertEqual(Self.keychainUses(in: ".onAppear { manager.syncIfStale(source) }"), [])
     }
 
     func testTheLogScannerCatchesPlantedOffenders() {
@@ -189,19 +207,19 @@ final class IntegrationSecretRulesTests: XCTestCase {
 
     func testTheInteractiveScannerCatchesPlantedOffenders() {
         XCTAssertEqual(Self.interactiveProblems(in: """
-            func syncJiraIfStale(now: Date = Date()) {
-                guard isJiraSyncOn else { return }
-                syncJira(interactive: false, using: nil)
+            func syncIfStale(now: Date = Date()) {
+                guard isSyncOn else { return }
+                sync(interactive: false, using: nil)
             }
             """), [])
         XCTAssertFalse(Self.interactiveProblems(in: """
-            func syncJiraIfStale(now: Date = Date()) {
-                syncJira(interactive: true, using: nil)
+            func syncIfStale(now: Date = Date()) {
+                sync(interactive: true, using: nil)
             }
             """).isEmpty)
         XCTAssertFalse(Self.interactiveProblems(in: """
-            func syncJiraIfStale() {
-                Task { _ = await JiraCredentialStore.load(allowInteraction: true) }
+            func syncIfStale() {
+                Task { _ = await store.load(allowInteraction: true) }
             }
             """).isEmpty)
         XCTAssertFalse(Self.interactiveProblems(in: "func somethingElse() {}").isEmpty, "a missing function is a problem")
@@ -209,15 +227,15 @@ final class IntegrationSecretRulesTests: XCTestCase {
 
     func testTheRetryScannerCatchesPlantedOffenders() {
         XCTAssertEqual(Self.retryProblems(in: """
-            func syncJiraIfStale(now: Date = Date()) {
-                guard jiraSync.allowsSyncOnAppear(lastSuccess: lastJiraSync, now: now, staleAfter: 300) else { return }
-                syncJira(interactive: false, using: nil)
+            func syncIfStale(now: Date = Date()) {
+                guard state.allowsSyncOnAppear(lastSuccess: lastSuccess, now: now, staleAfter: 300) else { return }
+                sync(interactive: false, using: nil)
             }
             """), [])
         XCTAssertFalse(Self.retryProblems(in: """
-            func syncJiraIfStale(now: Date = Date()) {
-                if let lastJiraSync, now.timeIntervalSince(lastJiraSync) < 300 { return }
-                syncJira(interactive: false, using: nil)
+            func syncIfStale(now: Date = Date()) {
+                if let lastSuccess, now.timeIntervalSince(lastSuccess) < 300 { return }
+                sync(interactive: false, using: nil)
             }
             """).isEmpty, "the original shape: only the last success is checked")
         XCTAssertFalse(Self.retryProblems(in: "func somethingElse() {}").isEmpty, "a missing function is a problem")
@@ -225,15 +243,15 @@ final class IntegrationSecretRulesTests: XCTestCase {
 
     func testTheRemovalScannerCatchesPlantedOffenders() {
         let planted = Self.code("""
-            Task { await JiraCredentialStore.remove() }
-            _ = await JiraCredentialStore.remove()
-            await JiraCredentialStore.remove()
-            let removed = await JiraCredentialStore.remove()
-            guard await JiraCredentialStore.remove() else { return }
-            if await JiraCredentialStore.remove() { done() }
-            // Task { await JiraCredentialStore.remove() } in a comment is fine
-            Task { await GitLabCredentialStore.remove() }
-            let gone = await GitLabCredentialStore.remove()
+            Task { await store.remove() }
+            _ = await store.remove()
+            await store.remove()
+            let removed = await store.remove()
+            guard await store.remove() else { return }
+            if await store.remove() { done() }
+            // Task { await store.remove() } in a comment is fine
+            Task { await self.store.remove() }
+            let gone = await self.store.remove()
             """)
         XCTAssertEqual(Self.discardedRemovals(in: planted).count, 4, "\(Self.discardedRemovals(in: planted))")
     }
@@ -257,8 +275,8 @@ final class IntegrationSecretRulesTests: XCTestCase {
             """, function: "syncGitLabIfStale").isEmpty, "a sync on appear that never asks allowsSyncOnAppear")
         XCTAssertFalse(Self.interactiveProblems(in: "func syncJiraIfStale() { syncJira(interactive: false, using: nil) }",
                                                 function: "syncGitLabIfStale").isEmpty, "a missing function is a problem")
-        XCTAssertEqual(Self.keychainUses(in: ".onAppear { _ = await GitLabCredentialStore.load(allowInteraction: false) }"),
-                       ["GitLabCredentialStore"])
+        XCTAssertEqual(Self.keychainUses(in: ".onAppear { _ = await TaskCredentials.gitlab.load(allowInteraction: false) }"),
+                       ["TaskCredentials"])
     }
 
     // MARK: - Rules
@@ -312,7 +330,7 @@ final class IntegrationSecretRulesTests: XCTestCase {
         return found
     }
 
-    static func interactiveProblems(in source: String, function: String = "syncJiraIfStale") -> [String] {
+    static func interactiveProblems(in source: String, function: String = "syncIfStale") -> [String] {
         guard let body = functionBody(function, in: source) else {
             return ["\(function): not found"]
         }
@@ -326,17 +344,17 @@ final class IntegrationSecretRulesTests: XCTestCase {
         return problems
     }
 
-    static func retryProblems(in source: String, function: String = "syncJiraIfStale") -> [String] {
+    static func retryProblems(in source: String, function: String = "syncIfStale") -> [String] {
         guard let body = functionBody(function, in: source) else {
             return ["\(function): not found"]
         }
         return body.contains(".allowsSyncOnAppear(") ? [] : ["\(function): does not ask SourceSyncState.allowsSyncOnAppear"]
     }
 
-    static let removeCalls = ["JiraCredentialStore.remove(", "GitLabCredentialStore.remove("]
+    static let removeCalls = ["store.remove("]
 
-    /// Lines that remove a saved token (`JiraCredentialStore.remove()`,
-    /// `GitLabCredentialStore.remove()`) and do nothing with its answer.
+    /// Lines that remove a saved token (`SourceSync.removeToken`'s `store.remove()`) and do nothing
+    /// with its answer.
     static func discardedRemovals(in source: String) -> [String] {
         source.components(separatedBy: "\n").filter { line in
             guard removeCalls.contains(where: { line.contains($0) }) else { return false }

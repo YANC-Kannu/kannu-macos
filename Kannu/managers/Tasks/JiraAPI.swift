@@ -46,6 +46,8 @@ struct JiraCredential: Codable, Equatable, CustomStringConvertible, CustomDebugS
     }
 }
 
+extension JiraCredential: StoredCredential {}
+
 /// `GET /rest/api/3/myself`: who the token belongs to. Only what Kannu shows.
 struct JiraMyself: Decodable, Equatable {
     let accountId: String

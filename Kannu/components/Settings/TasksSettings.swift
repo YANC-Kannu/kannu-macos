@@ -137,15 +137,15 @@ struct TasksSettings: View {
             Text("Its recorded time is deleted too.")
         }
         .confirmationDialog("Disconnect Jira?", isPresented: $confirmsJiraDisconnect, titleVisibility: .visible) {
-            Button("Keep Jira Tasks") { TasksManager.shared.disconnectJira(removeTasks: false) }
-            Button("Remove Jira Tasks", role: .destructive) { TasksManager.shared.disconnectJira(removeTasks: true) }
+            Button("Keep Jira Tasks") { TasksManager.shared.disconnect(.jira, removeTasks: false) }
+            Button("Remove Jira Tasks", role: .destructive) { TasksManager.shared.disconnect(.jira, removeTasks: true) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Kannu forgets the token. Keep the Jira tasks and their time, or remove them.")
         }
         .confirmationDialog("Disconnect GitLab?", isPresented: $confirmsGitLabDisconnect, titleVisibility: .visible) {
-            Button("Keep GitLab Tasks") { TasksManager.shared.disconnectGitLab(removeTasks: false) }
-            Button("Remove GitLab Tasks", role: .destructive) { TasksManager.shared.disconnectGitLab(removeTasks: true) }
+            Button("Keep GitLab Tasks") { TasksManager.shared.disconnect(.gitlab, removeTasks: false) }
+            Button("Remove GitLab Tasks", role: .destructive) { TasksManager.shared.disconnect(.gitlab, removeTasks: true) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Kannu forgets the token. Keep the GitLab tasks and their time, or remove them.")
@@ -358,18 +358,18 @@ private struct TaskSourcesSection: View {
             .settingsHighlight(id: SettingsDeepLink.tasksLocalSourceHighlightID)
 
             jiraRow(count: counts[.jira] ?? 0)
-            if jiraSiteHost.isEmpty, manager.jiraTokenRemovalFailed {
+            if jiraSiteHost.isEmpty, manager.tokenRemovalFailed(.jira) {
                 SettingsErrorText(String(localized: "Couldn't remove the Jira token from your Keychain."))
                 SettingsActionRow("Saved Jira token", description: "Or delete com.kannu.app.secure-secrets (jira-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingJiraToken() }
+                    Button("Remove Token") { manager.retryRemovingToken(.jira) }
                 }
             }
 
             gitlabRow(count: counts[.gitlab] ?? 0)
-            if gitlabHost.isEmpty, manager.gitlabTokenRemovalFailed {
+            if gitlabHost.isEmpty, manager.tokenRemovalFailed(.gitlab) {
                 SettingsErrorText(String(localized: "Couldn't remove the GitLab token from your Keychain."))
                 SettingsActionRow("Saved GitLab token", description: "Or delete com.kannu.app.secure-secrets (gitlab-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingGitLabToken() }
+                    Button("Remove Token") { manager.retryRemovingToken(.gitlab) }
                 }
             }
         } header: {
@@ -393,8 +393,8 @@ private struct TaskSourcesSection: View {
     private var isGitLabConnected: Bool { !gitlabHost.isEmpty }
 
     private func jiraRow(count: Int) -> some View {
-        let problem = TaskSourceStatus.problem(manager.jiraSync, source: .jira)
-        let status = isJiraConnected && (problem != nil || manager.jiraSync == .needsKeychainApproval)
+        let problem = TaskSourceStatus.problem(manager.syncState(.jira), source: .jira)
+        let status = isJiraConnected && (problem != nil || manager.syncState(.jira) == .needsKeychainApproval)
             ? String(localized: "Needs attention")
             : TaskSourceStatus.jiraText(connected: isJiraConnected, name: jiraAccountDisplayName)
         return LabeledContent {
@@ -417,12 +417,12 @@ private struct TaskSourcesSection: View {
             }
         }
         .settingsHighlight(id: SettingsDeepLink.tasksSourcesHighlightID)
-        .onAppear { manager.syncJiraIfStale() }
+        .onAppear { manager.syncIfStale(.jira) }
     }
 
     private func gitlabRow(count: Int) -> some View {
-        let problem = TaskSourceStatus.problem(manager.gitlabSync, source: .gitlab)
-        let status = isGitLabConnected && (problem != nil || manager.gitlabSync == .needsKeychainApproval)
+        let problem = TaskSourceStatus.problem(manager.syncState(.gitlab), source: .gitlab)
+        let status = isGitLabConnected && (problem != nil || manager.syncState(.gitlab) == .needsKeychainApproval)
             ? String(localized: "Needs attention")
             : TaskSourceStatus.gitlabText(host: gitlabHost, username: gitlabUsername, canLogTime: gitlabCanLogTime)
         return LabeledContent {
@@ -445,7 +445,7 @@ private struct TaskSourcesSection: View {
             }
         }
         .settingsHighlight(id: SettingsDeepLink.tasksGitLabSourceHighlightID)
-        .onAppear { manager.syncGitLabIfStale() }
+        .onAppear { manager.syncIfStale(.gitlab) }
     }
 }
 

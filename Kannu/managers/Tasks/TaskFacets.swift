@@ -212,7 +212,13 @@ enum TaskFacets {
     /// a label says so ("In progress", "doing", "WIP", "workflow::in-progress"), To Do otherwise.
     static func gitlabCategory(kind: GitLabKind, labels: [String]) -> String {
         if kind == .mergeRequest { return inProgressCategory }
-        return labels.contains(where: isInProgressLabel) ? inProgressCategory : toDoCategory
+        return labelCategory(labels)
+    }
+
+    /// An item whose source has no In Progress of its own (a GitHub issue, a Todoist task): In
+    /// Progress when a label says so, To Do otherwise.
+    static func labelCategory(_ labels: [String]) -> String {
+        labels.contains(where: isInProgressLabel) ? inProgressCategory : toDoCategory
     }
 
     /// "In progress", "in-progress", "Doing", "WIP", and the same after a scope ("workflow::doing").

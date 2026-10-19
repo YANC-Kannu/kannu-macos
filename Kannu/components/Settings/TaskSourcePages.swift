@@ -216,8 +216,8 @@ private struct JiraConnectionSection: View {
     let context: TasksPageContext
 
     private var isConnected: Bool { !jiraSiteHost.isEmpty }
-    private var problem: String? { TaskSourceStatus.problem(manager.jiraSync, source: .jira) }
-    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.jiraSync) }
+    private var problem: String? { TaskSourceStatus.problem(manager.syncState(.jira), source: .jira) }
+    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.syncState(.jira)) }
 
     var body: some View {
         Section {
@@ -245,15 +245,15 @@ private struct JiraConnectionSection: View {
             if isConnected, let problem {
                 SettingsErrorText(problem)
             }
-            if isConnected, manager.jiraSync == .needsKeychainApproval {
+            if isConnected, manager.syncState(.jira) == .needsKeychainApproval {
                 SettingsActionRow("Keychain access", description: "Let Kannu read the saved Jira token.") {
-                    Button("Allow Keychain Access") { manager.refreshJira() }
+                    Button("Allow Keychain Access") { manager.refresh(.jira) }
                 }
             }
-            if !isConnected, manager.jiraTokenRemovalFailed {
+            if !isConnected, manager.tokenRemovalFailed(.jira) {
                 SettingsErrorText(String(localized: "Couldn't remove the Jira token from your Keychain."))
                 SettingsActionRow("Saved Jira token", description: "Or delete com.kannu.app.secure-secrets (jira-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingJiraToken() }
+                    Button("Remove Token") { manager.retryRemovingToken(.jira) }
                 }
             }
 
@@ -267,7 +267,7 @@ private struct JiraConnectionSection: View {
                 }
                 // On the row that holds the switch, so it exists whenever the switch is clicked.
                 .onChange(of: jiraEnabled) { _, isOn in
-                    if isOn { manager.syncJiraIfStale() }
+                    if isOn { manager.syncIfStale(.jira) }
                 }
 
                 TaskColorRow(
@@ -295,25 +295,25 @@ private struct JiraConnectionSection: View {
     private var issuesRow: some View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                if manager.isJiraSyncing {
+                if manager.isSyncing(.jira) {
                     ProgressView()
                         .controlSize(.small)
                 }
                 TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                    Button("Refresh") { manager.refreshJira() }
+                    Button("Refresh") { manager.refresh(.jira) }
                         .disabled(!canRefresh(at: context.date))
                 }
             }
         } label: {
             TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
                 SettingsRowLabel("Jira issues", description: Text(verbatim: TaskSourceStatus.syncCaption(
-                    manager.jiraSync, enabled: jiraEnabled, at: context.date, source: .jira)))
+                    manager.syncState(.jira), enabled: jiraEnabled, at: context.date, source: .jira)))
             }
         }
     }
 
     private func canRefresh(at date: Date) -> Bool {
-        guard jiraEnabled, manager.isReady, !manager.isJiraSyncing else { return false }
+        guard jiraEnabled, manager.isReady, !manager.isSyncing(.jira) else { return false }
         return rateLimitedUntil.map { $0 <= date } ?? true
     }
 
@@ -322,10 +322,10 @@ private struct JiraConnectionSection: View {
             HStack(spacing: SettingsMetrics.rowContent) {
                 TextField("Issue filter (JQL)", text: $jiraJQL, prompt: Text(verbatim: JiraAPI.defaultJQL))
                     .labelsHidden()
-                    .onSubmit { manager.refreshJira() }
+                    .onSubmit { manager.refresh(.jira) }
                 Button("Reset") {
                     jiraJQL = JiraAPI.defaultJQL
-                    manager.refreshJira()
+                    manager.refresh(.jira)
                 }
                 .disabled(JiraAPI.effectiveJQL(jiraJQL) == JiraAPI.defaultJQL)
             }
@@ -351,8 +351,8 @@ private struct GitLabConnectionSection: View {
     let context: TasksPageContext
 
     private var isConnected: Bool { !gitlabHost.isEmpty }
-    private var problem: String? { TaskSourceStatus.problem(manager.gitlabSync, source: .gitlab) }
-    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.gitlabSync) }
+    private var problem: String? { TaskSourceStatus.problem(manager.syncState(.gitlab), source: .gitlab) }
+    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.syncState(.gitlab)) }
 
     var body: some View {
         Section {
@@ -382,15 +382,15 @@ private struct GitLabConnectionSection: View {
             if isConnected, let problem {
                 SettingsErrorText(problem)
             }
-            if isConnected, manager.gitlabSync == .needsKeychainApproval {
+            if isConnected, manager.syncState(.gitlab) == .needsKeychainApproval {
                 SettingsActionRow("GitLab Keychain access", description: "Let Kannu read the saved GitLab token.") {
-                    Button("Allow Keychain Access") { manager.refreshGitLab() }
+                    Button("Allow Keychain Access") { manager.refresh(.gitlab) }
                 }
             }
-            if !isConnected, manager.gitlabTokenRemovalFailed {
+            if !isConnected, manager.tokenRemovalFailed(.gitlab) {
                 SettingsErrorText(String(localized: "Couldn't remove the GitLab token from your Keychain."))
                 SettingsActionRow("Saved GitLab token", description: "Or delete com.kannu.app.secure-secrets (gitlab-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingGitLabToken() }
+                    Button("Remove Token") { manager.retryRemovingToken(.gitlab) }
                 }
             }
 
@@ -404,7 +404,7 @@ private struct GitLabConnectionSection: View {
                 }
                 // On the row that holds the switch, so it exists whenever the switch is clicked.
                 .onChange(of: gitlabEnabled) { _, isOn in
-                    if isOn { manager.syncGitLabIfStale() }
+                    if isOn { manager.syncIfStale(.gitlab) }
                 }
 
                 TaskColorRow(
@@ -422,7 +422,7 @@ private struct GitLabConnectionSection: View {
                 // On the row that holds the switch, so it exists whenever the switch is clicked. The
                 // task order follows the switch on its own; this brings the fetch in line with it.
                 .onChange(of: gitlabIncludeMergeRequests) { _, _ in
-                    manager.gitlabMergeRequestsSwitched()
+                    manager.sourceOptionsChanged(.gitlab)
                 }
 
                 itemsRow
@@ -445,25 +445,25 @@ private struct GitLabConnectionSection: View {
     private var itemsRow: some View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                if manager.isGitLabSyncing {
+                if manager.isSyncing(.gitlab) {
                     ProgressView()
                         .controlSize(.small)
                 }
                 TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                    Button("Refresh") { manager.refreshGitLab() }
+                    Button("Refresh") { manager.refresh(.gitlab) }
                         .disabled(!canRefresh(at: context.date))
                 }
             }
         } label: {
             TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
                 SettingsRowLabel("GitLab items", description: Text(verbatim: TaskSourceStatus.syncCaption(
-                    manager.gitlabSync, enabled: gitlabEnabled, at: context.date, source: .gitlab)))
+                    manager.syncState(.gitlab), enabled: gitlabEnabled, at: context.date, source: .gitlab)))
             }
         }
     }
 
     private func canRefresh(at date: Date) -> Bool {
-        guard gitlabEnabled, manager.isReady, !manager.isGitLabSyncing else { return false }
+        guard gitlabEnabled, manager.isReady, !manager.isSyncing(.gitlab) else { return false }
         return rateLimitedUntil.map { $0 <= date } ?? true
     }
 }

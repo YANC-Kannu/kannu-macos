@@ -60,7 +60,7 @@ final class TasksPopoverRulesTests: XCTestCase {
     static let railIconPath = "Kannu/components/Notch/TimerRailIcon.swift"
     static let newFiles = [buttonPath, popoverPath, menuPath, sideColumnPath, swipeMonitorPath, logTimeCardsPath, taskFormPath, railIconPath]
     static let notchDirectories = ["Kannu/components/Notch", "Kannu/components/AgentStatus"]
-    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "JiraCredentialStore", "GitLabCredentialStore"]
+    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "CredentialStore", "TaskCredentials", "EKEventStore"]
     static let tickers = ["Timer.publish", "Timer.scheduledTimer", "Timer(timeInterval", ".autoconnect()", "DispatchSourceTimer"]
     /// What the source menu must never bind: data keys (what is fetched), and the removed Local tasks key.
     static let dataKeys = ["jiraEnabled", "gitlabEnabled", "githubEnabled", "linearEnabled", "todoistEnabled",
@@ -367,10 +367,10 @@ final class TasksPopoverRulesTests: XCTestCase {
     func testTheKeychainAndTickerScannersCatchPlantedOffenders() {
         let planted = [
             "A.swift": "let value = SecureSecretsStore.read(.jiraCredential)",
-            "B.swift": "Task { _ = await JiraCredentialStore.load(allowInteraction: false) }",
+            "B.swift": "Task { _ = await TaskCredentials.jira.load(allowInteraction: false) }",
             "C.swift": "Text(\"fine\")",
         ]
-        XCTAssertEqual(Self.keychainUses(in: planted), ["A.swift: SecureSecretsStore", "B.swift: JiraCredentialStore"])
+        XCTAssertEqual(Self.keychainUses(in: planted), ["A.swift: SecureSecretsStore", "B.swift: TaskCredentials"])
         let tickers = [
             "A.swift": ".onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in }",
             "B.swift": "ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in tick() }",

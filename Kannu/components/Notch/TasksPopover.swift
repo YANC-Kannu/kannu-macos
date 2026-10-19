@@ -34,7 +34,7 @@ import SwiftUI
 ///
 /// Live time ticks through a `TimelineView`, once a second, only while the Now card is on screen
 /// and running; the manager never publishes every second. Appearing asks each source for a sync
-/// only when its last one is stale, and never with the Keychain dialog (`syncJiraIfStale`). This
+/// only when its last one is stale, and never with the Keychain dialog (`SourceSync.syncIfStale`). This
 /// view reads no secret: titles and keys are the sources' own text and render verbatim.
 struct TasksPopover: View {
     @ObservedObject private var manager = TasksManager.shared

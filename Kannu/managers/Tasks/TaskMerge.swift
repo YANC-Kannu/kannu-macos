@@ -31,6 +31,9 @@ struct RemoteIssue: Equatable {
     var spentSeconds: Int?
     /// GitLab only.
     var gitlab: GitLabRef? = nil
+    /// The item's page, for a source other than GitLab (GitHub, Linear, Todoist): already checked to
+    /// be on the connected site or server, nil otherwise. Kept in `RemoteTaskInfo.gitlabWebURL`.
+    var webURL: String? = nil
     /// "new", "indeterminate" or "done" (`RemoteTaskInfo.statusCategory`).
     var statusCategory: String? = nil
     /// The item's labels; nil when the source sent none.
@@ -166,6 +169,8 @@ enum TaskMerge {
                     remote.gitlabProjectID = gitlab.projectID
                     remote.gitlabIID = gitlab.iid
                     remote.gitlabWebURL = gitlab.webURL
+                } else if source != .gitlab {
+                    remote.gitlabWebURL = issue.webURL
                 }
                 task.title = title
                 switch task.visibility {
@@ -202,7 +207,7 @@ enum TaskMerge {
                     gitlabIID: issue.gitlab?.iid,
                     lastSeenAt: now,
                     gitlabKind: issue.gitlab?.kind,
-                    gitlabWebURL: issue.gitlab?.webURL,
+                    gitlabWebURL: issue.gitlab?.webURL ?? issue.webURL,
                     statusCategory: issue.statusCategory,
                     labels: issue.labels,
                     weight: issue.weight,

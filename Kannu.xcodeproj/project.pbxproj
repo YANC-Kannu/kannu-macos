@@ -98,6 +98,8 @@
 		AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A4 /* TaskDetailSummary.swift */; };
 		AA10000000000000000005A7 /* TaskArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A6 /* TaskArchive.swift */; };
 		AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A8 /* HoverRevealMotion.swift */; };
+		AA10000000000000000005B7 /* SourceSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B6 /* SourceSync.swift */; };
+		AA10000000000000000005B5 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B4 /* CredentialStore.swift */; };
 		AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B2 /* TaskSourceFacts.swift */; };
 		AA10000000000000000005B1 /* HoverRevealText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B0 /* HoverRevealText.swift */; };
 		AA10000000000000000005AF /* TimerDurationDigits.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AE /* TimerDurationDigits.swift */; };
@@ -226,6 +228,8 @@
 		AA10000000000000000005A4 /* TaskDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskDetailSummary.swift; path = Kannu/managers/Tasks/TaskDetailSummary.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A6 /* TaskArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskArchive.swift; path = Kannu/managers/Tasks/TaskArchive.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A8 /* HoverRevealMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealMotion.swift; path = Kannu/components/Notch/HoverRevealMotion.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B6 /* SourceSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SourceSync.swift; path = Kannu/managers/Tasks/SourceSync.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B4 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CredentialStore.swift; path = Kannu/managers/Tasks/CredentialStore.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005B2 /* TaskSourceFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskSourceFacts.swift; path = Kannu/managers/Tasks/TaskSourceFacts.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005B0 /* HoverRevealText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealText.swift; path = Kannu/components/Notch/HoverRevealText.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005AE /* TimerDurationDigits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerDurationDigits.swift; path = Kannu/components/Notch/TimerDurationDigits.swift; sourceTree = SOURCE_ROOT; };
@@ -704,6 +708,8 @@
 				AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */,
 				AA10000000000000000005A7 /* TaskArchive.swift in Sources */,
 				AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */,
+				AA10000000000000000005B7 /* SourceSync.swift in Sources */,
+				AA10000000000000000005B5 /* CredentialStore.swift in Sources */,
 				AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */,
 				AA10000000000000000005B1 /* HoverRevealText.swift in Sources */,
 				AA10000000000000000005AF /* TimerDurationDigits.swift in Sources */,

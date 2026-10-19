@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Jira and GitLab sync through one engine that every source will share
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 2 of the task-sources PR: `SourceSync` and `CredentialStore`, with Jira and GitLab moved onto them
+- **Changes:**
+  - New `SourceSync` (logic target) holds one source's sync: its state, generation, in-flight marker, kept refresh, Connect guards and token removal. TasksManager no longer keeps a copy per source. It holds one engine each for Jira and GitLab (`jira`, `gitlab`), is their `TaskSourceHost` (it merges their items with `TaskMerge` and publishes their changes), and loses about 420 lines.
+  - What does not change: a page appearing syncs only a stale source, never with the Keychain dialog and never after a refused token. Refresh asked during a sync is kept and runs after it, with the new options, except after a refusal, a sign-in to reconnect or a declined dialog. A result for an older connection is dropped. Connect saves nothing until the source accepted the credential, nor over a Disconnect that landed meanwhile. Remove Token waits for a Connect in flight.
+  - Fix: GitLab now has Jira's guards. A Refresh asked during a GitLab sync is kept instead of dropped. A GitLab Connect counts itself in flight and re-checks before saving. Remove GitLab Token waits for it.
+  - New `CredentialStore` replaces the twin `JiraCredentialStore` and `GitLabCredentialStore`: one serial queue per item, with the Keychain reached through a `SecretSlot` so the store is tested without it. The items and their contents are exactly those saved before (`TaskCredentials.jira`, `.gitlab`), so nobody connects again.
+  - `JiraTaskSource` and `GitLabTaskSource` are the two sources' providers: where a credential may be sent, one fetch, and their own wording for failures and Connect errors, moved unchanged out of TasksManager. Time to log and GitLab's linked merge requests read the shared stores and the engines' generations, so `WorklogConsentRulesTests` holds as it was.
+  - The Settings rows call the generic `syncState(_:)`, `refresh(_:)`, `syncIfStale(_:)`, `disconnect(_:removeTasks:)` and so on.
+  - `RemoteIssue.webURL` and `TaskFacets.labelCategory` are ready for the new sources. A Connect's check now returns the credential to save, since some sources learn part of it while checking.
+  - Tests:
+    - `JiraSyncRulesTests`, which read TasksManager's text for Jira's names, is replaced by `SourceSyncTests`: 17 tests that drive the engine with a fake source and pin each rule by what it does.
+    - New `CredentialStoreTests`: the items Kannu already saved read back, and saves write the same text byte for byte.
+    - `IntegrationSecretRulesTests` now scans the engine's on-appear syncs and token removal, and pins that the manager keeps no sync state of its own.
+
 ### 2026-10-19 - Every source's facts and settings live in one place, ready for GitHub, Linear, Todoist and Apple Reminders
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 1 of the task-sources PR: source facts and generic signatures, no visible change

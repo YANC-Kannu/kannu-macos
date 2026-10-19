@@ -46,6 +46,8 @@ struct GitLabCredential: Codable, Equatable, CustomStringConvertible, CustomDebu
     }
 }
 
+extension GitLabCredential: StoredCredential {}
+
 /// `GET /api/v4/user`: who the token belongs to. Only what Kannu shows and pages by.
 struct GitLabUser: Decodable, Equatable {
     let id: Int
