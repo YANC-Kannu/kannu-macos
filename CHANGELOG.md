@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-18 - Brain's Productivity section sits right under AI Agents
+- **Developer label:** "bring productivity settings to just below the ai section in brain"
+- **Agent label:** Claude Code (Opus 5.5) — the sidebar's section order changes, and General and Appearance get a "General" header
+- **Changes:**
+  - Brain's sidebar now reads AI Agents, Productivity (Timer, Notes, and Tasks where present),
+    then General and Appearance, then Media & Display, System, Utilities, Developer,
+    Integrations and About.
+  - General and Appearance get a "General" header: unlabelled, right under Productivity, they
+    read as part of it.
+  - `availableTabs` follows the same order, since search jumps to the first match in it.
+  - Test: `SettingsSidebarOrderTests` (the section order, the General header, and search's order
+    following the sidebar's).
+
 ### 2026-10-15 - The new gate file's project ids stay unique next to the task branches
 - **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen"
 - **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
