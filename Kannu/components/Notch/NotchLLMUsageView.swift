@@ -440,8 +440,14 @@ struct NotchLLMUsageView: View {
                     case .signInNeeded:
                         claudeStatusLine(String(localized: "Exact limits need a Claude Code sign-in. Press this card's ↻ to fetch them."))
                     case .otherOrganization:
-                        claudeStatusLine(String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings."),
-                                         action: terminal)
+                        let plans = agentMonitor.claudeOrganizationPlanNames
+                        if let code = plans.claudeCode, let desktop = plans.desktop, code != desktop {
+                            claudeStatusLine(String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop) for exact limits."),
+                                             action: terminal)
+                        } else {
+                            claudeStatusLine(String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings."),
+                                             action: terminal)
+                        }
                     case nil:
                         EmptyView()
                     }

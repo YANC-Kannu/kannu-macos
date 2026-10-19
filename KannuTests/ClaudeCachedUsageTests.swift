@@ -183,4 +183,14 @@ final class ClaudeCachedUsageTests: XCTestCase {
         XCTAssertEqual(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: "max"), "max")
         XCTAssertNil(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: nil))
     }
+
+    func testThePlanTypeIsCarriedAndNamed() {
+        var json = config(fixed: [:])
+        json["oauthAccount"] = ["accountUuid": "acct-1", "organizationUuid": "org-1", "organizationType": "claude_team"]
+        XCTAssertEqual(ClaudeCachedUsage.accountContext(json: json).organizationType, "claude_team")
+        XCTAssertEqual(ClaudeCachedUsage.planName(organizationType: "claude_max"), "Max")
+        XCTAssertEqual(ClaudeCachedUsage.planName(organizationType: "claude_team"), "Team")
+        XCTAssertNil(ClaudeCachedUsage.planName(organizationType: "something_new"))
+        XCTAssertNil(ClaudeCachedUsage.planName(organizationType: nil))
+    }
 }

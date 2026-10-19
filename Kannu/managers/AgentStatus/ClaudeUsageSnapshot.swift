@@ -99,7 +99,11 @@ struct ClaudeUsageSnapshot: Equatable {
     /// refreshes that cache for someone who uses Claude only in the desktop app.
     static let autoFetchInterval: TimeInterval = 900
 
-    static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?) -> Bool {
+    /// `organizationUnverified` (see `cardSources`) asks for the first fetch of a launch at once,
+    /// whatever the cache's age: until it runs, Claude Code's numbers cannot go on the card.
+    static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?,
+                                organizationUnverified: Bool = false) -> Bool {
+        if organizationUnverified, lastFetch == nil { return true }
         if let lastFetch, now.timeIntervalSince(lastFetch) < autoFetchInterval { return false }
         guard let cacheObservedAt else { return true }
         return now.timeIntervalSince(cacheObservedAt) >= autoFetchInterval
@@ -249,18 +253,27 @@ struct ClaudeUsageSnapshot: Equatable {
     /// sign-in is bound to. When that is a different one they are left out whole, never merged
     /// per key, so a card never shows one organization's five-hour bar beside another's week.
     /// With no desktop history at all, Claude Code's organization is the only one there is.
+    ///
+    /// `claudeCodeOrganizationRecorded` is false until Kannu's own fetch has recorded which
+    /// organization Claude Code's sign-in is on. Until then the organization is a guess — the file
+    /// it comes from flips between them — so with desktop history to follow, Claude Code's
+    /// sources stay off the card (`claudeCodeOrganizationUnverified`), and the automatic refresh
+    /// fetches at once to find out (`shouldAutoFetch`). A first look at the card must not show one
+    /// organization's numbers as another's.
     static func cardSources(
         statusline: ClaudeUsageSnapshot?,
         cache: ClaudeUsageSnapshot?,
         desktop: ClaudeUsageSnapshot?,
         desktopOrganization: String?,
-        claudeCodeOrganization: String?
-    ) -> (sources: [ClaudeUsageSnapshot?], claudeCodeOnAnotherOrganization: Bool) {
-        guard let desktopOrganization, let claudeCodeOrganization,
-              desktopOrganization != claudeCodeOrganization else {
-            return ([statusline, cache, desktop], false)
+        claudeCodeOrganization: String?,
+        claudeCodeOrganizationRecorded: Bool = true
+    ) -> (sources: [ClaudeUsageSnapshot?], claudeCodeOnAnotherOrganization: Bool, claudeCodeOrganizationUnverified: Bool) {
+        guard let desktopOrganization else { return ([statusline, cache, desktop], false, false) }
+        guard claudeCodeOrganizationRecorded else { return ([desktop], false, true) }
+        guard let claudeCodeOrganization, desktopOrganization != claudeCodeOrganization else {
+            return ([statusline, cache, desktop], false, false)
         }
-        return ([desktop], true)
+        return ([desktop], true, false)
     }
 
     /// Why the card may be showing less than it should.

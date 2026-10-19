@@ -516,6 +516,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
     private struct ClaudeUsageOrganizations {
         var desktop: String?
         var claudeCode: String?
+        /// Whether `claudeCode` was recorded at Kannu's own fetch, rather than read from a file
+        /// that flips (see `ClaudeUsageSnapshot.cardSources`).
+        var claudeCodeRecorded = true
+        /// Set when Claude Code's sources are held off the card until its organization is known.
+        var claudeCodeUnverified = false
     }
 
     private struct ClaudeUsageLoad {
@@ -553,13 +558,35 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // Claude Code's organization as recorded at Kannu's own last fetch; `oauthAccount` only
         // until there is one, because desktop-hosted sessions keep rewriting it.
         var context = claude.context
+        let recorded = Defaults[.claudeCodeUsageOrganization]
         context.organizationUUID = ClaudeCachedUsage.claudeCodeOrganization(
-            recordedAtFetch: Defaults[.claudeCodeUsageOrganization], inConfigNow: context.organizationUUID)
+            recordedAtFetch: recorded, inConfigNow: context.organizationUUID)
+        // Unrecorded, the cache's weekly reset may be another organization's: none is applied.
+        if recorded == nil { context.weeklyResetAnchor = nil }
+        rememberOrganizationType(claude.context)
         let desktop = ClaudeDesktopUsageHistory.read(now: now, account: context)
         return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot, desktop: desktop.snapshot,
                                 organizations: .init(desktop: desktop.organizationUUID,
-                                                     claudeCode: context.organizationUUID),
+                                                     claudeCode: context.organizationUUID,
+                                                     claudeCodeRecorded: recorded != nil),
                                 now: now)
+    }
+
+    /// Learns which plan an organization is on whenever `~/.claude.json` names it — the file flips
+    /// between a person's organizations, so over time both are seen.
+    private static func rememberOrganizationType(_ context: ClaudeCachedUsage.AccountContext) {
+        guard let organization = context.organizationUUID, let type = context.organizationType,
+              Defaults[.claudeOrganizationTypes][organization] != type else { return }
+        var types = Defaults[.claudeOrganizationTypes]
+        types[organization] = type
+        Defaults[.claudeOrganizationTypes] = types
+    }
+
+    /// The plans of the two organizations the card is choosing between, when Kannu has seen them.
+    var claudeOrganizationPlanNames: (claudeCode: String?, desktop: String?) {
+        let types = Defaults[.claudeOrganizationTypes]
+        let name = { (id: String?) in id.flatMap { types[$0] }.flatMap(ClaudeCachedUsage.planName) }
+        return (name(claudeUsageOrganizations.claudeCode), name(claudeUsageOrganizations.desktop))
     }
 
     private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
@@ -567,7 +594,10 @@ final class CursorAgentStatusMonitor: ObservableObject {
                                          now: Date) -> ClaudeUsageLoad {
         let card = ClaudeUsageSnapshot.cardSources(
             statusline: statusline, cache: cache, desktop: desktop,
-            desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode)
+            desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode,
+            claudeCodeOrganizationRecorded: organizations.claudeCodeRecorded)
+        var organizations = organizations
+        organizations.claudeCodeUnverified = card.claudeCodeOrganizationUnverified
         let sources = card.sources
         // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
         // shouldRefresh keeps its cadence gate (a nil snapshot re-reads on every rescan tick).
@@ -674,7 +704,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
               // Claude Code is on another organization: what it would fetch is not on the card.
               claudeUsageHint != .otherOrganization,
               ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
-                                                  lastFetch: lastClaudeUsageFetchAt) else { return }
+                                                  lastFetch: lastClaudeUsageFetchAt,
+                                                  organizationUnverified: claudeUsageOrganizations.claudeCodeUnverified)
+        else { return }
         refreshClaudeUsageFromCLI(manual: false)
     }
 

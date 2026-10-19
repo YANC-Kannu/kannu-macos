@@ -1253,6 +1253,10 @@ extension Defaults.Keys {
     /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
     /// and Claude Code's own sign-in with its token's, so it flips between them.
     static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
+    /// Organization id to `oauthAccount.organizationType` ("claude_max", "claude_team"…), learned
+    /// whenever `~/.claude.json` names both, so the card can say which plan each side is on even
+    /// while the file names the other one. Plan types only, never names or emails.
+    static let claudeOrganizationTypes = Key<[String: String]>("claudeOrganizationTypes", default: [:])
 
     // MARK: Security findings (connection to a separately installed ADR — github.com/uber/ADR)
     /// Extra directory searched for the `adr-discovery` / `adr-sensor` executables, before the

@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - The Claude card's first look never shows one organization's numbers as another's
+- **Developer label:** "can we install this token fix onto the super build and see it locally working"
+- **Agent label:** Follow-up 65, the organization gap in #96
+- **Changes:**
+  - Until Kannu's own fetch has recorded which organization Claude Code's sign-in is on, that
+    organization came from `oauthAccount` in `~/.claude.json`, which flips between a person's
+    organizations. Read as Max while the cache held the Team plan's numbers, it put Team's 0 % on
+    the Max card until the first automatic fetch. Now, with desktop history to follow, Claude
+    Code's statusline and cache stay off the card while the organization is unrecorded, the
+    automatic refresh fetches at once (once per launch, whatever the cache's age), and an
+    unrecorded organization's cached weekly reset is not used to date the desktop's week.
+  - The card's line about organizations names the plans when Kannu has seen them ("Claude Code is
+    signed in to Team, so these are Claude Desktop's (Max) readings"). Kannu learns each
+    organization's `organizationType` whenever `~/.claude.json` names it, in the new `Defaults` key
+    `claudeOrganizationTypes`: plan types only, never names or emails.
+  - Tests: the unrecorded organization keeps Claude Code's sources off and asks for one fetch at
+    once; plan types are carried and named.
+
 ### 2026-10-18 - Act on the review of #96: the automatic refresh never types, signs in or nags
 - **Developer label:** "The Claude card's Refresh fetches again, and signs Claude Code in when it has to" — review follow-up
 - **Agent label:** Follow-up 64 review — six lenses, two skeptics per finding, 37 findings confirmed, each fixed or answered

@@ -418,6 +418,37 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         }
     }
 
+    func testAnUnrecordedClaudeCodeOrganizationKeepsItsSourcesOff() {
+        // Before Kannu's own fetch has recorded Claude Code's organization, the file it would come
+        // from flips: trusting it put Team's zeros on the Max card for a first look.
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)],
+                                          observedAt: now.addingTimeInterval(-3_000))
+        let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
+                                                   desktopOrganization: "max", claudeCodeOrganization: "max",
+                                                   claudeCodeOrganizationRecorded: false)
+        XCTAssertEqual(card.sources, [desktop])
+        XCTAssertTrue(card.claudeCodeOrganizationUnverified)
+        XCTAssertFalse(card.claudeCodeOnAnotherOrganization, "unknown is not 'another': no line about it")
+        // No desktop history: Claude Code's organization is the only one, recorded or not.
+        let alone = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: nil,
+                                                    desktopOrganization: nil, claudeCodeOrganization: nil,
+                                                    claudeCodeOrganizationRecorded: false)
+        XCTAssertEqual(alone.sources, [nil, cache, nil])
+        XCTAssertFalse(alone.claudeCodeOrganizationUnverified)
+    }
+
+    func testAnUnverifiedOrganizationFetchesAtOnceOncePerLaunch() {
+        // A fresh cache would normally wait 15 minutes; an unverified organization cannot.
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now, lastFetch: nil,
+                                                          organizationUnverified: true))
+        // Once a fetch ran this launch, the normal cadence applies, so a failing one never loops.
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now,
+                                                           lastFetch: now.addingTimeInterval(-60),
+                                                           organizationUnverified: true))
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now, lastFetch: nil))
+    }
+
     func testHintNamesTheOtherOrganizationFirst() {
         // Even with hooks off and a live cache: the cache is someone else's limits.
         let live = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)], observedAt: now)

@@ -62,6 +62,20 @@ enum ClaudeCachedUsage {
     struct AccountContext: Equatable {
         var organizationUUID: String?
         var weeklyResetAnchor: Date?
+        /// `oauthAccount.organizationType` alongside the organization, e.g. "claude_max".
+        var organizationType: String?
+    }
+
+    /// The plan an organization type names, for the card's one line about organizations. Only
+    /// the plan — never the organization's or the account's name.
+    static func planName(organizationType: String?) -> String? {
+        switch organizationType {
+        case "claude_max": return "Max"
+        case "claude_pro": return "Pro"
+        case "claude_team": return "Team"
+        case "claude_enterprise": return "Enterprise"
+        default: return nil
+        }
     }
 
     /// One read of `~/.claude.json` for both the cached usage and the account context — the file
@@ -88,7 +102,8 @@ enum ClaudeCachedUsage {
                 anchor = isoDate(weekly["resets_at"])
             }
         }
-        return AccountContext(organizationUUID: organization, weeklyResetAnchor: anchor)
+        let type = (account?["organizationType"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        return AccountContext(organizationUUID: organization, weeklyResetAnchor: anchor, organizationType: type)
     }
 
     static func parse(json: [String: Any]) -> ClaudeUsageSnapshot? {
