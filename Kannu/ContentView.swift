@@ -508,8 +508,9 @@ struct ContentView: View {
         // While a music pill is already on screen the light is drawn inside it, so keep it
         // steady rather than blinking a dot in and out of a persistent container. Uses the
         // shared snapshot — testing `isPlaying` alone missed the paused-but-still-shown pill,
-        // which is exactly when the blink was visible.
-        if isClosedMusicPairingEligible { return true }
+        // which is exactly when the blink was visible. A running timer is the same kind of
+        // container: the light sits in its centre for as long as it runs.
+        if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
         // A pending high finding is a cue in its own right. With no agent activity there is no
         // deadline and no hover, and the shield the Settings copy promises ("stays beside the
         // traffic light until you acknowledge") never appeared on a notched Mac.
@@ -522,6 +523,17 @@ struct ContentView: View {
         revealHoldDeadline != nil
     }
 
+    /// A running timer has the closed notch: nothing but a HUD, Caps Lock's flash or the music pill
+    /// (which carries the timer itself) is drawn over it, the agent light sits in its centre, and an
+    /// island that hides until hover stays out while it runs. The timer used to give way to the
+    /// light for 7 s after every agent change, and to Caps Lock until it was released.
+    private var timerOwnsClosedNotch: Bool {
+        vm.notchState == .closed
+            && timerManager.isTimerActive
+            && coordinator.timerLiveActivityEnabled
+            && !vm.hideOnClosed
+    }
+
     /// Whether the notch/island should hide off-screen when closed on a non-notch display.
     /// Temporarily reveals the notch when a sneakPeek HUD (volume, brightness, music, etc.) is active.
     private var shouldHideUntilHover: Bool {
@@ -529,6 +541,7 @@ struct ContentView: View {
             && vm.notchState == .closed
             && !isSneakPeekVisibleOnCurrentScreen
             && !showAgentTrafficLight
+            && !timerOwnsClosedNotch
     }
 
     /// Whether the fallback top-edge hover detector should run.
@@ -1236,7 +1249,7 @@ struct ContentView: View {
                                       ? AnyTransition.move(edge: .trailing).combined(with: .opacity)
                                       : AnyTransition.opacity
                               )
-                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked {
+                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked && !timerOwnsClosedNotch {
                           InlineHUD(type: .constant(.capsLock), value: .constant(1.0), icon: .constant(""), hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
@@ -1245,8 +1258,9 @@ struct ContentView: View {
                           MusicLiveActivity(secondary: musicSecondary)
                               .id("closed-music-live-activity")
                               .transition(closedLiveActivitySwapTransition)
-                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
-                          // No music playing: standalone traffic light.
+                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed && !timerOwnsClosedNotch {
+                          // No music and no timer: standalone traffic light. A running timer
+                          // carries the light in its centre instead (below).
                             AgentTrafficLightLiveActivity(
                                 isHovering: isHovering,
                                 gestureProgress: gestureProgress,
@@ -1262,8 +1276,15 @@ struct ContentView: View {
                                 }
                             )
                             .transition(.blurReplace.animation(.interactiveSpring(dampingFraction: 1.2)))
-                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && vm.notchState == .closed && timerManager.isTimerActive && coordinator.timerLiveActivityEnabled && !vm.hideOnClosed {
-                          TimerLiveActivity()
+                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
+                          TimerLiveActivity(
+                              agentLight: showAgentTrafficLight
+                                  ? TimerAgentLight(
+                                      expandedHeight: shouldExpandPhysicalNotchForAgent ? physicalNotchAgentHeight : nil,
+                                      verticalOffset: physicalNotchAgentVerticalOffset
+                                  )
+                                  : nil
+                          )
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .recording) && vm.notchState == .closed && (recordingManager.isRecording || !recordingManager.isRecorderIdle) && Defaults[.enableScreenRecordingDetection] && !vm.hideOnClosed && !musicPairingEligible {
                           RecordingLiveActivity()
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .download) && vm.notchState == .closed && downloadManager.isDownloading && Defaults[.enableDownloadListener] && !vm.hideOnClosed {

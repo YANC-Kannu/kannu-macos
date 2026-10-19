@@ -27,7 +27,23 @@ import UIKit
 typealias PlatformFont = UIFont
 #endif
 
+/// The agent traffic light a running timer carries in its centre (`ContentView.timerOwnsClosedNotch`),
+/// placed the way the music pill places it: below a physical notch, the centre grows to the agent
+/// band's height and the light sits at its offset.
+struct TimerAgentLight: Equatable {
+    /// The agent band's height on a Mac with a physical notch; nil keeps the timer's own height.
+    var expandedHeight: CGFloat?
+    var verticalOffset: CGFloat
+}
+
 struct TimerLiveActivity: View {
+    /// The traffic light to draw in the centre, or nil when no agent is on screen.
+    let agentLight: TimerAgentLight?
+
+    init(agentLight: TimerAgentLight? = nil) {
+        self.agentLight = agentLight
+    }
+
     @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchForeground) private var notchForeground
     @ObservedObject var timerManager = TimerManager.shared
@@ -321,7 +337,10 @@ struct TimerLiveActivity: View {
             middleSectionView()
             rightWingView()
         }
-        .frame(height: adjustedNotchHeight, alignment: .center)
+        .frame(
+            height: agentLight?.expandedHeight ?? adjustedNotchHeight,
+            alignment: agentLight?.expandedHeight == nil ? .center : .top
+        )
         .contentShape(Rectangle())
     }
 
@@ -345,7 +364,16 @@ struct TimerLiveActivity: View {
     private func middleSectionView() -> some View {
         Rectangle()
             .fill(.clear)
-            .frame(width: middleSectionWidth, height: notchContentHeight)
+            .frame(width: middleSectionWidth, height: agentLight?.expandedHeight ?? notchContentHeight)
+            .overlay {
+                // The shield glyph rides in the light; the alert's text pill waits for the
+                // standalone light, as it does beside the music pill.
+                if let agentLight {
+                    AgentTrafficLightIndicator()
+                        .offset(y: agentLight.verticalOffset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
     }
 
     @ViewBuilder
