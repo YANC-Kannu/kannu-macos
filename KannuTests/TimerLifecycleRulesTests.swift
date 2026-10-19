@@ -153,7 +153,13 @@ final class TimerLifecycleRulesTests: XCTestCase {
         XCTAssertEqual(Self.bridgeProblems(in: planted), [
             "the delayed cleanup ends whatever Clock timer is running, not only the finished one",
         ])
-        let fixed = planted.replacingOccurrences(of: "isExternalTimerActive {", with: "isExternalTimerActive, TimerManager.shared.isFinished {")
+        let finishedOnly = planted.replacingOccurrences(of: "isExternalTimerActive {", with: "isExternalTimerActive, TimerManager.shared.isFinished {")
+        XCTAssertEqual(Self.bridgeProblems(in: finishedOnly), [
+            "the delayed cleanup is not bound to the session that finished",
+        ], "CodeRabbit on #107: a second Clock timer that starts and finishes inside the 3.2 s was ended")
+        let fixed = finishedOnly
+            .replacingOccurrences(of: "DispatchQueue.main.asyncAfter", with: "let session = TimerManager.shared.sessionID\n    DispatchQueue.main.asyncAfter")
+            .replacingOccurrences(of: "if TimerManager.shared.isExternalTimerActive", with: "if TimerManager.shared.sessionID == session, TimerManager.shared.isExternalTimerActive")
         XCTAssertEqual(Self.bridgeProblems(in: fixed), [])
     }
 
@@ -262,22 +268,25 @@ final class TimerLifecycleRulesTests: XCTestCase {
         guard let cleanup = functionBody(named: "clearLogState(", in: code(text)) else {
             return ["clearLogState( not found"]
         }
-        return cleanup.contains("isFinished")
+        guard cleanup.contains("isFinished") else {
+            return ["the delayed cleanup ends whatever Clock timer is running, not only the finished one"]
+        }
+        return cleanup.contains("let session = TimerManager.shared.sessionID") && cleanup.contains("TimerManager.shared.sessionID == session")
             ? []
-            : ["the delayed cleanup ends whatever Clock timer is running, not only the finished one"]
+            : ["the delayed cleanup is not bound to the session that finished"]
     }
 
     private static func notchProblems(in text: String) -> [String] {
         let source = code(text)
         var problems: [String] = []
-        let resigns = modifiers(".onReceive", in: source).filter { $0.contains("didResignKeyNotification") }
+        let resigns = SwiftModifierScan.modifiers(".onReceive", in: source).filter { $0.contains("didResignKeyNotification") }
         if resigns.isEmpty {
             problems.append("no didResignKeyNotification observer found")
         }
         for _ in resigns.filter({ !$0.contains("focusedNameField = nil") }) {
             problems.append("a click into another app leaves the name field focused, so the notch never auto-closes")
         }
-        let stops = modifiers(".onChange", in: source).filter { $0.hasPrefix(".onChange(of: timerManager.isTimerActive)") }
+        let stops = SwiftModifierScan.modifiers(".onChange", in: source).filter { $0.hasPrefix(".onChange(of: timerManager.isTimerActive)") }
         if stops.isEmpty {
             problems.append("no isTimerActive observer found")
         }
@@ -354,28 +363,5 @@ final class TimerLifecycleRulesTests: XCTestCase {
             index = text.index(after: index)
         } while index < text.endIndex && depth > 0
         return String(text[open..<index])
-    }
-
-    /// Each use of a modifier: its name, its balanced argument list if any, then its trailing closure if any.
-    private static func modifiers(_ name: String, in text: String) -> [String] {
-        var found: [String] = []
-        var searchStart = text.startIndex
-        while let range = text.range(of: name, range: searchStart..<text.endIndex) {
-            var index = range.upperBound
-            for (open, close) in [(Character("("), Character(")")), (Character("{"), Character("}"))] {
-                var probe = index
-                while probe < text.endIndex, text[probe] == " " { probe = text.index(after: probe) }
-                guard probe < text.endIndex, text[probe] == open else { continue }
-                var depth = 0
-                repeat {
-                    if text[probe] == open { depth += 1 } else if text[probe] == close { depth -= 1 }
-                    probe = text.index(after: probe)
-                } while probe < text.endIndex && depth > 0
-                index = probe
-            }
-            found.append(String(text[range.lowerBound..<index]))
-            searchStart = range.upperBound
-        }
-        return found
     }
 }

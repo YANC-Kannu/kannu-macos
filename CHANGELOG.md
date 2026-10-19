@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - A Clock timer's delayed cleanup ends only the session that finished
+- **Developer label:** CodeRabbit on #107 (covering this branch's timer fix): "Bind delayed cleanup to the finished session."
+- **Agent label:** Claude Code (Opus 5.5) — `SystemTimerBridge.clearLogState` captures the finished session before its 3.2 s wait
+- **Changes:**
+  - When a Clock timer finishes, Kannu ends it 3.2 seconds later. That cleanup now checks it is still the same session (`TimerManager.sessionID`). Before, a second Clock timer that started and also finished within those 3.2 seconds was ended by the first one's cleanup.
+  - `TimerLifecycleRulesTests` pins the session check alongside the finished check, with a planted offender for each.
+
+### 2026-10-12 - The timer rules tests share one modifier scanner
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on duplicated new lines (4.2%, limit 3%)
+- **Changes:**
+  - `TimerNamingRulesTests` and `TimerLifecycleRulesTests` each carried the same 24-line
+    `modifiers(_:in:)` scanner, which reads a SwiftUI modifier and its closure out of a view's
+    source. It now lives once, in `KannuTests/SwiftModifierScan.swift`, and both tests call it.
+    No test changes what it checks.
+
 ### 2026-10-16 - The timer tab's first task capsule sits level with the name field
 - **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
 - **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
