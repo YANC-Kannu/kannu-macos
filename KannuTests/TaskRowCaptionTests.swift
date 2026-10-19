@@ -55,6 +55,14 @@ final class TaskRowCaptionTests: XCTestCase {
         XCTAssertEqual(caption(gitlabIssue, onProjectPage: true).text, "#4326", "its project's page already names the project")
     }
 
+    /// CodeRabbit on #108: GitHub's "open" reads "Open" too, on every open issue.
+    func testAGitHubRowDropsOpenToo() {
+        let issue = TaskItem(source: .github, title: "Fix the login", remote: remote(key: "owner/app#7", status: "open"))
+        XCTAssertEqual(caption(issue).text, "app #7")
+        let closed = TaskItem(source: .github, title: "Old", remote: remote(key: "owner/app#8", status: "closed"))
+        XCTAssertEqual(caption(closed).text, "app #8 · Closed", "a status that says something stays")
+    }
+
     func testAMergeRequestKeepsAStatusThatSaysSomething() {
         let mr = TaskItem(source: .gitlab, title: "Fix the login",
                           remote: remote(key: "group/app!12", status: "review requested", kind: .mergeRequest, iid: 12))

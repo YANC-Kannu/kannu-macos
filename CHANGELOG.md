@@ -24,6 +24,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     set and cleared with its session, the chip in the open timer and the popover's short keys, each
     rule with a planted offender.
 
+### 2026-10-19 - Act on CodeRabbit's review of #108
+- **Developer label:** CodeRabbit's review of #108 (the review batch for #97, #103 and #106): four findings, all in the task sources
+- **Agent label:** Claude Code (Opus 5.5) — a Disconnect during a Connect's save wins; the user's own names come from every source; GitHub's "open" leaves the row caption; the Sync-switch scan catches the generic read
+- **Changes:**
+  - `SourceSync.connect` checks the generation again after the Keychain save. A Disconnect during
+    the save queued its removal behind it, which took the token just saved, and the Connect then put
+    the connection back on screen and synced with a token that was gone. Test:
+    `SourceSyncTests.testADisconnectDuringTheSaveIsNotUndoneByTheConnect`.
+  - New `TaskSource.selfNames`: every connected account's display name, plus GitLab's and GitHub's
+    usernames. The task page and the notch card both use it; they kept their own copy, of Jira and
+    GitLab only, so every GitHub task showed the user's own login as its person and spent one of
+    the card's four facts on it. Test: `TimerTaskDetailRulesTests.testTheUsersOwnNamesComeFromEverySourceInOnePlace`.
+  - A GitHub row's caption drops "Open" as a GitLab row drops "opened": every open issue says it.
+    Test: `TaskRowCaptionTests.testAGitHubRowDropsOpenToo`.
+  - `TimerSideColumnRulesTests`' Sync-switch scan matches `enabledKey` on its own. Behind the
+    capital "Enabled" check it could never match the generic `Defaults[$0.enabledKey]` read; the
+    planted offenders now include that line.
+
 ### 2026-10-19 - How to add a task source, written down
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 8 of the task-sources PR: docs/TASK-SOURCES.md

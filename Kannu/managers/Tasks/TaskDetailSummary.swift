@@ -331,8 +331,10 @@ struct TaskRowCaption: Equatable {
         if let key = TaskDetailSummary.shortKey(for: task, withProject: !onProjectPage) {
             segments.append(Segment(text: key))
         }
-        // GitLab's "opened" is every open issue's state: it tells one row from another nothing.
-        let saysNothing = task.source == .gitlab && task.remote?.status == "opened"
+        // GitLab's "opened" and GitHub's "open" are every open issue's state: they tell one row from
+        // another nothing.
+        let saysNothing = (task.source == .gitlab && task.remote?.status == "opened")
+            || (task.source == .github && task.remote?.status == "open")
         if !saysNothing, let status = TaskFacets.statusName(for: task) {
             segments.append(Segment(text: status))
         }

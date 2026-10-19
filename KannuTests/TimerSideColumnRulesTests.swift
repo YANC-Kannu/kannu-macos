@@ -339,8 +339,9 @@ final class TimerSideColumnRulesTests: XCTestCase {
             jiraConnected: !Defaults[.jiraSiteHost].isEmpty && Defaults[.jiraEnabled],
             gitlabConnected: !Defaults[.gitlabHost].isEmpty && Defaults[.gitlabEnabled]
             @Default(.jiraEnabled) private var jiraEnabled
+            anySourceConnected: TaskSource.remoteSources.contains { Defaults[$0.enabledKey] }
             """)
-        XCTAssertEqual(Self.syncSwitchReads(in: planted).count, 3)
+        XCTAssertEqual(Self.syncSwitchReads(in: planted).count, 4)
     }
 
     func testTheHelpScannerCatchesPlantedOffenders() {
@@ -621,9 +622,12 @@ final class TimerSideColumnRulesTests: XCTestCase {
     /// Lines that read a source's Sync switch. Those switches only decide what is fetched; whether
     /// a source is connected, for the page the tab opens on, is whether its scope is set.
     private static func syncSwitchReads(in code: String) -> [String] {
+        // `enabledKey` on its own: the generic read (`Defaults[$0.enabledKey]`) has no capital
+        // "Enabled", so behind the `&&` it could never match (CodeRabbit on #108).
         code.split(separator: "\n")
-            .filter { $0.contains("Enabled") && ($0.contains(".jira") || $0.contains(".gitlab") || $0.contains(".github")
-                || $0.contains(".linear") || $0.contains(".todoist") || $0.contains(".appleReminders") || $0.contains("enabledKey")) }
+            .filter { $0.contains("enabledKey")
+                || ($0.contains("Enabled") && ($0.contains(".jira") || $0.contains(".gitlab") || $0.contains(".github")
+                    || $0.contains(".linear") || $0.contains(".todoist") || $0.contains(".appleReminders"))) }
             .map(String.init)
     }
 

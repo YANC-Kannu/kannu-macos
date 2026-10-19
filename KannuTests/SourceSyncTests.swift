@@ -42,6 +42,10 @@ final class SourceSyncTests: XCTestCase {
         var removes = 0
         var removeSucceeds = true
         var checkGate: CheckedContinuation<Void, Never>?
+        /// Holds `save` until the test resumes it, for what lands during the save.
+        var holdsSave = false
+        var saveGate: CheckedContinuation<Void, Never>?
+        var commits = 0
     }
 
     struct Provider: TaskSourceProvider {
@@ -61,6 +65,9 @@ final class SourceSyncTests: XCTestCase {
         }
         @MainActor func save(_ credential: Credential) async -> Bool {
             recorder.saved.append(credential)
+            if recorder.holdsSave {
+                await withCheckedContinuation { recorder.saveGate = $0 }
+            }
             return recorder.saveSucceeds
         }
         @MainActor func remove() async -> Bool {
@@ -319,6 +326,25 @@ final class SourceSyncTests: XCTestCase {
         let result = await connecting.value
         XCTAssertEqual(result, String(localized: "Cancelled."))
         XCTAssertTrue(recorder.saved.isEmpty, "nothing saved over the Disconnect")
+    }
+
+    /// CodeRabbit on #108: a Disconnect during the save queues its removal behind it, which takes
+    /// the saved token, so the Connect must not then show the connection or sync with it.
+    func testADisconnectDuringTheSaveIsNotUndoneByTheConnect() async {
+        recorder.holdsSave = true
+        let connecting = Task { @MainActor in
+            await self.sync.connect { .accepted(Credential(scope: "s2", token: "new")) { self.recorder.commits += 1 } }
+        }
+        for _ in 0..<200 where recorder.saveGate == nil { await Task.yield() }
+        XCTAssertNotNil(recorder.saveGate, "the save never started")
+        sync.disconnect()
+        recorder.saveGate?.resume()
+        let result = await connecting.value
+        await settle()
+        XCTAssertEqual(result, String(localized: "Cancelled."))
+        XCTAssertEqual(recorder.commits, 0, "the connection is not put back over the Disconnect")
+        XCTAssertEqual(recorder.removes, 1, "the Disconnect's removal still runs")
+        XCTAssertTrue(recorder.fetches.isEmpty, "no sync with a token that is gone")
     }
 
     func testDisconnectDropsTheSyncInFlightAndForgetsTheToken() async {

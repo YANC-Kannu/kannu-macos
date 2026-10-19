@@ -63,6 +63,23 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         XCTAssertFalse(card.contains("TasksManager.shared"))
     }
 
+    /// CodeRabbit on #108: the user's own names came from Jira and GitLab only, so a GitHub task
+    /// showed the user's own login as its person. One list now, from every source, in both places.
+    func testTheUsersOwnNamesComeFromEverySourceInOnePlace() throws {
+        let settings = try String(contentsOf: Self.repoRoot.appendingPathComponent("Kannu/managers/Tasks/TaskSourceSettings.swift"),
+                                  encoding: .utf8)
+        let names = try XCTUnwrap(settings.range(of: "static var selfNames: Set<String> {")
+            .map { String(settings[$0.upperBound...].prefix(400)) }, "TaskSource.selfNames is gone")
+        XCTAssertTrue(names.contains("allCases.compactMap { $0.accountNameKey") && names.contains("Defaults[.githubUsername]"),
+                      "selfNames no longer covers every source's account")
+        let page = try String(contentsOf: Self.repoRoot.appendingPathComponent("Kannu/components/Settings/TaskDetailPage.swift"),
+                              encoding: .utf8)
+        for (name, text) in [("TimerSideColumn", try Self.column()), ("TaskDetailPage", page)] {
+            XCTAssertTrue(text.contains("selfNames: TaskSource.selfNames"), "\(name) does not use TaskSource.selfNames")
+            XCTAssertFalse(text.contains("static var selfNames"), "\(name) keeps its own list of names again")
+        }
+    }
+
     func testDeleteIsLocalOnlyAndGoesThroughTheManager() throws {
         let card = try Self.declaration("private struct TimerTaskDetail", in: try Self.column())
         XCTAssertTrue(card.contains("manager.delete(task.id)"), "delete must go through the manager")

@@ -65,6 +65,15 @@ extension TaskSource {
         }
     }
 
+    /// Every connected account's display name, and GitLab's and GitHub's usernames, for
+    /// `TaskDetailSummary(selfNames:)`: the user's own name never takes a fact. GitHub's assignee is
+    /// the user's own login, since its sync lists the issues assigned to them.
+    static var selfNames: Set<String> {
+        let names = allCases.compactMap { $0.accountNameKey.map { Defaults[$0] } }
+            + [Defaults[.gitlabUsername], Defaults[.githubUsername]]
+        return Set(names.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+    }
+
     /// The colour its tasks show when they have no tags (`TaskColoring`).
     var colorKey: Defaults.Key<TaskColor> {
         switch self {

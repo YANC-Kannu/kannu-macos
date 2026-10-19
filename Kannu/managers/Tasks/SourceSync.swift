@@ -261,6 +261,9 @@ final class SourceSync<Provider: TaskSourceProvider>: SourceSyncing {
         guard await store.save(credential) else {
             return String(localized: "\(source.name) accepted the token, but Kannu could not save it in your Keychain.")
         }
+        // A Disconnect during the save queued its removal behind it, so the token just saved goes
+        // with it: the connection must not come back on screen over the Disconnect.
+        guard started == generation else { return String(localized: "Cancelled.") }
         commit()
         generation += 1
         inFlight = nil
