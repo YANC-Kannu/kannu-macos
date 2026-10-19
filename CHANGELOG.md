@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Act on CodeRabbit's review of #111
+- **Developer label:** CodeRabbit on #111: check the `typed:` value in the task-start scanner
+- **Agent label:** Claude Code (Opus 5.5) — `TimerTaskLabelRulesTests.startProblems` also requires the session's name to be resolved from `task.title`
+- **Changes:**
+  - The task-start scanner checked the raw-key prefix and the short key, but a name that was not
+    the task's title (`typed: "Timer"`) passed while the key was right. It now requires
+    `name: TimerSessionName.resolved(typed: task.title`. Test:
+    `TimerTaskLabelRulesTests.testTheStartScannerCatchesANameThatIsNotTheTitle`, and the raw-key
+    planted offender now reports it too.
+
 ### 2026-10-19 - A timed task shows its title, with its key as a chip
 - **Developer label:** "the task view while running shows still the full ticket heading i guess, check that if it is proper label"
 - **Agent label:** Claude Code (Opus 5.5) — a task's timer session is named by its title; the short key (`TaskDetailSummary.shortKey`) rides beside it as a chip in the open timer and in the popover

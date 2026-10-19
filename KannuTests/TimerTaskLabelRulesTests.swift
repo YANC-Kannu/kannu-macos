@@ -43,9 +43,25 @@ final class TimerTaskLabelRulesTests: XCTestCase {
             """
         XCTAssertEqual(Self.startProblems(in: planted), [
             "the session's name is prefixed by the task's raw key",
+            "the session's name is not the task's title",
             "the session does not carry the task's short key",
         ])
         XCTAssertEqual(Self.startProblems(in: "func stop() {}"), ["start(_:) not found"])
+    }
+
+    /// CodeRabbit on #111: a name that is not the title passed while the key was right.
+    func testTheStartScannerCatchesANameThatIsNotTheTitle() {
+        let planted = """
+            func start(_ taskID: UUID) -> Bool {
+                timer.startTimer(
+                    duration: 60,
+                    name: TimerSessionName.resolved(typed: "Timer", fallback: "Timer"),
+                    taskKey: TaskDetailSummary.shortKey(for: task)
+                )
+                return true
+            }
+            """
+        XCTAssertEqual(Self.startProblems(in: planted), ["the session's name is not the task's title"])
     }
 
     func testTheSessionKeyLivesAndDiesWithItsSession() throws {
@@ -88,6 +104,9 @@ final class TimerTaskLabelRulesTests: XCTestCase {
         var problems: [String] = []
         if start.contains("$0.key) \\(task.title)") {
             problems.append("the session's name is prefixed by the task's raw key")
+        }
+        if !start.contains("name: TimerSessionName.resolved(typed: task.title") {
+            problems.append("the session's name is not the task's title")
         }
         if !start.contains("taskKey: TaskDetailSummary.shortKey(for: task)") {
             problems.append("the session does not carry the task's short key")
