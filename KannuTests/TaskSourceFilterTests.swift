@@ -54,7 +54,7 @@ final class TaskSourceFilterTests: XCTestCase {
     }
 
     private let everything = Order.connectedFilter(showGitLabMergeRequests: true, alwaysListed: nil)
-    private let jiraOnly = Order.viewFilter(showLocal: false, showJira: true, showGitLab: false, alwaysListed: nil)
+    private let jiraOnly = Order.viewFilter(hidden: [.local, .gitlab], alwaysListed: nil)
 
     // MARK: - The connected baseline
 
@@ -87,11 +87,11 @@ final class TaskSourceFilterTests: XCTestCase {
     func testTheNotchFilterFollowsShowInNotch() {
         let list = tasks("a J b") + [gitlab("G", kind: .issue)]
         XCTAssertEqual(titles(Order.active(list, listed: jiraOnly)), "J")
-        let noJira = Order.viewFilter(showLocal: true, showJira: false, showGitLab: true, alwaysListed: nil)
+        let noJira = Order.viewFilter(hidden: [.jira], alwaysListed: nil)
         XCTAssertEqual(titles(Order.active(list, listed: noJira)), "a b G")
-        let noGitLab = Order.viewFilter(showLocal: true, showJira: true, showGitLab: false, alwaysListed: nil)
+        let noGitLab = Order.viewFilter(hidden: [.gitlab], alwaysListed: nil)
         XCTAssertEqual(titles(Order.active(list, listed: noGitLab)), "a J b")
-        let all = Order.viewFilter(showLocal: true, showJira: true, showGitLab: true, alwaysListed: nil)
+        let all = Order.viewFilter(hidden: [], alwaysListed: nil)
         XCTAssertEqual(titles(Order.active(list, listed: all)), "a J b G")
     }
 
@@ -100,26 +100,30 @@ final class TaskSourceFilterTests: XCTestCase {
     func testTheNotchFilterComposesWithTheBaseline() {
         let list = tasks("a J") + [gitlab("I", kind: .issue), gitlab("M", kind: .mergeRequest)]
         let baseline = Order.active(list, listed: Order.connectedFilter(showGitLabMergeRequests: false, alwaysListed: nil))
-        let gitlabOnly = Order.viewFilter(showLocal: false, showJira: false, showGitLab: true, alwaysListed: nil)
+        let gitlabOnly = Order.viewFilter(hidden: [.local, .jira], alwaysListed: nil)
         XCTAssertEqual(titles(Order.active(baseline, listed: gitlabOnly)), "I")
         XCTAssertEqual(titles(baseline), "a J I", "the view filter changed nothing in the baseline")
     }
 
     func testTheTimedTaskAlwaysPassesTheNotchFilter() {
         let list = tasks("a J b") + [gitlab("G", kind: .issue)]
-        let timedB = Order.viewFilter(showLocal: false, showJira: true, showGitLab: false, alwaysListed: id("b", in: list))
+        let timedB = Order.viewFilter(hidden: [.local, .gitlab], alwaysListed: id("b", in: list))
         XCTAssertEqual(titles(Order.active(list, listed: timedB)), "J b")
-        let timedG = Order.viewFilter(showLocal: true, showJira: true, showGitLab: false, alwaysListed: id("G", in: list))
+        let timedG = Order.viewFilter(hidden: [.gitlab], alwaysListed: id("G", in: list))
         XCTAssertEqual(titles(Order.active(list, listed: timedG)), "a J b G")
     }
 
-    /// The notch says "Filtered" exactly while a source is hidden.
-    func testTheNotchFilterNarrowsOnlyWhileASourceIsHidden() {
-        XCTAssertFalse(Order.isNarrowingView(showLocal: true, showJira: true, showGitLab: true))
-        XCTAssertTrue(Order.isNarrowingView(showLocal: false, showJira: true, showGitLab: true))
-        XCTAssertTrue(Order.isNarrowingView(showLocal: true, showJira: false, showGitLab: true))
-        XCTAssertTrue(Order.isNarrowingView(showLocal: true, showJira: true, showGitLab: false))
-        XCTAssertTrue(Order.isNarrowingView(showLocal: false, showJira: false, showGitLab: false))
+    /// Every source answers to Show in notch the same way, the newer ones too: hidden only when it
+    /// is in the set.
+    func testEverySourceFollowsShowInNotch() {
+        let list = TaskSource.allCases.map { source in
+            TaskItem(source: source, title: source.rawValue,
+                     remote: source == .local ? nil : RemoteTaskInfo(remoteID: source.rawValue, key: "K-1", hostScope: "h", status: "",
+                                                                    isDoneRemotely: false, lastSeenAt: Date(timeIntervalSince1970: 0)))
+        }
+        XCTAssertEqual(Order.active(list, listed: Order.viewFilter(hidden: [], alwaysListed: nil)).count, TaskSource.allCases.count)
+        let noReminders = Order.viewFilter(hidden: [.appleReminders, .todoist], alwaysListed: nil)
+        XCTAssertEqual(titles(Order.active(list, listed: noReminders)), "local jira gitlab github linear")
     }
 
     // MARK: - Moves count what is shown

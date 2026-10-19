@@ -32,6 +32,691 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Guards: `TrafficLightPersistenceGateTests`, `TrafficLightGateRulesTests`, and a dated addendum
     under `docs/REGRESSIONS.md` entry 10.
 
+### 2026-10-19 - A window rebuild also clears the Tasks popover's flag
+- **Developer label:** Bringing #91 up to date with development: the Tasks popover (#85) is a popover the rebuild's reset did not know
+- **Agent label:** Claude Code (Opus 5.5) — `resetTransientInteractionState` clears `isTasksPopoverActive` too, as `NotchTeardownRulesTests` requires of every flag `hasAnyActivePopovers()` reads
+- **Changes:**
+  - `KannuViewModel.resetTransientInteractionState()` sets `isTasksPopoverActive` to false. The
+    Tasks popover landed on development with #88 after #91 was written, so a window rebuild with it
+    open left the flag set and the new notch never auto-closed. `NotchTeardownRulesTests.testTheResetClearsEveryFlagThePopoverCheckReads`
+    caught it on the merge.
+
+### 2026-10-11 - A window rebuild no longer leaves the notch unable to close or scroll
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — audit risk R-D: `KannuViewModel.resetTransientInteractionState()` on the window-rebuild path, pinned by `NotchTeardownRulesTests`
+- **Changes:**
+  - A display or resolution change rebuilds the notch window through `tearDownAllWindows` and
+    reuses the single `KannuViewModel`. The torn-down views get no reliable `.onDisappear` on a
+    borderless panel, so a scroll-gesture or auto-close suppression token held by a hovered view,
+    or a popover flag left `true`, survived into the new window: a notch that never auto-closed
+    and never scrolled until the next explicit close. `close()` clears the tokens, but the rebuild
+    only calls it while the notch is already closed.
+  - `KannuViewModel.resetTransientInteractionState()` clears both token sets and all six popover
+    flags `ContentView.hasAnyActivePopovers()` reads; `tearDownAllWindows` calls it after the old
+    window is closed and released, so the publish never reaches the detached view's
+    `.onChange(of: vm.isBatteryPopoverActive)` / `isStatsPopoverActive`, which would otherwise
+    schedule a `vm.close()` against the window built next. The per-display lifecycle already
+    drops its view model with the window and needs nothing.
+  - `NotchTeardownRulesTests` pins the call inside `tearDownAllWindows`, both token resets, and
+    keeps the reset's flag list equal to what `hasAnyActivePopovers()` reads and what the view
+    model declares — scanning both files, so a flag added to one without the other fails. The
+    declaration scan accepts access modifiers (`@Published private(set) var`), and planted
+    offenders pin every spelling it must see.
+
+### 2026-10-19 - The hover-slide tests skip where motion cannot be seen
+- **Developer label:** #106's first CI run on development: `HoverRevealTextTests` failed on both macOS runners
+- **Agent label:** Claude Code (Opus 5.5) — the two motion tests skip under Reduce Motion and on GitHub Actions, where the clipped text never moved; the stillness test still runs everywhere
+- **Changes:**
+  - `HoverRevealTextTests.testAClippedLineSlidesWhileActive` and `testAClippedTitleSlidesUpWhileActive`
+    render the view in a window and compare its pixels before and after the slide's start delay.
+    On GitHub's hosted runners the pixels never changed (run 39302104033, macOS 15 and 26), while
+    every local run sees the slide. The stacked PRs that added them never had a CI build, so this
+    was the first run there.
+  - They now skip when Reduce Motion is on (the view holds still by design) and when
+    `GITHUB_ACTIONS` is set. `testTextThatFitsOrIsNotHoveredStaysStill` runs everywhere, as before.
+
+### 2026-10-19 - The GitLab reconnect note ends its Brain path at the tab
+- **Developer label:** Bringing #106 up to date with development: `BrainPathRulesTests` (from #87's review) checks a note in the timer tab's Tasks page
+- **Agent label:** Claude Code (Opus 5.5) — "Reconnect GitLab in Brain › Tasks to see them." becomes "To see them, reconnect GitLab in Brain › Tasks."
+- **Changes:**
+  - The timer tab's GitLab reconnect note puts its Brain path last, so the path names the Tasks tab
+    and nothing after it. `BrainPathRulesTests.testEveryBrainPathStartsAtATabTheSidebarHas` reads
+    the words after "Brain ›" up to the next stop, and "Tasks to see them" is no tab.
+  - The rest of that review's commit (GitLab's Connect race guards) is already in the shared
+    `SourceSync` engine here: a Connect counts itself in flight before its first await, re-checks
+    the generation before and after saving, and Remove Token refuses while one is in flight
+    (`SourceSyncTests`). Its `JiraSyncRulesTests` edits stay out with the file, which
+    `SourceSyncTests` replaced.
+
+### 2026-10-19 - Act on CodeRabbit's review of #108
+- **Developer label:** CodeRabbit's review of #108 (the review batch for #97, #103 and #106): four findings, all in the task sources
+- **Agent label:** Claude Code (Opus 5.5) — a Disconnect during a Connect's save wins; the user's own names come from every source; GitHub's "open" leaves the row caption; the Sync-switch scan catches the generic read
+- **Changes:**
+  - `SourceSync.connect` checks the generation again after the Keychain save. A Disconnect during
+    the save queued its removal behind it, which took the token just saved, and the Connect then put
+    the connection back on screen and synced with a token that was gone. Test:
+    `SourceSyncTests.testADisconnectDuringTheSaveIsNotUndoneByTheConnect`.
+  - New `TaskSource.selfNames`: every connected account's display name, plus GitLab's and GitHub's
+    usernames. The task page and the notch card both use it; they kept their own copy, of Jira and
+    GitLab only, so every GitHub task showed the user's own login as its person and spent one of
+    the card's four facts on it. Test: `TimerTaskDetailRulesTests.testTheUsersOwnNamesComeFromEverySourceInOnePlace`.
+  - A GitHub row's caption drops "Open" as a GitLab row drops "opened": every open issue says it.
+    Test: `TaskRowCaptionTests.testAGitHubRowDropsOpenToo`.
+  - `TimerSideColumnRulesTests`' Sync-switch scan matches `enabledKey` on its own. Behind the
+    capital "Enabled" check it could never match the generic `Defaults[$0.enabledKey]` read; the
+    planted offenders now include that line.
+
+### 2026-10-19 - How to add a task source, written down
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 8 of the task-sources PR: docs/TASK-SOURCES.md
+- **Changes:**
+  - New docs/TASK-SOURCES.md maps the pieces every source has and lists the eight steps to add one: the case and its facts, its settings keys, its API file, client and provider, credential store, manager wiring, Brain, and tests. It also states the rules every source keeps: when it syncs, where a token may go, that macOS's questions come only from a click, and that older builds cannot read a task list holding a newer source's tasks.
+  - docs/SETTINGS.md: a row that exists only in some states (a source's row, only while connected) has a standing row its search entries land on until then, Add a source.
+
+### 2026-10-19 - Todoist is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 7 of the task-sources PR: Todoist, read-only, through its API v1
+- **Changes:**
+  - Brain › Tasks › Add a source › Todoist takes the API token from Todoist (Integrations › Developer). Kannu checks it with `GET /user`, which also says whose account it is. Token and account are kept together in the Keychain (`todoist-credential`).
+  - A sync reads the projects (for their names) and the open tasks through Todoist's unified API v1 (`api.todoist.com/api/v1`, cursor pages; the old REST v2 is shut down): at most two pages of 100 each. Tasks assigned to someone else are skipped.
+  - An optional Todoist filter on Todoist's page ("today | overdue", "#Work") narrows what is fetched. Return applies it.
+  - Each task's project is its Todoist project, so the source's page lists the projects. Priority 4/3/2 reads P1/P2/P3. A due date shows as the task's due date. Todoist's duration becomes the estimate, a day being 8 hours. A task opens at `app.todoist.com/app/task/<id>`.
+  - A refused token (401 or 403) reads as refused. A rate limit follows `Retry-After`. A 410 says Todoist retired the API Kannu uses.
+  - Linear's and Todoist's messages say "in Linear, under Security & access" and "in Todoist, under Integrations › Developer", so Brain's naming rule (never "Settings" for a page) holds.
+  - New `TodoistAPI.swift` (logic target), `TodoistClient.swift` (logging wrapper and provider), and the `todoistFilter` key.
+  - Tests: new `TodoistAPITests` (37 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
+### 2026-10-19 - Linear is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 6 of the task-sources PR: Linear, read-only, by personal API key
+- **Changes:**
+  - Brain › Tasks › Add a source › Linear takes a personal API key. Kannu checks it with Linear's GraphQL API, which also gives the workspace (`https://linear.app/<workspace>`). Key and workspace are kept together in the Keychain (`linear-credential`). The key goes in `Authorization` as Linear wants it, without "Bearer".
+  - A sync reads the issues assigned to the user that are not done or canceled, at most two pages of 100. Each issue's key is `ENG-123`, so its team is its project. A started state is In Progress. Due date, priority, parent, cycle and labels show on its page; Linear's estimates are points, not time, so none is taken. Its link opens only when it is under the connected workspace.
+  - Linear reports errors inside the answer, so they are read on any status. A refused key reads as refused. A rate limit (`RATELIMITED`, or HTTP 429) is timed from Linear's reset header, which is in milliseconds. Any other error's message is shown with the key taken out.
+  - New `LinearAPI.swift` (logic target) and `LinearClient.swift` (logging wrapper and provider).
+  - Tests: new `LinearAPITests` (35 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
+### 2026-10-19 - GitHub Issues is a task source, from github.com or GitHub Enterprise Server
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 5 of the task-sources PR: GitHub, read-only, including Enterprise Server
+- **Changes:**
+  - Brain › Tasks › Add a source › GitHub takes a server (github.com, or a GitHub Enterprise Server address; a pasted `/api/v3` is accepted) and a personal access token. Both are checked with `GET /user` before anything is saved, then kept together in the Keychain (`github-credential`).
+  - A sync reads the open issues assigned to the user (`GET /issues?filter=assigned`), at most two pages of 100. Kannu builds page 2 itself and never follows a URL from an answer. "Include pull requests" on GitHub's page adds the assigned pull requests; switching it drops a sync in flight and fetches again.
+  - Each issue's key is `owner/repo#7`, so its repository is its project ("repo #7" in captions). A pull request counts as In Progress; an issue is In Progress when a label says so. Its labels, milestone, assignee and comment count show on its page. Its link opens only when it is on the connected server.
+  - A 403 or 429 with `x-ratelimit-remaining: 0` or `Retry-After` is a rate limit, timed from GitHub's own reset. Any other 403 reads "needs read access to issues, or SSO authorisation".
+  - New `GitHubAPI.swift` (logic target): credential, host rules, requests, decoding, mapping and wording, plus `GitHubReader`. `GitHubClient.swift` holds the logging wrapper and the provider.
+  - Tests:
+    - New `GitHubAPITests` (36 tests) covers host forms, requests, decoding, mapping, the rate-limit remap, a two-page run through a stubbed `URLProtocol` and redaction.
+    - `IntegrationSecretRulesTests` now lets each source's own API file set its `Authorization` header and no other file.
+    - Inventory entry count re-pinned.
+
+### 2026-10-19 - Apple Reminders is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 4 of the task-sources PR: Apple Reminders through EventKit, read-only
+- **Changes:**
+  - Brain › Tasks › Add a source › Apple Reminders asks macOS for Reminders. That is the only place Kannu asks, and only on that click. Then every incomplete reminder, from every list, becomes a task. Each list is a project, so the source's page shows the lists. Reminders' priority shows as High, Medium or Low, and its due date as the task's due date. Kannu never changes a reminder.
+  - A change in Reminders (added, completed or edited, on this Mac or synced from iPhone) asks for a quiet sync. Several changes during a sync come to one more sync. The listener runs only while Reminders is connected, its sync is on and tasks are on.
+  - EventKit is touched only through `AppleRemindersStore`. Its `EKEventStore` is built and read on a queue of its own, on first use, never at launch. A sync reads macOS's answer without asking. If access is turned off later, the source reads "macOS no longer lets Kannu read your reminders" with an "Open Privacy & Security" button.
+  - At most 200 reminders, soonest due first. A longer list marks the sync incomplete, so nothing is marked gone because of the cap.
+  - The app's Info gains `NSRemindersFullAccessUsageDescription`. The search entry "Apple Reminders" lands on its row, or on Add a source until it is connected.
+  - Tests:
+    - New `AppleRemindersMappingTests` covers order, cap, priority names, the list as key and project, and merging.
+    - `IntegrationSecretRulesTests` pins that only `AppleRemindersStore` asks for access, only from `connectAppleReminders`, and that a sync's read never asks.
+    - Inventory entry count re-pinned.
+
+### 2026-10-19 - Brain › Tasks shows the sources you use, with one Add a source for the rest
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 3 of the task-sources PR: the overview with Add a source, one connection page for every source, one connect sheet for the new ones
+- **Changes:**
+  - Brain › Tasks › Sources lists Local tasks, then each connected source with "N open ›", then one "Add a source" row whose Connect… menu lists the sources not connected. A source not connected has no row of its own. Its search entries land on Add a source (`landingOnABuiltRow`), and the tasks it kept stay in All tasks.
+  - Every source's page has the same Connection section: who it is connected as and Disconnect…; what needs fixing (a refused token, Keychain access, Reminders access); Sync; its colour; Refresh with what the last sync found; and its own options (Jira's issue filter under Advanced, GitLab's Include merge requests). The Jira and GitLab sections written twice are gone.
+  - One Disconnect dialog serves every source ("Disconnect GitHub?", Keep or Remove its tasks). Disconnecting from a source's page also leaves that page.
+  - New `SourceConnectSheet` connects GitHub (server and token), Linear (API key), Todoist (API token) and Apple Reminders (macOS's own question). Jira and GitLab keep their sheets.
+  - Deep links: "Sources" lands on the always-present Local tasks row. Jira's row has its own id, and each new source's row gets one, along with "Add a source". The notch's "Manage tasks…" and "Add a source…" still land on Sources.
+  - "Ask to Log" and "Never Ask to Log" show only for sources whose time can be logged (Jira and GitLab).
+  - Tests:
+    - `SettingsHighlightInventoryTests`: re-pinned counts (236 entries, 271 registrations, 265 ids, with a dated note), the new landing map, and a new test that a source not connected lands on Add a source.
+    - `SettingsLayoutRulesTests`: the third connect sheet's padding.
+
+### 2026-10-19 - Jira and GitLab sync through one engine that every source will share
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 2 of the task-sources PR: `SourceSync` and `CredentialStore`, with Jira and GitLab moved onto them
+- **Changes:**
+  - New `SourceSync` (logic target) holds one source's sync: its state, generation, in-flight marker, kept refresh, Connect guards and token removal. TasksManager no longer keeps a copy per source. It holds one engine each for Jira and GitLab (`jira`, `gitlab`), is their `TaskSourceHost` (it merges their items with `TaskMerge` and publishes their changes), and loses about 420 lines.
+  - What does not change: a page appearing syncs only a stale source, never with the Keychain dialog and never after a refused token. Refresh asked during a sync is kept and runs after it, with the new options, except after a refusal, a sign-in to reconnect or a declined dialog. A result for an older connection is dropped. Connect saves nothing until the source accepted the credential, nor over a Disconnect that landed meanwhile. Remove Token waits for a Connect in flight.
+  - Fix: GitLab now has Jira's guards. A Refresh asked during a GitLab sync is kept instead of dropped. A GitLab Connect counts itself in flight and re-checks before saving. Remove GitLab Token waits for it.
+  - New `CredentialStore` replaces the twin `JiraCredentialStore` and `GitLabCredentialStore`: one serial queue per item, with the Keychain reached through a `SecretSlot` so the store is tested without it. The items and their contents are exactly those saved before (`TaskCredentials.jira`, `.gitlab`), so nobody connects again.
+  - `JiraTaskSource` and `GitLabTaskSource` are the two sources' providers: where a credential may be sent, one fetch, and their own wording for failures and Connect errors, moved unchanged out of TasksManager. Time to log and GitLab's linked merge requests read the shared stores and the engines' generations, so `WorklogConsentRulesTests` holds as it was.
+  - The Settings rows call the generic `syncState(_:)`, `refresh(_:)`, `syncIfStale(_:)`, `disconnect(_:removeTasks:)` and so on.
+  - `RemoteIssue.webURL` and `TaskFacets.labelCategory` are ready for the new sources. A Connect's check now returns the credential to save, since some sources learn part of it while checking.
+  - Tests:
+    - `JiraSyncRulesTests`, which read TasksManager's text for Jira's names, is replaced by `SourceSyncTests`: 17 tests that drive the engine with a fake source and pin each rule by what it does.
+    - New `CredentialStoreTests`: the items Kannu already saved read back, and saves write the same text byte for byte.
+    - `IntegrationSecretRulesTests` now scans the engine's on-appear syncs and token removal, and pins that the manager keeps no sync state of its own.
+
+### 2026-10-19 - Every source's facts and settings live in one place, ready for GitHub, Linear, Todoist and Apple Reminders
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 1 of the task-sources PR: source facts and generic signatures, no visible change
+- **Changes:**
+  - `TaskSource` gains `github`, `linear`, `todoist` and `appleReminders`, in the order Brain and the notch list them. The stored raw values of the existing three do not change. Nothing creates tasks from the new sources yet.
+  - New `TaskSourceFacts.swift` (logic target) holds what Kannu knows about each source in one switch per fact: its name and title, whether its time can be logged (Jira and GitLab only), whether it uses a token, how its keys read (which also gives its project), what its items are called, and its "Open in …" label.
+  - New `TaskSourceSettings.swift` maps each source to its Defaults keys: Sync, connection display copy, account name, colour and Show in notch. New keys were added for the four new sources.
+  - New `TaskSourcePreferences` keeps the notch's Show in notch and the connected sources current for the Tasks popover, the source menu and the timer tab's list. They no longer each hold three `@Default`s.
+  - The logic is generalised:
+    - `TaskSourceFilter` covers every source.
+    - `TaskOrdering.viewFilter(hidden:alwaysListed:)` replaces the three-flag form.
+    - `TaskColoring.integration(for:colors:)`, `TaskSyncSummary` and `TimerSidePage.initial` take any set of sources.
+    - `TaskDetailSummary`'s "Open in …" label and short keys (GitHub reads "repo #7") follow the facts.
+  - Fix: Time to log drafts are made only for sources whose time can be logged (`TaskSource.logsTime`). Before, every task that was not local made one.
+  - The notch's source menu lists Local tasks and each connected source, with "Add a source…" for the rest. Its Refresh and sync lines cover every source that syncs, through `TasksManager.syncStates`, `syncAllIfStale()`, `refreshAll()` and `browseURL(for:)`.
+  - Tests:
+    - New `TaskSourceFactsTests`.
+    - Updated for the new signatures: `TaskSourceFilterTests`, `TaskColorTests`, `TasksPopoverLogicTests` and `TimerSidePageTests`.
+    - `TasksPopoverRulesTests` now pins every source's Show in notch key and "Add a source…".
+    - `TimerSideColumnRulesTests` and `TimerTaskDetailRulesTests` pin the generic calls.
+
+### 2026-10-18 - Brain › Tasks is a tree: Source › Project › Task, with All tasks beside it
+- **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
+- **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks rebuilt as nested pages with one shared row design, split out of one 1,727-line file
+- **Changes:**
+  - The overview lists the sources (Local tasks, Jira Cloud, GitLab), each with "N open ›", then All tasks, Time to log, Interrupted sessions and the Tasks options. A source not connected offers Connect…, and its page too while it still holds kept tasks. A source with a problem reads "Needs attention" there, and shows the problem in full on its page.
+  - A source's page holds its connection rows: Connect or Disconnect, problems, Keychain access, Sync, colour, Refresh, and Jira's issue filter or GitLab's merge requests. These used to sit on the overview. Then come its projects, one row each ("ds-vendors", group path below, "40 open ›"), or its tasks directly when there is one project or none. Local tasks has its colour, Add a task and its tasks.
+  - A project's page lists its tasks; their captions drop the project the page already names ("#4326").
+  - A task's page is new. It shows the title with its short key and status and ▶/■; labels; tags as chips that remove themselves, with Add Tags; time and overtime, with Set Estimate and Add Time; the same facts as the notch card; a local task's reminder; Open in Jira or GitLab and an "Ask to log its time" switch; then Mark Done, Archive or Delete, or Reopen and Restore once closed or archived. Deleting the task leaves its page.
+  - All tasks replaces the Task list. A Find row holds a search field (never saved) and one Filter menu with the Source, Project, Status and Tag filters and Show All; its icon fills while filtering. "Filtered · 3 of 12 tasks" and Show All now cover Find too. Recently closed, the Archive and Tag colours fold up at the end.
+  - Every list shares one row: colour dot, title (two lines at most), one short caption (`TaskRowCaption`), ▶/■ and ›. The ⋯ menu on every row became a right-click menu that opens with Show Details and keeps every item. Move Up and Move Down are also accessibility actions. Drag to reorder is unchanged, and closed and archived rows lead with the short key.
+  - Navigation is a path of pages. Each page opens at its top; the back row goes up one level and names where it goes ("‹ GitLab"); going back scrolls to the row that opened the page. A search or deep link returns to the overview, scrolled to its row, except All tasks' own link ("Show all in Brain", a reminder's click).
+  - Search entries for a source page's rows now land on that source's row on the overview. Two new deep links, `tasksLocalSourceHighlightID` and `tasksGitLabSourceHighlightID`, name those rows. Two new entries, "Local tasks" and "Find a task", were added. The dead `landingOnABuiltRow` redirect is gone, since those rows no longer depend on a connection.
+  - `TasksSettings.swift` was split into flat files beside it: `TaskSourcePages`, `TaskConnectSheets`, `TaskRowList`, `AllTasksPage` and `TaskDetailPage`.
+  - docs/SETTINGS.md: sub-pages may nest as a tree; the back row names its parent; long lists keep their overflow in a right-click menu with a › to the item's page.
+  - Tests:
+    - `TaskListRulesTests` pins the shared rows, the right-click menu and the page path.
+    - `SettingsHighlightInventoryTests` pins that rows below the overview register nothing and that each page's entries land on the row that opens it. Counts are now 235 entries, 266 registrations and 260 ids.
+    - `TaskColorRulesTests`, `IntegrationSecretRulesTests` (the Keychain scan covers all six files) and `SettingsLayoutRulesTests` point at the new files.
+
+### 2026-10-18 - The pieces for a Brain › Tasks tree: counts per source and project, Find, and a short row caption
+- **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
+- **Agent label:** Claude Code (Opus 5.5) — pure helpers for the Source › Project › Task tree, tested before any view uses them
+- **Changes:**
+  - `TaskFacets.sourceCounts` and `TaskFacets.projectCounts(in:)` give each source and each project its number of tasks; projects sort by their short name, then by full key, with "No project" last.
+  - `TaskFacets.projectShortName` ("ds-vendors" for "discern_security/applications/ds-vendors") and `projectGroup` (the group path that tells two "app" projects apart). `TaskDetailSummary.shortKey` now uses the short name and can drop the project ("#4326") where a page already names it.
+  - `TaskSourceFilter(_:)` turns a source into its filter.
+  - `TaskFilter.query` holds what All tasks' Find field will hold. It is matched with `TaskSearch` alongside the four filters and is never saved; spaces alone hide nothing.
+  - `TaskRowCaption` is the one line under a task's title: the short key, the status unless it is GitLab's "Open", timing now or paused, time against the estimate and any overtime (orange), when it is due (orange once overdue), and the tags. With nothing tracked and no estimate it says nothing about time, instead of "No estimate" on every new task.
+  - Tests: `TaskRowCaptionTests` (new), and four `TaskFacetsTests` for counts, short names, project pages and Find.
+
+### 2026-10-18 - The notch's estimate is typed, in minutes, hours or days, with the presets one click away
+- **Developer label:** "in notch ability to add estimate is drop down, change it to allow hours days and minutes, or something with more flexibility without breaking our design"
+- **Agent label:** Claude Code (Opus 5.5) — typed estimate field in the timer tab's task form; a day unit for typed lengths
+- **Changes:**
+  - The timer tab's task form takes the estimate as typed text in the same golden-ratio slot the menu held: "45", "90m", "1.5h", "2d 3h". A chevron beside it still offers No estimate and the presets.
+  - While the field is focused it shows what it understood when that differs from what was typed ("= 19h"); leaving it writes the length the standard way ("90m" becomes "1h 30m").
+  - Text that is not a length, or is under a minute, turns orange and Add/Save waits until it is fixed, so a typo is never dropped silently. An emptied field or 0 means no estimate.
+  - A Jira or GitLab task with no Kannu estimate shows the source's own ("2h from Jira") as the field's prompt.
+  - `WorkDuration.parse` reads days (`d`, `day`, `days`). A day is a workday of 8 hours (`WorkDuration.hoursPerDay`), as GitLab and Jira count one by default, so "2d" is 16 hours. Lengths are still shown in hours. This also applies to Brain's Custom estimate sheet, Add Time and Time to log; the Custom sheet's hint now mentions "2d".
+  - Tests: `WorkDurationTests.testDaysAreWorkdays`; four `TaskFormDraftTests` for reading, echo, settling, presets and the remote prompt; `TimerSideColumnRulesTests` pins the field in the golden row and its settle-on-leave.
+
+### 2026-10-18 - A task card's linked merge requests open as a list
+- **Developer label:** "We need text about linked mr's inside the task to open a list of linked mr's and that page should have back on left and close on right and list of linked mr's with click through"
+- **Agent label:** Claude Code (Opus 5.5) — the "linked MRs" fact becomes a button that opens a page of the merge requests closing the issue (`closed_by`), each opening in the browser
+- **Changes:**
+  - On a GitLab issue's card, "2 linked MRs" is a button (a chevron after it, tooltip "Show
+    linked merge requests"), and ranks right after the due date, conflicts and health, so it is
+    always among the four facts the card has room for.
+  - It opens a page in the card's frame: Back on the left (to the card), "Linked merge requests",
+    Close on the right (to the list, which kept its place). Each merge request is a row with its
+    state as a dot (open green, merged purple, closed red), its title (sliding when clipped), and
+    "!12 · Merged · Kim Lee" (with Draft when it is one); a click opens it in the browser. While
+    loading, a spinner; then no merge requests, a failure with Try Again, the Keychain refused
+    with Try Again, or Reconnect GitLab. More than a page of them offers "More on GitLab".
+  - The list is GitLab's `closed_by` for the issue: the merge requests that close it when merged,
+    the same set its `merge_requests_count` counts, so the card's number and the list agree.
+    `GitLabAPI.closingMergeRequestsRequest` (read-only, the token in its header only),
+    `LinkedMergeRequest`, `GitLabReader.closingMergeRequests`, and
+    `TasksManager.linkedMergeRequests(for:)`: a click asks, so the Keychain may be read with its
+    dialog, as Refresh does; a loaded list is kept until the task's next sync or a new connection;
+    a refused token marks GitLab as needing reconnecting. Logs carry counts only.
+  - Tests: new `LinkedMergeRequestTests` (the request, the cases that send nothing, each answer as
+    a row: references, a page on another server dropped, an unknown state); `GitLabReaderTests`
+    (the list, more than a page, 401, rate limit, redirect, a server Kannu would not use);
+    `TaskDetailSummaryTests` (the fact is the only one with an action, within the first four);
+    `TimerTaskDetailRulesTests.testTheLinkedMergeRequestsPage`.
+
+### 2026-10-18 - Closing a task card finds the list where it was
+- **Developer label:** "the close button of a task should keep the list at previously scrolled position or at the position of closed task , see which is easy but the current way how they close back to top is not acceptable"
+- **Agent label:** Claude Code (Opus 5.5) — the task list stays in the view tree under a card or the Log page, hidden and inert, so its scroll position survives
+- **Changes:**
+  - Opening a card used to swap the task list out for it, so closing the card rebuilt the list at
+    the top. The list now stays under the card (and under the Time to log page), hidden, taking no
+    clicks or hovers and skipped by VoiceOver, and is never rebuilt: closing returns to exactly the
+    place it was scrolled to, with no jump. Keeping the list was both easier and exact, against
+    scrolling back to the closed task.
+  - Opening a card clears the hovered row, so no row goes on sliding its text under the card.
+  - Test: `TimerTaskDetailRulesTests.testClosingACardKeepsTheListsPlace`.
+
+### 2026-10-18 - Clipped text on the task card and rows slides into view on hover again
+- **Developer label:** "the animation to reveal the clipped text on hover is not working"
+- **Agent label:** Claude Code (Opus 5.5) — the reveal measures its sizes into state instead of through preference keys, and starts once they arrive; found and checked with a rendering harness
+- **Changes:**
+  - `HoverRevealText` never slid: it measured the truncated frame and the full text through two
+    preference keys, and in this view their `onPreferenceChange` reported zero sizes and never the
+    real ones (seen in a harness that renders the view and prints what it measured). With no
+    overflow, nothing counted as clipped.
+  - Each size is now written straight to state as it appears and whenever it changes
+    (`SizeReader`). The harness then measured every case (a fact, a two-line title, a row's title
+    and caption) and rendered each sliding.
+  - The slide also starts when the sizes arrive after the hover (`trigger`: the hover and whether
+    the text is clipped), so text that appears under the pointer slides too.
+  - Tests: new `HoverRevealTextTests` host the view in a window and compare its pixels: a clipped
+    line and a clipped title move while active; text that fits, or is not hovered, stays still;
+    and the sizes never go back through preferences. `HoverRevealText.swift` joins the logic
+    target (pbxproj ids 5B0/5B1).
+
+### 2026-10-18 - The notch's task form offers the tags already in use
+- **Developer label:** "also is adding tags in a task from notch does not provide existing tags ?"
+- **Agent label:** Claude Code (Opus 5.5) — while tags are typed in the timer tab's task form, the tags in use show as chips with their colours, from Brain's own suggestions
+- **Changes:**
+  - While the form's tags field has focus, the reminder's row shows the tags in use as chips, each
+    with its colour dot (none for plain glass): Brain's own suggestions
+    (`TaskTagEditing.suggestions`), so the first few with nothing typed, then those that start with
+    what is typed, then those that contain it, then the typed text as a new tag (a +). A tag
+    already typed is never offered; nothing is once ten are.
+  - A click completes the tag in place of what was being typed and adds a comma, ready for the
+    next; the field keeps its focus (chips are not focusable, and stay while the pointer is on them
+    so a click always lands). Chips that do not fit are left off the end, never wrapped, so the
+    row stays 24 pt. The reminder row comes back when the field lets go.
+  - `TaskFormDraft` gains `tagFragment`, `tagsBeforeFragment`, `tagSuggestions(existing:)` and
+    `completeTag(_:)`.
+  - Tests: `TaskFormDraftTests` (the fragment, completion, Brain's suggestions skipping typed
+    tags, nothing at ten); `TimerSideColumnRulesTests` (the form uses the suggestions, chips are
+    not focusable and never wrap).
+
+### 2026-10-18 - The task icons sit in a small rail between the timer tab's two columns
+- **Developer label:** "how would moving the 3 icons in the third picture to go vertically between the 2 sides of the tab work, also make them smaller and go in with genereal design"
+- **Agent label:** Claude Code (Opus 5.5) — search, filter, Refresh and the Time to log clock move from the Tasks page's top row into a vertical rail on the divider's line, with the hairline continuing below
+- **Changes:**
+  - The Tasks page's icons move out of its top row into a rail in the gap between the composer and
+    the list, centred on the divider's line: search, the filter, Refresh (while Jira or GitLab
+    syncs), and the Time to log clock (while an entry asks), top to bottom, the first level with
+    the session name field. Under them the divider's hairline runs to the page's bottom.
+  - Smaller and in the notch's own style (`TimerRailIcon`): 21 pt squares with a dim fill and a
+    10 pt glyph, brighter while what they open is open. The filter menu draws the same square
+    (`TaskSourceMenu` style `.rail`).
+  - The rail is an overlay hung into the gap (`TimerComposerMetrics.railOffset`), so it takes no
+    room: the gap stays 41 pt and nothing moves when the page changes. The divider steps aside
+    while the Tasks page shows; Presets keeps it.
+  - The list gets the whole page back: three rows, ending where Start and Reset do. Search opens
+    a field at the top of the page (the name field's look); opening it closes an open card or the
+    Log page. The clock toggles the Log page. The rail stays beside the card and the Log page.
+  - "Filtered · Show all" leaves with the row: the filter's square brightens while it hides a
+    source, its menu gains Show all (the popover's too), and "Nothing to show" offers Show all.
+  - Tests: `TimerSideColumnRulesTests` (the rail hangs in the gap, the divider steps aside, no
+    toolbar row, the icons' order, planted offenders); `TimerComposerMetricsTests` (the rail fits
+    the gap clear of both columns, centred on the divider, four slots fit; two rows under the
+    search field).
+
+### 2026-10-18 - The timer tab's columns split in the golden ratio and end on one line
+- **Developer label:** "fix allignements, keeo golden ratio wherever possible ... golden ratio is the goal"
+- **Agent label:** Claude Code (Opus 5.5) — the composer and the task column share the notch's width 1.618 : 1, the column ends where Start and Reset do, and the task form's rows split in the golden ratio
+- **Changes:**
+  - The composer and the side column split the tab's width in the golden ratio around the 41 pt
+    gap, at every notch width (`TimerComposerMetrics.sideColumnWidth(notchWidth:)`): 327 : 202 in
+    the narrowest notch, 349 : 215 in a 675 pt one, instead of a fixed 240 pt column. The notch
+    never grows for it; the columns share what it has. The width comes from the open notch's own
+    width, not the view model's, which shrinks to the closed size before the tab fades out.
+  - The width is passed down to the task list, the task card (its two fact columns follow) and the
+    Time to log page.
+  - The side page is the composer's height, name field included (`sidePageHeight(budget:style:)`),
+    so the list, the card and the divider end on the line Start and Reset end on, at every notch
+    height; three task rows fit beside the stacked composer.
+  - The task form is exactly the composer's height (rows 8 pt apart: 122), so the two swap without
+    anything moving. Its estimate and tags, and Add and Add & Start, split 1 : φ (`GoldenRow`, a
+    small `Layout`); Save alone fills its row. The reminder row is inset like the fields' text.
+  - Tests: `TimerComposerMetricsTests` (the golden split at five widths, the floor, the split
+    adding up, the page ending with the composer, the form equal to the composer);
+    `TimerSideColumnRulesTests` (the open notch's width, the divider and page ending together, the
+    form's golden rows); `TimerTaskDetailRulesTests` (the card takes the column's width).
+
+### 2026-10-18 - The timer's duration digits always show whole
+- **Developer label:** "also ui in timer broken randomly"
+- **Agent label:** Claude Code (Opus 5.5) — the composer's Hours, Minutes and Seconds boxes are an NSTextField of Kannu's own, sized to the box, under no clip
+- **Changes:**
+  - The duration boxes sometimes showed only the top half of their 22 pt digits. Each was a SwiftUI
+    `TextField`, which sizes itself from its text; rebuilt mid-animation (switching tabs, a timer
+    stopping, and since the task form, every time it closes) it could be measured for the default
+    13 pt font, about 16 pt tall, and it sat under two clip masks. The cause is likely, not
+    confirmed on screen, so both suspects go.
+  - New `DurationDigitField`: an `NSTextField` with the font set when it is made, the box's size
+    always (`sizeThatFits`), and a cell that centres the digits. While the user types, an update
+    never overwrites their text unless it no longer says the value.
+  - Typing works like a clock's display (`TimerDurationDigits`): digits only, a digit typed past two
+    pushes the first one out (typing 5 into "00" reads "05"), never past the range.
+  - The box and the composer draw a filled shape behind instead of a clip over the fields.
+  - Tests: `TimerDurationDigitsTests`; `TimerDurationFieldRulesTests` (the wrapper, no clip over
+    the boxes or the composer, the font and size fixed, the digits' line height fits the box,
+    planted offenders).
+
+### 2026-10-18 - New task and Edit task turn the timer tab's left panel into a task form
+- **Developer label:** "a seperate add taks doesnt make sense, the left part does that, for a detailed task edit, keep a small icon by reducing that pills width, keep a minimal size button with hover tool tip and that converts that one full notch patch to a editable task form with a close button and controls to add a task"
+- **Agent label:** Claude Code (Opus 5.5) — a New task button beside the session name field, a pencil on the task card, and one form in the composer's place for both
+- **Changes:**
+  - Beside the session name field, with tasks on, a small New task button (tooltip "New task").
+    The field is 30 pt narrower for it and keeps 259 pt at the smallest notch.
+  - The button turns the left panel into a task form in the composer's frame (116 pt, under the
+    composer's 122, so the notch never grows): the title with a × where the button was; the
+    estimate (Brain's choices) and tags, comma separated; a local task's reminder, a field date
+    picker (a compact one's calendar is a popover window the notch would close under), with an
+    orange bell while macOS blocks Kannu's notifications; then Add and Add & Start.
+  - The pencil on an expanded task card opens the same form on that task, with Save. Only what
+    changed is saved (`TaskFormDraft.edits`). A Jira or GitLab task's title shows but stays the
+    server's, and reminders are for local tasks.
+  - Add & Start starts the task the way its ▶ does; the typed session name gives way to it. Add
+    puts Local back in the notch if it was hidden, as the popover's Add does.
+  - The form's fields and its estimate menu hold the notch open while in use, under tokens of
+    their own, released when the focus goes, the form goes, or the notch's window stops being key.
+    Escape and the × leave without saving. A timer starting or stopping, the tab appearing, or
+    tasks going off brings the composer back.
+  - `TasksManager.addTask` returns the new task's id (its two callers check for nil), and
+    `renameTask` renames a local task; Brain's add row shares the estimate choices.
+  - Tests: `TaskFormDraftTests`; `TimerComposerMetricsTests` (the form fits, the name field keeps
+    its room); `TimerSideColumnRulesTests.testTheTaskFormOwnsTheManagerAndLetsTheNotchGo`;
+    `TimerLifecycleRulesTests` (the form is cleared when a timer starts or stops);
+    `TimerTaskDetailRulesTests` (the pencil's tooltip); `TasksPopoverRulesTests` (the form is a
+    notch task view: no `.help`, no Keychain, no tickers).
+
+### 2026-10-18 - The timer tab's task column has search, the filter, Refresh and Time to log
+- **Developer label:** "instead of tasks buttons,keep the refrsh button and on hover show the integrations last synced time, refrsh should trigger resync, search , filter will be icons, taking up a row similar to the name session ... in right the row will have search and filter option, possibly load the search dynamically ... also do we miss anything else from the task icon click feauture, check and make sure no feature is lost in this overhaul"
+- **Agent label:** Claude Code (Opus 5.5) — a toolbar on the Tasks page, the popover's Refresh rule and Time to log cards shared, the header button shown only where the column cannot be
+- **Changes:**
+  - The Tasks page has a toolbar level with the session name field (same height, same gap):
+    search, the Show in notch filter (the popover's `TaskSourceMenu`, with Connect and Manage
+    tasks…), Refresh while Jira or GitLab syncs, and Time to log, a clock with the yellow dot,
+    while an entry asks. "Filtered · Show all" leads the row while the filter hides a source.
+  - Search turns the row into a field that narrows the list as you type, in memory
+    (`TaskSearch`: title, key, short key, tags and labels, every word, case and accents
+    ignored). The × or Escape ends it.
+  - Refresh's tooltip says when each source last synced ("Jira: Synced 10:42 · GitLab: Offline");
+    a click resyncs both, with a spinner while syncing, off while rate limited. The rule is the
+    popover's, now one place (`TaskSyncSummary`), and the popover uses it too.
+  - The clock opens the Time to log cards in the column, with a × back; they are the popover's
+    cards (`LogTimeCards`, moved out of the popover with `StackedCardStyle`), so Log goes the one
+    way it does everywhere. The page closes when the last entry is answered.
+  - The list honours Show in notch, as the popover does, then the search; empty, it says "No
+    tasks", "No matching tasks" or "Nothing to show". An expanded card and the Log page take the
+    whole page; the list sits under the toolbar (`sideListHeight`, two rows at the smallest
+    notch).
+  - The search field, a Time to log card's fields (through `worklogFieldFocus`, nil in Brain) and
+    an open menu hold the notch open, each under its own token, released when the focus goes, the
+    page goes, or the notch's window stops being key.
+  - The header's Tasks button shows only where the column cannot: on the timer tab while a timer
+    runs, and on every tab with no timer tab (timer off, or a popover). Nothing the popover has is
+    lost: the running task's clock, pause and stop, Up next and Time to log stay there while
+    timing, and with no timer tab everything stays there.
+  - Tests: `TaskSearchTests`; `TasksHeaderVisibilityTests` (16-row table, the running-timer case);
+    `TasksPopoverLogicTests` (sync lines, tooltip, refresh rule); `TimerComposerMetricsTests`
+    (toolbar level with the name field, two rows under it); `TimerSideColumnRulesTests` (filter
+    and search, focus and menu holds, Refresh's rule, the toolbar over the list only);
+    `TasksPopoverRulesTests` (the header gate passes the running timer).
+
+### 2026-10-18 - A local task never timed says so on its card
+- **Developer label:** "for local taks without no logs, just maybe show a greyed out text that goes like no time logged , please start task to see or something more proffessiona"
+- **Agent label:** Claude Code (Opus 5.5) — a muted note on the timer tab's task card for a local task with no recorded time
+- **Changes:**
+  - `TaskDetailSummary` gains `note`: "No time recorded yet. Start the task to track it." for a
+    local task with no sessions and nothing running. A reminder is not time, so a reminded task
+    still says it; a Jira or GitLab task never does, since its facts and its server's time speak
+    for it.
+  - The card shows the note in grey where the facts go, after any facts, and gives way before
+    them when a two-line title leaves less room (`ViewThatFits`), so the card stays contained.
+  - Tests: `TaskDetailSummaryTests.testALocalTaskNeverTimedSaysSo`,
+    `TimerTaskDetailRulesTests.testANeverTimedLocalTaskShowsItsNote`.
+
+### 2026-10-19 - The archive keeps its own time, and the usage Refresh tooltip is translatable
+- **Developer label:** CodeRabbit on #107 (covering this branch): "Archive processing never runs while the app stays open and no sync happens." and "Localize the Refresh tooltip."
+- **Agent label:** Claude Code (Opus 5.5) — `TasksManager.refreshArchive()` on a new day and when Brain's Task list appears; `String(localized:)` on the header's Refresh tooltip
+- **Changes:**
+  - Closed tasks move to the Archive after 3 days, and archived Jira and GitLab tasks clear after 7. Before, that ran only at launch and after a Jira or GitLab sync. A local-only user's done tasks could sit in Recently closed, reading "archiving now", until Kannu restarted. Now `refreshArchive()` runs when the day changes (`NSCalendarDayChanged`) and when Brain's Task list appears. It protects the task being timed, as a sync does.
+  - The header's "Refresh usage" tooltip goes through `String(localized:)`, like every user-facing string.
+  - `TaskListRulesTests.testTheArchiveRunsOnANewDayAndWhenTheListAppears` pins both triggers.
+
+### 2026-10-18 - Clipped text on the task card slides into view on hover, the status pill no longer looks clickable, and no fact wears a refresh icon
+- **Developer label:** "the open hint text shows but nothing happens on clicking the ticket pill, refresh symbol near iteration is confusing , user might feel some refresh is intended, also none of the clipped text shows on hover, ideally they should slide and show that clipped .. text"
+- **Agent label:** Claude Code (Opus 5.5) — a hover-only reveal for clipped text, the pill's tooltip reworded, three icons replaced
+- **Changes:**
+  - New `HoverRevealText`: text that is clipped slides into view while the pointer rests on it,
+    once, then settles back — one line sideways, the card's two-line title upward, line by line.
+    The truncated text still defines the frame, so nothing around it moves; whether it is clipped
+    is measured, not guessed. It waits 0.4 s (brushing past starts nothing), runs only while
+    hovered and only when clipped, does nothing at rest, and stays still under Reduce Motion. The
+    timing lives in `HoverRevealMotion` (pure, tested). Kannu's `MarqueeText` is left as it is: a
+    wrap-around ticker for the music title, not a hover reveal.
+  - Used for the card's title, every fact, the time beside Start, and each list row's title and
+    caption (one hover per row drives both).
+  - The task-number pill's tooltip said only the status word, and GitLab's "Open" read as an
+    action that did nothing. It now says "Status: Open"; VoiceOver reads "ds-vendors #42, status
+    Open". The pill stays a label.
+  - The iteration fact used Kannu's sync arrows and read as a refresh button; it shows an
+    hourglass. "Timed …" (a circular clock arrow) shows a stopwatch, and sessions (the music
+    repeat glyph) a numbered list.
+  - Guards: `HoverRevealMotionTests`, `TaskDetailSummaryTests` (the new icons),
+    `TimerTaskDetailRulesTests` (each clipped text uses the reveal, the row's one hover, the pill's
+    "Status:" tooltip).
+
+### 2026-10-17 - The task card shows status as the key pill's colour, and archives at a tap
+- **Developer label:** "open, in progress and closed can be colors, no need to show mnaybe in card … open and to do can be yellow,. in progress can be green and closed or ended can be red"
+- **Agent label:** Claude Code (Opus 5.5) — the status chip folded into the key pill as a colour, a closed phase, and an archive button on the card
+- **Changes:**
+  - The card no longer spells the status out in a chip of its own. The task number's pill
+    (`ds-vendors #42`, or "Local") takes its colour: yellow for To Do or Open, green for In
+    Progress, red for closed or ended. The word stays as the pill's hover tooltip and is what
+    VoiceOver reads ("ds-vendors #42, In Progress").
+  - A closed phase: a task is red when its server says it is done, or it has left the task order
+    (marked done, no longer listed by its source, archived), reading "Closed" ("Done" for a local
+    task marked done).
+  - An archive button (archive box, tooltip "Archive") sits at the card's bottom right before the
+    trash or open-in icon: any task goes to the archive at once, and the card closes as the task
+    leaves the list.
+  - The chip row paints above the fact grid, so the status tooltip opening downward is never
+    covered; the title row stays above both for the ×.
+  - Guards: `TaskDetailSummaryTests` (the closed phase from every cause), `TimerTaskDetailRulesTests`
+    (no status chip, the pill's colour and tooltip, the colour for each phase, archive on the card).
+
+### 2026-10-17 - Tasks have an archive: closed ones move there after 3 days, archived Jira and GitLab tasks clear after 7, and nothing with time to log is ever lost
+- **Developer label:** "after a few days of being closed tikcet should go in to archive and not show up in any other list other than archive, user can alos immediately archive or delete the tasks, archice other than local tasks can auto clear in 7 days"
+- **Agent label:** Claude Code (Opus 5.5) — a new archived state with its own clock (`TaskArchive`), merge rules that keep it, and Brain's Recently closed and Archive sections
+- **Changes:**
+  - New `.archived` state. A task marked done, or one its source stops listing (closed, unassigned,
+    out of the filter), is Recently closed for 3 days, then archived; the archive is out of every
+    list but its own. Any task can be archived at once (Brain's ⋯ › Archive); for a Jira or GitLab
+    task that is its delete, since a deleted one would only come back on the next sync. Local tasks
+    keep Delete. Hide is gone: tasks hidden before read as archived by the user.
+  - An archived Jira or GitLab task clears itself 7 days after it was archived — never while it
+    holds time not yet logged (an open Time to log entry, an interrupted session, or finished time
+    that would round to something loggable), never while its server still lists it (it would only
+    come back as new), never the task being timed. Local tasks are never cleared.
+  - Sync: a task turning "no longer listed" is stamped with when; one archived on its own that the
+    source lists again comes back to the order with its time, as a gone one always has; one the
+    user archived stays archived.
+  - `TaskArchive` (pure, logic target) holds the rules; `TasksManager` runs it after loading and
+    after each sync — no timer. The tasks file is version 2 and reads its state leniently: a state
+    a build does not know reads as active instead of costing the whole list.
+  - Brain › Tasks › Task list: "Done and hidden" is now "Recently closed" ("archives in 2d",
+    Reopen or Archive) and a new "Archive" ("clears in 5d", "kept until its time is logged", "kept
+    while still open in its source"; Restore, and Delete for local tasks). Search finds both.
+  - Guards: `TaskArchiveTests` (both boundaries, the seed for older files, every reason clearing
+    waits, drafts that go with a task), `TaskMergeTests`, `TaskModelCodingTests`,
+    `TaskReminderPlanTests`, `SettingsHighlightInventoryTests`.
+
+### 2026-10-17 - The task card stays inside its column, lines up, and fills its space with an icon grid of facts
+- **Developer label:** "fix allignemets and also see if some other valid info is there to show , plan how we can show things there in proper spacing but contained in the tab itself"
+- **Agent label:** Claude Code (Opus 5.5) — a fixed-size card, a chip row that gives way, a two-column fact grid sized to the height left over, and the noise removed
+- **Changes:**
+  - Contained: the card is exactly the column's width and the page's height. A long label
+    (`workflow::sprint_backlog`) made the chip row wider than the column, the card grew with it,
+    and the × and the open icon were pushed off the notch. The chip row now tries every label and
+    gives way one at a time through `ViewThatFits`, with a "+N" for the rest; when even the key and
+    status do not fit, the key truncates in the middle.
+  - Aligned: the colour dot is gone — it drew nothing for plain glass yet still took its width,
+    indenting the title past the chips — and the card's own tint carries the colour. Title, chips
+    and facts share one leading edge; the × sits in the corner.
+  - Filled: the facts are a two-column grid of an icon and a few words, up to four, most important
+    first — due date, conflicts, health, milestone, iteration, weight, parent, someone else's name,
+    checklist ("2 of 5 done"), linked MRs, comments, updated ("Updated 2d ago"), then Jira's
+    priority and type and logged time. A local task shows its reminder, when it was last timed and
+    how many sessions it has. The grid takes the height left over and shows two rows, one, or none,
+    so a two-line title never pushes Start out of the card.
+  - Quieter: the user's own name is never a fact (every issue on the list is assigned to them, so
+    "you" said nothing); "No estimate" no longer sits beside Start when there is no estimate and
+    nothing tracked; a scoped label shows its value (`sprint_backlog`); a draft merge request gets
+    a "Draft" chip; conflicts and an at-risk health read in orange.
+  - Guards: `TaskDetailSummaryTests` (facts and icons in order, the user's own name, health words,
+    relative times, scoped labels, draft, local facts, when time shows) and
+    `TimerTaskDetailRulesTests` (the card's fixed frame, `ViewThatFits` on both axes, no dot).
+
+### 2026-10-17 - The sync keeps what a ticket's activity says: updated, comments, checklist, linked MRs, iteration, health, and an MR's draft, conflicts and author
+- **Developer label:** "see if some other valid info is there to show"
+- **Agent label:** Claude Code (Opus 5.5) — fields the same GitLab responses already carry, now decoded leniently and kept; Jira adds `updated`
+- **Changes:**
+  - `RemoteTaskInfo` gains `updatedAt`, `commentCount`, `checklistDone` / `checklistTotal`,
+    `linkedMergeRequests`, `iteration`, `healthStatus`, `isDraft`, `hasConflicts` and `author`,
+    all optional, written to the tasks file and read leniently like the facts before them.
+  - GitLab: `updated_at`, `user_notes_count`, `task_completion_status`, `merge_requests_count`,
+    `iteration` (an untitled one reads "Iteration 5"), `health_status`, and for merge requests
+    `draft`, `has_conflicts` and `author` — all already in the issue and merge-request lists, so no
+    request is added. Each is read on its own (`LenientField`): a value in a shape this version
+    does not expect costs that field, never the item or the page.
+  - Jira: the search also asks for `updated`, whose offset has no colon (`+0000`);
+    `RemoteTaskInfo.serverTimestamp` reads both servers' timestamps.
+  - A sync refreshes each of them, and one the server cleared is cleared here.
+  - Guards: `GitLabDecodingTests` (including a malformed-field item), `JiraDecodingTests`,
+    `JiraRequestTests`, `TaskMergeTests`, `TaskModelCodingTests` (round trip, the timestamp parser).
+
+### 2026-10-17 - The task card reads like its ticket: the title first, then a short key, status and labels as chips, the standard facts, and its time beside Start
+- **Developer label:** "THIS IS NOT WHAT WE WANT TO SHOW … we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the card and row redesigned around the issue's own title and the facts the sync now keeps
+- **Changes:**
+  - The first card put the full GitLab path key in front of the title inside a two-line text, so
+    `discern_security/applications/ds-vendors#4264` ate both lines and the title never showed.
+    The title is now the issue's own, alone, 13 pt on up to two lines that cannot collapse; the
+    key is a short chip of its own — `ds-vendors #4264`, `app !12`, `PROJ-123` — and the list's
+    rows lead with the title too, with the short key in their caption.
+  - A chip row under the title: the key (or "Local"), where the task stands as a tinted capsule
+    (To Do neutral, In Progress blue, in the source's own word: "Open", "In Review"), then as many
+    labels as fit and a "+N" for the rest — GitLab and Jira labels first, the user's tags as
+    "#tag" after.
+  - A facts line in the order they matter on 240 pt: the due date ("Due 20 Oct", "Due today",
+    "Overdue 14 Oct" in orange; a local reminder keeps Brain's words), milestone, "Weight 8", the
+    assignee ("you" when it is the connected account), the parent, Jira's priority and type, then
+    "Jira logged 3h" / "GitLab spent 3h".
+  - The bottom row keeps Start, with the time against the estimate beside it ("42m of 2h ·
+    10m over"), and the trash or open-in icon at the right; the inline delete confirm is unchanged.
+    The top row paints above the chips so the × tooltip is never covered.
+  - `TaskDetailSummary` rewritten for these words (`shortKey(for:)`, `chips(fitting:)`, the facts
+    order, `dueDayText`), pinned by `TaskDetailSummaryTests`; `TimerTaskDetailRulesTests` adds the
+    rule that the title is never prefixed by the key and the row leads with the title.
+
+### 2026-10-17 - The sync keeps a ticket's standard facts: weight, milestone, due date, assignee, parent, priority and type
+- **Developer label:** "we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the data half of the task card redesign: fields the servers already send, now decoded, merged and stored
+- **Changes:**
+  - `RemoteTaskInfo` gains `weight`, `milestone`, `dueDate`, `assignee`, `parentTitle`, `priority`
+    and `issueType`, all optional, written to the tasks file and read leniently, so a file from
+    before them still reads and a newer file never costs the list. A due date is the server's
+    date-only value kept as the start of that day in the local time zone (`RemoteTaskInfo.dayDate`).
+  - GitLab: the issue and merge-request lists already carry `weight`, `milestone`, `due_date`,
+    `assignees` and `epic`; they are decoded now (assignees leniently, like labels). A merge
+    request keeps only its assignee — it has no weight, milestone, due date or epic.
+  - Jira: the search asks for `priority`, `assignee`, `duedate`, `issuetype`, `parent` and
+    `labels` as well, and keeps each. Never `description` (heavy, private) and never a sprint
+    (a per-site custom field). Jira labels now reach the task like GitLab's.
+  - A sync refreshes every one of them: a value the server changed changes, one it cleared is
+    cleared, and either counts as a change worth saving (`TaskMerge`).
+  - Like titles, these sit in the 0600 tasks file, are never logged and are never sent anywhere.
+  - Guards: `GitLabDecodingTests`, `JiraDecodingTests`, `JiraRequestTests` (the new fields list),
+    `TaskMergeTests`, `TaskModelCodingTests` (round trip, old file, the day-date parser).
+
+### 2026-10-16 - A task capsule in the timer tab expands into its card: detail, Start, close, and delete for local tasks
+- **Developer label:** "on clicking the task it should expand into that area and show full detail of a task with start option and the top right having a cross button, local tasks should have a delete icon at botton right"
+- **Agent label:** Claude Code (Fable 5.1) — an in-place task card in the side column, its words from a pure summary, delete confirmed inline
+- **Changes:**
+  - Clicking a task's text in the timer tab's Tasks page replaces the list with that task's card,
+    in the column's own frame (the notch does not grow): key and title with its colour dot, where it
+    comes from and stands ("Jira · PROJ · In Progress", "GitLab · group/app · Merge request · Open",
+    "Local"), its time ("42m of 2h", "10m over" in orange, "Jira logged 3h", "Due Today 15:00",
+    "#tags"), then Start. The ▶ on the row still starts the task without opening the card.
+  - A × at the card's top right collapses it. A local task gets a trash icon at the bottom right;
+    the card's bottom row then asks "Delete? Its recorded time goes too." with Keep and Delete —
+    inline, no alert, since modals under the notch have misbehaved before. A Jira or GitLab task
+    cannot be deleted (the next sync would bring it back), so it gets an open-in-browser icon in
+    that spot instead.
+  - A task that leaves the list while its card is open (deleted, done, resynced away) collapses
+    the card; swiping to Presets does too. Expanding and collapsing use the page switch's animation
+    and respect Reduce Motion. Every icon-only button carries a hover tooltip.
+  - New `TaskDetailSummary` (pure, in the logic test target) holds the card's words, mirroring
+    Brain's row caption; `TaskDetailSummaryTests` pins them. `TimerTaskDetailRulesTests` pins the
+    wiring: the card takes the manager as a parameter, delete is local-only and inline-confirmed,
+    the icon buttons carry tooltips, reduced motion is honoured, and a vanished task collapses it.
+
+### 2026-10-19 - Act on CodeRabbit's review of #109
+- **Developer label:** CodeRabbit's review of #109 (the fixes batch for #91, #92, #93 and #98): two findings, both in fullscreen detection
+- **Agent label:** Claude Code (Opus 5.5) — fullscreen is read again when the Accessibility grant changes, and the no-Accessibility fallback looks once more after the menu bar's slide
+- **Changes:**
+  - `FullscreenMediaDetector` observes `AccessibilityPermissionStore.isAuthorized`. Granting
+    Accessibility from Brain › Media moves the verdict from the menu-bar fallback to `AXFullScreen`,
+    and revoking it moves it back, but neither was a space, playback or setting change, so a
+    fallback misreading stood until one came along.
+  - Without Accessibility, `handleChange` reads fullscreen a second time 1 s after its 500 ms settle.
+    The fallback reads the menu bar from a window snapshot, and the menu bar's slide out of (or back
+    into) a fullscreen space can outlast the settle. macOS posts no public notice for the menu bar's
+    own show and hide, so this is the recheck; each pass still takes one snapshot, and with
+    Accessibility granted nothing waits.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsReadAgainWhenItsInputsChange`.
+
+### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `FullscreenFallbackVerdict.swift`'s two `project.pbxproj` ids moved from `…00E2`/`…00E3` to
+    `…05A2`/`…05A3`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - The notch hides over fullscreen video again: detection re-checks when playback starts, and survives a missing Accessibility grant
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — fullscreen media detection re-checked on its real inputs, with a menu-bar fallback when `AXFullScreen` cannot be read
+- **Changes:**
+  - Fullscreen detection ran only on a space change, so fullscreen entered before pressing play was
+    never re-checked and the notch stayed out for the whole video. It now also re-checks when the
+    now-playing app or its play state changes and when the hide option changes — all through the
+    existing 500 ms settle, no polling.
+  - Without the Accessibility grant the "really fullscreen?" check silently answered no, so every
+    re-signed install stopped hiding for good (the grant dies with the code identity). It now falls
+    back to `FullscreenFallbackVerdict`: fullscreen when the window covers the whole screen frame
+    (nothing maximized can) or when that screen's menu bar is gone. A maximized window keeps the
+    menu bar, so the old maximized-hides-the-notch regression stays fixed; the one blind spot is a
+    menu bar set to auto-hide, and the one-time log says so.
+  - Brain › Media shows an "Accessibility access" row under the hide picker while the grant is
+    missing, with an Open System Settings button. The picker registered a highlight id, and two
+    search entries ("Hide in fullscreen", "Accessibility access") land on it — the conditional row
+    is never a search target.
+  - Guards: `FullscreenFallbackVerdictTests`; the settings inventory counts moved by the two new
+    entries and registrations.
+
+### 2026-10-19 - A Clock timer's delayed cleanup ends only the session that finished
+- **Developer label:** CodeRabbit on #107 (covering this branch's timer fix): "Bind delayed cleanup to the finished session."
+- **Agent label:** Claude Code (Opus 5.5) — `SystemTimerBridge.clearLogState` captures the finished session before its 3.2 s wait
+- **Changes:**
+  - When a Clock timer finishes, Kannu ends it 3.2 seconds later. That cleanup now checks it is still the same session (`TimerManager.sessionID`). Before, a second Clock timer that started and also finished within those 3.2 seconds was ended by the first one's cleanup.
+  - `TimerLifecycleRulesTests` pins the session check alongside the finished check, with a planted offender for each.
+
+### 2026-10-12 - The timer rules tests share one modifier scanner
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on duplicated new lines (4.2%, limit 3%)
+- **Changes:**
+  - `TimerNamingRulesTests` and `TimerLifecycleRulesTests` each carried the same 24-line
+    `modifiers(_:in:)` scanner, which reads a SwiftUI modifier and its closure out of a view's
+    source. It now lives once, in `KannuTests/SwiftModifierScan.swift`, and both tests call it.
+    No test changes what it checks.
+
 ### 2026-10-16 - The timer tab's first task capsule sits level with the name field
 - **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
 - **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
@@ -44,6 +729,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     tracked through a scroll-offset preference (macOS 14 has no `onScrollGeometryChange`).
   - The bottom fade, the row heights, the pager footer and every `TimerComposerMetrics` value are
     untouched; `TimerSideColumnRulesTests` and `TimerComposerMetricsTests` pin them as before.
+
+### 2026-10-12 - Searching Brain for a Jira or GitLab setting lands on that source while it is disconnected
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: CodeRabbit on this PR, search entries whose rows are not built while their source is disconnected
+- **Changes:**
+  - Brain › Tasks builds Sync Jira, Jira colour, Jira issues and the Issue filter only while Jira is
+    connected, and Sync GitLab, GitLab colour, Include merge requests and GitLab items only while
+    GitLab is. Searching for one of them while its source was disconnected opened Tasks and scrolled
+    to nothing. Search now lands those entries on the source's own row (Jira Cloud, GitLab), which
+    is always there, and on the row itself once the source is connected.
+  - `SettingsHighlightInventoryTests` keeps the two lists in `SettingsView` equal to the rows
+    `TaskSourcesSection` builds inside its connected blocks, so a new connected-only row cannot
+    scroll to nothing again.
 
 ### 2026-10-18 - GitLab's Connect has Jira's race guards, and Brain paths name the right tab
 - **Developer label:** CodeRabbit's full review of the task stack (#87): "`connectGitLab` and `retryRemovingGitLabToken` need the race guards that `connectJira` has", and "Include the Agents section in this path"
@@ -300,6 +998,49 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     the check missing, the check in a later helper, the check with an empty body, the check after
     `return true`, and the offer before `shouldOffer`. The existing `isSuspended` rule now matches
     the yielding monitor's call.
+
+### 2026-10-10 - Tasks take a colour from their first tag or their source
+- **Developer label:** "also allow color for each tag, and by default a task will be tagged with its integration too( but that should be hidden to user) and while setting up an integration ask user to select a color for a integration for eg gitlab is orange or local is white. there should be a default option which is glass grey opaque like now, other colors also should be glass opaque finish, lets jus give them a few presets to select from, now if a tag is added by user to a ticket, the color should be given to related to the tag that is highest in order , the order can be based on tags, the tags listing is a list change that to small tabs and only seletctd tags should be shown in a list, the list should be able to be reordered, or if it can be better dones as small pills it self do that, but the first one there will be the color for the task, dont show integration tag on that list, this would be considered excluding that"
+- **Agent label:** Claude Code (Opus 5.5) — task colours: ten glass presets (plain grey glass the default), a colour per tag and per source (local, Jira, GitLab), a task strictly coloured by its first tag or, untagged, by its source; reorderable tag pills with their own colour swatch, a Tag colours list in Brain, a colour picker in the Jira and GitLab connect sheets, and the colour shown in Brain's task rows, the notch Tasks popover, the timer tab's Tasks page and the running timer's accent
+- **Changes:**
+  - New `TaskColor` (`Kannu/managers/Tasks/TaskColor.swift`, in the logic test target): ten
+    presets, `glass` first and the default, each with `localizedName` and `description`.
+    `TaskColoring.color` gives a task strictly its first tag's colour (glass when that tag has
+    none); only a task with no tags takes its source's colour. The source is never a tag, so it
+    never shows as one.
+  - Tag colours are saved in tasks.json as `tagColors`, keyed by the cleaned, lower-cased tag;
+    glass is never stored. Each entry decodes on its own, so a malformed or unknown value costs only
+    that tag's colour, never the file or the other colours.
+  - Source colours are three `Defaults` keys (`tasksLocalColor`, `jiraTaskColor`,
+    `gitlabTaskColor`), default glass. `TasksManager` gains `tagColor(for:)`, `setTagColor`,
+    `setTagColors` and `color(of:)`, and republishes when a source colour changes.
+  - New `TaskColorViews.swift`: `TaskGlassBackground` (glass is exactly the old fill; a colour adds a
+    translucent tint and a thin tinted edge), `TaskColorDot`, and `TaskColorPickerButton`, a swatch
+    that opens the presets through the shared swatch grid.
+  - The Tags sheet shows the task's tags as capsule pills (`SettingsTagChip` gains `tint:`), each with
+    its colour swatch. Pills reorder by drag and drop, by a right-click Move to Front / Move Left /
+    Move Right menu, and by the same moves as VoiceOver actions (`TaskTagEditing.moving`). Done saves
+    the tags and the colours picked there; Cancel saves neither.
+  - Brain › Tasks: a colour row per source in Sources (Local always, Jira and GitLab once
+    connected), a "Tag colours" section at the end of the Task list, and a colour picker in the Jira
+    and GitLab connect sheets, saved only when Connect succeeds. Each swatch's VoiceOver label names
+    what it colours. Task list rows lead with a colour dot once any listed task has a colour; an
+    all-glass list looks as before. New search entries for the three source rows and Tag colours.
+  - The notch Tasks popover's Up next rows and Now card, and the timer tab's Tasks page rows, draw
+    their background through `TaskGlassBackground` with the task's colour.
+  - The running timer's accent: `TimerManager.startTimer` takes the timed task's colour as
+    `sessionTint`, cleared whenever a session ends or a Clock-app timer takes over, and
+    `sessionAccent` (the tint, else the preset's colour) is what every accent site reads. A change
+    of tag, tag colour or source colour recolours the running session. `NotchTimerView` re-locks its
+    accent whenever `sessionAccent` changes, so a session that replaces a preset session without a
+    colour no longer keeps the preset's accent.
+  - docs/SETTINGS.md notes the chip's capsule shape and `tint:`.
+  - Tests: new `TaskColorTests` (the colour rule, file round trips, odd and partly bad
+    `tagColors`) and `TaskColorRulesTests` (the tinted rows, Brain's dot, no `.help(` in the colour
+    views, the pills' reorder paths including the VoiceOver action, Done/Cancel saving, every accent
+    site reading `sessionAccent`, the tint cleared with each session), each scanner with planted
+    offenders; `TaskTagEditingTests` covers the reorder helpers; `SettingsHighlightInventoryTests`
+    counts move to 232 entries, 274 registrations and 268 distinct ids.
 
 ### 2026-10-10 - A two-finger swipe turns the timer tab's page over the preset cards too
 - **Developer label:** "swiping on any part of the tab shoulw work, current i think swipe does not work on top of preset capsules"
