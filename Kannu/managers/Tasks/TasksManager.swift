@@ -182,7 +182,14 @@ final class TasksManager: ObservableObject, TaskSourceHost {
                     } else {
                         self.reminderBaseline = [:]
                     }
+                    self.updateRemindersObserver()
                 }
+            }
+            .store(in: &cancellables)
+        Defaults.publisher(.appleRemindersEnabled, options: [])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateRemindersObserver() }
             }
             .store(in: &cancellables)
         Task { await load() }
@@ -971,8 +978,32 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         host: self
     )
 
+    /// Apple Reminders': every incomplete reminder, by list. No token — macOS's permission — and a
+    /// change in Reminders asks for a quiet sync (`AppleRemindersStore.observeChanges`).
+    private(set) lazy var appleReminders = SourceSync(
+        source: .appleReminders,
+        provider: AppleRemindersTaskSource(),
+        store: AppleRemindersAccessKeeper(),
+        connection: { SourceConnection(scope: Defaults[.appleRemindersScope], syncOn: Defaults[.appleRemindersEnabled]) },
+        options: { () },
+        forget: {
+            Defaults[.appleRemindersEnabled] = false
+            Defaults[.appleRemindersScope] = ""
+        },
+        host: self
+    )
+
     /// Every source's sync, in source order.
-    var syncs: [any SourceSyncing] { [jira, gitlab] }
+    var syncs: [any SourceSyncing] { [jira, gitlab, appleReminders] }
+
+    /// Reminders' change notice is listened to only while Reminders is connected, its sync is on,
+    /// and tasks are on; it asks for a quiet sync, never one with a dialog.
+    private func updateRemindersObserver() {
+        let observe = Defaults[.enableTasks] && appleReminders.isSyncOn
+        AppleRemindersStore.shared.observeChanges(observe) { [weak self] in
+            self?.appleReminders.externalChange()
+        }
+    }
 
     /// A source's sync; nil for local tasks.
     func syncing(_ source: TaskSource) -> (any SourceSyncing)? {
@@ -1008,6 +1039,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func disconnect(_ source: TaskSource, removeTasks: Bool) {
         guard let sync = syncing(source) else { return }
         sync.disconnect()
+        if source == .appleReminders { updateRemindersObserver() }
         logger.info("\(source.rawValue, privacy: .public) disconnected, tasks removed: \(removeTasks, privacy: .public)")
         guard removeTasks, isReady else { return }
         if let timed = timing?.taskID, tasks.first(where: { $0.id == timed })?.source == source {
@@ -1027,9 +1059,27 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Reminders (no token: macOS asks). Nil on success, or what to tell the user.
     func connect(_ source: TaskSource, server: String, token: String) async -> String? {
         switch source {
-        case .local, .jira, .gitlab, .github, .linear, .todoist, .appleReminders:
+        case .appleReminders:
+            return await connectAppleReminders()
+        case .local, .jira, .gitlab, .github, .linear, .todoist:
             return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
         }
+    }
+
+    /// Asks macOS for Reminders, once — the only place Kannu does — then syncs. Nil on success.
+    private func connectAppleReminders() async -> String? {
+        let failure = await appleReminders.connect {
+            guard await AppleRemindersStore.shared.requestAccess() else {
+                return .refused(String(localized: "macOS did not let Kannu read your reminders. Allow Kannu in Privacy & Security › Reminders, then connect again."))
+            }
+            return .accepted(AppleRemindersAccess()) {
+                Defaults[.appleRemindersScope] = AppleReminders.scope
+                Defaults[.appleRemindersEnabled] = true
+            }
+        }
+        if failure == nil { logger.info("Apple Reminders connected") }
+        updateRemindersObserver()
+        return failure
     }
 
     /// The token page on a GitHub server typed so far; nil until it is one Kannu would connect to.
@@ -1287,6 +1337,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         logger.info("Loaded \(file.tasks.count, privacy: .public) tasks, \(interrupted, privacy: .public) interrupted sessions, \(uncertain, privacy: .public) uncertain entries")
         if interrupted > 0 || normalized != file.drafts || loadedTasks != file.tasks || archive.changed { persist() }
         for sync in syncs { sync.loadFinished() }
+        updateRemindersObserver()
         if let pending = pendingReminderStart {
             pendingReminderStart = nil
             if !start(pending.taskID) { pending.otherwise() }

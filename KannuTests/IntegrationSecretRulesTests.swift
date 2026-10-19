@@ -142,6 +142,24 @@ final class IntegrationSecretRulesTests: XCTestCase {
         XCTAssertTrue(lifecycle.contains("manager.syncIfStale("), "no source row syncs from a lifecycle block")
     }
 
+    /// macOS's Reminders question is asked once, from the user's Connect, and never from a sync, a
+    /// page appearing or launch: only `AppleRemindersStore.requestAccess` asks, and only
+    /// `connectAppleReminders` calls it.
+    func testRemindersAccessIsAskedOnlyFromConnect() throws {
+        let sources = try Self.sources()
+        let asking = sources.filter { $0.value.contains("requestFullAccessToReminders") }.map(\.key)
+        XCTAssertEqual(asking, ["AppleRemindersSource.swift"])
+        let callers = sources.filter { $0.value.contains(".requestAccess()") }.map(\.key)
+        XCTAssertEqual(callers, ["TasksManager.swift"])
+        let manager = try XCTUnwrap(sources["TasksManager.swift"])
+        let connect = try XCTUnwrap(Self.functionBody("connectAppleReminders", in: manager), "connectAppleReminders is gone")
+        XCTAssertTrue(connect.contains("AppleRemindersStore.shared.requestAccess()"))
+        XCTAssertEqual(manager.components(separatedBy: ".requestAccess()").count - 1, 1, "asked from more than Connect")
+        let keeper = try XCTUnwrap(sources["AppleRemindersSource.swift"])
+        XCTAssertTrue(keeper.contains("AppleRemindersStore.shared.hasAccess ? .found(AppleRemindersAccess()) : .missing"),
+                      "a sync's credential read must only look at macOS's answer, never ask")
+    }
+
     /// The per-source sync state lives in `SourceSync`, one engine for every source: none of it may
     /// grow back in the manager, where Jira's and GitLab's copies once drifted apart.
     func testTheManagerKeepsNoSyncStateOfItsOwn() throws {

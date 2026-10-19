@@ -98,6 +98,7 @@
 		AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A4 /* TaskDetailSummary.swift */; };
 		AA10000000000000000005A7 /* TaskArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A6 /* TaskArchive.swift */; };
 		AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A8 /* HoverRevealMotion.swift */; };
+		AA10000000000000000005B9 /* AppleRemindersMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B8 /* AppleRemindersMapping.swift */; };
 		AA10000000000000000005B7 /* SourceSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B6 /* SourceSync.swift */; };
 		AA10000000000000000005B5 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B4 /* CredentialStore.swift */; };
 		AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B2 /* TaskSourceFacts.swift */; };
@@ -228,6 +229,7 @@
 		AA10000000000000000005A4 /* TaskDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskDetailSummary.swift; path = Kannu/managers/Tasks/TaskDetailSummary.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A6 /* TaskArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskArchive.swift; path = Kannu/managers/Tasks/TaskArchive.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A8 /* HoverRevealMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealMotion.swift; path = Kannu/components/Notch/HoverRevealMotion.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B8 /* AppleRemindersMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleRemindersMapping.swift; path = Kannu/managers/Tasks/AppleRemindersMapping.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005B6 /* SourceSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SourceSync.swift; path = Kannu/managers/Tasks/SourceSync.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005B4 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CredentialStore.swift; path = Kannu/managers/Tasks/CredentialStore.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005B2 /* TaskSourceFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskSourceFacts.swift; path = Kannu/managers/Tasks/TaskSourceFacts.swift; sourceTree = SOURCE_ROOT; };
@@ -708,6 +710,7 @@
 				AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */,
 				AA10000000000000000005A7 /* TaskArchive.swift in Sources */,
 				AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */,
+				AA10000000000000000005B9 /* AppleRemindersMapping.swift in Sources */,
 				AA10000000000000000005B7 /* SourceSync.swift in Sources */,
 				AA10000000000000000005B5 /* CredentialStore.swift in Sources */,
 				AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */,
@@ -968,6 +971,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1036,6 +1040,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

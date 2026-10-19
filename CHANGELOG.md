@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Apple Reminders is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 4 of the task-sources PR: Apple Reminders through EventKit, read-only
+- **Changes:**
+  - Brain › Tasks › Add a source › Apple Reminders asks macOS for Reminders. That is the only place Kannu asks, and only on that click. Then every incomplete reminder, from every list, becomes a task. Each list is a project, so the source's page shows the lists. Reminders' priority shows as High, Medium or Low, and its due date as the task's due date. Kannu never changes a reminder.
+  - A change in Reminders (added, completed or edited, on this Mac or synced from iPhone) asks for a quiet sync. Several changes during a sync come to one more sync. The listener runs only while Reminders is connected, its sync is on and tasks are on.
+  - EventKit is touched only through `AppleRemindersStore`. Its `EKEventStore` is built and read on a queue of its own, on first use, never at launch. A sync reads macOS's answer without asking. If access is turned off later, the source reads "macOS no longer lets Kannu read your reminders" with an "Open Privacy & Security" button.
+  - At most 200 reminders, soonest due first. A longer list marks the sync incomplete, so nothing is marked gone because of the cap.
+  - The app's Info gains `NSRemindersFullAccessUsageDescription`. The search entry "Apple Reminders" lands on its row, or on Add a source until it is connected.
+  - Tests:
+    - New `AppleRemindersMappingTests` covers order, cap, priority names, the list as key and project, and merging.
+    - `IntegrationSecretRulesTests` pins that only `AppleRemindersStore` asks for access, only from `connectAppleReminders`, and that a sync's read never asks.
+    - Inventory entry count re-pinned.
+
 ### 2026-10-19 - Brain › Tasks shows the sources you use, with one Add a source for the rest
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 3 of the task-sources PR: the overview with Add a source, one connection page for every source, one connect sheet for the new ones
