@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - A window rebuild also clears the Tasks popover's flag
+- **Developer label:** Bringing #91 up to date with development: the Tasks popover (#85) is a popover the rebuild's reset did not know
+- **Agent label:** Claude Code (Opus 5.5) — `resetTransientInteractionState` clears `isTasksPopoverActive` too, as `NotchTeardownRulesTests` requires of every flag `hasAnyActivePopovers()` reads
+- **Changes:**
+  - `KannuViewModel.resetTransientInteractionState()` sets `isTasksPopoverActive` to false. The
+    Tasks popover landed on development with #88 after #91 was written, so a window rebuild with it
+    open left the flag set and the new notch never auto-closed. `NotchTeardownRulesTests.testTheResetClearsEveryFlagThePopoverCheckReads`
+    caught it on the merge.
+
 ### 2026-10-11 - A window rebuild no longer leaves the notch unable to close or scroll
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
 - **Agent label:** Claude Code (Fable 5.1) — audit risk R-D: `KannuViewModel.resetTransientInteractionState()` on the window-rebuild path, pinned by `NotchTeardownRulesTests`

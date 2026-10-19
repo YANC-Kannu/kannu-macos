@@ -116,6 +116,7 @@ class KannuViewModel: NSObject, ObservableObject {
         isStatsPopoverActive = false
         isMediaOutputPopoverActive = false
         isTimerPopoverActive = false
+        isTasksPopoverActive = false
     }
 
     private func focusClipboardTabIfNeeded() {
