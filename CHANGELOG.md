@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - A snapshot board shows the usage cards at 640 and 690
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — DEBUG `usage` board for `--kannu-snapshots`
+- **Changes:**
+  - `--kannu-snapshot-tabs usage` renders the Usage tab's cards at the content widths of a 640
+    and a 690 pt notch: one card, two (Claude and Cursor), three (stacked), a sign-in status and
+    a day-old reading — each in the 142-pt slot with a red line at its floor, so a card running
+    past it shows. `NotchLLMUsageView` takes snapshot overrides for the results, the refresh
+    status, the forecasts and the notch width; in the app they are nil.
+  - Fixtures: a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the
+    week, Fable 41 %, Opus 12 %, Sonnet 5 % (so one folds under a status row); Cursor Pro at
+    62 % of its billing cycle with token totals; Codex at 20 / 55 %.
+
 ### 2026-10-19 - The Claude card splits in the golden ratio and fits the notch
 - **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
 - **Agent label:** Follow-up 67 — the Usage tab's cards in the timer tab's language, 5 hour : Weekly = 1 : φ
