@@ -67,8 +67,7 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         let card = try Self.declaration("private struct TimerTaskDetail", in: try Self.column())
         XCTAssertTrue(card.contains("manager.delete(task.id)"), "delete must go through the manager")
         XCTAssertTrue(card.contains("if summary.canDelete"), "the trash shows only when the summary allows (local tasks)")
-        XCTAssertTrue(card.contains("jiraBrowseURL(for:") && card.contains("gitlabBrowseURL(for:"),
-                      "a remote task opens in its browser instead")
+        XCTAssertTrue(card.contains("manager.browseURL(for: task)"), "a remote task opens in its browser instead")
     }
 
     func testDeleteConfirmsInlineNeverWithAModal() throws {

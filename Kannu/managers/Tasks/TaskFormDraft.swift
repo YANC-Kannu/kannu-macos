@@ -103,12 +103,8 @@ struct TaskFormDraft: Equatable {
     /// "No estimate", "2h", or the source's own "2h from Jira" while Kannu has none.
     var estimateLabel: String {
         if let estimateSeconds, estimateSeconds > 0 { return WorkDuration.format(estimateSeconds) }
-        if let remoteEstimate, remoteEstimate > 0 {
-            switch source {
-            case .jira: return String(localized: "\(WorkDuration.format(remoteEstimate)) from Jira")
-            case .gitlab: return String(localized: "\(WorkDuration.format(remoteEstimate)) from GitLab")
-            case .local: break
-            }
+        if let remoteEstimate, remoteEstimate > 0, source != .local {
+            return String(localized: "\(WorkDuration.format(remoteEstimate)) from \(source.name)")
         }
         return String(localized: "No estimate")
     }

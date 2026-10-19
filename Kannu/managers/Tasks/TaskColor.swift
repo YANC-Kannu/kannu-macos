@@ -21,7 +21,7 @@ import Foundation
 // A task's colour. Pure Foundation, so the logic target tests it; the views turn a `TaskColor` into
 // a glass tint.
 //
-// A tag can have a colour, and each integration (local, Jira, GitLab) has one. A task takes the
+// A tag can have a colour, and each integration (local, and each source) has one. A task takes the
 // colour of its first tag, strictly: when that tag has no colour the task is glass, even if a later
 // tag has one. Only a task with no tags at all takes its integration's colour.
 
@@ -87,13 +87,9 @@ enum TaskColoring {
         return tagColors[key(for: first)] ?? .glass
     }
 
-    /// The colour the user chose for the integration a task comes from.
-    static func integration(for source: TaskSource, local: TaskColor, jira: TaskColor, gitlab: TaskColor) -> TaskColor {
-        switch source {
-        case .local: return local
-        case .jira: return jira
-        case .gitlab: return gitlab
-        }
+    /// The colour the user chose for the integration a task comes from; glass when none was chosen.
+    static func integration(for source: TaskSource, colors: [TaskSource: TaskColor]) -> TaskColor {
+        colors[source] ?? .glass
     }
 
     /// Tag colours as read from a file: keys cleaned with `key(for:)`, empty keys, unknown colour

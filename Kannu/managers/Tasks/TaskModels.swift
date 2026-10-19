@@ -20,14 +20,20 @@ import Foundation
 
 // The task list as it is stored in `tasks.json`. Pure Foundation, so the logic target tests it.
 //
-// A task is local, or comes from Jira or GitLab (`TaskSource`, `RemoteTaskInfo`). Time recorded on a
-// remote task becomes a `WorklogDraft` that waits for the user's answer (`WorklogDrafts`); only
-// `TasksManager.confirmWorklog` ever sends one.
+// A task is local, or comes from a source (`TaskSource`, `RemoteTaskInfo`): Jira, GitLab, GitHub,
+// Linear, Todoist or Apple Reminders. Time recorded on a Jira or GitLab task becomes a `WorklogDraft`
+// that waits for the user's answer (`WorklogDrafts`); only `TasksManager.confirmWorklog` ever sends one.
 
-enum TaskSource: String, Codable, Equatable {
+/// Where a task comes from, in the order Brain and the notch list them. What Kannu knows about each
+/// is in `TaskSourceFacts`. The raw values are stored in `tasks.json` and never change.
+enum TaskSource: String, Codable, Equatable, CaseIterable {
     case local
     case jira
     case gitlab
+    case github
+    case linear
+    case todoist
+    case appleReminders
 }
 
 /// Whether a remote task's recorded time is offered for logging.

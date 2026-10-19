@@ -177,11 +177,9 @@ final class TasksManager: ObservableObject {
         // filter belongs here: those change what one view shows, never the data. `options: []`, so
         // subscribing does not fire.
         Publishers.MergeMany(
-            Defaults.publisher(.jiraEnabled, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.jiraSiteHost, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabEnabled, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabHost, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabIncludeMergeRequests, options: []).map { _ in () }.eraseToAnyPublisher()
+            TaskSource.remoteSources.compactMap(\.enabledKey).map { Defaults.publisher($0, options: []).map { _ in () }.eraseToAnyPublisher() }
+                + TaskSource.remoteSources.compactMap(\.scopeKey).map { Defaults.publisher($0, options: []).map { _ in () }.eraseToAnyPublisher() }
+                + [Defaults.publisher(.gitlabIncludeMergeRequests, options: []).map { _ in () }.eraseToAnyPublisher()]
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] in
@@ -191,9 +189,7 @@ final class TasksManager: ObservableObject {
         // The integration colours: `color(of:)` reads them, and the timed task's colour is the
         // running timer's accent. `options: []` here too.
         Publishers.MergeMany(
-            Defaults.publisher(.tasksLocalColor, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.jiraTaskColor, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabTaskColor, options: []).map { _ in () }.eraseToAnyPublisher()
+            TaskSource.allCases.map { Defaults.publisher($0.colorKey, options: []).map { _ in () }.eraseToAnyPublisher() }
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] in
@@ -527,13 +523,47 @@ final class TasksManager: ObservableObject {
     /// The colour a task shows: strictly its first tag's, or its integration's when it has no tags
     /// (`TaskColoring.color`).
     func color(of task: TaskItem) -> TaskColor {
-        let integration = TaskColoring.integration(
-            for: task.source,
-            local: Defaults[.tasksLocalColor],
-            jira: Defaults[.jiraTaskColor],
-            gitlab: Defaults[.gitlabTaskColor]
-        )
+        let integration = TaskColoring.integration(for: task.source, colors: [task.source: Defaults[task.source.colorKey]])
         return TaskColoring.color(tags: task.tags, tagColors: tagColors, integration: integration)
+    }
+
+    // MARK: - Every source at once
+
+    /// Each source whose sync is on, with where its sync stands: the notch's Refresh and its lines
+    /// (`TaskSyncSummary`).
+    var syncStates: [TaskSource: SourceSyncState] {
+        var states: [TaskSource: SourceSyncState] = [:]
+        if isJiraSyncOn { states[.jira] = jiraSync }
+        if isGitLabSyncOn { states[.gitlab] = gitlabSync }
+        return states
+    }
+
+    /// The sources whose sync is on, so a view can sync one the moment it is switched on.
+    var syncOnSources: Set<TaskSource> { Set(syncStates.keys) }
+
+    /// Whether any source is syncing now.
+    var isAnySyncing: Bool { isJiraSyncing || isGitLabSyncing }
+
+    /// Each source whose last sync is stale, never with the Keychain dialog (`syncJiraIfStale`).
+    func syncAllIfStale() {
+        syncJiraIfStale()
+        syncGitLabIfStale()
+    }
+
+    /// The user's Refresh: every source that syncs. One that is off, syncing or rate limited is
+    /// skipped; each may ask macOS for its Keychain item.
+    func refreshAll() {
+        refreshJira()
+        refreshGitLab()
+    }
+
+    /// The item's page on its own site or server, checked; nil for a task with none.
+    func browseURL(for task: TaskItem) -> URL? {
+        switch task.source {
+        case .jira: return jiraBrowseURL(for: task)
+        case .gitlab: return gitlabBrowseURL(for: task)
+        case .local, .github, .linear, .todoist, .appleReminders: return nil
+        }
     }
 
     /// A local task's reminder time; nil clears it. The first schedule is where Kannu asks macOS
@@ -814,7 +844,8 @@ final class TasksManager: ObservableObject {
                 }
                 let verdict = await poster.postGitLabSpend(request)
                 self.finishSend(draftID, verdict: verdict, source: source, generation: generation)
-            case .local:
+            case .local, .github, .linear, .todoist, .appleReminders:
+                // Only Jira and GitLab take time (`TaskSource.logsTime`); no draft is made for others.
                 self.restoreUnsent(draftID, to: previous, message: nil)
             }
         }
@@ -918,7 +949,7 @@ final class TasksManager: ObservableObject {
             switch source {
             case .jira: markJiraRejected(generation, status: status)
             case .gitlab: markGitLabRejected(generation, status: status)
-            case .local: break
+            case .local, .github, .linear, .todoist, .appleReminders: break
             }
         }
         finishSend(draftID, event: resolution.event, message: resolution.message, remoteID: remoteID)

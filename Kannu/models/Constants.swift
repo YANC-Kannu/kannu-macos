@@ -1543,8 +1543,31 @@ extension Defaults.Keys {
     static let gitlabCanLogTime = Key<Bool>("gitlabCanLogTime", default: false)
     /// Open merge requests assigned to the user or waiting for their review join the task order.
     static let gitlabIncludeMergeRequests = Key<Bool>("gitlabIncludeMergeRequests", default: true)
+    // GitHub, Linear, Todoist and Apple Reminders (Brain › Tasks › each source's page). Display
+    // copies too, as for Jira and GitLab: a token and where it may be sent live together in the
+    // Keychain; a scope here that differs from the Keychain's means "reconnect". Each "Sync" switch
+    // pauses fetching only: that source's tasks stay in the task order.
+    static let githubEnabled = Key<Bool>("githubEnabled", default: false)
+    /// The connected server's base URL (`https://github.com`, or a GitHub Enterprise Server's);
+    /// empty when not connected.
+    static let githubHost = Key<String>("githubHost", default: "")
+    static let githubUsername = Key<String>("githubUsername", default: "")
+    static let githubAccountDisplayName = Key<String>("githubAccountDisplayName", default: "")
+    /// Open pull requests assigned to the user join the task order too.
+    static let githubIncludePullRequests = Key<Bool>("githubIncludePullRequests", default: false)
+    static let linearEnabled = Key<Bool>("linearEnabled", default: false)
+    /// The connected workspace's address (`https://linear.app/acme`); empty when not connected.
+    static let linearWorkspace = Key<String>("linearWorkspace", default: "")
+    static let linearAccountDisplayName = Key<String>("linearAccountDisplayName", default: "")
+    static let todoistEnabled = Key<Bool>("todoistEnabled", default: false)
+    /// The connected account (`todoist:<user id>`); empty when not connected.
+    static let todoistAccount = Key<String>("todoistAccount", default: "")
+    static let todoistAccountDisplayName = Key<String>("todoistAccountDisplayName", default: "")
+    static let appleRemindersEnabled = Key<Bool>("appleRemindersEnabled", default: false)
+    /// "reminders" once the user connected Reminders (and macOS allowed it); empty otherwise.
+    static let appleRemindersScope = Key<String>("appleRemindersScope", default: "")
     // Brain › Tasks › Task list filters (`TaskFilter`). This Mac only; never sent anywhere.
-    /// All | Local | Jira | GitLab.
+    /// All, or one source.
     static let tasksListSourceFilter = Key<TaskSourceFilter>("tasksListSourceFilter", default: .all)
     /// `TaskFacets.anyProject` (""), `TaskFacets.noProject`, or a project name.
     static let tasksListProjectFilter = Key<String>("tasksListProjectFilter", default: TaskFacets.anyProject)
@@ -1556,11 +1579,19 @@ extension Defaults.Keys {
     static let tasksPopoverShowLocal = Key<Bool>("tasksPopoverShowLocal", default: true)
     static let tasksPopoverShowJira = Key<Bool>("tasksPopoverShowJira", default: true)
     static let tasksPopoverShowGitLab = Key<Bool>("tasksPopoverShowGitLab", default: true)
+    static let tasksPopoverShowGitHub = Key<Bool>("tasksPopoverShowGitHub", default: true)
+    static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
+    static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
+    static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
     // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
     // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
     static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)
     static let jiraTaskColor = Key<TaskColor>("jiraTaskColor", default: .glass)
     static let gitlabTaskColor = Key<TaskColor>("gitlabTaskColor", default: .glass)
+    static let githubTaskColor = Key<TaskColor>("githubTaskColor", default: .glass)
+    static let linearTaskColor = Key<TaskColor>("linearTaskColor", default: .glass)
+    static let todoistTaskColor = Key<TaskColor>("todoistTaskColor", default: .glass)
+    static let appleRemindersTaskColor = Key<TaskColor>("appleRemindersTaskColor", default: .glass)
 
     // Use Now Playing as the default media controller for new installs.
     static var defaultMediaController: MediaControllerType {

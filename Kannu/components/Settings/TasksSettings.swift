@@ -186,9 +186,7 @@ struct TasksSettings: View {
     /// What a page is called, in its back row's child and in the window's title.
     static func title(of page: TasksPage) -> String {
         switch page {
-        case .source(.local): return String(localized: "Local tasks")
-        case .source(.jira): return String(localized: "Jira Cloud")
-        case .source(.gitlab): return String(localized: "GitLab")
+        case .source(let source): return source.title
         case .project(_, let project): return TaskFacets.projectShortName(project)
         case .task: return String(localized: "Task")
         case .allTasks: return String(localized: "All tasks")
@@ -202,6 +200,7 @@ struct TasksSettings: View {
         case .source(.local): return SettingsDeepLink.tasksLocalSourceHighlightID
         case .source(.jira): return SettingsDeepLink.tasksSourcesHighlightID
         case .source(.gitlab): return SettingsDeepLink.tasksGitLabSourceHighlightID
+        case .source: return SettingsDeepLink.tasksSourcesHighlightID
         case .project: return page
         case .task(let id): return id
         case .allTasks: return SettingsDeepLink.tasksListHighlightID

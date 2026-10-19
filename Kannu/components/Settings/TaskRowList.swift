@@ -296,11 +296,10 @@ struct TaskAddRow: View {
     }
 }
 
-/// Open in Jira or Open in GitLab, with the page built from (Jira) or checked against (GitLab) the
-/// task's own site or server; nil for a local task or a page Kannu would not open.
+/// "Open in Jira", "Open in GitHub": the item's page, built from or checked against the task's own
+/// site or server (`TasksManager.browseURL`); nil for a task with no page Kannu would open.
 @MainActor
-func taskOpenLink(for task: TaskItem, manager: TasksManager) -> (title: LocalizedStringKey, url: URL)? {
-    if let url = manager.jiraBrowseURL(for: task) { return ("Open in Jira", url) }
-    if let url = manager.gitlabBrowseURL(for: task) { return ("Open in GitLab", url) }
-    return nil
+func taskOpenLink(for task: TaskItem, manager: TasksManager) -> (title: String, url: URL)? {
+    guard let title = task.source.browseLabel, let url = manager.browseURL(for: task) else { return nil }
+    return (title, url)
 }

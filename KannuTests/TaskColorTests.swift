@@ -24,7 +24,7 @@ final class TaskColorTests: XCTestCase {
     private let integrations: [TaskSource: TaskColor] = [.local: .white, .jira: .blue, .gitlab: .orange]
 
     private func integration(_ source: TaskSource) -> TaskColor {
-        TaskColoring.integration(for: source, local: .white, jira: .blue, gitlab: .orange)
+        TaskColoring.integration(for: source, colors: integrations)
     }
 
     // MARK: - Which colour

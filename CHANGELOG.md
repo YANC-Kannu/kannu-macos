@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Every source's facts and settings live in one place, ready for GitHub, Linear, Todoist and Apple Reminders
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 1 of the task-sources PR: source facts and generic signatures, no visible change
+- **Changes:**
+  - `TaskSource` gains `github`, `linear`, `todoist` and `appleReminders`, in the order Brain and the notch list them. The stored raw values of the existing three do not change. Nothing creates tasks from the new sources yet.
+  - New `TaskSourceFacts.swift` (logic target) holds what Kannu knows about each source in one switch per fact: its name and title, whether its time can be logged (Jira and GitLab only), whether it uses a token, how its keys read (which also gives its project), what its items are called, and its "Open in …" label.
+  - New `TaskSourceSettings.swift` maps each source to its Defaults keys: Sync, connection display copy, account name, colour and Show in notch. New keys were added for the four new sources.
+  - New `TaskSourcePreferences` keeps the notch's Show in notch and the connected sources current for the Tasks popover, the source menu and the timer tab's list. They no longer each hold three `@Default`s.
+  - The logic is generalised:
+    - `TaskSourceFilter` covers every source.
+    - `TaskOrdering.viewFilter(hidden:alwaysListed:)` replaces the three-flag form.
+    - `TaskColoring.integration(for:colors:)`, `TaskSyncSummary` and `TimerSidePage.initial` take any set of sources.
+    - `TaskDetailSummary`'s "Open in …" label and short keys (GitHub reads "repo #7") follow the facts.
+  - Fix: Time to log drafts are made only for sources whose time can be logged (`TaskSource.logsTime`). Before, every task that was not local made one.
+  - The notch's source menu lists Local tasks and each connected source, with "Add a source…" for the rest. Its Refresh and sync lines cover every source that syncs, through `TasksManager.syncStates`, `syncAllIfStale()`, `refreshAll()` and `browseURL(for:)`.
+  - Tests:
+    - New `TaskSourceFactsTests`.
+    - Updated for the new signatures: `TaskSourceFilterTests`, `TaskColorTests`, `TasksPopoverLogicTests` and `TimerSidePageTests`.
+    - `TasksPopoverRulesTests` now pins every source's Show in notch key and "Add a source…".
+    - `TimerSideColumnRulesTests` and `TimerTaskDetailRulesTests` pin the generic calls.
+
 ### 2026-10-18 - Brain › Tasks is a tree: Source › Project › Task, with All tasks beside it
 - **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
 - **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks rebuilt as nested pages with one shared row design, split out of one 1,727-line file

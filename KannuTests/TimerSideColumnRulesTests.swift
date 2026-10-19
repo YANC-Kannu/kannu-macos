@@ -95,15 +95,14 @@ final class TimerSideColumnRulesTests: XCTestCase {
 
     func testConnectedMeansAHostIsSetNotThatSyncIsOn() throws {
         let source = Self.code(try Self.raw(Self.sideColumnPath))
-        XCTAssertTrue(source.contains("Defaults[.jiraSiteHost]") && source.contains("Defaults[.gitlabHost]"),
-                      "the column no longer reads the hosts: the scan is vacuous")
+        XCTAssertTrue(source.contains("anySourceConnected: TaskSource.remoteSources.contains { $0.isConnected }"),
+                      "the column no longer reads whether a source is connected: the scan is vacuous")
         XCTAssertEqual(Self.syncSwitchReads(in: source), [])
     }
 
     func testTheTasksPageRefreshesAStaleSyncOnAppear() throws {
         let source = Self.code(try Self.raw(Self.sideColumnPath))
-        XCTAssertTrue(source.contains("manager.syncJiraIfStale()"), "the Tasks page shows a stale Jira order")
-        XCTAssertTrue(source.contains("manager.syncGitLabIfStale()"), "the Tasks page shows a stale GitLab order")
+        XCTAssertTrue(source.contains("manager.syncAllIfStale()"), "the Tasks page shows a stale order")
     }
 
     func testTheTouchedNotchFilesNeverUseHelp() throws {
@@ -124,7 +123,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
         XCTAssertTrue(page.contains("TaskSearch.filter(TaskOrdering.active(manager.activeTasks, listed: notchFilter), query: searchText)"))
         XCTAssertTrue(page.contains("TaskSourceMenu(openBrain:"), "the filter is the popover's menu")
-        XCTAssertTrue(page.contains("TaskOrdering.viewFilter(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab"))
+        XCTAssertTrue(page.contains("TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)"))
     }
 
     /// The search field holds the notch open only while it has focus, under a `@State` token, and
@@ -149,7 +148,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
         XCTAssertTrue(page.contains("TaskSyncSummary.canRefresh(isReady: manager.isReady"))
         XCTAssertTrue(page.contains("TaskSyncSummary.tooltip("))
-        XCTAssertTrue(page.contains("manager.refreshJira()") && page.contains("manager.refreshGitLab()"))
+        XCTAssertTrue(page.contains("manager.refreshAll()"))
         XCTAssertTrue(page.contains("TimelineView(.explicit("), "a rate limit ending redraws it, without polling")
         let popover = Self.code(try Self.raw("Kannu/components/Notch/TasksPopover.swift"))
         XCTAssertTrue(popover.contains("TaskSyncSummary.canRefresh("), "the popover's Refresh drifted from the column's")
@@ -619,11 +618,12 @@ final class TimerSideColumnRulesTests: XCTestCase {
         return declarations.filter { !($0.contains("@State") && $0.contains(" var ")) }.map(String.init)
     }
 
-    /// Lines that read Sync Jira or Sync GitLab. Those switches only decide what is fetched; whether
-    /// a source is connected, for the page the tab opens on, is whether its host is set.
+    /// Lines that read a source's Sync switch. Those switches only decide what is fetched; whether
+    /// a source is connected, for the page the tab opens on, is whether its scope is set.
     private static func syncSwitchReads(in code: String) -> [String] {
         code.split(separator: "\n")
-            .filter { $0.contains(".jiraEnabled") || $0.contains(".gitlabEnabled") }
+            .filter { $0.contains("Enabled") && ($0.contains(".jira") || $0.contains(".gitlab") || $0.contains(".github")
+                || $0.contains(".linear") || $0.contains(".todoist") || $0.contains(".appleReminders") || $0.contains("enabledKey")) }
             .map(String.init)
     }
 

@@ -23,7 +23,7 @@ import SwiftUI
 /// through the existing deep link (`SettingsDeepLink`, whose id names the tab), so Brain opens on
 /// the Tasks tab and scrolls to the row.
 enum TasksBrainDestination {
-    /// Sources: Manage tasks…, Connect Jira… / Connect GitLab… and the Brain glyph.
+    /// Sources: Manage tasks…, Add a source… and the Brain glyph.
     case sources
     /// The Task list sub-page, opened: Show all in Brain, and a click on a task reminder.
     case taskList
@@ -44,22 +44,17 @@ enum TasksBrainDestination {
     }
 }
 
-/// The Tasks popover's filter menu, Show in notch: check items show or hide Local, Jira and GitLab
-/// tasks in this popover's Up next, and nothing else. They are the notch's own keys
-/// (`tasksPopoverShowLocal`, `tasksPopoverShowJira`, `tasksPopoverShowGitLab`), never Sync Jira or
-/// Sync GitLab: what is fetched, and what Brain's Task list shows, never change from here
-/// (`TaskOrdering.viewFilter`). While it hides a source the glyph is filled, and the popover says
-/// "Filtered".
+/// The Tasks popover's filter menu, Show in notch: check items show or hide Local tasks and each
+/// connected source's in this popover's Up next, and nothing else. They are the notch's own keys
+/// (`TaskSource.showInNotchKey`), never a source's Sync switch: what is fetched, and what Brain's
+/// Task list shows, never change from here (`TaskOrdering.viewFilter`). While it hides a source the
+/// glyph is filled, and the popover says "Filtered".
 ///
-/// A source that is not connected offers "Connect Jira…" / "Connect GitLab…" instead, which, like
-/// "Manage tasks…", opens Brain at Sources: a token is typed only in Brain's Connect sheet, never
-/// in the notch. This menu reads Defaults only — never the Keychain.
+/// A source that is not connected has no check item; "Add a source…", like "Manage tasks…", opens
+/// Brain at Sources: a token is typed only in Brain's Connect sheet, never in the notch. This menu
+/// reads Defaults only — never the Keychain.
 struct TaskSourceMenu: View {
-    @Default(.tasksPopoverShowLocal) private var showLocal
-    @Default(.tasksPopoverShowJira) private var showJira
-    @Default(.tasksPopoverShowGitLab) private var showGitLab
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.gitlabHost) private var gitlabHost
+    @ObservedObject private var preferences = TaskSourcePreferences.shared
     /// Closes the popover, then opens Brain there.
     let openBrain: (TasksBrainDestination) -> Void
     /// The popover's header glyph, or the timer tab's rail icon (`TimerRailIcon`'s square).
@@ -71,34 +66,24 @@ struct TaskSourceMenu: View {
     }
 
     /// A source that is not connected has no check item, so it never counts as hidden: its kept
-    /// tasks show (the popover reads the keys the same way).
-    private var isNarrowing: Bool {
-        TaskOrdering.isNarrowingView(showLocal: showLocal, showJira: showJira || jiraSiteHost.isEmpty,
-                                     showGitLab: showGitLab || gitlabHost.isEmpty)
-    }
+    /// tasks show (`TaskSourcePreferences.hiddenInNotch`; the popover reads it the same way).
+    private var isNarrowing: Bool { preferences.isNarrowing }
 
     var body: some View {
         Menu {
             Section("Show in notch") {
-                Toggle("Local", isOn: $showLocal)
-                if jiraSiteHost.isEmpty {
-                    Button("Connect Jira…") { openBrain(.sources) }
-                } else {
-                    Toggle("Jira", isOn: $showJira)
+                ForEach([TaskSource.local] + preferences.connected, id: \.self) { source in
+                    Toggle(isOn: preferences.shownBinding(for: source)) {
+                        Text(verbatim: source.name)
+                    }
                 }
-                if gitlabHost.isEmpty {
-                    Button("Connect GitLab…") { openBrain(.sources) }
-                } else {
-                    Toggle("GitLab", isOn: $showGitLab)
+                if preferences.connected.count < TaskSource.remoteSources.count {
+                    Button("Add a source…") { openBrain(.sources) }
                 }
             }
             if isNarrowing {
                 // Every source back in the notch, without unticking each.
-                Button(String(localized: "Show all")) {
-                    showLocal = true
-                    showJira = true
-                    showGitLab = true
-                }
+                Button(String(localized: "Show all")) { preferences.showAll() }
             }
             Divider()
             Button("Manage tasks…") { openBrain(.sources) }

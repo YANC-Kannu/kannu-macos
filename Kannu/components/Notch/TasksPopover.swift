@@ -40,14 +40,7 @@ struct TasksPopover: View {
     @ObservedObject private var manager = TasksManager.shared
     @Default(.enableTimerFeature) private var enableTimerFeature
     // Show in notch (`TaskSourceMenu`): what Up next shows, and nothing else.
-    @Default(.tasksPopoverShowLocal) private var showLocal
-    @Default(.tasksPopoverShowJira) private var showJira
-    @Default(.tasksPopoverShowGitLab) private var showGitLab
-    // Sync Jira and Sync GitLab: data keys, read only to start a sync when one is switched on.
-    @Default(.jiraEnabled) private var jiraEnabled
-    @Default(.gitlabEnabled) private var gitlabEnabled
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.gitlabHost) private var gitlabHost
+    @ObservedObject private var preferences = TaskSourcePreferences.shared
     @State private var newTitle = ""
     /// Closes the popover: `TasksHeaderButton` owns whether it is shown.
     let close: () -> Void
@@ -85,39 +78,29 @@ struct TasksPopover: View {
                 .cornerRadius(12)
         )
         .onAppear {
-            manager.syncJiraIfStale()
-            manager.syncGitLabIfStale()
+            manager.syncAllIfStale()
         }
-        .onChange(of: jiraEnabled) { _, isOn in
-            if isOn { manager.syncJiraIfStale() }
-        }
-        .onChange(of: gitlabEnabled) { _, isOn in
-            if isOn { manager.syncGitLabIfStale() }
+        // A source's Sync switched on: its first sync, now.
+        .onChange(of: manager.syncOnSources) { old, new in
+            if !new.subtracting(old).isEmpty { manager.syncAllIfStale() }
         }
     }
 
     // MARK: - Show in notch
 
-    /// A source that is not connected has no check item in the menu, so its kept tasks always show.
-    private var showsJira: Bool { showJira || jiraSiteHost.isEmpty }
-    private var showsGitLab: Bool { showGitLab || gitlabHost.isEmpty }
-
-    private var isFiltered: Bool {
-        TaskOrdering.isNarrowingView(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab)
-    }
+    /// A source that is not connected has no check item in the menu, so its kept tasks always show
+    /// (`TaskSourcePreferences.hiddenInNotch`).
+    private var isFiltered: Bool { preferences.isNarrowing }
 
     /// Show in notch over the connected baseline (`TasksManager.activeTasks`). The task being timed
     /// always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab,
-                                alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
     }
 
     /// Show all: every source back in the notch.
     private func showAllSources() {
-        showLocal = true
-        showJira = true
-        showGitLab = true
+        preferences.showAll()
     }
 
     /// Closes the popover, then opens Brain › Tasks at `destination`.
@@ -144,7 +127,7 @@ struct TasksPopover: View {
                 }
                 Spacer(minLength: 0)
                 TaskSourceMenu(openBrain: openBrain)
-                if manager.isJiraSyncOn || manager.isGitLabSyncOn {
+                if !manager.syncStates.isEmpty {
                     refreshButton(at: context.date)
                 }
                 Button {
@@ -160,22 +143,18 @@ struct TasksPopover: View {
         }
     }
 
-    /// Each source's sync state while its sync is on; nil when off (`TaskSyncSummary`).
-    private var jiraState: SourceSyncState? { manager.isJiraSyncOn ? manager.jiraSync : nil }
-    private var gitlabState: SourceSyncState? { manager.isGitLabSyncOn ? manager.gitlabSync : nil }
-
     private var rateLimitEnds: [Date] {
-        TaskSyncSummary.rateLimitEnds(jira: manager.jiraSync, gitlab: manager.gitlabSync)
+        TaskSyncSummary.rateLimitEnds(manager.syncStates)
     }
 
     /// "Jira · Synced 10:42", "GitLab · Offline": one line per source that is synced.
     private func syncLines(at date: Date) -> [String] {
-        TaskSyncSummary.lines(jira: jiraState, gitlab: gitlabState, now: date)
+        TaskSyncSummary.lines(manager.syncStates, now: date)
     }
 
     @ViewBuilder
     private func refreshButton(at date: Date) -> some View {
-        if manager.isJiraSyncing || manager.isGitLabSyncing {
+        if manager.isAnySyncing {
             ProgressView()
                 .controlSize(.small)
                 .frame(width: 20, height: 20)
@@ -183,8 +162,7 @@ struct TasksPopover: View {
             // The user asked: each source may ask macOS for its Keychain item, and a source that
             // is off, syncing or rate limited is skipped by the manager.
             Button {
-                manager.refreshJira()
-                manager.refreshGitLab()
+                manager.refreshAll()
             } label: {
                 Image(systemName: "arrow.clockwise")
                     .imageScale(.large)
@@ -192,12 +170,12 @@ struct TasksPopover: View {
             .buttonStyle(.borderless)
             .disabled(!canRefresh(at: date))
             .accessibilityLabel("Refresh tasks")
-            .hoverTooltip(String(localized: "Refresh Jira and GitLab"), edge: .below)
+            .hoverTooltip(String(localized: "Refresh every source"), edge: .below)
         }
     }
 
     private func canRefresh(at date: Date) -> Bool {
-        TaskSyncSummary.canRefresh(isReady: manager.isReady, jira: jiraState, gitlab: gitlabState, at: date)
+        TaskSyncSummary.canRefresh(isReady: manager.isReady, manager.syncStates, at: date)
     }
 
     // MARK: - Loading
@@ -408,7 +386,7 @@ struct TasksPopover: View {
     private func addTask() {
         if manager.addTask(title: newTitle, estimateSeconds: nil) != nil {
             newTitle = ""
-            if !showLocal { showLocal = true }
+            if preferences.hiddenInNotch.contains(.local) { preferences.shownBinding(for: .local).wrappedValue = true }
         }
     }
 
@@ -452,7 +430,7 @@ struct TasksPopover: View {
     }
 
     private var emptyState: some View {
-        let connected = !jiraSiteHost.isEmpty || !gitlabHost.isEmpty
+        let connected = !preferences.connected.isEmpty
         return VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: emptyTitle(connected: connected))
                 .font(.system(size: 13, weight: .semibold))
@@ -461,7 +439,7 @@ struct TasksPopover: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !connected {
-                Button("Connect Jira or GitLab…") { openBrain(.sources) }
+                Button("Add a source…") { openBrain(.sources) }
                     .controlSize(.small)
             }
         }
@@ -484,7 +462,7 @@ struct TasksPopover: View {
 
     private func emptyMessage(connected: Bool) -> LocalizedStringKey {
         if filterHidesEveryTask { return "The filter hides every open task." }
-        return connected ? "No open tasks. Add one above." : "Connect Jira or GitLab, or add a task above."
+        return connected ? "No open tasks. Add one above." : "Add a source in Brain, or add a task above."
     }
 }
 

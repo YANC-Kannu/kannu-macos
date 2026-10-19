@@ -84,7 +84,7 @@ struct TaskDetailSummary: Equatable {
     let note: String?
     /// Only a local task can be deleted: a remote one would come back on the next sync.
     let canDelete: Bool
-    /// "Open in Jira" / "Open in GitLab"; nil for a local task.
+    /// "Open in Jira", "Open in GitHub"; nil for a local task or a reminder (`TaskSource.browseLabel`).
     let browseLabel: String?
 
     /// `selfNames`: the connected accounts' display names and usernames. An assignee or author
@@ -110,11 +110,7 @@ struct TaskDetailSummary: Equatable {
             : nil
 
         canDelete = task.source == .local
-        switch task.source {
-        case .local: browseLabel = nil
-        case .jira: browseLabel = String(localized: "Open in Jira")
-        case .gitlab: browseLabel = String(localized: "Open in GitLab")
-        }
+        browseLabel = task.source.browseLabel
     }
 
     /// Closed when its server says so (`isDoneRemotely`) or it has left the task order (done,
@@ -182,7 +178,7 @@ struct TaskDetailSummary: Equatable {
             switch task.source {
             case .jira: facts.append(Fact(icon: "checkmark.circle", text: String(localized: "Jira logged \(WorkDuration.format(spent))")))
             case .gitlab: facts.append(Fact(icon: "checkmark.circle", text: String(localized: "GitLab spent \(WorkDuration.format(spent))")))
-            case .local: break
+            case .local, .github, .linear, .todoist, .appleReminders: break
             }
         }
         if task.source == .local, let last = task.segments.map({ $0.end ?? $0.start }).max() {
@@ -249,18 +245,26 @@ struct TaskDetailSummary: Equatable {
     /// "ds-vendors #4264" / "ds-vendors !12" — the full `group/sub/project#4264` key is what used to
     /// eat the card. A project known only by its id reads "Project 42 #7". Nil for a local task.
     /// `withProject: false` drops the GitLab project, "#4264", where the page already names it.
+    /// GitHub reads like GitLab: "repo #7". A source with no keys of its own (Todoist, Reminders)
+    /// has none: its `key` is the list the item is in.
     static func shortKey(for task: TaskItem, withProject: Bool = true) -> String? {
         guard let remote = task.remote else { return nil }
-        switch task.source {
-        case .local:
+        switch task.source.keyStyle {
+        case .none, .list:
             return nil
-        case .jira:
+        case .dashed:
             return remote.key
-        case .gitlab:
-            guard let iid = remote.gitlabIID else { return remote.key }
-            let mark = remote.gitlabKind == .mergeRequest ? "!" : "#"
-            guard withProject, let project = TaskFacets.project(for: task) else { return mark + String(iid) }
-            return "\(TaskFacets.projectShortName(project)) \(mark)\(iid)"
+        case .path:
+            let number: String
+            if let iid = remote.gitlabIID {
+                number = (remote.gitlabKind == .mergeRequest ? "!" : "#") + String(iid)
+            } else if let marker = remote.key.lastIndex(where: { $0 == "#" || $0 == "!" }), marker > remote.key.startIndex {
+                number = String(remote.key[marker...])
+            } else {
+                return remote.key
+            }
+            guard withProject, let project = TaskFacets.project(for: task) else { return number }
+            return "\(TaskFacets.projectShortName(project)) \(number)"
         }
     }
 

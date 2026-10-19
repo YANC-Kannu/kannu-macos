@@ -85,16 +85,15 @@ struct TimerSideColumn: View {
         TimerSidePage.allCases.filter { $0 == .tasks ? tasksAvailable : presetsAvailable }
     }
 
-    /// The page the tab opens on. "Connected" means a host is set, as `TasksManager.isJiraConnected`
-    /// and `isGitLabConnected` have it: Sync Jira and Sync GitLab only decide what is fetched, and a
-    /// paused source's tasks stay listed. Read from the Defaults display copies only: no
-    /// `TasksManager` and no Keychain, so opening the tab never builds or unlocks anything.
+    /// The page the tab opens on. "Connected" means a source's scope is set (`TaskSource.isConnected`):
+    /// a Sync switch only decides what is fetched, and a paused source's tasks stay listed. Read from
+    /// the Defaults display copies only: no `TasksManager` and no Keychain, so opening the tab never
+    /// builds or unlocks anything.
     static func initialPage(tasksAvailable: Bool, presetsAvailable: Bool) -> TimerSidePage {
         TimerSidePage.initial(
             tasksAvailable: tasksAvailable,
             presetsAvailable: presetsAvailable,
-            jiraConnected: !Defaults[.jiraSiteHost].isEmpty,
-            gitlabConnected: !Defaults[.gitlabHost].isEmpty
+            anySourceConnected: TaskSource.remoteSources.contains { $0.isConnected }
         )
     }
 
@@ -267,11 +266,7 @@ private struct TimerTasksPage: View {
     @EnvironmentObject private var vm: KannuViewModel
     @ObservedObject private var manager = TasksManager.shared
     // Show in notch (`TaskSourceMenu`): what the list shows, read as the popover reads it.
-    @Default(.tasksPopoverShowLocal) private var showLocal
-    @Default(.tasksPopoverShowJira) private var showJira
-    @Default(.tasksPopoverShowGitLab) private var showGitLab
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.gitlabHost) private var gitlabHost
+    @ObservedObject private var preferences = TaskSourcePreferences.shared
     /// The page's height (`TimerComposerMetrics.sidePageHeight`): a card's and the Log page's.
     let height: CGFloat
     /// The column's width (`TimerComposerMetrics.sideColumnWidth`): the card's and the Log page's.
@@ -353,8 +348,7 @@ private struct TimerTasksPage: View {
         // The latest order, as the Tasks popover does it: a source syncs only when its last sync is
         // over 5 minutes old and no rate limit runs, and never with the Keychain dialog.
         .onAppear {
-            manager.syncJiraIfStale()
-            manager.syncGitLabIfStale()
+            manager.syncAllIfStale()
         }
         // Closing the notch or switching tabs removes this view without a focus change.
         .onDisappear {
@@ -414,26 +408,19 @@ private struct TimerTasksPage: View {
 
     // MARK: - Show in notch and search
 
-    /// A source that is not connected has no check item in the menu, so its kept tasks always show.
-    private var showsJira: Bool { showJira || jiraSiteHost.isEmpty }
-    private var showsGitLab: Bool { showGitLab || gitlabHost.isEmpty }
-
-    private var isFiltered: Bool {
-        TaskOrdering.isNarrowingView(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab)
-    }
+    /// A source that is not connected has no check item in the menu, so its kept tasks always show
+    /// (`TaskSourcePreferences.hiddenInNotch`).
+    private var isFiltered: Bool { preferences.isNarrowing }
 
     /// Show in notch over the connected baseline, as the popover has it. The task being timed always
     /// passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(showLocal: showLocal, showJira: showsJira, showGitLab: showsGitLab,
-                                alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
     }
 
     /// Show all: every source back in the notch.
     private func showAllSources() {
-        showLocal = true
-        showJira = true
-        showGitLab = true
+        preferences.showAll()
     }
 
     private var shownTasks: [TaskItem] {
@@ -522,7 +509,7 @@ private struct TimerTasksPage: View {
                 TaskSourceMenu(openBrain: { $0.open() }, style: .rail)
             }
             .zIndex(3)
-            if manager.isJiraSyncOn || manager.isGitLabSyncOn {
+            if !manager.syncStates.isEmpty {
                 railSlot { refreshControl }
                     .zIndex(2)
             }
@@ -589,18 +576,14 @@ private struct TimerTasksPage: View {
         }
     }
 
-    /// Each source's sync state while its sync is on; nil when off (`TaskSyncSummary`).
-    private var jiraState: SourceSyncState? { manager.isJiraSyncOn ? manager.jiraSync : nil }
-    private var gitlabState: SourceSyncState? { manager.isGitLabSyncOn ? manager.gitlabSync : nil }
-
     /// Refresh, the popover's own rule: a spinner while either source syncs; otherwise the button,
     /// off while every source that syncs is rate limited. Redraws once when a limit ends, so it
     /// comes back on time; no polling. The click may ask macOS for a Keychain item, as the
     /// popover's does; a source that is off, syncing or rate limited is skipped by the manager.
     private var refreshControl: some View {
-        TimelineView(.explicit(TaskSyncSummary.rateLimitEnds(jira: manager.jiraSync, gitlab: manager.gitlabSync))) { context in
-            let summary = TaskSyncSummary.tooltip(jira: jiraState, gitlab: gitlabState, now: context.date)
-            if manager.isJiraSyncing || manager.isGitLabSyncing {
+        TimelineView(.explicit(TaskSyncSummary.rateLimitEnds(manager.syncStates))) { context in
+            let summary = TaskSyncSummary.tooltip(manager.syncStates, now: context.date)
+            if manager.isAnySyncing {
                 ProgressView()
                     .controlSize(.mini)
                     .frame(width: M.railButtonSize, height: M.railButtonSize)
@@ -609,13 +592,12 @@ private struct TimerTasksPage: View {
                     .hoverTooltip(summary, edge: .below)
             } else {
                 Button {
-                    manager.refreshJira()
-                    manager.refreshGitLab()
+                    manager.refreshAll()
                 } label: {
                     TimerRailIcon(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .disabled(!TaskSyncSummary.canRefresh(isReady: manager.isReady, jira: jiraState, gitlab: gitlabState, at: context.date))
+                .disabled(!TaskSyncSummary.canRefresh(isReady: manager.isReady, manager.syncStates, at: context.date))
                 .accessibilityLabel(Text(verbatim: String(localized: "Refresh tasks")))
                 .accessibilityValue(Text(verbatim: summary))
                 .hoverTooltip(summary, edge: .below)
@@ -1460,13 +1442,7 @@ private struct TimerTaskDetail: View {
     }
 
     /// The issue's page on its own server; nil for a local task or an unverifiable URL.
-    private var browseURL: URL? {
-        switch task.source {
-        case .local: return nil
-        case .jira: return manager.jiraBrowseURL(for: task)
-        case .gitlab: return manager.gitlabBrowseURL(for: task)
-        }
-    }
+    private var browseURL: URL? { manager.browseURL(for: task) }
 }
 
 /// A small capsule for the card's chip row: the house neutral chip (caption size, white 0.12), or

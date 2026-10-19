@@ -63,6 +63,8 @@ struct TaskSourcePage: View {
         case .gitlab:
             GitLabConnectionSection(context: context)
             projectsOrTasks
+        case .github, .linear, .todoist, .appleReminders:
+            projectsOrTasks
         }
     }
 

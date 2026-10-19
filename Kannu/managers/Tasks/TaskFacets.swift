@@ -18,41 +18,31 @@
 
 import Foundation
 
-/// The Task list's Source filter: All | Local | Jira | GitLab. Stored in Defaults
-/// (`tasksListSourceFilter`); the `Defaults.Serializable` conformance lives beside the key.
+/// The Task list's Source filter: All, or one source. Stored in Defaults (`tasksListSourceFilter`)
+/// by raw value — "all", or the source's own — so a choice saved before a source existed still
+/// reads; the `Defaults.Serializable` conformance lives beside the key.
 enum TaskSourceFilter: String, CaseIterable, Identifiable {
     case all
     case local
     case jira
     case gitlab
+    case github
+    case linear
+    case todoist
+    case appleReminders
 
     var id: String { rawValue }
 
-    var localizedName: String {
-        switch self {
-        case .all: return String(localized: "All")
-        case .local: return String(localized: "Local")
-        case .jira: return String(localized: "Jira")
-        case .gitlab: return String(localized: "GitLab")
-        }
-    }
-
     /// The filter that lists one source's tasks: a source's page in Brain › Tasks.
     init(_ source: TaskSource) {
-        switch source {
-        case .local: self = .local
-        case .jira: self = .jira
-        case .gitlab: self = .gitlab
-        }
+        self = TaskSourceFilter(rawValue: source.rawValue) ?? .all
     }
 
-    var description: String {
-        switch self {
-        case .all: return String(localized: "Tasks from every source.")
-        case .local: return String(localized: "Tasks you added.")
-        case .jira: return String(localized: "Your Jira issues.")
-        case .gitlab: return String(localized: "Your GitLab issues and merge requests.")
-        }
+    /// The one source it lists; nil for All.
+    var source: TaskSource? { TaskSource(rawValue: rawValue) }
+
+    var localizedName: String {
+        source?.name ?? String(localized: "All")
     }
 }
 
@@ -131,19 +121,25 @@ enum TaskFacets {
 
     // MARK: - Project
 
+    /// The project, by how the source's keys read (`TaskSource.keyStyle`).
     static func project(for task: TaskItem) -> String? {
         guard let remote = task.remote else { return nil }
-        switch task.source {
-        case .local:
+        switch task.source.keyStyle {
+        case .none:
             return nil
-        case .jira:
+        case .dashed:
             guard let dash = remote.key.lastIndex(of: "-"), dash > remote.key.startIndex else { return nil }
             return String(remote.key[..<dash])
-        case .gitlab:
+        case .path:
             if let marker = remote.key.lastIndex(where: { $0 == "#" || $0 == "!" }), marker > remote.key.startIndex {
                 return String(remote.key[..<marker])
             }
             return remote.gitlabProjectID.map { projectIDPrefix + String($0) }
+        case .list:
+            // "#" starts only Kannu's own keys (`noProject`, `projectIDPrefix`): a list so named
+            // must not pass for one.
+            let name = remote.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? nil : (name.hasPrefix("#") ? " " + name : name)
         }
     }
 
@@ -197,9 +193,10 @@ enum TaskFacets {
     /// local task or an empty status.
     static func statusName(for task: TaskItem) -> String? {
         guard let status = task.remote?.status, !status.isEmpty else { return nil }
-        guard task.source == .gitlab else { return status }
+        // GitHub sends its states lower case too ("open", "closed").
+        guard task.source == .gitlab || task.source == .github else { return status }
         switch status {
-        case "opened": return String(localized: "Open")
+        case "opened", "open": return String(localized: "Open")
         case "closed": return String(localized: "Closed")
         case "merged": return String(localized: "Merged")
         case "locked": return String(localized: "Locked")
@@ -237,12 +234,7 @@ enum TaskFacets {
     // MARK: - Matching
 
     static func matches(_ task: TaskItem, filter: TaskFilter) -> Bool {
-        switch filter.source {
-        case .all: break
-        case .local: guard task.source == .local else { return false }
-        case .jira: guard task.source == .jira else { return false }
-        case .gitlab: guard task.source == .gitlab else { return false }
-        }
+        if let source = filter.source.source, task.source != source { return false }
         switch filter.project {
         case anyProject: break
         case noProject: guard project(for: task) == nil else { return false }
