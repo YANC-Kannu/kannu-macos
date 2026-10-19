@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - A window rebuild also clears the Tasks popover's flag
+- **Developer label:** Bringing #91 up to date with development: the Tasks popover (#85) is a popover the rebuild's reset did not know
+- **Agent label:** Claude Code (Opus 5.5) — `resetTransientInteractionState` clears `isTasksPopoverActive` too, as `NotchTeardownRulesTests` requires of every flag `hasAnyActivePopovers()` reads
+- **Changes:**
+  - `KannuViewModel.resetTransientInteractionState()` sets `isTasksPopoverActive` to false. The
+    Tasks popover landed on development with #88 after #91 was written, so a window rebuild with it
+    open left the flag set and the new notch never auto-closed. `NotchTeardownRulesTests.testTheResetClearsEveryFlagThePopoverCheckReads`
+    caught it on the merge.
+
+### 2026-10-11 - A window rebuild no longer leaves the notch unable to close or scroll
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — audit risk R-D: `KannuViewModel.resetTransientInteractionState()` on the window-rebuild path, pinned by `NotchTeardownRulesTests`
+- **Changes:**
+  - A display or resolution change rebuilds the notch window through `tearDownAllWindows` and
+    reuses the single `KannuViewModel`. The torn-down views get no reliable `.onDisappear` on a
+    borderless panel, so a scroll-gesture or auto-close suppression token held by a hovered view,
+    or a popover flag left `true`, survived into the new window: a notch that never auto-closed
+    and never scrolled until the next explicit close. `close()` clears the tokens, but the rebuild
+    only calls it while the notch is already closed.
+  - `KannuViewModel.resetTransientInteractionState()` clears both token sets and all six popover
+    flags `ContentView.hasAnyActivePopovers()` reads; `tearDownAllWindows` calls it after the old
+    window is closed and released, so the publish never reaches the detached view's
+    `.onChange(of: vm.isBatteryPopoverActive)` / `isStatsPopoverActive`, which would otherwise
+    schedule a `vm.close()` against the window built next. The per-display lifecycle already
+    drops its view model with the window and needs nothing.
+  - `NotchTeardownRulesTests` pins the call inside `tearDownAllWindows`, both token resets, and
+    keeps the reset's flag list equal to what `hasAnyActivePopovers()` reads and what the view
+    model declares — scanning both files, so a flag added to one without the other fails. The
+    declaration scan accepts access modifiers (`@Published private(set) var`), and planted
+    offenders pin every spelling it must see.
+
 ### 2026-10-19 - The hover-slide tests skip where motion cannot be seen
 - **Developer label:** #106's first CI run on development: `HoverRevealTextTests` failed on both macOS runners
 - **Agent label:** Claude Code (Opus 5.5) — the two motion tests skip under Reduce Motion and on GitHub Actions, where the clipped text never moved; the stillness test still runs everywhere
