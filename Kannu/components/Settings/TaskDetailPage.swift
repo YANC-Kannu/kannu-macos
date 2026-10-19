@@ -57,7 +57,7 @@ struct TaskDetailPage: View {
     @ViewBuilder
     private func content(_ task: TaskItem, now: Date) -> some View {
         let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task, now: now), now: now,
-                                        selfNames: Self.selfNames)
+                                        selfNames: TaskSource.selfNames)
         overviewSection(task, summary: summary)
         detailsSection(task, summary: summary)
         endSection(task)
@@ -230,11 +230,5 @@ struct TaskDetailPage: View {
                 }
             }
         }
-    }
-
-    /// The connected accounts, so the user's own name never takes a fact.
-    private static var selfNames: Set<String> {
-        Set([Defaults[.gitlabAccountDisplayName], Defaults[.gitlabUsername], Defaults[.jiraAccountDisplayName]]
-            .filter { !$0.isEmpty })
     }
 }

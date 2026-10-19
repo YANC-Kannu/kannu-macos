@@ -1177,7 +1177,7 @@ private struct TimerTaskDetail: View {
 
     @ViewBuilder
     private var card: some View {
-        let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: Self.selfNames)
+        let summary = TaskDetailSummary(task: task, tracked: manager.trackedSeconds(of: task), now: Date(), selfNames: TaskSource.selfNames)
         VStack(alignment: .leading, spacing: 0) {
             // Drawn above the rows below it, so the × tooltip (opening downward) is never
             // painted over by the chips — siblings paint in order, zIndex decides between them.
@@ -1234,12 +1234,6 @@ private struct TimerTaskDetail: View {
         .frame(width: width, height: height, alignment: .topLeading)
         .background(TaskGlassBackground(color: manager.color(of: task), base: 0.08))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    /// The connected accounts, so the user's own name never takes a fact.
-    private static var selfNames: Set<String> {
-        Set([Defaults[.gitlabAccountDisplayName], Defaults[.gitlabUsername], Defaults[.jiraAccountDisplayName]]
-            .filter { !$0.isEmpty })
     }
 
     /// The key (or "Local") coloured by where the task stands, a draft, then as many labels as fit
