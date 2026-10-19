@@ -4,6 +4,26 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - A timed task shows its title, with its key as a chip
+- **Developer label:** "the task view while running shows still the full ticket heading i guess, check that if it is proper label"
+- **Agent label:** Claude Code (Opus 5.5) — a task's timer session is named by its title; the short key (`TaskDetailSummary.shortKey`) rides beside it as a chip in the open timer and in the popover
+- **Changes:**
+  - Root cause: `TasksManager.start` named the session with the source's raw key followed by the title,
+    cut at 40 characters with no ellipsis. A GitLab task in a nested group read
+    "discern_security/applications/ds-vendors" (no number and no title) in the closed notch's
+    label, the open timer, the music-and-timer view, the sneak peek and the timer popover.
+  - The session's name is now the task's title, so every place that shows the session's name shows
+    the title. Clearing a rename still returns to it.
+  - New `TimerManager.sessionTaskKey`: the task's short key ("ds-vendors #4264", "ABC-123",
+    "repo #12", "app !12"), set by `startTimer(… taskKey:)` and cleared with every session like
+    `sessionTint`. Local, Todoist and Reminders tasks have none.
+  - The open timer shows the key as a chip under the name (`SideChip`, now shared from
+    `TimerSideColumn`), read from the session, so `NotchTimerView` still never reads `TasksManager`.
+  - The Tasks popover's Now card and Up next captions show the short key, not the raw one.
+  - Test: new `TimerTaskLabelRulesTests` pins the title name and the key passed at start, the key
+    set and cleared with its session, the chip in the open timer and the popover's short keys, each
+    rule with a planted offender.
+
 ### 2026-10-19 - How to add a task source, written down
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 8 of the task-sources PR: docs/TASK-SOURCES.md

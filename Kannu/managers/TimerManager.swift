@@ -40,6 +40,10 @@ class TimerManager: ObservableObject {
     /// The colour of the task this session times, when it has one; the accent sites read it
     /// through `sessionAccent`, ahead of the preset's colour. Cleared with every session.
     @Published private(set) var sessionTint: Color?
+    /// The timed task's short key ("ds-vendors #4264", "ABC-123"), shown as a chip beside the
+    /// session's name, which is the task's title. Nil for a task with no key and for every
+    /// session that is not a task's. Cleared with every session.
+    @Published private(set) var sessionTaskKey: String?
     @Published private(set) var activeSource: TimerSource = .none
     /// What a renamed session goes back to when its name is cleared: the preset's name, or
     /// "Custom Timer" (`TimerSessionName`).
@@ -162,14 +166,15 @@ class TimerManager: ObservableObject {
     /// `name` is what the session shows; `fallbackName`, when given, is the default a cleared name
     /// returns to (the user may have typed `name` over it). `playsSoundOnFinish` false runs the
     /// session into overtime silently. `tint` is the timed task's colour, the session's accent ahead
-    /// of the preset's (`sessionAccent`).
+    /// of the preset's (`sessionAccent`); `taskKey` is its short key (`sessionTaskKey`).
     func startTimer(
         duration: TimeInterval,
         name: String = "Timer",
         preset: TimerPreset? = nil,
         fallbackName: String? = nil,
         playsSoundOnFinish: Bool = true,
-        tint: Color? = nil
+        tint: Color? = nil,
+        taskKey: String? = nil
     ) {
         if activeSource == .external {
             endExternalTimer(triggerSmoothClose: false)
@@ -207,6 +212,7 @@ class TimerManager: ObservableObject {
 
         activePresetId = preset?.id
         sessionTint = tint
+        sessionTaskKey = taskKey
         emit(.started)
 
         scheduleTicks()
@@ -332,6 +338,7 @@ class TimerManager: ObservableObject {
         isOvertime = remaining < 0
         activePresetId = nil
         sessionTint = nil
+        sessionTaskKey = nil
         lastUpdated = Date()
     }
 
@@ -401,6 +408,7 @@ class TimerManager: ObservableObject {
         isOvertime = false
         activePresetId = nil
         sessionTint = nil
+        sessionTaskKey = nil
         activeSource = .none
     }
 

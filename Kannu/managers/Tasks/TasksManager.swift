@@ -275,15 +275,18 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             tracked: trackedSeconds(of: task),
             defaultMinutes: Defaults[.tasksDefaultSessionMinutes]
         )
-        let typed = task.remote.map { "\($0.key) \(task.title)" } ?? task.title
+        // The session is named by the title alone and the key rides beside it as a chip: a raw key
+        // in front ("discern_security/applications/ds-vendors#4264 …") filled the 40-character name
+        // before its number, let alone the title.
         let fallback = TimerSessionName.resolved(typed: task.title, fallback: String(localized: "Task"))
         let timer = TimerManager.shared
         timer.startTimer(
             duration: TimeInterval(length),
-            name: TimerSessionName.resolved(typed: typed, fallback: fallback),
+            name: TimerSessionName.resolved(typed: task.title, fallback: fallback),
             fallbackName: fallback,
             playsSoundOnFinish: Defaults[.tasksSoundAtEstimate],
-            tint: color(of: task).tint
+            tint: color(of: task).tint,
+            taskKey: TaskDetailSummary.shortKey(for: task)
         )
         // The id is minted inside startTimer; its .started event is already queued behind this.
         pendingLink = (timer.sessionID, taskID)

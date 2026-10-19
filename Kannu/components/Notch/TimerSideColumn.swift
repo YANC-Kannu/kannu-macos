@@ -1447,8 +1447,9 @@ private struct TimerTaskDetail: View {
 
 /// A small capsule for the card's chip row: the house neutral chip (caption size, white 0.12), or
 /// a tinted one for a state (tint text on a 0.15 wash). Exactly as wide as its text, unless it is
-/// the chip allowed to give way (`truncates`), which shortens in the middle instead.
-private struct SideChip: View {
+/// the chip allowed to give way (`truncates`), which shortens in the middle instead. Also the key
+/// chip under a running task's name (`NotchTimerView`).
+struct SideChip: View {
     let text: String
     var tint: Color? = nil
     var monospaced = false

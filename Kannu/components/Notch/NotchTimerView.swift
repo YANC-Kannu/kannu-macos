@@ -308,7 +308,19 @@ struct NotchTimerView: View {
         }
     }
 
+    /// The session's name, and under it a task's short key as a chip ("ds-vendors #4264"): the
+    /// name is the task's title, so the key never crowds it out (`TimerManager.sessionTaskKey`).
     private var timerTitleSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            timerNameRow
+            if let key = timerManager.sessionTaskKey {
+                SideChip(key, monospaced: true, truncates: true)
+                    .accessibilityLabel(Text(verbatim: String(localized: "Task \(key)")))
+            }
+        }
+    }
+
+    private var timerNameRow: some View {
         GeometryReader { geometry in
             let status = timerStatusText
             let spacing: CGFloat = status == nil ? 0 : 8
