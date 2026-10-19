@@ -535,7 +535,11 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             guard let remote = task.remote, let link = remote.gitlabWebURL,
                   GitHubHost.isWebURL(link, onServer: remote.hostScope) else { return nil }
             return URL(string: link)
-        case .local, .linear, .todoist, .appleReminders: return nil
+        case .linear:
+            guard let remote = task.remote, let link = remote.gitlabWebURL,
+                  LinearAPI.isIssueURL(link, in: remote.hostScope) else { return nil }
+            return URL(string: link)
+        case .local, .todoist, .appleReminders: return nil
         }
     }
 
@@ -1014,8 +1018,23 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         host: self
     )
 
+    /// Linear's: the issues assigned to the user that are not done or canceled.
+    private(set) lazy var linear = SourceSync(
+        source: .linear,
+        provider: LinearTaskSource(),
+        store: TaskCredentials.linear,
+        connection: { SourceConnection(scope: Defaults[.linearWorkspace], syncOn: Defaults[.linearEnabled]) },
+        options: { () },
+        forget: {
+            Defaults[.linearEnabled] = false
+            Defaults[.linearWorkspace] = ""
+            Defaults[.linearAccountDisplayName] = ""
+        },
+        host: self
+    )
+
     /// Every source's sync, in source order.
-    var syncs: [any SourceSyncing] { [jira, gitlab, github, appleReminders] }
+    var syncs: [any SourceSyncing] { [jira, gitlab, github, linear, appleReminders] }
 
     /// Reminders' change notice is listened to only while Reminders is connected, its sync is on,
     /// and tasks are on; it asks for a quiet sync, never one with a dialog.
@@ -1084,7 +1103,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             return await connectAppleReminders()
         case .github:
             return await connectGitHub(serverInput: server, token: token)
-        case .local, .jira, .gitlab, .linear, .todoist:
+        case .linear:
+            return await connectLinear(apiKey: token)
+        case .local, .jira, .gitlab, .todoist:
             return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
         }
     }
@@ -1109,6 +1130,30 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     nonisolated static func githubCreateTokenURL(server: String) -> URL? {
         guard case .success(let base) = GitHubHost.normalize(server) else { return nil }
         return GitHubHost.createTokenURL(base: base)
+    }
+
+    /// Checks the API key with Linear, which also says the workspace, then stores both and syncs.
+    /// Nil on success, or what to tell the user. Nothing is stored until Linear has accepted the key.
+    private func connectLinear(apiKey: String) async -> String? {
+        let apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard LinearAPI.isPlausibleKey(apiKey) else { return LinearAPI.implausibleKeyMessage }
+        let failure = await linear.connect {
+            switch await LinearClient().verify(apiKey: apiKey) {
+            case .verified(let viewer):
+                guard let workspace = viewer.scope else {
+                    return .refused(String(localized: "Linear answered, but its workspace address is not one Kannu can use."))
+                }
+                return .accepted(LinearCredential(workspace: workspace, apiKey: apiKey)) {
+                    Defaults[.linearWorkspace] = workspace
+                    Defaults[.linearAccountDisplayName] = viewer.displayName ?? viewer.name
+                    Defaults[.linearEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(LinearAPI.connectMessage(for: failure))
+            }
+        }
+        if failure == nil { logger.info("Linear connected") }
+        return failure
     }
 
     /// Checks the server and token with GitHub, then stores them and syncs. Nil on success, or what

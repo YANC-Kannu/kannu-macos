@@ -52,7 +52,7 @@ final class IntegrationSecretRulesTests: XCTestCase {
     static let onAppearSyncs = ["syncIfStale", "externalChange"]
     private static let enginePath = "Kannu/managers/Tasks/SourceSync.swift"
     /// The files that build a request with an `Authorization` header: each source's own API file.
-    static let authorizationHeaderOwners = ["GitHubAPI.swift", "JiraAPI.swift"]
+    static let authorizationHeaderOwners = ["GitHubAPI.swift", "JiraAPI.swift", "LinearAPI.swift"]
     static let secretWords = ["token", "email", "jql", "title", "summary", "credential", "displayname", "password", "authorization"]
 
     private static func read(_ path: String) throws -> String {

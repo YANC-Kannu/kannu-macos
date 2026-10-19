@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Linear is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 6 of the task-sources PR: Linear, read-only, by personal API key
+- **Changes:**
+  - Brain › Tasks › Add a source › Linear takes a personal API key. Kannu checks it with Linear's GraphQL API, which also gives the workspace (`https://linear.app/<workspace>`). Key and workspace are kept together in the Keychain (`linear-credential`). The key goes in `Authorization` as Linear wants it, without "Bearer".
+  - A sync reads the issues assigned to the user that are not done or canceled, at most two pages of 100. Each issue's key is `ENG-123`, so its team is its project. A started state is In Progress. Due date, priority, parent, cycle and labels show on its page; Linear's estimates are points, not time, so none is taken. Its link opens only when it is under the connected workspace.
+  - Linear reports errors inside the answer, so they are read on any status. A refused key reads as refused. A rate limit (`RATELIMITED`, or HTTP 429) is timed from Linear's reset header, which is in milliseconds. Any other error's message is shown with the key taken out.
+  - New `LinearAPI.swift` (logic target) and `LinearClient.swift` (logging wrapper and provider).
+  - Tests: new `LinearAPITests` (35 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
 ### 2026-10-19 - GitHub Issues is a task source, from github.com or GitHub Enterprise Server
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 5 of the task-sources PR: GitHub, read-only, including Enterprise Server

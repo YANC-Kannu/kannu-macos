@@ -79,8 +79,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // Local tasks row (its own "Local tasks" id is gone); Jira's row has its own "Jira Cloud" id
         // (one out, one in). GitHub, Linear, Todoist and Apple Reminders rows and the new "Add a
         // source" row register five more ids; "Add a source" is one more entry. Each new source's
-        // own entry lands on its row: Apple Reminders, GitHub.
-        XCTAssertEqual(inventory.entries.count, 238, "search entries")
+        // own entry lands on its row: Apple Reminders, GitHub, Linear.
+        XCTAssertEqual(inventory.entries.count, 239, "search entries")
         XCTAssertEqual(inventory.registrations.values.reduce(0, +), 271, "row registrations")
         XCTAssertEqual(inventory.registrations.count, 265, "distinct registered ids")
     }
