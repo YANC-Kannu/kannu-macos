@@ -598,6 +598,50 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     wiring: the card takes the manager as a parameter, delete is local-only and inline-confirmed,
     the icon buttons carry tooltips, reduced motion is honoured, and a vanished task collapses it.
 
+### 2026-10-19 - Act on CodeRabbit's review of #109
+- **Developer label:** CodeRabbit's review of #109 (the fixes batch for #91, #92, #93 and #98): two findings, both in fullscreen detection
+- **Agent label:** Claude Code (Opus 5.5) — fullscreen is read again when the Accessibility grant changes, and the no-Accessibility fallback looks once more after the menu bar's slide
+- **Changes:**
+  - `FullscreenMediaDetector` observes `AccessibilityPermissionStore.isAuthorized`. Granting
+    Accessibility from Brain › Media moves the verdict from the menu-bar fallback to `AXFullScreen`,
+    and revoking it moves it back, but neither was a space, playback or setting change, so a
+    fallback misreading stood until one came along.
+  - Without Accessibility, `handleChange` reads fullscreen a second time 1 s after its 500 ms settle.
+    The fallback reads the menu bar from a window snapshot, and the menu bar's slide out of (or back
+    into) a fullscreen space can outlast the settle. macOS posts no public notice for the menu bar's
+    own show and hide, so this is the recheck; each pass still takes one snapshot, and with
+    Accessibility granted nothing waits.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsReadAgainWhenItsInputsChange`.
+
+### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `FullscreenFallbackVerdict.swift`'s two `project.pbxproj` ids moved from `…00E2`/`…00E3` to
+    `…05A2`/`…05A3`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - The notch hides over fullscreen video again: detection re-checks when playback starts, and survives a missing Accessibility grant
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — fullscreen media detection re-checked on its real inputs, with a menu-bar fallback when `AXFullScreen` cannot be read
+- **Changes:**
+  - Fullscreen detection ran only on a space change, so fullscreen entered before pressing play was
+    never re-checked and the notch stayed out for the whole video. It now also re-checks when the
+    now-playing app or its play state changes and when the hide option changes — all through the
+    existing 500 ms settle, no polling.
+  - Without the Accessibility grant the "really fullscreen?" check silently answered no, so every
+    re-signed install stopped hiding for good (the grant dies with the code identity). It now falls
+    back to `FullscreenFallbackVerdict`: fullscreen when the window covers the whole screen frame
+    (nothing maximized can) or when that screen's menu bar is gone. A maximized window keeps the
+    menu bar, so the old maximized-hides-the-notch regression stays fixed; the one blind spot is a
+    menu bar set to auto-hide, and the one-time log says so.
+  - Brain › Media shows an "Accessibility access" row under the hide picker while the grant is
+    missing, with an Open System Settings button. The picker registered a highlight id, and two
+    search entries ("Hide in fullscreen", "Accessibility access") land on it — the conditional row
+    is never a search target.
+  - Guards: `FullscreenFallbackVerdictTests`; the settings inventory counts moved by the two new
+    entries and registrations.
+
 ### 2026-10-19 - A Clock timer's delayed cleanup ends only the session that finished
 - **Developer label:** CodeRabbit on #107 (covering this branch's timer fix): "Bind delayed cleanup to the finished session."
 - **Agent label:** Claude Code (Opus 5.5) — `SystemTimerBridge.clearLogState` captures the finished session before its 3.2 s wait
