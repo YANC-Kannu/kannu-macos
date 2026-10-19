@@ -153,7 +153,13 @@ final class TimerLifecycleRulesTests: XCTestCase {
         XCTAssertEqual(Self.bridgeProblems(in: planted), [
             "the delayed cleanup ends whatever Clock timer is running, not only the finished one",
         ])
-        let fixed = planted.replacingOccurrences(of: "isExternalTimerActive {", with: "isExternalTimerActive, TimerManager.shared.isFinished {")
+        let finishedOnly = planted.replacingOccurrences(of: "isExternalTimerActive {", with: "isExternalTimerActive, TimerManager.shared.isFinished {")
+        XCTAssertEqual(Self.bridgeProblems(in: finishedOnly), [
+            "the delayed cleanup is not bound to the session that finished",
+        ], "CodeRabbit on #107: a second Clock timer that starts and finishes inside the 3.2 s was ended")
+        let fixed = finishedOnly
+            .replacingOccurrences(of: "DispatchQueue.main.asyncAfter", with: "let session = TimerManager.shared.sessionID\n    DispatchQueue.main.asyncAfter")
+            .replacingOccurrences(of: "if TimerManager.shared.isExternalTimerActive", with: "if TimerManager.shared.sessionID == session, TimerManager.shared.isExternalTimerActive")
         XCTAssertEqual(Self.bridgeProblems(in: fixed), [])
     }
 
@@ -262,9 +268,12 @@ final class TimerLifecycleRulesTests: XCTestCase {
         guard let cleanup = functionBody(named: "clearLogState(", in: code(text)) else {
             return ["clearLogState( not found"]
         }
-        return cleanup.contains("isFinished")
+        guard cleanup.contains("isFinished") else {
+            return ["the delayed cleanup ends whatever Clock timer is running, not only the finished one"]
+        }
+        return cleanup.contains("let session = TimerManager.shared.sessionID") && cleanup.contains("TimerManager.shared.sessionID == session")
             ? []
-            : ["the delayed cleanup ends whatever Clock timer is running, not only the finished one"]
+            : ["the delayed cleanup is not bound to the session that finished"]
     }
 
     private static func notchProblems(in text: String) -> [String] {
