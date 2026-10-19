@@ -131,6 +131,271 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
     organization filter, per-window reading times and the automatic-fetch cadence.
 
+### 2026-10-19 - SonarCloud no longer fails #84 on the Keychain rule it was told about
+- **Developer label:** "#84 is held up by SonarCloud's quality gate, not by CodeRabbit. You need to mark S6288 as Accepted in SonarCloud first. fix this"
+- **Agent label:** Claude Code (Opus 5.5) — `.sonarcloud.properties` leaves `KeychainReader.swift` out of SonarCloud's automatic analysis
+- **Changes:**
+  - SonarCloud reported swift:S6288 (a Keychain item without user authentication) on `KeychainReader.swift`'s one `SecItemAdd`. That dropped #84's security rating to C and failed its quality gate. Kannu's items stay readable without a prompt on purpose: its tokens are read in the background, where no prompt can be answered.
+  - SonarCloud's automatic analysis ignored the `// NOSONAR` on that line and offers no per-rule ignore from the repository. New `.sonarcloud.properties` therefore leaves the file out of Sonar's analysis, with the reason, what still guards the file (`KeychainWritePlanTests`, `IntegrationSecretRulesTests`, CodeRabbit), and how to bring it back (delete the line and mark S6288 Accepted on sonarcloud.io).
+  - Merged development into the branch, keeping both sides of the CHANGELOG.
+
+### 2026-10-18 - The Sonar note sits on the line Sonar reports
+- **Developer label:** SonarCloud on #84 still failed after the `// NOSONAR`: S6288 is reported on the `SecItemAdd` call, not on the accessibility attribute
+- **Agent label:** Claude Code (Opus 5.5) — `// NOSONAR` moves to the `SecItemAdd` line; the reason stays on the attribute; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword`: `// NOSONAR` moves from the `kSecAttrAccessible` line to the
+    `return SecItemAdd(…)` line, where SonarCloud reports S6288, with a one-line pointer to the
+    reason above it. No behaviour change.
+
+### 2026-10-18 - The Keychain's accessibility choice says why it skips user authentication
+- **Developer label:** SonarCloud on #84: S6288, "iOS and macOS Keychain keys should require user authentication", at `KeychainReader.swift:81`
+- **Agent label:** Claude Code (Opus 5.5) — a written reason and `// NOSONAR` on the one flagged line; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword` keeps `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, now
+    with the reason beside it: Kannu reads these tokens in the background (usage refreshes, task
+    syncs), where an authentication prompt could never be answered, and the item is this-device
+    only with an access list that trusts only Kannu. The same value was already in use before
+    this branch; moving it into the new `SecItemAdd` call made SonarCloud count it as new code.
+  - `// NOSONAR` on that line, so the quality gate reflects the decision instead of failing on it.
+
+### 2026-10-04 - A saved secret always gets a fresh keychain item that only Kannu can read
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Keychain saves delete-then-add through `KeychainWritePlan`; other apps' items stay read-only
+- **Changes:**
+  - Audit of every keychain write: the only saver is `SecureSecretsStore` (service
+    `com.kannu.app.secure-secrets` — the AI provider API keys, Pushover keys, webhook URL and
+    Spotify cookie), and the only other delete is the one-time cleanup of
+    `com.kannu.app.llm-credentials`. Kannu writes no other app's item; Codex's `Codex Auth` and
+    Cursor's `cursor-access-token` are only ever read, so no write path had to stay as it was.
+  - `KeychainReader.setGenericPassword` used to update an existing item in place and add one only
+    when none existed. An update keeps the item's access list, so an item pre-planted under Kannu's
+    service and account with a list that lets any app read it would have received the secret. A save
+    now deletes the item and adds it fresh, and `SecItemAdd` gives the new item an access list that
+    trusts only Kannu. Same attributes (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), same `Bool`
+    result for callers.
+  - New `KeychainWritePlan` (pure; joins the logic test target, pbxproj ids 2B0/2B1): `.recreate` for
+    a `com.kannu.app.` service, `.refuse` for anything else, and `deleteLeftNothing(_:)` — the add runs
+    only after a delete that returned success or not-found, so a denied or failed delete stops the save
+    instead of falling back to an update. `deleteGenericPassword` also refuses a service Kannu does not
+    own.
+  - Delete-then-add is not atomic, so a failed add after a successful delete would have left no item
+    and lost the secret the user already had (the in-place update left it untouched on failure). The
+    save now reads the prior value first, silently (`allowInteraction: false`, so a save never raises a
+    keychain prompt), and when the add fails re-adds it through the same fresh add
+    (`KeychainWritePlan.valueToRestore(afterAdd:prior:)`). The add lives in a private
+    `addGenericPassword` that only the save calls. Failures log the account name and `OSStatus`
+    through `os.Logger` (category `Keychain`), never the value. A save still returns `false` on failure.
+  - `KeychainWritePlanTests` (13 tests): the plan for Kannu and foreign services, the delete-status
+    rule, the restore rule, every write call site names a Kannu service, no
+    `SecItemUpdate`/`SecKeychainItemModify` in any non-comment line under `Kannu/`, `SecItemAdd` only in
+    `KeychainReader.swift` and only inside the private add the save calls, the save's order (plan, read
+    prior, delete, add, restore on failure), and self-tests that catch the old in-place save and a
+    delete-then-add save that cannot restore.
+  - No `docs/REGRESSIONS.md` entry covers this, so the dated note lives at the code
+    (`KeychainWritePlan.swift`, `KeychainReader.swift`).
+
+### 2026-10-10 - Every icon-only control in the notch names itself in a tooltip, starting with the lyrics button
+- **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
+- **Agent label:** Claude Code (Opus 5.5) — notch tooltip principle: hover-driven bubble for shared icon buttons, every icon-only control covered, coverage scan and widened .help guard
+- **Changes:**
+  - Of 74 icon-only notch controls, 55 had no tooltip (the lyrics button among them, in both
+    players) and 2 used `.help`, which never renders in the notch. Every one now shows a tooltip
+    after the existing 0.4 s hover, and the same text is its accessibility label, so VoiceOver no
+    longer reads SF Symbol names.
+  - `HoverTooltip.swift`: the bubble and its show/hide timing are shared. The existing
+    `.hoverTooltip(_:edge:)` keeps its look and 22 pt offset; a new
+    `.hoverTooltip(_:edge:alignment:isHovering:)` is driven by a control's own hover state (one
+    hover source, docs/TOOLTIPS.md rule 3) and sits 8 pt clear of the control, so it never covers a
+    large glyph. `alignment: .leading` serves controls at a window's left edge.
+  - Shared buttons take `tooltip:`: `HoverButton`, the minimal player's squircle buttons,
+    `TabButton` (which now owns the tab's only hover handler; hover-to-switch moved into its
+    `onHover:`), and `TimerControlButton` (its second hover source is gone). The music rows use
+    `MusicControlButton.label`; the corner lyrics buttons open below.
+  - Header clipboard, timer and gear buttons, Notes, the clipboard popover and panel, the share
+    switch and the process popover all name their icon buttons. Note colours get localized names.
+  - The floating music and timer overlays are fitted to their button row, so no bubble can show
+    there: they get accessibility labels only (the timer overlay's dead `.help` is removed).
+  - docs/TOOLTIPS.md states the principle; AGENTS.md points to it; REGRESSIONS entry 9 gains a
+    dated addendum. The pre-commit `.help(` scan widens from 2 folders to 8, and the new
+    `NotchTooltipCoverageRulesTests` fails on a `.help(`, a shared icon button without `tooltip:`,
+    or an icon-only `Button` without `.hoverTooltip(` (allowlist with reasons, planted offenders).
+
+### 2026-10-04 - Settings is now Brain, with a brain icon in the notch and ⌘, to open it
+- **Developer label:** "rename settings to brain and use that icon, it is more going to be a place where do all the management"
+- **Agent label:** Brain rename (user-visible text only), notch brain icon, live ⌘, command, BrainNamingRulesTests
+- **Changes:**
+  - Everywhere users see Kannu's Settings window it is now **Brain**: the window title (Kannu
+    Brain), the menu bar icon's menu and the notch's right-click menu, the search field (Search
+    Brain), the "Brain icon in notch" row together with its search entry (keywords brain, settings,
+    gear), the menu bar icon caption, the hints in the notch's Stats, Timer and agent views and the
+    timer popover, onboarding (the finish button and the "change this later" lines), the
+    security-finding advice, push text and analysis error, the closed-notch findings caption, the
+    Spotify login hints, the ADR policy-drafting prompt, and ReadMe.md. Code names do not change:
+    the `Settings` folder and types, `KannuSettingsWindow`, `settingsIconInNotch`, comments.
+  - The notch header's button shows the `brain` SF Symbol instead of `gear`, with an accessibility
+    label and a `.hoverTooltip` reading "Brain". Screen Assistant keeps `brain.head.profile`.
+  - Kept as "Settings", because none of them is Kannu's window: every "System Settings" string and
+    the "Open … Settings" menu items that open macOS panes, "Settings file:" (an agent's config),
+    BetterDisplay's Settings, the Clipboard section header, "Global Settings", the permission
+    callout's default "Open Settings" button, "Battery Settings" and "Open Model Settings".
+  - ⌘, works. `commands` held a `CommandGroup(replacing: .appSettings)` that no scene attached, so
+    the shortcut did nothing. It is now attached to the app's scene, reads "Brain…", carries
+    `.keyboardShortcut(",", modifiers: .command)`, and still brings the Terms of Use back before
+    they are accepted. Like any menu key equivalent it fires while Kannu is the active app, which
+    the Brain window (and the terms and onboarding windows) make it; with only the notch on screen
+    the key belongs to the app in front. The never-attached "Check for Updates…" group is removed
+    rather than attached, because the Kannu menu built by `installTopMenuItemsIfNeeded` already
+    carries that item.
+  - `docs/SETTINGS.md` says the window is shown to users as Brain while the code keeps the Settings
+    names. `Localizable.xcstrings` is untouched, as for every recent string: the new keys show in
+    English in every locale until the catalog is synced and translated.
+  - New `BrainNamingRulesTests`: scans every string literal under `Kannu/` (comments skipped; plain,
+    multi-line, raw and interpolated literals read correctly) and fails on "Settings" outside an
+    11-entry allowlist plus the phrase "System Settings", each entry with its reason and each
+    required to match exactly one string. It also pins the window title, the header's `brain`
+    symbol, label and tooltip (no `gear`, no `.help(`, no `brain.head.profile`), the attached ⌘,
+    command with its terms guard, the menus, the search field and the renamed row's search
+    keywords, and carries a planted-offender self-test. `SettingsHighlightInventoryTests` counts
+    are unchanged (208 entries, 257 registrations, 251 ids): the rename swaps one entry and its id.
+
+### 2026-10-12 - A doc comment's token placeholder no longer reads as a leaked GitLab token
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on a blocker it took for a leaked GitLab token
+- **Changes:**
+  - `ClipboardCapturePolicy.isSecret`'s doc comment used `glpat-your-token-goes-here` as its example
+    of a lower-case word the rule turns away. That is exactly 20 characters after `glpat-`, the shape
+    of a real GitLab token, so SonarCloud's secret scanner reported it as one. The example is now
+    `glpat-your-token-here`, which the rule turns away for the same reason. No code changed.
+
+### 2026-10-04 - Kannu's clipboard history skips copied access tokens
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Clipboard history skips token-shaped text — the hook script's secret formats plus Atlassian
+- **Changes:**
+  - The clipboard history (off by default) persists what it records to UserDefaults in plain text,
+    and a token page's copy button carries no concealed marker: a GitLab or Atlassian token copied
+    from its settings page was recorded in Kannu's preferences file. `ClipboardManager.checkClipboard()`
+    now drops a copy whose text, URL or rich text's plain text holds a token-shaped secret, after
+    the read and before anything is recorded.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(text:)` / `secretKind(in:)`. Its
+    format list is the hook script's `SEC_PATTERNS` character for character (private keys,
+    Anthropic, OpenAI, AWS, GitHub, GitLab, Slack, Stripe, Google, npm, Hugging Face) plus
+    Atlassian `ATATT` API tokens (100+ characters), with the hook's acceptance rules: a whole token
+    (no word character just before it), the vendors' minimum lengths, no placeholder words
+    (`EXAMPLE`, `XXXXXXXX`, …), and at least 8 distinct characters after the vendor prefix. So
+    `task-…`, `risk-…`, `xoxo` and AWS's documentation key are still recorded.
+  - Two deliberate differences from the hook, both because a missed token is persisted in plain
+    text while a false alarm only drops one history entry. The body must hold a digit **or** both
+    upper and lower case (an AWS key ID, upper case by format, neither): the hook's digit rule
+    misses about 1 GitLab token in 20 to 30, 1 AWS key ID in 30 and every Hugging Face token
+    (letters only), while lower-case words such as `glpat-your-token-goes-here` still fail it. And a
+    private key needs one base64 run of 64+ characters after its header, footer or not: raw or
+    written-out `\n` line breaks continue the run, anything else ends it, so a copy cut short of
+    its footer or a service-account JSON is caught, and prose or code that only names the header
+    is not.
+  - `ClipboardCapturePolicyTests` covers every format alone and inside a sentence, tokens on one
+    line of a multi-line `.env`, script, JSON or URL copy, tokens with no digit, private keys
+    without a footer, with CRLF, encrypted or inside JSON, near misses one character short, glued to
+    a word or made of lower-case words, prose and code that name a key header, ordinary prose and
+    identifiers, a 1 MB scan of near misses under a second, and pins the list to the hook's: every
+    `SEC_PATTERNS` kind with identical anchors and pattern, `SEC_LITERAL_PREFIXES` and
+    `SEC_PLACEHOLDER_WORDS`, read from `AgentHookInstaller.swift`. The
+    capture-order test now also pins the text check between the read and the record. Fixture
+    tokens are assembled at run time, so no token-shaped literal is committed.
+
+### 2026-10-02 - Act on CodeRabbit's review of #71
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — review follow-up
+- **Agent label:** CodeRabbit #71 — recheck the pasteboard after reading it
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` checked a copy's privacy markers and then read its
+    contents, and the pasteboard is no snapshot: a concealed copy landing between the two reads
+    could be recorded under the earlier decision. It now rechecks `changeCount` after reading and
+    drops the read if anything changed (deleting the temporary image file a read may have
+    written); the next poll checks the new contents afresh.
+  - Not taken: a second recheck right before the deferred insert. Once the count matched after
+    the read, the item belongs to the copy whose markers were checked, so a later change cannot
+    make it private; that check would only drop a genuine copy made in quick succession.
+  - `ClipboardCapturePolicyTests.testTheCaptureChecksTypesFirstAndRechecksAfterReading` pins the
+    order from the source: markers, read, recheck, record.
+
+### 2026-10-02 - Kannu's clipboard history skips copies their app marked private
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — prerequisite: the relay key Kannu will copy must not persist in its own clipboard history
+- **Agent label:** Cloud relay PR A — honour nspasteboard.org's concealed and transient markers
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` now returns early when the pasteboard carries
+    `org.nspasteboard.ConcealedType` or `org.nspasteboard.TransientType`, the convention password
+    managers use to mark a copied secret or a momentary automation copy. The history persists what
+    it records to UserDefaults in plain text, so such a copy used to outlive the password manager's
+    own clear-after-90-seconds, in Kannu's preferences file.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(types:)` in the logic test target,
+    pinned by `ClipboardCapturePolicyTests`; `AutoGeneratedType` (not a privacy marker) is still
+    recorded.
+  - The upcoming cloud-session relay copies its key with the concealed marker, which is why this
+    lands first.
+
+### 2026-10-04 - Kannu stays light while several agents work at once
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Rescan storm: filter watched-file events, pace rescans, cache the Desktop audit-log walk
+- **Changes:**
+  - Changes inside a Claude session's own folder no longer trigger a rescan: subagent
+    transcripts, tool-output spills and workflow files, which Kannu never reads. Neither do the
+    hook status folder's per-file writes, which its kqueue watcher already handles; before, each
+    write cost two rescans. Lost-event flags still always rescan (`AgentWatchEvents`).
+  - Rescans are at least 0.3 s apart (hook-only) or 0.5 s apart (full), and a new request never
+    postpones the one already pending (`AgentRescanPacing`). A steady storm of writes used to
+    postpone the light instead of bounding the work.
+  - Claude Desktop's audit-log listing is cached for 2 s, and dropped when a log is added, removed
+    or renamed. The cache hands out fresh `URL`s, so a grown log is never read with its old size.
+  - `docs/REGRESSIONS.md` entry 11: a dated addendum.
+  - Tests: `RescanStormTests` (the filter, the pacing, and a simulated 20 ms write storm that must
+    keep rescanning, at a bounded rate).
+
+### 2026-10-04 - The paired-activity badge sits beside the album art, not over it
+- **Developer label:** "if you look at the timer placing, its over the small thumbnail adjust that"
+- **Agent label:** Closed music wing: badge beside the art via `ClosedMusicWingLayout`, hidden during inline sneak peek
+- **Changes:**
+  - In the closed notch, while music plays alongside a timer, a recording, Focus, Caps Lock, an
+    extension or the shelf, that activity's badge now sits 4 pt to the right of the album art,
+    vertically centred. It used to cover the art's bottom-right quarter. The left wing grows by the
+    badge and its gap (17 pt at the default notch height) only while a badge is shown.
+  - The art keeps its size and position from the wing's edge, so the open/close animation and the
+    pull-down gesture are unchanged.
+  - New `ClosedMusicWingLayout` (`Kannu/sizing/`) gives one width to both the wing's frame and the
+    notch, so the black shape always fits what it holds. It is in the logic test target
+    (pbxproj ids CA/CB).
+  - No badge during an inline sneak peek: that window is a fixed 460 pt, and a wider wing would be
+    cut off at both edges.
+  - Removed the unused `badgeOverlayOffset` and `badgeDisplaySize`.
+  - Tests: `ClosedMusicWingLayoutTests` (the art never moves, the badge never overlaps it, widths
+    and sizes) and `ClosedMusicWingRulesTests` (source pins: the badge is a child of the art's
+    HStack with no `.offset`, and the notch and the wing share one width), with planted offenders
+    including the old shape.
+
+### 2026-10-04 - A chat stays lit while the agents it started are still running
+- **Developer label:** "now we have background taks right, but kannu doesnt show that as chat still running"
+- **Agent label:** Background-agent detection: hook v44 counts what a Stop leaves running, Claude's session record confirms it
+- **Changes:**
+  - A Claude chat whose turn ended with background agents or a workflow still running stays green,
+    with "agents in background" beside its state and its clock still running from your prompt. It
+    turns red the moment Claude reports all of them finished. Before, it went red at the turn's
+    end while Claude went on working and spending tokens.
+  - Hook v44 records how many agents and workflows a Claude `Stop` leaves running (its
+    `background_tasks`), as a count only: the tasks' descriptions and commands are never written.
+    Kannu reads Claude Code's own session record (`~/.claude/sessions/<pid>.json`), which says
+    `busy` until the last of them finishes. Neither signal alone lights the chat. A fresh `idle`
+    counts for 3 s, and Kannu rescans when that ends, so the chat never flashes finished between
+    an agent ending and Claude reading its result.
+  - While that background work runs, a background agent's own light counts again: one waiting on
+    permission turns the chat yellow. The chat's status file is kept past the stale cap, so a long
+    workflow does not lose its card.
+  - Hook v44 also listens for `SubagentStart` and `SubagentStop`, so a finished agent's file says
+    `stopped` instead of "thinking" until the stale cap. Existing installs upgrade through the
+    hook version migration.
+  - `docs/REGRESSIONS.md`: a dated addendum to entry 5, whose rule changes on purpose, and a v44
+    note on entry 1.
+  - Tests: `BackgroundWorkTests` (Claude's status, the reconciler, the fold, the clock, the stale
+    cap and the turn parse) and four `HookScriptTests` cases (the count, what clears it, an older
+    Claude, and a subagent's own start and stop).
+
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
 - **Agent label:** Settings Quit row + search entry, pinned by the highlight inventory

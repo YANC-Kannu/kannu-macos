@@ -70,6 +70,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
     private var statusDirectoryFD: Int32 = -1
     private var rescanTask: Task<Void, Never>?
     private var quickRescanTask: Task<Void, Never>?
+    /// `AgentRescanPacing`: when the last rescan of either kind started, and when each kind's
+    /// pending one will (nil once it has started).
+    private var lastRescanStartedAt: Date?
+    private var pendingRescanAt: Date?
+    private var pendingQuickRescanAt: Date?
     private var pollTimer: Timer?
     private var isRunning = false
     private var watchedPaths: [String] = []
@@ -126,6 +131,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         isRunning = false
         rescanTask?.cancel()
         rescanTask = nil
+        pendingRescanAt = nil
+        pendingQuickRescanAt = nil
         pollTimer?.invalidate()
         pollTimer = nil
         if let statusDirectorySource {
@@ -206,14 +213,26 @@ final class CursorAgentStatusMonitor: ObservableObject {
             let monitor = Unmanaged<CursorAgentStatusMonitor>.fromOpaque(info).takeUnretainedValue()
             // kFSEventStreamCreateFlagUseCFTypes: the paths arrive as a CFArray of CFString.
             let paths = (Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as NSArray) as? [String] ?? []
-            let events = (0..<min(numEvents, paths.count)).map { (path: paths[$0], flags: UInt32(eventFlags[$0])) }
+            let allEvents = (0..<min(numEvents, paths.count)).map { (path: paths[$0], flags: UInt32(eventFlags[$0])) }
             Task { @MainActor in
+                // Subagent transcripts, tool-output spills and workflow files inside a session's
+                // folder, and hook writes the kqueue watcher already handles, are not worth a
+                // rescan (AgentWatchEvents; REGRESSIONS entry 11, 2026-10-04 addendum).
+                let events = AgentWatchEvents.worthARescan(
+                    allEvents,
+                    claudeProjectsRoot: AgentSessionLogParser.claudeProjectsDirectory.path,
+                    statusDirectory: AgentHookInstaller.statusDirectory.path
+                )
+                guard !events.isEmpty else { return }
                 // Appends and hook writes leave the transcript lists valid (see
                 // TranscriptListingInvalidation); dropping them on every event re-walked both
                 // project trees on the main actor several times a second while agents worked.
                 if TranscriptListingInvalidation.shouldInvalidate(events: events, transcriptRoots: CursorAgentStatusMonitor.transcriptRootPaths) {
                     CursorTranscriptParser.invalidatePathCache()
                     AgentSessionLogParser.invalidatePathCache()
+                }
+                if TranscriptListingInvalidation.shouldInvalidate(events: events, transcriptRoots: [ClaudeDesktopAgentSessionStore.defaultRoot.path]) {
+                    ClaudeDesktopAgentSessionStore.invalidateListingCache()
                 }
                 monitor.scheduleRescan(delay: 0.35)
             }
@@ -273,32 +292,61 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
     private func scheduleQuickRescan() {
         guard isRunning else { return }
+        let start = AgentRescanPacing.startDate(requestedAt: Date(), delay: 0.05, lastStart: lastRescanStartedAt,
+                                                floor: AgentRescanPacing.hookOnlyFloor)
+        guard AgentRescanPacing.needsScheduling(start: start, pending: pendingQuickRescanAt) else { return }
+        pendingQuickRescanAt = start
         quickRescanTask?.cancel()
         quickRescanTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.rescan(hooksOnly: true)
+            let wait = start.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled, let self else { return }
+            self.pendingQuickRescanAt = nil
+            await self.rescan(hooksOnly: true)
         }
     }
 
     private func scheduleRescan(delay: TimeInterval) {
         guard isRunning else { return }
+        let start = AgentRescanPacing.startDate(requestedAt: Date(), delay: delay, lastStart: lastRescanStartedAt,
+                                                floor: AgentRescanPacing.fullFloor)
+        guard AgentRescanPacing.needsScheduling(start: start, pending: pendingRescanAt) else { return }
+        pendingRescanAt = start
         rescanTask?.cancel()
         rescanTask = Task { [weak self] in
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            }
-            guard !Task.isCancelled else { return }
-            await self?.rescan(hooksOnly: false)
+            let wait = start.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled, let self else { return }
+            self.pendingRescanAt = nil
+            await self.rescan(hooksOnly: false)
         }
     }
 
     /// Subagent conversations folded into their parent on the last hook parse (v38 `parent_id`).
     private var foldedSubagentConversationIDs: Set<String> = []
 
+    /// Rescans when a fresh Claude `idle` stops counting as ongoing
+    /// (`AgentTrafficLightMapper.claudeIdleGraceEndMs`): nothing may write then, and without it a
+    /// chat whose background agents all finished stayed lit until the 30 s poll. Its own task, so
+    /// it never cancels or delays a rescan an event scheduled.
+    private var claudeIdleGraceTask: Task<Void, Never>?
+
+    private func armClaudeIdleGraceRecheck(at graceEndMs: Int64?) {
+        claudeIdleGraceTask?.cancel()
+        claudeIdleGraceTask = nil
+        guard let graceEndMs else { return }
+        let delay = max(0, TimeInterval(graceEndMs) / 1000 - Date().timeIntervalSince1970) + 0.1
+        claudeIdleGraceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.scheduleRescan(delay: 0)
+        }
+    }
+
     private func rescan(hooksOnly: Bool = false) async {
         guard isRunning else { return }
         let now = Date()
+        lastRescanStartedAt = now
         let previousStateByConversationID = latestDisplayStateByConversationID(from: sessions)
 
         let staleMinutes = Defaults[.agentStatusStaleMinutes]
@@ -309,12 +357,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // open (live process, tool_use outstanding) before it ages or deletes a file. No data
         // flows the other way. Cursor's corroboration is the previous cycle's transcript
         // analysis — a lag of a second is nothing to a hold that only matters after five minutes.
-        let (passiveClaudeSessions, deadPIDConversationIDs, liveClaudeTails) = buildClaudeSessions(
+        let (passiveClaudeSessions, deadPIDConversationIDs, liveClaudeTails, claudeWork) = buildClaudeSessions(
             staleMinutes: staleMinutes,
             collapseSeconds: collapseSeconds,
             inactiveSeconds: inactiveSeconds,
             now: now
         )
+        armClaudeIdleGraceRecheck(at: claudeWork.graceEndMs)
         let cursorPendingApprovalIDs = Set(
             cachedTranscriptAnalysisBySession.filter { $0.value.hasPendingToolApproval }.map(\.key)
         )
@@ -326,7 +375,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
             now: now,
             allowBackingDelete: !hooksOnly,
             liveClaudeTails: liveClaudeTails,
-            cursorPendingApprovalIDs: cursorPendingApprovalIDs
+            cursorPendingApprovalIDs: cursorPendingApprovalIDs,
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs
         )
         // Extracted to AgentTrafficLightMapper.reconcileClaudeSessions (pure, tested):
         // this merge has regressed repeatedly while it lived inline here, unreachable by
@@ -337,7 +387,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
             deadPIDConversationIDs: deadPIDConversationIDs,
             collapseMs: Int64(collapseSeconds) * 1_000,
             inactiveMs: Int64(inactiveSeconds) * 1_000,
-            nowMs: Int64(now.timeIntervalSince1970 * 1000)
+            nowMs: Int64(now.timeIntervalSince1970 * 1000),
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs
         )
 
         let transcriptAnalysis: [String: TranscriptAnalysis]
@@ -1029,7 +1080,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         now: Date = Date(),
         allowBackingDelete: Bool = true,
         liveClaudeTails: [String: AgentSessionLogParser.ClaudeTailState] = [:],
-        cursorPendingApprovalIDs: Set<String> = []
+        cursorPendingApprovalIDs: Set<String> = [],
+        claudeWorkOngoingIDs: Set<String> = []
     ) -> [AgentSessionStatus] {
         let directory = AgentHookInstaller.statusDirectory
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -1084,6 +1136,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
                                       turn: HookTurn(hookFile: json, home: homePath, now: now)))
         }
 
+        // A chat's turn ended with agents left running and Claude says they still are: for the stale
+        // cap, its turn is open (`AgentTrafficLightMapper.isClaudeBackgroundWork`).
+        func hasBackgroundWork(_ provider: String, _ conversationID: String, _ turn: HookTurn) -> Bool {
+            provider.lowercased() == "claude" && turn.endedAt != nil && turn.backgroundAgents > 0
+                && claudeWorkOngoingIDs.contains(conversationID)
+        }
+
         // For the stale-cap rule below: which chats a recently written subagent file names, and
         // which chats have an open turn (since when).
         var freshSubagentParentKeys = Set<String>()
@@ -1094,7 +1153,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
                nowMs - hookFile.tsMs <= staleMs {
                 freshSubagentParentKeys.insert(providerKey + "|" + parent)
             }
-            if let turn = hookFile.turn, turn.endedAt == nil {
+            if let turn = hookFile.turn, turn.endedAt == nil || hasBackgroundWork(hookFile.provider, hookFile.conversationID, turn) {
                 openTurnStartByKey[providerKey + "|" + hookFile.conversationID] = turn.startedAt
             }
         }
@@ -1149,7 +1208,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 rawState: state,
                 processAlive: claudeTail != nil,
                 namedByFreshSubagent: freshSubagentParentKeys.contains(providerKey + "|" + conversationID),
-                subagentOfOpenTurn: subagentOfOpenTurn
+                subagentOfOpenTurn: subagentOfOpenTurn,
+                backgroundWork: hookFile.turn.map { hasBackgroundWork(provider, conversationID, $0) } ?? false
             )
             guard nowMs - tsMs <= staleMs || awaitingOutlivesCap || activeOutlivesCap else {
                 removeIfUnchanged()
@@ -1242,7 +1302,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
         // One card per chat: subagents fold into their parent before names are resolved, so a
         // stand-in for a parent with no file of its own is named from the parent's transcript too.
-        let (folded, foldedIDs) = AgentTrafficLightMapper.foldSubagentHookSessions(results, parentByKey: subagentParentByKey)
+        let (folded, foldedIDs) = AgentTrafficLightMapper.foldSubagentHookSessions(
+            results, parentByKey: subagentParentByKey, claudeWorkOngoingIDs: claudeWorkOngoingIDs
+        )
         foldedSubagentConversationIDs = foldedIDs
         let enriched = enrichChatNames(fromComposerStore: folded)
         return enrichProjectNamesFromTranscripts(enriched, maxAgeMinutes: staleMinutes)
@@ -1834,14 +1896,17 @@ final class CursorAgentStatusMonitor: ObservableObject {
         deadPIDConversationIDs: Set<String>,
         /// Tail verdict per conversation whose process is alive this rescan — the evidence the
         /// hook parser needs to keep an unanswered prompt yellow (REGRESSIONS entry 12).
-        liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState]
+        liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState],
+        /// Live conversations whose record says Claude's work goes on (busy, waiting, or a fresh
+        /// idle), and when the earliest fresh idle stops counting.
+        claudeWork: (ongoingIDs: Set<String>, graceEndMs: Int64?)
     ) {
         let sessionsDir = AgentSessionLogParser.claudeSessionsDirectory
         guard FileManager.default.fileExists(atPath: sessionsDir.path),
               let files = try? FileManager.default.contentsOfDirectory(
                 at: sessionsDir,
                 includingPropertiesForKeys: [.contentModificationDateKey]
-              ) else { return ([], [], [:]) }
+              ) else { return ([], [], [:], ([], nil)) }
         refreshDesktopSessionIndexIfNeeded()
 
         let staleMs = Int64(staleMinutes) * 60_000
@@ -1858,6 +1923,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // the live one dead. See the subtraction before `return`.
         var liveConversationIDs: Set<String> = []
         var liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState] = [:]
+        var workOngoingIDs: Set<String> = []
+        var idleGraceEndMs: Int64? = nil
 
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file),
@@ -1886,6 +1953,16 @@ final class CursorAgentStatusMonitor: ObservableObject {
             // Skip stale check for live processes — a session may run for many hours.
             if processAlive {
                 liveConversationIDs.insert(sessionId)
+                // Claude's own word on whether its work goes on, background agents included.
+                let status = json["status"] as? String
+                let statusUpdatedAtMs = (json["statusUpdatedAt"] as? NSNumber)?.int64Value
+                if AgentTrafficLightMapper.claudeWorkOngoing(status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
+                    workOngoingIDs.insert(sessionId)
+                }
+                if let graceEnd = AgentTrafficLightMapper.claudeIdleGraceEndMs(
+                    status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
+                    idleGraceEndMs = min(idleGraceEndMs ?? graceEnd, graceEnd)
+                }
             } else {
                 // Recorded before the stale skip: a long-lived session that was SIGKILLed
                 // has an old startedAt, and the reconciler still needs to know it is dead.
@@ -1995,7 +2072,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // id. Without this, resuming a crashed session left it permanently "dead", and the
         // reconciler's `processDead ||` short-circuit bypasses the timestamp guard — flashing
         // red at the moment the user submits a prompt.
-        return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID)
+        return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID,
+                (workOngoingIDs, idleGraceEndMs))
     }
 
     /// The on-disk transcript of a Claude conversation, for features that act on a whole chat
