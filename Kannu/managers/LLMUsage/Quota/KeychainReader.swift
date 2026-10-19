@@ -1,7 +1,10 @@
 import Foundation
+import os
 import Security
 
 enum KeychainReader {
+    private static let log = os.Logger(subsystem: "com.kannu.app", category: "Keychain")
+
     static func genericPassword(service: String, account: String? = nil) -> String? {
         read(service: service, account: account).value
     }
@@ -38,38 +41,61 @@ enum KeychainReader {
         status == errSecInteractionNotAllowed || status == errSecUserCanceled
     }
 
+    /// Saves by deleting the item and adding it fresh, never by updating it in place
+    /// (2026-10-04). An in-place update keeps the item's existing access list, so an item
+    /// pre-planted under Kannu's service and account with a permissive list would have received
+    /// the secret; a fresh add gets a list that trusts only Kannu. Writes only Kannu-owned
+    /// services — another app's item is read-only. `KeychainWritePlan` decides both, and
+    /// `KeychainWritePlanTests` keeps in-place updates out of the app.
+    ///
+    /// Delete-then-add is not atomic, so the prior value is read first (silently: a save runs on
+    /// every keystroke and must never raise a keychain prompt) and re-added if the fresh add fails.
+    /// A failed save therefore keeps the secret the user had, as the old in-place update did; only
+    /// a prior value Kannu cannot read without a prompt is not restored. Logs the OSStatus, never
+    /// the value.
     @discardableResult
     static func setGenericPassword(_ value: String, service: String, account: String) -> Bool {
-        let data = Data(value.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account
-        ]
-        let attributes: [String: Any] = [
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        ]
-        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status == errSecSuccess {
-            return true
-        }
-        if status == errSecItemNotFound {
-            var insert = query
-            insert.merge(attributes) { _, new in new }
-            return SecItemAdd(insert as CFDictionary, nil) == errSecSuccess
+        guard KeychainWritePlan.forSaving(service: service) == .recreate else { return false }
+        let prior = read(service: service, account: account, allowInteraction: false).value
+        guard deleteGenericPassword(service: service, account: account) else { return false }
+        let status = addGenericPassword(value, service: service, account: account)
+        if status == errSecSuccess { return true }
+        log.error("Keychain save of \(account, privacy: .public) failed: OSStatus \(status, privacy: .public)")
+        if let restore = KeychainWritePlan.valueToRestore(afterAdd: status, prior: prior) {
+            let restored = addGenericPassword(restore, service: service, account: account)
+            log.error("Keychain restore of \(account, privacy: .public) after the failed save: OSStatus \(restored, privacy: .public)")
         }
         return false
     }
 
+    /// A fresh item: `SecItemAdd` gives it an access list that trusts only Kannu. Called only by
+    /// `setGenericPassword`, after the delete — never on its own.
+    private static func addGenericPassword(_ value: String, service: String, account: String) -> OSStatus {
+        let item: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecValueData as String: Data(value.utf8),
+            // Sonar S6288 asks for user authentication on every read. Kannu reads these tokens in
+            // the background (usage refreshes, task syncs), where no prompt can be answered, so
+            // the item stays readable while the Mac is unlocked, on this device only, with an
+            // access list that trusts only Kannu: the same protection every Kannu item had before.
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        // Sonar reports S6288 on this call; the reason is on the accessibility attribute above.
+        return SecItemAdd(item as CFDictionary, nil) // NOSONAR
+    }
+
+    /// True when nothing is left at this service and account. Refuses (false) for a service
+    /// Kannu does not own: deleting another app's credentials is a write too.
     @discardableResult
     static func deleteGenericPassword(service: String, account: String) -> Bool {
+        guard KeychainWritePlan.isKannuOwned(service: service) else { return false }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        return KeychainWritePlan.deleteLeftNothing(SecItemDelete(query as CFDictionary))
     }
 }

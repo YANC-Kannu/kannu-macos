@@ -80,6 +80,11 @@ final class BrainNamingRulesTests: XCTestCase {
                 reason: "opens the macOS Battery settings"),
         Allowed(file: "Kannu/components/ScreenAssistant/ChatPanels.swift", literal: .exactly("Open Model Settings"),
                 reason: "opens the Screen Assistant's model panel, not Brain"),
+        Allowed(file: "Kannu/components/Settings/TasksSettings.swift", literal: .exactly("Open Notification Settings"),
+                reason: "opens the macOS Notifications pane, for task reminders"),
+        Allowed(file: "Kannu/managers/Tasks/TaskReminders.swift",
+                literal: .containing("x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
+                reason: "the URL of the macOS Notifications pane, never shown"),
     ]
 
     // MARK: - The rename
@@ -117,7 +122,9 @@ final class BrainNamingRulesTests: XCTestCase {
         let header = Self.code(try Self.read("Kannu/components/Notch/KannuHeader.swift"))
         let start = try XCTUnwrap(header.range(of: "if Defaults[.settingsIconInNotch] {"),
                                   "the header's Brain button moved — this pin is vacuous")
-        let end = try XCTUnwrap(header.range(of: "RecordingIndicator()", range: start.upperBound..<header.endIndex))
+        // Brain is the last button of the open block; the battery block follows it (HeaderOrderRulesTests).
+        let end = try XCTUnwrap(header.range(of: "if vm.notchState == .open && showBatteryIndicator {",
+                                             range: start.upperBound..<header.endIndex))
         let button = String(header[start.lowerBound..<end.lowerBound])
         XCTAssertTrue(button.contains(#"Image(systemName: "brain")"#), "the button no longer shows the brain")
         XCTAssertFalse(button.contains(#""gear""#), "the button still shows the gear")
