@@ -54,7 +54,7 @@ final class TimerNamingRulesTests: XCTestCase {
     func testARenameIsSavedWhenTheViewGoesAwayAndOnlyIntoItsOwnSession() throws {
         for path in Self.startingViews {
             let source = Self.code(try String(contentsOf: Self.repoRoot.appendingPathComponent(path), encoding: .utf8))
-            let disappears = Self.modifiers(".onDisappear", in: source)
+            let disappears = SwiftModifierScan.modifiers(".onDisappear", in: source)
             XCTAssertTrue(disappears.contains { $0.contains("commitRename()") }, "\(path) drops a rename when it closes")
             let renames = Self.calls(of: "renameSession(", in: source)
             XCTAssertFalse(renames.isEmpty)
@@ -66,7 +66,7 @@ final class TimerNamingRulesTests: XCTestCase {
     func testTheNotchSavesARenameWhenItsWindowGoesToTheBackground() throws {
         let path = Self.startingViews[0]
         let source = Self.code(try String(contentsOf: Self.repoRoot.appendingPathComponent(path), encoding: .utf8))
-        let observers = Self.modifiers(".onReceive", in: source)
+        let observers = SwiftModifierScan.modifiers(".onReceive", in: source)
         XCTAssertTrue(
             observers.contains { $0.contains("didResignKeyNotification") && $0.contains("commitRename()") },
             "\(path) keeps an unsaved rename when the user clicks into another app"
@@ -97,39 +97,16 @@ final class TimerNamingRulesTests: XCTestCase {
             }
             .onDisappear { other() }
             """
-        let disappears = Self.modifiers(".onDisappear", in: planted)
+        let disappears = SwiftModifierScan.modifiers(".onDisappear", in: planted)
         XCTAssertEqual(disappears.count, 2)
         XCTAssertTrue(disappears[0].contains("commitRename()"))
         XCTAssertFalse(disappears[1].contains("commitRename()"), "one modifier's closure never reaches the next")
-        let receives = Self.modifiers(".onReceive", in: planted)
+        let receives = SwiftModifierScan.modifiers(".onReceive", in: planted)
         XCTAssertEqual(receives.count, 1)
         XCTAssertTrue(receives[0].contains("publisher(for: X)") && receives[0].hasSuffix("}"))
     }
 
     // MARK: - Scanning
-
-    /// Each use of a modifier: its name, its balanced argument list if any, then its trailing closure if any.
-    private static func modifiers(_ name: String, in text: String) -> [String] {
-        var found: [String] = []
-        var searchStart = text.startIndex
-        while let range = text.range(of: name, range: searchStart..<text.endIndex) {
-            var index = range.upperBound
-            for (open, close) in [(Character("("), Character(")")), (Character("{"), Character("}"))] {
-                var probe = index
-                while probe < text.endIndex, text[probe] == " " { probe = text.index(after: probe) }
-                guard probe < text.endIndex, text[probe] == open else { continue }
-                var depth = 0
-                repeat {
-                    if text[probe] == open { depth += 1 } else if text[probe] == close { depth -= 1 }
-                    probe = text.index(after: probe)
-                } while probe < text.endIndex && depth > 0
-                index = probe
-            }
-            found.append(String(text[range.lowerBound..<index]))
-            searchStart = range.upperBound
-        }
-        return found
-    }
 
     private static func offenders(_ starts: [String]) -> [String] {
         starts.filter { !$0.contains("TimerSessionName.resolved(") }

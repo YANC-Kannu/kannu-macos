@@ -65,9 +65,14 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // sub-page itself ("Show all in Brain", a reminder's click); no search entry uses it.
         // 2026-10-07: the Sources switches only connect now, so the "Local tasks" row, its id and
         // its search entry are gone (one fewer of each).
-        XCTAssertEqual(inventory.entries.count, 228, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 271, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 265, "distinct registered ids")
+        // 2026-10-15: fullscreen hiding became findable. The "Hide DynamicIsland Options" picker
+        // registered an id, and two new entries land on it — "Hide in fullscreen", and
+        // "Accessibility access", whose own row exists only while the grant is missing, so its
+        // entry targets the always-visible picker. The conditional row also registers its id for
+        // the highlight when it is built. Two more entries, registrations and ids.
+        XCTAssertEqual(inventory.entries.count, 230, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
