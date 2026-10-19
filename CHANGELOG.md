@@ -4,6 +4,13 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - How to add a task source, written down
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 8 of the task-sources PR: docs/TASK-SOURCES.md
+- **Changes:**
+  - New docs/TASK-SOURCES.md maps the pieces every source has and lists the eight steps to add one: the case and its facts, its settings keys, its API file, client and provider, credential store, manager wiring, Brain, and tests. It also states the rules every source keeps: when it syncs, where a token may go, that macOS's questions come only from a click, and that older builds cannot read a task list holding a newer source's tasks.
+  - docs/SETTINGS.md: a row that exists only in some states (a source's row, only while connected) has a standing row its search entries land on until then, Add a source.
+
 ### 2026-10-19 - Todoist is a task source
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 7 of the task-sources PR: Todoist, read-only, through its API v1

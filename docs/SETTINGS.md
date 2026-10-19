@@ -116,6 +116,9 @@ section describes it, it does not define it.
     top; going back scrolls to the row that opened it. Search entries for any page below the first
     land on the first page's row that leads there (Brain › Tasks: a source's settings land on the
     source's row).
+  - A row that exists only in some states (a task source's row, only while it is connected) has a
+    standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
+    `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
   - The back row is a lone leading borderless `Button` with a chevron `Label`, alone in its own
     `Section` — the one sanctioned lone left-hanging button, because it is navigation, not an
     action on a row. Nothing else takes this shape.
