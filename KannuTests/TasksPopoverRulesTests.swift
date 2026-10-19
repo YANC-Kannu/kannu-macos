@@ -52,14 +52,23 @@ final class TasksPopoverRulesTests: XCTestCase {
     /// The timer tab's side column (Tasks · Presets) and its swipe monitor are notch task views too.
     static let sideColumnPath = "Kannu/components/Notch/TimerSideColumn.swift"
     static let swipeMonitorPath = "Kannu/components/Notch/HorizontalSwipeMonitor.swift"
-    static let newFiles = [buttonPath, popoverPath, menuPath, sideColumnPath, swipeMonitorPath]
+    /// The Time to log cards, shared by the popover and the timer tab's task column.
+    static let logTimeCardsPath = "Kannu/components/Notch/LogTimeCards.swift"
+    /// The timer tab's task form, in the composer's place.
+    static let taskFormPath = "Kannu/components/Notch/TimerTaskForm.swift"
+    /// The timer tab's rail icons.
+    static let railIconPath = "Kannu/components/Notch/TimerRailIcon.swift"
+    static let newFiles = [buttonPath, popoverPath, menuPath, sideColumnPath, swipeMonitorPath, logTimeCardsPath, taskFormPath, railIconPath]
     static let notchDirectories = ["Kannu/components/Notch", "Kannu/components/AgentStatus"]
-    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "JiraCredentialStore", "GitLabCredentialStore"]
+    static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "CredentialStore", "TaskCredentials", "EKEventStore"]
     static let tickers = ["Timer.publish", "Timer.scheduledTimer", "Timer(timeInterval", ".autoconnect()", "DispatchSourceTimer"]
     /// What the source menu must never bind: data keys (what is fetched), and the removed Local tasks key.
-    static let dataKeys = ["jiraEnabled", "gitlabEnabled", "showLocalTasks"]
-    /// What it binds instead: Show in notch.
-    static let notchKeys = ["tasksPopoverShowLocal", "tasksPopoverShowJira", "tasksPopoverShowGitLab"]
+    static let dataKeys = ["jiraEnabled", "gitlabEnabled", "githubEnabled", "linearEnabled", "todoistEnabled",
+                           "appleRemindersEnabled", "showLocalTasks"]
+    /// What it binds instead: each source's Show in notch, mapped in `TaskSourceSettings`.
+    static let notchKeys = ["tasksPopoverShowLocal", "tasksPopoverShowJira", "tasksPopoverShowGitLab", "tasksPopoverShowGitHub",
+                            "tasksPopoverShowLinear", "tasksPopoverShowTodoist", "tasksPopoverShowAppleReminders"]
+    static let settingsPath = "Kannu/managers/Tasks/TaskSourceSettings.swift"
 
     private static func read(_ path: String) throws -> String {
         code(try String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8))
@@ -113,7 +122,7 @@ final class TasksPopoverRulesTests: XCTestCase {
     }
 
     func testTheSourceMenuFiltersTheNotchOnly() throws {
-        XCTAssertEqual(Self.menuKeyProblems(in: try Self.read(Self.menuPath)), [])
+        XCTAssertEqual(Self.menuKeyProblems(in: try Self.read(Self.menuPath), settings: try Self.read(Self.settingsPath)), [])
     }
 
     func testLiveTimeTicksOnlyThroughATimelineView() throws {
@@ -220,7 +229,8 @@ final class TasksPopoverRulesTests: XCTestCase {
                 TasksHeaderVisibility.isShown(
                     enableTasks: enableTasks,
                     currentViewIsTimer: coordinator.currentView == .timer,
-                    timerTabExists: enableTimerFeature && timerDisplayMode == .tab
+                    timerTabExists: enableTimerFeature && timerDisplayMode == .tab,
+                    timerIsRunning: timerManager.isTimerActive
                 )
             }
             """
@@ -239,16 +249,18 @@ final class TasksPopoverRulesTests: XCTestCase {
                        ["TasksHeaderButton() is not shown only with tasks on"])
         XCTAssertEqual(Self.placementProblems(in: plant("timerTabExists: enableTimerFeature && timerDisplayMode == .tab", "timerTabExists: true")),
                        ["TasksHeaderVisibility.isShown is not given the header's own state"])
+        XCTAssertEqual(Self.placementProblems(in: plant("timerIsRunning: timerManager.isTimerActive", "timerIsRunning: false")),
+                       ["TasksHeaderVisibility.isShown is not given the header's own state"])
         XCTAssertEqual(Self.placementProblems(in: plant(".transition(.opacity)", ".transition(.scale)")),
                        ["the Tasks button does not simply fade"])
         let afterClipboard = """
             if vm.notchState == .open && !enableMinimalisticUI {
                 if Defaults[.enableClipboardManager] { Button { Image(systemName: "doc.on.clipboard") } }
-                if TasksHeaderVisibility.isShown(enableTasks: enableTasks, currentViewIsTimer: coordinator.currentView == .timer, timerTabExists: enableTimerFeature && timerDisplayMode == .tab) {
+                if TasksHeaderVisibility.isShown(enableTasks: enableTasks, currentViewIsTimer: coordinator.currentView == .timer, timerTabExists: enableTimerFeature && timerDisplayMode == .tab, timerIsRunning: timerManager.isTimerActive) {
                     TasksHeaderButton().transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: TasksHeaderVisibility.isShown(enableTasks: enableTasks, currentViewIsTimer: coordinator.currentView == .timer, timerTabExists: enableTimerFeature && timerDisplayMode == .tab))
+            .animation(.easeInOut(duration: 0.15), value: TasksHeaderVisibility.isShown(enableTasks: enableTasks, currentViewIsTimer: coordinator.currentView == .timer, timerTabExists: enableTimerFeature && timerDisplayMode == .tab, timerIsRunning: timerManager.isTimerActive))
             """
         XCTAssertEqual(Self.placementProblems(in: afterClipboard), ["TasksHeaderButton() is not before the clipboard button"])
         XCTAssertEqual(Self.placementProblems(in: plant(".animation(.easeInOut(duration: 0.15), value: showsTasksButton)\n", "")),
@@ -301,8 +313,7 @@ final class TasksPopoverRulesTests: XCTestCase {
                     SettingsWindowController.shared.showWindow(navigatingToAgentStatusHighlight: highlightID)
                 }
             }
-            Button("Connect Jira…") { openBrain(.sources) }
-            Button("Connect GitLab…") { openBrain(.sources) }
+            Button("Add a source…") { openBrain(.sources) }
             Button("Manage tasks…") { openBrain(.sources) }
             """)
         let popover = Self.code("""
@@ -330,39 +341,36 @@ final class TasksPopoverRulesTests: XCTestCase {
                        ["TasksBrainDestination.open() does not use the deep link"])
         let settingsGlyph = popover.replacingOccurrences(of: "openBrain(.sources)", with: "SettingsWindowController.shared.showWindow()")
         XCTAssertEqual(Self.deepLinkProblems(menu: menu, popover: settingsGlyph), ["the Brain glyph does not open Sources"])
-        let connect = menu.replacingOccurrences(of: "Button(\"Connect GitLab…\") { openBrain(.sources) }",
-                                                with: "Button(\"Connect GitLab…\") { showsConnectSheet = true }")
-        XCTAssertEqual(Self.deepLinkProblems(menu: connect, popover: popover), ["Connect GitLab… does not open Sources"])
+        let connect = menu.replacingOccurrences(of: "Button(\"Add a source…\") { openBrain(.sources) }",
+                                                with: "Button(\"Add a source…\") { showsConnectSheet = true }")
+        XCTAssertEqual(Self.deepLinkProblems(menu: connect, popover: popover), ["Add a source… does not open Sources"])
         let stayOpen = popover.replacingOccurrences(of: "close()\n", with: "")
         XCTAssertEqual(Self.deepLinkProblems(menu: menu, popover: stayOpen), ["openBrain does not close the popover first"])
     }
 
     func testTheMenuKeyScannerCatchesPlantedOffenders() {
-        let good = Self.code("""
-            @Default(.tasksPopoverShowLocal) private var showLocal
-            @Default(.tasksPopoverShowJira) private var showJira
-            @Default(.tasksPopoverShowGitLab) private var showGitLab
-            Toggle("Jira", isOn: $showJira)
+        let menu = Self.code("""
+            Toggle(isOn: preferences.shownBinding(for: source)) { Text(verbatim: source.name) }
             // Never Sync Jira (jiraEnabled): a comment is prose.
             """)
-        XCTAssertEqual(Self.menuKeyProblems(in: good), [])
-        let syncJira = good.replacingOccurrences(of: "@Default(.tasksPopoverShowJira) private var showJira",
-                                                 with: "@Default(.jiraEnabled) private var showJira")
-        XCTAssertNotEqual(syncJira, good, "the plant did not take")
-        XCTAssertEqual(Self.menuKeyProblems(in: syncJira),
-                       ["the menu binds jiraEnabled", "the menu does not bind tasksPopoverShowJira"])
-        let alsoBound = good + "\nToggle(\"GitLab\", isOn: Defaults.binding(.gitlabEnabled))\n@Default(.showLocalTasks) var old"
-        XCTAssertEqual(Self.menuKeyProblems(in: alsoBound),
-                       ["the menu binds gitlabEnabled", "the menu binds showLocalTasks"])
+        let settings = Self.notchKeys.map { "case .x: return .\($0)" }.joined(separator: "\n")
+            + "\nBinding(get: { Defaults[source.showInNotchKey] }, set: { Defaults[source.showInNotchKey] = $0 })"
+        XCTAssertEqual(Self.menuKeyProblems(in: menu, settings: settings), [])
+        let syncJira = menu + "\nToggle(\"Jira\", isOn: Defaults.binding(.jiraEnabled))"
+        XCTAssertEqual(Self.menuKeyProblems(in: syncJira, settings: settings), ["the menu binds jiraEnabled"])
+        let unmapped = settings.replacingOccurrences(of: "return .tasksPopoverShowTodoist", with: "return .todoistEnabled")
+        XCTAssertEqual(Self.menuKeyProblems(in: menu, settings: unmapped), ["no source maps to tasksPopoverShowTodoist"])
+        let elsewhere = menu.replacingOccurrences(of: "preferences.shownBinding(for: source)", with: "$showJira")
+        XCTAssertEqual(Self.menuKeyProblems(in: elsewhere, settings: settings), ["the menu's toggles are not Show in notch"])
     }
 
     func testTheKeychainAndTickerScannersCatchPlantedOffenders() {
         let planted = [
             "A.swift": "let value = SecureSecretsStore.read(.jiraCredential)",
-            "B.swift": "Task { _ = await JiraCredentialStore.load(allowInteraction: false) }",
+            "B.swift": "Task { _ = await TaskCredentials.jira.load(allowInteraction: false) }",
             "C.swift": "Text(\"fine\")",
         ]
-        XCTAssertEqual(Self.keychainUses(in: planted), ["A.swift: SecureSecretsStore", "B.swift: JiraCredentialStore"])
+        XCTAssertEqual(Self.keychainUses(in: planted), ["A.swift: SecureSecretsStore", "B.swift: TaskCredentials"])
         let tickers = [
             "A.swift": ".onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in }",
             "B.swift": "ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in tick() }",
@@ -448,7 +456,8 @@ final class TasksPopoverRulesTests: XCTestCase {
                 problems.append("TasksHeaderButton() is not shown only with tasks on")
             }
             if !(gate.contains("currentViewIsTimer: coordinator.currentView == .timer")
-                 && gate.contains("timerTabExists: enableTimerFeature && timerDisplayMode == .tab")) {
+                 && gate.contains("timerTabExists: enableTimerFeature && timerDisplayMode == .tab")
+                 && gate.contains("timerIsRunning: timerManager.isTimerActive")) {
                 problems.append("TasksHeaderVisibility.isShown is not given the header's own state")
             }
             // A tab click changes `currentView` with no transaction: without this the fade never runs.
@@ -500,7 +509,7 @@ final class TasksPopoverRulesTests: XCTestCase {
     /// after the popover closes.
     static func deepLinkProblems(menu: String, popover: String) -> [String] {
         var problems: [String] = []
-        for title in ["Manage tasks…", "Connect Jira…", "Connect GitLab…"] {
+        for title in ["Manage tasks…", "Add a source…"] {
             if !(block(after: "Button(\"\(title)\")", in: menu)?.contains("openBrain(.sources)") ?? false) {
                 problems.append("\(title) does not open Sources")
             }
@@ -529,9 +538,16 @@ final class TasksPopoverRulesTests: XCTestCase {
     }
 
     /// The source menu names no data key and binds each Show in notch key.
-    static func menuKeyProblems(in menu: String) -> [String] {
-        dataKeys.filter { menu.contains($0) }.map { "the menu binds \($0)" }
-            + notchKeys.filter { !menu.contains("@Default(.\($0))") }.map { "the menu does not bind \($0)" }
+    /// The menu's toggles go through `TaskSourcePreferences.shownBinding`, which writes each source's
+    /// `showInNotchKey`; every source maps to its own Show in notch key; no data key is bound.
+    static func menuKeyProblems(in menu: String, settings: String) -> [String] {
+        var problems = dataKeys.filter { menu.contains($0) }.map { "the menu binds \($0)" }
+        problems += notchKeys.filter { !settings.contains("return .\($0)") }.map { "no source maps to \($0)" }
+        if !menu.contains("isOn: preferences.shownBinding(for: source)")
+            || !settings.contains("Binding(get: { Defaults[source.showInNotchKey] }, set: { Defaults[source.showInNotchKey] = $0 })") {
+            problems.append("the menu's toggles are not Show in notch")
+        }
+        return problems
     }
 
     static func keychainUses(in sources: [String: String]) -> [String] {

@@ -46,6 +46,8 @@ struct GitLabCredential: Codable, Equatable, CustomStringConvertible, CustomDebu
     }
 }
 
+extension GitLabCredential: StoredCredential {}
+
 /// `GET /api/v4/user`: who the token belongs to. Only what Kannu shows and pages by.
 struct GitLabUser: Decodable, Equatable {
     let id: Int
@@ -74,6 +76,51 @@ struct GitLabItem: Decodable, Equatable {
     let timeStats: TimeStats?
     /// The label names. Read leniently: another shape costs the labels, never the item.
     let labels: Labels?
+    /// Issues only; absent on merge requests and null on servers without weights.
+    let weight: Int?
+    /// Issues only; null when none is set.
+    let milestone: Milestone?
+    /// `YYYY-MM-DD`; issues only.
+    let dueDate: String?
+    /// The people assigned, names only. Read leniently, like the labels.
+    let assignees: Assignees?
+    /// Issues only, and only on Premium servers; null or absent elsewhere.
+    let epic: Epic?
+    // The rest is read leniently, each on its own: a field in a shape this version does not
+    // expect costs that field, never the item (and so never the page).
+    let updatedAt: LenientField<String>?
+    let userNotesCount: LenientField<Int>?
+    let taskCompletionStatus: LenientField<TaskCompletion>?
+    /// Issues only.
+    let mergeRequestsCount: LenientField<Int>?
+    /// Issues only, Premium.
+    let iteration: LenientField<Iteration>?
+    /// Issues only, Premium: "on_track", "needs_attention", "at_risk".
+    let healthStatus: LenientField<String>?
+    /// Merge requests only.
+    let draft: LenientField<Bool>?
+    let hasConflicts: LenientField<Bool>?
+    let author: LenientField<Person>?
+
+    struct TaskCompletion: Decodable, Equatable {
+        let count: Int?
+        let completedCount: Int?
+
+        private enum CodingKeys: String, CodingKey {
+            case count
+            case completedCount = "completed_count"
+        }
+    }
+
+    struct Iteration: Decodable, Equatable {
+        /// Null for an iteration a cadence made on its own.
+        let title: String?
+        let sequence: Int?
+    }
+
+    struct Person: Decodable, Equatable {
+        let name: String?
+    }
 
     struct Labels: Decodable, Equatable {
         let names: [String]
@@ -81,6 +128,24 @@ struct GitLabItem: Decodable, Equatable {
         init(from decoder: Decoder) throws {
             names = (try? decoder.singleValueContainer().decode([String].self)) ?? []
         }
+    }
+
+    struct Assignees: Decodable, Equatable {
+        let names: [String]
+
+        init(from decoder: Decoder) throws {
+            struct Person: Decodable { let name: String? }
+            let people = (try? decoder.singleValueContainer().decode([Person].self)) ?? []
+            names = people.compactMap(\.name)
+        }
+    }
+
+    struct Milestone: Decodable, Equatable {
+        let title: String?
+    }
+
+    struct Epic: Decodable, Equatable {
+        let title: String?
     }
 
     struct References: Decodable, Equatable {
@@ -99,10 +164,51 @@ struct GitLabItem: Decodable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, iid, title, state, references, labels
+        case id, iid, title, state, references, labels, weight, milestone, assignees, epic
+        case iteration, draft, author
         case projectID = "project_id"
         case webURL = "web_url"
         case timeStats = "time_stats"
+        case dueDate = "due_date"
+        case updatedAt = "updated_at"
+        case userNotesCount = "user_notes_count"
+        case taskCompletionStatus = "task_completion_status"
+        case mergeRequestsCount = "merge_requests_count"
+        case healthStatus = "health_status"
+        case hasConflicts = "has_conflicts"
+    }
+}
+
+/// A merge request that closes an issue when merged (`closed_by`): a row of the task card's linked
+/// merge requests page. What GitLab's `merge_requests_count` counts, so the card's "2 linked MRs"
+/// opens a list of two.
+struct LinkedMergeRequest: Equatable, Identifiable {
+    enum State: String, Equatable {
+        case opened, merged, closed, locked
+    }
+
+    /// The global id.
+    let id: Int
+    let iid: Int
+    /// Cleaned; the reference when GitLab sent none.
+    let title: String
+    /// `!12` in the issue's own project, `group/app!12` from another.
+    let reference: String
+    /// Nil for a state this version does not know.
+    let state: State?
+    let isDraft: Bool
+    let author: String?
+    /// Its page, only when it is on the connected server.
+    let webURL: URL?
+}
+
+/// One field of a server answer read on its own: a value in a shape this version does not expect
+/// becomes nil instead of failing the object around it.
+struct LenientField<Value: Decodable & Equatable>: Decodable, Equatable {
+    let value: Value?
+
+    init(from decoder: Decoder) throws {
+        value = try? decoder.singleValueContainer().decode(Value.self)
     }
 }
 
@@ -242,6 +348,35 @@ enum GitLabAPI {
         ).map { request(url: $0, method: "POST", credential: credential) }
     }
 
+    /// `GET /projects/:id/issues/:iid/closed_by`: the merge requests that close the issue when merged
+    /// (`LinkedMergeRequest`), one page of `pageSize`. Nil for a project or number that is not one,
+    /// or a server Kannu would not send to. Read-only.
+    static func closingMergeRequestsRequest(_ credential: GitLabCredential, projectID: Int, iid: Int) -> URLRequest? {
+        guard projectID > 0, iid > 0 else { return nil }
+        return GitLabHost.apiURL(
+            base: credential.baseURL,
+            path: "/projects/\(projectID)/issues/\(iid)/closed_by",
+            query: [URLQueryItem(name: "per_page", value: String(pageSize)), URLQueryItem(name: "page", value: "1")]
+        ).map { request(url: $0, method: "GET", credential: credential) }
+    }
+
+    /// A merge request from `closed_by` as the linked page shows it: `!12` when it is in the issue's
+    /// project, the full reference when not; its page kept only when it is on `base`.
+    static func linkedMergeRequest(from item: GitLabItem, base: String, issueProjectID: Int) -> LinkedMergeRequest {
+        let short = "!" + String(item.iid)
+        let reference = item.projectID == issueProjectID ? short : (item.references?.full.flatMap(TaskItem.cleanedTitle) ?? short)
+        return LinkedMergeRequest(
+            id: item.id,
+            iid: item.iid,
+            title: TaskItem.cleanedTitle(item.title ?? "") ?? reference,
+            reference: reference,
+            state: item.state.flatMap(LinkedMergeRequest.State.init(rawValue:)),
+            isDraft: item.draft?.value ?? false,
+            author: item.author?.value?.name.flatMap(TaskItem.cleanedTitle),
+            webURL: item.webURL.flatMap { GitLabHost.isWebURL($0, onServer: base) ? URL(string: $0) : nil }
+        )
+    }
+
     /// GitLab's own reason for refusing a request: its `message` (a string, or a field-to-errors
     /// object) or its `error`, as one cleaned line (`WorklogDrafts.displayReason`).
     static func refusalReason(_ data: Data?) -> String? {
@@ -323,6 +458,7 @@ enum GitLabAPI {
         }
         let webURL = item.webURL.flatMap { GitLabHost.isWebURL($0, onServer: base) ? $0 : nil }
         let labels = TaskFacets.keptLabels(item.labels?.names ?? [])
+        let checklist = checklistCounts(item.taskCompletionStatus?.value)
         return RemoteIssue(
             remoteID: remoteID(kind: kind, id: item.id),
             key: key,
@@ -333,8 +469,36 @@ enum GitLabAPI {
             spentSeconds: item.timeStats?.totalTimeSpent.flatMap { $0 > 0 ? $0 : nil },
             gitlab: RemoteIssue.GitLabRef(kind: kind, projectID: item.projectID, iid: item.iid, webURL: webURL),
             statusCategory: TaskFacets.gitlabCategory(kind: kind, labels: labels),
-            labels: labels
+            labels: labels,
+            // Weight, milestone, due date and epic belong to issues; a merge request has none.
+            weight: kind == .issue ? item.weight : nil,
+            milestone: kind == .issue ? item.milestone?.title.flatMap(TaskItem.cleanedTitle) : nil,
+            dueDate: kind == .issue ? RemoteTaskInfo.dayDate(item.dueDate) : nil,
+            assignee: item.assignees?.names.first.flatMap(TaskItem.cleanedTitle),
+            parentTitle: kind == .issue ? item.epic?.title.flatMap(TaskItem.cleanedTitle) : nil,
+            updatedAt: RemoteTaskInfo.serverTimestamp(item.updatedAt?.value),
+            commentCount: item.userNotesCount?.value,
+            checklistDone: checklist?.done,
+            checklistTotal: checklist?.total,
+            linkedMergeRequests: kind == .issue ? item.mergeRequestsCount?.value.flatMap { $0 > 0 ? $0 : nil } : nil,
+            iteration: kind == .issue ? iterationName(item.iteration?.value) : nil,
+            healthStatus: kind == .issue ? item.healthStatus?.value.flatMap(TaskItem.cleanedTitle) : nil,
+            isDraft: kind == .mergeRequest ? item.draft?.value : nil,
+            hasConflicts: kind == .mergeRequest ? item.hasConflicts?.value : nil,
+            author: kind == .mergeRequest ? item.author?.value?.name.flatMap(TaskItem.cleanedTitle) : nil
         )
+    }
+
+    /// The item's task list as done-of-total; nil without one (a total of 0).
+    private static func checklistCounts(_ status: GitLabItem.TaskCompletion?) -> (done: Int, total: Int)? {
+        guard let total = status?.count, total > 0 else { return nil }
+        return (min(max(status?.completedCount ?? 0, 0), total), total)
+    }
+
+    /// An iteration's title, or "Iteration 5" for one a cadence made without a title.
+    private static func iterationName(_ iteration: GitLabItem.Iteration?) -> String? {
+        if let title = iteration?.title.flatMap(TaskItem.cleanedTitle) { return title }
+        return iteration?.sequence.map { String(localized: "Iteration \($0)") }
     }
 }
 
@@ -441,6 +605,25 @@ struct GitLabReader {
             issueCount: issueCount,
             mergeRequestCount: items.count - issueCount
         )
+    }
+
+    /// The merge requests that close an issue (`closed_by`), one page. `complete` is false when
+    /// GitLab has more than it sent; the page then offers the issue itself on GitLab.
+    func closingMergeRequests(_ credential: GitLabCredential, projectID: Int, iid: Int) async -> Result<(items: [LinkedMergeRequest], complete: Bool), Failure> {
+        guard let request = GitLabAPI.closingMergeRequestsRequest(credential, projectID: projectID, iid: iid) else {
+            return .failure(.badServer)
+        }
+        let exchange = await IntegrationHTTP.send(request, session: session)
+        guard case .ok = exchange.outcome else { return .failure(.http(exchange.outcome)) }
+        guard let data = exchange.data, let read = GitLabAPI.decodeItems(data) else { return .failure(.decode) }
+        let header = exchange.response?.value(forHTTPHeaderField: GitLabAPI.nextPageHeader)
+        let complete: Bool
+        switch GitLabAPI.nextStep(nextPageHeader: header, page: 1, itemCount: read.count, pagesFetched: GitLabAPI.maxPages) {
+        case .done(let done): complete = done
+        case .next, .capped: complete = false
+        }
+        let items = read.map { GitLabAPI.linkedMergeRequest(from: $0, base: credential.baseURL, issueProjectID: projectID) }
+        return .success((items, complete))
     }
 
     private func fetchList(_ credential: GitLabCredential, _ list: GitLabAPI.List) async -> Result<(items: [GitLabItem], complete: Bool), Failure> {

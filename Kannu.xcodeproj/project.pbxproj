@@ -98,10 +98,25 @@
 		AA10000000000000000001A1 /* WorklogPoster.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000001A0 /* WorklogPoster.swift */; };
 		AA10000000000000000002A1 /* TaskFacets.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000002A0 /* TaskFacets.swift */; };
 		AA10000000000000000002A3 /* TaskReminderPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000002A2 /* TaskReminderPlan.swift */; };
+		AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A4 /* TaskDetailSummary.swift */; };
+		AA10000000000000000005A7 /* TaskArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A6 /* TaskArchive.swift */; };
+		AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A8 /* HoverRevealMotion.swift */; };
+		AA10000000000000000005BF /* TodoistAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BE /* TodoistAPI.swift */; };
+		AA10000000000000000005BD /* LinearAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BC /* LinearAPI.swift */; };
+		AA10000000000000000005BB /* GitHubAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BA /* GitHubAPI.swift */; };
+		AA10000000000000000005B9 /* AppleRemindersMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B8 /* AppleRemindersMapping.swift */; };
+		AA10000000000000000005B7 /* SourceSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B6 /* SourceSync.swift */; };
+		AA10000000000000000005B5 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B4 /* CredentialStore.swift */; };
+		AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B2 /* TaskSourceFacts.swift */; };
+		AA10000000000000000005B1 /* HoverRevealText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005B0 /* HoverRevealText.swift */; };
+		AA10000000000000000005AF /* TimerDurationDigits.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AE /* TimerDurationDigits.swift */; };
+		AA10000000000000000005AD /* TaskFormDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AC /* TaskFormDraft.swift */; };
+		AA10000000000000000005AB /* TaskSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AA /* TaskSearch.swift */; };
 		AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A0 /* TaskTagEditing.swift */; };
 		AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000003A0 /* TimerComposerMetrics.swift */; };
 		AA10000000000000000004A3 /* TimerSidePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A2 /* TimerSidePage.swift */; };
 		AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A4 /* TasksHeaderVisibility.swift */; };
+		AA10000000000000000004A7 /* TaskColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A6 /* TaskColor.swift */; };
 		AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BA /* ClipboardCapturePolicy.swift */; };
 		AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */; };
 		AA10000000000000000000B9 /* HostedContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B8 /* HostedContent.swift */; };
@@ -223,10 +238,25 @@
 		AA10000000000000000001A0 /* WorklogPoster.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WorklogPoster.swift; path = Kannu/managers/Tasks/WorklogPoster.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000002A0 /* TaskFacets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskFacets.swift; path = Kannu/managers/Tasks/TaskFacets.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000002A2 /* TaskReminderPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskReminderPlan.swift; path = Kannu/managers/Tasks/TaskReminderPlan.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005A4 /* TaskDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskDetailSummary.swift; path = Kannu/managers/Tasks/TaskDetailSummary.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005A6 /* TaskArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskArchive.swift; path = Kannu/managers/Tasks/TaskArchive.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005A8 /* HoverRevealMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealMotion.swift; path = Kannu/components/Notch/HoverRevealMotion.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005BE /* TodoistAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TodoistAPI.swift; path = Kannu/managers/Tasks/TodoistAPI.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005BC /* LinearAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LinearAPI.swift; path = Kannu/managers/Tasks/LinearAPI.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005BA /* GitHubAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GitHubAPI.swift; path = Kannu/managers/Tasks/GitHubAPI.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B8 /* AppleRemindersMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleRemindersMapping.swift; path = Kannu/managers/Tasks/AppleRemindersMapping.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B6 /* SourceSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SourceSync.swift; path = Kannu/managers/Tasks/SourceSync.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B4 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CredentialStore.swift; path = Kannu/managers/Tasks/CredentialStore.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B2 /* TaskSourceFacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskSourceFacts.swift; path = Kannu/managers/Tasks/TaskSourceFacts.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005B0 /* HoverRevealText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealText.swift; path = Kannu/components/Notch/HoverRevealText.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005AE /* TimerDurationDigits.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerDurationDigits.swift; path = Kannu/components/Notch/TimerDurationDigits.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005AC /* TaskFormDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskFormDraft.swift; path = Kannu/managers/Tasks/TaskFormDraft.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000005AA /* TaskSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskSearch.swift; path = Kannu/managers/Tasks/TaskSearch.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A0 /* TaskTagEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskTagEditing.swift; path = Kannu/managers/Tasks/TaskTagEditing.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000003A0 /* TimerComposerMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerComposerMetrics.swift; path = Kannu/sizing/TimerComposerMetrics.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A2 /* TimerSidePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerSidePage.swift; path = Kannu/managers/TimerSidePage.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A4 /* TasksHeaderVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TasksHeaderVisibility.swift; path = Kannu/managers/Tasks/TasksHeaderVisibility.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000004A6 /* TaskColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskColor.swift; path = Kannu/managers/Tasks/TaskColor.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000BA /* ClipboardCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardCapturePolicy.swift; path = Kannu/managers/ClipboardCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardPanelPlacement.swift; path = Kannu/managers/Display/ClipboardPanelPlacement.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B8 /* HostedContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HostedContent.swift; path = Kannu/helpers/HostedContent.swift; sourceTree = SOURCE_ROOT; };
@@ -698,10 +728,25 @@
 				AA10000000000000000001A1 /* WorklogPoster.swift in Sources */,
 				AA10000000000000000002A1 /* TaskFacets.swift in Sources */,
 				AA10000000000000000002A3 /* TaskReminderPlan.swift in Sources */,
+				AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */,
+				AA10000000000000000005A7 /* TaskArchive.swift in Sources */,
+				AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */,
+				AA10000000000000000005BF /* TodoistAPI.swift in Sources */,
+				AA10000000000000000005BD /* LinearAPI.swift in Sources */,
+				AA10000000000000000005BB /* GitHubAPI.swift in Sources */,
+				AA10000000000000000005B9 /* AppleRemindersMapping.swift in Sources */,
+				AA10000000000000000005B7 /* SourceSync.swift in Sources */,
+				AA10000000000000000005B5 /* CredentialStore.swift in Sources */,
+				AA10000000000000000005B3 /* TaskSourceFacts.swift in Sources */,
+				AA10000000000000000005B1 /* HoverRevealText.swift in Sources */,
+				AA10000000000000000005AF /* TimerDurationDigits.swift in Sources */,
+				AA10000000000000000005AD /* TaskFormDraft.swift in Sources */,
+				AA10000000000000000005AB /* TaskSearch.swift in Sources */,
 				AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */,
 				AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */,
 				AA10000000000000000004A3 /* TimerSidePage.swift in Sources */,
 				AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */,
+				AA10000000000000000004A7 /* TaskColor.swift in Sources */,
 				AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */,
 				AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */,
 				AA10000000000000000000B9 /* HostedContent.swift in Sources */,
@@ -953,6 +998,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1021,6 +1067,7 @@
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

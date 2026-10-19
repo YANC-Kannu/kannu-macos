@@ -16,6 +16,15 @@ enum SecureSecretKey: String, CaseIterable {
     /// Brain › Tasks › Sources › GitLab: `GitLabCredential` as JSON (`{baseURL, token}`), so the
     /// personal access token and the one server it may be sent to are stored, and read, together.
     case gitlabCredential = "gitlab-credential"
+    /// Brain › Tasks › GitHub: `GitHubCredential` as JSON (`{baseURL, token}`), github.com or a GitHub
+    /// Enterprise Server, so the token and the one server it may be sent to are stored together.
+    case githubCredential = "github-credential"
+    /// Brain › Tasks › Linear: `LinearCredential` as JSON (`{apiKey, workspace}`), so the API key and
+    /// the workspace it belongs to are stored together.
+    case linearCredential = "linear-credential"
+    /// Brain › Tasks › Todoist: `TodoistCredential` as JSON (`{token, userID}`), so the API token and
+    /// the account it belongs to are stored together.
+    case todoistCredential = "todoist-credential"
 }
 
 enum SecureSecretsStore {

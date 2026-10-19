@@ -46,58 +46,119 @@ struct GitLabClient {
         return result
     }
 
+    func closingMergeRequests(_ credential: GitLabCredential, projectID: Int, iid: Int) async -> Result<(items: [LinkedMergeRequest], complete: Bool), GitLabReader.Failure> {
+        let result = await reader.closingMergeRequests(credential, projectID: projectID, iid: iid)
+        switch result {
+        case .success(let read):
+            Self.log.info("GitLab linked MRs: \(read.items.count, privacy: .public), complete \(read.complete, privacy: .public)")
+        case .failure(let failure):
+            Self.log.notice("GitLab linked MRs failed: \(String(describing: failure), privacy: .public)")
+        }
+        return result
+    }
+
     func fetchItems(_ credential: GitLabCredential, username: String, includeMergeRequests: Bool) async -> GitLabReader.Fetch {
         let fetch = await reader.fetchItems(credential, username: username, includeMergeRequests: includeMergeRequests)
         if let failure = fetch.failure {
             Self.log.notice("GitLab fetch failed: \(String(describing: failure), privacy: .public)")
+        } else {
+            Self.log.info("GitLab fetch: \(fetch.issueCount, privacy: .public) issues, \(fetch.mergeRequestCount, privacy: .public) merge requests")
         }
         return fetch
     }
 }
 
-/// The GitLab credential in the Keychain. Every call runs on one serial queue, never on the
-/// caller's thread: a Keychain read can show the SecurityAgent dialog (an interactive read, or an
-/// item whose access list no longer matches this build) and blocks until it is answered — on the
-/// main thread that freezes Kannu (docs/REGRESSIONS.md entry 11). Serial, so a save and a read
-/// cannot cross. The same shape as `JiraCredentialStore`, for its own item.
-enum GitLabCredentialStore {
-    enum LoadResult: Equatable {
-        case found(GitLabCredential)
-        case missing
-        /// The item is there, but macOS wants the user to approve the read.
-        case needsApproval
-        /// The item is there but could not be read or did not decode.
-        case broken
+/// GitLab as a task source (`SourceSync`): the credential's server, checked again, and one fetch
+/// of the user's open issues and, with Include merge requests on, the merge requests assigned to
+/// them or waiting for their review. Its failures read as the GitLab page says them.
+struct GitLabTaskSource: TaskSourceProvider {
+    struct Options {
+        /// The token owner's user name, for the "waiting for my review" list.
+        var username: String
+        var includeMergeRequests: Bool
     }
 
-    private static let queue = DispatchQueue(label: "com.kannu.app.tasks.gitlab-keychain", qos: .userInitiated)
+    func scope(of credential: GitLabCredential) -> String? {
+        GitLabHost.isValidBase(credential.baseURL) ? credential.baseURL : nil
+    }
 
-    private static func onQueue<T>(_ work: @escaping () -> T) async -> T {
-        await withCheckedContinuation { continuation in
-            queue.async { continuation.resume(returning: work()) }
+    func fetch(_ credential: GitLabCredential, options: Options) async -> SourceFetch {
+        let fetched = await GitLabClient().fetchItems(credential, username: options.username,
+                                                      includeMergeRequests: options.includeMergeRequests)
+        guard case .fetched(let fetch) = fetched.outcome else {
+            return .failed(Self.syncState(for: fetched.failure, now: Date()))
+        }
+        return .fetched(fetch)
+    }
+
+    static func syncState(for failure: GitLabReader.Failure?, now: Date) -> SourceSyncState {
+        switch failure {
+        case .http(.offline):
+            return .offline
+        case .http(.rateLimited(let seconds)):
+            return .rateLimited(until: now.addingTimeInterval(seconds))
+        case .http(.auth(let status)):
+            return .authFailed(status: status)
+        case .http(.rejected(403)):
+            return .failed(String(localized: "GitLab refused the request (403). The token may lack the read_api scope, or have lost access."))
+        case .http(.rejected(let status)):
+            return .failed(String(localized: "GitLab refused the request (\(status))."))
+        case .http(.redirected(let status)):
+            return .failed(String(localized: "The server answered with a redirect (\(status)), which Kannu never follows."))
+        case .http(.failedBeforeSend):
+            return .failed(String(localized: "Kannu could not reach the GitLab server over a trusted HTTPS connection. Check your connection."))
+        case .http(.ambiguous(let status?)):
+            return .failed(String(localized: "GitLab did not answer properly (\(status)). Try again later."))
+        case .http(.ambiguous(nil)), .http(.ok):
+            return .failed(String(localized: "GitLab did not answer in time. Try again later."))
+        case .decode:
+            return .failed(String(localized: "GitLab's answer could not be read."))
+        case .badServer, .badUsername, nil:
+            return .needsReconnect
         }
     }
 
-    /// `allowInteraction: false` (a background sync) never shows the dialog; a read that would need
-    /// it comes back `.needsApproval`, and the user's own click retries with `true`.
-    static func load(allowInteraction: Bool) async -> LoadResult {
-        await onQueue {
-            let read = SecureSecretsStore.read(.gitlabCredential, allowInteraction: allowInteraction)
-            if read.status == errSecItemNotFound { return .missing }
-            if KeychainReader.needsUserApproval(read.status) { return .needsApproval }
-            guard read.status == errSecSuccess, let value = read.value,
-                  let credential = GitLabCredential.decoded(value) else { return .broken }
-            return .found(credential)
+    static func message(for error: GitLabHostError) -> String {
+        switch error {
+        case .empty:
+            return String(localized: "Type your GitLab server, such as https://gitlab.com or https://gitlab.example.com.")
+        case .notHTTPS:
+            return String(localized: "Kannu connects to GitLab over HTTPS only.")
+        case .userInfo:
+            return String(localized: "The server has a name and @ before the host. Type just the server, such as https://gitlab.example.com.")
+        case .queryOrFragment, .badPath:
+            return String(localized: "Type the server's address, not a page on it, such as https://gitlab.example.com or https://example.com/gitlab.")
+        case .port:
+            return String(localized: "That port is not a valid one.")
+        case .malformed:
+            return String(localized: "That is not a server address. It looks like https://gitlab.example.com.")
         }
     }
 
-    static func save(_ credential: GitLabCredential) async -> Bool {
-        guard let encoded = credential.encoded() else { return false }
-        return await onQueue { SecureSecretsStore.set(encoded, for: .gitlabCredential) }
-    }
-
-    /// False when the item is still there. Never discard it: the user was told the token is gone.
-    static func remove() async -> Bool {
-        await onQueue { SecureSecretsStore.removeValue(for: .gitlabCredential) }
+    static func connectMessage(for failure: GitLabReader.Failure, server: String) -> String {
+        switch failure {
+        case .badServer:
+            return message(for: GitLabHostError.malformed)
+        case .badUsername, .decode, .http(.ok):
+            return String(localized: "\(server) answered, but not the way GitLab does. Check the server.")
+        case .http(.auth(let status)):
+            return String(localized: "GitLab did not accept that token (\(status)). It may have expired or been revoked: create a new one.")
+        case .http(.rejected(403)):
+            return String(localized: "GitLab refused the token (403). Create one with the read_api scope, or api to log time later.")
+        case .http(.rejected(404)):
+            return String(localized: "No GitLab answered at \(server) (404). Check the server, and its path if it has one.")
+        case .http(.rejected(let status)):
+            return String(localized: "GitLab refused the request (\(status)).")
+        case .http(.redirected(let status)):
+            return String(localized: "\(server) answered with a redirect (\(status)), which Kannu never follows. Check the server, and its path if it has one.")
+        case .http(.rateLimited):
+            return String(localized: "GitLab is limiting requests right now. Try again in a minute.")
+        case .http(.offline):
+            return String(localized: "This Mac is offline.")
+        case .http(.failedBeforeSend):
+            return String(localized: "Kannu could not reach \(server) over a trusted HTTPS connection. Check the server and your connection. A certificate macOS does not trust, such as a self-signed one, is refused.")
+        case .http(.ambiguous):
+            return String(localized: "GitLab did not answer. Try again.")
+        }
     }
 }

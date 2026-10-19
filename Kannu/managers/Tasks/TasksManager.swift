@@ -38,17 +38,15 @@ import os
 /// popover, the control overlay, the lock-screen widget — ends the task's time the same way,
 /// because they all end the session.
 ///
-/// **Jira.** Jira Cloud is a source of tasks (Brain › Tasks › Sources). A sync reads the user's
-/// issues and folds them into the list with `TaskMerge`, on the main actor, against the list as it
-/// is then. It runs only when the Tasks page appears and the last sync is over 5 minutes old, on
-/// Refresh, and right after Connect: no timer, no polling, nothing at launch. The credential is read
-/// from the Keychain off the main actor (`JiraCredentialStore`), non-interactively unless the user
-/// clicked something, and the host it is used with is the Keychain's own, never a Defaults copy.
-///
-/// **GitLab.** The same, for the user's open GitLab issues and, with Include merge requests on, the
-/// open merge requests assigned to them or waiting for their review (`GitLabClient`,
-/// `GitLabCredentialStore`). Each source keeps its own sync state, generation and in-flight marker,
-/// and merges only its own tasks: one failing or being slow never shows on, or holds up, the other.
+/// **Sources.** Jira Cloud, GitLab and the other sources each have a `SourceSync`: a sync reads the
+/// user's items and folds them into the list with `TaskMerge` (`merge(_:from:scope:at:)`), on the
+/// main actor, against the list as it is then. It runs only when a page appears and the last sync is
+/// over 5 minutes old, on Refresh, when the source says it changed, and right after Connect: no
+/// timer, no polling, nothing at launch. The credential is read from the Keychain off the main actor
+/// (`TaskCredentials`), non-interactively unless the user clicked something, and the site or server
+/// it is used with is the Keychain's own, never a Defaults copy. Each source keeps its own state,
+/// generation and in-flight marker, and merges only its own tasks: one failing or being slow never
+/// shows on, or holds up, another.
 ///
 /// **Ask, then log.** When timing a Jira or GitLab task ends, its unlogged time is folded into one
 /// draft (`WorklogDrafts.folding`, rounded to the nearest 15 minutes) that Brain › Tasks › Time to
@@ -56,7 +54,7 @@ import os
 /// Send Again, builds a write request (`WorklogConsentRulesTests`), and it saves the draft as
 /// `.sending` before the request goes out, so a relaunch knows to check instead of sending twice.
 @MainActor
-final class TasksManager: ObservableObject {
+final class TasksManager: ObservableObject, TaskSourceHost {
     static let shared = TasksManager()
 
     enum LoadState: Equatable {
@@ -84,17 +82,13 @@ final class TasksManager: ObservableObject {
     /// Every task, in the user's order. Done, hidden and gone tasks keep their place.
     @Published private(set) var tasks: [TaskItem] = []
     @Published private(set) var drafts: [WorklogDraft] = []
+    /// Each tag's colour, keyed by `TaskColoring.key(for:)`; saved in tasks.json with the tasks.
+    @Published private(set) var tagColors: [String: TaskColor] = [:]
     @Published private(set) var loadState: LoadState = .loading
     /// The task being timed right now, if any.
     @Published private(set) var timing: Timing?
     /// Set when the file could not be decoded and was moved aside: names the kept copy.
     @Published private(set) var movedAsideFileName: String?
-    @Published private(set) var jiraSync: SourceSyncState = .idle
-    /// Disconnect could not delete the saved token from the Keychain, so it is still there.
-    @Published private(set) var jiraTokenRemovalFailed = false
-    @Published private(set) var gitlabSync: SourceSyncState = .idle
-    /// Disconnect could not delete the saved GitLab token from the Keychain, so it is still there.
-    @Published private(set) var gitlabTokenRemovalFailed = false
     /// macOS has Kannu's notifications turned off, so a schedule raises no reminder. Checked after
     /// a schedule, after the task file is read, and when the Task list opens.
     @Published private(set) var remindersBlocked = false
@@ -116,39 +110,13 @@ final class TasksManager: ObservableObject {
     private var isAsleep = false
     private var sleepObservers: [NSObjectProtocol] = []
     private var terminateObserver: NSObjectProtocol?
+    /// The archive's own clock: a new day archives what waited long enough, with no sync needed.
+    private var dayChangeObserver: NSObjectProtocol?
     private var revision = 0
     private var savedRevision = 0
     /// Drafts whose send is under way, so a second click cannot start another.
     private var sendsInFlight = Set<UUID>()
 
-    /// A sync older than this is refreshed when the Tasks page appears (Jira and GitLab alike).
-    static let jiraStaleAfter: TimeInterval = 5 * 60
-    /// The last sync that succeeded.
-    private var lastJiraSync: Date?
-    /// Bumped by Connect and Disconnect: a sync started before carries the old value, and its result
-    /// is dropped instead of landing on a list that has moved on.
-    private var jiraGeneration = 0
-    /// The generation of the sync in flight, if any.
-    private var jiraSyncInFlight: Int?
-    /// The page appeared before the task file was read: sync once it is.
-    private var pendingJiraSyncWhenReady = false
-    /// Refresh was asked while a sync was running. That sync carries the filter it started with,
-    /// so it would end with "Synced" for the old filter and mark tasks gone against it: the
-    /// refresh runs when it is done. Connect and Disconnect drop it with the sync.
-    private var pendingJiraRefresh = false
-    /// Connects between their first await and their return. `isJiraConnected` stays false until
-    /// a Connect's save has landed, so it alone cannot tell "Remove Token" that a new token is on
-    /// its way into the Keychain.
-    private var jiraConnectsInFlight = 0
-    /// The same four, for GitLab. Its generation also moves when Include merge requests is switched
-    /// during a sync, which read the old setting.
-    private var lastGitLabSync: Date?
-    private var gitlabGeneration = 0
-    private var gitlabSyncInFlight: Int?
-    private var pendingGitLabSyncWhenReady = false
-    /// Connects between their first await and their return, as `jiraConnectsInFlight`:
-    /// `isGitLabConnected` stays false until a Connect's save has landed.
-    private var gitlabConnectsInFlight = 0
     /// The reminders macOS was last told about (`TaskReminderPlan.wanted`). Taken from the file at
     /// load; each save after that sends only what changed; emptied when Tasks is turned off, which
     /// takes them all back. `checkReminderPermission` checks it against what macOS actually holds.
@@ -173,20 +141,40 @@ final class TasksManager: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.saveBeforeQuit() }
         }
+        // A Mac that stays up for weeks, with no source to sync, still archives on time: the closed
+        // tasks' days are counted again each new day (CodeRabbit on #107).
+        dayChangeObserver = NotificationCenter.default.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshArchive() }
+        }
         // What the views read through the manager depends on these data keys: the connected baseline
-        // (`activeTasks`) and whether each source syncs (`isJiraSyncOn`, `isGitLabSyncOn`). No view
+        // (`activeTasks`) and whether each source syncs (`SourceSync.isSyncOn`). No view
         // filter belongs here: those change what one view shows, never the data. `options: []`, so
         // subscribing does not fire.
         Publishers.MergeMany(
-            Defaults.publisher(.jiraEnabled, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.jiraSiteHost, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabEnabled, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabHost, options: []).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.gitlabIncludeMergeRequests, options: []).map { _ in () }.eraseToAnyPublisher()
+            TaskSource.remoteSources.compactMap(\.enabledKey).map { Defaults.publisher($0, options: []).map { _ in () }.eraseToAnyPublisher() }
+                + TaskSource.remoteSources.compactMap(\.scopeKey).map { Defaults.publisher($0, options: []).map { _ in () }.eraseToAnyPublisher() }
+                + [Defaults.publisher(.gitlabIncludeMergeRequests, options: []).map { _ in () }.eraseToAnyPublisher()]
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] in
             MainActor.assumeIsolated { self?.objectWillChange.send() }
+        }
+        .store(in: &cancellables)
+        // The integration colours: `color(of:)` reads them, and the timed task's colour is the
+        // running timer's accent. `options: []` here too.
+        Publishers.MergeMany(
+            TaskSource.allCases.map { Defaults.publisher($0.colorKey, options: []).map { _ in () }.eraseToAnyPublisher() }
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] in
+            MainActor.assumeIsolated {
+                self?.objectWillChange.send()
+                self?.refreshTimedTint()
+            }
         }
         .store(in: &cancellables)
         // Tasks off: Settings takes every reminder back (`TaskReminders.withdrawAll`), so macOS holds
@@ -205,7 +193,14 @@ final class TasksManager: ObservableObject {
                     } else {
                         self.reminderBaseline = [:]
                     }
+                    self.updateRemindersObserver()
                 }
+            }
+            .store(in: &cancellables)
+        Defaults.publisher(.appleRemindersEnabled, options: [])
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateRemindersObserver() }
             }
             .store(in: &cancellables)
         Task { await load() }
@@ -225,12 +220,16 @@ final class TasksManager: ObservableObject {
     /// only while GitLab is connected: merge requests kept after a disconnect stay in sight.
     private var connected: TaskOrdering.Listed {
         TaskOrdering.connectedFilter(
-            showGitLabMergeRequests: Defaults[.gitlabIncludeMergeRequests] || !isGitLabConnected,
+            showGitLabMergeRequests: Defaults[.gitlabIncludeMergeRequests] || !gitlab.isConnected,
             alwaysListed: timing?.taskID
         )
     }
 
-    var doneAndHiddenTasks: [TaskItem] { tasks.filter { $0.visibility != .active } }
+    /// Done and gone tasks, until `TaskArchive` archives them: Brain's Recently closed.
+    var recentlyClosedTasks: [TaskItem] { tasks.filter { $0.visibility == .done || $0.visibility == .gone } }
+
+    /// Brain's Archive: out of every other list.
+    var archivedTasks: [TaskItem] { tasks.filter { $0.visibility == .archived } }
 
     /// The Task list's rows: the task order narrowed by its filters, which are the Task list's own.
     func listedTasks(_ filter: TaskFilter) -> [TaskItem] {
@@ -283,7 +282,8 @@ final class TasksManager: ObservableObject {
             duration: TimeInterval(length),
             name: TimerSessionName.resolved(typed: typed, fallback: fallback),
             fallbackName: fallback,
-            playsSoundOnFinish: Defaults[.tasksSoundAtEstimate]
+            playsSoundOnFinish: Defaults[.tasksSoundAtEstimate],
+            tint: color(of: task).tint
         )
         // The id is minted inside startTimer; its .started event is already queued behind this.
         pendingLink = (timer.sessionID, taskID)
@@ -309,6 +309,16 @@ final class TasksManager: ObservableObject {
         guard let link, link.isPaused, TimerManager.shared.sessionID == link.session,
               TimerManager.shared.hasManualTimerRunning else { return }
         TimerManager.shared.resumeTimer()
+    }
+
+    /// Recolours the running timer after the timed task's colour may have changed: its tags, a
+    /// tag's colour, or its integration's colour. Called by those changes themselves, never from
+    /// `$tasks` or `$tagColors` (docs/REGRESSIONS.md entry 10). A session still waiting for its
+    /// `.started` counts as well.
+    private func refreshTimedTint() {
+        guard let target = link.map({ (session: $0.session, taskID: $0.taskID) }) ?? pendingLink,
+              let task = tasks.first(where: { $0.id == target.taskID }) else { return }
+        TimerManager.shared.updateSessionTint(color(of: task).tint, session: target.session)
     }
 
     private func handle(_ event: TimerSessionEvent) {
@@ -397,12 +407,27 @@ final class TasksManager: ObservableObject {
 
     // MARK: - Editing
 
+    /// A local task at the top of the order; its id, so a caller can tag, schedule or start it.
+    /// Nil when there is no title or the task list cannot change.
     @discardableResult
-    func addTask(title: String, estimateSeconds: Int?) -> Bool {
-        guard isReady, let title = TaskItem.cleanedTitle(title) else { return false }
+    func addTask(title: String, estimateSeconds: Int?) -> UUID? {
+        guard isReady, let title = TaskItem.cleanedTitle(title) else { return nil }
         let task = TaskItem(title: title, localEstimateSeconds: estimateSeconds.flatMap { $0 > 0 ? $0 : nil })
         tasks = TaskOrdering.inserting(task, into: tasks)
         persist()
+        return task.id
+    }
+
+    /// A local task's new title (`TaskItem.cleanedTitle`). A Jira or GitLab title is the server's,
+    /// and the next sync would put it back, so it is never renamed here. The save sends a scheduled
+    /// reminder again under the new title (`syncReminders`).
+    @discardableResult
+    func renameTask(_ taskID: UUID, to title: String) -> Bool {
+        guard let title = TaskItem.cleanedTitle(title),
+              let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return false }
+        if title != task.title {
+            update(taskID) { $0.title = title }
+        }
         return true
     }
 
@@ -450,6 +475,86 @@ final class TasksManager: ObservableObject {
     /// The task's own tags, cleaned (`TaskItem.cleanedTags`). Kannu's only: never sent anywhere.
     func setTags(_ tags: [String], for taskID: UUID) {
         update(taskID) { $0.tags = TaskItem.cleanedTags(tags) }
+        refreshTimedTint()
+    }
+
+    /// A tag's colour; `.glass` when it has none.
+    func tagColor(for tag: String) -> TaskColor {
+        tagColors[TaskColoring.key(for: tag)] ?? .glass
+    }
+
+    /// One tag's colour, shared by every task carrying the tag. `.glass` removes the entry: it is
+    /// the default and never stored.
+    func setTagColor(_ color: TaskColor, for tag: String) {
+        setTagColors([tag: color])
+    }
+
+    /// Several tag colours in one save, for a sheet that stages its changes until Save. Each entry
+    /// is set as `setTagColor` sets it; a tag not named keeps its colour.
+    func setTagColors(_ colors: [String: TaskColor]) {
+        guard isReady else { return }
+        var updated = tagColors
+        for (tag, color) in colors {
+            let key = TaskColoring.key(for: tag)
+            guard !key.isEmpty else { continue }
+            updated[key] = color == .glass ? nil : color
+        }
+        guard updated != tagColors else { return }
+        tagColors = updated
+        persist()
+        refreshTimedTint()
+    }
+
+    /// The colour a task shows: strictly its first tag's, or its integration's when it has no tags
+    /// (`TaskColoring.color`).
+    func color(of task: TaskItem) -> TaskColor {
+        let integration = TaskColoring.integration(for: task.source, colors: [task.source: Defaults[task.source.colorKey]])
+        return TaskColoring.color(tags: task.tags, tagColors: tagColors, integration: integration)
+    }
+
+    // MARK: - Every source at once
+
+    /// Each source whose sync is on, with where its sync stands: the notch's Refresh and its lines
+    /// (`TaskSyncSummary`).
+    var syncStates: [TaskSource: SourceSyncState] {
+        Dictionary(uniqueKeysWithValues: syncs.filter(\.isSyncOn).map { ($0.source, $0.state) })
+    }
+
+    /// The sources whose sync is on, so a view can sync one the moment it is switched on.
+    var syncOnSources: Set<TaskSource> { Set(syncStates.keys) }
+
+    /// Whether any source is syncing now.
+    var isAnySyncing: Bool { syncs.contains(where: \.isSyncing) }
+
+    /// Each source whose last sync is stale, never with the Keychain dialog (`SourceSync.syncIfStale`).
+    func syncAllIfStale() {
+        for sync in syncs { sync.syncIfStale(now: Date()) }
+    }
+
+    /// The user's Refresh: every source that syncs. One that is off, syncing or rate limited is
+    /// skipped; each may ask macOS for its Keychain item.
+    func refreshAll() {
+        for sync in syncs { sync.refresh(now: Date()) }
+    }
+
+    /// The item's page on its own site or server, checked; nil for a task with none.
+    func browseURL(for task: TaskItem) -> URL? {
+        switch task.source {
+        case .jira: return jiraBrowseURL(for: task)
+        case .gitlab: return gitlabBrowseURL(for: task)
+        case .github:
+            guard let remote = task.remote, let link = remote.gitlabWebURL,
+                  GitHubHost.isWebURL(link, onServer: remote.hostScope) else { return nil }
+            return URL(string: link)
+        case .linear:
+            guard let remote = task.remote, let link = remote.gitlabWebURL,
+                  LinearAPI.isIssueURL(link, in: remote.hostScope) else { return nil }
+            return URL(string: link)
+        case .todoist:
+            guard let link = task.remote?.gitlabWebURL, link.hasPrefix(TodoistAPI.taskPageBase) else { return nil }
+            return URL(string: link)
+        case .local, .appleReminders: return nil
+        }
     }
 
     /// A local task's reminder time; nil clears it. The first schedule is where Kannu asks macOS
@@ -508,22 +613,37 @@ final class TasksManager: ObservableObject {
         }
     }
 
-    /// Marking the task being timed done stops the timer first, which ends its time.
+    /// Marking the task being timed done stops the timer first, which ends its time. Done tasks
+    /// are Recently closed until `TaskArchive` archives them.
     func markDone(_ taskID: UUID) {
         if timing?.taskID == taskID { stopTiming() }
-        update(taskID) { $0.visibility = .done }
+        update(taskID) {
+            $0.visibility = .done
+            $0.closedAt = Date()
+        }
     }
 
-    /// Out of the task order, into Done and hidden; Show puts it back. A remote task is hidden, never
-    /// deleted: the next sync would only bring it back.
-    func hide(_ taskID: UUID) {
+    /// Into the archive at once, whatever the source: for a remote task this is its delete, since
+    /// a deleted one would only come back on the next sync. Stops the timer first if it is timed.
+    /// It stays archived even if its source lists it again; Restore puts it back.
+    func archive(_ taskID: UUID) {
         if timing?.taskID == taskID { stopTiming() }
-        update(taskID) { $0.visibility = .hidden }
+        update(taskID) {
+            $0.visibility = .archived
+            $0.archivedAt = Date()
+            $0.archivedByUser = true
+        }
     }
 
-    /// Back into the task order, where it was.
+    /// Out of the archive or Recently closed, back into the task order where it was. A remote
+    /// task its source no longer lists goes back to Recently closed at the next complete sync.
     func reopen(_ taskID: UUID) {
-        update(taskID) { $0.visibility = .active }
+        update(taskID) {
+            $0.visibility = .active
+            $0.closedAt = nil
+            $0.archivedAt = nil
+            $0.archivedByUser = false
+        }
     }
 
     /// Local tasks only, and never the one being timed.
@@ -553,6 +673,29 @@ final class TasksManager: ObservableObject {
 
     func discardInterruptedSession(segmentID: UUID, taskID: UUID) {
         update(taskID) { task in task.segments.removeAll { $0.id == segmentID && $0.isInterrupted } }
+    }
+
+    /// `TaskArchive` over the list as it is now, after a sync. True when something changed (the
+    /// caller saves). The task being timed, or about to be, is never archived or cleared.
+    /// The archive's clock outside a sync: when Brain's Task list appears and when the day changes.
+    /// Archives what waited `TaskArchive.closedDays`, and clears archived remote tasks after
+    /// `TaskArchive.clearDays`. Before, only a launch or a Jira or GitLab sync did: a local-only user's
+    /// done tasks sat in Recently closed, "archiving now", until the next launch.
+    func refreshArchive(now: Date = Date()) {
+        guard isReady else { return }
+        let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
+        if applyArchive(now: now, protected: timed) { persist() }
+    }
+
+    private func applyArchive(now: Date, protected: Set<UUID>) -> Bool {
+        let archive = TaskArchive.apply(tasks, drafts: drafts, protected: protected, now: now)
+        guard archive.changed else { return false }
+        tasks = archive.tasks
+        drafts = archive.drafts
+        if archive.archived + archive.cleared > 0 {
+            logger.info("Archive: \(archive.archived, privacy: .public) archived, \(archive.cleared, privacy: .public) cleared")
+        }
+        return true
     }
 
     private func update(_ taskID: UUID, _ change: (inout TaskItem) -> Void) {
@@ -633,7 +776,7 @@ final class TasksManager: ObservableObject {
             case .jira:
                 // 2. The Keychain's own site, and only the one the time was recorded against.
                 let credential: JiraCredential
-                switch await JiraCredentialStore.load(allowInteraction: true) {
+                switch await TaskCredentials.jira.load(allowInteraction: true) {
                 case .found(let stored) where stored.site == draft.hostScope && JiraSite.isValidHost(stored.site):
                     credential = stored
                 case .found, .missing, .broken:
@@ -644,7 +787,7 @@ final class TasksManager: ObservableObject {
                     return
                 }
                 // The connection this token belongs to: a 401 for it says nothing about a newer one.
-                let generation = self.jiraGeneration
+                let generation = self.jira.generation
                 let lookup = JiraWorklogLookup(
                     credential: credential, issueID: remote.remoteID, entry: draft.id,
                     accountID: accountID, started: draft.started, seconds: draft.seconds
@@ -680,7 +823,7 @@ final class TasksManager: ObservableObject {
                 self.finishSend(draftID, verdict: verdict, source: source, generation: generation)
             case .gitlab:
                 let credential: GitLabCredential
-                switch await GitLabCredentialStore.load(allowInteraction: true) {
+                switch await TaskCredentials.gitlab.load(allowInteraction: true) {
                 case .found(let stored) where stored.baseURL == draft.hostScope && GitLabHost.isValidBase(stored.baseURL):
                     credential = stored
                 case .found, .missing, .broken:
@@ -690,7 +833,7 @@ final class TasksManager: ObservableObject {
                     self.restoreUnsent(draftID, to: previous, message: String(localized: "macOS did not let Kannu read the saved GitLab token, so nothing was sent."))
                     return
                 }
-                let generation = self.gitlabGeneration
+                let generation = self.gitlab.generation
                 guard self.canStillSend(draftID) else {
                     self.restoreUnsent(draftID, to: previous, message: String(localized: "GitLab was disconnected, or connected to another server, before Kannu could send this, so nothing was sent."))
                     return
@@ -702,7 +845,8 @@ final class TasksManager: ObservableObject {
                 }
                 let verdict = await poster.postGitLabSpend(request)
                 self.finishSend(draftID, verdict: verdict, source: source, generation: generation)
-            case .local:
+            case .local, .github, .linear, .todoist, .appleReminders:
+                // Only Jira and GitLab take time (`TaskSource.logsTime`); no draft is made for others.
                 self.restoreUnsent(draftID, to: previous, message: nil)
             }
         }
@@ -745,7 +889,7 @@ final class TasksManager: ObservableObject {
     /// Never Ask to Log (`false`): the task's time stays on this Mac, and its open entries are
     /// kept local. Ask to Log (`true`) offers its unlogged time again.
     func setAsksToLogTime(_ asks: Bool, for taskID: UUID) {
-        guard isReady, let index = tasks.firstIndex(where: { $0.id == taskID }), tasks[index].source != .local else { return }
+        guard isReady, let index = tasks.firstIndex(where: { $0.id == taskID }), tasks[index].source.logsTime else { return }
         var task = tasks[index]
         task.logPolicy = asks ? .ask : .localOnly
         if asks {
@@ -802,28 +946,10 @@ final class TasksManager: ObservableObject {
         var remoteID: String?
         if case .logged(let id) = verdict { remoteID = id }
         if case .authRejected(let status) = verdict {
-            // The token was refused: the Sources row says so, and no sync re-sends it on its own.
-            switch source {
-            case .jira: markJiraRejected(generation, status: status)
-            case .gitlab: markGitLabRejected(generation, status: status)
-            case .local: break
-            }
+            // The token was refused: the source's row says so, and no sync re-sends it on its own.
+            syncing(source)?.markRejected(generation, status: status)
         }
         finishSend(draftID, event: resolution.event, message: resolution.message, remoteID: remoteID)
-    }
-
-    /// A worklog's 401 marks the Sources row, unless Jira was reconnected or disconnected while the
-    /// request was out: a refusal of the old token says nothing about the new connection, and
-    /// marking it would stop the new one's background syncs. A sync in flight reports for itself.
-    private func markJiraRejected(_ generation: Int, status: Int) {
-        guard generation == jiraGeneration, !isJiraSyncing else { return }
-        jiraSync = .authFailed(status: status)
-    }
-
-    /// The same for GitLab.
-    private func markGitLabRejected(_ generation: Int, status: Int) {
-        guard generation == gitlabGeneration, !isGitLabSyncing else { return }
-        gitlabSync = .authFailed(status: status)
     }
 
     private func finishSend(_ draftID: UUID, event: WorklogDrafts.Event, message: String?, remoteID: String? = nil) {
@@ -845,44 +971,287 @@ final class TasksManager: ObservableObject {
         logger.info("Logging time ended: \(next.rawValue, privacy: .public)")
     }
 
-    // MARK: - Jira
+    // MARK: - Sources
 
-    /// Connected, as far as the display copies say. The Keychain has the final word at sync time.
-    var isJiraConnected: Bool { !Defaults[.jiraSiteHost].isEmpty }
+    /// Jira Cloud's sync (`SourceSync`): the user's issues, by the issue filter. Built on first use.
+    private(set) lazy var jira = SourceSync(
+        source: .jira,
+        provider: JiraTaskSource(),
+        store: TaskCredentials.jira,
+        connection: { SourceConnection(scope: Defaults[.jiraSiteHost], syncOn: Defaults[.jiraEnabled]) },
+        options: { JiraAPI.effectiveJQL(Defaults[.jiraJQL]) },
+        forget: {
+            Defaults[.jiraEnabled] = false
+            Defaults[.jiraSiteHost] = ""
+            Defaults[.jiraAccountID] = ""
+            Defaults[.jiraAccountDisplayName] = ""
+        },
+        host: self
+    )
 
-    /// Connected and "Sync Jira" on: Jira is fetched. Off pauses fetching only; the Jira tasks stay
-    /// in the task order.
-    var isJiraSyncOn: Bool { isJiraConnected && Defaults[.jiraEnabled] }
+    /// GitLab's: the user's open issues and, with Include merge requests on, the open merge
+    /// requests assigned to them or waiting for their review.
+    private(set) lazy var gitlab = SourceSync(
+        source: .gitlab,
+        provider: GitLabTaskSource(),
+        store: TaskCredentials.gitlab,
+        connection: { SourceConnection(scope: Defaults[.gitlabHost], syncOn: Defaults[.gitlabEnabled]) },
+        options: {
+            GitLabTaskSource.Options(username: Defaults[.gitlabUsername],
+                                     includeMergeRequests: Defaults[.gitlabIncludeMergeRequests])
+        },
+        forget: {
+            Defaults[.gitlabEnabled] = false
+            Defaults[.gitlabHost] = ""
+            Defaults[.gitlabUsername] = ""
+            Defaults[.gitlabAccountDisplayName] = ""
+            Defaults[.gitlabCanLogTime] = false
+        },
+        host: self
+    )
 
-    var isJiraSyncing: Bool { jiraSyncInFlight == jiraGeneration }
+    /// Apple Reminders': every incomplete reminder, by list. No token — macOS's permission — and a
+    /// change in Reminders asks for a quiet sync (`AppleRemindersStore.observeChanges`).
+    private(set) lazy var appleReminders = SourceSync(
+        source: .appleReminders,
+        provider: AppleRemindersTaskSource(),
+        store: AppleRemindersAccessKeeper(),
+        connection: { SourceConnection(scope: Defaults[.appleRemindersScope], syncOn: Defaults[.appleRemindersEnabled]) },
+        options: { () },
+        forget: {
+            Defaults[.appleRemindersEnabled] = false
+            Defaults[.appleRemindersScope] = ""
+        },
+        host: self
+    )
 
-    /// The page appeared. Syncs when Jira is on, nothing is in flight, and
-    /// `SourceSyncState.allowsSyncOnAppear` agrees: the last sync is over 5 minutes old, no rate limit
-    /// is running, and Jira has not refused the token (a refused token is only ever retried by the
-    /// user). Never shows the Keychain dialog: a read that would need it ends in
-    /// `.needsKeychainApproval`, and the user's click retries.
-    func syncJiraIfStale(now: Date = Date()) {
-        guard isJiraSyncOn, !isJiraSyncing else { return }
-        guard isReady else {
-            if loadState == .loading { pendingJiraSyncWhenReady = true }
-            return
+    /// GitHub's, from github.com or a GitHub Enterprise Server: the open issues assigned to the user
+    /// and, with Include pull requests on, the pull requests.
+    private(set) lazy var github = SourceSync(
+        source: .github,
+        provider: GitHubTaskSource(),
+        store: TaskCredentials.github,
+        connection: { SourceConnection(scope: Defaults[.githubHost], syncOn: Defaults[.githubEnabled]) },
+        options: { Defaults[.githubIncludePullRequests] },
+        forget: {
+            Defaults[.githubEnabled] = false
+            Defaults[.githubHost] = ""
+            Defaults[.githubUsername] = ""
+            Defaults[.githubAccountDisplayName] = ""
+        },
+        host: self
+    )
+
+    /// Linear's: the issues assigned to the user that are not done or canceled.
+    private(set) lazy var linear = SourceSync(
+        source: .linear,
+        provider: LinearTaskSource(),
+        store: TaskCredentials.linear,
+        connection: { SourceConnection(scope: Defaults[.linearWorkspace], syncOn: Defaults[.linearEnabled]) },
+        options: { () },
+        forget: {
+            Defaults[.linearEnabled] = false
+            Defaults[.linearWorkspace] = ""
+            Defaults[.linearAccountDisplayName] = ""
+        },
+        host: self
+    )
+
+    /// Todoist's: the open tasks, or those the user's Todoist filter matches, not assigned to someone else.
+    private(set) lazy var todoist = SourceSync(
+        source: .todoist,
+        provider: TodoistTaskSource(),
+        store: TaskCredentials.todoist,
+        connection: { SourceConnection(scope: Defaults[.todoistAccount], syncOn: Defaults[.todoistEnabled]) },
+        options: { Defaults[.todoistFilter] },
+        forget: {
+            Defaults[.todoistEnabled] = false
+            Defaults[.todoistAccount] = ""
+            Defaults[.todoistAccountDisplayName] = ""
+        },
+        host: self
+    )
+
+    /// Every source's sync, in source order.
+    var syncs: [any SourceSyncing] { [jira, gitlab, github, linear, todoist, appleReminders] }
+
+    /// Reminders' change notice is listened to only while Reminders is connected, its sync is on,
+    /// and tasks are on; it asks for a quiet sync, never one with a dialog.
+    private func updateRemindersObserver() {
+        let observe = Defaults[.enableTasks] && appleReminders.isSyncOn
+        AppleRemindersStore.shared.observeChanges(observe) { [weak self] in
+            self?.appleReminders.externalChange()
         }
-        guard jiraSync.allowsSyncOnAppear(lastSuccess: lastJiraSync, now: now, staleAfter: Self.jiraStaleAfter) else { return }
-        syncJira(interactive: false, using: nil)
     }
 
-    /// Refresh, Allow Keychain Access, and Return or Reset on the issue filter: the user asked, so
-    /// the Keychain may ask them too. During a sync only the filter row can get here (Refresh is
-    /// disabled and the Keychain row hidden while one runs), and its request is kept, not dropped:
-    /// that sync fetches the filter it started with, and runs again for the new one when it finishes.
-    func refreshJira(now: Date = Date()) {
-        guard isJiraSyncOn, isReady else { return }
-        if case .rateLimited(let until) = jiraSync, until > now { return }
-        guard !isJiraSyncing else {
-            pendingJiraRefresh = true
-            return
+    /// A source's sync; nil for local tasks.
+    func syncing(_ source: TaskSource) -> (any SourceSyncing)? {
+        syncs.first { $0.source == source }
+    }
+
+    /// Where a source's syncing stands, for its row and page.
+    func syncState(_ source: TaskSource) -> SourceSyncState { syncing(source)?.state ?? .idle }
+
+    /// Disconnect could not delete the source's saved token from the Keychain.
+    func tokenRemovalFailed(_ source: TaskSource) -> Bool { syncing(source)?.tokenRemovalFailed ?? false }
+
+    func isSyncing(_ source: TaskSource) -> Bool { syncing(source)?.isSyncing ?? false }
+
+    /// A page with the source's row appeared, or its Sync was switched on (`SourceSync.syncIfStale`).
+    func syncIfStale(_ source: TaskSource) { syncing(source)?.syncIfStale(now: Date()) }
+
+    /// The user's Refresh, Allow Keychain Access or new filter (`SourceSync.refresh`).
+    func refresh(_ source: TaskSource) { syncing(source)?.refresh(now: Date()) }
+
+    /// An option that decides what the source fetches was switched (`SourceSync.optionsChanged`).
+    func sourceOptionsChanged(_ source: TaskSource) { syncing(source)?.optionsChanged(now: Date()) }
+
+    /// Disconnect could not delete the saved token: the user asks again, off the main actor.
+    func retryRemovingToken(_ source: TaskSource) { syncing(source)?.retryRemovingToken() }
+
+    /// Forgets the source's connection and token, and stops its syncing. With `removeTasks`, its
+    /// tasks and their unlogged time go too (timing one stops first); without, they stay in the order
+    /// as they are, and their Time to log entries stay: kept local, or sent once the source is
+    /// connected to the same site or server again. A Log still saving or waiting for the Keychain
+    /// sends nothing (`canStillSend`); one whose request is already out cannot be recalled, and its
+    /// answer is dropped with the entry.
+    func disconnect(_ source: TaskSource, removeTasks: Bool) {
+        guard let sync = syncing(source) else { return }
+        sync.disconnect()
+        if source == .appleReminders { updateRemindersObserver() }
+        logger.info("\(source.rawValue, privacy: .public) disconnected, tasks removed: \(removeTasks, privacy: .public)")
+        guard removeTasks, isReady else { return }
+        if let timed = timing?.taskID, tasks.first(where: { $0.id == timed })?.source == source {
+            stopTiming()
         }
-        syncJira(interactive: true, using: nil)
+        let removed = Set(tasks.filter { $0.source == source }.map(\.id))
+        guard !removed.isEmpty else { return }
+        if let pending = pendingLink, removed.contains(pending.taskID) { pendingLink = nil }
+        tasks.removeAll { removed.contains($0.id) }
+        drafts.removeAll { removed.contains($0.taskID) }
+        persist()
+    }
+
+    // MARK: - Connect
+
+    /// Connect… from `SourceConnectSheet`: GitHub (with its server), Linear, Todoist, or Apple
+    /// Reminders (no token: macOS asks). Nil on success, or what to tell the user.
+    func connect(_ source: TaskSource, server: String, token: String) async -> String? {
+        switch source {
+        case .appleReminders:
+            return await connectAppleReminders()
+        case .github:
+            return await connectGitHub(serverInput: server, token: token)
+        case .linear:
+            return await connectLinear(apiKey: token)
+        case .todoist:
+            return await connectTodoist(token: token)
+        case .local, .jira, .gitlab:
+            return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
+        }
+    }
+
+    /// Asks macOS for Reminders, once — the only place Kannu does — then syncs. Nil on success.
+    private func connectAppleReminders() async -> String? {
+        let failure = await appleReminders.connect {
+            guard await AppleRemindersStore.shared.requestAccess() else {
+                return .refused(String(localized: "macOS did not let Kannu read your reminders. Allow Kannu in Privacy & Security › Reminders, then connect again."))
+            }
+            return .accepted(AppleRemindersAccess()) {
+                Defaults[.appleRemindersScope] = AppleReminders.scope
+                Defaults[.appleRemindersEnabled] = true
+            }
+        }
+        if failure == nil { logger.info("Apple Reminders connected") }
+        updateRemindersObserver()
+        return failure
+    }
+
+    /// The token page on a GitHub server typed so far; nil until it is one Kannu would connect to.
+    nonisolated static func githubCreateTokenURL(server: String) -> URL? {
+        guard case .success(let base) = GitHubHost.normalize(server) else { return nil }
+        return GitHubHost.createTokenURL(base: base)
+    }
+
+    /// Checks the token with Todoist, which also says whose account it is, then stores both and
+    /// syncs. Nil on success, or what to tell the user. Nothing is stored until Todoist accepted it.
+    private func connectTodoist(token: String) async -> String? {
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard TodoistAPI.isPlausibleToken(token) else {
+            return String(localized: "Paste your API token from Todoist, under Integrations › Developer. It has no spaces in it.")
+        }
+        let failure = await todoist.connect {
+            switch await TodoistClient().verify(token: token) {
+            case .verified(let user):
+                guard let account = TodoistAPI.scope(userID: user.id) else {
+                    return .refused(String(localized: "Todoist answered, but not with an account Kannu can use."))
+                }
+                return .accepted(TodoistCredential(userID: user.id, token: token)) {
+                    Defaults[.todoistAccount] = account
+                    Defaults[.todoistAccountDisplayName] = user.fullName ?? ""
+                    Defaults[.todoistEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(TodoistAPI.connectMessage(for: failure))
+            }
+        }
+        if failure == nil { logger.info("Todoist connected") }
+        return failure
+    }
+
+    /// Checks the API key with Linear, which also says the workspace, then stores both and syncs.
+    /// Nil on success, or what to tell the user. Nothing is stored until Linear has accepted the key.
+    private func connectLinear(apiKey: String) async -> String? {
+        let apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard LinearAPI.isPlausibleKey(apiKey) else { return LinearAPI.implausibleKeyMessage }
+        let failure = await linear.connect {
+            switch await LinearClient().verify(apiKey: apiKey) {
+            case .verified(let viewer):
+                guard let workspace = viewer.scope else {
+                    return .refused(String(localized: "Linear answered, but its workspace address is not one Kannu can use."))
+                }
+                return .accepted(LinearCredential(workspace: workspace, apiKey: apiKey)) {
+                    Defaults[.linearWorkspace] = workspace
+                    Defaults[.linearAccountDisplayName] = viewer.displayName ?? viewer.name
+                    Defaults[.linearEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(LinearAPI.connectMessage(for: failure))
+            }
+        }
+        if failure == nil { logger.info("Linear connected") }
+        return failure
+    }
+
+    /// Checks the server and token with GitHub, then stores them and syncs. Nil on success, or what
+    /// to tell the user. Nothing is stored until GitHub has accepted the token.
+    private func connectGitHub(serverInput: String, token: String) async -> String? {
+        let base: String
+        switch GitHubHost.normalize(serverInput) {
+        case .success(let normalized): base = normalized
+        case .failure(let error): return GitHubAPI.message(for: error)
+        }
+        let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard GitHubAPI.isPlausibleToken(token) else {
+            return String(localized: "Paste a personal access token from your GitHub settings. It has no spaces in it.")
+        }
+        let credential = GitHubCredential(baseURL: base, token: token)
+        let server = GitHubHost.displayName(base)
+        let failure = await github.connect {
+            switch await GitHubClient().verify(credential) {
+            case .verified(let user):
+                return .accepted(credential) {
+                    Defaults[.githubHost] = base
+                    Defaults[.githubUsername] = user.login
+                    Defaults[.githubAccountDisplayName] = user.name ?? ""
+                    Defaults[.githubEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(GitHubAPI.connectMessage(for: failure, server: server))
+            }
+        }
+        if failure == nil { logger.info("GitHub connected") }
+        return failure
     }
 
     /// Checks the site, email and token with Jira, then stores them and syncs. Nil on success, or
@@ -891,7 +1260,7 @@ final class TasksManager: ObservableObject {
         let host: String
         switch JiraSite.normalize(siteInput) {
         case .success(let normalized): host = normalized
-        case .failure(let error): return Self.message(for: error)
+        case .failure(let error): return JiraTaskSource.message(for: error)
         }
         let email = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -902,288 +1271,21 @@ final class TasksManager: ObservableObject {
             return String(localized: "An API token has no spaces in it. Copy it again from Atlassian.")
         }
         let credential = JiraCredential(site: host, email: email, token: token)
-        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
-        let generation = jiraGeneration
-        jiraConnectsInFlight += 1
-        defer { jiraConnectsInFlight -= 1 }
-        let verified: JiraMyself
-        switch await JiraClient().verify(credential) {
-        case .verified(let myself): verified = myself
-        case .failed(let failure): return Self.connectMessage(for: failure, host: host)
-        }
-        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
-        // Keychain item now: nothing is saved over it. After the save the connect is committed —
-        // the Keychain and the display copies change together, below, with no await between.
-        guard !Task.isCancelled, generation == jiraGeneration else { return String(localized: "Cancelled.") }
-        guard await JiraCredentialStore.save(credential) else {
-            return String(localized: "Jira accepted the token, but Kannu could not save it in your Keychain.")
-        }
-        Defaults[.jiraSiteHost] = host
-        Defaults[.jiraAccountID] = verified.accountId
-        Defaults[.jiraAccountDisplayName] = verified.displayName ?? ""
-        Defaults[.jiraEnabled] = true
-        jiraGeneration += 1
-        jiraSyncInFlight = nil
-        pendingJiraRefresh = false
-        lastJiraSync = nil
-        jiraSync = .idle
-        // The save replaced whatever a failed Disconnect left in the Keychain.
-        jiraTokenRemovalFailed = false
-        logger.info("Jira connected")
-        if isReady {
-            // The credential is in hand: no Keychain read for the first sync.
-            syncJira(interactive: false, using: credential)
-        } else if loadState == .loading {
-            pendingJiraSyncWhenReady = true
-        }
-        return nil
-    }
-
-    /// Forgets the token and stops syncing. With `removeTasks`, the Jira tasks and their unlogged
-    /// time go too (timing one stops first); without, they stay in the order as they are, and their
-    /// Time to log entries stay: kept local, or sent once Jira is connected to the same site again.
-    /// A Log still saving or waiting for the Keychain sends nothing (`canStillSend`); one whose
-    /// request is already out cannot be recalled, and its answer is dropped with the entry.
-    func disconnectJira(removeTasks: Bool) {
-        jiraGeneration += 1
-        jiraSyncInFlight = nil
-        pendingJiraSyncWhenReady = false
-        pendingJiraRefresh = false
-        lastJiraSync = nil
-        jiraSync = .idle
-        Defaults[.jiraEnabled] = false
-        Defaults[.jiraSiteHost] = ""
-        Defaults[.jiraAccountID] = ""
-        Defaults[.jiraAccountDisplayName] = ""
-        removeJiraToken()
-        logger.info("Jira disconnected, tasks removed: \(removeTasks, privacy: .public)")
-        guard removeTasks, isReady else { return }
-        if let timed = timing?.taskID, tasks.first(where: { $0.id == timed })?.source == .jira {
-            stopTiming()
-        }
-        let removed = Set(tasks.filter { $0.source == .jira }.map(\.id))
-        guard !removed.isEmpty else { return }
-        if let pending = pendingLink, removed.contains(pending.taskID) { pendingLink = nil }
-        tasks.removeAll { removed.contains($0.id) }
-        drafts.removeAll { removed.contains($0.taskID) }
-        persist()
-    }
-
-    /// Disconnect could not delete the saved token: the user asks again. The delete may raise the
-    /// Keychain dialog (an item saved by a differently signed build); it runs off the main actor.
-    /// Not while a Connect is in flight: the display copies still say disconnected until its save
-    /// lands, and a delete queued behind that save would take the new token with it.
-    func retryRemovingJiraToken() {
-        guard !isJiraConnected, jiraConnectsInFlight == 0 else { return }
-        removeJiraToken()
-    }
-
-    /// Deletes the saved token off the main actor, and says so when it could not. A result that
-    /// lands after a new Connect is dropped: that Connect saved a token of its own.
-    private func removeJiraToken() {
-        let generation = jiraGeneration
-        jiraTokenRemovalFailed = false
-        Task { [weak self] in
-            let removed = await JiraCredentialStore.remove()
-            guard let self, generation == self.jiraGeneration else { return }
-            self.jiraTokenRemovalFailed = !removed
-            if !removed { self.logger.error("Jira: the saved sign-in could not be removed from the Keychain") }
-        }
-    }
-
-    /// The issue's page, built from the host the task came from, or nil for anything else.
-    func jiraBrowseURL(for task: TaskItem) -> URL? {
-        guard task.source == .jira, let remote = task.remote else { return nil }
-        return JiraSite.browseURL(host: remote.hostScope, key: remote.key)
-    }
-
-    private func syncJira(interactive: Bool, using known: JiraCredential?) {
-        let generation = jiraGeneration
-        jiraSyncInFlight = generation
-        jiraSync = .syncing
-        let expectedHost = Defaults[.jiraSiteHost]
-        let jql = JiraAPI.effectiveJQL(Defaults[.jiraJQL])
-        Task { [weak self] in
-            let credential: JiraCredential
-            if let known {
-                credential = known
-            } else {
-                switch await JiraCredentialStore.load(allowInteraction: interactive) {
-                case .found(let stored):
-                    credential = stored
-                case .needsApproval:
-                    self?.finishJiraSync(generation, .needsKeychainApproval)
-                    return
-                case .missing, .broken:
-                    self?.finishJiraSync(generation, .needsReconnect)
-                    return
+        let failure = await jira.connect {
+            switch await JiraClient().verify(credential) {
+            case .verified(let myself):
+                return .accepted(credential) {
+                    Defaults[.jiraSiteHost] = host
+                    Defaults[.jiraAccountID] = myself.accountId
+                    Defaults[.jiraAccountDisplayName] = myself.displayName ?? ""
+                    Defaults[.jiraEnabled] = true
                 }
+            case .failed(let failure):
+                return .refused(JiraTaskSource.connectMessage(for: failure, host: host))
             }
-            // The Keychain's host is the only one a token is sent to. A Defaults copy that
-            // disagrees means the setup changed under Kannu: reconnect, never a request elsewhere.
-            guard credential.site == expectedHost, JiraSite.isValidHost(credential.site) else {
-                self?.finishJiraSync(generation, .needsReconnect)
-                return
-            }
-            let result = await JiraClient().fetchIssues(credential, jql: jql)
-            self?.didFetchJira(result.outcome, failure: result.failure, host: credential.site, generation: generation)
         }
-    }
-
-    private func finishJiraSync(_ generation: Int, _ state: SourceSyncState) {
-        guard generation == jiraGeneration else { return }
-        jiraSyncInFlight = nil
-        jiraSync = state
-        guard pendingJiraRefresh else { return }
-        pendingJiraRefresh = false
-        // The filter changed under this sync: run the user's Refresh now, with Refresh's own
-        // guards. Not after a refused token or a sign-in that needs reconnecting, though: a new
-        // filter does not change that answer, and sending the token again can lock the account.
-        // Nor after the user declined the Keychain dialog: running again would raise it straight
-        // back. The Allow Keychain Access button carries that retry, and it reads the current filter.
-        switch state {
-        case .authFailed, .needsReconnect, .needsKeychainApproval: return
-        default: refreshJira()
-        }
-    }
-
-    private func didFetchJira(_ outcome: SyncOutcome, failure: JiraClient.Failure?, host: String, generation: Int) {
-        // Connected again or disconnected meanwhile: this result belongs to a setup that is gone.
-        guard generation == jiraGeneration else { return }
-        let now = Date()
-        guard case .fetched(let fetch) = outcome else {
-            finishJiraSync(generation, Self.syncState(for: failure, now: now))
-            logger.notice("Jira sync failed")
-            return
-        }
-        guard isReady else {
-            finishJiraSync(generation, .failed(String(localized: "Kannu could not read its task list, so Jira issues cannot be added to it.")))
-            return
-        }
-        // The task being timed stays in the order however the issue changed: its row holds the
-        // list's Stop button. The first sync after its timing ends decides.
-        let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
-        let merged = TaskMerge.apply(outcome, source: .jira, hostScope: host, to: tasks, now: now, keepingActive: timed)
-        tasks = merged.tasks
-        if merged.changed { persist() }
-        lastJiraSync = now
-        finishJiraSync(generation, .synced(at: now, count: fetch.issues.count, complete: fetch.complete))
-        logger.info("Jira sync: \(fetch.issues.count, privacy: .public) issues, complete \(fetch.complete, privacy: .public), \(merged.added, privacy: .public) added, \(merged.updated, privacy: .public) updated, \(merged.gone, privacy: .public) gone")
-    }
-
-    private static func syncState(for failure: JiraClient.Failure?, now: Date) -> SourceSyncState {
-        switch failure {
-        case .http(.offline):
-            return .offline
-        case .http(.rateLimited(let seconds)):
-            return .rateLimited(until: now.addingTimeInterval(seconds))
-        case .http(.auth(let status)):
-            return .authFailed(status: status)
-        case .http(.rejected(400)):
-            return .failed(String(localized: "Jira refused the issue filter (400). Check it under Advanced, or reset it."))
-        case .http(.rejected(let status)):
-            return .failed(String(localized: "Jira refused the request (\(status)). The account may have lost access to this site."))
-        case .http(.redirected(let status)):
-            return .failed(String(localized: "The site answered with a redirect (\(status)), which Kannu never follows."))
-        case .http(.failedBeforeSend):
-            return .failed(String(localized: "Kannu could not reach the Jira site. Check your connection."))
-        case .http(.ambiguous(let status?)):
-            return .failed(String(localized: "Jira did not answer properly (\(status)). Try again later."))
-        case .http(.ambiguous(nil)), .http(.ok):
-            return .failed(String(localized: "Jira did not answer in time. Try again later."))
-        case .decode:
-            return .failed(String(localized: "Jira's answer could not be read."))
-        case .badSite, nil:
-            return .needsReconnect
-        }
-    }
-
-    private static func message(for error: JiraSiteError) -> String {
-        switch error {
-        case .empty:
-            return String(localized: "Type your Jira site, such as acme or acme.atlassian.net.")
-        case .notHTTPS:
-            return String(localized: "Kannu connects to Jira over HTTPS only.")
-        case .userInfo:
-            return String(localized: "The site has a name and @ before the host. Type just the site, such as acme.atlassian.net.")
-        case .port:
-            return String(localized: "Jira Cloud uses the standard HTTPS port. Remove the port from the site.")
-        case .notAtlassianCloud, .malformed:
-            return String(localized: "That is not a Jira Cloud site. It looks like acme.atlassian.net.")
-        }
-    }
-
-    private static func connectMessage(for failure: JiraClient.Failure, host: String) -> String {
-        switch failure {
-        case .badSite:
-            return message(for: .notAtlassianCloud)
-        case .decode, .http(.ok):
-            return String(localized: "\(host) answered, but not the way Jira Cloud does. Check the site.")
-        case .http(.auth(let status)):
-            return String(localized: "Jira did not accept that email and token (\(status)). Check both, or create a new token.")
-        case .http(.rejected(404)):
-            return String(localized: "No Jira site answered at \(host) (404). Check the site.")
-        case .http(.rejected(let status)):
-            return String(localized: "Jira refused the request (\(status)).")
-        case .http(.redirected(let status)):
-            return String(localized: "\(host) answered with a redirect (\(status)), which Kannu never follows. Check the site.")
-        case .http(.rateLimited):
-            return String(localized: "Jira is limiting requests right now. Try again in a minute.")
-        case .http(.offline):
-            return String(localized: "This Mac is offline.")
-        case .http(.failedBeforeSend):
-            return String(localized: "Kannu could not reach \(host). Check the site and your connection.")
-        case .http(.ambiguous):
-            return String(localized: "Jira did not answer. Try again.")
-        }
-    }
-
-    // MARK: - GitLab
-
-    /// Connected, as far as the display copies say. The Keychain has the final word at sync time.
-    var isGitLabConnected: Bool { !Defaults[.gitlabHost].isEmpty }
-
-    /// Connected and "Sync GitLab" on: GitLab is fetched. Off pauses fetching only; the GitLab tasks
-    /// stay in the task order.
-    var isGitLabSyncOn: Bool { isGitLabConnected && Defaults[.gitlabEnabled] }
-
-    var isGitLabSyncing: Bool { gitlabSyncInFlight == gitlabGeneration }
-
-    /// The page appeared. Syncs when GitLab is on, nothing is in flight, and
-    /// `SourceSyncState.allowsSyncOnAppear` agrees: the last sync is over 5 minutes old, no rate
-    /// limit is running, and GitLab has not refused the token. Never shows the Keychain dialog: a
-    /// read that would need it ends in `.needsKeychainApproval`, and the user's click retries.
-    func syncGitLabIfStale(now: Date = Date()) {
-        guard isGitLabSyncOn, !isGitLabSyncing else { return }
-        guard isReady else {
-            if loadState == .loading { pendingGitLabSyncWhenReady = true }
-            return
-        }
-        guard gitlabSync.allowsSyncOnAppear(lastSuccess: lastGitLabSync, now: now, staleAfter: Self.jiraStaleAfter) else { return }
-        syncGitLab(interactive: false, using: nil)
-    }
-
-    /// Refresh, Allow Keychain Access, and Include merge requests switched: the user asked, so the
-    /// Keychain may ask them too.
-    func refreshGitLab(now: Date = Date()) {
-        guard isGitLabSyncOn, isReady, !isGitLabSyncing else { return }
-        if case .rateLimited(let until) = gitlabSync, until > now { return }
-        syncGitLab(interactive: true, using: nil)
-    }
-
-    /// Include merge requests was switched. The task order follows at once (`connected`); what is
-    /// fetched follows with a sync, started now when one can run. A sync already in flight read the
-    /// old setting, so its result is dropped and a new one starts. Until a sync succeeds with the new
-    /// setting, the next page visit syncs again: offline, a rate limit or Sync GitLab off only delay
-    /// it.
-    func gitlabMergeRequestsSwitched(now: Date = Date()) {
-        if isGitLabSyncing {
-            gitlabGeneration += 1
-            gitlabSyncInFlight = nil
-            gitlabSync = .idle
-        }
-        lastGitLabSync = nil
-        refreshGitLab(now: now)
+        if failure == nil { logger.info("Jira connected") }
+        return failure
     }
 
     /// Checks the server and token with GitLab, then stores them and syncs. Nil on success, or what
@@ -1193,7 +1295,7 @@ final class TasksManager: ObservableObject {
         let base: String
         switch GitLabHost.normalize(serverInput) {
         case .success(let normalized): base = normalized
-        case .failure(let error): return Self.message(for: error)
+        case .failure(let error): return GitLabTaskSource.message(for: error)
         }
         let token = token.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
@@ -1204,102 +1306,141 @@ final class TasksManager: ObservableObject {
         }
         let credential = GitLabCredential(baseURL: base, token: token)
         let server = GitLabHost.displayName(base)
-        // From here on "Remove Token" refuses: the save below may be on its way to the Keychain.
-        let generation = gitlabGeneration
-        gitlabConnectsInFlight += 1
-        defer { gitlabConnectsInFlight -= 1 }
-        let user: GitLabUser
-        let access: GitLabAccess
-        switch await GitLabClient().verify(credential) {
-        case .verified(let verified, let scopes):
-            user = verified
-            access = GitLabAPI.access(scopes: scopes)
-        case .failed(let failure):
-            return Self.gitlabConnectMessage(for: failure, server: server)
+        let failure = await gitlab.connect {
+            switch await GitLabClient().verify(credential) {
+            case .verified(let user, let scopes):
+                let access = GitLabAPI.access(scopes: scopes)
+                guard access != .cannotList else {
+                    return .refused(String(localized: "This token cannot list your issues. Create one with the read_api scope, or api to log time later."))
+                }
+                guard GitLabAPI.isUsername(user.username) else {
+                    return .refused(String(localized: "\(server) answered, but not the way GitLab does. Check the server."))
+                }
+                return .accepted(credential) {
+                    Defaults[.gitlabHost] = base
+                    Defaults[.gitlabUsername] = user.username
+                    Defaults[.gitlabAccountDisplayName] = user.name ?? ""
+                    Defaults[.gitlabCanLogTime] = access == .canLogTime
+                    Defaults[.gitlabEnabled] = true
+                }
+            case .failed(let failure):
+                return .refused(GitLabTaskSource.connectMessage(for: failure, server: server))
+            }
         }
-        guard access != .cannotList else {
-            return String(localized: "This token cannot list your issues. Create one with the read_api scope, or api to log time later.")
-        }
-        guard GitLabAPI.isUsername(user.username) else {
-            return String(localized: "\(server) answered, but not the way GitLab does. Check the server.")
-        }
-        // A cancel, or another Connect or a Disconnect that finished during the verify, owns the
-        // Keychain item now: nothing is saved over it, and a Disconnect is not undone. After the
-        // save the connect is committed — the Keychain and the display copies change together,
-        // below, with no await between.
-        guard !Task.isCancelled, generation == gitlabGeneration else { return String(localized: "Cancelled.") }
-        guard await GitLabCredentialStore.save(credential) else {
-            return String(localized: "GitLab accepted the token, but Kannu could not save it in your Keychain.")
-        }
-        Defaults[.gitlabHost] = base
-        Defaults[.gitlabUsername] = user.username
-        Defaults[.gitlabAccountDisplayName] = user.name ?? ""
-        Defaults[.gitlabCanLogTime] = access == .canLogTime
-        Defaults[.gitlabEnabled] = true
-        gitlabGeneration += 1
-        gitlabSyncInFlight = nil
-        lastGitLabSync = nil
-        gitlabSync = .idle
-        // The save replaced whatever a failed Disconnect left in the Keychain.
-        gitlabTokenRemovalFailed = false
-        logger.info("GitLab connected, can log time: \(access == .canLogTime, privacy: .public)")
-        if isReady {
-            // The credential is in hand: no Keychain read for the first sync.
-            syncGitLab(interactive: false, using: credential)
-        } else if loadState == .loading {
-            pendingGitLabSyncWhenReady = true
-        }
-        return nil
+        if failure == nil { logger.info("GitLab connected, can log time: \(Defaults[.gitlabCanLogTime], privacy: .public)") }
+        return failure
     }
 
-    /// Forgets the token and stops syncing. With `removeTasks`, the GitLab tasks and their unlogged
-    /// time go too (timing one stops first); without, they stay in the order as they are, and their
-    /// Time to log entries stay: kept local, or sent once GitLab is connected to the same server.
-    /// A Log still saving or waiting for the Keychain sends nothing (`canStillSend`); one whose
-    /// request is already out cannot be recalled, and its answer is dropped with the entry.
-    func disconnectGitLab(removeTasks: Bool) {
-        gitlabGeneration += 1
-        gitlabSyncInFlight = nil
-        pendingGitLabSyncWhenReady = false
-        lastGitLabSync = nil
-        gitlabSync = .idle
-        Defaults[.gitlabEnabled] = false
-        Defaults[.gitlabHost] = ""
-        Defaults[.gitlabUsername] = ""
-        Defaults[.gitlabAccountDisplayName] = ""
-        Defaults[.gitlabCanLogTime] = false
-        removeGitLabToken()
-        logger.info("GitLab disconnected, tasks removed: \(removeTasks, privacy: .public)")
-        guard removeTasks, isReady else { return }
-        if let timed = timing?.taskID, tasks.first(where: { $0.id == timed })?.source == .gitlab {
-            stopTiming()
+    /// The issue's page, built from the host the task came from, or nil for anything else.
+    func jiraBrowseURL(for task: TaskItem) -> URL? {
+        guard task.source == .jira, let remote = task.remote else { return nil }
+        return JiraSite.browseURL(host: remote.hostScope, key: remote.key)
+    }
+
+    // MARK: - Where a sync's items land
+
+    var readiness: SourceReadiness {
+        switch loadState {
+        case .loading: return .loading
+        case .ready: return .ready
+        case .failed: return .failed
         }
-        let removed = Set(tasks.filter { $0.source == .gitlab }.map(\.id))
-        guard !removed.isEmpty else { return }
-        if let pending = pendingLink, removed.contains(pending.taskID) { pendingLink = nil }
-        tasks.removeAll { removed.contains($0.id) }
-        drafts.removeAll { removed.contains($0.taskID) }
-        persist()
     }
 
-    /// Disconnect could not delete the saved token: the user asks again, off the main actor.
-    /// Not while a Connect is in flight: the display copies still say disconnected until its save
-    /// lands, and a delete queued behind that save would take the new token with it.
-    func retryRemovingGitLabToken() {
-        guard !isGitLabConnected, gitlabConnectsInFlight == 0 else { return }
-        removeGitLabToken()
+    /// A sync's items, folded into the list as it is now. The task being timed stays in the order
+    /// however its item changed: its row holds the list's Stop button. The first sync after its
+    /// timing ends decides.
+    func merge(_ fetch: RemoteFetch, from source: TaskSource, scope: String, at now: Date) {
+        let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
+        let merged = TaskMerge.apply(.fetched(fetch), source: source, hostScope: scope, to: tasks, now: now, keepingActive: timed)
+        tasks = merged.tasks
+        let archived = applyArchive(now: now, protected: timed)
+        if merged.changed || archived { persist() }
+        logger.info("\(source.rawValue, privacy: .public) sync: \(fetch.issues.count, privacy: .public) items, complete \(fetch.complete, privacy: .public), \(merged.added, privacy: .public) added, \(merged.updated, privacy: .public) updated, \(merged.gone, privacy: .public) gone")
     }
 
-    /// Deletes the saved token off the main actor, and says so when it could not. A result that
-    /// lands after a new Connect is dropped: that Connect saved a token of its own.
-    private func removeGitLabToken() {
-        let generation = gitlabGeneration
-        gitlabTokenRemovalFailed = false
-        Task { [weak self] in
-            let removed = await GitLabCredentialStore.remove()
-            guard let self, generation == self.gitlabGeneration else { return }
-            self.gitlabTokenRemovalFailed = !removed
-            if !removed { self.logger.error("GitLab: the saved sign-in could not be removed from the Keychain") }
+    func sourceWillChange() {
+        objectWillChange.send()
+    }
+
+    // MARK: - Linked merge requests
+
+    /// What the task card's linked merge requests page shows.
+    enum LinkedMergeRequestsResult: Equatable {
+        case loaded([LinkedMergeRequest], complete: Bool)
+        case failed(String)
+        /// macOS did not let Kannu read the saved token.
+        case needsKeychainApproval
+        /// Disconnected, connected to another server, or the token was refused.
+        case needsReconnect
+    }
+
+    /// The connection and the task's last sync a list was read under: a newer either reads again.
+    private struct LinkedMergeRequestsStamp: Equatable {
+        let generation: Int
+        let lastSeenAt: Date
+    }
+
+    private var linkedMergeRequestsCache: [UUID: (stamp: LinkedMergeRequestsStamp, result: LinkedMergeRequestsResult)] = [:]
+    private var linkedMergeRequestsInFlight: [UUID: Task<LinkedMergeRequestsResult, Never>] = [:]
+
+    /// The merge requests that close a GitLab issue (`closed_by`), for the task card's linked page.
+    /// A click asks, so the Keychain may be read with its dialog, as Refresh does. Read-only. A
+    /// loaded list is kept until the task's next sync or a new connection; two asks at once share
+    /// one request.
+    func linkedMergeRequests(for taskID: UUID) async -> LinkedMergeRequestsResult {
+        guard isReady, let task = tasks.first(where: { $0.id == taskID }), task.source == .gitlab,
+              let remote = task.remote, remote.gitlabKind == .issue,
+              let projectID = remote.gitlabProjectID, let iid = remote.gitlabIID,
+              remote.hostScope == Defaults[.gitlabHost] else { return .needsReconnect }
+        let stamp = LinkedMergeRequestsStamp(generation: gitlab.generation, lastSeenAt: remote.lastSeenAt)
+        if let cached = linkedMergeRequestsCache[taskID], cached.stamp == stamp { return cached.result }
+        if let running = linkedMergeRequestsInFlight[taskID] { return await running.value }
+        let host = remote.hostScope
+        let work = Task { [weak self] () -> LinkedMergeRequestsResult in
+            guard let self else { return .needsReconnect }
+            return await self.fetchLinkedMergeRequests(projectID: projectID, iid: iid, host: host)
+        }
+        linkedMergeRequestsInFlight[taskID] = work
+        let result = await work.value
+        linkedMergeRequestsInFlight[taskID] = nil
+        if case .loaded = result, stamp.generation == gitlab.generation {
+            linkedMergeRequestsCache[taskID] = (stamp, result)
+        }
+        return result
+    }
+
+    private func fetchLinkedMergeRequests(projectID: Int, iid: Int, host: String) async -> LinkedMergeRequestsResult {
+        let credential: GitLabCredential
+        switch await TaskCredentials.gitlab.load(allowInteraction: true) {
+        case .found(let stored) where stored.baseURL == host && GitLabHost.isValidBase(stored.baseURL):
+            credential = stored
+        case .found, .missing, .broken:
+            return .needsReconnect
+        case .needsApproval:
+            return .needsKeychainApproval
+        }
+        let generation = gitlab.generation
+        let read = await GitLabClient().closingMergeRequests(credential, projectID: projectID, iid: iid)
+        // Disconnected, or connected again, while the list was on its way: it is not this one's.
+        guard generation == gitlab.generation else { return .needsReconnect }
+        switch read {
+        case .success(let list):
+            return .loaded(list.items, complete: list.complete)
+        case .failure(.http(.auth(let status))):
+            gitlab.markRejected(generation, status: status)
+            return .needsReconnect
+        case .failure(let failure):
+            switch GitLabTaskSource.syncState(for: failure, now: Date()) {
+            case .failed(let reason):
+                return .failed(reason)
+            case .offline:
+                return .failed(String(localized: "Kannu is offline. Try again when you are back online."))
+            case .rateLimited(let until):
+                return .failed(String(localized: "GitLab asked Kannu to wait until \(until.formatted(date: .omitted, time: .shortened))."))
+            default:
+                return .needsReconnect
+            }
         }
     }
 
@@ -1308,141 +1449,6 @@ final class TasksManager: ObservableObject {
         guard task.source == .gitlab, let remote = task.remote, let link = remote.gitlabWebURL,
               GitLabHost.isWebURL(link, onServer: remote.hostScope) else { return nil }
         return URL(string: link)
-    }
-
-    private func syncGitLab(interactive: Bool, using known: GitLabCredential?) {
-        let generation = gitlabGeneration
-        gitlabSyncInFlight = generation
-        gitlabSync = .syncing
-        let expectedBase = Defaults[.gitlabHost]
-        let username = Defaults[.gitlabUsername]
-        let includeMergeRequests = Defaults[.gitlabIncludeMergeRequests]
-        Task { [weak self] in
-            let credential: GitLabCredential
-            if let known {
-                credential = known
-            } else {
-                switch await GitLabCredentialStore.load(allowInteraction: interactive) {
-                case .found(let stored):
-                    credential = stored
-                case .needsApproval:
-                    self?.finishGitLabSync(generation, .needsKeychainApproval)
-                    return
-                case .missing, .broken:
-                    self?.finishGitLabSync(generation, .needsReconnect)
-                    return
-                }
-            }
-            // The Keychain's server is the only one a token is sent to. A Defaults copy that
-            // disagrees means the setup changed under Kannu: reconnect, never a request elsewhere.
-            guard credential.baseURL == expectedBase, GitLabHost.isValidBase(credential.baseURL) else {
-                self?.finishGitLabSync(generation, .needsReconnect)
-                return
-            }
-            let fetch = await GitLabClient().fetchItems(credential, username: username, includeMergeRequests: includeMergeRequests)
-            self?.didFetchGitLab(fetch, base: credential.baseURL, generation: generation)
-        }
-    }
-
-    private func finishGitLabSync(_ generation: Int, _ state: SourceSyncState) {
-        guard generation == gitlabGeneration else { return }
-        gitlabSyncInFlight = nil
-        gitlabSync = state
-    }
-
-    private func didFetchGitLab(_ fetched: GitLabReader.Fetch, base: String, generation: Int) {
-        // Connected again or disconnected meanwhile: this result belongs to a setup that is gone.
-        guard generation == gitlabGeneration else { return }
-        let now = Date()
-        guard case .fetched(let fetch) = fetched.outcome else {
-            finishGitLabSync(generation, Self.gitlabSyncState(for: fetched.failure, now: now))
-            logger.notice("GitLab sync failed")
-            return
-        }
-        guard isReady else {
-            finishGitLabSync(generation, .failed(String(localized: "Kannu could not read its task list, so GitLab items cannot be added to it.")))
-            return
-        }
-        // The task being timed stays in the order however the item changed: its row holds the
-        // list's Stop button. The first sync after its timing ends decides.
-        let timed = Set([timing?.taskID, pendingLink?.taskID].compactMap { $0 })
-        let merged = TaskMerge.apply(fetched.outcome, source: .gitlab, hostScope: base, to: tasks, now: now, keepingActive: timed)
-        tasks = merged.tasks
-        if merged.changed { persist() }
-        lastGitLabSync = now
-        finishGitLabSync(generation, .synced(at: now, count: fetch.issues.count, complete: fetch.complete))
-        logger.info("GitLab sync: \(fetched.issueCount, privacy: .public) issues, \(fetched.mergeRequestCount, privacy: .public) merge requests, complete \(fetch.complete, privacy: .public), \(merged.added, privacy: .public) added, \(merged.updated, privacy: .public) updated, \(merged.gone, privacy: .public) gone")
-    }
-
-    private static func gitlabSyncState(for failure: GitLabReader.Failure?, now: Date) -> SourceSyncState {
-        switch failure {
-        case .http(.offline):
-            return .offline
-        case .http(.rateLimited(let seconds)):
-            return .rateLimited(until: now.addingTimeInterval(seconds))
-        case .http(.auth(let status)):
-            return .authFailed(status: status)
-        case .http(.rejected(403)):
-            return .failed(String(localized: "GitLab refused the request (403). The token may lack the read_api scope, or have lost access."))
-        case .http(.rejected(let status)):
-            return .failed(String(localized: "GitLab refused the request (\(status))."))
-        case .http(.redirected(let status)):
-            return .failed(String(localized: "The server answered with a redirect (\(status)), which Kannu never follows."))
-        case .http(.failedBeforeSend):
-            return .failed(String(localized: "Kannu could not reach the GitLab server over a trusted HTTPS connection. Check your connection."))
-        case .http(.ambiguous(let status?)):
-            return .failed(String(localized: "GitLab did not answer properly (\(status)). Try again later."))
-        case .http(.ambiguous(nil)), .http(.ok):
-            return .failed(String(localized: "GitLab did not answer in time. Try again later."))
-        case .decode:
-            return .failed(String(localized: "GitLab's answer could not be read."))
-        case .badServer, .badUsername, nil:
-            return .needsReconnect
-        }
-    }
-
-    private static func message(for error: GitLabHostError) -> String {
-        switch error {
-        case .empty:
-            return String(localized: "Type your GitLab server, such as https://gitlab.com or https://gitlab.example.com.")
-        case .notHTTPS:
-            return String(localized: "Kannu connects to GitLab over HTTPS only.")
-        case .userInfo:
-            return String(localized: "The server has a name and @ before the host. Type just the server, such as https://gitlab.example.com.")
-        case .queryOrFragment, .badPath:
-            return String(localized: "Type the server's address, not a page on it, such as https://gitlab.example.com or https://example.com/gitlab.")
-        case .port:
-            return String(localized: "That port is not a valid one.")
-        case .malformed:
-            return String(localized: "That is not a server address. It looks like https://gitlab.example.com.")
-        }
-    }
-
-    private static func gitlabConnectMessage(for failure: GitLabReader.Failure, server: String) -> String {
-        switch failure {
-        case .badServer:
-            return message(for: GitLabHostError.malformed)
-        case .badUsername, .decode, .http(.ok):
-            return String(localized: "\(server) answered, but not the way GitLab does. Check the server.")
-        case .http(.auth(let status)):
-            return String(localized: "GitLab did not accept that token (\(status)). It may have expired or been revoked: create a new one.")
-        case .http(.rejected(403)):
-            return String(localized: "GitLab refused the token (403). Create one with the read_api scope, or api to log time later.")
-        case .http(.rejected(404)):
-            return String(localized: "No GitLab answered at \(server) (404). Check the server, and its path if it has one.")
-        case .http(.rejected(let status)):
-            return String(localized: "GitLab refused the request (\(status)).")
-        case .http(.redirected(let status)):
-            return String(localized: "\(server) answered with a redirect (\(status)), which Kannu never follows. Check the server, and its path if it has one.")
-        case .http(.rateLimited):
-            return String(localized: "GitLab is limiting requests right now. Try again in a minute.")
-        case .http(.offline):
-            return String(localized: "This Mac is offline.")
-        case .http(.failedBeforeSend):
-            return String(localized: "Kannu could not reach \(server) over a trusted HTTPS connection. Check the server and your connection. A certificate macOS does not trust, such as a self-signed one, is refused.")
-        case .http(.ambiguous):
-            return String(localized: "GitLab did not answer. Try again.")
-        }
     }
 
     // MARK: - Loading and saving
@@ -1486,21 +1492,21 @@ final class TasksManager: ObservableObject {
         }
         tasks = loadedTasks
         drafts = normalized
+        tagColors = file.tagColors
+        // Closed tasks that waited long enough move to the archive, and archived remote ones whose
+        // time is settled clear. Nothing is timed at launch, so nothing is protected.
+        let archive = TaskArchive.apply(tasks, drafts: drafts, protected: [], now: Date())
+        tasks = archive.tasks
+        drafts = archive.drafts
         loadState = .ready
         // What earlier launches told macOS. It may not hold all of it (notifications turned on
         // since, a file replaced), so `checkReminderPermission` below checks with macOS.
         reminderBaseline = TaskReminderPlan.wanted(loadedTasks)
         let uncertain = normalized.filter { $0.state == .uncertain }.count
         logger.info("Loaded \(file.tasks.count, privacy: .public) tasks, \(interrupted, privacy: .public) interrupted sessions, \(uncertain, privacy: .public) uncertain entries")
-        if interrupted > 0 || normalized != file.drafts || loadedTasks != file.tasks { persist() }
-        if pendingJiraSyncWhenReady {
-            pendingJiraSyncWhenReady = false
-            syncJiraIfStale()
-        }
-        if pendingGitLabSyncWhenReady {
-            pendingGitLabSyncWhenReady = false
-            syncGitLabIfStale()
-        }
+        if interrupted > 0 || normalized != file.drafts || loadedTasks != file.tasks || archive.changed { persist() }
+        for sync in syncs { sync.loadFinished() }
+        updateRemindersObserver()
         if let pending = pendingReminderStart {
             pendingReminderStart = nil
             if !start(pending.taskID) { pending.otherwise() }
@@ -1510,7 +1516,7 @@ final class TasksManager: ObservableObject {
     }
 
     private var snapshot: TasksFile {
-        TasksFile(tasks: tasks, drafts: drafts)
+        TasksFile(tasks: tasks, drafts: drafts, tagColors: tagColors)
     }
 
     /// Saves on the store, off the main actor. Saves can land out of order; the revision lets the

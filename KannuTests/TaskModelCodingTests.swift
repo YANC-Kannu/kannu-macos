@@ -100,14 +100,26 @@ final class TaskModelCodingTests: XCTestCase {
                 remoteID: "mr:31", key: "group/app!12", hostScope: "https://gitlab.example.com", status: "review requested",
                 isDoneRemotely: false, remoteEstimateSeconds: 1800, remoteSpentSeconds: nil,
                 gitlabProjectID: 8, gitlabIID: 12, lastSeenAt: start, gitlabKind: .mergeRequest,
-                gitlabWebURL: "https://gitlab.example.com/group/app/-/merge_requests/12"
+                gitlabWebURL: "https://gitlab.example.com/group/app/-/merge_requests/12",
+                statusCategory: "indeterminate", labels: ["bug"],
+                weight: 3, milestone: "Sprint 42", dueDate: start, assignee: "Dana Example",
+                parentTitle: "Login epic", priority: "High", issueType: "Bug",
+                updatedAt: start, commentCount: 4, checklistDone: 1, checklistTotal: 3, linkedMergeRequests: 2,
+                iteration: "Iteration 5", healthStatus: "on_track", isDraft: true, hasConflicts: false, author: "Kim Lee"
             ),
             createdAt: start
         )
         let file = TasksFile(tasks: [mergeRequest], drafts: [])
         let data = try TasksFile.makeEncoder().encode(file)
         XCTAssertEqual(try TasksFile.makeDecoder().decode(TasksFile.self, from: data), file)
-        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains(#""gitlabKind" : "mergeRequest""#))
+        let text = String(decoding: data, as: UTF8.self)
+        XCTAssertTrue(text.contains(#""gitlabKind" : "mergeRequest""#))
+        // A property left out of CodingKeys is silently never written: every standard fact is.
+        for key in ["weight", "milestone", "dueDate", "assignee", "parentTitle", "priority", "issueType",
+                    "updatedAt", "commentCount", "checklistDone", "checklistTotal", "linkedMergeRequests",
+                    "iteration", "healthStatus", "isDraft", "hasConflicts", "author"] {
+            XCTAssertTrue(text.contains("\"\(key)\" :"), "\(key) is not written to the file")
+        }
     }
 
     func testAFileWrittenBeforeGitLabStillReads() throws {
@@ -125,6 +137,58 @@ final class TaskModelCodingTests: XCTestCase {
         XCTAssertNil(remote.gitlabWebURL)
         XCTAssertNil(remote.gitlabProjectID)
         XCTAssertNil(remote.remoteSpentSeconds)
+        XCTAssertNil(remote.weight, "the standard facts came later still")
+        XCTAssertNil(remote.dueDate)
+        XCTAssertNil(remote.assignee)
+    }
+
+    func testADayDateIsTheStartOfThatDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(RemoteTaskInfo.dayDate("2026-10-20", calendar: calendar), Date(timeIntervalSince1970: 1_792_454_400))
+        XCTAssertNil(RemoteTaskInfo.dayDate(nil, calendar: calendar))
+        XCTAssertNil(RemoteTaskInfo.dayDate("", calendar: calendar))
+        XCTAssertNil(RemoteTaskInfo.dayDate("2026-13-01", calendar: calendar), "no thirteenth month")
+        XCTAssertNil(RemoteTaskInfo.dayDate("2026-10-20T10:00:00Z", calendar: calendar), "date-only, as both servers send it")
+    }
+
+    func testServerTimestampsInBothServersShapes() {
+        let expected = Date(timeIntervalSince1970: 1_792_141_954.567)   // 2026-10-16T09:12:34.567Z
+        let gitlab = RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34.567Z")
+        XCTAssertEqual(gitlab?.timeIntervalSince1970 ?? 0, expected.timeIntervalSince1970, accuracy: 0.001)
+        let jira = RemoteTaskInfo.serverTimestamp("2026-10-16T14:42:34.567+0530")
+        XCTAssertEqual(jira?.timeIntervalSince1970 ?? 0, expected.timeIntervalSince1970, accuracy: 0.001,
+                       "Jira's offset has no colon")
+        XCTAssertEqual(RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34Z")?.timeIntervalSince1970 ?? 0,
+                       1_792_141_954, accuracy: 0.001, "no fractions")
+        XCTAssertNil(RemoteTaskInfo.serverTimestamp("yesterday"))
+        XCTAssertNil(RemoteTaskInfo.serverTimestamp(nil))
+    }
+
+    func testTheArchiveReadsBackAndOlderWordsReadSafely() throws {
+        var archived = TaskItem(source: .jira, title: "Put away", visibility: .archived, createdAt: start)
+        archived.closedAt = start
+        archived.archivedAt = start.addingTimeInterval(60)
+        archived.archivedByUser = true
+        let file = TasksFile(tasks: [archived], drafts: [])
+        let data = try TasksFile.makeEncoder().encode(file)
+        XCTAssertEqual(try TasksFile.makeDecoder().decode(TasksFile.self, from: data), file)
+        XCTAssertEqual(file.version, 2, "the archive is version 2")
+
+        let ids = (UUID(), UUID(), UUID())
+        let json = """
+        {"version": 1, "tasks": [
+          {"id": "\(ids.0.uuidString)", "source": "jira", "title": "Hidden before the archive", "visibility": "hidden"},
+          {"id": "\(ids.1.uuidString)", "title": "From a newer Kannu", "visibility": "snoozed"},
+          {"id": "\(ids.2.uuidString)", "title": "Plain done", "visibility": "done"}]}
+        """
+        let decoded = try TasksFile.makeDecoder().decode(TasksFile.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.tasks.count, 3, "one unknown word never costs the list")
+        XCTAssertEqual(decoded.tasks[0].visibility, .archived, "hidden is archived now")
+        XCTAssertTrue(decoded.tasks[0].archivedByUser, "the user put it away: it stays put away")
+        XCTAssertEqual(decoded.tasks[1].visibility, .active, "a state this version does not know reads as active")
+        XCTAssertEqual(decoded.tasks[2].visibility, .done)
+        XCTAssertNil(decoded.tasks[2].closedAt, "seeded later, by TaskArchive")
     }
 
     func testAKindFromANewerKannuDoesNotCostTheFile() throws {

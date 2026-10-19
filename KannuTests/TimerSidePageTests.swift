@@ -40,7 +40,7 @@ final class TimerSidePageTests: XCTestCase {
                             expected = .tasks
                         }
                         let page = TimerSidePage.initial(tasksAvailable: tasks, presetsAvailable: presets,
-                                                         jiraConnected: jira, gitlabConnected: gitlab)
+                                                         anySourceConnected: jira || gitlab)
                         XCTAssertEqual(page, expected, "tasks \(tasks) presets \(presets) jira \(jira) gitlab \(gitlab)")
                     }
                 }
@@ -49,20 +49,20 @@ final class TimerSidePageTests: XCTestCase {
     }
 
     func testAConnectedSourceOpensTasksEvenWithPresetsOn() {
-        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, jiraConnected: true, gitlabConnected: false), .tasks)
-        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, jiraConnected: false, gitlabConnected: true), .tasks)
+        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, anySourceConnected: true), .tasks)
+        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, anySourceConnected: true), .tasks)
     }
 
     func testWithoutAConnectionPresetsIsTheDeepWorkDefault() {
-        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, jiraConnected: false, gitlabConnected: false), .presets)
+        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: true, anySourceConnected: false), .presets)
     }
 
     func testAConnectionWithoutTheTasksPageNeverOpensTasks() {
-        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: false, presetsAvailable: true, jiraConnected: true, gitlabConnected: true), .presets)
+        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: false, presetsAvailable: true, anySourceConnected: true), .presets)
     }
 
     func testTheOnlyPageIsTheOneShown() {
-        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: false, jiraConnected: false, gitlabConnected: false), .tasks)
+        XCTAssertEqual(TimerSidePage.initial(tasksAvailable: true, presetsAvailable: false, anySourceConnected: false), .tasks)
     }
 
     // MARK: - Swipe decision
