@@ -217,7 +217,7 @@ struct NotchAgentStatusView: View {
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .hoverTooltip(String(localized: "Security findings — click for Settings"), edge: .below, pointingHandCursor: true)
+                .hoverTooltip(String(localized: "Security findings — click to open Brain"), edge: .below, pointingHandCursor: true)
             }
             Spacer(minLength: 0)
             if smartCaffeinate {
@@ -246,8 +246,8 @@ struct NotchAgentStatusView: View {
                 .buttonStyle(.plain)
                 .hoverTooltip(
                     caffeinate.isKeepingAwake
-                        ? String(localized: "Keeping awake — agent running. Click for Settings.")
-                        : String(localized: "Smart caffeinate on. Click for Settings.")
+                        ? String(localized: "Keeping awake — agent running. Click to open Brain.")
+                        : String(localized: "Smart caffeinate on. Click to open Brain.")
                 , edge: .below, pointingHandCursor: true)
                 .accessibilityLabel("Smart caffeinate is on")
                 .accessibilityHint("Opens caffeinate settings")
@@ -589,7 +589,7 @@ struct NotchAgentStatusView: View {
     /// here instead.
     @ViewBuilder
     private func statusText(for session: AgentSessionStatus, font: Font) -> some View {
-        let suffix = session.runOutcomeSuffix + resumeSuffix(for: session)
+        let suffix = session.runOutcomeSuffix + session.backgroundWorkSuffix + resumeSuffix(for: session)
         if isMinimalistic, let display = AgentTurnMetricsView.display(for: session) {
             switch display {
             case let .live(since):
