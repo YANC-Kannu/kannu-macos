@@ -850,7 +850,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Never Ask to Log (`false`): the task's time stays on this Mac, and its open entries are
     /// kept local. Ask to Log (`true`) offers its unlogged time again.
     func setAsksToLogTime(_ asks: Bool, for taskID: UUID) {
-        guard isReady, let index = tasks.firstIndex(where: { $0.id == taskID }), tasks[index].source != .local else { return }
+        guard isReady, let index = tasks.firstIndex(where: { $0.id == taskID }), tasks[index].source.logsTime else { return }
         var task = tasks[index]
         task.logPolicy = asks ? .ask : .localOnly
         if asks {
@@ -1022,6 +1022,18 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     // MARK: - Connect
+
+    /// Connect… from `SourceConnectSheet`: GitHub (with its server), Linear, Todoist, or Apple
+    /// Reminders (no token: macOS asks). Nil on success, or what to tell the user.
+    func connect(_ source: TaskSource, server: String, token: String) async -> String? {
+        switch source {
+        case .local, .jira, .gitlab, .github, .linear, .todoist, .appleReminders:
+            return String(localized: "\(source.name) cannot be connected in this version of Kannu.")
+        }
+    }
+
+    /// The token page on a GitHub server typed so far; nil until it is one Kannu would connect to.
+    nonisolated static func githubCreateTokenURL(server: String) -> URL? { nil }
 
     /// Checks the site, email and token with Jira, then stores them and syncs. Nil on success, or
     /// what to tell the user. Nothing is stored until Jira has accepted the token.

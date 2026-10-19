@@ -16,6 +16,7 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import AppKit
 import Defaults
 import SwiftUI
 
@@ -23,11 +24,12 @@ import SwiftUI
 /// own page — or, with one project or none, its tasks right there. Local tasks has its colour, Add a
 /// task, then its tasks.
 ///
-/// The connection rows are the ones the Sources section used to hold: Connect… or Disconnect…, what
+/// Every source's connection is the same section (`SourceConnectionSection`): Disconnect…, what
 /// needs fixing, Sync, the colour a task from it shows with no tags (`TaskColoring`), Refresh, and
-/// Jira's issue filter or GitLab's merge requests. Connection only: Sync decides what is fetched,
-/// never what is listed, and a paused source's tasks stay listed. Each source has its own rows,
-/// status and Refresh, so one failing never shows on the other.
+/// that source's own options — Jira's issue filter, GitLab's merge requests, GitHub's pull requests,
+/// Todoist's filter. Connection only: Sync decides what is fetched, never what is listed, and a
+/// paused source's tasks stay listed. Each source has its own rows, status and Refresh, so one
+/// failing never shows on another.
 ///
 /// Like every row below the overview, nothing here carries a highlight id: their search entries
 /// land on the source's row on the overview (docs/SETTINGS.md). Status comes from the Defaults
@@ -39,8 +41,7 @@ struct TaskSourcePage: View {
     let context: TasksPageContext
 
     var body: some View {
-        switch source {
-        case .local:
+        if source == .local {
             Section {
                 TaskColorRow(
                     "Local tasks colour",
@@ -57,13 +58,8 @@ struct TaskSourcePage: View {
             } header: {
                 SettingsSectionHeader("Tasks")
             }
-        case .jira:
-            JiraConnectionSection(context: context)
-            projectsOrTasks
-        case .gitlab:
-            GitLabConnectionSection(context: context)
-            projectsOrTasks
-        case .github, .linear, .todoist, .appleReminders:
+        } else {
+            SourceConnectionSection(source: source, context: context)
             projectsOrTasks
         }
     }
@@ -90,7 +86,7 @@ struct TaskSourcePage: View {
                     .id(page)
                 }
             } header: {
-                SettingsSectionHeader("Projects")
+                SettingsSectionHeader(source.keyStyle == .list ? String(localized: "Lists") : String(localized: "Projects"))
             }
         } else {
             Section {
@@ -126,23 +122,215 @@ struct TaskProjectPage: View {
     }
 }
 
+/// A source's connection, the same for every source: who it is connected as and Disconnect…; what
+/// needs fixing; Sync; its colour; Refresh with what the last sync found; and its own options.
+struct SourceConnectionSection: View {
+    @ObservedObject private var manager = TasksManager.shared
+    let source: TaskSource
+    let context: TasksPageContext
+
+    private var state: SourceSyncState { manager.syncState(source) }
+    private var problem: String? { TaskSourceStatus.problem(state, source: source) }
+    private var rateLimitedUntil: Date? { state.rateLimitEnd }
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                if source.isConnected {
+                    Button("Disconnect…") { context.confirmsDisconnect.wrappedValue = source }
+                } else {
+                    Button("Connect…") { context.connect(source) }
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
+                    Text(verbatim: source.title)
+                    SettingsStatusText(TaskSourceStatus.text(for: source), isReady: source.isSyncOn && problem == nil)
+                    Text(verbatim: source.isConnected ? TaskSourceStatus.detail(for: source) : TaskSourceStatus.pitch(for: source))
+                        .settingsDescriptionStyle()
+                }
+            }
+
+            if source.isConnected, let problem {
+                SettingsErrorText(problem)
+                if source == .appleReminders, state == .needsReconnect {
+                    SettingsActionRow("Reminders access", description: "Allow Kannu in Privacy & Security › Reminders.") {
+                        Button("Open Privacy & Security") { TaskSourceStatus.openRemindersPrivacySettings() }
+                    }
+                }
+            }
+            if source.isConnected, state == .needsKeychainApproval {
+                SettingsActionRow("Keychain access", description: String(localized: "Let Kannu read the saved \(source.name) token.")) {
+                    Button("Allow Keychain Access") { manager.refresh(source) }
+                }
+            }
+            if !source.isConnected, manager.tokenRemovalFailed(source) {
+                SettingsErrorText(String(localized: "Couldn't remove the \(source.name) token from your Keychain."))
+                SettingsActionRow(
+                    "Saved token",
+                    description: String(localized: "Or delete com.kannu.app.secure-secrets (\(TaskSourceStatus.keychainItem(for: source))) in Keychain Access.")
+                ) {
+                    Button("Remove Token") { manager.retryRemovingToken(source) }
+                }
+            }
+
+            if source.isConnected, let enabledKey = source.enabledKey {
+                SettingsRow(
+                    verbatim: String(localized: "Sync \(source.name)"),
+                    description: Defaults[enabledKey]
+                        ? String(localized: "Fetch your open \(source.name) \(source.itemNoun.many).")
+                        : String(localized: "Sync paused. \(source.name) tasks stay listed.")
+                ) {
+                    Toggle(String(localized: "Sync \(source.name)"), isOn: Binding(
+                        get: { Defaults[enabledKey] },
+                        set: { Defaults[enabledKey] = $0 }
+                    ))
+                }
+                // On the row that holds the switch, so it exists whenever the switch is clicked.
+                .onChange(of: manager.syncOnSources.contains(source)) { _, isOn in
+                    if isOn { manager.syncIfStale(source) }
+                }
+
+                TaskColorRow(
+                    verbatim: String(localized: "\(source.name) colour"),
+                    description: String(localized: "For \(source.name) tasks that have no tags."),
+                    accessibilityLabel: String(localized: "\(source.name) colour: \(Defaults[source.colorKey].localizedName)"),
+                    selection: Binding(get: { Defaults[source.colorKey] }, set: { Defaults[source.colorKey] = $0 })
+                )
+
+                SourceOptionRows(source: source)
+
+                refreshRow
+            }
+        } header: {
+            SettingsSectionHeader("Connection")
+        }
+    }
+
+    /// Refresh, with what the last sync found. While the source asks Kannu to wait, the button is
+    /// off until the time it gave; the timeline redraws once, then, with no polling.
+    private var refreshRow: some View {
+        LabeledContent {
+            HStack(spacing: SettingsMetrics.rowContent) {
+                if manager.isSyncing(source) {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { timeline in
+                    Button("Refresh") { manager.refresh(source) }
+                        .disabled(!canRefresh(at: timeline.date))
+                }
+            }
+        } label: {
+            TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { timeline in
+                SettingsRowLabel(verbatim: String(localized: "\(source.name) \(source.itemNoun.many)"),
+                                 description: TaskSourceStatus.syncCaption(state, enabled: source.isSyncOn, at: timeline.date, source: source))
+            }
+        }
+    }
+
+    private func canRefresh(at date: Date) -> Bool {
+        guard source.isSyncOn, manager.isReady, !manager.isSyncing(source) else { return false }
+        return rateLimitedUntil.map { $0 <= date } ?? true
+    }
+}
+
+/// A source's own options on its page: what decides what is fetched, beyond Sync.
+private struct SourceOptionRows: View {
+    @ObservedObject private var manager = TasksManager.shared
+    @Default(.jiraJQL) private var jiraJQL
+    @Default(.gitlabIncludeMergeRequests) private var gitlabIncludeMergeRequests
+    @State private var showsAdvanced = false
+    let source: TaskSource
+
+    var body: some View {
+        switch source {
+        case .jira:
+            DisclosureGroup(isExpanded: $showsAdvanced) {
+                LabeledContent {
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        TextField("Issue filter (JQL)", text: $jiraJQL, prompt: Text(verbatim: JiraAPI.defaultJQL))
+                            .labelsHidden()
+                            .onSubmit { manager.refresh(.jira) }
+                        Button("Reset") {
+                            jiraJQL = JiraAPI.defaultJQL
+                            manager.refresh(.jira)
+                        }
+                        .disabled(JiraAPI.effectiveJQL(jiraJQL) == JiraAPI.defaultJQL)
+                    }
+                } label: {
+                    SettingsRowLabel("Issue filter (JQL)", description: "Which issues appear. Return applies it.")
+                }
+            } label: {
+                SettingsRowLabel("Advanced")
+            }
+        case .gitlab:
+            SettingsRow("Include merge requests", description: "Also show MRs assigned to you or awaiting your review.") {
+                Defaults.Toggle(key: .gitlabIncludeMergeRequests) {
+                    Text("Include merge requests")
+                }
+            }
+            // On the row that holds the switch, so it exists whenever the switch is clicked. The
+            // task order follows the switch on its own; this brings the fetch in line with it.
+            .onChange(of: gitlabIncludeMergeRequests) { _, _ in
+                manager.sourceOptionsChanged(.gitlab)
+            }
+        case .local, .github, .linear, .todoist, .appleReminders:
+            EmptyView()
+        }
+    }
+}
+
 /// What a source's rows say about its connection, from the Defaults display copies and the
 /// manager's sync state — never the Keychain. Shared by the overview's rows and the source pages.
 enum TaskSourceStatus {
-    static func jiraText(connected: Bool, name: String) -> String {
-        guard connected else { return String(localized: "Not connected") }
-        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? String(localized: "Connected") : String(localized: "Connected as \(name)")
+    /// "Connected as Dana", "Connected as @dana · gitlab.com (can log time)"; "Not connected".
+    static func text(for source: TaskSource) -> String {
+        guard source.isConnected else { return String(localized: "Not connected") }
+        switch source {
+        case .gitlab:
+            let server = GitLabHost.displayName(Defaults[.gitlabHost])
+            return Defaults[.gitlabCanLogTime]
+                ? String(localized: "Connected as @\(Defaults[.gitlabUsername]) · \(server) (can log time)")
+                : String(localized: "Connected as @\(Defaults[.gitlabUsername]) · \(server) (read-only)")
+        case .appleReminders:
+            return String(localized: "Allowed")
+        case .local, .jira, .github, .linear, .todoist:
+            let name = source.accountNameKey.map { Defaults[$0] }?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return name.isEmpty ? String(localized: "Connected") : String(localized: "Connected as \(name)")
+        }
     }
 
-    /// "Connected as @dana · gitlab.com (can log time)", or "(read-only)" for a `read_api` token.
-    static func gitlabText(host: String, username: String, canLogTime: Bool) -> String {
-        guard !host.isEmpty else { return String(localized: "Not connected") }
-        let server = GitLabHost.displayName(host)
-        return canLogTime
-            ? String(localized: "Connected as @\(username) · \(server) (can log time)")
-            : String(localized: "Connected as @\(username) · \(server) (read-only)")
+    /// The line under a connected source's status: where it reads from and what it lists.
+    static func detail(for source: TaskSource) -> String {
+        switch source {
+        case .jira:
+            return String(localized: "Site \(Defaults[.jiraSiteHost]) · Filter: \(JiraAPI.filterSummary(jql: Defaults[.jiraJQL]))")
+        case .gitlab:
+            let lists = Defaults[.gitlabIncludeMergeRequests]
+                ? String(localized: "Lists your open issues and merge requests")
+                : String(localized: "Lists your open issues")
+            let name = Defaults[.gitlabAccountDisplayName].trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? lists : "\(name) · \(lists)"
+        case .github, .linear, .todoist, .appleReminders, .local:
+            return String(localized: "Lists your open \(source.name) \(source.itemNoun.many).")
+        }
     }
+
+    /// What a source not yet connected offers, and what connecting takes.
+    static func pitch(for source: TaskSource) -> String {
+        switch source {
+        case .jira: return String(localized: "Your open issues. Needs your site, email and a token.")
+        case .gitlab: return String(localized: "Your issues and MRs, from gitlab.com or your server.")
+        case .github: return String(localized: "Issues assigned to you, from github.com or GitHub Enterprise. Needs a token.")
+        case .linear: return String(localized: "Issues assigned to you. Needs a personal API key.")
+        case .todoist: return String(localized: "Your open tasks. Needs your API token.")
+        case .appleReminders: return String(localized: "Your incomplete reminders. macOS asks you first.")
+        case .local: return ""
+        }
+    }
+
+    /// The Keychain item's account, for the Remove Token hint.
+    static func keychainItem(for source: TaskSource) -> String { "\(source.rawValue.lowercased())-credential" }
 
     /// A problem the user has to act on. Offline and rate limits are not: they read in the Refresh
     /// row's caption and clear on their own.
@@ -151,9 +339,14 @@ enum TaskSourceStatus {
         case .authFailed(let status):
             return String(localized: "Token rejected (\(status)). Disconnect, then connect with a new token.")
         case .needsReconnect:
-            return source == .gitlab
-                ? String(localized: "Saved GitLab sign-in missing or for another server. Disconnect, then connect again.")
-                : String(localized: "Saved Jira sign-in missing or for another site. Disconnect, then connect again.")
+            switch source {
+            case .appleReminders:
+                return String(localized: "macOS no longer lets Kannu read your reminders.")
+            case .jira:
+                return String(localized: "Saved Jira sign-in missing or for another site. Disconnect, then connect again.")
+            case .local, .gitlab, .github, .linear, .todoist:
+                return String(localized: "Saved \(source.name) sign-in missing or for another server. Disconnect, then connect again.")
+            }
         case .failed(let message):
             return message
         case .idle, .syncing, .synced, .offline, .rateLimited, .needsKeychainApproval:
@@ -161,7 +354,7 @@ enum TaskSourceStatus {
         }
     }
 
-    /// The Refresh row's caption: what the last sync found, issues for Jira and items for GitLab.
+    /// The Refresh row's caption: what the last sync found, in the source's own nouns.
     static func syncCaption(_ sync: SourceSyncState, enabled: Bool, at date: Date, source: TaskSource) -> String {
         guard enabled else { return String(localized: "Sync paused.") }
         switch sync {
@@ -171,20 +364,13 @@ enum TaskSourceStatus {
             return String(localized: "Syncing…")
         case .synced(let at, let count, let complete):
             let time = at.formatted(date: .omitted, time: .shortened)
-            if source == .jira {
-                if !complete {
-                    return String(localized: "Synced \(time) · Showing the first \(count) — narrow the filter")
-                }
-                return count == 1
-                    ? String(localized: "Synced \(time) · 1 issue")
-                    : String(localized: "Synced \(time) · \(count) issues")
-            }
             if !complete {
-                return String(localized: "Synced \(time) · Showing the first \(count)")
+                return source == .jira
+                    ? String(localized: "Synced \(time) · Showing the first \(count) — narrow the filter")
+                    : String(localized: "Synced \(time) · Showing the first \(count)")
             }
-            return count == 1
-                ? String(localized: "Synced \(time) · 1 item")
-                : String(localized: "Synced \(time) · \(count) items")
+            let noun = count == 1 ? source.itemNoun.one : source.itemNoun.many
+            return String(localized: "Synced \(time) · \(count) \(noun)")
         case .offline:
             return String(localized: "Offline.")
         case .rateLimited(let until):
@@ -195,276 +381,26 @@ enum TaskSourceStatus {
         }
     }
 
-    static func rateLimitedUntil(_ sync: SourceSyncState) -> Date? {
-        if case .rateLimited(let until) = sync { return until }
-        return nil
-    }
-}
-
-// MARK: - Jira Cloud
-
-/// Jira's page, its connection: Connect… or Disconnect…, what needs fixing, Sync Jira, its colour,
-/// Refresh, and the issue filter under Advanced.
-private struct JiraConnectionSection: View {
-    @ObservedObject private var manager = TasksManager.shared
-    @Default(.jiraEnabled) private var jiraEnabled
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.jiraAccountDisplayName) private var jiraAccountDisplayName
-    @Default(.jiraJQL) private var jiraJQL
-    @Default(.jiraTaskColor) private var jiraColor
-    @State private var showsAdvanced = false
-    let context: TasksPageContext
-
-    private var isConnected: Bool { !jiraSiteHost.isEmpty }
-    private var problem: String? { TaskSourceStatus.problem(manager.syncState(.jira), source: .jira) }
-    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.syncState(.jira)) }
-
-    var body: some View {
-        Section {
-            LabeledContent {
-                if isConnected {
-                    Button("Disconnect…") { context.confirmsJiraDisconnect.wrappedValue = true }
-                } else {
-                    Button("Connect…") { context.sheet.wrappedValue = .connectJira }
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                    Text("Jira Cloud")
-                    SettingsStatusText(TaskSourceStatus.jiraText(connected: isConnected, name: jiraAccountDisplayName),
-                                       isReady: isConnected && jiraEnabled && problem == nil)
-                    if isConnected {
-                        Text(verbatim: String(localized: "Site \(jiraSiteHost) · Filter: \(JiraAPI.filterSummary(jql: jiraJQL))"))
-                            .settingsDescriptionStyle()
-                    } else {
-                        Text("Your open issues. Needs your site, email and a token.")
-                            .settingsDescriptionStyle()
-                    }
-                }
-            }
-
-            if isConnected, let problem {
-                SettingsErrorText(problem)
-            }
-            if isConnected, manager.syncState(.jira) == .needsKeychainApproval {
-                SettingsActionRow("Keychain access", description: "Let Kannu read the saved Jira token.") {
-                    Button("Allow Keychain Access") { manager.refresh(.jira) }
-                }
-            }
-            if !isConnected, manager.tokenRemovalFailed(.jira) {
-                SettingsErrorText(String(localized: "Couldn't remove the Jira token from your Keychain."))
-                SettingsActionRow("Saved Jira token", description: "Or delete com.kannu.app.secure-secrets (jira-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingToken(.jira) }
-                }
-            }
-
-            if isConnected {
-                SettingsRow("Sync Jira", description: jiraEnabled
-                    ? Text("Fetch your open Jira issues.")
-                    : Text("Sync paused. Jira tasks stay listed.")) {
-                    Defaults.Toggle(key: .jiraEnabled) {
-                        Text("Sync Jira")
-                    }
-                }
-                // On the row that holds the switch, so it exists whenever the switch is clicked.
-                .onChange(of: jiraEnabled) { _, isOn in
-                    if isOn { manager.syncIfStale(.jira) }
-                }
-
-                TaskColorRow(
-                    "Jira colour",
-                    description: "For Jira tasks that have no tags.",
-                    accessibilityLabel: String(localized: "Jira colour: \(jiraColor.localizedName)"),
-                    selection: $jiraColor
-                )
-
-                issuesRow
-
-                DisclosureGroup(isExpanded: $showsAdvanced) {
-                    issueFilterRow
-                } label: {
-                    SettingsRowLabel("Advanced")
-                }
-            }
-        } header: {
-            SettingsSectionHeader("Connection")
+    /// Where a source's token is made, on the server typed so far; nil while it is not one Kannu
+    /// would connect to.
+    static func createTokenURL(for source: TaskSource, server: String) -> URL? {
+        switch source {
+        case .github:
+            return TasksManager.githubCreateTokenURL(server: server)
+        case .linear:
+            return URL(string: "https://linear.app/settings/account/security")
+        case .todoist:
+            return URL(string: "https://app.todoist.com/app/settings/integrations/developer")
+        case .local, .jira, .gitlab, .appleReminders:
+            return nil
         }
     }
 
-    /// Refresh, with what the last sync found. While Jira asks Kannu to wait, the button is off
-    /// until the time it gave; the timeline redraws once, then, with no polling.
-    private var issuesRow: some View {
-        LabeledContent {
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if manager.isSyncing(.jira) {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                    Button("Refresh") { manager.refresh(.jira) }
-                        .disabled(!canRefresh(at: context.date))
-                }
-            }
-        } label: {
-            TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                SettingsRowLabel("Jira issues", description: Text(verbatim: TaskSourceStatus.syncCaption(
-                    manager.syncState(.jira), enabled: jiraEnabled, at: context.date, source: .jira)))
-            }
+    /// System Settings › Privacy & Security › Reminders.
+    static func openRemindersPrivacySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Reminders") {
+            NSWorkspace.shared.open(url)
         }
-    }
-
-    private func canRefresh(at date: Date) -> Bool {
-        guard jiraEnabled, manager.isReady, !manager.isSyncing(.jira) else { return false }
-        return rateLimitedUntil.map { $0 <= date } ?? true
-    }
-
-    private var issueFilterRow: some View {
-        LabeledContent {
-            HStack(spacing: SettingsMetrics.rowContent) {
-                TextField("Issue filter (JQL)", text: $jiraJQL, prompt: Text(verbatim: JiraAPI.defaultJQL))
-                    .labelsHidden()
-                    .onSubmit { manager.refresh(.jira) }
-                Button("Reset") {
-                    jiraJQL = JiraAPI.defaultJQL
-                    manager.refresh(.jira)
-                }
-                .disabled(JiraAPI.effectiveJQL(jiraJQL) == JiraAPI.defaultJQL)
-            }
-        } label: {
-            SettingsRowLabel("Issue filter (JQL)", description: "Which issues appear. Return applies it.")
-        }
-    }
-}
-
-// MARK: - GitLab
-
-/// GitLab's page, its connection: Connect… or Disconnect…, what needs fixing, Sync GitLab, its
-/// colour, merge requests, and Refresh.
-private struct GitLabConnectionSection: View {
-    @ObservedObject private var manager = TasksManager.shared
-    @Default(.gitlabEnabled) private var gitlabEnabled
-    @Default(.gitlabHost) private var gitlabHost
-    @Default(.gitlabUsername) private var gitlabUsername
-    @Default(.gitlabAccountDisplayName) private var gitlabAccountDisplayName
-    @Default(.gitlabCanLogTime) private var gitlabCanLogTime
-    @Default(.gitlabIncludeMergeRequests) private var gitlabIncludeMergeRequests
-    @Default(.gitlabTaskColor) private var gitlabColor
-    let context: TasksPageContext
-
-    private var isConnected: Bool { !gitlabHost.isEmpty }
-    private var problem: String? { TaskSourceStatus.problem(manager.syncState(.gitlab), source: .gitlab) }
-    private var rateLimitedUntil: Date? { TaskSourceStatus.rateLimitedUntil(manager.syncState(.gitlab)) }
-
-    var body: some View {
-        Section {
-            LabeledContent {
-                if isConnected {
-                    Button("Disconnect…") { context.confirmsGitLabDisconnect.wrappedValue = true }
-                } else {
-                    Button("Connect…") { context.sheet.wrappedValue = .connectGitLab }
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                    Text("GitLab")
-                    SettingsStatusText(
-                        TaskSourceStatus.gitlabText(host: gitlabHost, username: gitlabUsername, canLogTime: gitlabCanLogTime),
-                        isReady: isConnected && gitlabEnabled && problem == nil
-                    )
-                    if isConnected {
-                        Text(verbatim: listsText)
-                            .settingsDescriptionStyle()
-                    } else {
-                        Text("Your issues and MRs, from gitlab.com or your server.")
-                            .settingsDescriptionStyle()
-                    }
-                }
-            }
-
-            if isConnected, let problem {
-                SettingsErrorText(problem)
-            }
-            if isConnected, manager.syncState(.gitlab) == .needsKeychainApproval {
-                SettingsActionRow("GitLab Keychain access", description: "Let Kannu read the saved GitLab token.") {
-                    Button("Allow Keychain Access") { manager.refresh(.gitlab) }
-                }
-            }
-            if !isConnected, manager.tokenRemovalFailed(.gitlab) {
-                SettingsErrorText(String(localized: "Couldn't remove the GitLab token from your Keychain."))
-                SettingsActionRow("Saved GitLab token", description: "Or delete com.kannu.app.secure-secrets (gitlab-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingToken(.gitlab) }
-                }
-            }
-
-            if isConnected {
-                SettingsRow("Sync GitLab", description: gitlabEnabled
-                    ? Text("Fetch your open GitLab issues.")
-                    : Text("Sync paused. GitLab tasks stay listed.")) {
-                    Defaults.Toggle(key: .gitlabEnabled) {
-                        Text("Sync GitLab")
-                    }
-                }
-                // On the row that holds the switch, so it exists whenever the switch is clicked.
-                .onChange(of: gitlabEnabled) { _, isOn in
-                    if isOn { manager.syncIfStale(.gitlab) }
-                }
-
-                TaskColorRow(
-                    "GitLab colour",
-                    description: "For GitLab tasks that have no tags.",
-                    accessibilityLabel: String(localized: "GitLab colour: \(gitlabColor.localizedName)"),
-                    selection: $gitlabColor
-                )
-
-                SettingsRow("Include merge requests", description: "Also show MRs assigned to you or awaiting your review.") {
-                    Defaults.Toggle(key: .gitlabIncludeMergeRequests) {
-                        Text("Include merge requests")
-                    }
-                }
-                // On the row that holds the switch, so it exists whenever the switch is clicked. The
-                // task order follows the switch on its own; this brings the fetch in line with it.
-                .onChange(of: gitlabIncludeMergeRequests) { _, _ in
-                    manager.sourceOptionsChanged(.gitlab)
-                }
-
-                itemsRow
-            }
-        } header: {
-            SettingsSectionHeader("Connection")
-        }
-    }
-
-    private var listsText: String {
-        let lists = gitlabIncludeMergeRequests
-            ? String(localized: "Lists your open issues and merge requests")
-            : String(localized: "Lists your open issues")
-        let name = gitlabAccountDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? lists : "\(name) · \(lists)"
-    }
-
-    /// Refresh, with what the last sync found. While GitLab asks Kannu to wait, the button is off
-    /// until the time it gave; the timeline redraws once, then, with no polling.
-    private var itemsRow: some View {
-        LabeledContent {
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if manager.isSyncing(.gitlab) {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                    Button("Refresh") { manager.refresh(.gitlab) }
-                        .disabled(!canRefresh(at: context.date))
-                }
-            }
-        } label: {
-            TimelineView(.explicit(rateLimitedUntil.map { [$0] } ?? [])) { context in
-                SettingsRowLabel("GitLab items", description: Text(verbatim: TaskSourceStatus.syncCaption(
-                    manager.syncState(.gitlab), enabled: gitlabEnabled, at: context.date, source: .gitlab)))
-            }
-        }
-    }
-
-    private func canRefresh(at date: Date) -> Bool {
-        guard gitlabEnabled, manager.isReady, !manager.isSyncing(.gitlab) else { return false }
-        return rateLimitedUntil.map { $0 <= date } ?? true
     }
 }
 
@@ -473,8 +409,7 @@ private struct GitLabConnectionSection: View {
 /// controls whose label the row replaces (docs/SETTINGS.md). The swatch's own label replaces the
 /// row's for VoiceOver, so `accessibilityLabel` names what it colours as well as the colour.
 struct TaskColorRow: View {
-    private let title: LocalizedStringKey
-    private let description: LocalizedStringKey
+    private let label: SettingsRowLabel
     private let accessibilityLabel: String
     @Binding private var selection: TaskColor
 
@@ -484,8 +419,14 @@ struct TaskColorRow: View {
         accessibilityLabel: String,
         selection: Binding<TaskColor>
     ) {
-        self.title = title
-        self.description = description
+        label = SettingsRowLabel(title, description: description)
+        self.accessibilityLabel = accessibilityLabel
+        _selection = selection
+    }
+
+    /// For a title built at run time (already localised): a source's "GitHub colour".
+    init(verbatim title: String, description: String, accessibilityLabel: String, selection: Binding<TaskColor>) {
+        label = SettingsRowLabel(verbatim: title, description: description)
         self.accessibilityLabel = accessibilityLabel
         _selection = selection
     }
@@ -494,7 +435,7 @@ struct TaskColorRow: View {
         LabeledContent {
             TaskColorPickerButton(selection: $selection, accessibilityLabel: accessibilityLabel)
         } label: {
-            SettingsRowLabel(title, description: description)
+            label
         }
     }
 }

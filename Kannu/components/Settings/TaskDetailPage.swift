@@ -175,11 +175,14 @@ struct TaskDetailPage: View {
                     SettingsRowLabel("Source", description: Text(verbatim: remote.key))
                 }
 
-                SettingsRow("Ask to log its time", description: "Offer its recorded time in Time to log.") {
-                    Toggle("Ask to log its time", isOn: Binding(
-                        get: { task.logPolicy == .ask },
-                        set: { manager.setAsksToLogTime($0, for: task.id) }
-                    ))
+                // Only where the source takes time (`TaskSource.logsTime`): Jira and GitLab.
+                if task.source.logsTime {
+                    SettingsRow("Ask to log its time", description: "Offer its recorded time in Time to log.") {
+                        Toggle("Ask to log its time", isOn: Binding(
+                            get: { task.logPolicy == .ask },
+                            set: { manager.setAsksToLogTime($0, for: task.id) }
+                        ))
+                    }
                 }
             }
         } header: {

@@ -75,9 +75,13 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // their source's page and gave up their ids (nine fewer of each); the overview's new
         // "Local tasks" row registers one; "Task list" became "All tasks"; two new entries, "Local
         // tasks" and "Find a task", land on overview rows.
-        XCTAssertEqual(inventory.entries.count, 235, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 266, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 260, "distinct registered ids")
+        // 2026-10-19: every source shares one row shape. "Sources" now lands on the always-present
+        // Local tasks row (its own "Local tasks" id is gone); Jira's row has its own "Jira Cloud" id
+        // (one out, one in). GitHub, Linear, Todoist and Apple Reminders rows and the new "Add a
+        // source" row register five more ids; "Add a source" is one more entry.
+        XCTAssertEqual(inventory.entries.count, 236, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 271, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 265, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
@@ -142,6 +146,18 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         XCTAssertEqual(withoutRow, [])
     }
 
+    /// A source's row exists only while it is connected, so its entries land on Add a source until
+    /// then: the redirect is wired, and every source with a row has its id in the map it reads.
+    func testASourceNotConnectedLandsOnAddASource() throws {
+        let settingsView = try XCTUnwrap(try Self.sources()["SettingsView.swift"])
+        XCTAssertTrue(settingsView.contains(".map(landingOnABuiltRow)"), "search no longer redirects them")
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.tasksAddSourceHighlightID"))
+        for link in ["tasksJiraSourceHighlightID", "tasksGitLabSourceHighlightID", "tasksGitHubSourceHighlightID",
+                     "tasksLinearSourceHighlightID", "tasksTodoistSourceHighlightID", "tasksAppleRemindersSourceHighlightID"] {
+            XCTAssertTrue(settingsView.contains(": \(link)"), "\(link) is not in taskSourceRows")
+        }
+    }
+
     /// Brain › Tasks' pages below the overview exist only while open, so nothing on them may carry
     /// a highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). All tasks'
     /// own deep link is on its back row, which the overview's file builds.
@@ -161,8 +177,9 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         let landing = Dictionary(inventory.entries.filter { $0.tab == "tasks" }.map { ($0.title, $0.highlight) },
                                  uniquingKeysWith: { first, _ in first })
         let rows: [String: [String]] = [
-            "tasksLocalSourceHighlightID": ["Local tasks", "Local tasks colour"],
-            "tasksSourcesHighlightID": ["Jira Cloud", "Sync Jira", "Jira colour", "Refresh Jira issues", "Issue filter (JQL)"],
+            "tasksSourcesHighlightID": ["Sources", "Local tasks", "Local tasks colour"],
+            "tasksJiraSourceHighlightID": ["Jira Cloud", "Sync Jira", "Jira colour", "Refresh Jira issues", "Issue filter (JQL)"],
+            "tasksAddSourceHighlightID": ["Add a source"],
             "tasksGitLabSourceHighlightID": ["GitLab", "Sync GitLab", "GitLab colour", "Include merge requests", "Refresh GitLab items"],
             "tasksListHighlightID": ["All tasks", "Find a task", "Add a task", "Task order", "Tag colours", "Archived tasks"],
         ]

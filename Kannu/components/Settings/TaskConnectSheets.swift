@@ -198,3 +198,119 @@ struct GitLabConnectSheet: View {
         dismiss()
     }
 }
+
+/// Connect… for GitHub, Linear, Todoist and Apple Reminders. A token — GitHub's with its server — lives
+/// only in this sheet's state until the source has accepted it; the manager then stores it in the
+/// Keychain and the field is cleared. Apple Reminders has no token: Connect asks macOS, which shows
+/// its own question once. A sheet pads its own content; a Form row never does.
+struct SourceConnectSheet: View {
+    let source: TaskSource
+    @Environment(\.dismiss) private var dismiss
+    @State private var server = "https://github.com"
+    @State private var token = ""
+    /// Saved only when Connect succeeds; Cancel keeps the colour the key had.
+    @State private var color: TaskColor
+    @State private var problem: String?
+    @State private var connecting: Task<Void, Never>?
+
+    init(source: TaskSource) {
+        self.source = source
+        _color = State(initialValue: Defaults[source.colorKey])
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
+            Text(verbatim: String(localized: "Connect \(source.title)"))
+                .font(.headline)
+            Text(verbatim: explanation)
+                .settingsDescriptionStyle()
+            if source == .github {
+                TextField("Server", text: $server, prompt: Text(verbatim: "https://github.com"))
+                    .onChange(of: server) { _, _ in problem = nil }
+            }
+            if source.usesToken {
+                SecureField(tokenLabel, text: $token)
+                if let createTokenURL = TaskSourceStatus.createTokenURL(for: source, server: server) {
+                    Link("Create token…", destination: createTokenURL)
+                }
+            }
+            LabeledContent {
+                TaskColorPickerButton(
+                    selection: $color,
+                    accessibilityLabel: String(localized: "\(source.name) colour: \(color.localizedName)")
+                )
+            } label: {
+                SettingsRowLabel(verbatim: String(localized: "\(source.name) colour"),
+                                 description: String(localized: "For \(source.name) tasks that have no tags."))
+            }
+            if let problem {
+                Text(verbatim: problem)
+                    .settingsDescriptionStyle(tint: .red)
+            }
+            HStack(spacing: SettingsMetrics.rowContent) {
+                if connecting != nil {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Spacer()
+                Button("Cancel", role: .cancel) { close() }
+                    .keyboardShortcut(.cancelAction)
+                Button(source.usesToken ? String(localized: "Connect") : String(localized: "Allow Access")) { connect() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(connecting != nil || (source.usesToken && token.isEmpty))
+            }
+        }
+        .padding(SettingsMetrics.cardPadding)
+        .frame(width: 420)
+        .onDisappear {
+            connecting?.cancel()
+            token = ""
+        }
+    }
+
+    private var explanation: String {
+        switch source {
+        case .github:
+            return String(localized: "Issues assigned to you. A fine-grained token with read access to issues is enough. Checked with your server, then kept in your Keychain.")
+        case .linear:
+            return String(localized: "Issues assigned to you. Create a personal API key in Linear, under Security & access. Checked with Linear, then kept in your Keychain.")
+        case .todoist:
+            return String(localized: "Your open tasks. Your API token is in Todoist, under Integrations › Developer. Checked with Todoist, then kept in your Keychain.")
+        case .appleReminders:
+            return String(localized: "Your incomplete reminders, from every list. macOS asks you once; Kannu reads them and never changes them.")
+        case .local, .jira, .gitlab:
+            return ""
+        }
+    }
+
+    private var tokenLabel: String {
+        switch source {
+        case .linear: return String(localized: "API key")
+        case .todoist: return String(localized: "API token")
+        case .local, .jira, .gitlab, .github, .appleReminders: return String(localized: "Personal access token")
+        }
+    }
+
+    private func connect() {
+        problem = nil
+        connecting = Task { @MainActor in
+            let failure = await TasksManager.shared.connect(source, server: server, token: token)
+            guard !Task.isCancelled else { return }
+            connecting = nil
+            if let failure {
+                problem = failure
+            } else {
+                token = ""
+                Defaults[source.colorKey] = color
+                dismiss()
+            }
+        }
+    }
+
+    private func close() {
+        connecting?.cancel()
+        connecting = nil
+        token = ""
+        dismiss()
+    }
+}

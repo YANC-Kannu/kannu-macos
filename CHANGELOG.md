@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Brain › Tasks shows the sources you use, with one Add a source for the rest
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 3 of the task-sources PR: the overview with Add a source, one connection page for every source, one connect sheet for the new ones
+- **Changes:**
+  - Brain › Tasks › Sources lists Local tasks, then each connected source with "N open ›", then one "Add a source" row whose Connect… menu lists the sources not connected. A source not connected has no row of its own. Its search entries land on Add a source (`landingOnABuiltRow`), and the tasks it kept stay in All tasks.
+  - Every source's page has the same Connection section: who it is connected as and Disconnect…; what needs fixing (a refused token, Keychain access, Reminders access); Sync; its colour; Refresh with what the last sync found; and its own options (Jira's issue filter under Advanced, GitLab's Include merge requests). The Jira and GitLab sections written twice are gone.
+  - One Disconnect dialog serves every source ("Disconnect GitHub?", Keep or Remove its tasks). Disconnecting from a source's page also leaves that page.
+  - New `SourceConnectSheet` connects GitHub (server and token), Linear (API key), Todoist (API token) and Apple Reminders (macOS's own question). Jira and GitLab keep their sheets.
+  - Deep links: "Sources" lands on the always-present Local tasks row. Jira's row has its own id, and each new source's row gets one, along with "Add a source". The notch's "Manage tasks…" and "Add a source…" still land on Sources.
+  - "Ask to Log" and "Never Ask to Log" show only for sources whose time can be logged (Jira and GitLab).
+  - Tests:
+    - `SettingsHighlightInventoryTests`: re-pinned counts (236 entries, 271 registrations, 265 ids, with a dated note), the new landing map, and a new test that a source not connected lands on Add a source.
+    - `SettingsLayoutRulesTests`: the third connect sheet's padding.
+
 ### 2026-10-19 - Jira and GitLab sync through one engine that every source will share
 - **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
 - **Agent label:** Claude Code (Opus 5.5) — step 2 of the task-sources PR: `SourceSync` and `CredentialStore`, with Jira and GitLab moved onto them

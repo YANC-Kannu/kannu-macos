@@ -180,11 +180,14 @@ struct TaskRowList: View {
             if let link = taskOpenLink(for: task, manager: manager) {
                 Button(link.title) { NSWorkspace.shared.open(link.url) }
             }
-            // Whether the time recorded on it is offered in Time to log. Never asking keeps it here.
-            if task.logPolicy == .ask {
-                Button("Never Ask to Log") { manager.setAsksToLogTime(false, for: task.id) }
-            } else {
-                Button("Ask to Log") { manager.setAsksToLogTime(true, for: task.id) }
+            // Whether the time recorded on it is offered in Time to log, where its source takes time.
+            // Never asking keeps it here.
+            if task.source.logsTime {
+                if task.logPolicy == .ask {
+                    Button("Never Ask to Log") { manager.setAsksToLogTime(false, for: task.id) }
+                } else {
+                    Button("Ask to Log") { manager.setAsksToLogTime(true, for: task.id) }
+                }
             }
             Button("Archive") { manager.archive(task.id) }
         }

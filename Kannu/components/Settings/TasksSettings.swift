@@ -47,8 +47,8 @@ struct TasksSettings: View {
     @State private var pendingDelete: TaskItem?
     @State private var newTitle = ""
     @State private var newEstimate: Int?
-    @State private var confirmsJiraDisconnect = false
-    @State private var confirmsGitLabDisconnect = false
+    /// The source whose Disconnect… was clicked, while its dialog asks what to keep.
+    @State private var confirmsDisconnect: TaskSource?
     /// The pages opened below the overview; empty is the overview.
     @State private var path: [TasksPage] = []
     /// All tasks' Find field. Here, not on the page, so it survives a look at a task and back.
@@ -66,9 +66,9 @@ struct TasksSettings: View {
             pendingDelete: $pendingDelete,
             newTitle: $newTitle,
             newEstimate: $newEstimate,
-            confirmsJiraDisconnect: $confirmsJiraDisconnect,
-            confirmsGitLabDisconnect: $confirmsGitLabDisconnect,
-            open: { path.append($0) }
+            confirmsDisconnect: $confirmsDisconnect,
+            open: { path.append($0) },
+            connect: { sheet = .connect($0) }
         )
     }
 
@@ -112,10 +112,12 @@ struct TasksSettings: View {
         }
         .sheet(item: $sheet) { sheet in
             switch sheet {
-            case .connectJira:
+            case .connect(.jira):
                 JiraConnectSheet()
-            case .connectGitLab:
+            case .connect(.gitlab):
                 GitLabConnectSheet()
+            case .connect(let source):
+                SourceConnectSheet(source: source)
             case .tags(let taskID, let title, let current, let existing):
                 TaskTagsSheet(taskID: taskID, title: title, current: current, existing: existing)
             default:
@@ -136,19 +138,19 @@ struct TasksSettings: View {
         } message: { _ in
             Text("Its recorded time is deleted too.")
         }
-        .confirmationDialog("Disconnect Jira?", isPresented: $confirmsJiraDisconnect, titleVisibility: .visible) {
-            Button("Keep Jira Tasks") { TasksManager.shared.disconnect(.jira, removeTasks: false) }
-            Button("Remove Jira Tasks", role: .destructive) { TasksManager.shared.disconnect(.jira, removeTasks: true) }
+        .confirmationDialog(
+            Text(verbatim: String(localized: "Disconnect \(confirmsDisconnect?.name ?? "")?")),
+            isPresented: Binding(get: { confirmsDisconnect != nil }, set: { if !$0 { confirmsDisconnect = nil } }),
+            titleVisibility: .visible,
+            presenting: confirmsDisconnect
+        ) { source in
+            Button(String(localized: "Keep \(source.name) Tasks")) { disconnect(source, removeTasks: false) }
+            Button(String(localized: "Remove \(source.name) Tasks"), role: .destructive) { disconnect(source, removeTasks: true) }
             Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Kannu forgets the token. Keep the Jira tasks and their time, or remove them.")
-        }
-        .confirmationDialog("Disconnect GitLab?", isPresented: $confirmsGitLabDisconnect, titleVisibility: .visible) {
-            Button("Keep GitLab Tasks") { TasksManager.shared.disconnect(.gitlab, removeTasks: false) }
-            Button("Remove GitLab Tasks", role: .destructive) { TasksManager.shared.disconnect(.gitlab, removeTasks: true) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Kannu forgets the token. Keep the GitLab tasks and their time, or remove them.")
+        } message: { source in
+            Text(verbatim: source.usesToken
+                 ? String(localized: "Kannu forgets the token. Keep the \(source.name) tasks and their time, or remove them.")
+                 : String(localized: "Kannu stops reading \(source.name). Keep its tasks and their time, or remove them."))
         }
     }
 
@@ -197,10 +199,7 @@ struct TasksSettings: View {
     /// page, a task by its id.
     private static func scrollTarget(of page: TasksPage) -> AnyHashable {
         switch page {
-        case .source(.local): return SettingsDeepLink.tasksLocalSourceHighlightID
-        case .source(.jira): return SettingsDeepLink.tasksSourcesHighlightID
-        case .source(.gitlab): return SettingsDeepLink.tasksGitLabSourceHighlightID
-        case .source: return SettingsDeepLink.tasksSourcesHighlightID
+        case .source(let source): return SettingsDeepLink.taskSourceRows[source] ?? SettingsDeepLink.tasksSourcesHighlightID
         case .project: return page
         case .task(let id): return id
         case .allTasks: return SettingsDeepLink.tasksListHighlightID
@@ -247,6 +246,17 @@ struct TasksSettings: View {
         }
     }
 
+    /// Disconnect, from the dialog: the source's page, if open, leaves with its tasks.
+    private func disconnect(_ source: TaskSource, removeTasks: Bool) {
+        TasksManager.shared.disconnect(source, removeTasks: removeTasks)
+        path.removeAll { page in
+            switch page {
+            case .source(let shown), .project(let shown, _): return shown == source
+            case .task, .allTasks: return false
+            }
+        }
+    }
+
     private func apply(_ value: TaskValueSheet.Value, from sheet: TaskSheet) {
         switch (sheet, value) {
         case (.customEstimateForNewTask, .duration(let seconds)):
@@ -286,9 +296,10 @@ struct TasksPageContext {
     let pendingDelete: Binding<TaskItem?>
     let newTitle: Binding<String>
     let newEstimate: Binding<Int?>
-    let confirmsJiraDisconnect: Binding<Bool>
-    let confirmsGitLabDisconnect: Binding<Bool>
+    let confirmsDisconnect: Binding<TaskSource?>
     let open: (TasksPage) -> Void
+    /// Connect…: the source's own sheet (a token, or Apple Reminders' permission).
+    let connect: (TaskSource) -> Void
 }
 
 /// Atop every page, alone in its own Section: up one level, naming where it goes ("‹ GitLab"). The
@@ -328,49 +339,60 @@ struct TasksOpenButton: View {
     }
 }
 
-/// The overview's Sources: Local tasks, Jira Cloud and GitLab, each with how many tasks it holds and
-/// a › to its page, where its connection and settings are. A source not connected offers Connect…,
-/// and its page too while it still holds tasks kept from before. A separate view so `TasksManager`
-/// is created only once tasks are turned on.
+/// The overview's Sources: Local tasks, then each connected source with how many tasks it holds and a
+/// › to its page, where its connection and settings are; then "Add a source", a Connect menu of the
+/// sources not connected. A source not connected has no row of its own: its search entries land on
+/// Add a source (`SettingsView.landingOnABuiltRow`), and tasks it kept from before stay in All tasks.
+/// A separate view so `TasksManager` is created only once tasks are turned on.
 ///
 /// Status comes from the Defaults display copies and the manager's sync state, never from the
 /// Keychain (`TaskSourceStatus`). A source's row appearing asks for a sync only when the last one is
-/// stale; a problem shows here as "Needs attention" and in full on the source's page.
+/// stale; a problem shows here as "Needs attention" and in full on the source's page. Each row
+/// registers its own deep link, literally (`highlighted(_:for:)`), so search and the inventory test
+/// find it.
 private struct TaskSourcesSection: View {
     @ObservedObject private var manager = TasksManager.shared
-    @Default(.jiraEnabled) private var jiraEnabled
-    @Default(.jiraSiteHost) private var jiraSiteHost
-    @Default(.jiraAccountDisplayName) private var jiraAccountDisplayName
-    @Default(.gitlabEnabled) private var gitlabEnabled
-    @Default(.gitlabHost) private var gitlabHost
-    @Default(.gitlabUsername) private var gitlabUsername
-    @Default(.gitlabCanLogTime) private var gitlabCanLogTime
     let context: TasksPageContext
 
     var body: some View {
         let counts = TaskFacets.sourceCounts(manager.activeTasks)
+        let sources = manager.syncs.map(\.source)
+        let connected = sources.filter(\.isConnected)
+        let addable = sources.filter { !$0.isConnected }
         Section {
             LabeledContent {
                 openButton(count: counts[.local] ?? 0, page: .source(.local))
             } label: {
                 SettingsRowLabel("Local tasks", description: "Tasks you add here or in the notch.")
             }
-            .settingsHighlight(id: SettingsDeepLink.tasksLocalSourceHighlightID)
+            .settingsHighlight(id: SettingsDeepLink.tasksSourcesHighlightID)
 
-            jiraRow(count: counts[.jira] ?? 0)
-            if jiraSiteHost.isEmpty, manager.tokenRemovalFailed(.jira) {
-                SettingsErrorText(String(localized: "Couldn't remove the Jira token from your Keychain."))
-                SettingsActionRow("Saved Jira token", description: "Or delete com.kannu.app.secure-secrets (jira-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingToken(.jira) }
+            ForEach(connected, id: \.self) { source in
+                highlighted(sourceRow(source, count: counts[source] ?? 0), for: source)
+            }
+
+            ForEach(addable.filter { manager.tokenRemovalFailed($0) }, id: \.self) { source in
+                SettingsErrorText(String(localized: "Couldn't remove the \(source.name) token from your Keychain."))
+                SettingsActionRow(
+                    "Saved token",
+                    description: String(localized: "Or delete com.kannu.app.secure-secrets (\(TaskSourceStatus.keychainItem(for: source))) in Keychain Access.")
+                ) {
+                    Button("Remove Token") { manager.retryRemovingToken(source) }
                 }
             }
 
-            gitlabRow(count: counts[.gitlab] ?? 0)
-            if gitlabHost.isEmpty, manager.tokenRemovalFailed(.gitlab) {
-                SettingsErrorText(String(localized: "Couldn't remove the GitLab token from your Keychain."))
-                SettingsActionRow("Saved GitLab token", description: "Or delete com.kannu.app.secure-secrets (gitlab-credential) in Keychain Access.") {
-                    Button("Remove Token") { manager.retryRemovingToken(.gitlab) }
+            if !addable.isEmpty {
+                LabeledContent {
+                    Menu("Connect…") {
+                        ForEach(addable, id: \.self) { source in
+                            Button(source.title) { context.connect(source) }
+                        }
+                    }
+                    .fixedSize()
+                } label: {
+                    SettingsRowLabel("Add a source", description: Text(verbatim: addable.map(\.title).formatted(.list(type: .or))))
                 }
+                .settingsHighlight(id: SettingsDeepLink.tasksAddSourceHighlightID)
             }
         } header: {
             SettingsSectionHeader("Sources")
@@ -389,63 +411,37 @@ private struct TaskSourcesSection: View {
         ) { context.open(page) }
     }
 
-    private var isJiraConnected: Bool { !jiraSiteHost.isEmpty }
-    private var isGitLabConnected: Bool { !gitlabHost.isEmpty }
-
-    private func jiraRow(count: Int) -> some View {
-        let problem = TaskSourceStatus.problem(manager.syncState(.jira), source: .jira)
-        let status = isJiraConnected && (problem != nil || manager.syncState(.jira) == .needsKeychainApproval)
+    /// A connected source: who it is connected as, or "Needs attention", and its open count.
+    private func sourceRow(_ source: TaskSource, count: Int) -> some View {
+        let state = manager.syncState(source)
+        let problem = TaskSourceStatus.problem(state, source: source)
+        let status = problem != nil || state == .needsKeychainApproval
             ? String(localized: "Needs attention")
-            : TaskSourceStatus.jiraText(connected: isJiraConnected, name: jiraAccountDisplayName)
+            : TaskSourceStatus.text(for: source)
         return LabeledContent {
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if !isJiraConnected {
-                    Button("Connect…") { context.sheet.wrappedValue = .connectJira }
-                }
-                if isJiraConnected || count > 0 {
-                    openButton(count: count, page: .source(.jira))
-                }
-            }
+            openButton(count: count, page: .source(source))
         } label: {
             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("Jira Cloud")
-                SettingsStatusText(status, isReady: isJiraConnected && jiraEnabled && problem == nil)
-                if !isJiraConnected {
-                    Text("Your open issues. Needs your site, email and a token.")
-                        .settingsDescriptionStyle()
-                }
+                Text(verbatim: source.title)
+                SettingsStatusText(status, isReady: source.isSyncOn && problem == nil)
             }
         }
-        .settingsHighlight(id: SettingsDeepLink.tasksSourcesHighlightID)
-        .onAppear { manager.syncIfStale(.jira) }
+        .onAppear { manager.syncIfStale(source) }
     }
 
-    private func gitlabRow(count: Int) -> some View {
-        let problem = TaskSourceStatus.problem(manager.syncState(.gitlab), source: .gitlab)
-        let status = isGitLabConnected && (problem != nil || manager.syncState(.gitlab) == .needsKeychainApproval)
-            ? String(localized: "Needs attention")
-            : TaskSourceStatus.gitlabText(host: gitlabHost, username: gitlabUsername, canLogTime: gitlabCanLogTime)
-        return LabeledContent {
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if !isGitLabConnected {
-                    Button("Connect…") { context.sheet.wrappedValue = .connectGitLab }
-                }
-                if isGitLabConnected || count > 0 {
-                    openButton(count: count, page: .source(.gitlab))
-                }
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("GitLab")
-                SettingsStatusText(status, isReady: isGitLabConnected && gitlabEnabled && problem == nil)
-                if !isGitLabConnected {
-                    Text("Your issues and MRs, from gitlab.com or your server.")
-                        .settingsDescriptionStyle()
-                }
-            }
+    /// Each source's row with its own deep link, written out so it is found by search and pinned by
+    /// `SettingsHighlightInventoryTests`.
+    @ViewBuilder
+    private func highlighted(_ row: some View, for source: TaskSource) -> some View {
+        switch source {
+        case .local: row
+        case .jira: row.settingsHighlight(id: SettingsDeepLink.tasksJiraSourceHighlightID)
+        case .gitlab: row.settingsHighlight(id: SettingsDeepLink.tasksGitLabSourceHighlightID)
+        case .github: row.settingsHighlight(id: SettingsDeepLink.tasksGitHubSourceHighlightID)
+        case .linear: row.settingsHighlight(id: SettingsDeepLink.tasksLinearSourceHighlightID)
+        case .todoist: row.settingsHighlight(id: SettingsDeepLink.tasksTodoistSourceHighlightID)
+        case .appleReminders: row.settingsHighlight(id: SettingsDeepLink.tasksAppleRemindersSourceHighlightID)
         }
-        .settingsHighlight(id: SettingsDeepLink.tasksGitLabSourceHighlightID)
-        .onAppear { manager.syncIfStale(.gitlab) }
     }
 }
 
@@ -547,15 +543,12 @@ enum TaskSheet: Identifiable {
     case tags(taskID: UUID, title: String, current: [String], existing: [String])
     /// Schedule on a local task.
     case schedule(taskID: UUID, title: String, current: Date?)
-    /// Connect… on the Jira Cloud row: served by `JiraConnectSheet`, not `TaskValueSheet`.
-    case connectJira
-    /// Connect… on the GitLab row: served by `GitLabConnectSheet`.
-    case connectGitLab
+    /// Connect… for a source: `JiraConnectSheet`, `GitLabConnectSheet`, or `SourceConnectSheet`.
+    case connect(TaskSource)
 
     var id: String {
         switch self {
-        case .connectJira: return "connect-jira"
-        case .connectGitLab: return "connect-gitlab"
+        case .connect(let source): return "connect-\(source.rawValue)"
         case .customEstimateForNewTask: return "new-task-estimate"
         case .estimate(let taskID, _, _): return "estimate-\(taskID)"
         case .addTime(let taskID, _): return "add-time-\(taskID)"
@@ -591,7 +584,7 @@ private struct TaskValueSheet: View {
         switch sheet {
         case .customEstimateForNewTask(let current), .estimate(_, _, let current):
             _text = State(initialValue: current.map(WorkDuration.format) ?? "")
-        case .addTime, .endTime, .schedule, .tags, .connectJira, .connectGitLab:
+        case .addTime, .endTime, .schedule, .tags, .connect:
             _text = State(initialValue: "")
         }
         switch sheet {
@@ -679,15 +672,14 @@ private struct TaskValueSheet: View {
         case .endTime: return "Set End Time"
         case .tags: return "Tags"
         case .schedule: return "Schedule"
-        case .connectJira: return "Connect Jira Cloud"
-        case .connectGitLab: return "Connect GitLab"
+        case .connect: return "Connect"
         }
     }
 
     /// The task's own title, verbatim.
     private var subject: String? {
         switch sheet {
-        case .customEstimateForNewTask, .tags, .connectJira, .connectGitLab: return nil
+        case .customEstimateForNewTask, .tags, .connect: return nil
         case .estimate(_, let title, _), .addTime(_, let title), .endTime(_, _, let title, _, _),
              .schedule(_, let title, _):
             return title
@@ -706,7 +698,7 @@ private struct TaskValueSheet: View {
             return "When did you stop? Not after a later session began."
         case .schedule:
             return "A reminder with a Start button."
-        case .tags, .connectJira, .connectGitLab:
+        case .tags, .connect:
             return ""
         }
     }
@@ -715,7 +707,7 @@ private struct TaskValueSheet: View {
         switch sheet {
         case .addTime: return "Add"
         case .schedule: return "Schedule"
-        case .customEstimateForNewTask, .estimate, .endTime, .tags, .connectJira, .connectGitLab: return "Save"
+        case .customEstimateForNewTask, .estimate, .endTime, .tags, .connect: return "Save"
         }
     }
 
