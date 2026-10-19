@@ -1032,6 +1032,12 @@ struct ContentView: View {
                 clearRevealState()
                 syncHiddenEdgeHoverPolling()
             }
+            // A running timer holds a hide-until-hover island out, which ends the hidden-edge poll;
+            // when the timer stops (or its live activity is turned off) the island hides again, and
+            // without the poll the top edge could not bring it back.
+            .onChange(of: timerOwnsClosedNotch) { _, _ in
+                syncHiddenEdgeHoverPolling()
+            }
             .onChange(of: vm.notchState) { _, state in
                 if state == .open {
                     // An open notch outlives any reveal window; the countdown restarts when

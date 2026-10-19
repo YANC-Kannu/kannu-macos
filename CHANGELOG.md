@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Act on CodeRabbit's review of #110
+- **Developer label:** CodeRabbit on #110: restart hidden-edge hover polling when the timer stops
+- **Agent label:** Claude Code (Opus 5.5) — `ContentView` syncs the hidden-edge poll whenever `timerOwnsClosedNotch` changes
+- **Changes:**
+  - On a display without a notch, with Always show off, a running timer keeps the island out, so
+    `shouldHideUntilHover` is false and the hidden-edge hover poll ends. When the timer stopped the
+    island hid again, but nothing restarted the poll, so resting the pointer on the top edge could not
+    bring it back until some other event did. `.onChange(of: timerOwnsClosedNotch)` now calls
+    `syncHiddenEdgeHoverPolling()`, which covers the timer starting or stopping and its live activity
+    being switched on or off.
+  - Test: `ClosedNotchTimerRulesTests.testTheHoverPollFollowsTheTimer`.
+
 ### 2026-10-19 - A running timer keeps the closed notch, with the agent light in its centre
 - **Developer label:** "when a timer runs you can see it clearly on the notch right, i felt like sometimes it missed that"
 - **Agent label:** Claude Code (Opus 5.5) — the closed notch's priority chain gives a running timer its place: the agent light rides in its centre, Caps Lock flashes instead of holding the notch, and a hide-until-hover island stays out

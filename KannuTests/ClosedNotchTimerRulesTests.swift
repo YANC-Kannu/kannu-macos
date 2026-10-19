@@ -76,6 +76,17 @@ final class ClosedNotchTimerRulesTests: XCTestCase {
                       "below a physical notch the centre must take the agent band's height")
     }
 
+    /// CodeRabbit on #110: a running timer holds a hide-until-hover island out, which ends the
+    /// hidden-edge poll. When the timer stops the island hides again, so the poll must be synced
+    /// again then, or the top edge cannot reveal the island.
+    func testTheHoverPollFollowsTheTimer() throws {
+        let text = try Self.read(Self.contentViewPath)
+        let change = try XCTUnwrap(Self.body(after: ".onChange(of: timerOwnsClosedNotch)", in: text),
+                                   "nothing watches timerOwnsClosedNotch")
+        XCTAssertTrue(change.contains("syncHiddenEdgeHoverPolling()"),
+                      "the hidden-edge poll is not synced when the timer starts or stops")
+    }
+
     func testCapsLockFlashesWhileATimerRuns() throws {
         XCTAssertEqual(Self.capsLockProblems(in: try Self.read(Self.capsLockPath)), [])
     }
