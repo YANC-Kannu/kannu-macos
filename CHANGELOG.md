@@ -4,6 +4,41 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - The Claude card splits in the golden ratio and fits the notch
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — the Usage tab's cards in the timer tab's language, 5 hour : Weekly = 1 : φ
+- **Changes:**
+  - The Claude card's two things sit side by side: the 5-hour window (now) as the minor column
+    and the weekly stack (the trend: all models, then each per-model window) as the major one,
+    1 : φ of the card's inner width — 98 : 161 pt with Cursor beside it in a 640-pt notch, 210 :
+    340 alone. Too narrow for two columns (three cards at 640), the card stacks its bars with one
+    line for both resets. The card is at most 138 pt in every state and no longer runs past the
+    notch; the notch never grows for it.
+  - The timer tab's language throughout: explicit type (13 semibold names, 12 semibold values,
+    11 medium text, 10 semibold chips and glyphs), 4-pt capsule bars on white 0.12, chips on
+    white 0.12, a continuous radius-10 glass card at white 0.06, fixed row heights, orange only
+    for an over-threshold band or a warning forecast, `.secondary` and `.tertiary` for everything
+    quiet. Every size reads from `UsageCardMetrics`; `UsageCardMetricsRulesTests` scans the view
+    for a literal size, a text style, a non-continuous rounded rectangle or a refresh tooltip
+    that does not open below, with planted offenders proving the scan.
+  - Forecasts no longer take a row each: under the 5-hour bar the verdict is a few words ("full
+    by 2:05 AM", `UsageForecast.shortCaption`, time only since a 5-hour window never needs the
+    day); on a weekly bar it tints the bar and percent orange and the full sentence is the row's
+    hover tooltip and accessibility value.
+  - A stale reading is a clock glyph in the header with "updated 3h ago" on hover, its bars
+    dimmed, not a text row; the account note is a chip beside the tier.
+  - One status row at a time, one line, the action as a chip beside it, in this order: what the
+    Claude refresh found, then a quota failure with its one-tap fix, then a quota failure alone.
+    The full message is the text's hover tooltip. Before, up to three stacked rows could show.
+  - Weekly bars beyond what fits (3 with a status row, 4 without) fold into a "+n" chip beside
+    the title that names them on hover; the stacked fallback draws three. These are the only
+    lossy rules, and they only bite at four or more per-model windows.
+  - Codex and Cursor on the same card: Codex splits like Claude with its Today/Week totals under
+    the weekly bar; Cursor's one window is titled **Billing cycle** (it was "Weekly", which is
+    wrong for it) with its totals and on-demand spend as facts; Antigravity is header and note.
+  - Not done: a sliding label for a clipped per-model name (the timer's `HoverRevealText` is not
+    on `development`); a long name truncates, and the row's tooltip names it.
+
 ### 2026-10-19 - The usage card's sizes add up in one place
 - **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
 - **Agent label:** Follow-up 67 — `UsageCardMetrics`: the 142-pt slot, the golden split, the row heights, the worst case proven
