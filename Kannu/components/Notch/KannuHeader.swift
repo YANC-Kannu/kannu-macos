@@ -115,7 +115,7 @@ struct KannuHeader: View {
                         // Icon-only, so VoiceOver would otherwise announce the SF Symbol name
                         // rather than what the control does.
                         .accessibilityLabel("Refresh usage")
-                        .hoverTooltip("Refresh usage", edge: .below)
+                        .hoverTooltip(String(localized: "Refresh usage"), edge: .below)
                         .transition(.opacity)
                     }
 

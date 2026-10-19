@@ -60,6 +60,8 @@ struct AllTasksPage: View {
         }
         .onAppear {
             manager.checkReminderPermission()
+            // Recently closed and the Archive read their days from now, not from the last sync.
+            manager.refreshArchive()
             // A Project filter saved before project keys: rewrite it once, so the menu selects it.
             let project = TaskFacets.normalizedProjectFilter(projectFilter)
             if project != projectFilter { projectFilter = project }
