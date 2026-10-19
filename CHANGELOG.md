@@ -24,6 +24,44 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     set and cleared with its session, the chip in the open timer and the popover's short keys, each
     rule with a planted offender.
 
+### 2026-10-19 - Act on CodeRabbit's review of #110
+- **Developer label:** CodeRabbit on #110: restart hidden-edge hover polling when the timer stops
+- **Agent label:** Claude Code (Opus 5.5) — `ContentView` syncs the hidden-edge poll whenever `timerOwnsClosedNotch` changes
+- **Changes:**
+  - On a display without a notch, with Always show off, a running timer keeps the island out, so
+    `shouldHideUntilHover` is false and the hidden-edge hover poll ends. When the timer stopped the
+    island hid again, but nothing restarted the poll, so resting the pointer on the top edge could not
+    bring it back until some other event did. `.onChange(of: timerOwnsClosedNotch)` now calls
+    `syncHiddenEdgeHoverPolling()`, which covers the timer starting or stopping and its live activity
+    being switched on or off.
+  - Test: `ClosedNotchTimerRulesTests.testTheHoverPollFollowsTheTimer`.
+
+### 2026-10-19 - A running timer keeps the closed notch, with the agent light in its centre
+- **Developer label:** "when a timer runs you can see it clearly on the notch right, i felt like sometimes it missed that"
+- **Agent label:** Claude Code (Opus 5.5) — the closed notch's priority chain gives a running timer its place: the agent light rides in its centre, Caps Lock flashes instead of holding the notch, and a hide-until-hover island stays out
+- **Changes:**
+  - Root cause: the closed notch draws the first match of one if/else-if chain, and the standalone
+    agent traffic light sat above the timer. With no music playing, the light took the whole notch
+    for 7 s after every agent change, while the pointer was on the notch, and for as long as a high
+    security finding waited, and the timer was not drawn at all.
+  - New `timerOwnsClosedNotch` in `ContentView`, one definition for "a running timer has the closed
+    notch". The standalone light gives way to it, and `TimerLiveActivity` now takes the light
+    (`TimerAgentLight`) and draws it in its centre, below a physical notch at the agent band's height,
+    the way the music pill already does. The light holds steady there instead of blinking with each
+    agent change. A pending high finding shows as the shield in the light; its text pill waits for the
+    standalone light, as beside the music pill.
+  - Caps Lock: its indicator no longer outranks a running timer. Pressing Caps Lock while a timer runs
+    flashes the indicator for the usual 1.5 s HUD time instead of holding the notch until released,
+    and a timer that starts while Caps Lock is on ends the held indicator (`CapsLockManager`). Other
+    HUDs are never ended by it.
+  - On a display without a notch, with Always show off, the island no longer hides until hover while a
+    timer runs; it hides again when the timer stops.
+  - Unchanged: the music pill (it already carries the timer and the light), downloads, HUD sneak
+    peeks, fullscreen hiding, and hovering a running timer opening the Timer tab.
+  - Test: new `ClosedNotchTimerRulesTests` pins the chain, the steady light, the hide-until-hover
+    term, the timer's centre drawing the light, and Caps Lock's flash and its end, each with a planted
+    copy of the old code.
+
 ### 2026-10-18 - Brain's Productivity section sits right under AI Agents
 - **Developer label:** "bring productivity settings to just below the ai section in brain"
 - **Agent label:** Claude Code (Opus 5.5) — the sidebar's section order changes, and General and Appearance get a "General" header
