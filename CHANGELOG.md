@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - Act on CodeRabbit's review of #109
+- **Developer label:** CodeRabbit's review of #109 (the fixes batch for #91, #92, #93 and #98): two findings, both in fullscreen detection
+- **Agent label:** Claude Code (Opus 5.5) — fullscreen is read again when the Accessibility grant changes, and the no-Accessibility fallback looks once more after the menu bar's slide
+- **Changes:**
+  - `FullscreenMediaDetector` observes `AccessibilityPermissionStore.isAuthorized`. Granting
+    Accessibility from Brain › Media moves the verdict from the menu-bar fallback to `AXFullScreen`,
+    and revoking it moves it back, but neither was a space, playback or setting change, so a
+    fallback misreading stood until one came along.
+  - Without Accessibility, `handleChange` reads fullscreen a second time 1 s after its 500 ms settle.
+    The fallback reads the menu bar from a window snapshot, and the menu bar's slide out of (or back
+    into) a fullscreen space can outlast the settle. macOS posts no public notice for the menu bar's
+    own show and hide, so this is the recheck; each pass still takes one snapshot, and with
+    Accessibility granted nothing waits.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsReadAgainWhenItsInputsChange`.
+
 ### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
 - **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
 - **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change

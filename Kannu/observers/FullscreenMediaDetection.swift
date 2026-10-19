@@ -86,10 +86,28 @@ class FullscreenMediaDetector: ObservableObject {
         Defaults.publisher(.enableFullscreenMediaDetection, options: [])
             .sink { [weak self] _ in Task { await self?.handleChange() } }
             .store(in: &cancellables)
+        // Granting Accessibility (Brain › Media's row) moves the verdict from the menu-bar
+        // fallback to `AXFullScreen`, and revoking it moves it back: neither is a space, playback
+        // or setting change, so a fallback misreading used to stand until one came along.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            AccessibilityPermissionStore.shared.$isAuthorized
+                .removeDuplicates()
+                .dropFirst()
+                .sink { [weak self] _ in Task { await self?.handleChange() } }
+                .store(in: &self.cancellables)
+        }
     }
 
     private func handleChange() async {
         try? await Task.sleep(for: .milliseconds(500))
+        self.updateFullScreenStatus()
+        // Without Accessibility the verdict reads the menu bar from a window snapshot, and the
+        // menu bar's slide out of (or back into) a fullscreen space can outlast the 500 ms
+        // settle. macOS posts no public notice for the menu bar's own show and hide, so the
+        // fallback looks once more after it has finished; still one snapshot per pass.
+        guard !AXIsProcessTrusted() else { return }
+        try? await Task.sleep(for: .milliseconds(1000))
         self.updateFullScreenStatus()
     }
 
