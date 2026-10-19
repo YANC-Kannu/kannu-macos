@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-19 - The hover-slide tests skip where motion cannot be seen
+- **Developer label:** #106's first CI run on development: `HoverRevealTextTests` failed on both macOS runners
+- **Agent label:** Claude Code (Opus 5.5) — the two motion tests skip under Reduce Motion and on GitHub Actions, where the clipped text never moved; the stillness test still runs everywhere
+- **Changes:**
+  - `HoverRevealTextTests.testAClippedLineSlidesWhileActive` and `testAClippedTitleSlidesUpWhileActive`
+    render the view in a window and compare its pixels before and after the slide's start delay.
+    On GitHub's hosted runners the pixels never changed (run 39302104033, macOS 15 and 26), while
+    every local run sees the slide. The stacked PRs that added them never had a CI build, so this
+    was the first run there.
+  - They now skip when Reduce Motion is on (the view holds still by design) and when
+    `GITHUB_ACTIONS` is set. `testTextThatFitsOrIsNotHoveredStaysStill` runs everywhere, as before.
+
 ### 2026-10-19 - The GitLab reconnect note ends its Brain path at the tab
 - **Developer label:** Bringing #106 up to date with development: `BrainPathRulesTests` (from #87's review) checks a note in the timer tab's Tasks page
 - **Agent label:** Claude Code (Opus 5.5) — "Reconnect GitLab in Brain › Tasks to see them." becomes "To see them, reconnect GitLab in Brain › Tasks."
