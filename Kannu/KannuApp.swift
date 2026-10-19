@@ -888,6 +888,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // able to arrive), and the reaper, which only ever stops Kannu's own orphaned helpers.
         startLaunchInvariants()
 
+        // The task reminders' delegate, before the gate: a click on a reminder while Kannu is not
+        // running launches it, and macOS hands the response to whatever delegate is set when this
+        // method returns — set once the launch continued, it missed the click. Installing sets the
+        // delegate and its Start button only: no permission prompt, no file read, no `TasksManager`.
+        // The response waits inside `TaskReminderCenter` until the launch has continued.
+        TaskReminderCenter.shared.install()
+
         // Nothing else — no helper, no permission prompt, no hook written into ~/.claude or ~/.cursor,
         // no notch — until the current Terms of Use are accepted. UI tests skip the gate.
         if TermsOfUse.isAccepted(acceptedVersion: Defaults[.termsAcceptedVersion])
@@ -969,7 +976,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = CaffeinateManager.shared
         extensionXPCServiceHost.start()
         extensionRPCServer.start()
-        
+
         // Migrate legacy progress bar settings
         Defaults.Keys.migrateProgressBarStyle()
         Defaults.Keys.migrateMusicAuxControls()
@@ -1378,6 +1385,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             shelfURLsAwaitingAcceptance.removeAll()
             _ = handleIncomingShelfURLs(waiting)
         }
+
+        // Last of all: a task reminder clicked while Kannu was launching, or while the terms were
+        // up, is answered now that the Settings window and `TasksManager` may be built.
+        TaskReminderCenter.shared.launchDidContinue()
     }
 
     private func installTopMenuItemsIfNeeded() {

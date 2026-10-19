@@ -58,14 +58,21 @@ final class SettingsHighlightInventoryTests: XCTestCase {
 
     func testCountsArePinned() throws {
         let inventory = try Self.inventory()
+        // 2026-10-06: Brain › Tasks' Add a task, Task order and Done and hidden rows moved into the
+        // Task list sub-page and gave up their ids; the one visible "Task list" row registers
+        // instead, and four new entries (Task list, its filters, tags, schedule) land on it.
+        // Then the Task list's back row registered `tasksListOpenID`, the deep link that opens the
+        // sub-page itself ("Show all in Brain", a reminder's click); no search entry uses it.
+        // 2026-10-07: the Sources switches only connect now, so the "Local tasks" row, its id and
+        // its search entry are gone (one fewer of each).
         // 2026-10-15: fullscreen hiding became findable. The "Hide DynamicIsland Options" picker
         // registered an id, and two new entries land on it — "Hide in fullscreen", and
         // "Accessibility access", whose own row exists only while the grant is missing, so its
         // entry targets the always-visible picker. The conditional row also registers its id for
         // the highlight when it is built. Two more entries, registrations and ids.
-        XCTAssertEqual(inventory.entries.count, 210, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 259, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 253, "distinct registered ids")
+        XCTAssertEqual(inventory.entries.count, 230, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
