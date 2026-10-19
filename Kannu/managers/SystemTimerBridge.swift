@@ -822,10 +822,12 @@ final class SystemTimerBridge {
             guard TimerManager.shared.isExternalTimerActive else { return }
             if didComplete {
                 self.logDebug("Timer finished; scheduling delayed cleanup")
+                // The session that finished. A Clock timer started inside the 3.2 s is a new session
+                // (`TimerManager.sessionID`): left alone even if it, too, has finished by then.
+                let session = TimerManager.shared.sessionID
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3.2) {
-                    // Only the finished timer this cleanup was scheduled for: a Clock timer started
-                    // inside the 3.2 s is running, not finished, and is left alone.
-                    if TimerManager.shared.isExternalTimerActive, TimerManager.shared.isFinished {
+                    if TimerManager.shared.sessionID == session,
+                       TimerManager.shared.isExternalTimerActive, TimerManager.shared.isFinished {
                         self.logDebug("Delayed cleanup firing; ending external timer")
                         TimerManager.shared.endExternalTimer(triggerSmoothClose: false)
                     }

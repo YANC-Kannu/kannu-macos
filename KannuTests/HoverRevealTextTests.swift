@@ -65,8 +65,20 @@ final class HoverRevealTextTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(seconds))
     }
 
+    /// The two motion tests need frames that move. Under Reduce Motion the view holds still on
+    /// purpose; on GitHub's hosted runners the clipped text never moved either (2026-10-19, run
+    /// 39302104033, both macOS images), while every local run sees it slide. The stillness test
+    /// below runs everywhere.
+    private func skipWhereMotionCannotBeSeen() throws {
+        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                      "Reduce Motion is on: the text holds still by design")
+        try XCTSkipIf(ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true",
+                      "hosted CI runners show no hover slide; run these locally")
+    }
+
     /// Past the pause and partway along the travel, the clipped line has moved.
-    func testAClippedLineSlidesWhileActive() {
+    func testAClippedLineSlidesWhileActive() throws {
+        try skipWhereMotionCannotBeSeen()
         let view = host(HoverRevealText("Health Check Migration and more words", font: .system(size: 11, weight: .medium),
                                         isActive: true)
                             .frame(width: 70, alignment: .leading),
@@ -79,7 +91,8 @@ final class HoverRevealTextTests: XCTestCase {
     }
 
     /// A two-line title longer than two lines slides up.
-    func testAClippedTitleSlidesUpWhileActive() {
+    func testAClippedTitleSlidesUpWhileActive() throws {
+        try skipWhereMotionCannotBeSeen()
         let view = host(HoverRevealText("A long card title that runs over two lines and then some more words to make three",
                                         font: .system(size: 13, weight: .semibold), lines: 2, isActive: true)
                             .fixedSize(horizontal: false, vertical: true)

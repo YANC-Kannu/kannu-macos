@@ -24,6 +24,103 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     set and cleared with its session, the chip in the open timer and the popover's short keys, each
     rule with a planted offender.
 
+### 2026-10-18 - Brain's Productivity section sits right under AI Agents
+- **Developer label:** "bring productivity settings to just below the ai section in brain"
+- **Agent label:** Claude Code (Opus 5.5) — the sidebar's section order changes, and General and Appearance get a "General" header
+- **Changes:**
+  - Brain's sidebar now reads AI Agents, Productivity (Timer, Notes, and Tasks where present),
+    then General and Appearance, then Media & Display, System, Utilities, Developer,
+    Integrations and About.
+  - General and Appearance get a "General" header: unlabelled, right under Productivity, they
+    read as part of it.
+  - `availableTabs` follows the same order, since search jumps to the first match in it.
+  - Test: `SettingsSidebarOrderTests` (the section order, the General header, and search's order
+    following the sidebar's).
+
+### 2026-10-15 - The new gate file's project ids stay unique next to the task branches
+- **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `TrafficLightPersistenceGate.swift`'s two `project.pbxproj` ids moved from `…00E0`/`…00E1` to
+    `…05A0`/`…05A1`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - A green chat no longer pins the notch out, and a momentary blip never flickers the light
+- **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen … the minimum a transition state is shown in notch only if it is persisted for 1 second or more, else we have to retain the continous one"
+- **Agent label:** Claude Code (Fable 5) — a 1 s persistence gate at the traffic light's single publish point, and reveal windows re-armed only by a published change
+- **Changes:**
+  - New `TrafficLightPersistenceGate` (pure, in the logic test target): a calming change — leaving
+    executing/thinking/awaiting-input, or hiding the light — must persist 1 s before it is
+    published; anything that lights up (green or yellow appearing) still publishes at once. A
+    green → ended → green blip inside that second was never published, so the notch never reacts.
+  - `publishTrafficLight` consults the gate; a held change re-evaluates by rescanning at the
+    deadline, so what is published is always recomputed from disk, never a value captured when the
+    hold was armed. `stop()` cancels the hold and resets the gate.
+  - `noteAgentActivityPulse` re-arms the island's 7 s reveal only when the published light actually
+    changed. Every hook write of a working chat used to re-arm it, which kept the notch out for the
+    whole of a long green run (for example over fullscreen video). The heartbeat fast-path and the
+    pulse latch's single-consumer contract are unchanged.
+  - A visible consequence, intended: a finished chat's red appears about a second late, and a chat
+    that stays green reveals the island once for 7 s and then lets it retract.
+  - Guards: `TrafficLightPersistenceGateTests`, `TrafficLightGateRulesTests`, and a dated addendum
+    under `docs/REGRESSIONS.md` entry 10.
+
+### 2026-10-19 - A window rebuild also clears the Tasks popover's flag
+- **Developer label:** Bringing #91 up to date with development: the Tasks popover (#85) is a popover the rebuild's reset did not know
+- **Agent label:** Claude Code (Opus 5.5) — `resetTransientInteractionState` clears `isTasksPopoverActive` too, as `NotchTeardownRulesTests` requires of every flag `hasAnyActivePopovers()` reads
+- **Changes:**
+  - `KannuViewModel.resetTransientInteractionState()` sets `isTasksPopoverActive` to false. The
+    Tasks popover landed on development with #88 after #91 was written, so a window rebuild with it
+    open left the flag set and the new notch never auto-closed. `NotchTeardownRulesTests.testTheResetClearsEveryFlagThePopoverCheckReads`
+    caught it on the merge.
+
+### 2026-10-11 - A window rebuild no longer leaves the notch unable to close or scroll
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — audit risk R-D: `KannuViewModel.resetTransientInteractionState()` on the window-rebuild path, pinned by `NotchTeardownRulesTests`
+- **Changes:**
+  - A display or resolution change rebuilds the notch window through `tearDownAllWindows` and
+    reuses the single `KannuViewModel`. The torn-down views get no reliable `.onDisappear` on a
+    borderless panel, so a scroll-gesture or auto-close suppression token held by a hovered view,
+    or a popover flag left `true`, survived into the new window: a notch that never auto-closed
+    and never scrolled until the next explicit close. `close()` clears the tokens, but the rebuild
+    only calls it while the notch is already closed.
+  - `KannuViewModel.resetTransientInteractionState()` clears both token sets and all six popover
+    flags `ContentView.hasAnyActivePopovers()` reads; `tearDownAllWindows` calls it after the old
+    window is closed and released, so the publish never reaches the detached view's
+    `.onChange(of: vm.isBatteryPopoverActive)` / `isStatsPopoverActive`, which would otherwise
+    schedule a `vm.close()` against the window built next. The per-display lifecycle already
+    drops its view model with the window and needs nothing.
+  - `NotchTeardownRulesTests` pins the call inside `tearDownAllWindows`, both token resets, and
+    keeps the reset's flag list equal to what `hasAnyActivePopovers()` reads and what the view
+    model declares — scanning both files, so a flag added to one without the other fails. The
+    declaration scan accepts access modifiers (`@Published private(set) var`), and planted
+    offenders pin every spelling it must see.
+
+### 2026-10-19 - The hover-slide tests skip where motion cannot be seen
+- **Developer label:** #106's first CI run on development: `HoverRevealTextTests` failed on both macOS runners
+- **Agent label:** Claude Code (Opus 5.5) — the two motion tests skip under Reduce Motion and on GitHub Actions, where the clipped text never moved; the stillness test still runs everywhere
+- **Changes:**
+  - `HoverRevealTextTests.testAClippedLineSlidesWhileActive` and `testAClippedTitleSlidesUpWhileActive`
+    render the view in a window and compare its pixels before and after the slide's start delay.
+    On GitHub's hosted runners the pixels never changed (run 39302104033, macOS 15 and 26), while
+    every local run sees the slide. The stacked PRs that added them never had a CI build, so this
+    was the first run there.
+  - They now skip when Reduce Motion is on (the view holds still by design) and when
+    `GITHUB_ACTIONS` is set. `testTextThatFitsOrIsNotHoveredStaysStill` runs everywhere, as before.
+
+### 2026-10-19 - The GitLab reconnect note ends its Brain path at the tab
+- **Developer label:** Bringing #106 up to date with development: `BrainPathRulesTests` (from #87's review) checks a note in the timer tab's Tasks page
+- **Agent label:** Claude Code (Opus 5.5) — "Reconnect GitLab in Brain › Tasks to see them." becomes "To see them, reconnect GitLab in Brain › Tasks."
+- **Changes:**
+  - The timer tab's GitLab reconnect note puts its Brain path last, so the path names the Tasks tab
+    and nothing after it. `BrainPathRulesTests.testEveryBrainPathStartsAtATabTheSidebarHas` reads
+    the words after "Brain ›" up to the next stop, and "Tasks to see them" is no tab.
+  - The rest of that review's commit (GitLab's Connect race guards) is already in the shared
+    `SourceSync` engine here: a Connect counts itself in flight before its first await, re-checks
+    the generation before and after saving, and Remove Token refuses while one is in flight
+    (`SourceSyncTests`). Its `JiraSyncRulesTests` edits stay out with the file, which
+    `SourceSyncTests` replaced.
+
 ### 2026-10-19 - Act on CodeRabbit's review of #108
 - **Developer label:** CodeRabbit's review of #108 (the review batch for #97, #103 and #106): four findings, all in the task sources
 - **Agent label:** Claude Code (Opus 5.5) — a Disconnect during a Connect's save wins; the user's own names come from every source; GitHub's "open" leaves the row caption; the Sync-switch scan catches the generic read
@@ -593,6 +690,66 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     wiring: the card takes the manager as a parameter, delete is local-only and inline-confirmed,
     the icon buttons carry tooltips, reduced motion is honoured, and a vanished task collapses it.
 
+### 2026-10-19 - Act on CodeRabbit's review of #109
+- **Developer label:** CodeRabbit's review of #109 (the fixes batch for #91, #92, #93 and #98): two findings, both in fullscreen detection
+- **Agent label:** Claude Code (Opus 5.5) — fullscreen is read again when the Accessibility grant changes, and the no-Accessibility fallback looks once more after the menu bar's slide
+- **Changes:**
+  - `FullscreenMediaDetector` observes `AccessibilityPermissionStore.isAuthorized`. Granting
+    Accessibility from Brain › Media moves the verdict from the menu-bar fallback to `AXFullScreen`,
+    and revoking it moves it back, but neither was a space, playback or setting change, so a
+    fallback misreading stood until one came along.
+  - Without Accessibility, `handleChange` reads fullscreen a second time 1 s after its 500 ms settle.
+    The fallback reads the menu bar from a window snapshot, and the menu bar's slide out of (or back
+    into) a fullscreen space can outlast the settle. macOS posts no public notice for the menu bar's
+    own show and hide, so this is the recheck; each pass still takes one snapshot, and with
+    Accessibility granted nothing waits.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsReadAgainWhenItsInputsChange`.
+
+### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `FullscreenFallbackVerdict.swift`'s two `project.pbxproj` ids moved from `…00E2`/`…00E3` to
+    `…05A2`/`…05A3`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - The notch hides over fullscreen video again: detection re-checks when playback starts, and survives a missing Accessibility grant
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — fullscreen media detection re-checked on its real inputs, with a menu-bar fallback when `AXFullScreen` cannot be read
+- **Changes:**
+  - Fullscreen detection ran only on a space change, so fullscreen entered before pressing play was
+    never re-checked and the notch stayed out for the whole video. It now also re-checks when the
+    now-playing app or its play state changes and when the hide option changes — all through the
+    existing 500 ms settle, no polling.
+  - Without the Accessibility grant the "really fullscreen?" check silently answered no, so every
+    re-signed install stopped hiding for good (the grant dies with the code identity). It now falls
+    back to `FullscreenFallbackVerdict`: fullscreen when the window covers the whole screen frame
+    (nothing maximized can) or when that screen's menu bar is gone. A maximized window keeps the
+    menu bar, so the old maximized-hides-the-notch regression stays fixed; the one blind spot is a
+    menu bar set to auto-hide, and the one-time log says so.
+  - Brain › Media shows an "Accessibility access" row under the hide picker while the grant is
+    missing, with an Open System Settings button. The picker registered a highlight id, and two
+    search entries ("Hide in fullscreen", "Accessibility access") land on it — the conditional row
+    is never a search target.
+  - Guards: `FullscreenFallbackVerdictTests`; the settings inventory counts moved by the two new
+    entries and registrations.
+
+### 2026-10-19 - A Clock timer's delayed cleanup ends only the session that finished
+- **Developer label:** CodeRabbit on #107 (covering this branch's timer fix): "Bind delayed cleanup to the finished session."
+- **Agent label:** Claude Code (Opus 5.5) — `SystemTimerBridge.clearLogState` captures the finished session before its 3.2 s wait
+- **Changes:**
+  - When a Clock timer finishes, Kannu ends it 3.2 seconds later. That cleanup now checks it is still the same session (`TimerManager.sessionID`). Before, a second Clock timer that started and also finished within those 3.2 seconds was ended by the first one's cleanup.
+  - `TimerLifecycleRulesTests` pins the session check alongside the finished check, with a planted offender for each.
+
+### 2026-10-12 - The timer rules tests share one modifier scanner
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on duplicated new lines (4.2%, limit 3%)
+- **Changes:**
+  - `TimerNamingRulesTests` and `TimerLifecycleRulesTests` each carried the same 24-line
+    `modifiers(_:in:)` scanner, which reads a SwiftUI modifier and its closure out of a view's
+    source. It now lives once, in `KannuTests/SwiftModifierScan.swift`, and both tests call it.
+    No test changes what it checks.
+
 ### 2026-10-16 - The timer tab's first task capsule sits level with the name field
 - **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
 - **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
@@ -618,6 +775,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `SettingsHighlightInventoryTests` keeps the two lists in `SettingsView` equal to the rows
     `TaskSourcesSection` builds inside its connected blocks, so a new connected-only row cannot
     scroll to nothing again.
+
+### 2026-10-18 - GitLab's Connect has Jira's race guards, and Brain paths name the right tab
+- **Developer label:** CodeRabbit's full review of the task stack (#87): "`connectGitLab` and `retryRemovingGitLabToken` need the race guards that `connectJira` has", and "Include the Agents section in this path"
+- **Agent label:** Claude Code (Opus 5.5) — the GitLab connect counts itself in flight and re-checks the generation before saving; three security messages point at Brain › Agent Security
+- **Changes:**
+  - `connectGitLab` counts itself in flight before its first await (`gitlabConnectsInFlight`), and
+    re-checks cancellation and the generation together right before the save, as `connectJira`
+    does. A Disconnect that finishes during the verify is no longer undone by the Connect saving
+    anyway.
+  - `retryRemovingGitLabToken` refuses while a Connect is in flight: the display copies still say
+    disconnected until its save lands, and a delete queued behind that save took the new token
+    with it, leaving GitLab shown as connected with an empty Keychain.
+  - "Session analysis is off" now says Brain › Agent Security › Analyze chats with ADR Detection
+    (it said Brain › Security findings, a section). Two other messages said Brain › Agents › for
+    rows in the Agent Security tab: Security findings and Agent policy now name Agent Security.
+  - Tests: `JiraSyncRulesTests.testGitLabRemoveTokenRefusesWhileAConnectIsInFlight` (the Jira
+    connect scanner, now for either source); new `BrainPathRulesTests` (every "Brain › …" in the
+    app's strings starts at a tab or section the sidebar has; the three messages pinned).
 
 ### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
 - **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
@@ -1441,6 +1616,148 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     both save a rename when they go away and pass its session, and the notch saves when its window
     goes to the background, with planted-offender self-tests for both scanners.
 
+### 2026-10-18 - A usage line whose key is spelled with an escape still counts
+- **Developer label:** CodeRabbit on #74: the quick filter skips a valid JSON line whose `usage` key is escaped (`"usage"`), undercounting usage
+- **Agent label:** Claude Code (Opus 5.5) — the usage pre-filter also lets through a line with an escape of one of the key's letters, and nothing else extra
+- **Changes:**
+  - `JSONLUsageCache.consume()` parses a line that has the bytes `"usage"`, or, failing that, a
+    JSON escape of one of the key's own letters (`u`, `s`, `a`, `g`,
+    `e`). No transcript writer is known to escape plain letters, but such a line now counts
+    instead of being skipped.
+  - Only those five escapes: the `\u001b` of a tool output's terminal colours, common in
+    transcripts, is still never parsed, so the memory fix's saving holds.
+  - Test: `JSONLUsageCacheTests.testAKeySpelledWithAnEscapeStillCountsAndColourEscapesAreNotParsed`
+    (the escaped line counts and matches the parse-every-line oracle; the colour line is not parsed).
+
+### 2026-10-04 - Token usage no longer drives Kannu past a gigabyte: transcripts are read once, then only what was appended
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Incremental usage aggregator — per-file offset cache, `"usage"` pre-filter, chunked reads off the cooperative pool
+- **Changes:**
+  - Root cause: `JSONLUsageParser.aggregate` loaded every transcript whole with
+    `String(contentsOf:)`, split it as a `String` and JSON-parsed every line, on every refresh, for
+    Claude and Codex at once. `ClaudeUsageProvider` lists subagent transcripts too (they are real
+    usage), so on this Mac that is 131 files and 659 MB, the largest 233.5 MB. Replayed on a clone of
+    those transcripts, one pass of the old code peaked at **1.1 GB** footprint, took 14 s, and left
+    887 MB resident afterwards.
+  - New `JSONLUsageCache`, one per provider: per file (keyed by path) the device + inode, the offset
+    just past the last newline consumed, and the in-week records those lines produced. A refresh
+    reads only appended bytes, in 4 MB `pread` chunks into one reused buffer, each chunk inside an
+    `autoreleasepool`. An unfinished last line is read again next time (it counts meanwhile only if
+    it already parses, as the old split counted it, and is never committed, so never twice). A new
+    inode or a file shorter than the offset is re-read from 0; a file that leaves the listing is
+    forgotten; a clock set back starts over.
+  - Only lines containing the bytes `"usage"` are JSON-parsed: `ClaudeUsageLine` reads tokens from a
+    `usage` object only (Claude's `message.usage`, the Codex-shaped top-level `usage`), so no other
+    line can be a record. 47,827 of 204,308 lines on this Mac.
+  - De-duplication unchanged: listing order, then line order, the week guard before the key claim,
+    first message id + request id wins. `JSONLUsageParser.snapshot(counting:now:)` folds the counted
+    records into the totals exactly as before.
+  - The work runs on the cache's own serial utility queue (`records(files:now:)`); the provider
+    awaits it instead of holding a cooperative-pool thread for the whole pass. One `os.Logger` line
+    per refresh (`com.kannu.app` / `UsageAggregator`): files, files read, bytes, lines parsed,
+    records, ms — counts only.
+  - Same transcripts, new code: **29.9 MB** peak, 3.9 s for the first pass, and an unchanged second
+    pass reads 0 bytes in 4 ms. The counted records are identical to the old parse (4,121 records,
+    same tokens, same digest).
+  - Tests: `JSONLUsageCacheTests` (13) — an unchanged refresh reads nothing, an append reads only the
+    delta and equals a full re-parse, truncated and replaced files are re-read without double
+    counting, a partial last line waits for its newline, the pre-filter matches parsing every line for
+    every shape, cross-file de-duplication and the week guard hold, lines straddling a chunk boundary.
+    The old algorithm is kept in the test as the oracle. `JSONLUsageCache.swift` joins the logic test
+    target (pbxproj ids C8/C9).
+  - Not covered, on purpose: a file rewritten in place under the same inode to an equal or larger size
+    between two refreshes is not noticed (transcripts are append-only). Lines in a file that is not
+    valid UTF-8, or that ends lines with CRLF, now count; the old `String` split dropped them.
+
+### 2026-10-19 - SonarCloud no longer fails #84 on the Keychain rule it was told about
+- **Developer label:** "#84 is held up by SonarCloud's quality gate, not by CodeRabbit. You need to mark S6288 as Accepted in SonarCloud first. fix this"
+- **Agent label:** Claude Code (Opus 5.5) — `.sonarcloud.properties` leaves `KeychainReader.swift` out of SonarCloud's automatic analysis
+- **Changes:**
+  - SonarCloud reported swift:S6288 (a Keychain item without user authentication) on `KeychainReader.swift`'s one `SecItemAdd`. That dropped #84's security rating to C and failed its quality gate. Kannu's items stay readable without a prompt on purpose: its tokens are read in the background, where no prompt can be answered.
+  - SonarCloud's automatic analysis ignored the `// NOSONAR` on that line and offers no per-rule ignore from the repository. New `.sonarcloud.properties` therefore leaves the file out of Sonar's analysis, with the reason, what still guards the file (`KeychainWritePlanTests`, `IntegrationSecretRulesTests`, CodeRabbit), and how to bring it back (delete the line and mark S6288 Accepted on sonarcloud.io).
+  - Merged development into the branch, keeping both sides of the CHANGELOG.
+
+### 2026-10-18 - The Sonar note sits on the line Sonar reports
+- **Developer label:** SonarCloud on #84 still failed after the `// NOSONAR`: S6288 is reported on the `SecItemAdd` call, not on the accessibility attribute
+- **Agent label:** Claude Code (Opus 5.5) — `// NOSONAR` moves to the `SecItemAdd` line; the reason stays on the attribute; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword`: `// NOSONAR` moves from the `kSecAttrAccessible` line to the
+    `return SecItemAdd(…)` line, where SonarCloud reports S6288, with a one-line pointer to the
+    reason above it. No behaviour change.
+
+### 2026-10-18 - The Keychain's accessibility choice says why it skips user authentication
+- **Developer label:** SonarCloud on #84: S6288, "iOS and macOS Keychain keys should require user authentication", at `KeychainReader.swift:81`
+- **Agent label:** Claude Code (Opus 5.5) — a written reason and `// NOSONAR` on the one flagged line; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword` keeps `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, now
+    with the reason beside it: Kannu reads these tokens in the background (usage refreshes, task
+    syncs), where an authentication prompt could never be answered, and the item is this-device
+    only with an access list that trusts only Kannu. The same value was already in use before
+    this branch; moving it into the new `SecItemAdd` call made SonarCloud count it as new code.
+  - `// NOSONAR` on that line, so the quality gate reflects the decision instead of failing on it.
+
+### 2026-10-04 - A saved secret always gets a fresh keychain item that only Kannu can read
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Keychain saves delete-then-add through `KeychainWritePlan`; other apps' items stay read-only
+- **Changes:**
+  - Audit of every keychain write: the only saver is `SecureSecretsStore` (service
+    `com.kannu.app.secure-secrets` — the AI provider API keys, Pushover keys, webhook URL and
+    Spotify cookie), and the only other delete is the one-time cleanup of
+    `com.kannu.app.llm-credentials`. Kannu writes no other app's item; Codex's `Codex Auth` and
+    Cursor's `cursor-access-token` are only ever read, so no write path had to stay as it was.
+  - `KeychainReader.setGenericPassword` used to update an existing item in place and add one only
+    when none existed. An update keeps the item's access list, so an item pre-planted under Kannu's
+    service and account with a list that lets any app read it would have received the secret. A save
+    now deletes the item and adds it fresh, and `SecItemAdd` gives the new item an access list that
+    trusts only Kannu. Same attributes (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), same `Bool`
+    result for callers.
+  - New `KeychainWritePlan` (pure; joins the logic test target, pbxproj ids 2B0/2B1): `.recreate` for
+    a `com.kannu.app.` service, `.refuse` for anything else, and `deleteLeftNothing(_:)` — the add runs
+    only after a delete that returned success or not-found, so a denied or failed delete stops the save
+    instead of falling back to an update. `deleteGenericPassword` also refuses a service Kannu does not
+    own.
+  - Delete-then-add is not atomic, so a failed add after a successful delete would have left no item
+    and lost the secret the user already had (the in-place update left it untouched on failure). The
+    save now reads the prior value first, silently (`allowInteraction: false`, so a save never raises a
+    keychain prompt), and when the add fails re-adds it through the same fresh add
+    (`KeychainWritePlan.valueToRestore(afterAdd:prior:)`). The add lives in a private
+    `addGenericPassword` that only the save calls. Failures log the account name and `OSStatus`
+    through `os.Logger` (category `Keychain`), never the value. A save still returns `false` on failure.
+  - `KeychainWritePlanTests` (13 tests): the plan for Kannu and foreign services, the delete-status
+    rule, the restore rule, every write call site names a Kannu service, no
+    `SecItemUpdate`/`SecKeychainItemModify` in any non-comment line under `Kannu/`, `SecItemAdd` only in
+    `KeychainReader.swift` and only inside the private add the save calls, the save's order (plan, read
+    prior, delete, add, restore on failure), and self-tests that catch the old in-place save and a
+    delete-then-add save that cannot restore.
+  - No `docs/REGRESSIONS.md` entry covers this, so the dated note lives at the code
+    (`KeychainWritePlan.swift`, `KeychainReader.swift`).
+
+### 2026-10-10 - Every icon-only control in the notch names itself in a tooltip, starting with the lyrics button
+- **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
+- **Agent label:** Claude Code (Opus 5.5) — notch tooltip principle: hover-driven bubble for shared icon buttons, every icon-only control covered, coverage scan and widened .help guard
+- **Changes:**
+  - Of 74 icon-only notch controls, 55 had no tooltip (the lyrics button among them, in both
+    players) and 2 used `.help`, which never renders in the notch. Every one now shows a tooltip
+    after the existing 0.4 s hover, and the same text is its accessibility label, so VoiceOver no
+    longer reads SF Symbol names.
+  - `HoverTooltip.swift`: the bubble and its show/hide timing are shared. The existing
+    `.hoverTooltip(_:edge:)` keeps its look and 22 pt offset; a new
+    `.hoverTooltip(_:edge:alignment:isHovering:)` is driven by a control's own hover state (one
+    hover source, docs/TOOLTIPS.md rule 3) and sits 8 pt clear of the control, so it never covers a
+    large glyph. `alignment: .leading` serves controls at a window's left edge.
+  - Shared buttons take `tooltip:`: `HoverButton`, the minimal player's squircle buttons,
+    `TabButton` (which now owns the tab's only hover handler; hover-to-switch moved into its
+    `onHover:`), and `TimerControlButton` (its second hover source is gone). The music rows use
+    `MusicControlButton.label`; the corner lyrics buttons open below.
+  - Header clipboard, timer and gear buttons, Notes, the clipboard popover and panel, the share
+    switch and the process popover all name their icon buttons. Note colours get localized names.
+  - The floating music and timer overlays are fitted to their button row, so no bubble can show
+    there: they get accessibility labels only (the timer overlay's dead `.help` is removed).
+  - docs/TOOLTIPS.md states the principle; AGENTS.md points to it; REGRESSIONS entry 9 gains a
+    dated addendum. The pre-commit `.help(` scan widens from 2 folders to 8, and the new
+    `NotchTooltipCoverageRulesTests` fails on a `.help(`, a shared icon button without `tooltip:`,
+    or an icon-only `Button` without `.hoverTooltip(` (allowlist with reasons, planted offenders).
+
 ### 2026-10-04 - Settings is now Brain, with a brain icon in the notch and ⌘, to open it
 - **Developer label:** "rename settings to brain and use that icon, it is more going to be a place where do all the management"
 - **Agent label:** Brain rename (user-visible text only), notch brain icon, live ⌘, command, BrainNamingRulesTests
@@ -1478,6 +1795,144 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     command with its terms guard, the menus, the search field and the renamed row's search
     keywords, and carries a planted-offender self-test. `SettingsHighlightInventoryTests` counts
     are unchanged (208 entries, 257 registrations, 251 ids): the rename swaps one entry and its id.
+
+### 2026-10-12 - A doc comment's token placeholder no longer reads as a leaked GitLab token
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on a blocker it took for a leaked GitLab token
+- **Changes:**
+  - `ClipboardCapturePolicy.isSecret`'s doc comment used `glpat-your-token-goes-here` as its example
+    of a lower-case word the rule turns away. That is exactly 20 characters after `glpat-`, the shape
+    of a real GitLab token, so SonarCloud's secret scanner reported it as one. The example is now
+    `glpat-your-token-here`, which the rule turns away for the same reason. No code changed.
+
+### 2026-10-04 - Kannu's clipboard history skips copied access tokens
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Clipboard history skips token-shaped text — the hook script's secret formats plus Atlassian
+- **Changes:**
+  - The clipboard history (off by default) persists what it records to UserDefaults in plain text,
+    and a token page's copy button carries no concealed marker: a GitLab or Atlassian token copied
+    from its settings page was recorded in Kannu's preferences file. `ClipboardManager.checkClipboard()`
+    now drops a copy whose text, URL or rich text's plain text holds a token-shaped secret, after
+    the read and before anything is recorded.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(text:)` / `secretKind(in:)`. Its
+    format list is the hook script's `SEC_PATTERNS` character for character (private keys,
+    Anthropic, OpenAI, AWS, GitHub, GitLab, Slack, Stripe, Google, npm, Hugging Face) plus
+    Atlassian `ATATT` API tokens (100+ characters), with the hook's acceptance rules: a whole token
+    (no word character just before it), the vendors' minimum lengths, no placeholder words
+    (`EXAMPLE`, `XXXXXXXX`, …), and at least 8 distinct characters after the vendor prefix. So
+    `task-…`, `risk-…`, `xoxo` and AWS's documentation key are still recorded.
+  - Two deliberate differences from the hook, both because a missed token is persisted in plain
+    text while a false alarm only drops one history entry. The body must hold a digit **or** both
+    upper and lower case (an AWS key ID, upper case by format, neither): the hook's digit rule
+    misses about 1 GitLab token in 20 to 30, 1 AWS key ID in 30 and every Hugging Face token
+    (letters only), while lower-case words such as `glpat-your-token-goes-here` still fail it. And a
+    private key needs one base64 run of 64+ characters after its header, footer or not: raw or
+    written-out `\n` line breaks continue the run, anything else ends it, so a copy cut short of
+    its footer or a service-account JSON is caught, and prose or code that only names the header
+    is not.
+  - `ClipboardCapturePolicyTests` covers every format alone and inside a sentence, tokens on one
+    line of a multi-line `.env`, script, JSON or URL copy, tokens with no digit, private keys
+    without a footer, with CRLF, encrypted or inside JSON, near misses one character short, glued to
+    a word or made of lower-case words, prose and code that name a key header, ordinary prose and
+    identifiers, a 1 MB scan of near misses under a second, and pins the list to the hook's: every
+    `SEC_PATTERNS` kind with identical anchors and pattern, `SEC_LITERAL_PREFIXES` and
+    `SEC_PLACEHOLDER_WORDS`, read from `AgentHookInstaller.swift`. The
+    capture-order test now also pins the text check between the read and the record. Fixture
+    tokens are assembled at run time, so no token-shaped literal is committed.
+
+### 2026-10-02 - Act on CodeRabbit's review of #71
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — review follow-up
+- **Agent label:** CodeRabbit #71 — recheck the pasteboard after reading it
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` checked a copy's privacy markers and then read its
+    contents, and the pasteboard is no snapshot: a concealed copy landing between the two reads
+    could be recorded under the earlier decision. It now rechecks `changeCount` after reading and
+    drops the read if anything changed (deleting the temporary image file a read may have
+    written); the next poll checks the new contents afresh.
+  - Not taken: a second recheck right before the deferred insert. Once the count matched after
+    the read, the item belongs to the copy whose markers were checked, so a later change cannot
+    make it private; that check would only drop a genuine copy made in quick succession.
+  - `ClipboardCapturePolicyTests.testTheCaptureChecksTypesFirstAndRechecksAfterReading` pins the
+    order from the source: markers, read, recheck, record.
+
+### 2026-10-02 - Kannu's clipboard history skips copies their app marked private
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — prerequisite: the relay key Kannu will copy must not persist in its own clipboard history
+- **Agent label:** Cloud relay PR A — honour nspasteboard.org's concealed and transient markers
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` now returns early when the pasteboard carries
+    `org.nspasteboard.ConcealedType` or `org.nspasteboard.TransientType`, the convention password
+    managers use to mark a copied secret or a momentary automation copy. The history persists what
+    it records to UserDefaults in plain text, so such a copy used to outlive the password manager's
+    own clear-after-90-seconds, in Kannu's preferences file.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(types:)` in the logic test target,
+    pinned by `ClipboardCapturePolicyTests`; `AutoGeneratedType` (not a privacy marker) is still
+    recorded.
+  - The upcoming cloud-session relay copies its key with the concealed marker, which is why this
+    lands first.
+
+### 2026-10-04 - Kannu stays light while several agents work at once
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Rescan storm: filter watched-file events, pace rescans, cache the Desktop audit-log walk
+- **Changes:**
+  - Changes inside a Claude session's own folder no longer trigger a rescan: subagent
+    transcripts, tool-output spills and workflow files, which Kannu never reads. Neither do the
+    hook status folder's per-file writes, which its kqueue watcher already handles; before, each
+    write cost two rescans. Lost-event flags still always rescan (`AgentWatchEvents`).
+  - Rescans are at least 0.3 s apart (hook-only) or 0.5 s apart (full), and a new request never
+    postpones the one already pending (`AgentRescanPacing`). A steady storm of writes used to
+    postpone the light instead of bounding the work.
+  - Claude Desktop's audit-log listing is cached for 2 s, and dropped when a log is added, removed
+    or renamed. The cache hands out fresh `URL`s, so a grown log is never read with its old size.
+  - `docs/REGRESSIONS.md` entry 11: a dated addendum.
+  - Tests: `RescanStormTests` (the filter, the pacing, and a simulated 20 ms write storm that must
+    keep rescanning, at a bounded rate).
+
+### 2026-10-04 - The paired-activity badge sits beside the album art, not over it
+- **Developer label:** "if you look at the timer placing, its over the small thumbnail adjust that"
+- **Agent label:** Closed music wing: badge beside the art via `ClosedMusicWingLayout`, hidden during inline sneak peek
+- **Changes:**
+  - In the closed notch, while music plays alongside a timer, a recording, Focus, Caps Lock, an
+    extension or the shelf, that activity's badge now sits 4 pt to the right of the album art,
+    vertically centred. It used to cover the art's bottom-right quarter. The left wing grows by the
+    badge and its gap (17 pt at the default notch height) only while a badge is shown.
+  - The art keeps its size and position from the wing's edge, so the open/close animation and the
+    pull-down gesture are unchanged.
+  - New `ClosedMusicWingLayout` (`Kannu/sizing/`) gives one width to both the wing's frame and the
+    notch, so the black shape always fits what it holds. It is in the logic test target
+    (pbxproj ids CA/CB).
+  - No badge during an inline sneak peek: that window is a fixed 460 pt, and a wider wing would be
+    cut off at both edges.
+  - Removed the unused `badgeOverlayOffset` and `badgeDisplaySize`.
+  - Tests: `ClosedMusicWingLayoutTests` (the art never moves, the badge never overlaps it, widths
+    and sizes) and `ClosedMusicWingRulesTests` (source pins: the badge is a child of the art's
+    HStack with no `.offset`, and the notch and the wing share one width), with planted offenders
+    including the old shape.
+
+### 2026-10-04 - A chat stays lit while the agents it started are still running
+- **Developer label:** "now we have background taks right, but kannu doesnt show that as chat still running"
+- **Agent label:** Background-agent detection: hook v44 counts what a Stop leaves running, Claude's session record confirms it
+- **Changes:**
+  - A Claude chat whose turn ended with background agents or a workflow still running stays green,
+    with "agents in background" beside its state and its clock still running from your prompt. It
+    turns red the moment Claude reports all of them finished. Before, it went red at the turn's
+    end while Claude went on working and spending tokens.
+  - Hook v44 records how many agents and workflows a Claude `Stop` leaves running (its
+    `background_tasks`), as a count only: the tasks' descriptions and commands are never written.
+    Kannu reads Claude Code's own session record (`~/.claude/sessions/<pid>.json`), which says
+    `busy` until the last of them finishes. Neither signal alone lights the chat. A fresh `idle`
+    counts for 3 s, and Kannu rescans when that ends, so the chat never flashes finished between
+    an agent ending and Claude reading its result.
+  - While that background work runs, a background agent's own light counts again: one waiting on
+    permission turns the chat yellow. The chat's status file is kept past the stale cap, so a long
+    workflow does not lose its card.
+  - Hook v44 also listens for `SubagentStart` and `SubagentStop`, so a finished agent's file says
+    `stopped` instead of "thinking" until the stale cap. Existing installs upgrade through the
+    hook version migration.
+  - `docs/REGRESSIONS.md`: a dated addendum to entry 5, whose rule changes on purpose, and a v44
+    note on entry 1.
+  - Tests: `BackgroundWorkTests` (Claude's status, the reconciler, the fold, the clock, the stale
+    cap and the turn parse) and four `HookScriptTests` cases (the count, what clears it, an older
+    Claude, and a subagent's own start and stop).
 
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"

@@ -17,12 +17,14 @@ import SwiftUIIntrospect
 import UniformTypeIdentifiers
 
 /// Groups for organizing settings tabs in the sidebar.
+/// The sidebar's sections, top to bottom in case order: AI Agents leads, Productivity (the timer,
+/// notes and tasks the agents' work is timed and tracked with) right under it, then General.
 private enum SettingsTabGroup: String, CaseIterable, Identifiable {
     case agents
+    case productivity
     case core
     case mediaAndDisplay
     case system
-    case productivity
     case utilities
     case developer
     case integrations
@@ -34,7 +36,8 @@ private enum SettingsTabGroup: String, CaseIterable, Identifiable {
     var title: String? {
         switch self {
         case .agents:           return String(localized: "AI Agents")
-        case .core:             return nil
+        // Under Productivity, an unlabelled General and Appearance would read as part of it.
+        case .core:             return String(localized: "General")
         case .mediaAndDisplay:  return String(localized: "Media & Display")
         case .system:           return String(localized: "System")
         case .productivity:     return String(localized: "Productivity")
@@ -542,14 +545,19 @@ struct SettingsView: View {
     }
 
     private var availableTabs: [SettingsTab] {
-        // Ordered to match group layout: agents → core → media & display → system →
-        // productivity → utilities → developer → integrations → info.
+        // Ordered to match group layout: agents → productivity → general → media & display →
+        // system → utilities → developer → integrations → info. Search jumps to the first match in
+        // this order, so it follows the sidebar's.
         let ordered: [SettingsTab] = [
             // AI Agents — the product's core, so it leads.
             .agentStatus,
             .agentSecurity,
             .llmUsage,
-            // Core
+            // Productivity
+            .timer,
+            .notes,
+            .tasks,
+            // General
             .general,
             .appearance,
             // Media & Display
@@ -560,10 +568,6 @@ struct SettingsView: View {
             // System
             .hudAndOSD,
             .battery,
-            // Productivity
-            .timer,
-            .notes,
-            .tasks,
             // Utilities
             .clipboard,
             .screenAssistant,
@@ -864,6 +868,11 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .media, title: "Show Change Media Output control", keywords: ["airplay", "route picker", "media output"], highlightID: SettingsTab.media.highlightID(for: "Show Change Media Output control")),
             SettingsSearchEntry(tab: .media, title: "Enable album art parallax", keywords: ["parallax", "lock screen", "album art"], highlightID: SettingsTab.media.highlightID(for: "Enable album art parallax")),
             SettingsSearchEntry(tab: .media, title: "Enable album art parallax effect", keywords: ["parallax", "parallax effect", "album art"], highlightID: SettingsTab.media.highlightID(for: "Enable album art parallax effect")),
+            SettingsSearchEntry(tab: .media, title: "Hide in fullscreen", keywords: ["fullscreen", "hide notch", "hide dynamicisland", "video", "movie"], highlightID: SettingsTab.media.highlightID(for: "Hide DynamicIsland Options")),
+            // The Accessibility row is built only while the grant is missing, so its entry lands
+            // on the always-visible picker right above it (the #90 rule: never target a row that
+            // is sometimes not built).
+            SettingsSearchEntry(tab: .media, title: "Accessibility access", keywords: ["accessibility", "fullscreen", "permission", "menu bar"], highlightID: SettingsTab.media.highlightID(for: "Hide DynamicIsland Options")),
 
             // Shelf
             SettingsSearchEntry(tab: .shelf, title: "Enable shelf", keywords: ["shelf", "dock"], highlightID: SettingsTab.shelf.highlightID(for: "Enable shelf")),
@@ -2920,8 +2929,9 @@ struct Media: View {
     @Default(.colorExtractionMode) private var colorExtractionMode
     @Default(.parallaxEffectIntensity) private var parallaxEffectIntensity
 
-    
+
     @ObservedObject private var musicManager = MusicManager.shared
+    @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
 
     private var isAppleMusicActive: Bool {
         musicManager.bundleIdentifier == "com.apple.Music"
@@ -3199,8 +3209,24 @@ struct Media: View {
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
+                .settingsHighlight(id: highlightID("Hide DynamicIsland Options"))
                 .onChange(of: hideNotchOption) {
                     Defaults[.enableFullscreenMediaDetection] = hideNotchOption != .never
+                }
+
+                // Shown only while hiding is on and the grant is missing: without Accessibility
+                // the detector cannot read `AXFullScreen` and falls back to the menu-bar probe
+                // (`FullscreenFallbackVerdict`), which is close but not exact.
+                if hideNotchOption != .never, !accessibilityPermission.isAuthorized {
+                    SettingsActionRow(
+                        "Accessibility access",
+                        description: "Fullscreen is detected exactly with Accessibility. Without it, Kannu goes by whether the menu bar is hidden."
+                    ) {
+                        Button("Open System Settings") {
+                            AccessibilityPermissionStore.shared.openSystemSettings()
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Accessibility access"))
                 }
             } header: {
                 HStack {

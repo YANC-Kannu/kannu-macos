@@ -939,7 +939,7 @@ private struct TimerLinkedMRsPage: View {
         case .done(.needsKeychainApproval):
             note(String(localized: "macOS did not let Kannu read the saved GitLab token."), retry: true)
         case .done(.needsReconnect):
-            note(String(localized: "Reconnect GitLab in Brain › Tasks to see them."))
+            note(String(localized: "To see them, reconnect GitLab in Brain › Tasks."))
         }
     }
 
