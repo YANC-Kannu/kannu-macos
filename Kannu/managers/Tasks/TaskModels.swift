@@ -20,14 +20,20 @@ import Foundation
 
 // The task list as it is stored in `tasks.json`. Pure Foundation, so the logic target tests it.
 //
-// A task is local, or comes from Jira or GitLab (`TaskSource`, `RemoteTaskInfo`). Time recorded on a
-// remote task becomes a `WorklogDraft` that waits for the user's answer (`WorklogDrafts`); only
-// `TasksManager.confirmWorklog` ever sends one.
+// A task is local, or comes from a source (`TaskSource`, `RemoteTaskInfo`): Jira, GitLab, GitHub,
+// Linear, Todoist or Apple Reminders. Time recorded on a Jira or GitLab task becomes a `WorklogDraft`
+// that waits for the user's answer (`WorklogDrafts`); only `TasksManager.confirmWorklog` ever sends one.
 
-enum TaskSource: String, Codable, Equatable {
+/// Where a task comes from, in the order Brain and the notch list them. What Kannu knows about each
+/// is in `TaskSourceFacts`. The raw values are stored in `tasks.json` and never change.
+enum TaskSource: String, Codable, Equatable, CaseIterable {
     case local
     case jira
     case gitlab
+    case github
+    case linear
+    case todoist
+    case appleReminders
 }
 
 /// Whether a remote task's recorded time is offered for logging.
@@ -38,15 +44,22 @@ enum LogPolicy: String, Codable, Equatable {
     case localOnly
 }
 
+/// Where a task stands in its life. Only `.active` is in the task order and every list in the
+/// notch; the rest are Brain's: done and gone are "Recently closed" for `TaskArchive.closedDays`,
+/// then archived (`TaskArchive`).
 enum TaskVisibility: String, Codable, Equatable {
     /// In the task order.
     case active
-    /// Marked done.
+    /// A local task marked done.
     case done
-    /// Hidden by the user (a remote task cannot be deleted, only hidden).
-    case hidden
-    /// A remote task the last complete sync no longer returned.
+    /// A remote task the last complete sync no longer returned: closed, unassigned, or out of the
+    /// connected filter. It returns to `.active` if a sync lists it again.
     case gone
+    /// In the archive: out of every list but the archive. The user archives a task at once (a
+    /// remote task's delete), or a done or gone one is archived after `TaskArchive.closedDays`.
+    /// Files written before the archive said "hidden" for a remote task the user put away; that
+    /// reads as archived by the user (`TaskItem.init(from:)`).
+    case archived
 }
 
 /// Which kind of GitLab item a task is. Issues and merge requests number their global ids
@@ -77,20 +90,91 @@ struct RemoteTaskInfo: Codable, Equatable {
     var lastSeenAt: Date
     /// GitLab only: an issue or a merge request. Nil for Jira, and in a file written before GitLab.
     var gitlabKind: GitLabKind? = nil
-    /// GitLab only: the item's page, kept only when it is on the server the task came from
-    /// (`GitLabHost.isWebURL`), and checked again before it is opened.
+    /// The item's page, kept only when it is on the site or server the task came from
+    /// (`GitLabHost.isWebURL` and each source's own check), and checked again before it is opened.
+    /// Named for GitLab, the first source that had one; GitHub, Linear and Todoist keep theirs here
+    /// too, so the file's shape never changed.
     var gitlabWebURL: String? = nil
     /// Where the item stands, in Jira's status-category words: "new" (To Do), "indeterminate" (In
     /// Progress) or "done". Jira's own `status.statusCategory.key`; for GitLab, set by
     /// `GitLabAPI.remoteIssue` (`TaskFacets.gitlabCategory`). Nil in a file written before it.
     var statusCategory: String? = nil
-    /// GitLab only: the item's labels, as the server sent them. Read for the In Progress facet and
-    /// never sent anywhere. Nil for Jira, and in a file written before it.
+    /// The item's labels, as the server sent them (GitLab labels; Jira labels). Read for the
+    /// In Progress facet and shown on the task's card; never sent anywhere. Nil in a file written
+    /// before them.
     var labels: [String]? = nil
+    /// The standard facts the ticket page shows, so the task's card can too. Each is nil where the
+    /// source has no such thing (a merge request has no weight) and in a file written before them.
+    /// Like titles they sit in the 0600 tasks file, are never logged, and are never sent.
+    /// GitLab issues only: the weight.
+    var weight: Int? = nil
+    /// GitLab issues only: the milestone's title.
+    var milestone: String? = nil
+    /// The due date (GitLab `due_date`, Jira `duedate`): date-only on both, kept as the start of
+    /// that day in the local time zone (`dayDate`).
+    var dueDate: Date? = nil
+    /// The assignee's display name — the first one, when GitLab lists several.
+    var assignee: String? = nil
+    /// The parent's title: a GitLab epic, a Jira parent issue.
+    var parentTitle: String? = nil
+    /// Jira only: the priority's name ("High").
+    var priority: String? = nil
+    /// Jira only: the issue type's name ("Bug").
+    var issueType: String? = nil
+    /// When the server last changed the item (GitLab `updated_at`, Jira `updated`).
+    var updatedAt: Date? = nil
+    /// GitLab only: comments by people (`user_notes_count`), system notes excluded.
+    var commentCount: Int? = nil
+    /// GitLab only: the item's task list, "2 of 5 done" (`task_completion_status`). Both nil
+    /// when it has none.
+    var checklistDone: Int? = nil
+    var checklistTotal: Int? = nil
+    /// GitLab issues only: merge requests that close it when merged (`merge_requests_count`, the
+    /// same set `closed_by` lists).
+    var linkedMergeRequests: Int? = nil
+    /// GitLab issues only, Premium: the iteration's title, or "Iteration 5" for an untitled one.
+    var iteration: String? = nil
+    /// GitLab issues only, Premium: "on_track", "needs_attention" or "at_risk".
+    var healthStatus: String? = nil
+    /// GitLab merge requests only.
+    var isDraft: Bool? = nil
+    var hasConflicts: Bool? = nil
+    /// GitLab merge requests only: who opened it.
+    var author: String? = nil
 
     private enum CodingKeys: String, CodingKey {
         case remoteID, key, hostScope, status, isDoneRemotely, remoteEstimateSeconds, remoteSpentSeconds
         case gitlabProjectID, gitlabIID, lastSeenAt, gitlabKind, gitlabWebURL, statusCategory, labels
+        case weight, milestone, dueDate, assignee, parentTitle, priority, issueType
+        case updatedAt, commentCount, checklistDone, checklistTotal, linkedMergeRequests, iteration, healthStatus
+        case isDraft, hasConflicts, author
+    }
+
+    /// A server timestamp: GitLab's `2026-10-16T09:12:34.567Z`, Jira's `2026-10-16T09:12:34.567+0000`
+    /// (its offset has no colon, which ISO 8601 parsing wants), with or without fractions. Nil for
+    /// anything else.
+    static func serverTimestamp(_ text: String?) -> Date? {
+        guard var text = text?.trimmingCharacters(in: .whitespaces), !text.isEmpty else { return nil }
+        if let range = text.range(of: #"[+-]\d{4}$"#, options: .regularExpression) {
+            let offset = text[range]
+            text.replaceSubrange(range, with: offset.prefix(3) + ":" + offset.suffix(2))
+        }
+        let formatter = ISO8601DateFormatter()
+        for options: ISO8601DateFormatter.Options in [[.withInternetDateTime, .withFractionalSeconds], [.withInternetDateTime]] {
+            formatter.formatOptions = options
+            if let date = formatter.date(from: text) { return date }
+        }
+        return nil
+    }
+
+    /// A server's date-only field (`2026-10-20`) as the start of that day in `calendar`'s time
+    /// zone; nil for anything else. No `DateFormatter`: three integers and the calendar suffice.
+    static func dayDate(_ text: String?, calendar: Calendar = .current) -> Date? {
+        guard let text else { return nil }
+        let parts = text.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
+        guard parts.count == 3, let year = parts[0], let month = parts[1], let day = parts[2],
+              (1...12).contains(month), (1...31).contains(day) else { return nil }
+        return calendar.date(from: DateComponents(year: year, month: month, day: day))
     }
 }
 
@@ -114,6 +198,23 @@ extension RemoteTaskInfo {
         gitlabWebURL = try container.decodeIfPresent(String.self, forKey: .gitlabWebURL)
         statusCategory = try? container.decodeIfPresent(String.self, forKey: .statusCategory)
         labels = try? container.decodeIfPresent([String].self, forKey: .labels)
+        weight = try? container.decodeIfPresent(Int.self, forKey: .weight)
+        milestone = try? container.decodeIfPresent(String.self, forKey: .milestone)
+        dueDate = try? container.decodeIfPresent(Date.self, forKey: .dueDate)
+        assignee = try? container.decodeIfPresent(String.self, forKey: .assignee)
+        parentTitle = try? container.decodeIfPresent(String.self, forKey: .parentTitle)
+        priority = try? container.decodeIfPresent(String.self, forKey: .priority)
+        issueType = try? container.decodeIfPresent(String.self, forKey: .issueType)
+        updatedAt = try? container.decodeIfPresent(Date.self, forKey: .updatedAt)
+        commentCount = try? container.decodeIfPresent(Int.self, forKey: .commentCount)
+        checklistDone = try? container.decodeIfPresent(Int.self, forKey: .checklistDone)
+        checklistTotal = try? container.decodeIfPresent(Int.self, forKey: .checklistTotal)
+        linkedMergeRequests = try? container.decodeIfPresent(Int.self, forKey: .linkedMergeRequests)
+        iteration = try? container.decodeIfPresent(String.self, forKey: .iteration)
+        healthStatus = try? container.decodeIfPresent(String.self, forKey: .healthStatus)
+        isDraft = try? container.decodeIfPresent(Bool.self, forKey: .isDraft)
+        hasConflicts = try? container.decodeIfPresent(Bool.self, forKey: .hasConflicts)
+        author = try? container.decodeIfPresent(String.self, forKey: .author)
     }
 }
 
@@ -169,6 +270,14 @@ struct TaskItem: Codable, Identifiable, Equatable {
     var tags: [String]
     /// When a local task's reminder is due. Nil when it has none; never set on a remote task.
     var scheduledAt: Date?
+    /// When it was marked done, or its source stopped listing it. Nil while it is listed: an
+    /// archived remote task the server still lists is never cleared (`TaskArchive`).
+    var closedAt: Date?
+    /// When it went into the archive.
+    var archivedAt: Date?
+    /// True when the user archived it (or, before the archive, hid it). A task the user archived
+    /// stays archived if its source lists it again; one archived on its own returns to the order.
+    var archivedByUser: Bool
 
     init(
         id: UUID = UUID(),
@@ -181,7 +290,10 @@ struct TaskItem: Codable, Identifiable, Equatable {
         visibility: TaskVisibility = .active,
         createdAt: Date = Date(),
         tags: [String] = [],
-        scheduledAt: Date? = nil
+        scheduledAt: Date? = nil,
+        closedAt: Date? = nil,
+        archivedAt: Date? = nil,
+        archivedByUser: Bool = false
     ) {
         self.id = id
         self.source = source
@@ -194,6 +306,9 @@ struct TaskItem: Codable, Identifiable, Equatable {
         self.createdAt = createdAt
         self.tags = tags
         self.scheduledAt = scheduledAt
+        self.closedAt = closedAt
+        self.archivedAt = archivedAt
+        self.archivedByUser = archivedByUser
     }
 
     var effectiveEstimateSeconds: Int? { localEstimateSeconds ?? remote?.remoteEstimateSeconds }
@@ -239,11 +354,13 @@ struct TaskItem: Codable, Identifiable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, source, title, localEstimateSeconds, remote, segments, logPolicy, visibility, createdAt
-        case tags, scheduledAt
+        case tags, scheduledAt, closedAt, archivedAt, archivedByUser
     }
 
     /// Fields added after the first version default instead of failing, so an older file still
-    /// reads. Unknown keys are ignored, so a newer file reads too.
+    /// reads. Unknown keys are ignored, so a newer file reads too. The visibility reads leniently:
+    /// "hidden" (before the archive) is archived by the user, and a word this version does not know
+    /// reads as active — costing that one task its state, never the user their whole list.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
@@ -253,10 +370,19 @@ struct TaskItem: Codable, Identifiable, Equatable {
         remote = try container.decodeIfPresent(RemoteTaskInfo.self, forKey: .remote)
         segments = try container.decodeIfPresent([WorkSegment].self, forKey: .segments) ?? []
         logPolicy = try container.decodeIfPresent(LogPolicy.self, forKey: .logPolicy) ?? .ask
-        visibility = try container.decodeIfPresent(TaskVisibility.self, forKey: .visibility) ?? .active
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
         tags = Self.cleanedTags((try? container.decodeIfPresent([String].self, forKey: .tags)) ?? [])
         scheduledAt = try? container.decodeIfPresent(Date.self, forKey: .scheduledAt)
+        closedAt = try? container.decodeIfPresent(Date.self, forKey: .closedAt)
+        archivedAt = try? container.decodeIfPresent(Date.self, forKey: .archivedAt)
+        archivedByUser = ((try? container.decodeIfPresent(Bool.self, forKey: .archivedByUser)) ?? nil) ?? false
+        let raw = (try? container.decodeIfPresent(String.self, forKey: .visibility)) ?? nil
+        if raw == "hidden" {
+            visibility = .archived
+            archivedByUser = true
+        } else {
+            visibility = raw.flatMap(TaskVisibility.init(rawValue:)) ?? .active
+        }
     }
 }
 
@@ -319,21 +445,31 @@ struct WorklogDraft: Codable, Identifiable, Equatable {
 
 /// The whole of `tasks.json`. The order of `tasks` is the order the user set.
 struct TasksFile: Codable, Equatable {
-    static let currentVersion = 1
+    /// 2: the archive (`TaskVisibility.archived`, a task's `closedAt` / `archivedAt`).
+    static let currentVersion = 2
     static let empty = TasksFile(version: currentVersion, tasks: [], drafts: [])
 
     var version: Int
     var tasks: [TaskItem]
     var drafts: [WorklogDraft]
+    /// Each tag's colour, keyed by `TaskColoring.key(for:)`. A tag without an entry is `.glass`,
+    /// which is never stored. Kannu's only, like the tags themselves.
+    var tagColors: [String: TaskColor]
 
-    init(version: Int = TasksFile.currentVersion, tasks: [TaskItem], drafts: [WorklogDraft]) {
+    init(
+        version: Int = TasksFile.currentVersion,
+        tasks: [TaskItem],
+        drafts: [WorklogDraft],
+        tagColors: [String: TaskColor] = [:]
+    ) {
         self.version = version
         self.tasks = tasks
         self.drafts = drafts
+        self.tagColors = tagColors
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, tasks, drafts
+        case version, tasks, drafts, tagColors
     }
 
     init(from decoder: Decoder) throws {
@@ -341,6 +477,20 @@ struct TasksFile: Codable, Equatable {
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
         tasks = try container.decodeIfPresent([TaskItem].self, forKey: .tasks) ?? []
         drafts = try container.decodeIfPresent([WorklogDraft].self, forKey: .drafts) ?? []
+        // Added after the first version, and only decoration: a missing or malformed value, or a
+        // colour this version does not know, never costs the file. Each entry decodes on its own,
+        // so one bad value costs only that tag's colour.
+        let rawColors = (try? container.decodeIfPresent([String: LossyString].self, forKey: .tagColors)) ?? [:]
+        tagColors = TaskColoring.cleanedTagColors(rawColors.compactMapValues(\.value))
+    }
+
+    /// A string, or nil when the value is anything else.
+    private struct LossyString: Decodable {
+        let value: String?
+
+        init(from decoder: Decoder) {
+            value = try? decoder.singleValueContainer().decode(String.self)
+        }
     }
 
     /// A segment still open in a file being loaded was being timed when Kannu stopped: a quit that

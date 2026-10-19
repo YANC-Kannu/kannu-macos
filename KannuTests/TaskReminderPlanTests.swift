@@ -35,7 +35,7 @@ final class TaskReminderPlanTests: XCTestCase {
             task("Past", at: -600),
             task("None", at: nil),
             task("Done", at: 600, visibility: .done),
-            task("Hidden", at: 600, visibility: .hidden),
+            task("Archived", at: 600, visibility: .archived),
             task("Jira", at: 600, source: .jira),
         ]
         XCTAssertEqual(Set(Plan.wanted(tasks).values.map(\.title)), ["Soon", "Past"])
@@ -64,10 +64,10 @@ final class TaskReminderPlanTests: XCTestCase {
         XCTAssertEqual(cleared.remove, [Plan.identifier(for: id)])
     }
 
-    func testDoneHiddenAndDeletedTakeTheReminderBack() {
+    func testDoneArchivedAndDeletedTakeTheReminderBack() {
         let list = [task("Write", at: 600)]
         let before = Plan.wanted(list)
-        for visibility in [TaskVisibility.done, .hidden] {
+        for visibility in [TaskVisibility.done, .archived] {
             var changed = list
             changed[0].visibility = visibility
             XCTAssertEqual(Plan.changes(from: before, to: Plan.wanted(changed), now: now).remove,

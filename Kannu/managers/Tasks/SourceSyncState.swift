@@ -18,8 +18,8 @@
 
 import Foundation
 
-/// Where a source's syncing stands (Jira Cloud, GitLab), for the Sources section. Each source has
-/// its own, so one failing never shows on, or stops, the other.
+/// Where a source's syncing stands, for its row and page in Brain › Tasks. Each source has its own,
+/// so one failing never shows on, or stops, another.
 enum SourceSyncState: Equatable {
     case idle
     case syncing
@@ -91,5 +91,37 @@ enum SourceSyncState: Equatable {
         }
         guard let lastSuccess else { return true }
         return now.timeIntervalSince(lastSuccess) >= staleAfter
+    }
+}
+
+/// The notch's Refresh, wherever it is drawn (the Tasks popover's header, the timer tab's task
+/// toolbar): what each source's last sync found, and whether a click would sync anything. `states`
+/// holds only the sources whose sync is on; one missing has no line and is never refreshed.
+enum TaskSyncSummary {
+    /// "Jira · Synced 10:42", "GitLab · Offline": one line per source that syncs, in source order.
+    static func lines(_ states: [TaskSource: SourceSyncState], now: Date) -> [String] {
+        ordered(states).map { source, state in String(localized: "\(source.name) · \(state.shortCaption(now: now))") }
+    }
+
+    /// The same on one line, for a tooltip (which never wraps): "Jira: Synced 10:42 · GitLab: Offline".
+    static func tooltip(_ states: [TaskSource: SourceSyncState], now: Date) -> String {
+        ordered(states).map { source, state in String(localized: "\(source.name): \(state.shortCaption(now: now))") }
+            .joined(separator: " · ")
+    }
+
+    /// Whether Refresh may be clicked: the task list is readable and at least one source syncs and
+    /// is not rate limited at `date`. A limit that has run out no longer counts.
+    static func canRefresh(isReady: Bool, _ states: [TaskSource: SourceSyncState], at date: Date) -> Bool {
+        guard isReady else { return false }
+        return states.values.contains { state in state.rateLimitEnd.map { $0 <= date } ?? true }
+    }
+
+    /// When a running rate limit ends, earliest first, so a view can redraw then and only then.
+    static func rateLimitEnds(_ states: [TaskSource: SourceSyncState]) -> [Date] {
+        states.values.compactMap(\.rateLimitEnd).sorted()
+    }
+
+    private static func ordered(_ states: [TaskSource: SourceSyncState]) -> [(TaskSource, SourceSyncState)] {
+        TaskSource.allCases.compactMap { source in states[source].map { (source, $0) } }
     }
 }

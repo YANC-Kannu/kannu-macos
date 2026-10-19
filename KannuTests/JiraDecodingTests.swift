@@ -43,6 +43,13 @@ final class JiraDecodingTests: XCTestCase {
               {"expand":"","id":"10001","self":"https://acme.atlassian.net/rest/api/3/issue/10001","key":"PROJ-1",
                "fields":{"summary":"Fix the login redirect",
                          "status":{"name":"In Progress","id":"3","statusCategory":{"id":4,"key":"indeterminate","name":"In Progress"}},
+                         "priority":{"id":"2","name":"High","iconUrl":"https://acme.atlassian.net/images/icons/priorities/high.svg"},
+                         "assignee":{"accountId":"5b10ac8d82e05b22cc7d4ef5","displayName":"Dana  Example","active":true},
+                         "duedate":"2026-10-20",
+                         "issuetype":{"id":"10004","name":"Bug","subtask":false},
+                         "parent":{"id":"10000","key":"PROJ-100","fields":{"summary":"Login epic","status":{"name":"In Progress"}}},
+                         "labels":["backend","auth"],
+                         "updated":"2026-10-16T09:12:34.567+0000",
                          "timetracking":{"originalEstimate":"2h","remainingEstimate":"1h","timeSpent":"3h",
                                          "originalEstimateSeconds":7200,"remainingEstimateSeconds":3600,"timeSpentSeconds":10800}}},
               {"id":"10002","key":"PROJ-2",
@@ -57,9 +64,17 @@ final class JiraDecodingTests: XCTestCase {
         let first = JiraAPI.remoteIssue(from: page.issues[0])
         XCTAssertEqual(first, RemoteIssue(remoteID: "10001", key: "PROJ-1", title: "Fix the login redirect", status: "In Progress",
                                           isDoneRemotely: false, estimateSeconds: 7200, spentSeconds: 10800,
-                                          statusCategory: "indeterminate"))
+                                          statusCategory: "indeterminate", labels: ["backend", "auth"],
+                                          dueDate: RemoteTaskInfo.dayDate("2026-10-20"), assignee: "Dana Example",
+                                          parentTitle: "Login epic", priority: "High", issueType: "Bug",
+                                          updatedAt: RemoteTaskInfo.serverTimestamp("2026-10-16T09:12:34.567Z")))
+        XCTAssertNotNil(first.updatedAt, "Jira's colon-less offset parses")
         let second = JiraAPI.remoteIssue(from: page.issues[1])
         XCTAssertEqual(second.statusCategory, "new", "the category is kept for the Task list's Status filter")
+        XCTAssertNil(second.labels, "no labels field: none, not an empty list")
+        XCTAssertNil(second.dueDate)
+        XCTAssertNil(second.assignee)
+        XCTAssertNil(second.priority)
         XCTAssertNil(second.estimateSeconds, "an empty timetracking object has no estimate")
         XCTAssertNil(second.spentSeconds)
         XCTAssertEqual(second.status, "To Do")

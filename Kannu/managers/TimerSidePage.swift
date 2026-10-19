@@ -34,10 +34,9 @@ enum TimerSidePage: String, CaseIterable, Identifiable, Equatable {
     static func initial(
         tasksAvailable: Bool,
         presetsAvailable: Bool,
-        jiraConnected: Bool,
-        gitlabConnected: Bool
+        anySourceConnected: Bool
     ) -> TimerSidePage {
-        if tasksAvailable && (jiraConnected || gitlabConnected) { return .tasks }
+        if tasksAvailable && anySourceConnected { return .tasks }
         if presetsAvailable { return .presets }
         return .tasks
     }

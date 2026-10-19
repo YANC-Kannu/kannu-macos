@@ -35,7 +35,7 @@ final class TaskMergeTests: XCTestCase {
     }
 
     private func jiraTask(_ id: String, title: String = "Issue", site: String? = nil,
-                          visibility: TaskVisibility = .active) -> TaskItem {
+                          visibility: TaskVisibility = .active, archivedByUser: Bool = false) -> TaskItem {
         TaskItem(
             source: .jira,
             title: title,
@@ -43,7 +43,9 @@ final class TaskMergeTests: XCTestCase {
                                    isDoneRemotely: false, remoteEstimateSeconds: nil, remoteSpentSeconds: nil,
                                    gitlabProjectID: nil, gitlabIID: nil, lastSeenAt: then),
             visibility: visibility,
-            createdAt: then
+            createdAt: then,
+            archivedAt: visibility == .archived ? then : nil,
+            archivedByUser: archivedByUser
         )
     }
 
@@ -86,6 +88,64 @@ final class TaskMergeTests: XCTestCase {
         XCTAssertEqual(result.gone, 0)
     }
 
+    func testTheStandardFactsAreSetAndRefreshedLikeTheRest() {
+        var first = issue("1")
+        first.weight = 8
+        first.milestone = "Sprint 42"
+        first.dueDate = then
+        first.assignee = "Dana Example"
+        first.parentTitle = "Login epic"
+        first.priority = "High"
+        first.issueType = "Bug"
+        first.updatedAt = now
+        first.commentCount = 3
+        first.checklistDone = 2
+        first.checklistTotal = 5
+        first.linkedMergeRequests = 1
+        first.iteration = "Iteration 5"
+        first.healthStatus = "at_risk"
+        first.isDraft = true
+        first.hasConflicts = true
+        first.author = "Kim Lee"
+        let created = merge([first], into: [])
+        let createdRemote = created.tasks.first?.remote
+        XCTAssertEqual(createdRemote?.updatedAt, now)
+        XCTAssertEqual(createdRemote?.commentCount, 3)
+        XCTAssertEqual(createdRemote?.checklistDone, 2)
+        XCTAssertEqual(createdRemote?.checklistTotal, 5)
+        XCTAssertEqual(createdRemote?.linkedMergeRequests, 1)
+        XCTAssertEqual(createdRemote?.iteration, "Iteration 5")
+        XCTAssertEqual(createdRemote?.healthStatus, "at_risk")
+        XCTAssertEqual(createdRemote?.isDraft, true)
+        XCTAssertEqual(createdRemote?.hasConflicts, true)
+        XCTAssertEqual(createdRemote?.author, "Kim Lee")
+        let remote = created.tasks.first?.remote
+        XCTAssertEqual(remote?.weight, 8)
+        XCTAssertEqual(remote?.milestone, "Sprint 42")
+        XCTAssertEqual(remote?.dueDate, then)
+        XCTAssertEqual(remote?.assignee, "Dana Example")
+        XCTAssertEqual(remote?.parentTitle, "Login epic")
+        XCTAssertEqual(remote?.priority, "High")
+        XCTAssertEqual(remote?.issueType, "Bug")
+
+        // The server owns them: a changed one changes, a dropped one is dropped, and either is a
+        // change worth saving.
+        var second = issue("1")
+        second.milestone = "Sprint 43"
+        second.assignee = "Dana Example"
+        let refreshed = merge([second], into: created.tasks)
+        let after = refreshed.tasks.first?.remote
+        XCTAssertEqual(after?.milestone, "Sprint 43")
+        XCTAssertNil(after?.weight, "cleared on the server, cleared here")
+        XCTAssertNil(after?.dueDate)
+        XCTAssertNil(after?.priority)
+        XCTAssertNil(after?.commentCount)
+        XCTAssertNil(after?.hasConflicts, "a resolved conflict clears")
+        XCTAssertNil(after?.author)
+        XCTAssertEqual(after?.assignee, "Dana Example")
+        XCTAssertEqual(refreshed.updated, 1)
+    }
+
     func testAnUnchangedIssueIsNotAChange() {
         let task = jiraTask("1")
         let result = merge([issue("1")], into: [task])
@@ -120,12 +180,15 @@ final class TaskMergeTests: XCTestCase {
             jiraTask("1"),
             jiraTask("2"),
             jiraTask("3", visibility: .done),
-            jiraTask("4", visibility: .hidden),
+            jiraTask("4", visibility: .archived, archivedByUser: true),
             TaskItem(title: "Mine", createdAt: then),
         ]
         let result = merge([issue("1")], into: tasks)
-        XCTAssertEqual(result.tasks.map(\.visibility), [.active, .gone, .done, .hidden, .active])
+        XCTAssertEqual(result.tasks.map(\.visibility), [.active, .gone, .done, .archived, .active])
         XCTAssertEqual(result.gone, 1)
+        XCTAssertEqual(result.tasks[1].closedAt, now, "going is closing: the archive counts from here")
+        XCTAssertEqual(result.tasks[3].closedAt, now, "an archived one no longer listed may now be cleared")
+        XCTAssertNil(result.tasks[0].closedAt)
     }
 
     func testACappedFetchMarksNothingGone() {
@@ -142,28 +205,49 @@ final class TaskMergeTests: XCTestCase {
         XCTAssertFalse(result.changed)
     }
 
-    func testHiddenAndDoneTasksKeepTheirStateWhenReturned() {
-        let tasks = [jiraTask("1", visibility: .hidden), jiraTask("2", visibility: .done)]
+    func testUserArchivedAndDoneTasksKeepTheirStateWhenReturned() {
+        var archived = jiraTask("1", visibility: .archived, archivedByUser: true)
+        archived.closedAt = then
+        let tasks = [archived, jiraTask("2", visibility: .done)]
         let result = merge([issue("1", status: "In Progress"), issue("2", status: "In Progress")], into: tasks)
-        XCTAssertEqual(result.tasks.map(\.visibility), [.hidden, .done])
+        XCTAssertEqual(result.tasks.map(\.visibility), [.archived, .done])
         XCTAssertEqual(result.tasks.map { $0.remote?.status }, ["In Progress", "In Progress"])
+        XCTAssertNil(result.tasks[0].closedAt, "still listed: the archive must never clear it, or it would come back new")
+        XCTAssertEqual(result.tasks[0].archivedAt, then)
     }
 
     func testAGoneTaskThatComesBackIsActiveAgainInItsPlace() {
-        let tasks = [jiraTask("1"), jiraTask("2", visibility: .gone), jiraTask("3")]
+        var gone = jiraTask("2", visibility: .gone)
+        gone.closedAt = then
+        let tasks = [jiraTask("1"), gone, jiraTask("3")]
         let result = merge([issue("1"), issue("2"), issue("3")], into: tasks)
         XCTAssertEqual(result.tasks.map(\.visibility), [.active, .active, .active])
         XCTAssertEqual(result.tasks.map(\.id), tasks.map(\.id))
+        XCTAssertNil(result.tasks[1].closedAt)
         XCTAssertEqual(result.updated, 1)
+    }
+
+    func testATaskArchivedOnItsOwnThatComesBackIsActiveAgain() {
+        // Merge requests switched off made it go, three days archived it; switched back on, it
+        // returns with its time, as a gone task always has.
+        var archived = jiraTask("1", visibility: .archived)
+        archived.closedAt = then
+        archived.segments = [WorkSegment(start: then, end: then.addingTimeInterval(600), origin: .timer)]
+        let result = merge([issue("1")], into: [archived])
+        XCTAssertEqual(result.tasks.first?.visibility, .active)
+        XCTAssertNil(result.tasks.first?.closedAt)
+        XCTAssertNil(result.tasks.first?.archivedAt)
+        XCTAssertEqual(result.tasks.first?.segments, archived.segments)
+        XCTAssertEqual(result.tasks.first?.id, archived.id)
     }
 
     func testAnotherSitesTasksGoOnAnySuccessfulFetch() {
         let old = jiraTask("1", site: "old.atlassian.net")
-        let oldHidden = jiraTask("2", site: "old.atlassian.net", visibility: .hidden)
-        let capped = merge([issue("1")], complete: false, into: [old, oldHidden])
+        let oldArchived = jiraTask("2", site: "old.atlassian.net", visibility: .archived, archivedByUser: true)
+        let capped = merge([issue("1")], complete: false, into: [old, oldArchived])
         XCTAssertEqual(capped.tasks.count, 3, "the same id on another site is a different issue")
         XCTAssertEqual(capped.tasks[0].visibility, .gone, "even a capped fetch: that site is not connected")
-        XCTAssertEqual(capped.tasks[1].visibility, .hidden, "only active tasks become gone")
+        XCTAssertEqual(capped.tasks[1].visibility, .archived, "only active tasks become gone")
         XCTAssertEqual(capped.tasks[2].remote?.hostScope, site)
         XCTAssertEqual(capped.added, 1)
         XCTAssertEqual(capped.gone, 1)
