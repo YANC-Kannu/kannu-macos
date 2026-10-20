@@ -185,6 +185,9 @@ struct AgentSecurityFinding: Equatable, Hashable, Identifiable, Codable {
         case "undeclared_mcp_server": return String(localized: "Running MCP server nobody declared")
         case "unattended_execution": return String(localized: "Permission checks bypassed")
         case "third_party_destination": return String(localized: "MCP server reaches outside your domains")
+        // Raised for anything the ADR scan policy forbids: a catalogued tool, an MCP server, a
+        // skill, a package (upstream a3ab5f7). ADR's own summary names the asset.
+        case "forbidden_asset": return String(localized: "Forbidden by your ADR policy")
         default:
             let words = rule.split(separator: "_").map(String.init)
             guard let first = words.first else { return rule }

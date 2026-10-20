@@ -1283,7 +1283,7 @@ extension Defaults.Keys {
     /// Kannu-run scans that failed in a row (no snapshot written). The next one comes after 1, 2,
     /// 4, 8, 16 hours, never later than the daily scan; a scan that writes a snapshot resets it.
     static let adrKannuScanFailures = Key<Int>("adrKannuScanFailures", default: 0)
-    /// Optional `--policy` file for Discovery (tenant domains, approved, forbidden).
+    /// Optional `--policy` file for Discovery (tenant domains, approved and forbidden lists).
     static let adrPolicyFile = Key<String>("adrPolicyFile", default: "")
     /// How an unacknowledged high finding shows in the closed notch.
     static let adrHighAlertMode = Key<ADRHighAlertMode>("adrHighAlertMode", default: .untilAcknowledged)
