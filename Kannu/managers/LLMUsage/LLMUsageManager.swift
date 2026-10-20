@@ -77,11 +77,16 @@ final class LLMUsageManager: ObservableObject {
     /// `interactive` marks a refresh the user asked for directly, letting providers take
     /// steps that may show a system prompt (e.g. approving a cross-app keychain read).
     /// Automatic and timer-driven refreshes must leave it false so nothing blocks on a dialog.
-    func refreshAll(force: Bool = false, interactive: Bool = false) {
-        refreshAll(force: force, interactive: interactive, drainingParkedRequest: false)
+    /// `bypassFloor` is for a caller whose own data just changed and that has paced itself — the
+    /// Claude usage fetch completing. The card's poll runs a refresh moments before that fetch
+    /// lands, so the floor would otherwise drop it and leave the new numbers off the card for
+    /// minutes. It never prompts (that is `interactive`).
+    func refreshAll(force: Bool = false, interactive: Bool = false, bypassFloor: Bool = false) {
+        refreshAll(force: force, interactive: interactive, drainingParkedRequest: bypassFloor)
     }
 
-    /// `drainingParkedRequest` is true only for the re-entry that drains `pendingForcedRefresh`.
+    /// `drainingParkedRequest` is true for the re-entry that drains `pendingForcedRefresh`, and for
+    /// a public `bypassFloor` request.
     /// That request was parked *because* a refresh was already in flight, and `lastRefresh` is
     /// stamped at refresh start — so by the time it drains, the elapsed time is almost always
     /// under the interactive floor and the parked intent would be silently dropped, which is

@@ -42,6 +42,9 @@ struct UsageLimit: Equatable {
     var resetsAt: Date? = nil
     /// Server-reported severity ("normal"/"warning"/"critical") when available; drives the accent.
     var severity: String? = nil
+    /// When the value was read, when the source says. A Claude window can come from a desktop
+    /// sample days old; the card shows that age rather than passing the number off as current.
+    var observedAt: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 
