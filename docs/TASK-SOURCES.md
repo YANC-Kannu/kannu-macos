@@ -63,5 +63,8 @@ case and a few files, not a hunt through the views.
 - **Where a token goes:** only to the scope saved with it in the Keychain. A display copy that
   disagrees means "reconnect", never a request elsewhere.
 - **What a permission costs:** macOS's questions (Keychain, Reminders) come only from a click.
-- **Older builds:** a build from before a source existed cannot read a `tasks.json` that holds its
-  tasks; it moves the file aside (kept, not lost). Testers do not go back.
+- **Older builds:** a build from before a source existed drops that source's tasks when it reads
+  `tasks.json` (`TaskItem.UnknownSource`), keeps every other task, and writes the file without
+  them on its next save — their recorded time goes with them; the build that knows the source
+  lists them again. Any other fault in the file still moves it aside (kept, not lost). Testers do
+  not go back.
