@@ -8,6 +8,54 @@ struct ComposerMeta: Equatable {
     let checkpointMs: Int64
     let createdMs: Int64
     let name: String?
+
+    /// This record, with anything it lacks taken from `header`. Status and activity stay this
+    /// record's own: a 3.19 header has no status, and its `lastUpdatedAt` can move with no agent
+    /// activity (Cursor 3.19.19, read-only: 1 of the 25 newest chats had a header 178 s newer than
+    /// its `composerData`; letting that header win dropped the chat's status).
+    func filling(from header: ComposerMeta) -> ComposerMeta {
+        ComposerMeta(
+            composerID: composerID,
+            status: status ?? header.status,
+            updatedMs: updatedMs > 0 ? updatedMs : header.updatedMs,
+            checkpointMs: checkpointMs > 0 ? checkpointMs : header.checkpointMs,
+            createdMs: createdMs > 0 ? createdMs : header.createdMs,
+            name: name ?? header.name
+        )
+    }
+}
+
+/// The composer headers read in the last few seconds, keyed by the ids asked for. One rescan asks
+/// for several different id sets (transcript ids, chat-title ids, one id for a hook session's
+/// backing), so a miss adds the missing ids to the cache instead of replacing it; everything
+/// expires together when the TTL runs out.
+struct ComposerHeaderCache {
+    let ttl: TimeInterval
+    private(set) var headers: [String: ComposerMeta] = [:]
+    /// Every id read since `filledAt`, found or not: an id with no header is not re-read either.
+    private(set) var readIDs: Set<String> = []
+    private(set) var filledAt: Date?
+
+    init(ttl: TimeInterval) { self.ttl = ttl }
+
+    mutating func headers(
+        forIDs ids: Set<String>,
+        now: Date,
+        load: (Set<String>) -> [String: ComposerMeta]
+    ) -> [String: ComposerMeta] {
+        if let filledAt, now.timeIntervalSince(filledAt) < ttl {
+            let missing = ids.subtracting(readIDs)
+            if !missing.isEmpty {
+                headers.merge(load(missing)) { _, fresh in fresh }
+                readIDs.formUnion(missing)
+            }
+        } else {
+            headers = load(ids)
+            readIDs = ids
+            filledAt = now
+        }
+        return headers.filter { ids.contains($0.key) }
+    }
 }
 
 // Main-actor isolated: the static caches below are unguarded mutable state, and every
@@ -26,9 +74,7 @@ enum CursorComposerStore {
             .appendingPathComponent("Library/Application Support/Cursor/User/workspaceStorage", isDirectory: true)
     }()
 
-    private static let headersCacheTTL: TimeInterval = 3.0
-    private static var cachedHeaders: [String: ComposerMeta] = [:]
-    private static var cachedHeadersAt: Date?
+    private static var headersCache = ComposerHeaderCache(ttl: 3.0)
 
     private static let planRegistryCacheTTL: TimeInterval = 10.0
     private static var cachedPlanNames: Set<String> = []
@@ -51,11 +97,12 @@ enum CursorComposerStore {
     ) -> [String: ComposerMeta] {
         guard !ids.isEmpty else { return [:] }
 
-        var merged = loadComposerHeadersCached()
-
-        for meta in loadComposerDataFromDiskKV(forIDs: ids) {
-            mergeMeta(&merged, meta)
-        }
+        var merged = combine(
+            composerData: loadComposerDataFromDiskKV(forIDs: ids),
+            headers: headersCache.headers(forIDs: ids, now: Date()) {
+                loadComposerHeaders(atPath: globalDBPath, forIDs: $0)
+            }
+        )
 
         if includeWorkspaceDatabases {
             for meta in loadFromDatabase(path: globalDBPath) where ids.contains(meta.composerID) {
@@ -78,22 +125,28 @@ enum CursorComposerStore {
         return filter(merged, ids: ids)
     }
 
-    private static func loadComposerHeadersCached() -> [String: ComposerMeta] {
-        let now = Date()
-        if let cachedHeadersAt, now.timeIntervalSince(cachedHeadersAt) < headersCacheTTL {
-            return cachedHeaders
+    /// `composerData` is the record of a conversation: its status and activity time win. A header
+    /// fills only what that record lacks (the name, mostly), and stands in for a conversation that
+    /// has no `composerData` at all, so it still has a name and a backing record.
+    nonisolated static func combine(
+        composerData: [ComposerMeta],
+        headers: [String: ComposerMeta]
+    ) -> [String: ComposerMeta] {
+        var merged: [String: ComposerMeta] = [:]
+        for meta in composerData {
+            mergeMeta(&merged, meta)
         }
-        let fresh = loadComposerHeaders(from: globalDBPath)
-        cachedHeaders = fresh
-        cachedHeadersAt = now
-        return fresh
+        for (id, header) in headers {
+            merged[id] = merged[id].map { $0.filling(from: header) } ?? header
+        }
+        return merged
     }
 
     private static func filter(_ merged: [String: ComposerMeta], ids: Set<String>) -> [String: ComposerMeta] {
         merged.filter { ids.contains($0.key) }
     }
 
-    private static func mergeMeta(_ merged: inout [String: ComposerMeta], _ meta: ComposerMeta) {
+    private nonisolated static func mergeMeta(_ merged: inout [String: ComposerMeta], _ meta: ComposerMeta) {
         if let existing = merged[meta.composerID] {
             if meta.updatedMs >= existing.updatedMs {
                 merged[meta.composerID] = meta
@@ -183,13 +236,80 @@ enum CursorComposerStore {
         return names
     }
 
-    private static func loadComposerHeaders(from path: String) -> [String: ComposerMeta] {
-        guard FileManager.default.fileExists(atPath: path) else { return [:] }
+    /// Composer headers (name, timestamps) for `ids` from one `state.vscdb`.
+    ///
+    /// Cursor 3.x keeps one row per composer in a `composerHeaders` table; on Cursor 3.19.19 the
+    /// table is populated and the old `ItemTable` key `composer.composerHeaders` has no row at all,
+    /// so reading only the key lost every header name and timestamp. Earlier versions kept every
+    /// header in that key's `allComposers` array, which is still read when the table is absent, and
+    /// for any id the table does not hold, so a half-migrated profile keeps its names.
+    ///
+    /// The table is read by primary key, one row per requested id — never scanned: the global
+    /// database runs to gigabytes and Cursor holds it open.
+    static func loadComposerHeaders(atPath path: String, forIDs ids: Set<String>) -> [String: ComposerMeta] {
+        guard !ids.isEmpty, FileManager.default.fileExists(atPath: path) else { return [:] }
 
         var db: OpaquePointer?
         guard sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let db else { return [:] }
         defer { sqlite3_close(db) }
 
+        var results = hasComposerHeadersTable(db) ? loadComposerHeaderRows(db, forIDs: ids) : [:]
+        let unresolved = ids.subtracting(results.keys)
+        guard !unresolved.isEmpty else { return results }
+        for (id, meta) in loadLegacyComposerHeaders(db) where unresolved.contains(id) {
+            results[id] = meta
+        }
+        return results
+    }
+
+    private static func hasComposerHeadersTable(_ db: OpaquePointer) -> Bool {
+        var stmt: OpaquePointer?
+        let sql = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'composerHeaders' LIMIT 1"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else { return false }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) == SQLITE_ROW
+    }
+
+    /// One primary-key lookup per id. The timestamp columns mirror the same keys inside `value`
+    /// (milliseconds); the name and status exist only inside `value`.
+    private static func loadComposerHeaderRows(_ db: OpaquePointer, forIDs ids: Set<String>) -> [String: ComposerMeta] {
+        var stmt: OpaquePointer?
+        let sql = "SELECT lastUpdatedAt, checkpointAt, createdAt, value FROM composerHeaders WHERE composerId = ?"
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else { return [:] }
+        defer { sqlite3_finalize(stmt) }
+
+        var results: [String: ComposerMeta] = [:]
+        for id in ids {
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
+            _ = id.withCString { cID in
+                sqlite3_bind_text(stmt, 1, cID, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
+            guard sqlite3_step(stmt) == SQLITE_ROW else { continue }
+
+            var value: [String: Any] = [:]
+            if let valueText = sqlite3_column_text(stmt, 3),
+               let data = String(cString: valueText).data(using: .utf8),
+               let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                value = dict
+            }
+            let checkpoint = max(sqlite3_column_int64(stmt, 1), int64(from: value["conversationCheckpointLastUpdatedAt"]))
+            let updated = max(sqlite3_column_int64(stmt, 0), int64(from: value["lastUpdatedAt"]), checkpoint)
+            let createdColumn = sqlite3_column_int64(stmt, 2)
+            results[id] = ComposerMeta(
+                composerID: id,
+                status: value["status"] as? String,
+                updatedMs: updated,
+                checkpointMs: checkpoint,
+                createdMs: createdColumn > 0 ? createdColumn : int64(from: value["createdAt"]),
+                name: value["name"] as? String
+            )
+        }
+        return results
+    }
+
+    /// The pre-table layout: every header in one JSON array under one `ItemTable` key.
+    private static func loadLegacyComposerHeaders(_ db: OpaquePointer) -> [String: ComposerMeta] {
         var stmt: OpaquePointer?
         let sql = "SELECT value FROM ItemTable WHERE key='composer.composerHeaders'"
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else { return [:] }

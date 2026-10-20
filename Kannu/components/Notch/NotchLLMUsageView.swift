@@ -541,7 +541,9 @@ struct NotchLLMUsageView: View {
     private func weeklyBars(_ snap: UsageSnapshot, provider: ProviderID, now: Date) -> [QuotaBar] {
         var bars: [QuotaBar] = []
         if let week = snap.weekLimit, Self.isLive(week, now: now) {
-            bars.append(.init(week, label: String(localized: "All models"), windowID: Self.windowID(provider, slot: "week")))
+            // Cursor's split plan names its first bar "Auto" and keys it apart from "week" (#100).
+            bars.append(.init(week, label: snap.weekLimitLabel ?? String(localized: "All models"),
+                              windowID: Self.windowID(provider, slot: snap.weekLimitKey)))
         }
         for extra in snap.extraLimits where Self.isLive(extra.limit, now: now) {
             bars.append(.init(extra.limit, label: extra.label ?? Self.extraLimitLabel(extra),
