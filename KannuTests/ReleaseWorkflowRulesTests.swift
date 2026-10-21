@@ -47,6 +47,36 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         ])
     }
 
+    /// No build strips the `com.apple.security.mach-services` entitlement. The release workflow, CI
+    /// and both local build scripts each ran `plutil -remove com.apple.security.mach-services`, which
+    /// reads the dots in the key as a key path, answered "No value to remove at key path" and never
+    /// removed it: every build those four made, ad-hoc ones included, carried the key. The reason the
+    /// strip gave, that amfid kills an ad-hoc app carrying it, does not hold on macOS 26 (an ad-hoc
+    /// signed app with hardened runtime and this entitlement launches), and neither does
+    /// `ExtensionXPCServiceHost`'s note that its listener crashes the app without it (a Kannu Dev
+    /// build without the key started the listener and ran for hours). A strip that worked would
+    /// only change what gets signed, for no reason anyone has shown.
+    func testNoBuildStripsTheMachServicesEntitlement() throws {
+        for path in Self.buildFiles {
+            XCTAssertEqual(Self.machServicesProblems(in: try Self.read(path), path: path), [], path)
+        }
+        let plutilStrip = "if ! plutil_out=$(plutil -remove com.apple.security.mach-services Kannu/Kannu.entitlements 2>&1); then"
+        XCTAssertEqual(Self.machServicesProblems(in: plutilStrip, path: "ci.yml"),
+                       ["ci.yml strips the mach-services entitlement"])
+        let plistBuddyStrip = "/usr/libexec/PlistBuddy -c \"Delete :com.apple.security.mach-services\" \"$ENTITLEMENTS\""
+        XCTAssertEqual(Self.machServicesProblems(in: plistBuddyStrip, path: "release.yml"),
+                       ["release.yml strips the mach-services entitlement"])
+    }
+
+    private static let buildFiles = [
+        workflowPath, ".github/workflows/ci.yml", "scripts/build-dmg.sh", "scripts/build-launch-app.sh",
+    ]
+
+    static func machServicesProblems(in text: String, path: String) -> [String] {
+        let strips = ["plutil -remove com.apple.security.mach-services", "Delete :com.apple.security.mach-services"]
+        return strips.contains(where: text.contains) ? ["\(path) strips the mach-services entitlement"] : []
+    }
+
     // MARK: - Rules
 
     static func problems(in workflow: String) -> [String] {

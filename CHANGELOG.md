@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Builds stop pretending to strip the mach-services entitlement
+- **Developer label:** "Fix the release workflow's mach-services strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.mach-services` blocks from the release workflow, CI and both local build scripts; none ever removed the key
+- **Changes:**
+  - `plutil -remove com.apple.security.mach-services` reads the dots in the key as a key path. It
+    answered "No value to remove at key path", which each block took for "already absent", so the
+    key was never removed: the 1.3.4 release, the 1.4.0 beta, CI and every local ad-hoc build all
+    carried it.
+  - Making the strip work was not the fix. Its reason, that amfid kills an ad-hoc app carrying the
+    key, does not hold on macOS 26: an ad-hoc signed app with hardened runtime and this entitlement
+    launches. And a Kannu Dev build without the key started `ExtensionXPCServiceHost`'s listener and
+    ran for hours, against that file's note that it crashes. A working strip would only have changed
+    what CI and the scripts sign.
+  - So the blocks go from `.github/workflows/release.yml`, `.github/workflows/ci.yml`,
+    `scripts/build-dmg.sh` and `scripts/build-launch-app.sh`. Nothing that gets built changes: every
+    build signs the same entitlements as before.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsTheMachServicesEntitlement` checks the four
+    files for a `plutil -remove` or PlistBuddy `Delete` of the key, with planted copies of each.
+
 ### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
 - **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"
 - **Agent label:** Claude Code (Opus 5.5) — `release.yml` treats a tag with a hyphen (`v1.4.0-beta.1`) as a pre-release: same build, signing and notarization, published as a GitHub pre-release, no Sparkle export and no appcast commit

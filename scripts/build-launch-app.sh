@@ -79,16 +79,6 @@ prepare_entitlements() {
   TEMP_ENTITLEMENTS="$(mktemp "${TMPDIR:-/tmp}/kannu-entitlements.XXXXXX")"
   cp "$ENTITLEMENTS_SRC" "$TEMP_ENTITLEMENTS"
 
-  # Ad-hoc builds fail when mach-services is present (amfid kills the app).
-  if ! plutil_out=$(plutil -remove com.apple.security.mach-services "$TEMP_ENTITLEMENTS" 2>&1); then
-    if printf '%s' "$plutil_out" | grep -q "No value to remove"; then
-      : # already absent
-    else
-      echo "error: plutil failed to modify entitlements: $plutil_out" >&2
-      exit 1
-    fi
-  fi
-
   # Ad-hoc local builds should not disable library validation.
   if ! plutil_out=$(plutil -remove com.apple.security.cs.disable-library-validation "$TEMP_ENTITLEMENTS" 2>&1); then
     if printf '%s' "$plutil_out" | grep -q "No value to remove"; then
