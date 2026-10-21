@@ -24,6 +24,9 @@ events = [
     ("postToolUseFailure", "executing"),
     ("beforeMCPExecution", "executing"),
     ("stop", "stopped"),
+    ("sessionEnd", "session_end"),
+    ("subagentStart", "thinking"),
+    ("subagentStop", "stopped"),
 ]
 config = {}
 if config_path.exists():

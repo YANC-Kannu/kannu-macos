@@ -42,6 +42,9 @@ struct UsageLimit: Equatable {
     var resetsAt: Date? = nil
     /// Server-reported severity ("normal"/"warning"/"critical") when available; drives the accent.
     var severity: String? = nil
+    /// When the value was read, when the source says. A Claude window can come from a desktop
+    /// sample days old; the card shows that age rather than passing the number off as current.
+    var observedAt: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 
@@ -83,6 +86,9 @@ struct NamedLimit: Equatable {
     let limit: UsageLimit
     /// The provider's own name for this window, preferred over anything derived from the key.
     var label: String? = nil
+    /// A 5-hour window (Antigravity reports one per model pool), shown with the 5-hour bar instead
+    /// of under Weekly.
+    var isSessionWindow: Bool = false
 }
 
 extension NamedLimit {
@@ -95,7 +101,16 @@ struct UsageSnapshot: Equatable {
     var today: UsageTotals = .init()
     var week: UsageTotals = .init()
     var sessionLimit: UsageLimit? = nil // 5h window quota
-    var weekLimit: UsageLimit? = nil // 7d all-models window quota
+    var weekLimit: UsageLimit? = nil // 7d all-models window quota (Cursor: the billing cycle)
+    /// The provider's own name for the `weekLimit` bar (Cursor's "Auto" pool); nil keeps the
+    /// view's default.
+    var weekLimitLabel: String? = nil
+    /// The alert and forecast reading key of the `weekLimit` bar. Cursor's Auto pool reads as
+    /// "auto", so its forecast never continues a series of blended totals.
+    var weekLimitKey: String = "week"
+    /// What `sessionLimit` and `weekLimit` measure when it is not every model: Antigravity's quota
+    /// is per model pool, and these two are its first pool's. nil reads as all models.
+    var limitsLabel: String? = nil
     /// Additional rate-limit windows beyond the 5h/7d pair, in the order the provider reported them.
     var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil // billing-cycle on-demand spend from usage-summary
@@ -138,6 +153,12 @@ struct UsageSnapshot: Equatable {
 struct QuotaFetchResult: Equatable {
     var session: UsageLimit?
     var week: UsageLimit?
+    /// Becomes `UsageSnapshot.weekLimitLabel`.
+    var weekLabel: String? = nil
+    /// Becomes `UsageSnapshot.weekLimitKey`.
+    var weekKey: String = "week"
+    /// Becomes `UsageSnapshot.extraLimits` (Cursor's API pool).
+    var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil
     var accountTier: String? = nil
     var errorMessage: String?

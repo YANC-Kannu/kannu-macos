@@ -98,7 +98,8 @@ struct KannuHeader: View {
                     // is the active view, so it sits with the other comers and goers.
                     if coordinator.currentView == .llmUsage {
                         Button(action: {
-                            llmUsageManager.refreshAll(force: true)
+                            // Also clears Antigravity's backoff: a press means try now.
+                            llmUsageManager.refreshRequestedByUser()
                         }) {
                             Capsule()
                                 .fill(.black)

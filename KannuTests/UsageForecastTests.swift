@@ -178,4 +178,34 @@ final class UsageForecastTests: XCTestCase {
         XCTAssertEqual(readings.map(\.label), ["5-hour", "weekly", "Fable weekly"])
         XCTAssertEqual(UsageWindowReading.label(provider: "cursor", key: "week"), "billing-cycle")
     }
+
+    func testClaudeReadingsCarryEachWindowsOwnTime() {
+        // A merged snapshot's observedAt is its newest source's; a days-old weekly sample must not
+        // be dated now in the forecast.
+        let old = now.addingTimeInterval(-3 * 86_400)
+        let snapshot = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 42, resetsAt: now.addingTimeInterval(3600)),
+            .init(key: "seven_day", percent: 10, resetsAt: now.addingTimeInterval(86_400), observedAt: old)
+        ], observedAt: now)
+        let readings = UsageWindowReading.readings(fromClaude: snapshot, now: now)
+        XCTAssertEqual(readings.map(\.observedAt), [now, old])
+    }
+
+    func testTheShortCaptionSaysTheSameInFewerWords() {
+        // Across midnight on purpose: the short form never names the day.
+        let at = now.addingTimeInterval(23 * 3600)
+        let short = UsageForecast.shortCaption(.hitsLimit(at: at), resetsAt: nil, now: now)
+        XCTAssertEqual(short?.isWarning, true)
+        XCTAssertEqual(short?.text, "full by " + UsageForecast.time(at))
+        XCTAssertFalse(short?.text.contains(UsageForecast.clock(at, now: now)) ?? true, "no weekday")
+        XCTAssertEqual(UsageForecast.shortCaption(.atLimit, resetsAt: nil, now: now)?.text, "full")
+        XCTAssertEqual(UsageForecast.shortCaption(.atLimit, resetsAt: at, now: now)?.text,
+                       "full · resets " + UsageForecast.time(at))
+        let steadyEnough = UsageForecast.shortCaption(.lastsUntilReset(projected: 83.4), resetsAt: at, now: now)
+        XCTAssertEqual(steadyEnough?.text, "~83% at reset")
+        XCTAssertEqual(steadyEnough?.isWarning, false)
+        XCTAssertNil(UsageForecast.shortCaption(.lastsUntilReset(projected: 40), resetsAt: at, now: now))
+        XCTAssertNil(UsageForecast.shortCaption(.steady, resetsAt: at, now: now))
+        XCTAssertNil(UsageForecast.shortCaption(.insufficientData, resetsAt: nil, now: now))
+    }
 }

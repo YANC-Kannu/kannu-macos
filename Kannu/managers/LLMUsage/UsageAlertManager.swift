@@ -85,6 +85,7 @@ final class UsageAlertManager: ObservableObject {
         for provider in [ProviderID.codex, ProviderID.cursor] {
             guard case .success(let snapshot)? = results[provider] else { continue }
             let readings = Self.readings(provider: provider.rawValue, session: snapshot.sessionLimit, week: snapshot.weekLimit,
+                                         weekKey: snapshot.weekLimitKey, weekLabel: snapshot.weekLimitLabel,
                                          extra: snapshot.extraLimits, observedAt: snapshot.lastUpdated)
             guard !readings.isEmpty else { continue }
             foregroundSucceeded.insert(provider.rawValue)
@@ -93,7 +94,10 @@ final class UsageAlertManager: ObservableObject {
         evaluate()
     }
 
-    private static func readings(provider: String, session: UsageLimit?, week: UsageLimit?, extra: [NamedLimit],
+    /// `weekKey` and `weekLabel` are the provider's own for the week slot (Cursor's Auto pool), so
+    /// a push names the pool and its forecast series is not the blended total's.
+    private static func readings(provider: String, session: UsageLimit?, week: UsageLimit?,
+                                 weekKey: String, weekLabel: String?, extra: [NamedLimit],
                                  observedAt: Date) -> [UsageWindowReading] {
         var out: [UsageWindowReading] = []
         func add(_ key: String, _ limit: UsageLimit?, label: String? = nil) {
@@ -104,7 +108,7 @@ final class UsageAlertManager: ObservableObject {
                                           severity: limit.severity, observedAt: observedAt))
         }
         add("session", session)
-        add("week", week)
+        add(weekKey, week, label: weekLabel)
         for named in extra { add(named.key, named.limit, label: named.label) }
         return out
     }
@@ -196,7 +200,9 @@ final class UsageAlertManager: ObservableObject {
 
     private func applyBackground(_ result: QuotaFetchResult, provider: String) {
         backgroundInFlight.remove(provider)
-        let readings = Self.readings(provider: provider, session: result.session, week: result.week, extra: [], observedAt: Date())
+        let readings = Self.readings(provider: provider, session: result.session, week: result.week,
+                                     weekKey: result.weekKey, weekLabel: result.weekLabel,
+                                     extra: result.extraLimits, observedAt: Date())
         guard !readings.isEmpty else { return }
         providerReadings[provider] = readings
         evaluate()
