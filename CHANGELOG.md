@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
+- **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"
+- **Agent label:** Claude Code (Opus 5.5) — `release.yml` treats a tag with a hyphen (`v1.4.0-beta.1`) as a pre-release: same build, signing and notarization, published as a GitHub pre-release, no Sparkle export and no appcast commit
+- **Changes:**
+  - The release workflow ran the same steps for every `v*` tag, the last of which commits the appcast
+    to `main` — the feed every installed Kannu reads — and published the GitHub release as Latest.
+    `scripts/RELEASE.md`'s "Test with a pre-release tag" would have shipped a beta to everyone.
+  - Now `Create DMG` sets `RELEASE_PRERELEASE` from the tag: a hyphen in the version makes it a
+    pre-release. For one, `Export Sparkle Update Assets`, `Upload Sparkle Artifact` and
+    `Update appcast on main` are skipped, and the GitHub release is published with
+    `prerelease: true` and `make_latest: false`. Testers download the notarized DMG from the
+    Releases page; Sparkle never offers it.
+  - `scripts/RELEASE.md` replaces the pre-release section with "Beta (pre-release) tags": the tag,
+    the notes file (`docs/release-notes/1.4.0-beta.1.md`), and the build numbering (the beta above
+    the feed's newest, the release above the beta: 1.4.0 beta build 9, 1.4.0 build 10, so Sparkle
+    moves beta testers to the release).
+  - Test: new `ReleaseWorkflowRulesTests` (the hyphen check, the three guarded steps and the
+    pre-release flags, with planted copies of the old workflow).
+
 ### 2026-10-21 - Act on CodeRabbit's review of #104
 - **Developer label:** CodeRabbit's review of #104: a Keychain gate test depended on a fixed sleep
 - **Agent label:** Claude Code (Opus 5.5) — `testAWaitingCallThatMayPromptHoldsBackNewSilentReads` polls, with a deadline, until the waiting dialog call refuses a non-waiting silent read

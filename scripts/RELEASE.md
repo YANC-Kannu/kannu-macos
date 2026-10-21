@@ -46,14 +46,22 @@ git push origin v1.0.0
 4. Watch **Actions → Release**
 5. Verify the GitHub Release contains `Kannu.<version>.dmg` and `Updates/appcast.xml` updated on `main`
 
-### Test with a pre-release tag
+### Beta (pre-release) tags
+
+A tag with a hyphen — `v1.4.0-beta.1` — runs the same build, signing and notarization as a release,
+publishes the DMG as a GitHub **pre-release** (never marked Latest), and skips the Sparkle export and
+the appcast commit to `main`. Sparkle never offers it: only testers who download it from the Releases
+page run it. The release notes come from `docs/release-notes/<version>.md` for the tag's version
+(`1.4.0-beta.1.md`), or GitHub's generated list.
 
 ```bash
-git tag v1.0.0-test.1
-git push origin v1.0.0-test.1
+git tag v1.4.0-beta.1
+git push origin v1.4.0-beta.1
 ```
 
-Delete the test release afterward if desired.
+Number the beta's build above the feed's newest and below the release's: with 1.3.4 at build 8,
+the 1.4.0 beta is build 9 and 1.4.0 itself build 10, so Sparkle moves every beta tester to the
+release when it ships. `ReleaseWorkflowRulesTests` pins the pre-release rules.
 
 ---
 
