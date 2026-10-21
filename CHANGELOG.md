@@ -4,6 +4,337 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - Act on CodeRabbit's review of #113
+- **Developer label:** CodeRabbit's review of #113 (the agents batch: #96, #100, #101, #102, #105): three findings, all in the usage card and its Settings text
+- **Agent label:** Claude Code (Opus 5.5) — the 5-hour column draws one bar and folds other pools' windows into a chip, the weekly bar limit counts Codex's and Cursor's token-total rows, and the Providers footer says what the Claude card runs
+- **Changes:**
+  - The 5-hour column draws one bar, as `UsageCardMetrics.fiveHourColumnHeight` budgets. Antigravity's
+    other pools' 5-hour windows fold into a "+n" chip beside the title, named on hover, as the
+    weekly column's overflow does; with three pools the column had grown to 106 pt and the card past
+    the 138 pt slot.
+  - `UsageCardMetrics.maxWeeklyBars(statusRow:factRows:)` (and the column heights under it) counts
+    the two token-total rows Codex's and Cursor's weekly column draws under its bars;
+    `NotchLLMUsageView.showsTokenTotals` decides both. Cursor's Auto and API bars with a status row
+    made a 150 pt card; the API bar now folds into the chip. Claude's budget is unchanged.
+  - Brain › Usage's Providers footer no longer says Claude "needs no permission" or names a gauge
+    button the card no longer has: it says Kannu runs Claude Code's /usage while the tab is open and
+    the limits are over 15 minutes old, and that the card's ↻ fetches now and can start Claude
+    Code's sign-in.
+  - Tests: `UsageCardMetricsTests.testTheTokenTotalsCountInTheWeeklyBudget`,
+    `UsageCardMetricsRulesTests.testTheColumnsDrawWithinTheirBudgets`.
+
+### 2026-10-21 - Act on CodeRabbit's review of #96
+- **Developer label:** CodeRabbit's review of #96 at 9c7ca4f: five findings, fixed on the agents batch (#113)
+- **Agent label:** Claude Code (Opus 5.5) — the "other organization" hint clears after a sign-in in Terminal, a cancelled refresh starts no further step or child, and three new test files carry the GPL header
+- **Changes:**
+  - **The "other organization" hint no longer sticks.** Kannu records Claude Code's organization
+    only at its own fetch, the recorded value wins over `~/.claude.json`, and the automatic refresh
+    stood down while the hint said "another organization" — so after the card's "Sign in in
+    Terminal" to the right organization, the card kept saying "sign in" until a manual ↻.
+    `ClaudeUsageOrganizations` now carries `claudeCodeInConfig` (`oauthAccount`'s organization
+    before the recorded override), and `ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch` lets
+    one paced automatic fetch run when the file names a different organization than the recorded
+    one; Claude Code's own fetch leaves its true organization there, which is what gets recorded.
+    Both "another organization" lines now end "then press this card's ↻".
+    Test: `ClaudeUsageSnapshotTests.testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves`.
+  - **A cancelled refresh stops.** App exit kills the running probe, which then reads as failed,
+    and on a press that alone chose the interactive spawn: a `claude` child started after the exit
+    cleanup had looked, and outlived Kannu (REGRESSIONS entry 19). New pure
+    `ClaudeUsageFetchCommand.step(_:cancelled:signedIn:fetched:)` finishes a cancelled run with
+    what it got to, applied before every step in `ClaudeUsageRefresh.run`; the interactive fetch
+    checks for a cancel before each attempt; and `register(_:)` refuses, and stops, a child that
+    starts after the cancel. Tests: `ClaudeUsageFetchCommandTests.testACancelledRefreshFinishesInsteadOfStartingAnotherStep`
+    and `testTheRefreshWorkerHonoursACancelBeforeEveryStepAndChild`.
+  - `UsageCardMetricsTests.swift`, `UsageCardMetricsRulesTests.swift` and
+    `AntigravityUsageReportTests.swift` start with the project's GPL header.
+  - Not changed: "redsign" and "golden ration" in the CHANGELOG developer labels quote the request
+    verbatim, as the label requires.
+
+
+### 2026-10-21 - The usage card splits with the timer's own golden split
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — #96 brought up to date with `development` before it merges
+- **Changes:**
+  - `development` now carries the timer tab's `TimerComposerMetrics`, so `UsageCardMetrics`
+    stops carrying its own copy of the golden ratio and the split and calls the timer's — the
+    rule the copy's comment set ("whichever lands second delegates"). The split is unchanged:
+    98 : 161 with two cards in a 640 pt notch, pinned as before.
+  - `testGoldenSplitIsTheTimersSplit` checks the usage card's split against the timer's at the
+    widths the card uses.
+  - The redesign entry's "Not done" note gives the real reason the bar labels do not slide.
+
+### 2026-10-19 - A snapshot board shows the usage cards at 640 and 690
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — DEBUG `usage` board for `--kannu-snapshots`
+- **Changes:**
+  - `--kannu-snapshot-tabs usage` renders the Usage tab's cards at the content widths of a 640
+    and a 690 pt notch: one card, two (Claude and Cursor), three (stacked), a sign-in status and
+    a day-old reading — each in the 142-pt slot with a red line at its floor, so a card running
+    past it shows. `NotchLLMUsageView` takes snapshot overrides for the results, the refresh
+    status, the forecasts and the notch width; in the app they are nil.
+  - Fixtures: a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the
+    week, Fable 41 %, Opus 12 %, Sonnet 5 % (so one folds under a status row); Cursor Pro at
+    62 % of its billing cycle with token totals; Codex at 20 / 55 %.
+
+### 2026-10-19 - The Claude card splits in the golden ratio and fits the notch
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — the Usage tab's cards in the timer tab's language, 5 hour : Weekly = 1 : φ
+- **Changes:**
+  - The Claude card's two things sit side by side: the 5-hour window (now) as the minor column
+    and the weekly stack (the trend: all models, then each per-model window) as the major one,
+    1 : φ of the card's inner width — 98 : 161 pt with Cursor beside it in a 640-pt notch, 210 :
+    340 alone. Too narrow for two columns (three cards at 640), the card stacks its bars with one
+    line for both resets. The card is at most 138 pt in every state and no longer runs past the
+    notch; the notch never grows for it.
+  - The timer tab's language throughout: explicit type (13 semibold names, 12 semibold values,
+    11 medium text, 10 semibold chips and glyphs), 4-pt capsule bars on white 0.12, chips on
+    white 0.12, a continuous radius-10 glass card at white 0.06, fixed row heights, orange only
+    for an over-threshold band or a warning forecast, `.secondary` and `.tertiary` for everything
+    quiet. Every size reads from `UsageCardMetrics`; `UsageCardMetricsRulesTests` scans the view
+    for a literal size, a text style, a non-continuous rounded rectangle or a refresh tooltip
+    that does not open below, with planted offenders proving the scan.
+  - Forecasts no longer take a row each: under the 5-hour bar the verdict is a few words ("full
+    by 2:05 AM", `UsageForecast.shortCaption`, time only since a 5-hour window never needs the
+    day); on a weekly bar it tints the bar and percent orange and the full sentence is the row's
+    hover tooltip and accessibility value.
+  - A stale reading is a clock glyph in the header with "updated 3h ago" on hover, its bars
+    dimmed, not a text row; the account note is a chip beside the tier.
+  - One status row at a time, one line, the action as a chip beside it, in this order: what the
+    Claude refresh found, then a quota failure with its one-tap fix, then a quota failure alone.
+    The full message is the text's hover tooltip. Before, up to three stacked rows could show.
+  - Weekly bars beyond what fits (3 with a status row, 4 without) fold into a "+n" chip beside
+    the title that names them on hover; the stacked fallback draws three. These are the only
+    lossy rules, and they only bite at four or more per-model windows.
+  - Codex and Cursor on the same card: Codex splits like Claude with its Today/Week totals under
+    the weekly bar; Cursor's one window is titled **Billing cycle** (it was "Weekly", which is
+    wrong for it) with its totals and on-demand spend as facts; Antigravity is header and note.
+  - A long per-model name truncates and the row's tooltip names it, rather than sliding like the
+    timer's `HoverRevealText`: a weekly bar row already owns a hover for its forecast, and
+    docs/TOOLTIPS.md rule 3 gives a control one hover source.
+
+### 2026-10-19 - The usage card's sizes add up in one place
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — `UsageCardMetrics`: the 142-pt slot, the golden split, the row heights, the worst case proven
+- **Changes:**
+  - Measured first: the open notch is a fixed 200 pt, and after its bottom padding, the header
+    (38 pt on a notched MacBook, 24 without a notch) and the stack spacing, the Usage tab gets
+    142 pt. The Claude card was about 157 pt in its base state, stacking the 5-hour and weekly
+    sections, plus 15 per forecast caption and 35 for a status line — so it ran into the shadow
+    band and the window clipped it, cutting a forecast line or the status button.
+  - New `Kannu/sizing/UsageCardMetrics.swift` (Foundation-only, in the test target): every size
+    of a provider card, the slot arithmetic, the timer's `goldenSplit` (copied while
+    `TimerComposerMetrics` is not on `development`; whichever lands second delegates), the card
+    widths a notch gives one, two or three cards, the 1 : φ columns and the width below which a
+    card stacks (88 pt), the row heights, and the most weekly bars a card may draw with and
+    without a status row (3 and 4).
+  - `UsageCardMetricsTests` pins the slot (142/148/156), the φ split at 640 and 690 pt with one
+    and two cards (210 : 340, 98 : 161, 229 : 371, 108 : 176), that three cards stack, and that
+    every worst case — three weekly bars with a status row (138), four without (136), the
+    stacked fallback (138) — fits under the 138-pt limit.
+
+### 2026-10-19 - The Claude card's first look never shows one organization's numbers as another's
+- **Developer label:** "can we install this token fix onto the super build and see it locally working"
+- **Agent label:** Follow-up 65, the organization gap in #96
+- **Changes:**
+  - Until Kannu's own fetch has recorded which organization Claude Code's sign-in is on, that
+    organization came from `oauthAccount` in `~/.claude.json`, which flips between a person's
+    organizations. Read as Max while the cache held the Team plan's numbers, it put Team's 0 % on
+    the Max card until the first automatic fetch. Now, with desktop history to follow, Claude
+    Code's statusline and cache stay off the card while the organization is unrecorded, the
+    automatic refresh fetches at once (once per launch, whatever the cache's age), and an
+    unrecorded organization's cached weekly reset is not used to date the desktop's week.
+  - The card's line about organizations names the plans when Kannu has seen them ("Claude Code is
+    signed in to Team, so these are Claude Desktop's (Max) readings"). Kannu learns each
+    organization's `organizationType` whenever `~/.claude.json` names it, in the new `Defaults` key
+    `claudeOrganizationTypes`: plan types only, never names or emails.
+  - Tests: the unrecorded organization keeps Claude Code's sources off and asks for one fetch at
+    once; plan types are carried and named.
+
+### 2026-10-18 - Act on the review of #96: the automatic refresh never types, signs in or nags
+- **Developer label:** "The Claude card's Refresh fetches again, and signs Claude Code in when it has to" — review follow-up
+- **Agent label:** Follow-up 64 review — six lenses, two skeptics per finding, 37 findings confirmed, each fixed or answered
+- **Changes:**
+  - What a refresh runs is now a set of pure steps in `ClaudeUsageFetchCommand`, tested path by
+    path. The automatic refresh never reaches the interactive pty spawn (it types blind into a
+    terminal session) and never opens the browser; both happen only on a press.
+  - The probe is `claude --settings '{"disableAllHooks":true}' -p "/usage"`. Measured: it fetches
+    (`fetchedAtMs` advanced, three plan rows, 2.8 s) and, unlike the bare run, leaves no
+    SessionStart status file and fires none of the user's own hooks. The bare probe runs only if it
+    fails outright; Claude Code older than 2.1.263 gets no probe at all, so `/usage` can never reach
+    the model as a billed prompt.
+  - A probe that shows a claude.ai sign-in but returns no limits is answered with "signed in but
+    returned no limits" and Terminal, never a browser sign-in over a working one (that can move
+    Claude Code to another organization). New outcomes for a sign-in that did not finish and an
+    unreadable sign-in state, each with copy that says what a press will do.
+  - The automatic refresh only ever surfaces a missing sign-in; anything else it finds stays quiet
+    and holds it back until a press. A "sign in" line clears itself once Claude Code's cache turns
+    fresher some other way (a sign-in in Terminal, Claude Code's own `/usage`).
+  - Kannu runs only a `claude` signed by Anthropic (Developer ID, team Q6L2SF6YDW, identifier
+    `com.anthropic.claude-code`), checked off the main actor and cached per version: 0.2-0.5 s per
+    binary here, and the npm shim and an Apple-signed binary are rejected. A Homebrew cask's link is
+    now a candidate too. Resolution moved off the main actor.
+  - The environment scrub applies only to an inherited agent session (`CLAUDECODE`,
+    `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID` present). A user's own `launchctl setenv`
+    API key, gateway or cloud provider is inherited as before, so the auth-status gate sees it.
+  - Quitting Kannu stops a running refresh child (`ClaudeUsageRefresh.terminateForAppExit` from
+    `applicationWillTerminate`), so a sign-in no longer outlives the app with its localhost listener
+    open (entry 19). Cancel now escalates to SIGKILL like every other stop.
+  - The probe's own hook file is recognised by its transcript under `~/.claude/projects/-/`: the
+    hook strips a trailing slash, so a run from `/` records no cwd and the old `cwd == "/"` match
+    never fired.
+  - The Terminal sign-in resolves the binary again when pressed; the one a refresh found may have
+    been reaped by an update.
+  - Fresh numbers reach the card at once: the providers' refresh after a fetch bypasses the floor
+    that the card's own poll had just reset.
+  - Desktop values carry `notAfter` (five hours or a week after the sample) and expire at render
+    time, not only at the next read; they borrow the server's exact reset for the same
+    organization, so the 5-hour countdown no longer vanishes and the usage push no longer repeats.
+    A weekly rollover caught after a gap of more than an hour gives no countdown, only a bound: it
+    could have happened anywhere in that gap.
+  - The status line is one line with its action beside it (the stacked note pushed the button out
+    of the fixed-height card), the copy says "this card's ↻", and the "updated …" label waits 30
+    minutes, longer than the automatic fetch, so kept-current bars never dim between runs.
+  - Refresh steps log at `notice`, which `/usr/bin/log show` keeps; `info` was not persisted.
+  - CodeRabbit on #96: a weekly rollover seen in the desktop samples is now projected in whole
+    weeks to the week the newest sample is in, as the anchor is. A later reset can go unseen when
+    usage climbs past the last value before it, and `rollover + 7 days` then lay in the past and hid
+    a current bar. Its other two findings (Cancel against a trapped SIGTERM, an unreadable
+    `auth status` read as "sign in") are fixed above.
+  - Answered without a change: per-model weekly windows share the all-models reset (the cache's
+    Fable `resets_at` equals `seven_day`'s); the "moved" weekly anchor was two organizations'
+    anchors, now kept apart.
+
+### 2026-10-18 - The Claude card follows the organization Claude Desktop is on
+- **Developer label:** "Desktop's org (Max)" — the answer to which organization the Claude card should follow when Claude Code and Claude Desktop are on different ones
+- **Agent label:** Follow-up 64, organization rule — one organization per card, recorded at fetch
+- **Changes:**
+  - One person can belong to several organizations, each with its own limits and weekly reset.
+    Measured on this Mac: Claude Desktop records usage for a Max plan (weekly reset Wednesday
+    00:00Z), while Claude Code's own sign-in is bound to a Team plan of the same person (Monday
+    05:00Z). The card merged them, so a fresh Team "0 %" replaced Max's 43 %.
+  - The card now follows the organization of the desktop history's newest sample — what
+    desktop-hosted agents spend. Claude Code's statusline and cache join only when Claude Code is
+    on that same organization; otherwise they are left out whole, the plan badge (Claude Code's
+    plan) is hidden, the card says Claude Code is signed in to another organization and offers
+    **Sign in in Terminal**, and the automatic refresh stands down, since what it would fetch is
+    not on the card. Another organization's weekly reset is never used to date this one's week.
+  - Which organization Claude Code is on is recorded by Kannu straight after its own fetch.
+    `oauthAccount` in `~/.claude.json` cannot be trusted for it: measured, it read Max before a
+    `claude -p "/usage"`, Team right after it and 90 seconds later, and had read Max again earlier
+    after a desktop-hosted session ran. New `Defaults` key `claudeCodeUsageOrganization`.
+  - Tests: one organization per card, merging as before for one or an unknown organization, the
+    hint, the newest-sample organization, the organization known with no current window, another
+    organization's anchor not applied, and the recorded organization winning over the file.
+  - The desktop-history tests spell their sample offsets as `Double` literals: Swift 6.1 (CI's
+    macos-15 image) cannot convert an integer tuple literal to `(mins: Double, fh: Double?, sd:
+    Double?)`, which failed PR #96's macos-15 build while Xcode's newer compiler accepted it.
+
+### 2026-10-18 - The Claude card's Refresh fetches again, and signs Claude Code in when it has to
+- **Developer label:** "I think the usage tab is broken for claude or is not upto date , check what can be done and if any newer easier way to get usage stat has come up" — then "cant we trigger that / login command also in refresh button so user can get that prompt to enter rest of details easily"
+- **Agent label:** Follow-up 64 — `claude -p "/usage"` probe, sign-in from Refresh, an honest Claude card
+- **Changes:**
+  - Refresh had run nothing since 2026-10-02: Claude Desktop moved its bundled CLI to
+    `claude-code/<version>/<build>/claude.app`, the lookup expected `<version>/claude.app`, found no
+    binary and silently re-read disk. `ClaudeCodeBinary` reads both layouts and `~/.local/bin/claude`
+    and takes the highest version (the terminal copy only updates when `claude` runs). The Homebrew
+    npm shim is not a candidate.
+  - Refresh now runs `claude -p "/usage"`, the non-interactive form of `/usage`: no model turn, no
+    pty, nothing typed, and it writes the same `cachedUsageUtilization` the card reads. The
+    interactive pty spawn stays as the fallback when the probe fails outright, with its guards.
+  - When the probe runs cleanly but prints no plan rows, Claude Code is not signed in to claude.ai
+    (or its sign-in lacks the `user:profile` scope). On a press Kannu then starts Claude Code's own
+    `claude auth login --claudeai`: the browser opens claude.ai, the card says "Finish signing in in
+    your browser…" with Cancel, and Kannu fetches again when it finishes — no second click. Only
+    when `claude auth status` says signed out or claude.ai; an API key, key helper, cloud provider or
+    gateway is never switched over. If the browser route cannot finish, **Sign in in Terminal**
+    opens a `.command` file that runs the same sign-in where its prompt is visible. Kannu never reads
+    or stores the sign-in.
+  - Measured on this Mac with the shipped code in a harness: signed out, the probe exits 0 in 1 s with
+    only the cost summary; sign-in took 49 s including the browser; the fetch after it advanced
+    `fetchedAtMs` from 2 September to now. A rerun inside Claude Code's 60 s write throttle prints
+    plan rows without advancing the stamp and counts as fetched.
+  - The spawn drops every `CLAUDE*` and `ANTHROPIC*` variable it inherits, and adds none. A normal
+    launch has none (plain inheritance, as before); from inside an agent session the inherited
+    desktop-host proxy made the probe fetch on the host session's credentials instead of Claude
+    Code's own — measured with and without them. REGRESSIONS entry 8 has the addendum.
+  - While the Usage tab is on screen, Kannu runs the probe itself when Claude Code's cache is older
+    than 15 minutes and no fetch ran in 15 minutes. It never starts a sign-in, and stands down while
+    the last Refresh is waiting on the user.
+  - The desktop history no longer shows numbers it cannot vouch for: a 5-hour value older than five
+    hours is dropped instead of reading as a live 0 %, and the inferred 5-hour countdown is gone (that
+    window has no fixed grid). The weekly reset comes from Claude Code's cached weekly reset projected
+    in whole weeks, however old, instead of a guess from sampling gaps; a week that ended since the
+    sample is dropped. Only one organization's samples are read: the signed-in account's, else the
+    newest sample's.
+  - Each Claude window keeps its own reading time through the merge. A section whose oldest reading
+    is over ten minutes old says "updated 3h ago" and dims its bars; the forecast uses the real time.
+  - The sign-in line under the bars no longer says "Limits unavailable" or points at Terminal: it
+    says Refresh will fetch them, and the Refresh outcomes have one line each.
+  - Every refresh step is logged under `com.kannu.app` / `ClaudeUsage`: step, Claude Code version,
+    outcome, seconds. Never the output (plan figures, account name) or a path.
+  - Tests: probe classification, plan-row detection, the sign-in decision, `auth status` parsing,
+    the Terminal script's quoting, the environment scrub, binary layouts and version order, the
+    5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
+    organization filter, per-window reading times and the automatic-fetch cadence.
+
+### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P3 Hook contracts v45
+- **Changes:**
+  - Hook v45: a payload carrying `cursor_version` is never filed under another provider. Cursor runs
+    `~/.claude/settings.json` hooks as third-party configs, so Kannu's Claude hook fired inside Cursor
+    and filed Cursor chats as Claude sessions. Such a call now writes nothing, but it still gives the
+    Claude answer, including the agent-policy deny when blocking is on: Cursor maps Claude's
+    `permissionDecision` to its own `permission`, so an enforced rule keeps refusing the tool inside
+    Cursor, as it did under v44. Cursor chats are tracked, and their secret, hidden-text and
+    sensitive-file findings recorded, only when Kannu's Cursor hook is installed; with only the
+    Claude hook installed, Kannu no longer records them. Verified on this Mac: Cursor's own hook log
+    shows it running Kannu's Claude hook with `cursor_version` in the payload. Unverified: that a JSON
+    deny from a third-party hook blocks the tool in Cursor (the docs give the field mapping, not that).
+  - Cursor's `preToolUse`, `beforeShellExecution`, `beforeMCPExecution` and the new `subagentStart`
+    now answer exactly `{"permission":"allow"}`, with no `continue` key, as Cursor's schema documents.
+    The deny shape and every other Cursor event are unchanged.
+  - The Cursor table gains three events. `sessionEnd` removes the chat's card. `subagentStart` and
+    `subagentStop` write a file of the subagent's own (`subagent_id`, with `parent_conversation_id`
+    as `parent_id`), which Kannu folds into the parent chat. A `subagentStop` without a subagent id
+    writes nothing. Cursor documents no id on `subagentStop`, so a Cursor subagent's file stays
+    `thinking` until the stale cap; it never outranks a working or waiting chat, and the fold ignores
+    it once the chat's turn ends. A Cursor `stop` with `status: "error"` sets `ended_on_error`;
+    `aborted` does not.
+    The installed check reads a fixed core, as Claude's does, so a v44 install still reports
+    installed and upgrades through the version migration. Verified on this Mac: Cursor's log shows
+    the `sessionEnd` reasons (`window_close`, `user_close`) and the `stop` status values.
+    Unverified: the subagent payloads come from Cursor's docs and forum reports only, because Kannu
+    never registered those events before.
+  - The `gated` Claude group (ExitPlanMode, AskUserQuestion) counts as a prompt only when the tool
+    really is one of those. VS Code with `chat.useClaudeHooks` ignores matchers, so the group ran for
+    every tool and turned each one yellow. Unverified on this Mac (VS Code docs only).
+  - Claude `StopFailure` with `error: "rate_limit"` sets `quota_exceeded`, as Antigravity's quota
+    stop does. The Claude chat keeps its own title: only Antigravity, which has no log title, gets
+    "Quota exceeded" as its name, and that label is no longer carried into later writes.
+    Claude's new `UserPromptExpansion` event is registered, and its prompt goes through the secret and
+    hidden-text checks. Claude fires `UserPromptSubmit` and then `UserPromptExpansion` with the same
+    typed line, so the second check adds only a finding that is not recorded yet and never counts
+    the same prompt twice. Unverified on this Mac (Claude Code hooks docs only).
+  - Codex: install no longer flips a user's `features.hooks = false` (or the `codex_hooks` alias,
+    or an inline `features` table) to true. It adds the key only when the file has none. The
+    `[features]` section now runs to the next table header, not to the next `[`, so a bracket in a
+    comment or an array before `hooks = false` can no longer lead to a second `hooks` key (invalid
+    TOML), and an indented `[features]` header is found instead of duplicated. A
+    config.toml that exists but cannot be read now fails the install instead of being overwritten.
+    Settings shows "Open Codex and run /hooks to trust Kannu's hooks." under an installed Codex row,
+    because Codex skips a hook until the user trusts it. Unverified on this Mac (Codex docs only).
+  - The Cursor and Claude event tables and the Cursor and Codex config edits moved into
+    `AgentHookLayout`, so tests can reach them. `scripts/install-cursor-hooks.sh` registers the three
+    new Cursor events too, and `docs/REGRESSIONS.md` entry 1 has a v45 addendum.
+  - Tests: eleven `HookScriptTests` cases, run again under `/usr/bin/python3` 3.9 (seven of the first
+    eight behaviour cases fail against the v44 script; `sessionEnd` removal already worked through
+    the state argument). The policy deny inside Cursor and the once-only slash-command count both
+    fail against the first v45 draft (checked by hand: it printed allow and counted 2). Five
+    `AgentHookLayoutTests` cases cover the tables, the merge and strip, and the TOML edit, and
+    `BackgroundWorkTests` reads the Claude table directly. Full suite: 887 tests, 0 failures. Not
+    verified live: that needs Kannu running, and this change was not run in the app.
+
 ### 2026-10-21 - Act on CodeRabbit's review of #112
 - **Developer label:** CodeRabbit on #112: discard stale fullscreen scans before publishing
 - **Agent label:** Claude Code (Opus 5.5) — each fullscreen scan takes a main-actor ticket, and `publish(_:ticket:)` drops a scan a newer one has overtaken
@@ -41,7 +372,6 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `ReadMe.md` describes Tasks and the six sources, lists Reminders and Notifications under
     Runtime Permissions, and names `Kannu.1.3.4.dmg`; `docs/ADR.md` says Brain › Agent Security
     where it said Settings › Agents.
-
 ### 2026-10-19 - Act on CodeRabbit's review of #111
 - **Developer label:** CodeRabbit on #111: check the `typed:` value in the task-start scanner
 - **Agent label:** Claude Code (Opus 5.5) — `TimerTaskLabelRulesTests.startProblems` also requires the session's name to be resolved from `task.title`
@@ -1817,6 +2147,229 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     delete-then-add save that cannot restore.
   - No `docs/REGRESSIONS.md` entry covers this, so the dated note lives at the code
     (`KeychainWritePlan.swift`, `KeychainReader.swift`).
+
+### 2026-10-18 - Cursor chat names come back, and the Cursor card splits Auto from API
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P2 Cursor storage and quota
+- **Changes:**
+  - Cursor 3.x moved its composer headers (chat name, timestamps) out of the `ItemTable` key
+    `composer.composerHeaders` into a `composerHeaders` table. `CursorComposerStore` now reads
+    that table by primary key, one row per requested id, and uses the old key when the table is
+    missing or does not hold an id. Same read-only, bounded queries as before; no table scan.
+    **Verified on this Mac (Cursor 3.19.19):** the table exists and the old key has 0 rows. A
+    read-only harness asked the new reader for the 10 newest transcript ids and got 10 headers,
+    all with names and timestamps, in 5 ms. Only schema, JSON key names and counts were printed.
+  - A header fills only what a chat's `composerData` lacks (the name, mostly); `composerData`
+    keeps its status and activity time, and a header alone still backs a chat with no
+    `composerData`. Before, the newer whole record won the merge. **Verified on this Mac,
+    read-only, counts only:** none of the 25 newest headers has a `status`, all 25
+    `composerData` records do, and 1 header was 178 s newer than its `composerData`, so the old
+    merge dropped that chat's status. By the mapper's rules an aborted chat could then light
+    green; that was not observed. On a pre-table profile a legacy header no longer overrides
+    `composerData`'s status or time either.
+  - The 3 s header cache adds the ids it has not read yet instead of replacing them, so the
+    different id sets of one rescan (transcript ids, chat-title ids, one hook session's id) do
+    not each reread the database or re-parse the legacy blob. `ComposerHeaderCache` is a plain
+    struct with a test.
+  - The Cursor quota's main bar is the Auto pool (`autoPercentUsed`). The API pool
+    (`apiPercentUsed`) is a second bar labelled "API". When Cursor sends no split, the bar
+    falls back to the blended `totalPercentUsed` (or a percent derived from spend and limit). The
+    split is read from both `usage-summary` and `GetCurrentPeriodUsage`. On a single-pool plan
+    (`membershipType` "start" or "express", after paseo PR 3717) the blended total is the bar even
+    when the split is sent, and there is no API bar. If an enterprise account has no `plan` and a
+    null `overall.limit`, the parser returns no bar (and no fake 0 %); on-demand spend is still
+    read. **Unverified:** the split field names come from third-party reports (ClaudeBar issue
+    303, paseo PR 3717). Paseo matches the single-pool names against `GetPlanInfo`'s `planName`,
+    and whether `membershipType` spells them the same way is unknown. The enterprise shape (no
+    `plan`, null `overall.limit`) is synthetic, taken from the task description; neither source
+    shows it. This change reads no live Cursor response and calls no Cursor API.
+  - Which bar is main, its key and its label ("auto"/"Auto", "api"/"API", "week" and the default
+    label for the blend) are decided in `CursorPlanUsage` and pinned by tests. The Auto pool
+    reads as alert and forecast key `cursor:auto`, so its forecast never continues the saved
+    `cursor:week` series of blended totals, and its near-limit push says "Cursor Auto limit".
+  - The Cursor card's long-window section is titled "Billing cycle", not "Weekly". Claude and
+    Codex still say "Weekly".
+  - The background quota poll now passes the extra limits and the main bar's key and label
+    through, as the Usage tab does.
+  - **Untested and not seen (app not launched):** the card layout, the "Billing cycle" title,
+    copying the bars into the snapshot in `CursorUsageProvider`, and the background poll's
+    pass-through. Those files are not in the test target.
+  - The vestigial fallback `GET cursor.com/api/usage?user=<id>` and its decoder are removed.
+    Only `CursorUsageProvider` used them. The usage-events, quota-only and not-configured
+    branches are unchanged.
+  - New `CursorPlanUsage.swift` (Foundation-only) replaces `CursorAPIHelpers.parsePercent`.
+    `CursorComposerStore.swift` and `CursorPlanUsage.swift` join the test target.
+    `CursorComposerStoreTests` (11) and `CursorPlanUsageTests` (14) use temp SQLite fixtures in
+    both layouts, the header/`composerData` merge, the header cache, and quota fixtures: split
+    present, split absent, single-pool, enterprise (synthetic), and the bars. The merge and cache
+    tests were checked to fail with the old merge and the old replace-on-miss cache.
+  - `docs/REGRESSIONS.md` entry 5 has a 2026-10-18 addendum on the moved name source and on the
+    header that won the merge.
+
+### 2026-10-18 - ADR installs are pinned to upstream 6b33dff, and Kannu reads ADR's new forbidden-asset finding
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P4 ADR refresh — pin to uber/ADR 6b33dff, forbidden_asset, Cline and managed MCP files, schema 1.2, stale Detection checkout
+- **Changes:**
+  - Every ADR install line Kannu hands out (Settings and `docs/ADR.md`) is pinned to uber/ADR `main`
+    at `6b33dffecd719708c435f772c9e93f1210944e31` (2026-10-16): `uv tool install "adr-discovery @
+    git+https://github.com/uber/ADR@<sha>#subdirectory=Discovery"`, the pipx line, and
+    `git clone … && git checkout <sha> && cd Detection && uv sync`. The pin lives once, in
+    `ADRUpstream` (`ADRDiscoveryCommand.swift`); `ADRDiscoveryCommandTests` and `ADRDocsTests` pin
+    the lines and that the page carries the same ones, and a source scan pins that `ADRConnection`
+    (what Settings' Copy buttons and the Detection checkout row read, outside the test target) uses
+    those constants and calls the stale-checkout check, and that no app source carries an unpinned
+    install line. Upstream still calls Discovery 0.2.0, so the version shown cannot tell an old
+    install from a pinned one.
+  - ADR's policy: since upstream a3ab5f7 (2026-10-12) `forbidden` and the new `forbidden_indicators`
+    (`mcp_endpoint`, `package`, `name`, `skill_sha256`, `file_sha256`) raise a high
+    `forbidden_asset` finding, MCP servers included. The drafting prompt and `docs/ADR.md` §6 said
+    these lists never flag an MCP server and raise no finding; both now describe them (kept opt-in in
+    the prompt, with the warning that a bad indicator fails every scan), and the test that pinned the
+    old wording now pins the new. An `mcp_endpoint` url is to hold scheme, host, port and path only:
+    upstream's `normalize_url` drops user info, query and fragment before comparing, so copying them
+    from an MCP config would only put a URL's key in `policy.json`; a server whose path carries a key
+    is to be named with a `name` indicator instead.
+  - `forbidden_asset` has a title ("Forbidden by your ADR policy") and its own guide family with
+    what-it-means and what-to-do text; ADR's own summary stays the summary.
+  - Kannu's new-MCP-server watch, and the scan trigger built on it, read the two macOS MCP files
+    upstream Discovery added in a1b433c: Cline's
+    `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+    and `/Library/Application Support/ClaudeCode/managed-mcp.json` (format checked against Cline's
+    and Claude Code's docs: `mcpServers`). The first read of each is learned silently, as for every
+    file. Claude Desktop's and VS Code's macOS paths were already watched; `~/.claude/settings*.json`
+    are not added (Claude Code declares no servers there). Upstream reads Cline only under stock VS
+    Code, and so does Kannu, so Settings and `docs/ADR.md` say "Cline in VS Code": Cline in Cursor,
+    another editor or the Cline CLI is not watched.
+  - Snapshot schema 1.2 (84ed18c, ff3028b) decodes unchanged — no field Kannu reads moved — and a
+    new test decodes a 1.2 snapshot with a `forbidden_asset` finding. Settings' newest-scan line
+    shows the schema version next to the catalog version.
+  - **Acknowledgements reset once.** Discovery schema 1.1 puts the declaring file into an MCP
+    server's (and a skill's) identity, so the asset ids Kannu keys Discovery findings and
+    acknowledgements on change once when Discovery is upgraded past 2026-10-12; those findings show
+    again and need one more Acknowledge.
+  - ADR Detection: a checkout without upstream's Claude Code 2.1 fix (1c8ecd6, 2026-09-22, which added
+    `if isinstance(claude_result, list):` after both `claude_result = json.loads(` lines in
+    `guardrail/adr_agent/adr_baseline.py`) is reported on the Detection checkout row as stale, with
+    the update line, instead of failing every analysis. Only the old code counts: the file must have
+    the `json.loads` line and no `isinstance(claude_result` check, true of all three upstream
+    revisions before the fix and false of both since (checked in a scratch clone). A later rewrite
+    without that line, or an empty file, is not called stale, so the update line never moves a
+    newer checkout back to the pin.
+  - ADR Detection's verdict carries no tactic at the pinned commit (`DetectionResult` has no field
+    for one; the only `threat_tactic` upstream writes is triage's prior suspicion, in its debug log),
+    so the docs stop promising one: a malicious chat reads "malicious · 0.91" and "Malicious activity
+    in this chat". The adapter is not changed to read the debug log.
+  - Adapter v6 drops `reasoning_agent.max_tokens`, which upstream has never read; the run is bounded
+    by `--max-turns` and `--timeout`. Embedded copy and `scripts/adr-analyze-session.py` stay
+    byte-identical.
+  - The Detection run's environment whitelist gains `PYTHON_DOTENV_DISABLED=1`: at the pinned commit
+    upstream's `guardrail` package imports a detector (a6076aa) that calls `load_dotenv()` at import,
+    which would load the first `.env` found in or above the checkout into the run and the Claude CLI.
+    Verified against python-dotenv 1.2.2's source (the version in upstream's `uv.lock`).
+  - `docs/ADR.md` §8 now says where upstream writes inside the checkout
+    (`Detection/ads_reasoning_workspace/`, `debug_logs*/conversation_*.json`, overwritten each run,
+    holding the raw Claude output and, when the hidden-Unicode check fires, the decoded text) and
+    that the Claude CLI keeps the reasoning session under `~/.claude/projects/`.
+  - `adr-discovery`'s new `--resolve` (DNS lookups) and `--archive-skills` flags join the arguments
+    Kannu refuses to pass.
+  - Verified on this Mac: the Debug build and the full `KannuTests` suite (858 tests, 0 failures).
+    Unverified: ADR is not installed here, and installing it is the user's call, so no Discovery
+    scan, no Detection run and no pinned install line was executed; every upstream fact above is
+    from uber/ADR's source at `6b33dff`, read in a scratch clone.
+
+### 2026-10-18 - Antigravity hooks use the shape Antigravity documents, and its card can show model quotas
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P6 Antigravity hooks v46 and agy /usage
+- **Changes:**
+  - Hook v46: Antigravity's hooks.json now maps a hook name to its configuration
+    (antigravity.google/docs/hooks). Kannu writes one `kannu-agent-status` entry to
+    `~/.gemini/config/hooks.json`, the one global file the docs list. `SessionStart`, `PreInvocation`,
+    `PostInvocation` and `Stop` hold flat lists of handlers; `PreToolUse` and `PostToolUse` hold one
+    matcher group with matcher `""` (every tool). `UserPromptSubmit` is gone: it is not an
+    Antigravity event, and Antigravity 2.6.0 rejects hook configurations that can never run. If the
+    user sets `enabled: false` on Kannu's entry, a reinstall keeps it. UNVERIFIED: built from the docs
+    and changelog only; Antigravity is not installed on this Mac.
+  - Migration: install removes the v45 Claude-style `hooks.<event>` groups Kannu wrote, from all
+    three files (`~/.gemini/config/hooks.json`, `~/.gemini/antigravity-ide/hooks.json`,
+    `~/.gemini/hooks.json`). The user's own groups and hooks stay. A file that holds nothing of
+    Kannu's is not rewritten. The two older files are now cleanup-only, because the docs no longer
+    name them. Install never writes there, and uninstall strips both shapes from all three files. A
+    v45 install upgrades through the script-version migration. A new
+    `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script. The
+    installed check reads a fixed core (`PreInvocation`, `PreToolUse`, `Stop`), as Claude's and
+    Cursor's do. UNVERIFIED on a real install.
+  - The hook script reads Antigravity's camelCase payload: `toolCall.name` and `toolCall.args` (so
+    the secret, hidden-text and agent-policy checks see the tool call), `transcriptPath` (kept as the
+    chat's `transcript_path`, only as a canonical path under `~/.gemini`; nothing reads it yet) and
+    `fullyIdle`. A `Stop` with `fullyIdle: false` and no error keeps the light green and the turn
+    open, because background tasks are still running. Antigravity has no prompt event, so the first
+    model call of a run (`PreInvocation` with `invocationNum` 0) starts a turn; the docs do not say
+    whether that count restarts for each user message. `CommandLine` is read as a command too, the
+    key `run_command` is believed to take; undocumented. UNVERIFIED.
+  - Antigravity answers: `PreToolUse` and `Stop` print `{"decision":"allow"}`, since the docs mark
+    `decision` required on both. On `PreToolUse`, `allow` passes the call to the next hook or the
+    default policy, so nothing is auto-approved. Every other event prints `{}` (the documented
+    `PostToolUse` answer). The no-python fallback answers the same. With agent-policy blocking on, a
+    matched `PreToolUse` gets the documented deny, `{"decision":"deny","reason":…}`. That widens
+    `POLICY_DENY_EVENTS` on the docs alone, so `docs/REGRESSIONS.md` entry 1 has a v46 addendum
+    naming the exception. UNVERIFIED that Antigravity honours either answer.
+  - What the user opts into changed with it, so the Settings › Agents › **Block matching tool calls**
+    row now reads "On: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell
+    the agent why." The `enforceAgentPolicy` doc comment, the row's search keywords (`antigravity`)
+    and `docs/ADR.md` section 9 name Antigravity too, so a user turning blocking on is told that
+    Antigravity calls are refused, not only flagged. `ADRDocsTests` now fails when a host in
+    `POLICY_DENY_EVENTS` is missing from the row, the doc comment or the section 9 heading.
+  - Usage: the Antigravity card reads `agy -p "/usage" --output-format json`, which CLI v1.1.11
+    (2026-08-07) answers without an agent turn. `agy` is looked for in `~/.local/bin` (the official
+    installer), `/opt/homebrew/bin` and `/usr/local/bin`. No public source shows an `agy` inside
+    Antigravity.app, so no bundle path is guessed. Only a binary with a valid Developer ID signature
+    from team `EQHXZ8M8AV` (Google LLC) is run. That team ID comes from Antigravity.app's published
+    signature (third-party sources) and from Google Chrome on this Mac, where the requirement string
+    was checked: Chrome and GoogleUpdater pass, `/bin/ls` and Cursor fail. How the `agy` binary
+    itself is signed is UNVERIFIED; if it is signed any other way, the reader never runs.
+  - The run goes through `BoundedProcessRunner` on a utility queue, with a 20 s timeout, stdin from
+    `/dev/null`, the temporary folder as working directory and Kannu's environment unchanged. Its
+    output is never logged; the log says only how the run ended. Kannu never reads Antigravity's
+    OAuth files and never calls its local language server.
+  - After a run that gives no quota, Kannu leaves `agy` alone for 15 minutes. Only the Usage tab's
+    Refresh button lifts that wait (`LLMUsageManager.refreshRequestedByUser`). The 30 s tick, opening
+    the tab and the Claude refresh paths wait it out. The wait is not keyed on `interactive`:
+    Refresh never sets it, and only Claude's keychain button does. UNVERIFIED with a real `agy`.
+  - One failed run does not blank the bars. The last quota `agy` gave stays on the card for up to
+    540 s, the same bound `LLMUsageManager` keeps a last-good result for, after a run that gives none
+    (a timeout, a non-zero exit, a run the wait skipped). A window whose reset has passed is dropped.
+    Kept bars carry the time `agy` reported them, so the manager's own bound does not add to it.
+    UNVERIFIED with a real `agy`.
+  - A signature verdict, pass or fail, is reused while the file's device, inode, size, mtime and
+    ctime are unchanged. A same-user rewrite in place with the mtime put back still changes the ctime,
+    so it is checked again. An `agy` signed some other way is not hashed again on every refresh.
+    Not closed: a swap between the check and the exec. That needs a suspended spawn checked by pid,
+    which `BoundedProcessRunner` does not do.
+  - The JSON field names are undocumented, so `AntigravityUsageReport` (new, Foundation-only, in
+    the test target) accepts the plausible shapes and ignores the rest. A pool is any object with a
+    5-hour or weekly window, wherever it sits, including the headless envelope's `response` given
+    as JSON text. A window is a used or remaining percentage, fraction or count, with an optional
+    ISO 8601 or epoch reset. A failed headless `status`, token `usage`, daily caps and unnamed
+    per-model fractions give nothing. The first pool with a 5-hour window fills the 5-hour and
+    weekly bars. Every other pool's windows become extra bars labelled with its name. Another
+    pool's 5-hour bar sits under "5 hour" (`NamedLimit.isSessionWindow`), and the primary pool's
+    name replaces "All models" when there is more than one (`UsageSnapshot.limitsLabel`). The hook
+    session line stays as the card's secondary text, or the whole card without quotas. UNVERIFIED
+    against a real `agy`.
+  - Because `/usage` reaches Google's backend, the Antigravity provider is no longer a local-file
+    provider: it refreshes on the network floor (180 s, 10 s for Refresh), not on every 30 s tick
+    of the Usage tab. Its hook session line now refreshes on that floor too. The Providers footer in
+    Settings › Usage says Kannu runs `agy /usage`.
+  - Tests: a v46 `HookScriptTests` group (answers, camelCase fields, the enforced deny, turns and
+    `fullyIdle`, the transcript path), run again under `/usr/bin/python3` 3.9. Three existing cases
+    moved off `UserPromptSubmit` and the old answer. `AgentHookLayoutTests` cases cover the
+    documented shape, the v45 migration, uninstall of both shapes and a kept `enabled: false`.
+    `AntigravityUsageReportTests` covers the pinned invocation and plausible fixtures. Fixtures,
+    not captured output. It also pins the network floor (`AntigravityUsageCommand.reachesNetwork`).
+    It checks that the code requirement compiles, refuses `/bin/ls` and `/usr/bin/python3`, and
+    accepts Google Chrome (skipped where Chrome is not installed). It covers the verdict cache, the
+    ctime catching an in-place rewrite, and the kept last quota. Chrome stands in for `agy`, which is
+    not installed here.
 
 ### 2026-10-10 - Every icon-only control in the notch names itself in a tooltip, starting with the lyrics button
 - **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"

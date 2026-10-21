@@ -106,6 +106,36 @@ enum DebugSnapshots {
                 await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
             }
         }
+        if request.tabs == nil || request.tabs?.contains("usage") == true {
+            // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
+            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read.
+            // Each sits in the 142 pt slot a notched MacBook leaves, with a red line at its floor,
+            // so a card running past it shows.
+            let now = Date()
+            let fixtures = DebugSnapshotFixtures.usageResults(now: now)
+            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool)] = [
+                ("usage-1", [.claude], nil, false),
+                ("usage-2", [.claude, .cursor], nil, false),
+                ("usage-3", [.claude, .cursor, .codex], nil, false),
+                ("usage-status", [.claude, .cursor], .signInNeeded, false),
+                ("usage-stale", [.claude, .cursor], nil, true),
+            ]
+            for notchWidth in [CGFloat(640), 690] {
+                for board in boards {
+                    let results = fixtures(board.providers, board.stale)
+                    let view = NotchLLMUsageView(snapshotResults: results, snapshotRefreshStatus: board.status,
+                                                 snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: now),
+                                                 snapshotNotchWidth: notchWidth)
+                        .environmentObject(viewModel)
+                        .frame(height: UsageCardMetrics.smallestTabContentHeight, alignment: .top)
+                        .overlay(alignment: .bottom) { Color.red.frame(height: 1) }
+                        .background(Color.black)
+                        .environment(\.colorScheme, .dark)
+                    let width = notchWidth - UsageCardMetrics.openNotchHorizontalPadding * 2 - UsageCardMetrics.openNotchSideInset * 2
+                    await render(AnyView(view), name: "\(board.name)-\(Int(notchWidth))", dark: true, width: width, into: request.directory)
+                }
+            }
+        }
     }
 
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
@@ -316,6 +346,54 @@ enum DebugSnapshots {
 /// Findings for the snapshot board only — never ingested into the store, whose ingest prunes the
 /// shared acknowledgements.
 enum DebugSnapshotFixtures {
+    /// The Usage tab's cards as this Mac shows them: a Max plan at 13 % of its 5-hour window with a
+    /// pace that fills it, 83 % of the week, Fable at 41 %, two more per-model windows (so one
+    /// folds when a status row is up); Cursor Pro at 62 % of its billing cycle with token totals;
+    /// Codex at 20 / 55 %. `stale` dates every reading a day back.
+    static func usageResults(now: Date) -> ([ProviderID], Bool) -> [ProviderID: UsageResult] {
+        { providers, stale in
+            let observed: Date? = stale ? now.addingTimeInterval(-86_400) : now.addingTimeInterval(-120)
+            let fiveHourReset = now.addingTimeInterval(4 * 3600 + 15 * 60)
+            let weekReset = now.addingTimeInterval(86_400 + 8 * 3600 + 5 * 60)
+            func limit(_ used: Double, _ reset: Date?) -> UsageLimit {
+                UsageLimit(used: used, limit: 100, resetsAt: reset, severity: nil, observedAt: observed)
+            }
+            var claude = UsageSnapshot()
+            claude.accountTier = "Max"
+            claude.billedCostOnly = true
+            claude.sessionLimit = limit(13, fiveHourReset)
+            claude.weekLimit = limit(83, weekReset)
+            claude.extraLimits = [
+                NamedLimit(key: "model_scoped:Fable", limit: limit(41, weekReset), label: "Fable"),
+                NamedLimit(key: "model_scoped:Opus", limit: limit(12, weekReset), label: "Opus"),
+                NamedLimit(key: "model_scoped:Sonnet", limit: limit(5, weekReset), label: "Sonnet"),
+            ]
+            var cursor = UsageSnapshot()
+            cursor.accountTier = "Pro"
+            cursor.weekLimit = limit(62, now.addingTimeInterval(9 * 86_400))
+            cursor.today = UsageTotals(inputTokens: 1_100_000, outputTokens: 120_000, costUSD: 3.4)
+            cursor.week = UsageTotals(inputTokens: 7_400_000, outputTokens: 680_000, costUSD: 21.8)
+            cursor.onDemandSpendUSD = 3.4
+            var codex = UsageSnapshot()
+            codex.accountTier = "Plus"
+            codex.billedCostOnly = true
+            codex.sessionLimit = limit(20, now.addingTimeInterval(2 * 3600))
+            codex.weekLimit = limit(55, now.addingTimeInterval(3 * 86_400))
+            codex.today = UsageTotals(inputTokens: 300_000, outputTokens: 40_000)
+            codex.week = UsageTotals(inputTokens: 2_100_000, outputTokens: 260_000)
+            let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
+            return all.filter { providers.contains($0.key) }
+        }
+    }
+
+    /// A pace that fills the 5-hour window before it resets, and a week heading for 95 %.
+    static func usageOutlooks(now: Date) -> [String: UsageForecast.Outlook] {
+        [
+            NotchLLMUsageView.windowID(.claude, slot: "session"): .hitsLimit(at: now.addingTimeInterval(2 * 3600 + 40 * 60)),
+            NotchLLMUsageView.windowID(.claude, slot: "week"): .lastsUntilReset(projected: 95),
+        ]
+    }
+
     /// The user-shaped policy the View-rules board renders: commands with and without reasons,
     /// a multi-word phrase, and a tool rule.
     static let agentPolicy = AgentPolicy(rules: [
