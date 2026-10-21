@@ -120,6 +120,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `until` and the EOF grace. The full KannuTests suite ran: 946 tests, 0 failures. Fixtures only;
     nothing ran against a real Codex.
 
+### 2026-10-21 - Act on CodeRabbit's review of #99
+- **Developer label:** CodeRabbit's review of #99: a GPL header, and whether a silent Keychain read should give up instead of waiting for a dialog
+- **Agent label:** Claude Code (Opus 5.5) — `JSONLUsageCacheCodexTests.swift` gets the GPL header; the silent read keeps waiting, and `KeychainReader.read` says why
+- **Changes:**
+  - `KannuTests/JSONLUsageCacheCodexTests.swift` starts with the project's GPL header, copied from
+    `CodexUsageLineTests.swift`.
+  - Not changed: `KeychainReader.read(allowInteraction: false)` keeps waiting while a call that may
+    prompt runs. A read that gave up could only report the item missing or needing approval — a
+    card saying "not signed in", or a fix-it button for nothing. The wait lasts only while a dialog
+    the user asked for is open, and holds only silent reads made meanwhile off the main thread (that
+    refresh's other providers, a task source's sync), never one on the main thread. Its doc comment
+    now says so.
+
 ### 2026-10-21 - A Keychain dialog is never swallowed by a silent read on another thread
 - **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
 - **Agent label:** Follow-up 68 — fixes from an adversarial review of #99's merge with `development`
