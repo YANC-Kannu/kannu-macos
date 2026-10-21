@@ -376,6 +376,20 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
 
     // MARK: - Automatic fetch
 
+    /// CodeRabbit on #96: after "Sign in in Terminal" to the card's organization, nothing recorded
+    /// the new one — the recorded organization wins over `~/.claude.json`, and the automatic refresh
+    /// stood down while the hint said "another organization". It may run once the file names a
+    /// different organization than the recorded one.
+    func testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves() {
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "team"),
+                       "still on the recorded organization: nothing to fetch for the card")
+        XCTAssertTrue(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "max"),
+                      "the file moved off the recorded organization: one paced fetch records where it went")
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: nil))
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: nil, inConfigNow: "max"),
+                       "nothing recorded is not 'another organization'")
+    }
+
     func testAutoFetchRunsWhenTheCacheIsOldOrMissing() {
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: nil, lastFetch: nil))
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(

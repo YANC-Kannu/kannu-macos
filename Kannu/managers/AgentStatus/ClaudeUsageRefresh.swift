@@ -42,8 +42,18 @@ enum ClaudeUsageRefresh {
 
     private static var isCancelled: Bool { running.withLock { $0.cancelled } }
 
-    private static func register(_ process: Process) {
-        running.withLock { $0.process = process }
+    /// Registers the child so Cancel and app exit can reach it. False when the refresh was
+    /// cancelled already: app exit may have picked what to stop before this child existed, so it
+    /// is stopped here instead.
+    @discardableResult
+    private static func register(_ process: Process) -> Bool {
+        let registered = running.withLock { state -> Bool in
+            guard !state.cancelled else { return false }
+            state.process = process
+            return true
+        }
+        if !registered, process.isRunning { stop(process, grace: 0.5) }
+        return registered
     }
 
     private static func unregister(_ process: Process) {
@@ -92,6 +102,7 @@ enum ClaudeUsageRefresh {
         var signedIn = false
         var fetched = false
         while true {
+            step = ClaudeUsageFetchCommand.step(step, cancelled: isCancelled, signedIn: signedIn, fetched: fetched)
             switch step {
             case .probe:
                 let outcome = probeUsage(binary: binary)
@@ -349,6 +360,7 @@ enum ClaudeUsageRefresh {
         // to the bare invocation, which is proven to fetch. Better a working refresh than a clean
         // one that does nothing.
         for arguments in ClaudeUsageFetchCommand.attempts {
+            if isCancelled { return false }
             guard ClaudeUsageFetchCommand.isValidForInteractiveSession(arguments: arguments) else { continue }
             if attemptUsageFetch(binary: binary, arguments: arguments) { return true }
         }

@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - Act on CodeRabbit's review of #96
+- **Developer label:** CodeRabbit's review of #96 at 9c7ca4f: five findings, fixed on the agents batch (#113)
+- **Agent label:** Claude Code (Opus 5.5) — the "other organization" hint clears after a sign-in in Terminal, a cancelled refresh starts no further step or child, and three new test files carry the GPL header
+- **Changes:**
+  - **The "other organization" hint no longer sticks.** Kannu records Claude Code's organization
+    only at its own fetch, the recorded value wins over `~/.claude.json`, and the automatic refresh
+    stood down while the hint said "another organization" — so after the card's "Sign in in
+    Terminal" to the right organization, the card kept saying "sign in" until a manual ↻.
+    `ClaudeUsageOrganizations` now carries `claudeCodeInConfig` (`oauthAccount`'s organization
+    before the recorded override), and `ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch` lets
+    one paced automatic fetch run when the file names a different organization than the recorded
+    one; Claude Code's own fetch leaves its true organization there, which is what gets recorded.
+    Both "another organization" lines now end "then press this card's ↻".
+    Test: `ClaudeUsageSnapshotTests.testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves`.
+  - **A cancelled refresh stops.** App exit kills the running probe, which then reads as failed,
+    and on a press that alone chose the interactive spawn: a `claude` child started after the exit
+    cleanup had looked, and outlived Kannu (REGRESSIONS entry 19). New pure
+    `ClaudeUsageFetchCommand.step(_:cancelled:signedIn:fetched:)` finishes a cancelled run with
+    what it got to, applied before every step in `ClaudeUsageRefresh.run`; the interactive fetch
+    checks for a cancel before each attempt; and `register(_:)` refuses, and stops, a child that
+    starts after the cancel. Tests: `ClaudeUsageFetchCommandTests.testACancelledRefreshFinishesInsteadOfStartingAnotherStep`
+    and `testTheRefreshWorkerHonoursACancelBeforeEveryStepAndChild`.
+  - `UsageCardMetricsTests.swift`, `UsageCardMetricsRulesTests.swift` and
+    `AntigravityUsageReportTests.swift` start with the project's GPL header.
+  - Not changed: "redsign" and "golden ration" in the CHANGELOG developer labels quote the request
+    verbatim, as the label requires.
+
 
 ### 2026-10-21 - The usage card splits with the timer's own golden split
 - **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"

@@ -5,6 +5,42 @@ import XCTest
 /// only a pinned test catches them. See docs/REGRESSIONS.md.
 final class ClaudeUsageFetchCommandTests: XCTestCase {
 
+    // MARK: - A cancelled refresh runs no further step
+
+    /// CodeRabbit on #96: app exit kills the probe, which then reads as failed, and on a press that
+    /// alone chose the interactive spawn — a child started after the exit cleanup had looked.
+    func testACancelledRefreshFinishesInsteadOfStartingAnotherStep() {
+        let afterKilledProbe = ClaudeUsageFetchCommand.step(afterProbe: .failed, manual: true)
+        XCTAssertEqual(afterKilledProbe, .interactiveFetch, "the path the guard has to stop")
+        XCTAssertEqual(ClaudeUsageFetchCommand.step(afterKilledProbe, cancelled: true, signedIn: false, fetched: false),
+                       .finish(.fetchFailed))
+        for next: ClaudeUsageFetchCommand.RefreshStep in [.probe, .interactiveFetch, .authStatus, .signIn] {
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: true, signedIn: true, fetched: false),
+                           .finish(.signInDidNotFinish), "after a sign-in, a cancel reads as one that did not finish")
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: true, signedIn: false, fetched: true),
+                           .finish(nil), "what was fetched before the cancel still counts")
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: false, signedIn: false, fetched: false), next,
+                           "not cancelled: the step runs")
+        }
+        XCTAssertEqual(ClaudeUsageFetchCommand.step(.finish(.noLimitsReturned), cancelled: true, signedIn: false, fetched: false),
+                       .finish(.noLimitsReturned), "a step already finishing keeps its status")
+    }
+
+    /// The worker applies that step before every step it runs, and a child that starts after a
+    /// cancel is stopped at once: app exit picks what to stop when it runs, before such a child
+    /// exists (REGRESSIONS entry 19). The worker is app-only, so its source is read.
+    func testTheRefreshWorkerHonoursACancelBeforeEveryStepAndChild() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Kannu/managers/AgentStatus/ClaudeUsageRefresh.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("while true {\n            step = ClaudeUsageFetchCommand.step(step, cancelled: isCancelled, signedIn: signedIn, fetched: fetched)"),
+                      "run() no longer checks for a cancel before each step")
+        XCTAssertTrue(source.contains("guard !state.cancelled else { return false }"),
+                      "register(_:) accepts a child after the refresh was cancelled")
+        XCTAssertTrue(source.contains("if isCancelled { return false }"),
+                      "the interactive fetch starts its next attempt after a cancel")
+    }
+
     // MARK: - Regression 1: print-only flags kill the interactive session
 
     func testNoAttemptUsesAPrintOnlyFlag() {

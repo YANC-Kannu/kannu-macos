@@ -523,10 +523,10 @@ struct NotchLLMUsageView: View {
             case .otherOrganization:
                 let plans = agentMonitor.claudeOrganizationPlanNames
                 if let code = plans.claudeCode, let desktop = plans.desktop, code != desktop {
-                    return StatusLine(text: String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop) for exact limits."),
+                    return StatusLine(text: String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop), then press this card's ↻ for exact limits."),
                                       action: terminal)
                 }
-                return StatusLine(text: String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings."),
+                return StatusLine(text: String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings. Sign it in to Claude Desktop's, then press this card's ↻."),
                                   action: terminal)
             case nil:
                 return nil

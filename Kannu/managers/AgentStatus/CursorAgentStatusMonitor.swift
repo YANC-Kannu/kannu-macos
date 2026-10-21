@@ -529,6 +529,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
         var claudeCodeRecorded = true
         /// Set when Claude Code's sources are held off the card until its organization is known.
         var claudeCodeUnverified = false
+        /// `oauthAccount`'s organization as `~/.claude.json` names it now, before the recorded one
+        /// overrides it: a sign-in elsewhere (Terminal) moves it, and nothing else tells Kannu.
+        var claudeCodeInConfig: String?
     }
 
     private struct ClaudeUsageLoad {
@@ -576,7 +579,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot, desktop: desktop.snapshot,
                                 organizations: .init(desktop: desktop.organizationUUID,
                                                      claudeCode: context.organizationUUID,
-                                                     claudeCodeRecorded: recorded != nil),
+                                                     claudeCodeRecorded: recorded != nil,
+                                                     claudeCodeInConfig: claude.context.organizationUUID),
                                 now: now)
     }
 
@@ -709,8 +713,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
     func refreshClaudeUsageIfStale(now: Date = Date()) {
         guard !isRefreshingClaudeUsage,
               !claudeAutomaticRefreshHeld,
-              // Claude Code is on another organization: what it would fetch is not on the card.
-              claudeUsageHint != .otherOrganization,
+              // Claude Code is on another organization: what it would fetch is not on the card —
+              // unless `~/.claude.json` has moved off the recorded one since, as a sign-in in
+              // Terminal does; then one paced fetch records where it went.
+              claudeUsageHint != .otherOrganization
+                || ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
+                    recorded: Defaults[.claudeCodeUsageOrganization],
+                    inConfigNow: claudeUsageOrganizations.claudeCodeInConfig),
               ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
                                                   lastFetch: lastClaudeUsageFetchAt,
                                                   organizationUnverified: claudeUsageOrganizations.claudeCodeUnverified)

@@ -317,6 +317,16 @@ extension ClaudeUsageFetchCommand {
         succeeded ? .probe : .finish(.signInDidNotFinish)
     }
 
+    /// A refresh that was cancelled (Cancel, or app exit) runs no further step: a probe killed by
+    /// app exit reads as failed, and on a press that alone would start the interactive spawn. A
+    /// step already decided to finish keeps its status; anything else finishes now, with what the
+    /// run got to.
+    static func step(_ next: RefreshStep, cancelled: Bool, signedIn: Bool, fetched: Bool) -> RefreshStep {
+        guard cancelled else { return next }
+        if case .finish = next { return next }
+        return .finish(fetched ? nil : signedIn ? .signInDidNotFinish : .fetchFailed)
+    }
+
     /// What the card shows after a refresh, and whether the automatic refresh stands down. The
     /// automatic refresh only ever surfaces the one thing a press can fix — a missing sign-in;
     /// everything else it finds is shown after a press, never as a permanent line nobody asked for.

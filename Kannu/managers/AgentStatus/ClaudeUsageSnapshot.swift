@@ -101,6 +101,17 @@ struct ClaudeUsageSnapshot: Equatable {
 
     /// `organizationUnverified` (see `cardSources`) asks for the first fetch of a launch at once,
     /// whatever the cache's age: until it runs, Claude Code's numbers cannot go on the card.
+    /// While Claude Code is recorded on another organization than the card's, the automatic
+    /// refresh stands down: what it would fetch is not on the card. The recorded organization wins
+    /// over `~/.claude.json`, which desktop-hosted sessions keep rewriting — so after the card's
+    /// "Sign in in Terminal" nothing would ever record the new one. When the file names a different
+    /// organization than the recorded one, a paced fetch may run: Claude Code's own profile fetch
+    /// leaves its true organization in the file, and that is what gets recorded.
+    static func otherOrganizationAllowsAutoFetch(recorded: String?, inConfigNow: String?) -> Bool {
+        guard let recorded, let inConfigNow else { return false }
+        return inConfigNow != recorded
+    }
+
     static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?,
                                 organizationUnverified: Bool = false) -> Bool {
         if organizationUnverified, lastFetch == nil { return true }
