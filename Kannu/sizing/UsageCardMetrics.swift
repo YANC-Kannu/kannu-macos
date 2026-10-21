@@ -28,9 +28,8 @@ import CoreGraphics
 /// window clipped it. A card has two things: the 5-hour window (one gauge, now) and the weekly
 /// stack (all models plus each per-model window, the trend) — a 1 : φ pair, laid side by side.
 ///
-/// `goldenRatio`, `goldenSplit` and the row sizes are the timer tab's (`TimerComposerMetrics`,
-/// `GoldenRow`), copied here while that file is not on `development`; whichever change lands
-/// second delegates to the other.
+/// The split is the timer tab's own (`TimerComposerMetrics.goldenSplit`, the rule `GoldenRow`
+/// lays out), so the two tabs cannot drift apart; the row sizes follow the timer's scale.
 enum UsageCardMetrics {
     // MARK: The slot
 
@@ -114,14 +113,12 @@ enum UsageCardMetrics {
 
     // MARK: Widths
 
-    static let goldenRatio: CGFloat = 1.6180339887
+    static var goldenRatio: CGFloat { TimerComposerMetrics.goldenRatio }
 
     /// Two parts of `total` with `spacing` between them in the golden ratio, minor : major = 1 : φ,
-    /// in whole points, rounded down so the major part takes the fraction.
+    /// in whole points, rounded down so the major part takes the fraction — the timer's split.
     static func goldenSplit(_ total: CGFloat, spacing: CGFloat) -> (minor: CGFloat, major: CGFloat) {
-        let parts = max(0, total - spacing)
-        let minor = (parts / (1 + goldenRatio)).rounded(.down)
-        return (minor, parts - minor)
+        TimerComposerMetrics.goldenSplit(total, spacing: spacing)
     }
 
     /// The tab's width inside its padding, in an open notch `notchWidth` wide.

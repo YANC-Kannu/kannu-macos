@@ -91,7 +91,13 @@ final class UsageCardMetricsTests: XCTestCase {
         XCTAssertLessThan(M.valueFontSize, M.titleFontSize)
     }
 
-    func testGoldenSplitMatchesTheTimersFormula() {
+    func testGoldenSplitIsTheTimersSplit() {
+        for (total, spacing) in [(CGFloat(570), CGFloat(41)), (269, 10), (560, 10), (5, 10)] {
+            let usage = M.goldenSplit(total, spacing: spacing)
+            let timer = TimerComposerMetrics.goldenSplit(total, spacing: spacing)
+            XCTAssertEqual(usage.minor, timer.minor)
+            XCTAssertEqual(usage.major, timer.major)
+        }
         // The timer's own numbers: 529 pt of columns around a 41 pt gap give 202 : 327.
         let split = M.goldenSplit(570, spacing: 41)
         XCTAssertEqual(split.minor, 202)

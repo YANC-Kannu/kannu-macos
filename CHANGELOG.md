@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - The usage card splits with the timer's own golden split
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — #96 brought up to date with `development` before it merges
+- **Changes:**
+  - `development` now carries the timer tab's `TimerComposerMetrics`, so `UsageCardMetrics`
+    stops carrying its own copy of the golden ratio and the split and calls the timer's — the
+    rule the copy's comment set ("whichever lands second delegates"). The split is unchanged:
+    98 : 161 with two cards in a 640 pt notch, pinned as before.
+  - `testGoldenSplitIsTheTimersSplit` checks the usage card's split against the timer's at the
+    widths the card uses.
+  - The redesign entry's "Not done" note gives the real reason the bar labels do not slide.
+
 ### 2026-10-19 - A snapshot board shows the usage cards at 640 and 690
 - **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
 - **Agent label:** Follow-up 67 — DEBUG `usage` board for `--kannu-snapshots`
@@ -49,8 +61,9 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Codex and Cursor on the same card: Codex splits like Claude with its Today/Week totals under
     the weekly bar; Cursor's one window is titled **Billing cycle** (it was "Weekly", which is
     wrong for it) with its totals and on-demand spend as facts; Antigravity is header and note.
-  - Not done: a sliding label for a clipped per-model name (the timer's `HoverRevealText` is not
-    on `development`); a long name truncates, and the row's tooltip names it.
+  - A long per-model name truncates and the row's tooltip names it, rather than sliding like the
+    timer's `HoverRevealText`: a weekly bar row already owns a hover for its forecast, and
+    docs/TOOLTIPS.md rule 3 gives a control one hover source.
 
 ### 2026-10-19 - The usage card's sizes add up in one place
 - **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
