@@ -28,7 +28,7 @@ the version number cannot tell an old install from a new one. To move an existin
 pinned commit, run the line above again with `--reinstall` after `uv tool install` (pipx:
 `pipx install --force …`).
 
-Then open Kannu → Settings → Agents → **ADR Discovery** and press **Check again**. Kannu looks
+Then open Kannu → Brain → Agent Security → **ADR Discovery** and press **Check again**. Kannu looks
 in `~/.local/bin`, uv's tool directory, `/opt/homebrew/bin` and `/usr/local/bin`; a different
 location can be set in the **ADR tools folder** row (choose the folder that holds `adr-discovery`,
 `adr-sensor` or `uv`; leave it empty for the standard places). Avoid a folder inside Documents,
@@ -37,13 +37,13 @@ Desktop, Downloads or iCloud Drive: macOS asks for permission every time Kannu l
 ## 2. Produce a snapshot
 
 Kannu reads the newest `snapshot-*.json` in its snapshot folder (default
-`~/.kannu/adr/discovery`, changeable in Settings). Run a scan into it:
+`~/.kannu/adr/discovery`, changeable in Brain). Run a scan into it:
 
 ```bash
 adr-discovery --json --output-dir ~/.kannu/adr/discovery > /dev/null
 ```
 
-Findings appear in Settings within a second of the file landing. Exit code `2` means the scan
+Findings appear in Brain within a second of the file landing. Exit code `2` means the scan
 could not read everything (a denied directory, an unavailable probe); Kannu shows that as
 *partial coverage* rather than claiming the machine is clean.
 
@@ -59,7 +59,7 @@ and no access at all under personal folders such as `~/.ssh`, `Documents`, `Mail
 
 ## 3. Let Kannu run it (default once connected)
 
-With Discovery connected, Settings → Agents → ADR Discovery → **Let Kannu run scans** makes
+With Discovery connected, Brain → Agent Security → ADR Discovery → **Let Kannu run scans** makes
 Kannu invoke `adr-discovery --json --output-dir <snapshot folder>` itself. Kannu checks once a
 minute whether a scan is due, and runs one:
 
@@ -77,14 +77,14 @@ minute whether a scan is due, and runs one:
   While scans keep failing, a settings change waits for that retry too;
 - whenever you press **Scan now**.
 
-Settings shows when the next automatic scan is due under "Last run by Kannu". The exact command is
+Brain shows when the next automatic scan is due under "Last run by Kannu". The exact command is
 fixed in code and pinned by tests; Kannu never adds flags to it. Turn the toggle off if something
 else already schedules Discovery — Kannu then only reads, and labels those snapshots as watched.
 
 ## 4. How a high-severity finding gets your attention
 
 - **In the closed notch:** a monochrome shield pill beside the traffic light — never a fourth
-  light colour — that stays until you acknowledge the finding (default). Settings offers
+  light colour — that stays until you acknowledge the finding (default). Brain offers
   *For 5 seconds, then glyph*, *Glyph only* and *Off*. While a Focus mode is on, only the small
   glyph shows; the pill appears when Focus ends. Clicking the pill opens the panel.
 - **In the panel:** the finding is pinned above the primary session with Details, Acknowledge and
@@ -192,7 +192,7 @@ the Discovery README's "Policy file"):
 A Discovery installed from `main` before 2026-10-12 ignores both indicator lists and never raises
 *forbidden asset*.
 
-Point Kannu at the file with Settings → Agent Security → ADR scans → Advanced → **ADR scan policy**;
+Point Kannu at the file with Brain → Agent Security → ADR scans → Advanced → **ADR scan policy**;
 Kannu passes it to every scan it runs, and never parses it itself. **Copy a prompt that drafts a
 policy** on the same row has your agent read your MCP configs, ask which domains are yours, and
 write `~/.kannu/adr/policy.json`; it describes the forbidden lists but leaves them out unless you
@@ -204,7 +204,7 @@ The policy that can — and that Kannu can enforce — is the *agent policy* in 
 `adr-sensor` exports normalised session records for Claude Code, Cursor, Codex, Warp, Claude
 Desktop, Cline and opencode. **Kannu does not use it**: it reads those sources itself, and no
 finding depends on the Sensor. It is listed because a security team may want those sessions in a
-SIEM. Settings shows whether it is installed and offers **Copy install command**
+SIEM. Brain shows whether it is installed and offers **Copy install command**
 (`uv tool install adr-sensor`) — Kannu never installs anything itself.
 
 ## 8. Session analysis with ADR Detection (opt-in, off by default)
@@ -222,11 +222,11 @@ npm install -g @anthropic-ai/claude-code && claude auth login           # if not
 ```
 
 The checkout is pinned to the same commit as Discovery. A checkout older than 2026-09-22 cannot read
-Claude Code 2.1's JSON output (upstream fix `1c8ecd6`), so every analysis would fail; Settings says
+Claude Code 2.1's JSON output (upstream fix `1c8ecd6`), so every analysis would fail; Brain says
 so on the **Detection checkout** row and gives the update line — in the `Detection` folder,
 `git fetch && git checkout 6b33dffecd719708c435f772c9e93f1210944e31 && uv sync`.
 
-Then Settings → Agents → Session analysis → **Analyze chats with ADR Detection** (a consent
+Then Brain → Agent Security → Session analysis → **Analyze chats with ADR Detection** (a consent
 alert names what leaves the Mac), choose the `Detection` folder, and optionally store keys:
 an OpenAI key if you turn **Triage with OpenAI first** on (off = Claude only), an Anthropic API
 key if you would rather spend API credits than your subscription's 5-hour/weekly quota.
@@ -243,7 +243,7 @@ finding — high when confidence ≥ 0.8, medium otherwise — and rides the sam
 path as every other finding. ADR's verdict names no tactic at the pinned commit (the only tactic it
 records is what triage suspected beforehand), so the finding is titled "Malicious activity in this
 chat" and the explanation says what happened. Reports are kept under `~/.kannu/adr/detection/`
-(reveal from the chat's menu or Settings).
+(reveal from the chat's menu or Brain).
 
 What leaves the Mac, exactly: the chosen transcript text, to Anthropic (your login or your key)
 and, only with triage on, to OpenAI. Nothing else, nothing automatic, nothing without your click.
@@ -288,7 +288,7 @@ A JSON file you write, `~/.kannu/agent-policy.json`, naming commands and tools a
 - `reason` is optional and is what the agent is told.
 - Caps: 64 KB, 200 rules, 200 characters per string. Anything else — missing, not JSON, over a cap,
   `version` not 1, a rule with neither key — means **no policy**; the hook never fails closed on
-  its own configuration, and Settings → Agents → **Agent policy** says why.
+  its own configuration, and Brain → Agent Security → **Agent policy** says why.
 
 Kannu writes this file in two places, both at your click and both only after checking the bytes
 with the same rules as above, so neither can replace a working policy with a bad one. **Import…**
@@ -309,7 +309,7 @@ through `decision: deny` with a `reason`), the hook refuses the call and tells
 the agent `Kannu policy: "ssh" is blocked on this Mac by the user's agent policy. <reason> Ask the
 user before trying another way.` A refused call is a medium finding — the policy working; a call
 that ran is high. Antigravity's deny (hook v46) follows antigravity.google/docs/hooks and has not
-been tested on a real install; the Settings row says so. Codex, VS Code, Gemini CLI, Qwen Code,
+been tested on a real install; the Brain row says so. Codex, VS Code, Gemini CLI, Qwen Code,
 Copilot CLI and opencode get the finding only: their hook contracts either have no verified deny or
 no pre-tool event at all, and Kannu does not guess at a host's protocol.
 
@@ -319,7 +319,7 @@ reads nor writes.
 
 ## What Kannu does with findings
 
-- Lists them in Settings → Agents → Security findings, highest severity first. Each row is
+- Lists them in Brain → Agent Security → Security findings, highest severity first. Each row is
   compact — title, severity and a two-line summary — with its actions on the bottom row: **Details**
   on the left, and on the right a "…" menu, **Acknowledge** and **Copy for agent**. Details opens
   the evidence and, in plain words, what the finding means and what to do, as one block of text

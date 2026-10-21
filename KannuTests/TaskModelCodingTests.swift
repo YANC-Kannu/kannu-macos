@@ -203,6 +203,28 @@ final class TaskModelCodingTests: XCTestCase {
         XCTAssertNil(decoded.tasks.first?.remote?.gitlabKind, "an unknown kind reads as nil, the rest of the file survives")
     }
 
+    /// A task from a source this build does not know — a newer Kannu's, or a tester's after going
+    /// back — costs itself, never the list; a log policy it does not know reads as ask. Anything
+    /// else wrong with a task still fails the file, which `TaskFileStore` then moves aside.
+    func testATaskFromAnUnknownSourceIsDroppedAndTheRestReads() throws {
+        let ids = (UUID(), UUID(), UUID())
+        let json = """
+        {"version": 2, "tasks": [
+          {"id": "\(ids.0.uuidString)", "title": "Mine"},
+          {"id": "\(ids.1.uuidString)", "source": "basecamp", "title": "From a newer Kannu"},
+          {"id": "\(ids.2.uuidString)", "source": "jira", "title": "Known", "logPolicy": "weekly"}]}
+        """
+        let decoded = try TasksFile.makeDecoder().decode(TasksFile.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.tasks.map(\.id), [ids.0, ids.2], "the unknown source's task is dropped, the others read")
+        XCTAssertEqual(decoded.tasks[1].logPolicy, .ask, "a log policy this version does not know reads as ask")
+
+        let broken = """
+        {"version": 2, "tasks": [{"id": "not-a-uuid", "title": "Mine"}]}
+        """
+        XCTAssertThrowsError(try TasksFile.makeDecoder().decode(TasksFile.self, from: Data(broken.utf8)),
+                             "only an unknown source is forgiven; a malformed task still fails the file")
+    }
+
     func testTheLocalEstimateWinsOverTheRemoteOne() {
         var task = sampleFile().tasks[1]
         XCTAssertEqual(task.effectiveEstimateSeconds, 14400)

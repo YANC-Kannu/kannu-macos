@@ -31,6 +31,9 @@ class FullscreenMediaDetector: ObservableObject {
     private let detector: MacroVisionKit
     @ObservedObject private var musicManager = MusicManager.shared
     @MainActor @Published private(set) var fullscreenStatus: [String: Bool] = [:]
+    /// Bumped per scan on the main actor. A scan publishes only while it is the latest, so one
+    /// that finishes late cannot overwrite a newer verdict (CodeRabbit on #112).
+    @MainActor private var scanGeneration = 0
     private var notificationTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -38,7 +41,7 @@ class FullscreenMediaDetector: ObservableObject {
         self.detector = MacroVisionKit.shared
         detector.configuration.includeSystemApps = true
         setupNotificationObservers()
-        updateFullScreenStatus()
+        Task { [weak self] in await self?.updateFullScreenStatus() }
     }
 
     private func setupNotificationObservers() {
@@ -101,23 +104,43 @@ class FullscreenMediaDetector: ObservableObject {
 
     private func handleChange() async {
         try? await Task.sleep(for: .milliseconds(500))
-        self.updateFullScreenStatus()
+        await self.updateFullScreenStatus()
         // Without Accessibility the verdict reads the menu bar from a window snapshot, and the
         // menu bar's slide out of (or back into) a fullscreen space can outlast the 500 ms
         // settle. macOS posts no public notice for the menu bar's own show and hide, so the
         // fallback looks once more after it has finished; still one snapshot per pass.
         guard !AXIsProcessTrusted() else { return }
         try? await Task.sleep(for: .milliseconds(1000))
-        self.updateFullScreenStatus()
+        await self.updateFullScreenStatus()
     }
 
-    private func updateFullScreenStatus() {
+    /// Reads the screens and windows where the caller runs — off the main thread, since an
+    /// Accessibility read of an unresponsive app can wait — then publishes on the main actor.
+    private func updateFullScreenStatus() async {
+        let ticket = await nextScanTicket()
+        await publish(currentFullscreenStatus(), ticket: ticket)
+    }
+
+    @MainActor
+    private func nextScanTicket() -> Int {
+        scanGeneration += 1
+        return scanGeneration
+    }
+
+    /// `fullscreenStatus` is main-actor state (`KannuViewModel` derives `hideOnClosed` from it):
+    /// this is the one place that assigns it. It used to be assigned from whichever thread ran
+    /// the scan. A scan another one has overtaken is dropped: its screens and windows are older.
+    @MainActor
+    private func publish(_ newStatus: [String: Bool], ticket: Int) {
+        guard ticket == scanGeneration, newStatus != fullscreenStatus else { return }
+        fullscreenStatus = newStatus
+        NSLog("✅ Fullscreen status: \(newStatus)")
+    }
+
+    private func currentFullscreenStatus() -> [String: Bool] {
         guard Defaults[.enableFullscreenMediaDetection] else {
-            let reset = Dictionary(uniqueKeysWithValues: NSScreen.screens.map { ($0.localizedName, false) })
-            if reset != fullscreenStatus {
-                fullscreenStatus = reset
-            }
-            return
+            // Two displays can share a name; nothing is fullscreen here, so the first entry stands.
+            return Dictionary(NSScreen.screens.map { ($0.localizedName, false) }, uniquingKeysWith: { first, _ in first })
         }
         
 
@@ -152,10 +175,7 @@ class FullscreenMediaDetector: ObservableObject {
             }
         }
 
-        if newStatus != fullscreenStatus {
-            fullscreenStatus = newStatus
-            NSLog("✅ Fullscreen status: \(newStatus)")
-        }
+        return newStatus
     }
 
     /// Says once, not on every window scan, that fullscreen detection is degraded. Without the
