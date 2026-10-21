@@ -77,11 +77,16 @@ final class LLMUsageManager: ObservableObject {
     /// `interactive` marks a refresh the user asked for directly, letting providers take
     /// steps that may show a system prompt (e.g. approving a cross-app keychain read).
     /// Automatic and timer-driven refreshes must leave it false so nothing blocks on a dialog.
-    func refreshAll(force: Bool = false, interactive: Bool = false) {
-        refreshAll(force: force, interactive: interactive, drainingParkedRequest: false)
+    /// `bypassFloor` is for a caller whose own data just changed and that has paced itself — the
+    /// Claude usage fetch completing. The card's poll runs a refresh moments before that fetch
+    /// lands, so the floor would otherwise drop it and leave the new numbers off the card for
+    /// minutes. It never prompts (that is `interactive`).
+    func refreshAll(force: Bool = false, interactive: Bool = false, bypassFloor: Bool = false) {
+        refreshAll(force: force, interactive: interactive, drainingParkedRequest: bypassFloor)
     }
 
-    /// `drainingParkedRequest` is true only for the re-entry that drains `pendingForcedRefresh`.
+    /// `drainingParkedRequest` is true for the re-entry that drains `pendingForcedRefresh`, and for
+    /// a public `bypassFloor` request.
     /// That request was parked *because* a refresh was already in flight, and `lastRefresh` is
     /// stamped at refresh start — so by the time it drains, the elapsed time is almost always
     /// under the interactive floor and the parked intent would be silently dropped, which is
@@ -96,8 +101,9 @@ final class LLMUsageManager: ObservableObject {
         let enabledIDs = Set(allEnabled.map { $0.id })
         results = results.filter { enabledIDs.contains($0.key) }
 
-        // Local file providers (Antigravity) read from disk: no network, nothing that can be
-        // rate-limited, so they refresh on every open and never gate on `isRefreshing`.
+        // Local file providers read from disk: no network, nothing that can be rate-limited, so
+        // they refresh on every open and never gate on `isRefreshing`. (Antigravity was one until
+        // it learned to ask `agy` for its quotas, which reaches Google's backend.)
         if !localProviders.isEmpty {
             for provider in localProviders {
                 // Keep the current card — success or failure — while refreshing; only a
@@ -144,6 +150,14 @@ final class LLMUsageManager: ObservableObject {
         Task { await runRefresh(providers: networkProviders, interactive: interactive, ownsRefreshFlag: true) }
     }
 
+    /// The Usage tab's Refresh button. The user asked for fresh figures, so it also lifts
+    /// Antigravity's failure backoff: someone who has just signed in to `agy` should not wait out
+    /// 15 minutes. Every other caller of `refreshAll` leaves the backoff alone.
+    func refreshRequestedByUser() {
+        AntigravityQuotaReader.shared.clearBackoff()
+        refreshAll(force: true)
+    }
+
     /// Retries a provider's quota with prompts allowed, after the user taps the card's fix-it button.
     func resolveQuotaAction(_ action: QuotaAction) {
         switch action {
@@ -152,7 +166,7 @@ final class LLMUsageManager: ObservableObject {
     }
 
     /// `ownsRefreshFlag` is true only for the network pass. The local pass must leave
-    /// `isRefreshing` alone: Antigravity reads a file and finishes almost immediately, so
+    /// `isRefreshing` alone: a local provider reads a file and finishes almost immediately, so
     /// clearing the flag there would unblock the UI mid-network-request.
     private func runRefresh(providers: [UsageProvider], interactive: Bool, ownsRefreshFlag: Bool) async {
         let now = Date()

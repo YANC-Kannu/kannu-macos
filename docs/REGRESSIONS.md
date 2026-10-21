@@ -153,6 +153,66 @@ The turn carries `turn_bg_agents` (entry 5, 2026-10-04 addendum). Two rules:
   outlives its turn.
 - Nothing from `background_tasks` but a count is written.
 
+**v45 addendum — other hosts read Kannu's Claude file.** Cursor runs `~/.claude/settings.json` as a
+"third-party config" (seen in Cursor's own hook log on 2026-09-10), and VS Code does too with
+`chat.useClaudeHooks` on. Cursor sent its chats through the Claude hook, which filed them as Claude
+sessions. VS Code ignores matchers, so it ran the `gated` group for every tool and turned each one
+yellow. Rules:
+- A payload with `cursor_version` is only ever filed by Kannu's Cursor hook. Any other provider writes
+  nothing, and still gives its usual answer, the policy deny included: Cursor maps a Claude
+  `permissionDecision` to its own `permission` (cursor.com/docs/reference/third-party-hooks), so the
+  skip goes after the policy check, never before it. The first v45 draft skipped first and allowed
+  what an enforced rule had refused under v44. So a Cursor chat is tracked, and its secret,
+  hidden-text and sensitive-file sightings recorded, only when Kannu's Cursor hook is installed.
+- A matcher key in the script holds only for the tools its group names.
+- A label is never written as a chat's name where a log title exists. The hook's name outranks
+  `ai-title` on the card (entry 5), so "Quota exceeded" is Antigravity's only.
+- One thing the user typed is one sighting. Claude fires `UserPromptSubmit` and then
+  `UserPromptExpansion` for a slash command, both with the typed `prompt`; the second look
+  (`SEC_RECHECK_EVENTS`) adds a sighting not yet on disk, never a count.
+
+Cursor's permission hooks answer the documented `{"permission":"allow"}`, with no `continue`; the
+deny shape is unchanged. The Cursor table gains `sessionEnd`, `subagentStart` and `subagentStop`.
+The installed check now reads a fixed `cursorCoreInstalledEvents`, as Claude's always has (entry 6).
+Both tables moved into `AgentHookLayout`, so the logic target pins them. Cursor fires its subagent
+events in the parent's conversation, so they go to a file of the subagent's own (`subagent_id`, with
+`parent_id`). A `subagentStop` without an id writes nothing: in the parent's file it would have
+shown a running chat as finished. Cursor's documented `subagentStop` carries no id, so today a Cursor
+subagent's file stays `thinking` until the stale cap. That leftover never outranks a chat that is
+working or waiting, the fold ignores it once the chat's turn ends, and only Claude files outlive the
+cap. Guards: the `HookScriptTests` v45
+group, run again under `/usr/bin/python3` 3.9, and the v45 cases in `AgentHookLayoutTests`.
+
+**v46 addendum — Antigravity's hooks, from its docs only.** Antigravity changed its hooks.json:
+the top level maps a hook's name to its configuration, only `PreToolUse` and `PostToolUse` take
+matcher groups, and `UserPromptSubmit` is not an event. Since 2.6.0 it rejects a configuration that
+can never run instead of ignoring it. Kannu's v45 file was Claude-shaped, so Antigravity read it as a
+hook named "hooks" with no runnable handler. Kannu now writes one `kannu-agent-status` entry to
+`~/.gemini/config/hooks.json`, the one global file the docs list. `AgentHookLayout` gives Antigravity's
+files the `.namedHooks` shape. The two files an older Kannu also wrote are `.stripOnly`: install and
+uninstall remove Kannu's entries from them, old shape and new, and never write there (entry 6).
+The script reads `toolCall.name`/`toolCall.args`, `transcriptPath` and `fullyIdle`. `PreToolUse` and
+`Stop` answer `{"decision":"allow"}`, because the docs mark `decision` required on both. `allow`
+defers to the next hook or the default policy. Every other event answers `{}`. Rules:
+- The Antigravity deny (`{"decision":"deny","reason":…}`) widens `POLICY_DENY_EVENTS` on the docs
+  alone. That breaks the v42 rule "only after a live check". The deny is the documented one, and the
+  host now requires a decision on every call anyway. Run a live check before widening it further.
+  A change to `POLICY_DENY_EVENTS` changes what the user opts into, so the **Block matching tool
+  calls** row, the `enforceAgentPolicy` doc comment and `docs/ADR.md` section 9 must name the same
+  hosts. The first v46 draft widened the table and left the row saying only Claude Code and Cursor
+  refuse (caught in review). Guard: `ADRDocsTests.testEveryHostThatCanRefuseIsNamedWhereTheUserOptsIn`
+  reads the mirror's table and the three texts from the source tree.
+- Antigravity has no prompt event, so a turn starts at the first model call of a run
+  (`PreInvocation` with `invocationNum` 0, never `false`). A `Stop` with `fullyIdle: false` and no
+  error keeps the light green and the turn open.
+- The installed check reads the fixed `antigravityCoreInstalledEvents`, as Claude's and Cursor's do.
+  A v45 file fails it and upgrades through the version migration, which is gated on the script.
+  `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script.
+
+Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9, and the v46 cases
+in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
+changelog. None of it has run against a real Antigravity.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call
@@ -319,6 +379,24 @@ Guards: `BackgroundWorkTests` (the reconciler arm, the fold, the clock, the stal
 parse), and `HookScriptTests.testAStopCountsTheAgentsItLeavesRunningAndNothingElse` with its
 siblings.
 
+**2026-10-18 addendum: a source moved and nothing failed.** Cursor 3.x moved composer headers out
+of the `ItemTable` key `composer.composerHeaders` and into a `composerHeaders` table. On Cursor
+3.19.19 the key has 0 rows. `CursorComposerStore` read only the key, so the composer-metadata
+source went empty with no error. Names fell back to glass and transcript titles, and every id went
+to the workspace-database scan. The real name was on disk and never read. `CursorComposerStore`
+now reads the table by primary key and keeps the key as a fallback; `CursorComposerStoreTests`
+covers both layouts. When a provider updates, check the store's schema (read-only, schema and
+key names only) before assuming a name source still exists.
+
+The same change first re-broke the merge seam. A 3.19 header has no `status`, and its
+`lastUpdatedAt` can move with no agent activity (1 of the 25 newest chats on this Mac: 178 s
+ahead of its `composerData`). The merge kept whichever whole record was newer, so that header
+replaced `composerData` and the chat lost its status. Caught in review, before merge. Rule: a
+header is a name and a backing record, never a status or an activity time; `composerData` keeps
+its own and the header fills only what it lacks (`CursorComposerStore.combine`). Guard:
+`CursorComposerStoreTests.testANewerHeaderKeepsComposerDataStatusAndActivity`, checked to fail
+with the old merge.
+
 ---
 
 ## 6. Migration coverage must equal install coverage must equal uninstall coverage
@@ -461,6 +539,51 @@ verified to turn the suite red before this was committed.
 environment whitelist as data, `ADRDetectionCommandTests` pins both, and the embedded adapter is
 tested identical to `scripts/adr-analyze-session.py`. Permission and tool flags never pass
 through Kannu — the adapter alone decides how upstream runs its Claude session.
+
+**2026-10-18 addendum — a third silent failure, and the print probe.** From 2026-10-02 Refresh ran
+nothing at all: Claude Desktop moved its bundled CLI from `claude-code/<version>/claude.app` to
+`claude-code/<version>/<build>/claude.app`, `resolveClaudeBinary` found no binary, and the button
+quietly re-read disk. Same signature as the first two — no error, a spinner, an unmoved
+`fetchedAtMs` — and nothing logged that it had happened. `ClaudeCodeBinary` now reads both layouts,
+`~/.local/bin/claude` and a Homebrew cask's link, picks the highest version among binaries signed by
+Anthropic (Developer ID, team Q6L2SF6YDW, identifier `com.anthropic.claude-code` — a child inherits
+Kannu's privacy permissions, and these folders are writable by any process of the user's), and
+every refresh step is logged at `notice` (category `ClaudeUsage`: step, Claude Code version,
+outcome, seconds — never the output or a path), which `/usr/bin/log show` keeps.
+
+The refresh now runs `claude --settings '{"disableAllHooks":true}' -p "/usage"`
+(`ClaudeUsageFetchCommand.printProbeAttempts`), which needs no pty and no typed keystrokes; the bare
+`-p "/usage"` runs only if that fails outright. Measured on this Mac from a launchd-like clean
+environment (`env -i` with HOME, USER, PATH): both fetch (`fetchedAtMs` advanced, three plan rows),
+the hooks-off one in 2.8 s with no hook status file, the bare one leaving a SessionStart file that
+SessionEnd then deleted. Signed out, the probe exits 0 in 1 s with only the cost summary. The
+interactive pty spawn is reached only on a press — for a probe that fails outright or a Claude Code
+older than 2.1.263, the oldest read to carry the non-interactive `/usage` — because it types blind
+into a terminal session; its guards are unchanged.
+
+What the refresh does after the probe is `ClaudeUsageFetchCommand`'s steps, all pinned by tests: a
+probe that still shows a claude.ai sign-in ("You are currently using your subscription…") but no
+limits is never answered with a browser sign-in — that can move Claude Code to another
+organization; only a probe with no claude.ai sign-in leads to `claude auth status`, and only a
+press, never the automatic refresh, then starts `claude auth login --claudeai`. An API-key,
+key-helper, cloud-provider or gateway setup is never switched.
+
+**Inherited variables decide whose sign-in is used.** Run from inside a Claude Desktop agent
+session, the probe inherits that session's `ANTHROPIC_BASE_URL` (the desktop host's proxy) and its
+`CLAUDE_CODE_ACCOUNT_UUID` / `CLAUDE_CODE_ORGANIZATION_UUID`. Measured 2026-10-18 from such a
+process: with them the probe fetched; with them removed the same process found no sign-in of its
+own and fetched nothing. So the inherited proxy quietly substitutes the host session's credentials
+for Claude Code's. `ClaudeUsageFetchCommand.environment(inheriting:)` therefore drops the `CLAUDE*`
+and `ANTHROPIC*` namespaces **only when the inherited environment is an agent session's** (it
+carries `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID`); every other launch,
+including a user's own `launchctl setenv` API key or gateway, is plain inheritance (nil), as before.
+It only ever removes; adding is still regression 2.
+
+Also measured, so nobody leans on them: `claude auth status` printed `loggedIn: false` in the same
+clean environment where `claude -p "/usage"` fetched plan rows; and `oauthAccount` in
+`~/.claude.json` flips between organizations — Claude Code's own run writes its token's, a
+desktop-hosted session's run the desktop's — so Kannu records Claude Code's organization itself,
+straight after its own fetch (`claudeCodeUsageOrganization`).
 
 ---
 
@@ -1117,7 +1240,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
-| `CursorAgentStatusMonitor.swift` (usage spawn) | — | The `/usage` fetch invocation. Two silent breakages in one day from added flags/env (entry 8). |
+| `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
 | `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |

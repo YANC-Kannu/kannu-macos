@@ -20,14 +20,18 @@ import Foundation
 
 /// How Kannu invokes the user's `adr-discovery` — held as data so tests can pin it, the same
 /// discipline `ClaudeUsageFetchCommand` earned the hard way (docs/REGRESSIONS.md entry 8):
-/// every argument is verified against what the tool actually accepts (0.2.0's `cli.py`).
+/// every argument is verified against what the tool actually accepts (`cli.py` at
+/// `ADRUpstream.commit`; the package still calls itself 0.2.0 there).
 ///
 /// - `--json` so the snapshot is machine-readable.
 /// - `--output-dir <snapshot folder>` so the file lands where the store already watches; the
 ///   tool names it `snapshot-<timestamp>.json` and writes it `0600` with `O_EXCL`.
-/// - `--policy <file>` only when the user configured one (tenant domains, approved, forbidden).
+/// - `--policy <file>` only when the user configured one (tenant domains, approved and forbidden
+///   catalog ids, approved and forbidden indicators).
 /// - Never `--dry-run` (nothing would be written), never `--root` (that scans a fixture tree,
-///   not this Mac), never `--diff` (Kannu de-duplicates by finding id itself).
+///   not this Mac), never `--diff` (Kannu de-duplicates by finding id itself), never `--resolve`
+///   (DNS lookups of provider hosts: Discovery sends nothing over the network without it), never
+///   `--archive-skills` (zips of every skill, written where Kannu does not look).
 ///
 /// Exit codes: 0 complete, 2 partial coverage (still a valid snapshot), 1 error.
 enum ADRDiscoveryCommand {
@@ -40,7 +44,7 @@ enum ADRDiscoveryCommand {
     static let timeout: TimeInterval = 180
 
     /// Arguments that would make the run useless or scan the wrong thing.
-    static let forbiddenArguments: Set<String> = ["--dry-run", "--root", "--diff", "--explain"]
+    static let forbiddenArguments: Set<String> = ["--dry-run", "--root", "--diff", "--explain", "--resolve", "--archive-skills"]
 
     static func arguments(outputDirectory: URL, policyFile: URL?) -> [String] {
         var args = ["--json", "--output-dir", outputDirectory.path]
@@ -67,10 +71,16 @@ enum ADRDiscoveryCommand {
     static let suggestedPolicyPath = "~/.kannu/adr/policy.json"
 
     /// What "Copy a prompt that drafts a policy" on the ADR scan policy row puts on the
-    /// pasteboard. Written from adr-discovery 0.2.0's source (`judge/sanction.py`, `findings.py`):
-    /// only `tenant_domains` affects MCP servers. `approved` and `forbidden` match catalog ids of
-    /// AI tools, never an MCP server, and raise no finding, so the prompt leaves them out by default.
-    /// A file ADR cannot read fails every scan, hence the check at the end.
+    /// pasteboard. Written from upstream's source at `ADRUpstream.commit` (`judge/sanction.py`,
+    /// `judge/findings.py`): `tenant_domains` flags MCP servers that reach outside the listed
+    /// domains. Since a3ab5f7 (2026-10-12) a forbidden match is a finding too — `forbidden` takes
+    /// catalog ids of AI tools, `forbidden_indicators` names MCP servers, packages, skills and files,
+    /// and either raises a high `forbidden_asset` — so the prompt describes them but keeps them
+    /// opt-in. An `mcp_endpoint` url goes through `normalize_url` (`redact.strip_url`), which drops
+    /// user info, query and fragment before comparing, so the prompt keeps those — where a URL's
+    /// secrets live — out of the policy file. An indicator with an unknown kind or an extra field
+    /// makes the file unreadable, and a file ADR cannot read fails every scan, hence the check at
+    /// the end.
     static let policyDraftingPrompt = """
         Write \(suggestedPolicyPath) for ADR Discovery, the scanner Kannu runs to check the AI tools and MCP \
         servers on this Mac. Format: JSON, {"tenant_domains": ["example.com"]}. Any MCP server that connects by \
@@ -79,9 +89,16 @@ enum ADRDiscoveryCommand {
         (~/.claude.json, ~/.cursor/mcp.json, any project .mcp.json) and list each URL-based server's name and \
         host only, never tokens, headers or environment values. Ask me which of those domains are mine, then \
         write the file with just those, create the folder if needed, and check it with python3 -m json.tool. \
-        ADR also reads "approved" and "forbidden" lists, but they take ADR catalog ids of AI tools (such as \
-        claude-code) and never flag an MCP server, so leave them out unless I ask. Finish by telling me to \
-        choose the file in Kannu: Brain, Agent Security, ADR scans, Advanced, ADR scan policy, Choose.
+        ADR also reads "forbidden", a list of ADR catalog ids of AI tools (such as claude-code), and \
+        "forbidden_indicators", a list that can name an MCP server: {"kind": "mcp_endpoint", "url": "https://..."}, \
+        {"kind": "package", "ecosystem": "npm", "name": "...", "all_versions": true} (or "versions": ["1.2.3"]), or \
+        {"kind": "name", "asset_kind": "mcp_server", "name": "..."}. An mcp_endpoint url is scheme, host, port and \
+        path only, never user info, a query string or a fragment (ADR drops them before comparing); if the path \
+        itself carries a key, use a name indicator instead. Anything they match is a high-severity \
+        finding; "approved" and "approved_indicators" are the allowed counterparts and raise none. Leave all four \
+        out unless I ask, and use only those fields: ADR rejects an indicator with an unknown kind or an extra \
+        field, and a policy it cannot read fails every scan. Finish by telling me to choose the file in Kannu: \
+        Brain, Agent Security, ADR scans, Advanced, ADR scan policy, Choose.
         """
 }
 
@@ -190,5 +207,38 @@ enum ADRToolFolder {
             return entry.name
         }
         return nil
+    }
+}
+
+/// The upstream ADR revision Kannu's integration was last checked against: github.com/uber/ADR
+/// `main` at 6b33dff (2026-10-16). The install lines Kannu hands out pin it, because an unpinned
+/// install runs whatever reached `main` last — the shape Kannu itself reports for an MCP server
+/// (`unpinned_mcp_server`). Moving the pin is a deliberate change: re-read upstream at the new
+/// commit first (the snapshot schema, the policy fields, the Detection API the adapter imports).
+enum ADRUpstream {
+    static let commit = "6b33dffecd719708c435f772c9e93f1210944e31"
+
+    static let discoveryInstallCommand = "uv tool install \"adr-discovery @ git+https://github.com/uber/ADR@\(commit)#subdirectory=Discovery\""
+    static let discoveryPipxCommand = "pipx install \"git+https://github.com/uber/ADR@\(commit)#subdirectory=Discovery\""
+    static let detectionCloneCommand = "git clone https://github.com/uber/ADR && cd ADR && git checkout \(commit) && cd Detection && uv sync"
+    /// Run inside an existing Detection folder; works from a branch or a detached checkout alike.
+    static let detectionUpdateCommand = "git fetch && git checkout \(commit) && uv sync"
+
+    /// Upstream's fix for Claude Code 2.1's list-shaped `--output-format json` (1c8ecd6, PR 134,
+    /// 2026-09-22) added `if isinstance(claude_result, list):` after both
+    /// `claude_result = json.loads(...)` lines in `guardrail/adr_agent/adr_baseline.py`. A checkout
+    /// without it fails every analysis: `json.loads` returns a list and `.get` raises. Every
+    /// revision of that file before the fix has the `json.loads` line and no `isinstance` check on
+    /// it; every revision since, up to `commit`, has both.
+    static let claudeCode21OutputFixMarker = "isinstance(claude_result"
+    static let preClaudeCode21OutputShape = "claude_result = json.loads("
+
+    /// Pure: whether a Detection checkout's `adr_baseline.py` predates that fix. Only the old code,
+    /// recognisably there, counts: a file upstream later rewrites, or a fork that fixes it another
+    /// way, need not have the `claude_result = json.loads(` line and is left to the run to judge —
+    /// a stale verdict blocks analysis, and its update line would move a newer checkout back to
+    /// the pin.
+    static func predatesClaudeCode21OutputFix(baselineSource: String) -> Bool {
+        baselineSource.contains(preClaudeCode21OutputShape) && !baselineSource.contains(claudeCode21OutputFixMarker)
     }
 }

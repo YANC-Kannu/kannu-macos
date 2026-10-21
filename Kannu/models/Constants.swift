@@ -1248,6 +1248,15 @@ extension Defaults.Keys {
     /// Conversation ids of Kannu's own `/usage` probe sessions, so they never show as chats —
     /// persisted because the probe's dead session file outlives the process that spawned it.
     static let claudeUsageProbeConversationIDs = Key<[String]>("claudeUsageProbeConversationIDs", default: [])
+    /// The organization Claude Code's own sign-in fetched usage for, read right after Kannu's last
+    /// successful `/usage` fetch. `oauthAccount` in `~/.claude.json` cannot say it: every Claude
+    /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
+    /// and Claude Code's own sign-in with its token's, so it flips between them.
+    static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
+    /// Organization id to `oauthAccount.organizationType` ("claude_max", "claude_team"…), learned
+    /// whenever `~/.claude.json` names both, so the card can say which plan each side is on even
+    /// while the file names the other one. Plan types only, never names or emails.
+    static let claudeOrganizationTypes = Key<[String: String]>("claudeOrganizationTypes", default: [:])
 
     // MARK: Security findings (connection to a separately installed ADR — github.com/uber/ADR)
     /// Extra directory searched for the `adr-discovery` / `adr-sensor` executables, before the
@@ -1274,7 +1283,7 @@ extension Defaults.Keys {
     /// Kannu-run scans that failed in a row (no snapshot written). The next one comes after 1, 2,
     /// 4, 8, 16 hours, never later than the daily scan; a scan that writes a snapshot resets it.
     static let adrKannuScanFailures = Key<Int>("adrKannuScanFailures", default: 0)
-    /// Optional `--policy` file for Discovery (tenant domains, approved, forbidden).
+    /// Optional `--policy` file for Discovery (tenant domains, approved and forbidden lists).
     static let adrPolicyFile = Key<String>("adrPolicyFile", default: "")
     /// How an unacknowledged high finding shows in the closed notch.
     static let adrHighAlertMode = Key<ADRHighAlertMode>("adrHighAlertMode", default: .untilAcknowledged)
@@ -1296,8 +1305,9 @@ extension Defaults.Keys {
     // Kannu's "new MCP server" check: local reads of agents' MCP settings, nothing sent.
     static let watchMCPServers = Key<Bool>("watchMCPServers", default: true)
     /// The agent policy (`~/.kannu/agent-policy.json`, hook v42): off means every match is reported
-    /// and the call runs; on means Claude Code and Cursor refuse it. Off by default — a change to
-    /// what an agent does is opt-in, and the file itself is the first opt-in.
+    /// and the call runs; on means Claude Code, Cursor and Antigravity refuse it (Antigravity's deny,
+    /// hook v46, is from its docs and has not been tested on a real install). Off by default — a
+    /// change to what an agent does is opt-in, and the file itself is the first opt-in.
     static let enforceAgentPolicy = Key<Bool>("enforceAgentPolicy", default: false)
     static let mcpServerBaseline = Key<MCPServerWatch.Baseline>("mcpServerBaseline", default: MCPServerWatch.Baseline())
     static let mcpServerAdditions = Key<[MCPServerWatch.Addition]>("mcpServerAdditions", default: [])

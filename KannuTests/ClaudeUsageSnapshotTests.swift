@@ -361,6 +361,149 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         XCTAssertEqual(ClaudeUsageSnapshot.merged([older, newerLive], now: now)?.observedAt, now)
     }
 
+    func testMergeKeepsEachWindowsOwnObservationTime() {
+        // A weekly percent from a desktop sample days old must not borrow the age of a five-hour
+        // value read a minute ago: the card shows each reading's age, the forecast uses it.
+        let fresh = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)],
+                                        observedAt: now.addingTimeInterval(-60))
+        let old = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 31, resetsIn: 86_400)],
+                                      observedAt: now.addingTimeInterval(-3 * 86_400))
+        let merged = ClaudeUsageSnapshot.merged([fresh, old], now: now)
+        XCTAssertEqual(merged?.window("five_hour")?.observedAt, now.addingTimeInterval(-60))
+        XCTAssertEqual(merged?.window("seven_day")?.observedAt, now.addingTimeInterval(-3 * 86_400))
+        XCTAssertEqual(merged?.observedAt, now.addingTimeInterval(-60))
+    }
+
+    // MARK: - Automatic fetch
+
+    /// CodeRabbit on #96: after "Sign in in Terminal" to the card's organization, nothing recorded
+    /// the new one — the recorded organization wins over `~/.claude.json`, and the automatic refresh
+    /// stood down while the hint said "another organization". It may run once the file names a
+    /// different organization than the recorded one.
+    func testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves() {
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "team"),
+                       "still on the recorded organization: nothing to fetch for the card")
+        XCTAssertTrue(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "max"),
+                      "the file moved off the recorded organization: one paced fetch records where it went")
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: nil))
+        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: nil, inConfigNow: "max"),
+                       "nothing recorded is not 'another organization'")
+    }
+
+    func testAutoFetchRunsWhenTheCacheIsOldOrMissing() {
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: nil, lastFetch: nil))
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: now.addingTimeInterval(-900), lastFetch: nil))
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: now.addingTimeInterval(-899), lastFetch: nil))
+    }
+
+    func testAutoFetchWaitsAfterAnyFetch() {
+        // A run that left the cache as it was (no sign-in) must not repeat every poll tick.
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: nil, lastFetch: now.addingTimeInterval(-899)))
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
+            now: now, cacheObservedAt: nil, lastFetch: now.addingTimeInterval(-900)))
+    }
+
+    // MARK: - One organization per card
+
+    func testClaudeCodeOnAnotherOrganizationIsLeftOutWhole() {
+        let statusline = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 5, resetsIn: 300)], observedAt: now)
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)],
+                                          observedAt: now.addingTimeInterval(-3_000))
+        let split = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                    desktopOrganization: "max", claudeCodeOrganization: "team")
+        XCTAssertTrue(split.claudeCodeOnAnotherOrganization)
+        XCTAssertEqual(split.sources, [desktop])
+        // A fresher Team reading must not displace the Max one: that was the measured card.
+        XCTAssertEqual(ClaudeUsageSnapshot.merged(split.sources, now: now)?.sevenDayPercent, 43)
+    }
+
+    func testOneOrganizationOrAnUnknownOneMergesAsBefore() {
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)], observedAt: now)
+        for (desktopOrg, codeOrg) in [("max", "max"), (nil, "team"), ("max", nil)] as [(String?, String?)] {
+            let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
+                                                       desktopOrganization: desktopOrg, claudeCodeOrganization: codeOrg)
+            XCTAssertFalse(card.claudeCodeOnAnotherOrganization)
+            XCTAssertEqual(card.sources, [nil, cache, desktop])
+        }
+    }
+
+    func testAnUnrecordedClaudeCodeOrganizationKeepsItsSourcesOff() {
+        // Before Kannu's own fetch has recorded Claude Code's organization, the file it would come
+        // from flips: trusting it put Team's zeros on the Max card for a first look.
+        let cache = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 0, resetsIn: 3_000)], observedAt: now)
+        let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)],
+                                          observedAt: now.addingTimeInterval(-3_000))
+        let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
+                                                   desktopOrganization: "max", claudeCodeOrganization: "max",
+                                                   claudeCodeOrganizationRecorded: false)
+        XCTAssertEqual(card.sources, [desktop])
+        XCTAssertTrue(card.claudeCodeOrganizationUnverified)
+        XCTAssertFalse(card.claudeCodeOnAnotherOrganization, "unknown is not 'another': no line about it")
+        // No desktop history: Claude Code's organization is the only one, recorded or not.
+        let alone = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: nil,
+                                                    desktopOrganization: nil, claudeCodeOrganization: nil,
+                                                    claudeCodeOrganizationRecorded: false)
+        XCTAssertEqual(alone.sources, [nil, cache, nil])
+        XCTAssertFalse(alone.claudeCodeOrganizationUnverified)
+    }
+
+    func testAnUnverifiedOrganizationFetchesAtOnceOncePerLaunch() {
+        // A fresh cache would normally wait 15 minutes; an unverified organization cannot.
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now, lastFetch: nil,
+                                                          organizationUnverified: true))
+        // Once a fetch ran this launch, the normal cadence applies, so a failing one never loops.
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now,
+                                                           lastFetch: now.addingTimeInterval(-60),
+                                                           organizationUnverified: true))
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: now, lastFetch: nil))
+    }
+
+    func testHintNamesTheOtherOrganizationFirst() {
+        // Even with hooks off and a live cache: the cache is someone else's limits.
+        let live = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)], observedAt: now)
+        XCTAssertEqual(ClaudeUsageSnapshot.hint(hooksInstalled: false, statusline: live, cache: live,
+                                                claudeCodeOnAnotherOrganization: true, now: now), .otherOrganization)
+    }
+
+    func testADesktopWindowBorrowsTheExactResetForTheSameOrganization() {
+        // The desktop's 5-hour value is fresher but has no reset; taken whole, it removed the
+        // countdown and flipped the usage-alert key between the exact reset and none.
+        let cache = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 3_000)],
+                                        observedAt: now.addingTimeInterval(-600))
+        let desktop = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 45, resetsAt: nil, resetIsInferred: true,
+                  notAfter: now.addingTimeInterval(4 * 3600))
+        ], observedAt: now)
+        let merged = ClaudeUsageSnapshot.merged([nil, cache, desktop], now: now)
+        XCTAssertEqual(merged?.fiveHourPercent, 45)
+        XCTAssertEqual(merged?.fiveHourResetsAt, now.addingTimeInterval(3_000))
+    }
+
+    func testNotAfterHidesAWindowAtRenderTime() {
+        let snapshot = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 45, resetsAt: nil, notAfter: now.addingTimeInterval(60))
+        ], observedAt: now)
+        XCTAssertEqual(snapshot.fiveHourDisplayPercent(now: now), 45)
+        XCTAssertNil(snapshot.fiveHourDisplayPercent(now: now.addingTimeInterval(60)))
+    }
+
+    // MARK: - Stale label
+
+    func testTheStaleLabelWaitsLongerThanTheAutomaticFetch() {
+        // Bars the automatic refresh keeps current must never dim between its runs.
+        XCTAssertGreaterThan(ClaudeUsageSnapshot.staleLabelInterval, ClaudeUsageSnapshot.autoFetchInterval)
+        XCTAssertNil(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-1_800), now: now))
+        XCTAssertNil(ClaudeUsageSnapshot.staleLabel(observedAt: nil, now: now))
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-1_860), now: now), "updated 31m ago")
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-3 * 3600), now: now), "updated 3h ago")
+        XCTAssertEqual(ClaudeUsageSnapshot.staleLabel(observedAt: now.addingTimeInterval(-3 * 86_400), now: now), "updated 3d ago")
+    }
+
     // MARK: - Sign-in hint
 
     func testHintIsNeverShownWithoutClaudeHooks() {
