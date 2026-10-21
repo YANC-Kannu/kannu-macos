@@ -26,7 +26,8 @@ struct UsageRecord {
     let dedupKey: String?
 }
 
-/// One transcript line's token usage — Claude's and Codex's JSONL share this shape. "Input" counts
+/// One Claude transcript line's token usage. (Codex rollouts use a different, stateful shape: see
+/// `CodexUsageLine`. The top-level `usage`/`request_id` fallback below never matches one.) "Input" counts
 /// everything the model read: fresh input plus cache creation plus cache reads. Claude splits one
 /// assistant message across several records that repeat the same usage; `dedupKey`
 /// (message id + request id) is what makes them count once. Lifted out of `JSONLUsageParser` so the
