@@ -78,6 +78,8 @@ struct NotchLLMUsageView: View {
         let active = ProviderID.allCases.filter { isEnabled($0) && isActiveProvider($0) }
         let innerWidth = M.cardInnerWidth(notchWidth: snapshotNotchWidth ?? vm.notchSize.width, cards: active.count)
 
+        // The tab's Refresh control lives in KannuHeader's trailing row, with the items that come
+        // and go, left of the fixed buttons (icon-only, shown while this tab is active).
         HStack(alignment: .top, spacing: M.cardSpacing) {
             ForEach(active) { provider in
                 card(for: provider, innerWidth: innerWidth)

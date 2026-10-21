@@ -80,6 +80,7 @@ struct ContentView: View {
     @Default(.timerProgressStyle) var timerProgressStyle
     @Default(.timerIconColorMode) var timerIconColorMode
     @Default(.timerSolidColor) var timerSolidColor
+    /// Not read here: observed so an edited preset colour redraws `timerManager.sessionAccent`.
     @Default(.timerPresets) var timerPresets
     @Default(.showCapsLockLabel) var showCapsLockLabel
     @Default(.capsLockIndicatorTintMode) var capsLockTintMode
@@ -224,12 +225,17 @@ struct ContentView: View {
     @State private var agentHoverTask: Task<Void, Never>?
 
     /// Non-notch hide-until-hover reveal windows. `revealHoldDeadline` keeps the island on
-    /// screen; `agentLightDeadline` keeps the traffic light lit. Both are refreshed by agent
-    /// activity and on hover-exit, and are per-screen because the island, its hover state and
-    /// its offset are all per-`ContentView` — see `performViewTeardown` for cancellation.
+    /// screen; `agentLightDeadline` keeps the traffic light lit. Both are refreshed when the
+    /// published light changes and on hover-exit, and are per-screen because the island, its
+    /// hover state and its offset are all per-`ContentView` — see `performViewTeardown` for
+    /// cancellation.
     @State private var revealHoldDeadline: Date?
     @State private var agentLightDeadline: Date?
     @State private var revealExpiryTask: Task<Void, Never>?
+    /// The light pair `noteAgentActivityPulse` last re-armed for: a pulse re-arms the reveal
+    /// only when the published light actually changed, never on bare session activity.
+    @State private var lastRevealedLightState: AgentTrafficLightState?
+    @State private var lastRevealedLightShown: Bool?
 
     @State private var gestureProgress: CGFloat = .zero
     @State private var skipGestureActiveDirection: MusicManager.SkipDirection?
@@ -508,8 +514,9 @@ struct ContentView: View {
         // While a music pill is already on screen the light is drawn inside it, so keep it
         // steady rather than blinking a dot in and out of a persistent container. Uses the
         // shared snapshot — testing `isPlaying` alone missed the paused-but-still-shown pill,
-        // which is exactly when the blink was visible.
-        if isClosedMusicPairingEligible { return true }
+        // which is exactly when the blink was visible. A running timer is the same kind of
+        // container: the light sits in its centre for as long as it runs.
+        if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
         // A pending high finding is a cue in its own right. With no agent activity there is no
         // deadline and no hover, and the shield the Settings copy promises ("stays beside the
         // traffic light until you acknowledge") never appeared on a notched Mac.
@@ -522,6 +529,17 @@ struct ContentView: View {
         revealHoldDeadline != nil
     }
 
+    /// A running timer has the closed notch: nothing but a HUD, Caps Lock's flash or the music pill
+    /// (which carries the timer itself) is drawn over it, the agent light sits in its centre, and an
+    /// island that hides until hover stays out while it runs. The timer used to give way to the
+    /// light for 7 s after every agent change, and to Caps Lock until it was released.
+    private var timerOwnsClosedNotch: Bool {
+        vm.notchState == .closed
+            && timerManager.isTimerActive
+            && coordinator.timerLiveActivityEnabled
+            && !vm.hideOnClosed
+    }
+
     /// Whether the notch/island should hide off-screen when closed on a non-notch display.
     /// Temporarily reveals the notch when a sneakPeek HUD (volume, brightness, music, etc.) is active.
     private var shouldHideUntilHover: Bool {
@@ -529,6 +547,7 @@ struct ContentView: View {
             && vm.notchState == .closed
             && !isSneakPeekVisibleOnCurrentScreen
             && !showAgentTrafficLight
+            && !timerOwnsClosedNotch
     }
 
     /// Whether the fallback top-edge hover detector should run.
@@ -1013,6 +1032,12 @@ struct ContentView: View {
                 clearRevealState()
                 syncHiddenEdgeHoverPolling()
             }
+            // A running timer holds a hide-until-hover island out, which ends the hidden-edge poll;
+            // when the timer stops (or its live activity is turned off) the island hides again, and
+            // without the poll the top edge could not bring it back.
+            .onChange(of: timerOwnsClosedNotch) { _, _ in
+                syncHiddenEdgeHoverPolling()
+            }
             .onChange(of: vm.notchState) { _, state in
                 if state == .open {
                     // An open notch outlives any reveal window; the countdown restarts when
@@ -1236,7 +1261,7 @@ struct ContentView: View {
                                       ? AnyTransition.move(edge: .trailing).combined(with: .opacity)
                                       : AnyTransition.opacity
                               )
-                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked {
+                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked && !timerOwnsClosedNotch {
                           InlineHUD(type: .constant(.capsLock), value: .constant(1.0), icon: .constant(""), hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
@@ -1245,8 +1270,9 @@ struct ContentView: View {
                           MusicLiveActivity(secondary: musicSecondary)
                               .id("closed-music-live-activity")
                               .transition(closedLiveActivitySwapTransition)
-                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
-                          // No music playing: standalone traffic light.
+                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed && !timerOwnsClosedNotch {
+                          // No music and no timer: standalone traffic light. A running timer
+                          // carries the light in its centre instead (below).
                             AgentTrafficLightLiveActivity(
                                 isHovering: isHovering,
                                 gestureProgress: gestureProgress,
@@ -1262,8 +1288,15 @@ struct ContentView: View {
                                 }
                             )
                             .transition(.blurReplace.animation(.interactiveSpring(dampingFraction: 1.2)))
-                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && vm.notchState == .closed && timerManager.isTimerActive && coordinator.timerLiveActivityEnabled && !vm.hideOnClosed {
-                          TimerLiveActivity()
+                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
+                          TimerLiveActivity(
+                              agentLight: showAgentTrafficLight
+                                  ? TimerAgentLight(
+                                      expandedHeight: shouldExpandPhysicalNotchForAgent ? physicalNotchAgentHeight : nil,
+                                      verticalOffset: physicalNotchAgentVerticalOffset
+                                  )
+                                  : nil
+                          )
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .recording) && vm.notchState == .closed && (recordingManager.isRecording || !recordingManager.isRecorderIdle) && Defaults[.enableScreenRecordingDetection] && !vm.hideOnClosed && !musicPairingEligible {
                           RecordingLiveActivity()
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .download) && vm.notchState == .closed && downloadManager.isDownloading && Defaults[.enableDownloadListener] && !vm.hideOnClosed {
@@ -1890,11 +1923,7 @@ struct ContentView: View {
     private var timerAccentColor: Color {
         switch timerIconColorMode {
         case .adaptive:
-            if let presetId = timerManager.activePresetId,
-               let preset = timerPresets.first(where: { $0.id == presetId }) {
-                return preset.color
-            }
-            return timerManager.timerColor
+            return timerManager.sessionAccent ?? timerManager.timerColor
         case .solid:
             return timerSolidColor
         }
@@ -2295,8 +2324,8 @@ struct ContentView: View {
 
     // MARK: - Non-notch reveal windows
 
-    /// An agent did something: pull the island back into view and relight the traffic light,
-    /// each for its own window. Only meaningful when the island is hidden by default.
+    /// The traffic light changed: pull the island back into view and relight the light, each
+    /// for its own window. Only meaningful when the island is hidden by default.
     private func noteAgentActivityPulse() {
         guard hideUntilHoverAppliesHere || isPhysicalNotchScreen, enableAgentStatusFeature else { return }
         // Strict collapse: the running-agent heartbeat keeps other consumers informed but
@@ -2306,6 +2335,16 @@ struct ContentView: View {
         if agentStatusMonitor.consumeActivityPulseWasHeartbeatOnly() && !physicalNotchAgentBandFollowsHeartbeat {
             return
         }
+        // Only a *published* light change re-arms the windows. Session-list churn also bumps the
+        // pulse (every hook write of a working chat moves `updatedAt`), and re-arming on each one
+        // pinned the island out for as long as a chat stayed green — the reveal is a glance at a
+        // change, not a mirror of activity. The values read here are post-gate
+        // (`TrafficLightPersistenceGate`), so a sub-second green → ended → green blip never
+        // reaches this comparison either.
+        guard agentLight.trafficLightState != lastRevealedLightState
+            || agentLight.shouldShowTrafficLight != lastRevealedLightShown else { return }
+        lastRevealedLightState = agentLight.trafficLightState
+        lastRevealedLightShown = agentLight.shouldShowTrafficLight
         let now = Date()
         let lightDeadline = now.addingTimeInterval(notchRevealHoldSeconds)
         let holdDeadline = now.addingTimeInterval(notchRevealHoldSeconds)
@@ -2684,6 +2723,7 @@ struct ContentView: View {
          vm.isColorPickerPopoverActive || 
          vm.isStatsPopoverActive ||
          vm.isTimerPopoverActive ||
+         vm.isTasksPopoverActive ||
          vm.isMediaOutputPopoverActive
     }
 

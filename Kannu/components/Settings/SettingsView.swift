@@ -17,12 +17,14 @@ import SwiftUIIntrospect
 import UniformTypeIdentifiers
 
 /// Groups for organizing settings tabs in the sidebar.
+/// The sidebar's sections, top to bottom in case order: AI Agents leads, Productivity (the timer,
+/// notes and tasks the agents' work is timed and tracked with) right under it, then General.
 private enum SettingsTabGroup: String, CaseIterable, Identifiable {
     case agents
+    case productivity
     case core
     case mediaAndDisplay
     case system
-    case productivity
     case utilities
     case developer
     case integrations
@@ -34,7 +36,8 @@ private enum SettingsTabGroup: String, CaseIterable, Identifiable {
     var title: String? {
         switch self {
         case .agents:           return String(localized: "AI Agents")
-        case .core:             return nil
+        // Under Productivity, an unlabelled General and Appearance would read as part of it.
+        case .core:             return String(localized: "General")
         case .mediaAndDisplay:  return String(localized: "Media & Display")
         case .system:           return String(localized: "System")
         case .productivity:     return String(localized: "Productivity")
@@ -64,6 +67,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
     case shelf
     case shortcuts
     case notes
+    case tasks
     case agentStatus
     case agentSecurity
     case llmUsage
@@ -77,7 +81,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .general, .appearance:                                          return .core
         case .media, .liveActivities, .lockScreen, .devices:                 return .mediaAndDisplay
         case .hudAndOSD, .battery:                                           return .system
-        case .timer, .notes:                                      return .productivity
+        case .timer, .notes, .tasks:                              return .productivity
         case .clipboard, .screenAssistant, .shelf,
              .downloads, .shortcuts:                                         return .utilities
         case .stats:                                              return .developer
@@ -106,6 +110,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shelf: return String(localized: "Shelf")
         case .shortcuts: return String(localized: "Shortcuts")
         case .notes: return String(localized: "Notes")
+        case .tasks: return String(localized: "Tasks")
         case .agentStatus: return String(localized: "Agents")
         case .agentSecurity: return String(localized: "Agent Security")
         case .llmUsage: return String(localized: "Usage")
@@ -132,6 +137,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shelf: return "books.vertical"
         case .shortcuts: return "keyboard"
         case .notes: return "note.text"
+        case .tasks: return "checklist"
         case .agentStatus: return "light.beacon.max"
         case .agentSecurity: return "shield.lefthalf.filled"
         case .llmUsage: return "gauge.with.dots.needle.bottom.50percent"
@@ -158,6 +164,7 @@ private enum SettingsTab: String, CaseIterable, Identifiable {
         case .shelf: return .brown
         case .shortcuts: return .orange
         case .notes: return Color(red: 0.979, green: 0.716, blue: 0.153, opacity: 1.000)
+        case .tasks: return .green
         case .agentStatus: return .yellow
         case .agentSecurity: return .orange
         case .llmUsage: return .cyan
@@ -174,7 +181,8 @@ private struct SettingsSearchEntry: Identifiable {
     let tab: SettingsTab
     let title: String
     let keywords: [String]
-    let highlightID: String?
+    /// A `var` so a search can redirect it (`landingOnABuiltRow`).
+    var highlightID: String?
 
     var id: String { "\(tab.rawValue)-\(title)" }
 }
@@ -184,6 +192,35 @@ private struct SettingsSearchEntry: Identifiable {
 enum SettingsDeepLink {
     static let smartCaffeinateHighlightID = SettingsTab.agentStatus.highlightID(for: "Smart caffeinate")
     static let securityFindingsHighlightID = SettingsTab.agentSecurity.highlightID(for: "Security findings")
+    /// Brain › Tasks › Sources, on its first row, Local tasks, which is always there: where the notch
+    /// Tasks popover's "Manage tasks…", "Add a source…" and Brain glyph land.
+    static let tasksSourcesHighlightID = SettingsTab.tasks.highlightID(for: "Sources")
+    /// Brain › Tasks › Sources, each connected source's row: where going back from its page lands,
+    /// and where search lands for the rows on that page.
+    static let tasksJiraSourceHighlightID = SettingsTab.tasks.highlightID(for: "Jira Cloud")
+    static let tasksGitLabSourceHighlightID = SettingsTab.tasks.highlightID(for: "GitLab")
+    static let tasksGitHubSourceHighlightID = SettingsTab.tasks.highlightID(for: "GitHub")
+    static let tasksLinearSourceHighlightID = SettingsTab.tasks.highlightID(for: "Linear")
+    static let tasksTodoistSourceHighlightID = SettingsTab.tasks.highlightID(for: "Todoist")
+    static let tasksAppleRemindersSourceHighlightID = SettingsTab.tasks.highlightID(for: "Apple Reminders")
+    /// Brain › Tasks › Sources › Add a source: where search lands for a source not connected, whose
+    /// row is not there.
+    static let tasksAddSourceHighlightID = SettingsTab.tasks.highlightID(for: "Add a source")
+
+    /// Each source's row, by source.
+    static let taskSourceRows: [TaskSource: String] = [
+        .jira: tasksJiraSourceHighlightID, .gitlab: tasksGitLabSourceHighlightID, .github: tasksGitHubSourceHighlightID,
+        .linear: tasksLinearSourceHighlightID, .todoist: tasksTodoistSourceHighlightID,
+        .appleReminders: tasksAppleRemindersSourceHighlightID,
+    ]
+    /// Brain › Tasks › Your tasks, the All tasks row that opens the list: where search lands. The
+    /// id keeps its old "Task list" name, so no link breaks.
+    static let tasksListHighlightID = SettingsTab.tasks.highlightID(for: "Task list")
+    /// The All tasks page itself, opened, on its back row: the popover's "Show all in Brain" and a
+    /// click on a task reminder. `TasksSettings` opens the page for this id.
+    static let tasksListOpenID = SettingsTab.tasks.highlightID(for: "Task list page")
+    /// Brain › Tasks › Time to log, shown while an entry waits: the popover's "… more in Brain".
+    static let tasksTimeToLogHighlightID = SettingsTab.tasks.highlightID(for: "Time to log")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -508,14 +545,19 @@ struct SettingsView: View {
     }
 
     private var availableTabs: [SettingsTab] {
-        // Ordered to match group layout: agents → core → media & display → system →
-        // productivity → utilities → developer → integrations → info.
+        // Ordered to match group layout: agents → productivity → general → media & display →
+        // system → utilities → developer → integrations → info. Search jumps to the first match in
+        // this order, so it follows the sidebar's.
         let ordered: [SettingsTab] = [
             // AI Agents — the product's core, so it leads.
             .agentStatus,
             .agentSecurity,
             .llmUsage,
-            // Core
+            // Productivity
+            .timer,
+            .notes,
+            .tasks,
+            // General
             .general,
             .appearance,
             // Media & Display
@@ -526,9 +568,6 @@ struct SettingsView: View {
             // System
             .hudAndOSD,
             .battery,
-            // Productivity
-            .timer,
-            .notes,
             // Utilities
             .clipboard,
             .screenAssistant,
@@ -723,6 +762,18 @@ struct SettingsView: View {
                 entry.title.localizedCaseInsensitiveContains(trimmed) ||
                 entry.keywords.contains { $0.localizedCaseInsensitiveContains(trimmed) }
             }
+            .map(landingOnABuiltRow)
+    }
+
+    /// Brain › Tasks builds a source's row only while the source is connected. An entry for that row
+    /// lands on Add a source until then, instead of scrolling to a row that was never built.
+    private func landingOnABuiltRow(_ entry: SettingsSearchEntry) -> SettingsSearchEntry {
+        guard let id = entry.highlightID,
+              let source = SettingsDeepLink.taskSourceRows.first(where: { $0.value == id })?.key,
+              !source.isConnected else { return entry }
+        var landed = entry
+        landed.highlightID = SettingsDeepLink.tasksAddSourceHighlightID
+        return landed
     }
 
     private var settingsSearchIndex: [SettingsSearchEntry] {
@@ -817,6 +868,11 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .media, title: "Show Change Media Output control", keywords: ["airplay", "route picker", "media output"], highlightID: SettingsTab.media.highlightID(for: "Show Change Media Output control")),
             SettingsSearchEntry(tab: .media, title: "Enable album art parallax", keywords: ["parallax", "lock screen", "album art"], highlightID: SettingsTab.media.highlightID(for: "Enable album art parallax")),
             SettingsSearchEntry(tab: .media, title: "Enable album art parallax effect", keywords: ["parallax", "parallax effect", "album art"], highlightID: SettingsTab.media.highlightID(for: "Enable album art parallax effect")),
+            SettingsSearchEntry(tab: .media, title: "Hide in fullscreen", keywords: ["fullscreen", "hide notch", "hide dynamicisland", "video", "movie"], highlightID: SettingsTab.media.highlightID(for: "Hide DynamicIsland Options")),
+            // The Accessibility row is built only while the grant is missing, so its entry lands
+            // on the always-visible picker right above it (the #90 rule: never target a row that
+            // is sometimes not built).
+            SettingsSearchEntry(tab: .media, title: "Accessibility access", keywords: ["accessibility", "fullscreen", "permission", "menu bar"], highlightID: SettingsTab.media.highlightID(for: "Hide DynamicIsland Options")),
 
             // Shelf
             SettingsSearchEntry(tab: .shelf, title: "Enable shelf", keywords: ["shelf", "dock"], highlightID: SettingsTab.shelf.highlightID(for: "Enable shelf")),
@@ -892,6 +948,43 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Solid colour", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
             SettingsSearchEntry(tab: .timer, title: "Accent colour", keywords: ["accent", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Accent colour")),
+
+            // Tasks. A source page's rows exist only while it is open, so their entries land on the
+            // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
+            SettingsSearchEntry(tab: .tasks, title: "Sources", keywords: ["tasks", "sources", "jira", "gitlab", "integrations", "connect", "issues"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Add a source", keywords: ["tasks", "sources", "add", "connect", "integrations", "jira", "gitlab", "github", "linear", "todoist", "reminders"], highlightID: SettingsDeepLink.tasksAddSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitHub", keywords: ["github", "github enterprise", "issues", "pull requests", "connect", "personal access token", "integration"], highlightID: SettingsDeepLink.tasksGitHubSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Linear", keywords: ["linear", "issues", "cycles", "api key", "connect", "integration"], highlightID: SettingsDeepLink.tasksLinearSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Todoist", keywords: ["todoist", "tasks", "projects", "filter", "api token", "connect", "integration"], highlightID: SettingsDeepLink.tasksTodoistSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Apple Reminders", keywords: ["reminders", "apple reminders", "lists", "to do", "integration", "connect"], highlightID: SettingsDeepLink.tasksAppleRemindersSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Local tasks", keywords: ["tasks", "local", "my tasks", "own tasks", "add"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Local tasks colour", keywords: ["tasks", "local", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksSourcesHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Jira Cloud", keywords: ["jira", "atlassian", "connect", "disconnect", "api token", "issues", "integration"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Sync Jira", keywords: ["jira", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Jira colour", keywords: ["jira", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Refresh Jira issues", keywords: ["jira", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Issue filter (JQL)", keywords: ["jira", "jql", "filter", "query", "advanced", "issues"], highlightID: SettingsDeepLink.tasksJiraSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitLab", keywords: ["gitlab", "connect", "disconnect", "personal access token", "self-managed", "issues", "merge requests", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Sync GitLab", keywords: ["gitlab", "sync", "issues", "fetch", "pause sync"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "GitLab colour", keywords: ["gitlab", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Include merge requests", keywords: ["gitlab", "merge requests", "mr", "review", "reviewer", "pull requests"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Refresh GitLab items", keywords: ["gitlab", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsTab.tasks.highlightID(for: "Enable tasks")),
+            SettingsSearchEntry(tab: .tasks, title: "Default session length", keywords: ["tasks", "session", "length", "minutes", "pomodoro", "timer"], highlightID: SettingsTab.tasks.highlightID(for: "Default session length")),
+            SettingsSearchEntry(tab: .tasks, title: "Sound when the estimate is reached", keywords: ["tasks", "sound", "estimate", "alarm", "chime", "overtime"], highlightID: SettingsTab.tasks.highlightID(for: "Sound when the estimate is reached")),
+            SettingsSearchEntry(tab: .tasks, title: "Time to log", keywords: ["tasks", "log time", "log work", "worklog", "time tracking", "spent", "timesheet", "jira", "gitlab"], highlightID: SettingsTab.tasks.highlightID(for: "Time to log")),
+            // All tasks' rows, and a task's own page, exist only while open, so their entries land on
+            // the overview's All tasks row, which opens it.
+            SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Find a task", keywords: ["tasks", "find", "search", "look up", "key", "title"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Task filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Task order", keywords: ["tasks", "order", "reorder", "move", "drag", "priority", "list", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Task tags", keywords: ["tasks", "tags", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Schedule a task", keywords: ["tasks", "schedule", "reminder", "notification", "remind me", "due"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Recently closed tasks", keywords: ["tasks", "done", "finished", "completed", "closed", "reopen"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Archived tasks", keywords: ["tasks", "archive", "archived", "hidden", "restore", "delete", "clear"], highlightID: SettingsDeepLink.tasksListHighlightID),
 
             // Stats
             SettingsSearchEntry(tab: .stats, title: "Enable system stats monitoring", keywords: ["stats", "monitoring"], highlightID: SettingsTab.stats.highlightID(for: "Enable system stats monitoring")),
@@ -1056,6 +1149,10 @@ struct SettingsView: View {
         case .notes:
             SettingsForm(tab: .notes) {
                 NotesSettingsView()
+            }
+        case .tasks:
+            SettingsForm(tab: .tasks) {
+                TasksSettings()
             }
         case .llmUsage:
             SettingsForm(tab: .llmUsage) {
@@ -2832,8 +2929,9 @@ struct Media: View {
     @Default(.colorExtractionMode) private var colorExtractionMode
     @Default(.parallaxEffectIntensity) private var parallaxEffectIntensity
 
-    
+
     @ObservedObject private var musicManager = MusicManager.shared
+    @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
 
     private var isAppleMusicActive: Bool {
         musicManager.bundleIdentifier == "com.apple.Music"
@@ -3111,8 +3209,24 @@ struct Media: View {
                 }
                 .pickerStyle(.radioGroup)
                 .labelsHidden()
+                .settingsHighlight(id: highlightID("Hide DynamicIsland Options"))
                 .onChange(of: hideNotchOption) {
                     Defaults[.enableFullscreenMediaDetection] = hideNotchOption != .never
+                }
+
+                // Shown only while hiding is on and the grant is missing: without Accessibility
+                // the detector cannot read `AXFullScreen` and falls back to the menu-bar probe
+                // (`FullscreenFallbackVerdict`), which is close but not exact.
+                if hideNotchOption != .never, !accessibilityPermission.isAuthorized {
+                    SettingsActionRow(
+                        "Accessibility access",
+                        description: "Fullscreen is detected exactly with Accessibility. Without it, Kannu goes by whether the menu bar is hidden."
+                    ) {
+                        Button("Open System Settings") {
+                            AccessibilityPermissionStore.shared.openSystemSettings()
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Accessibility access"))
                 }
             } header: {
                 HStack {
