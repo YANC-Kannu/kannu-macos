@@ -12,14 +12,21 @@ resolves an unpinned package at launch, or one reached over plain HTTP. It needs
 newer; `uv` brings its own interpreter, so nothing else is required.
 
 ```bash
-uv tool install "adr-discovery @ git+https://github.com/uber/ADR#subdirectory=Discovery"
+uv tool install "adr-discovery @ git+https://github.com/uber/ADR@6b33dffecd719708c435f772c9e93f1210944e31#subdirectory=Discovery"
 ```
 
 pipx works the same way:
 
 ```bash
-pipx install "git+https://github.com/uber/ADR#subdirectory=Discovery"
+pipx install "git+https://github.com/uber/ADR@6b33dffecd719708c435f772c9e93f1210944e31#subdirectory=Discovery"
 ```
+
+Both lines pin `main` at `6b33dff` (2026-10-16), the commit this page and Kannu were last checked
+against. An unpinned install runs whatever reached `main` last — the same supply-chain shape Kannu
+reports when an MCP server does it. The package calls itself 0.2.0 at that commit and before it, so
+the version number cannot tell an old install from a new one. To move an existing install to the
+pinned commit, run the line above again with `--reinstall` after `uv tool install` (pipx:
+`pipx install --force …`).
 
 Then open Kannu → Brain → Agent Security → **ADR Discovery** and press **Check again**. Kannu looks
 in `~/.local/bin`, uv's tool directory, `/opt/homebrew/bin` and `/usr/local/bin`; a different
@@ -59,11 +66,12 @@ minute whether a scan is due, and runs one:
 - when Kannu has never run one;
 - 24 hours after Kannu's last scan;
 - when the MCP servers declared in an AI tool's global settings change — `~/.claude.json`,
-  `~/.claude/mcp.json`, Claude Desktop's `claude_desktop_config.json`, `~/.cursor/mcp.json`,
-  VS Code's `mcp.json`, `~/.codex/config.toml`, `~/.gemini/settings.json`,
-  `~/.qwen/settings.json` and `~/.config/opencode/opencode.json` — at most once every five
-  minutes (the server names are compared, not the files' dates, so an unrelated rewrite of
-  `~/.claude.json` does not count);
+  `~/.claude/mcp.json`, Claude Code's managed `/Library/Application Support/ClaudeCode/managed-mcp.json`,
+  Claude Desktop's `claude_desktop_config.json`, `~/.cursor/mcp.json`, VS Code's `mcp.json`, Cline's
+  `cline_mcp_settings.json` (in VS Code's `globalStorage/saoudrizwan.claude-dev/settings`),
+  `~/.codex/config.toml`, `~/.gemini/settings.json`, `~/.qwen/settings.json` and
+  `~/.config/opencode/opencode.json` — at most once every five minutes (the server names are
+  compared, not the files' dates, so an unrelated rewrite of `~/.claude.json` does not count);
 - after a scan that wrote no snapshot (it timed out, failed to start, exited with an error, or
   left an unreadable file): again after 1, 2, 4, 8 and 16 hours, never later than the daily scan.
   While scans keep failing, a settings change waits for that retry too;
@@ -109,14 +117,16 @@ else already schedules Discovery — Kannu then only reads, and labels those sna
   ordinary and not reported. Paths come from file tools and from parsing shell commands; code that
   opens a file from inside `python -c` is not seen.
 - **New MCP servers (Kannu's own, on by default, local):** once a minute Kannu reads the MCP
-  servers declared in Claude Code (`~/.claude.json`, user and local scopes), Claude Desktop, Cursor,
-  VS Code, Codex, Gemini CLI, Qwen Code and opencode settings, plus the project files (`.mcp.json`,
-  `.cursor/mcp.json`, `.vscode/mcp.json`…) of the folders your sessions run in, skipping Desktop,
-  Documents, Downloads and cloud folders so macOS never prompts. The first look only learns what is
-  there; a server that appears later is a medium finding ("New MCP server: github"), with what it
-  runs (`npx @modelcontextprotocol/server-github`, or a URL cut to its host) kept in Kannu. Env
-  values, headers and URL paths are never read into a finding. Kannu-run Discovery scans use the
-  same reads: a scan runs when the declared servers change, not whenever a settings file is touched.
+  servers declared in Claude Code (`~/.claude.json`, user and local scopes, and an administrator's
+  `managed-mcp.json`), Claude Desktop, Cursor, VS Code (and Cline in VS Code — not Cline in Cursor
+  or another editor), Codex, Gemini CLI, Qwen Code and opencode settings, plus the project files
+  (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`…) of the folders your sessions run in,
+  skipping Desktop, Documents, Downloads and cloud folders so macOS never prompts. The first look
+  only learns what is there; a server that appears later is a medium finding ("New MCP server:
+  github"), with what it runs (`npx @modelcontextprotocol/server-github`, or a URL cut to its host)
+  kept in Kannu. Env values, headers and URL paths are never read into a finding. Kannu-run
+  Discovery scans use the same reads: a scan runs when the declared servers change, not whenever a
+  settings file is touched.
 
 ## 5. Run it on your own schedule (optional)
 
@@ -151,24 +161,43 @@ snapshot folder at wherever those snapshots land.
 
 ## 6. Tenant policy (optional)
 
-Discovery accepts `--policy policy.json`: a JSON object with up to three arrays of non-empty strings,
-`approved`, `forbidden` and `tenant_domains`. Any other key is ignored; a file ADR cannot read fails
-every scan ("cannot read policy"). The upstream README only shows the flag, so this is from
-adr-discovery 0.2.0's source (`judge/sanction.py`, `judge/findings.py`):
+Discovery accepts `--policy policy.json`: a JSON object with up to five arrays — `tenant_domains`,
+`approved` and `forbidden` of non-empty strings, `approved_indicators` and `forbidden_indicators` of
+indicator objects. Any other key is ignored; a file ADR cannot read fails every scan ("cannot read
+policy"), and that includes an indicator with an unknown `kind` or a field its kind does not take.
+This is from upstream's source at the pinned commit (`judge/sanction.py`, `judge/findings.py`, and
+the Discovery README's "Policy file"):
 
-- **`tenant_domains`** is the one list that affects MCP servers. A server declared with a `url`
-  whose host is not one of these domains, or a subdomain of one, raises the *third-party
-  destination* finding (Kannu: "MCP server reaches outside your domains"). No wildcards; servers that
-  run as a local command have no destination and are never checked.
-- **`approved`** and **`forbidden`** match ADR *catalog ids* of AI tools (`claude-code`, `cursor`, …),
-  setting an asset's `sanction` field. MCP servers never get a catalog id, so these lists cannot
-  touch one, and neither raises a finding.
+- **`tenant_domains`** — a server declared with a `url` whose host is not one of these domains, or a
+  subdomain of one, raises the *third-party destination* finding (Kannu: "MCP server reaches outside
+  your domains"). No wildcards; servers that run as a local command have no destination and are
+  never checked.
+- **`forbidden`** (ADR *catalog ids* of AI tools: `claude-code`, `cursor`, …) and
+  **`forbidden_indicators`** (anything without a catalog id) mark an asset forbidden, and a forbidden
+  asset raises a high *forbidden asset* finding (Kannu: "Forbidden by your ADR policy"). Indicators:
+  `{"kind": "mcp_endpoint", "url": "https://…"}` — an MCP server declaring that URL (scheme and host
+  case, user info, query, fragment and trailing slash ignored, so leave those — and any key in
+  them — out of the file; a server whose path carries a key is better named with a `name`
+  indicator); `{"kind": "package", "ecosystem": "npm"|"pypi", "name": "…",
+  "versions": ["1.2.3"]}` or `"all_versions": true` instead of `versions` — a server launched with
+  `npx`, `bunx`, `pnpm dlx`, `uvx` or `pipx` for that package (a launch that pins no version matches
+  only `all_versions`); `{"kind": "name", "asset_kind": "mcp_server", "name": "…"}`; `{"kind":
+  "skill_sha256", "sha256": "…"}` — a skill's folder hash (schema 1.2 redefined it, so one written
+  for 1.1 no longer matches); and `{"kind": "file_sha256", "sha256": "…"}`.
+- **`approved`** and **`approved_indicators`** are the opposite and raise no finding; forbidden beats
+  approved. Assets a non-empty approved list could have named but does not — catalogued tools for
+  `approved`, assets of an indicator's kind for `approved_indicators` — are marked *unsanctioned* in
+  the snapshot, which is not a finding either.
+
+A Discovery installed from `main` before 2026-10-12 ignores both indicator lists and never raises
+*forbidden asset*.
 
 Point Kannu at the file with Brain → Agent Security → ADR scans → Advanced → **ADR scan policy**;
 Kannu passes it to every scan it runs, and never parses it itself. **Copy a prompt that drafts a
 policy** on the same row has your agent read your MCP configs, ask which domains are yours, and
-write `~/.kannu/adr/policy.json`. This is ADR's policy, about the MCP servers on the machine; it
-cannot name a command. The policy that can — and that Kannu can enforce — is the *agent policy* in §9.
+write `~/.kannu/adr/policy.json`; it describes the forbidden lists but leaves them out unless you
+ask. This is ADR's policy, about the tools and MCP servers on the machine; it cannot name a command.
+The policy that can — and that Kannu can enforce — is the *agent policy* in §9.
 
 ## 7. ADR Sensor (optional, not used yet)
 
@@ -188,9 +217,14 @@ an optional gpt-4o triage pass (OpenAI), then a Claude reasoning agent that runs
 Setup, all yours:
 
 ```bash
-git clone https://github.com/uber/ADR && cd ADR/Detection && uv sync   # Python 3.10–3.12
+git clone https://github.com/uber/ADR && cd ADR && git checkout 6b33dffecd719708c435f772c9e93f1210944e31 && cd Detection && uv sync   # Python 3.10–3.12
 npm install -g @anthropic-ai/claude-code && claude auth login           # if not already
 ```
+
+The checkout is pinned to the same commit as Discovery. A checkout older than 2026-09-22 cannot read
+Claude Code 2.1's JSON output (upstream fix `1c8ecd6`), so every analysis would fail; Brain says
+so on the **Detection checkout** row and gives the update line — in the `Detection` folder,
+`git fetch && git checkout 6b33dffecd719708c435f772c9e93f1210944e31 && uv sync`.
 
 Then Brain → Agent Security → Session analysis → **Analyze chats with ADR Detection** (a consent
 alert names what leaves the Mac), choose the `Detection` folder, and optionally store keys:
@@ -204,17 +238,31 @@ stubbed: user and assistant text never is, so a prose-heavy chat can still overr
 
 Run one: right-click a finished Claude Code chat in the notch → **Analyze with ADR Detection…**.
 By default a confirmation names the transcript and the providers every time. The verdict shows
-under the chat ("ADR: clean · 0.08" or the tactic and confidence); a malicious verdict becomes a
+under the chat ("ADR: clean · 0.08" or "ADR: malicious · 0.91"); a malicious verdict becomes a
 finding — high when confidence ≥ 0.8, medium otherwise — and rides the same shield/pill/card/push
-path as every other finding. Reports are kept under `~/.kannu/adr/detection/` (reveal from the
-chat's menu or Brain).
+path as every other finding. ADR's verdict names no tactic at the pinned commit (the only tactic it
+records is what triage suspected beforehand), so the finding is titled "Malicious activity in this
+chat" and the explanation says what happened. Reports are kept under `~/.kannu/adr/detection/`
+(reveal from the chat's menu or Brain).
 
 What leaves the Mac, exactly: the chosen transcript text, to Anthropic (your login or your key)
 and, only with triage on, to OpenAI. Nothing else, nothing automatic, nothing without your click.
 The adapter Kannu runs is its own GPL script (`scripts/adr-analyze-session.py`, written to
-`~/.kannu/adr/detection/` at run time); it imports ADR from your checkout and copies nothing.
+`~/.kannu/adr/detection/` at run time); it imports ADR from your checkout and copies nothing. Its
+environment is a whitelist, with `.env` loading switched off (`PYTHON_DOTENV_DISABLED`): upstream
+imports a detector that would otherwise load the first `.env` found in or above the checkout
+into the run.
 
-## 9. Agent policy (opt-in; blocking on Claude Code and Cursor)
+What stays on the Mac but outside `~/.kannu`: upstream writes its own working files **inside the
+checkout**, in `Detection/ads_reasoning_workspace/` — a `.mcp.json` for its context servers and, in
+`debug_logs*/`, `conversation_claude_output.json` (the Claude run's raw output, its explanation and
+the triage reasoning; when the hidden-Unicode check fires, the decoded hidden text too) or, when
+triage clears the chat, `conversation_triage_only.json`. Every run overwrites the same names. The
+Claude CLI also keeps the reasoning session, prompt included, under `~/.claude/projects/` like any
+other session; upstream reads it back to count context-server calls. Delete either when you no
+longer need it.
+
+## 9. Agent policy (opt-in; blocking on Claude Code, Cursor and Antigravity)
 
 A JSON file you write, `~/.kannu/agent-policy.json`, naming commands and tools an agent may not use:
 
@@ -255,13 +303,15 @@ and Copy for agent work. Both sit on the **Get a policy** row, next to the statu
 Every match is recorded as a finding (`policy_command` / `policy_tool`) with the rule, the tool,
 and whether the call was refused or ran. **Block matching tool calls** (off by default) is what
 turns a report into a refusal: on Claude Code (`PreToolUse`, through `permissionDecision: deny`,
-whose reason reaches the model and the transcript) and on Cursor (`beforeShellExecution`,
-`beforeMCPExecution`, `preToolUse`, through `permission: deny`), the hook refuses the call and tells
+whose reason reaches the model and the transcript), on Cursor (`beforeShellExecution`,
+`beforeMCPExecution`, `preToolUse`, through `permission: deny`) and on Antigravity (`PreToolUse`,
+through `decision: deny` with a `reason`), the hook refuses the call and tells
 the agent `Kannu policy: "ssh" is blocked on this Mac by the user's agent policy. <reason> Ask the
 user before trying another way.` A refused call is a medium finding — the policy working; a call
-that ran is high. Codex, VS Code, Gemini CLI, Qwen Code, Copilot CLI, Antigravity and opencode get
-the finding only: their hook contracts either have no verified deny or no pre-tool event at all,
-and Kannu does not guess at a host's protocol.
+that ran is high. Antigravity's deny (hook v46) follows antigravity.google/docs/hooks and has not
+been tested on a real install; the Brain row says so. Codex, VS Code, Gemini CLI, Qwen Code,
+Copilot CLI and opencode get the finding only: their hook contracts either have no verified deny or
+no pre-tool event at all, and Kannu does not guess at a host's protocol.
 
 Real enforcement for an agent Kannu cannot refuse lives in that agent's own permission system —
 for Claude Code, `"permissions": {"deny": ["Bash(ssh *)"]}` in `settings.json`, which Kannu neither

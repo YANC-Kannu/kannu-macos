@@ -81,6 +81,14 @@ struct ADRSessionAnalysis: Codable, Equatable, Identifiable {
     }
 
     /// ADR's five tactics as sentences; anything else is prettified.
+    ///
+    /// At `ADRUpstream.commit` a verdict carries no tactic, so a malicious chat is titled "Malicious
+    /// activity in this chat" and labelled "malicious · 0.91". `DetectionResult` has no tactic field,
+    /// and `detections[0]` holds only description, confidence, source and tool violations. The one
+    /// `threat_tactic` upstream writes (into `ads_reasoning_workspace/debug_logs*/` in the checkout)
+    /// is the tactic *triage suspected* before the reasoning run — "N/A" with triage off (Kannu's
+    /// default) unless the hidden-Unicode pre-check fired — not the verdict's, so the adapter does
+    /// not read it. The mapping stays for an upstream that adds one.
     static func title(forTactic tactic: String?) -> String {
         switch tactic?.lowercased() {
         case "initial_compromise": return String(localized: "Initial compromise attempt in this chat")

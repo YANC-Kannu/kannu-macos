@@ -202,12 +202,11 @@ final class BackgroundWorkTests: XCTestCase {
         }
     }
 
-    /// The installer's Claude table is not in the logic target, so its two v44 rows are read from source.
-    func testTheInstallerHooksASubagentsStartAndEnd() throws {
-        let installer = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Kannu/managers/AgentStatus/AgentHookInstaller.swift")
-        let source = try String(contentsOf: installer, encoding: .utf8)
-        XCTAssertTrue(source.contains(#"("SubagentStart", nil, "", "thinking"),"#))
-        XCTAssertTrue(source.contains(#"("SubagentStop", nil, "", "stopped"),"#))
+    /// The Claude table's two v44 rows. Since v45 the table lives in `AgentHookLayout`, in the logic
+    /// target, so it is read directly rather than from the installer's source.
+    func testTheInstallerHooksASubagentsStartAndEnd() {
+        let rows = AgentHookLayout.claudeHookEntries.map { "\($0.event)|\($0.matcher ?? "-")|\($0.matcherKey)|\($0.state)" }
+        XCTAssertTrue(rows.contains("SubagentStart|-||thinking"))
+        XCTAssertTrue(rows.contains("SubagentStop|-||stopped"))
     }
 }
