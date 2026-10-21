@@ -48,11 +48,22 @@ struct JSONLUsageScanStats: Equatable {
 /// - a replaced file (new inode) or one shorter than the offset drops what was read and starts again
 ///   from 0; a file that leaves the listing (deleted, or past the scan cutoff) is forgotten.
 ///
-/// Only lines containing the bytes `"usage"` are parsed. `ClaudeUsageLine.parse` reads tokens only
-/// from a `usage` object (under `message` for Claude, top level for the Codex shape), so a line
-/// without that key can never produce a record, and the filter changes nothing but the work done.
-/// JSON may also spell the key with an escaped letter (`"us\u0061ge"`): no transcript writer is known
-/// to, but such a line is parsed too rather than skipped. Only the five escapes of the key's own
+/// Two formats, one per provider:
+///
+/// - `.claude`: every line stands alone. Only lines containing the bytes `"usage"` are parsed.
+///   `ClaudeUsageLine.parse` reads tokens only from a `usage` object, so a line without that key can
+///   never produce a record, and the filter changes nothing but the work done.
+/// - `.codex`: a rollout is stateful (`CodexUsageLine`): a usage event's model comes from an earlier
+///   `turn_context` line, its count from the running total of the event before it, and a fork's
+///   replayed history is recognised from the file's first line. The reader is kept in the file's
+///   entry with everything it learnt from the lines consumed so far, so a refresh that reads only
+///   the appended bytes continues exactly where the last one stopped. The unterminated last line is
+///   read with a copy, never the kept reader, so its state is not committed twice. Only lines that
+///   carry `"token_count"`, `"turn_context"` or (until the first one) `"session_meta"` as a quoted
+///   JSON string are parsed: the three kinds `CodexUsageLine` reads.
+///
+/// For `.claude`, JSON may also spell the key with an escaped letter (`"us\u0061ge"`): no
+/// transcript writer is known to, but such a line is parsed too rather than skipped. Only the five escapes of the key's own
 /// letters count, so the `\u001b` of a tool output's terminal colours never costs a parse.
 ///
 /// Cross-file de-duplication is unchanged: files in listing order, lines in file order, the week
@@ -61,8 +72,20 @@ struct JSONLUsageScanStats: Equatable {
 /// Not thread-safe. `records(files:now:)` confines it to its own serial utility queue (hence
 /// `@unchecked Sendable`); tests call `refresh` directly from one thread.
 final class JSONLUsageCache: @unchecked Sendable {
+    /// How a file's lines turn into usage records.
+    enum Format {
+        /// Claude Code transcripts: one `ClaudeUsageLine` per line.
+        case claude
+        /// Codex rollouts: `CodexUsageLine`, whose state runs through the whole file.
+        case codex
+    }
+
     static let chunkSize = 4 << 20
     private static let usageMarker = Array(#""usage""#.utf8)
+    /// Quoted, as Codex writes them (`"type":"token_count"`): a conversation or tool-output line that
+    /// only mentions one of the words carries it escaped or bare inside a string, and is never parsed.
+    private static let codexMarkers = [#""token_count""#, #""turn_context""#].map { Array($0.utf8) }
+    private static let codexSessionMetaMarker = Array(#""session_meta""#.utf8)
     /// Where a JSON escape of a letter of "usage" would start, then the five of them.
     private static let letterEscapePrefix = Array(#"\u00"#.utf8)
     private static let usageLetterEscapes = [#"\u0075"#, #"\u0073"#, #"\u0061"#, #"\u0067"#, #"\u0065"#].map { Array($0.utf8) }
@@ -89,18 +112,22 @@ final class JSONLUsageCache: @unchecked Sendable {
         var records: [UsageRecord] = []
         /// The unterminated last line's record, when it already parses. Recomputed on every read.
         var tail: UsageRecord?
+        /// `.codex` only: the reader after the last line before `offset`.
+        var codexReader = CodexUsageLine()
 
         init(identity: FileIdentity) { self.identity = identity }
     }
 
     private let label: String
+    private let format: Format
     private let queue: DispatchQueue
     private var entries: [String: Entry] = [:]
     private var lastNow: Date?
 
     /// `label` names the provider in the log line ("claude", "codex").
-    init(label: String) {
+    init(label: String, format: Format = .claude) {
         self.label = label
+        self.format = format
         queue = DispatchQueue(label: "com.kannu.app.usage-aggregator.\(label)", qos: .utility)
     }
 
@@ -159,6 +186,9 @@ final class JSONLUsageCache: @unchecked Sendable {
         return Refresh(records: counted, stats: stats)
     }
 
+    /// The records kept for `file`, for tests: what the next refresh will walk.
+    func keptRecordCount(for file: URL) -> Int { entries[file.path]?.records.count ?? 0 }
+
     private func update(path: String, weekStart: Date, buffer: UnsafeMutableRawPointer,
                         stats: inout JSONLUsageScanStats) {
         // O_NONBLOCK so a FIFO named *.jsonl cannot hang the queue; it is then refused below.
@@ -180,6 +210,10 @@ final class JSONLUsageCache: @unchecked Sendable {
         if entry.identity != identity || size < entry.offset {
             entry = Entry(identity: identity)
         }
+        // The window moves forward, so a record that has left the week never counts again. Drop it
+        // rather than keep it for as long as the file stays listed: a resumed Codex session appends
+        // to the same rollout, which then stays fresh for weeks.
+        entry.records.removeAll { $0.timestamp < weekStart }
         guard size != entry.scannedSize else {
             entries[path] = entry
             return
@@ -201,11 +235,13 @@ final class JSONLUsageCache: @unchecked Sendable {
                     let lineEnd = buffer.distance(to: newline)
                     if carry.isEmpty {
                         consume(UnsafeRawBufferPointer(start: buffer + lineStart, count: lineEnd - lineStart),
-                                into: &entry.records, weekStart: weekStart, stats: &stats)
+                                into: &entry.records, codexReader: &entry.codexReader,
+                                weekStart: weekStart, stats: &stats)
                     } else {
                         carry.append(buffer.assumingMemoryBound(to: UInt8.self) + lineStart, count: lineEnd - lineStart)
                         carry.withUnsafeBytes {
-                            consume($0, into: &entry.records, weekStart: weekStart, stats: &stats)
+                            consume($0, into: &entry.records, codexReader: &entry.codexReader,
+                                    weekStart: weekStart, stats: &stats)
                         }
                         carry = Data()
                     }
@@ -220,8 +256,12 @@ final class JSONLUsageCache: @unchecked Sendable {
         }
         if !carry.isEmpty {
             var tail: [UsageRecord] = []
+            // A copy: the line is read again once it is finished, by the kept reader.
+            var tailReader = entry.codexReader
             autoreleasepool {
-                carry.withUnsafeBytes { consume($0, into: &tail, weekStart: weekStart, stats: &stats) }
+                carry.withUnsafeBytes {
+                    consume($0, into: &tail, codexReader: &tailReader, weekStart: weekStart, stats: &stats)
+                }
             }
             entry.tail = tail.first
         }
@@ -229,16 +269,32 @@ final class JSONLUsageCache: @unchecked Sendable {
         entries[path] = entry
     }
 
-    private func consume(_ line: UnsafeRawBufferPointer, into records: inout [UsageRecord], weekStart: Date,
-                         stats: inout JSONLUsageScanStats) {
+    private func consume(_ line: UnsafeRawBufferPointer, into records: inout [UsageRecord],
+                         codexReader: inout CodexUsageLine, weekStart: Date, stats: inout JSONLUsageScanStats) {
         guard let base = line.baseAddress, !line.isEmpty else { return }
-        let mayHaveUsage = Self.contains(Self.usageMarker, in: base, count: line.count)
-            || (Self.contains(Self.letterEscapePrefix, in: base, count: line.count)
-                && Self.usageLetterEscapes.contains { Self.contains($0, in: base, count: line.count) })
-        guard mayHaveUsage else { return }
-        stats.linesParsed += 1
-        guard let record = ClaudeUsageLine.parse(Data(bytes: base, count: line.count)),
-              record.timestamp >= weekStart else { return }
+        let record: UsageRecord?
+        switch format {
+        case .claude:
+            let mayHaveUsage = Self.contains(Self.usageMarker, in: base, count: line.count)
+                || (Self.contains(Self.letterEscapePrefix, in: base, count: line.count)
+                    && Self.usageLetterEscapes.contains { Self.contains($0, in: base, count: line.count) })
+            guard mayHaveUsage else { return }
+            stats.linesParsed += 1
+            record = ClaudeUsageLine.parse(Data(bytes: base, count: line.count))
+        case .codex:
+            // Every line the reader cares about goes through it, inside the week or not: an old
+            // `turn_context` still names the model of a newer event, and an old total is the
+            // baseline the next one is measured against. Only the records are filtered by date.
+            let mayMatter = Self.codexMarkers.contains { Self.contains($0, in: base, count: line.count) }
+                || (codexReader.isAwaitingSessionMeta
+                    && Self.contains(Self.codexSessionMetaMarker, in: base, count: line.count))
+            guard mayMatter else { return }
+            stats.linesParsed += 1
+            guard let object = try? JSONSerialization.jsonObject(with: Data(bytes: base, count: line.count))
+                    as? [String: Any] else { return }
+            record = codexReader.consume(object)
+        }
+        guard let record, record.timestamp >= weekStart else { return }
         records.append(record)
     }
 

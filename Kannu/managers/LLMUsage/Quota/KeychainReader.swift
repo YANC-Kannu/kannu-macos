@@ -1,24 +1,87 @@
 import Foundation
+import LocalAuthentication
 import os
 import Security
 
 enum KeychainReader {
     private static let log = os.Logger(subsystem: "com.kannu.app", category: "Keychain")
 
+    /// Every Keychain call goes through this. A silent read turns the process-wide
+    /// `SecKeychainSetUserInteractionAllowed` switch off, and anything that may need a dialog — a
+    /// read that may ask, a save, a delete, Kannu's own item whose access list no longer trusts this
+    /// build — must not run meanwhile, or its dialog is swallowed and it fails as if declined (an
+    /// own-item read that comes back empty is then saved over, deleting the secret). Calls that may
+    /// prompt never wait for each other, so the main thread never waits behind a dialog another
+    /// thread is showing; they wait only for silent reads, which take milliseconds.
+    private static let gate = KeychainInteractionGate(
+        turnInteractionOff: {
+            var allowed: DarwinBoolean = true
+            let known = SecKeychainGetUserInteractionAllowed(&allowed) == errSecSuccess
+            SecKeychainSetUserInteractionAllowed(false)
+            return known ? allowed.boolValue : true
+        },
+        restoreInteraction: { SecKeychainSetUserInteractionAllowed($0) }
+    )
+
+    /// Kannu's own items. May show the Keychain dialog when the item's access list does not trust
+    /// this build (another build saved it).
     static func genericPassword(service: String, account: String? = nil) -> String? {
-        read(service: service, account: account).value
+        gate.run(.mayPrompt) { copyPassword(passwordQuery(service: service, account: account)) }?.value
     }
 
-    /// Reads a generic password and reports the raw status so callers can tell
-    /// "item missing" apart from "item exists but macOS wants the user to approve access".
-    /// `allowInteraction: false` suppresses the system permission dialog entirely — items
-    /// owned by another app then fail with errSecInteractionNotAllowed/errSecUserCanceled
-    /// instead of blocking a background refresh behind a prompt nobody asked for.
+    /// Reads another app's generic password and reports the raw status, so callers can tell "item
+    /// missing" apart from "item exists but macOS wants the user to approve access".
+    ///
+    /// `allowInteraction: false` must not show a dialog. Codex's "Codex Auth" and cursor-agent's
+    /// "cursor-access-token" are file-based login-keychain items, and that keychain ignores
+    /// `kSecUseAuthenticationUI` and `kSecUseAuthenticationContext`: Apple's `SecItem.cpp` hands the
+    /// query to the legacy path, which never reads either key and fetches the secret with
+    /// `SecKeychainItemCopyContent`, raising the access dialog whenever user interaction is allowed
+    /// (the SDK's `SecItem.h` says so too: "Legacy keychain items will still activate UI if needed").
+    /// Only `SecKeychainSetUserInteractionAllowed(false)` stops that, so silent reads turn it off for
+    /// as long as any is in flight and then put the previous value back (`gate`). A protected item then fails with
+    /// `errSecInteractionNotAllowed`, which `needsUserApproval` recognises. The LAContext covers an
+    /// item in the data-protection keychain the same way. Deprecated API: Apple's DTS still points
+    /// to it when the item is not your own.
+    ///
+    /// A silent read waits while a call that may prompt runs, on purpose. Giving up could only report
+    /// the item missing or needing approval — a card saying "not signed in", or a fix-it button for
+    /// nothing. The wait lasts only while a dialog the user asked for is open (a fix-it button's
+    /// read), and holds only silent reads made meanwhile off the main thread — that refresh's other
+    /// providers, which it waits for anyway, or a task source's sync on its own queue — never one on
+    /// the main thread (`setGenericPassword`'s read does not wait).
     static func read(
         service: String,
         account: String? = nil,
         allowInteraction: Bool = true
     ) -> (value: String?, status: OSStatus) {
+        let query = passwordQuery(service: service, account: account)
+        if allowInteraction {
+            return gate.run(.mayPrompt) { copyPassword(query) } ?? (nil, errSecInteractionNotAllowed)
+        }
+        return gate.run(.silent) { copyPasswordSilently(query) } ?? (nil, errSecInteractionNotAllowed)
+    }
+
+    /// `setGenericPassword`'s read of the value it is about to replace: Kannu's own item, silently,
+    /// and without waiting for a call that may be showing a dialog. A save runs on the main thread on
+    /// every keystroke, and such a call can last as long as the user leaves the dialog open. Other
+    /// silent reads in flight do not hold it up. While a dialog-capable call runs this returns nil,
+    /// which the save handles: that prior value is not restored if the fresh add fails.
+    private static func ownValueWithoutWaiting(service: String, account: String) -> String? {
+        gate.run(.silent, wait: false) { copyPasswordSilently(passwordQuery(service: service, account: account)) }?.value
+    }
+
+    /// One read that cannot show a dialog. Runs inside `gate.run(.silent)`, which has turned user
+    /// interaction off; the LAContext does the same for an item in the data-protection keychain.
+    private static func copyPasswordSilently(_ query: [String: Any]) -> (value: String?, status: OSStatus) {
+        var query = query
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
+        return copyPassword(query)
+    }
+
+    private static func passwordQuery(service: String, account: String?) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -26,7 +89,10 @@ enum KeychainReader {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         if let account { query[kSecAttrAccount as String] = account } // only filter by account when given
-        if !allowInteraction { query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUISkip }
+        return query
+    }
+
+    private static func copyPassword(_ query: [String: Any]) -> (value: String?, status: OSStatus) {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess, let data = item as? Data else { return (nil, status) }
@@ -51,12 +117,13 @@ enum KeychainReader {
     /// Delete-then-add is not atomic, so the prior value is read first (silently: a save runs on
     /// every keystroke and must never raise a keychain prompt) and re-added if the fresh add fails.
     /// A failed save therefore keeps the secret the user had, as the old in-place update did; only
-    /// a prior value Kannu cannot read without a prompt is not restored. Logs the OSStatus, never
-    /// the value.
+    /// a prior value Kannu cannot read without a prompt, or one it skipped reading because a
+    /// Keychain dialog was open at that moment (`ownValueWithoutWaiting`), is not restored. Logs the
+    /// OSStatus, never the value.
     @discardableResult
     static func setGenericPassword(_ value: String, service: String, account: String) -> Bool {
         guard KeychainWritePlan.forSaving(service: service) == .recreate else { return false }
-        let prior = read(service: service, account: account, allowInteraction: false).value
+        let prior = ownValueWithoutWaiting(service: service, account: account)
         guard deleteGenericPassword(service: service, account: account) else { return false }
         let status = addGenericPassword(value, service: service, account: account)
         if status == errSecSuccess { return true }
@@ -83,7 +150,7 @@ enum KeychainReader {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         // Sonar reports S6288 on this call; the reason is on the accessibility attribute above.
-        return SecItemAdd(item as CFDictionary, nil) // NOSONAR
+        return gate.run(.mayPrompt) { SecItemAdd(item as CFDictionary, nil) } ?? errSecInteractionNotAllowed // NOSONAR
     }
 
     /// True when nothing is left at this service and account. Refuses (false) for a service
@@ -96,6 +163,7 @@ enum KeychainReader {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        return KeychainWritePlan.deleteLeftNothing(SecItemDelete(query as CFDictionary))
+        let status = gate.run(.mayPrompt) { SecItemDelete(query as CFDictionary) } ?? errSecInteractionNotAllowed
+        return KeychainWritePlan.deleteLeftNothing(status)
     }
 }

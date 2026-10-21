@@ -23,6 +23,147 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Test: new `ReleaseWorkflowRulesTests` (the hyphen check, the three guarded steps and the
     pre-release flags, with planted copies of the old workflow).
 
+### 2026-10-21 - Act on CodeRabbit's review of #99
+- **Developer label:** CodeRabbit's review of #99: a GPL header, and whether a silent Keychain read should give up instead of waiting for a dialog
+- **Agent label:** Claude Code (Opus 5.5) — `JSONLUsageCacheCodexTests.swift` gets the GPL header; the silent read keeps waiting, and `KeychainReader.read` says why
+- **Changes:**
+  - `KannuTests/JSONLUsageCacheCodexTests.swift` starts with the project's GPL header, copied from
+    `CodexUsageLineTests.swift`.
+  - Not changed: `KeychainReader.read(allowInteraction: false)` keeps waiting while a call that may
+    prompt runs. A read that gave up could only report the item missing or needing approval — a
+    card saying "not signed in", or a fix-it button for nothing. The wait lasts only while a dialog
+    the user asked for is open, and holds only silent reads made meanwhile off the main thread (that
+    refresh's other providers, a task source's sync), never one on the main thread. Its doc comment
+    now says so.
+
+### 2026-10-21 - A Keychain dialog is never swallowed by a silent read on another thread
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — fixes from an adversarial review of #99's merge with `development`
+- **Changes:**
+  - `KeychainInteractionGate` (Foundation-only, in the test target) replaces `crossAppReadLock`.
+    A silent read turns the process-wide `SecKeychainSetUserInteractionAllowed` switch off, and
+    while it is off no Keychain call can show its dialog: it fails as if the user had declined.
+    The lock covered only `read`, so Kannu's own item read by `genericPassword`, which may need
+    a dialog after another build saved it, could come back empty during a background silent
+    read, and saving that empty value deletes the stored secret. Now:
+    - Every call goes through the gate. Silent reads share the switch (the first turns it off, the
+      last puts it back) and never wait for each other.
+    - A call that may prompt (a read that may ask, `genericPassword`, the fresh add, the delete)
+      never waits for another such call, only for silent reads in flight, which take milliseconds.
+      So the main thread never waits behind a dialog.
+    - New silent reads wait while a dialog may be open, and a waiting dialog call holds them back
+      so it cannot be starved.
+  - One open dialog no longer blocks every other read. Silent reads of Kannu's own task credentials
+    (#106) and the Codex and Cursor quota reads run side by side; only a dialog holds them up.
+  - The save's read of the value it replaces gives up only while a dialog may be open, not
+    whenever any read is in flight. The save's comment says which prior values are not restored.
+  - Codex lines are parsed only when they carry `"token_count"`, `"turn_context"` or
+    `"session_meta"` as a quoted JSON string. A conversation line that merely mentions the words
+    is no longer copied and parsed.
+  - `JSONLUsageCache` drops records once they leave the week instead of keeping them for as long as
+    the file stays listed. A resumed Codex session appends to the same rollout, which can then stay
+    fresh for weeks.
+  - Tests:
+    - `KeychainInteractionGateTests` hold threads inside the gate and pin who is let in while whom
+      is inside.
+    - `KeychainWritePlanTests` pin that every Keychain call in `KeychainReader` goes through the
+      gate, and that the save's prior read is silent.
+    - New `JSONLUsageCacheCodexTests` cases cover the mention line and the pruning, each shown to
+      fail with its fix reverted.
+    - The `JSONLUsageCacheTests` fixture comment no longer calls the top-level shape Codex's.
+
+### 2026-10-21 - Codex rollouts are read once, then only what was appended
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — #99 brought up to date with `development` (#74's usage cache, #84's Keychain rewrite)
+- **Changes:**
+  - `development`'s fix for the gigabyte footprint (#74) reads each transcript once and then only
+    the appended bytes, through `JSONLUsageCache`; this branch read Codex rollouts whole on every
+    refresh with its own stateful reader. Merged as-is, Codex would have gone back to the old
+    cost. `JSONLUsageCache` now has two formats: `.claude` as before, and `.codex`, which keeps
+    each rollout's `CodexUsageLine` in the file's entry, so an appended read continues with the
+    model, the running total and the fork-replay state the earlier lines set. The unfinished last
+    line is read with a copy of the reader, never the kept one. Lines older than the week still
+    feed the reader; only their records are dropped.
+  - `CodexUsageProvider` lists rollouts under `$CODEX_HOME` (`sessions` and `archived_sessions`)
+    as this branch did and reads them through the cache as `development` does.
+    `CodexRolloutFiles.recentRecords`, the whole-file path, is gone.
+  - `KeychainReader` keeps `development`'s delete-and-add save and its log, and this branch's
+    silent read for other apps' items behind `crossAppReadLock`. The save's read of the value it
+    replaces now tries that lock instead of waiting for it: a save runs on the main thread on every
+    keystroke, and the lock can be held by a read that is showing another app's Keychain dialog.
+    Busy means no prior value to restore, which the save already handled.
+  - `JSONLUsageCacheCodexTests`: every split of a rollout across two refreshes, one refresh per
+    appended line, an unfinished last event, a fork's replay split across refreshes, week-old lines
+    that still feed the reader, a replaced file, an archived copy, and the two formats kept apart.
+    Each is checked against `CodexUsageLine.records(in:)` over the whole file. Mutating the cache
+    to commit the tail's reader, or to drop the reader between refreshes, fails them.
+  - `KeychainWritePlanTests` follow the save's new read and pin that it never waits for the lock.
+
+### 2026-10-18 - Codex token totals count real requests, and only a tap on a card's button may let a keychain read prompt
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P1 Codex usage fixes — rollout token_count parser, CODEX_HOME and archived_sessions, silent keychain reads
+- **Changes:**
+  - Codex token totals in the Usage tab were always 0. `CodexUsageProvider` parsed rollouts with the
+    Claude reader, which looks for `message.usage`; Codex writes usage as `event_msg` lines whose
+    payload is a `token_count` event. New Foundation-only `CodexUsageLine` (in the KannuTests target)
+    counts each request from `info.last_token_usage`, never the cumulative `total_token_usage`; skips
+    `info: null`; skips a re-emitted event whose running total did not move; falls back to the growth
+    of the total when `last_token_usage` is missing; and takes the model from the latest
+    `turn_context` before the event. Input is `input_tokens` (cached reads and
+    `cache_write_input_tokens` included) and output is `output_tokens` (reasoning included), so
+    nothing is added twice. Field names were checked against upstream
+    `codex-rs/protocol/src/protocol.rs` (`TokenUsage`, `TokenUsageInfo`, `TokenCountEvent`,
+    `TurnContextItem`, `SessionMeta`) and ccusage's Codex adapter.
+  - A forked session or spawned subagent no longer counts its parent's usage again. Codex starts
+    such a rollout with the parent's history, `token_count` events included, re-stamped to the fork
+    instant. When the first `session_meta` has `forked_from_id`, `parent_thread_id` or
+    `source.subagent.thread_spawn.parent_thread_id`, the usage events written in one burst after it
+    (each at most 1 s after the previous, starting from `session_meta`) only set the running-total
+    baseline. The 1 s pause and the fixture shapes follow ccusage's `replay.rs` and its tests.
+  - Codex requests are read by `CodexRolloutFiles.recentRecords` (Foundation-only, tested on disk) and
+    summed by `JSONLUsageParser.aggregate(records:now:)`. Claude's reader and results are unchanged.
+  - Rollouts are read from `$CODEX_HOME` (default `~/.codex`), under both `sessions/` and
+    `archived_sessions/`. `.jsonl.zst` files count only toward "Codex has logs": Codex compresses a
+    rollout only after 7 idle days (`MIN_ROLLOUT_AGE`), so none can hold a request inside the week.
+    A verbatim copy of a rollout in both folders counts once (key: line timestamp plus running total).
+    The first-launch check that turns the Codex provider on now looks in the same two folders under
+    the same home, instead of only `~/.codex/sessions`.
+  - The Codex card shows tokens only (`billedCostOnly`), as Claude's does. The pricing table has no
+    cached-input rate, so a dollar estimate would bill Codex's mostly cached input at the full rate.
+  - Keychain: the "Codex Auth" and "cursor-access-token" reads ran with prompts allowed on every
+    automatic refresh and on the background poll. Passing `kSecUseAuthenticationUISkip` does not
+    stop that for these file-based login-keychain items: Apple's `SecItem.cpp` sends the query to the
+    legacy path, which never reads that key, and the SDK's `SecItem.h` says legacy items "will still
+    activate UI if needed". `KeychainReader.read(allowInteraction: false)` now also turns
+    `SecKeychainSetUserInteractionAllowed` off for that one call (lock-serialised, previous value
+    restored) and passes an `LAContext` with `interactionNotAllowed`. A protected item should then
+    fail with `errSecInteractionNotAllowed`, the status the approval button keys on.
+    `KeychainReadPolicy` (Foundation-only, tested) makes the decision: a silent read, then Cursor's
+    state.vscdb, then one read allowed to prompt, only on a user-initiated refresh.
+  - When a sign-in exists only in the keychain and needs approval, the card says so and offers
+    "Show usage limits…" instead of "not signed in": Codex (`grantCodexKeychainAccess`) and, new,
+    Cursor (`grantCursorKeychainAccess`). The Cursor card is kept instead of hidden when it offers
+    the button. A tap refreshes only the provider that owns the button interactively
+    (`QuotaAction.provider`, `refreshAll(interactiveFor:)`), so approving Codex cannot raise
+    Cursor's dialog.
+  - Cursor reads its token once per refresh: a task-local `CredentialReadScope` set by
+    `CursorUsageProvider` and `CursorQuotaClient` replaces up to a dozen reads (quota guard,
+    usage-summary, connect fallback, events check, each events page).
+  - Tests: `CodexUsageLineTests` (23 tests: upstream-shaped `token_count`/`turn_context`/`session_meta`
+    fixtures with `cache_write_input_tokens`, `info: null`, repeats, missing `last_token_usage`,
+    garbage lines, forked and subagent replays, `CODEX_HOME` and `archived_sessions` discovery, the
+    first-launch folder check, and `recentRecords` over a temp `CODEX_HOME`). New
+    `KeychainReadPolicyTests` (10 tests: no prompt outside a user-initiated refresh, at most one
+    prompt, state.vscdb before any prompt, one read per scope through nested scopes and child
+    tasks). `ClaudeTurnTokensTests`' made-up "Codex-shaped" test is now
+    `testTopLevelUsageFallbackStillParses`, pinning only the Claude reader's fallback. Full suite:
+    884 executed, 0 failures.
+  - Verified on this Mac: a Debug build and the full KannuTests suite. Unverified: Codex is not
+    installed here, so real rollouts, forks and subagents were never parsed (fixtures only). No
+    keychain read was made, so it is unproven that the silent read stays silent and returns
+    `errSecInteractionNotAllowed` for the real "Codex Auth" and "cursor-access-token" items, and the
+    approval buttons and their dialog were never tried. The app was not launched.
+
 ### 2026-10-21 - Act on CodeRabbit's review of #113
 - **Developer label:** CodeRabbit's review of #113 (the agents batch: #96, #100, #101, #102, #105): three findings, all in the usage card and its Settings text
 - **Agent label:** Claude Code (Opus 5.5) — the 5-hour column draws one bar and folds other pools' windows into a chip, the weekly bar limit counts Codex's and Cursor's token-total rows, and the Providers footer says what the Claude card runs

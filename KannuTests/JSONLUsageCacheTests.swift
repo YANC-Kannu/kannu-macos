@@ -65,7 +65,9 @@ final class JSONLUsageCacheTests: XCTestCase {
                                     "cache_creation_input_tokens": 0, "output_tokens": output]]])
     }
 
-    /// The Codex shape the parser accepts: usage, model and request id at the top level.
+    /// `ClaudeUsageLine`'s top-level fallback: usage, model and request id at the top level. No
+    /// known writer uses it (Codex rollouts are read by `JSONLUsageCache`'s `.codex` format, see
+    /// `JSONLUsageCacheCodexTests`); it stands here as a second line shape the parser accepts.
     private func codex(request: String, hoursAgo: Double = 2, input: Int = 30, output: Int = 7) -> Data {
         line(["timestamp": stamp(hoursAgo), "model": "gpt-5-codex", "request_id": request,
               "usage": ["input_tokens": input, "output_tokens": output]])

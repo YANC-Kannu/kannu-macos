@@ -190,6 +190,44 @@ final class KeychainWritePlanTests: XCTestCase {
         XCTAssertEqual(calls(Self.codeLines(of: reader).joined(separator: "\n")), 3, "the declaration plus the save's two calls")
     }
 
+    /// The save runs on the main thread on every keystroke. Its read of the prior value is silent
+    /// (it must never raise a dialog) and never waits for a call that may be showing one, which can
+    /// last as long as the user takes to answer.
+    func testTheSavesPriorReadIsSilentAndNeverWaitsForADialog() throws {
+        let reader = try XCTUnwrap(Self.appSources()[Self.readerPath])
+        let prior = try XCTUnwrap(Self.body(of: "static func ownValueWithoutWaiting", in: reader))
+        XCTAssertTrue(prior.contains("gate.run(.silent, wait: false)"))
+        XCTAssertTrue(prior.contains("copyPasswordSilently("))
+        XCTAssertFalse(prior.contains(".mayPrompt"))
+        let save = try XCTUnwrap(Self.body(of: "static func setGenericPassword", in: reader))
+        XCTAssertFalse(save.contains("read(service:"), "the save must not take the waiting read")
+    }
+
+    /// Every call that reaches the Keychain goes through the gate, so none can run while a silent
+    /// read has user interaction switched off for the whole process — and only the gate's own
+    /// callbacks touch that switch.
+    func testEveryKeychainCallGoesThroughTheGate() throws {
+        let reader = try XCTUnwrap(Self.appSources()[Self.readerPath])
+        let lines = Self.codeLines(of: reader)
+        for call in ["SecItemAdd(", "SecItemDelete("] {
+            let sites = lines.filter { $0.contains(call) }
+            XCTAssertFalse(sites.isEmpty, call)
+            XCTAssertTrue(sites.allSatisfy { $0.contains("gate.run(.mayPrompt)") }, "\(call): \(sites)")
+        }
+        // `copyPassword(query)` runs the query; outside its own declaration and the silent helper it
+        // may only be reached from inside `gate.run`.
+        let silent = try XCTUnwrap(Self.body(of: "static func copyPasswordSilently", in: reader))
+        let reads = lines.filter {
+            ($0.contains("copyPassword(") || $0.contains("copyPasswordSilently("))
+                && !$0.contains("func copyPassword") && !silent.contains($0)
+        }
+        XCTAssertFalse(reads.isEmpty)
+        XCTAssertTrue(reads.allSatisfy { $0.contains("gate.run(") }, "\(reads)")
+        let switchLines = lines.filter { $0.contains("SecKeychainSetUserInteractionAllowed(") }
+        XCTAssertEqual(switchLines.count, 2, "turned off and restored by the gate's callbacks only: \(switchLines)")
+        XCTAssertFalse(reader.contains("crossAppReadLock"))
+    }
+
     // MARK: - The scanner itself
 
     /// Guards the detector, not the tree: the save as it stood before 2026-10-04 must be caught.
@@ -239,14 +277,14 @@ final class KeychainWritePlanTests: XCTestCase {
         }
         """
         let problems = Self.saveProblems(in: planted)
-        XCTAssertTrue(problems.contains { $0.contains("allowInteraction: false") }, "\(problems)")
+        XCTAssertTrue(problems.contains { $0.contains("ownValueWithoutWaiting") }, "\(problems)")
         XCTAssertTrue(problems.contains { $0.contains("valueToRestore") }, "\(problems)")
 
         let readAfterDelete = """
         static func setGenericPassword(_ value: String, service: String, account: String) -> Bool {
             guard KeychainWritePlan.forSaving(service: service) == .recreate else { return false }
             guard deleteGenericPassword(service: service, account: account) else { return false }
-            let prior = read(service: service, account: account, allowInteraction: false).value
+            let prior = ownValueWithoutWaiting(service: service, account: account)
             let status = addGenericPassword(value, service: service, account: account)
             if status == errSecSuccess { return true }
             if let restore = KeychainWritePlan.valueToRestore(afterAdd: status, prior: prior) {
@@ -282,7 +320,7 @@ final class KeychainWritePlanTests: XCTestCase {
     /// What `setGenericPassword` must do, in this order.
     private static let saveSteps: [(fragment: String, why: String)] = [
         ("KeychainWritePlan.forSaving(service: service) == .recreate", "ask the plan before touching anything"),
-        ("read(service: service, account: account, allowInteraction: false)", "read the prior value silently, before the delete removes it"),
+        ("ownValueWithoutWaiting(service: service, account: account)", "read the prior value silently and without waiting for another app's dialog, before the delete removes it"),
         ("deleteGenericPassword(service: service, account: account)", "remove the old item before adding"),
         ("addGenericPassword(value, service: service, account: account)", "add the new value fresh"),
         ("KeychainWritePlan.valueToRestore(afterAdd: status, prior: prior)", "decide whether a failed add needs the prior value back"),

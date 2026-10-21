@@ -51,11 +51,29 @@ struct UsageLimit: Equatable {
 /// A user-fixable reason a quota fetch failed, surfaced as a button in the usage card.
 enum QuotaAction: Equatable {
     case grantClaudeKeychainAccess
+    /// Codex's sign-in lives in the "Codex Auth" keychain item (no auth.json) and macOS wants the
+    /// user to approve Kannu reading it.
+    case grantCodexKeychainAccess
+    /// cursor-agent's "cursor-access-token" keychain item is the only Cursor sign-in found (no
+    /// state.vscdb token) and macOS wants the user to approve Kannu reading it.
+    case grantCursorKeychainAccess
+
+    /// The one provider whose refresh may prompt when the user taps the button. Every other
+    /// provider in that refresh stays silent, so approving Codex never raises Cursor's dialog.
+    var provider: ProviderID {
+        switch self {
+        case .grantClaudeKeychainAccess: return .claude
+        case .grantCodexKeychainAccess: return .codex
+        case .grantCursorKeychainAccess: return .cursor
+        }
+    }
+
     var buttonTitle: String {
         switch self {
         // Says what approving buys, not what it costs. Plan tier already shows without it;
         // the keychain read is only needed for live 5h/7d limits.
-        case .grantClaudeKeychainAccess: return "Show usage limits…"
+        case .grantClaudeKeychainAccess, .grantCodexKeychainAccess, .grantCursorKeychainAccess:
+            return "Show usage limits…"
         }
     }
 }
