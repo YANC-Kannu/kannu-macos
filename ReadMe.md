@@ -17,6 +17,7 @@ Kannu is a fork of [Atoll](https://github.com/Ebullioscopic/Atoll), which itself
 - **Jump to the session** — click a chat row to activate the app that owns it (terminal, IDE, or a resumable Claude session). Rows that cannot be located offer no affordance rather than a dead click.
 - **Custom notch skins** — upload a background image clipped to the notch shape, with optional dark scrim for readability.
 - **Mobile notifications (optional)** — push agent state changes to iPhone, Apple Watch, or Android via ntfy, Pushover, or a custom webhook.
+- **Tasks and time** — Brain › Tasks lists your own tasks beside those from Jira Cloud, GitLab, GitHub (including GitHub Enterprise Server), Linear, Todoist and Apple Reminders, with estimates, tags, reminders and an archive. The timer times a task, and the time it records can go back to Jira or GitLab, only when you say so; the other sources are read, never changed. Tokens stay in your Keychain.
 - Media controls, live activities, lock screen widgets, stats, timers, clipboard, and shelf.
 - **Keyboard shortcuts off by default** — enable globally in Brain → Shortcuts when you want hotkeys.
 
@@ -28,7 +29,7 @@ Calendar, terminal, and color picker features from the Atoll/Boring.Notch lineag
 - MacBook with a notch, or a non-notch Mac using floating Dynamic Island pill mode.
 - Apple silicon or Intel — the app builds universal.
 - Xcode 16+ to build from source (the source needs Swift 6.1).
-- Permissions as needed: Accessibility, Screen Recording, Music.
+- Permissions as needed: Accessibility, Screen Recording, Music, Reminders, Notifications.
 
 
 
@@ -46,12 +47,14 @@ Kannu requests permissions only when you use the related feature. The app is not
 - **Location (When In Use)** — used for lock screen weather.
 - **Audio Capture** — used for real-time waveform/audio-activity features.
 - **Developer Tools** — optional, used for advanced Focus detection mode.
+- **Reminders** — asked only when you connect Apple Reminders as a task source (Brain › Tasks › Add a source).
+- **Notifications** — asked the first time you schedule a task reminder.
 
 For detailed prompts and one-click setup actions, open **Brain** in Kannu. Contributor docs are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Install (Pre-built DMG)
 
-1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.2.0.dmg`) from the [Releases page](https://github.com/libinmv/kannu/releases).
+1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.3.4.dmg`) from the [Releases page](https://github.com/libinmv/kannu/releases).
 2. Open the DMG and drag **Kannu** into the **Applications** folder.
 3. Launch Kannu from Applications.
 

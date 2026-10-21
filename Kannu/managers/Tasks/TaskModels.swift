@@ -357,19 +357,34 @@ struct TaskItem: Codable, Identifiable, Equatable {
         case tags, scheduledAt, closedAt, archivedAt, archivedByUser
     }
 
+    /// A task whose `source` this build does not know: a newer Kannu's, or a tester's after going
+    /// back. `TasksFile` drops that one task and reads the rest, instead of moving the whole file
+    /// aside (its tracked time goes with it on the next save; the source that knows it lists it
+    /// again).
+    struct UnknownSource: Error {
+        let rawValue: String
+    }
+
     /// Fields added after the first version default instead of failing, so an older file still
     /// reads. Unknown keys are ignored, so a newer file reads too. The visibility reads leniently:
     /// "hidden" (before the archive) is archived by the user, and a word this version does not know
-    /// reads as active — costing that one task its state, never the user their whole list.
+    /// reads as active — costing that one task its state, never the user their whole list. A log
+    /// policy this version does not know reads as `ask`. An unknown source throws `UnknownSource`,
+    /// which costs that task alone (`TasksFile`).
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
-        source = try container.decodeIfPresent(TaskSource.self, forKey: .source) ?? .local
+        if let rawSource = try container.decodeIfPresent(String.self, forKey: .source) {
+            guard let known = TaskSource(rawValue: rawSource) else { throw UnknownSource(rawValue: rawSource) }
+            source = known
+        } else {
+            source = .local
+        }
         title = try container.decode(String.self, forKey: .title)
         localEstimateSeconds = try container.decodeIfPresent(Int.self, forKey: .localEstimateSeconds)
         remote = try container.decodeIfPresent(RemoteTaskInfo.self, forKey: .remote)
         segments = try container.decodeIfPresent([WorkSegment].self, forKey: .segments) ?? []
-        logPolicy = try container.decodeIfPresent(LogPolicy.self, forKey: .logPolicy) ?? .ask
+        logPolicy = ((try? container.decodeIfPresent(LogPolicy.self, forKey: .logPolicy)) ?? nil) ?? .ask
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date(timeIntervalSince1970: 0)
         tags = Self.cleanedTags((try? container.decodeIfPresent([String].self, forKey: .tags)) ?? [])
         scheduledAt = try? container.decodeIfPresent(Date.self, forKey: .scheduledAt)
@@ -475,13 +490,29 @@ struct TasksFile: Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
-        tasks = try container.decodeIfPresent([TaskItem].self, forKey: .tasks) ?? []
+        // A task from a source this build does not know costs itself, never the list; any other
+        // fault in a task still fails the file, which is then moved aside with everything in it.
+        tasks = (try container.decodeIfPresent([KnownSourceTask].self, forKey: .tasks) ?? []).compactMap(\.task)
         drafts = try container.decodeIfPresent([WorklogDraft].self, forKey: .drafts) ?? []
         // Added after the first version, and only decoration: a missing or malformed value, or a
         // colour this version does not know, never costs the file. Each entry decodes on its own,
         // so one bad value costs only that tag's colour.
         let rawColors = (try? container.decodeIfPresent([String: LossyString].self, forKey: .tagColors)) ?? [:]
         tagColors = TaskColoring.cleanedTagColors(rawColors.compactMapValues(\.value))
+    }
+
+    /// A task, or nil when its source is one this build does not know (`TaskItem.UnknownSource`).
+    /// Every other decoding error is thrown on.
+    private struct KnownSourceTask: Decodable {
+        let task: TaskItem?
+
+        init(from decoder: Decoder) throws {
+            do {
+                task = try TaskItem(from: decoder)
+            } catch is TaskItem.UnknownSource {
+                task = nil
+            }
+        }
     }
 
     /// A string, or nil when the value is anything else.
