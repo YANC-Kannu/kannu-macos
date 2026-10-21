@@ -132,6 +132,44 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `errSecInteractionNotAllowed` for the real "Codex Auth" and "cursor-access-token" items, and the
     approval buttons and their dialog were never tried. The app was not launched.
 
+### 2026-10-21 - Act on CodeRabbit's review of #112
+- **Developer label:** CodeRabbit on #112: discard stale fullscreen scans before publishing
+- **Agent label:** Claude Code (Opus 5.5) — each fullscreen scan takes a main-actor ticket, and `publish(_:ticket:)` drops a scan a newer one has overtaken
+- **Changes:**
+  - Scans run concurrently now that they leave the main thread (the initial one and each change's,
+    500 ms and 1.5 s after it), so an older Accessibility or window scan could finish after a newer
+    one and overwrite `fullscreenStatus`, leaving `hideOnClosed` wrong until the next change.
+    `FullscreenMediaDetector` bumps `scanGeneration` on the main actor when a scan starts, and
+    `publish(_:ticket:)` assigns only while the scan's ticket is the latest.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsPublishedOnTheMainActor` requires the
+    ticket check.
+
+### 2026-10-20 - Release hardening for 1.4.0: an unknown task source costs one task, Reminders is entitled, fullscreen publishes on the main actor
+- **Developer label:** "see if everything is solid enough" — the pre-release audit of development
+- **Agent label:** Claude Code (Fable 5.1) — `tasks.json` drops a task from a source this build does not know instead of moving the file aside; `Kannu.entitlements` names the calendars entitlement EventKit needs under hardened runtime; `FullscreenMediaDetector` assigns its main-actor verdict on the main actor; README and docs/ADR.md catch up
+- **Changes:**
+  - `TaskItem` throws `UnknownSource` for a `source` raw value it does not know, and `TasksFile`
+    decodes its tasks through `KnownSourceTask`, which drops exactly those tasks and throws
+    everything else on. Before, one unknown source failed the whole file, which `TaskFileStore`
+    moved aside as `tasks.corrupt-<date>.json`, and the list started empty. A `logPolicy` this
+    version does not know reads as `ask`. `docs/TASK-SOURCES.md` says what going back to an older
+    build now costs: that source's tasks and their recorded time, not the list.
+    Test: `TaskModelCodingTests.testATaskFromAnUnknownSourceIsDroppedAndTheRestReads` (a malformed
+    task still fails the file).
+  - `Kannu.entitlements` gains `com.apple.security.personal-information.calendars`. Hardened runtime
+    denies the EventKit store without it; `ENABLE_RESOURCE_ACCESS_CALENDARS` injects it at signing,
+    but the only build checked so far used a custom entitlements file, so the key is spelled out.
+  - `FullscreenMediaDetector.updateFullScreenStatus()` is async: `currentFullscreenStatus()` reads
+    screens and windows where the caller runs (an Accessibility read of an unresponsive app can
+    wait, so not on main), and `publish(_:)`, the one `@MainActor` function that assigns
+    `fullscreenStatus`, runs on the main actor. The property was `@MainActor @Published` yet
+    assigned from whichever thread ran the scan; the fullscreen fix added five more callers. The
+    detection-off reset no longer traps on two displays with the same name
+    (`uniquingKeysWith`). Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsPublishedOnTheMainActor`.
+  - `ReadMe.md` describes Tasks and the six sources, lists Reminders and Notifications under
+    Runtime Permissions, and names `Kannu.1.3.4.dmg`; `docs/ADR.md` says Brain › Agent Security
+    where it said Settings › Agents.
+
 ### 2026-10-19 - Act on CodeRabbit's review of #111
 - **Developer label:** CodeRabbit on #111: check the `typed:` value in the task-start scanner
 - **Agent label:** Claude Code (Opus 5.5) — `TimerTaskLabelRulesTests.startProblems` also requires the session's name to be resolved from `task.title`
