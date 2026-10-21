@@ -1517,7 +1517,94 @@ extension Defaults.Keys {
     static let savedNotes = Key<[NoteItem]>("savedNotes", default: [])
     static let enableAppleNotesSync = Key<Bool>("enableAppleNotesSync", default: false)
     static let appleNotesLastSyncDate = Key<Date?>("appleNotesLastSyncDate", default: nil)
-    
+
+    // MARK: Tasks Feature
+    // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),
+    // not here: they hold recorded time, and a Defaults write is a whole-plist rewrite.
+    static let enableTasks = Key<Bool>("enableTasks", default: false)
+    /// How long a task's timer runs when the task has no estimate left, in minutes.
+    static let tasksDefaultSessionMinutes = Key<Int>("tasksDefaultSessionMinutes", default: 25)
+    /// Off by default: a task's timer runs on past its estimate silently.
+    static let tasksSoundAtEstimate = Key<Bool>("tasksSoundAtEstimate", default: false)
+    // Jira Cloud (Brain › Tasks › Sources). These are display copies only: the token, and the one
+    // host it may be sent to, live together in the Keychain (`SecureSecretKey.jiraCredential`). A
+    // site here that differs from the Keychain's means "reconnect", never a request to this host.
+    /// "Sync Jira": Jira issues are fetched. On after Connect. Off pauses fetching only: the Jira
+    /// tasks stay in the task order.
+    static let jiraEnabled = Key<Bool>("jiraEnabled", default: false)
+    /// The connected site's host (`acme.atlassian.net`); empty when not connected.
+    static let jiraSiteHost = Key<String>("jiraSiteHost", default: "")
+    static let jiraAccountID = Key<String>("jiraAccountID", default: "")
+    static let jiraAccountDisplayName = Key<String>("jiraAccountDisplayName", default: "")
+    /// The issue filter. Empty means the default (`JiraAPI.defaultJQL`).
+    static let jiraJQL = Key<String>("jiraJQL", default: JiraAPI.defaultJQL)
+    // GitLab (Brain › Tasks › Sources). Display copies too: the token and the one server it may be
+    // sent to live together in the Keychain (`SecureSecretKey.gitlabCredential`). A server here that
+    // differs from the Keychain's means "reconnect", never a request to this server.
+    /// "Sync GitLab": GitLab issues (and merge requests) are fetched. Off pauses fetching only: the
+    /// GitLab tasks stay in the task order.
+    static let gitlabEnabled = Key<Bool>("gitlabEnabled", default: false)
+    /// The connected server's base URL (`https://gitlab.com`); empty when not connected.
+    static let gitlabHost = Key<String>("gitlabHost", default: "")
+    /// The token owner's user name, for the "waiting for my review" list. Checked before each use.
+    static let gitlabUsername = Key<String>("gitlabUsername", default: "")
+    static let gitlabAccountDisplayName = Key<String>("gitlabAccountDisplayName", default: "")
+    /// The token has the `api` scope. Off for `read_api`, and when the server did not say.
+    static let gitlabCanLogTime = Key<Bool>("gitlabCanLogTime", default: false)
+    /// Open merge requests assigned to the user or waiting for their review join the task order.
+    static let gitlabIncludeMergeRequests = Key<Bool>("gitlabIncludeMergeRequests", default: true)
+    // GitHub, Linear, Todoist and Apple Reminders (Brain › Tasks › each source's page). Display
+    // copies too, as for Jira and GitLab: a token and where it may be sent live together in the
+    // Keychain; a scope here that differs from the Keychain's means "reconnect". Each "Sync" switch
+    // pauses fetching only: that source's tasks stay in the task order.
+    static let githubEnabled = Key<Bool>("githubEnabled", default: false)
+    /// The connected server's base URL (`https://github.com`, or a GitHub Enterprise Server's);
+    /// empty when not connected.
+    static let githubHost = Key<String>("githubHost", default: "")
+    static let githubUsername = Key<String>("githubUsername", default: "")
+    static let githubAccountDisplayName = Key<String>("githubAccountDisplayName", default: "")
+    /// Open pull requests assigned to the user join the task order too.
+    static let githubIncludePullRequests = Key<Bool>("githubIncludePullRequests", default: false)
+    static let linearEnabled = Key<Bool>("linearEnabled", default: false)
+    /// The connected workspace's address (`https://linear.app/acme`); empty when not connected.
+    static let linearWorkspace = Key<String>("linearWorkspace", default: "")
+    static let linearAccountDisplayName = Key<String>("linearAccountDisplayName", default: "")
+    static let todoistEnabled = Key<Bool>("todoistEnabled", default: false)
+    /// The connected account (`todoist:<user id>`); empty when not connected.
+    static let todoistAccount = Key<String>("todoistAccount", default: "")
+    static let todoistAccountDisplayName = Key<String>("todoistAccountDisplayName", default: "")
+    /// A Todoist filter ("today | overdue", "#Work"); empty lists every open task.
+    static let todoistFilter = Key<String>("todoistFilter", default: "")
+    static let appleRemindersEnabled = Key<Bool>("appleRemindersEnabled", default: false)
+    /// "reminders" once the user connected Reminders (and macOS allowed it); empty otherwise.
+    static let appleRemindersScope = Key<String>("appleRemindersScope", default: "")
+    // Brain › Tasks › Task list filters (`TaskFilter`). This Mac only; never sent anywhere.
+    /// All, or one source.
+    static let tasksListSourceFilter = Key<TaskSourceFilter>("tasksListSourceFilter", default: .all)
+    /// `TaskFacets.anyProject` (""), `TaskFacets.noProject`, or a project name.
+    static let tasksListProjectFilter = Key<String>("tasksListProjectFilter", default: TaskFacets.anyProject)
+    static let tasksListStatusFilter = Key<TaskStatusFilter>("tasksListStatusFilter", default: .toDoAndInProgress)
+    /// `TaskFacets.anyTag` (""), or a tag.
+    static let tasksListTagFilter = Key<String>("tasksListTagFilter", default: TaskFacets.anyTag)
+    // The notch's Tasks popover: Show in notch (`TaskSourceMenu`). What Up next shows, and nothing
+    // else — never what is fetched or what Brain's Task list shows (`TaskOrdering.viewFilter`).
+    static let tasksPopoverShowLocal = Key<Bool>("tasksPopoverShowLocal", default: true)
+    static let tasksPopoverShowJira = Key<Bool>("tasksPopoverShowJira", default: true)
+    static let tasksPopoverShowGitLab = Key<Bool>("tasksPopoverShowGitLab", default: true)
+    static let tasksPopoverShowGitHub = Key<Bool>("tasksPopoverShowGitHub", default: true)
+    static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
+    static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
+    static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
+    // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
+    static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)
+    static let jiraTaskColor = Key<TaskColor>("jiraTaskColor", default: .glass)
+    static let gitlabTaskColor = Key<TaskColor>("gitlabTaskColor", default: .glass)
+    static let githubTaskColor = Key<TaskColor>("githubTaskColor", default: .glass)
+    static let linearTaskColor = Key<TaskColor>("linearTaskColor", default: .glass)
+    static let todoistTaskColor = Key<TaskColor>("todoistTaskColor", default: .glass)
+    static let appleRemindersTaskColor = Key<TaskColor>("appleRemindersTaskColor", default: .glass)
+
     // Use Now Playing as the default media controller for new installs.
     static var defaultMediaController: MediaControllerType {
         .nowPlaying
@@ -1669,3 +1756,9 @@ enum ReleaseInfo {
 /// `DisplayPlacement` lives in the logic test target, which does not link Defaults, so the storage
 /// conformance is declared here. A `String`-backed enum needs nothing more.
 extension DisplayPlacement: Defaults.Serializable {}
+
+/// The Task list's filters live in the logic test target too (`TaskFacets.swift`).
+extension TaskSourceFilter: Defaults.Serializable {}
+extension TaskStatusFilter: Defaults.Serializable {}
+/// `TaskColor.swift` is in the logic test target as well.
+extension TaskColor: Defaults.Serializable {}

@@ -118,6 +118,42 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
         )
     }
 
+    /// CodeRabbit on #109: two inputs to the verdict changed with nothing re-checking. Granting or
+    /// revoking Accessibility switches between `AXFullScreen` and the menu-bar fallback, and the
+    /// fallback's menu bar can still be sliding when the 500 ms settle reads it, so the fallback
+    /// takes one more pass after it.
+    func testTheVerdictIsReadAgainWhenItsInputsChange() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/observers/FullscreenMediaDetection.swift"])
+        let observers = try XCTUnwrap(Self.body(ofFunction: "setupNotificationObservers", in: text),
+                                      "setupNotificationObservers went away — this pin is now vacuous, update it")
+        XCTAssertTrue(observers.contains("AccessibilityPermissionStore.shared.$isAuthorized")
+                      && observers.contains("self?.handleChange()"),
+                      "a change to the Accessibility grant no longer re-reads fullscreen")
+        let change = try XCTUnwrap(Self.body(ofFunction: "handleChange", in: text), "handleChange went away")
+        let code = Self.strippingComments(change)
+        XCTAssertEqual(code.components(separatedBy: "self.updateFullScreenStatus()").count - 1, 2,
+                       "the fallback no longer looks again after the menu bar's slide")
+        XCTAssertTrue(code.contains("guard !AXIsProcessTrusted() else { return }"),
+                      "the second look is for the fallback only; AXFullScreen needs no wait")
+    }
+
+    /// `fullscreenStatus` is main-actor state, but the detector reads screens and windows off the
+    /// main thread (an Accessibility read of an unresponsive app can wait). The verdict reaches the
+    /// property through one `@MainActor` function, and nothing else assigns it.
+    func testTheVerdictIsPublishedOnTheMainActor() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/observers/FullscreenMediaDetection.swift"])
+        let publish = try XCTUnwrap(Self.body(ofFunction: "publish", in: text),
+                                    "publish went away — this pin is now vacuous, update it")
+        XCTAssertTrue(publish.contains("fullscreenStatus = newStatus"), "publish(_:) no longer assigns the verdict")
+        XCTAssertTrue(publish.contains("ticket == scanGeneration"),
+                      "a scan that finished late can overwrite a newer verdict (CodeRabbit on #112)")
+        XCTAssertTrue(text.contains("@MainActor\n    private func publish("), "publish(_:) must be @MainActor")
+        let assignments = Self.strippingComments(text).components(separatedBy: "fullscreenStatus = ").count - 1
+        XCTAssertEqual(assignments, 1, "fullscreenStatus is assigned somewhere other than publish(_:)")
+        XCTAssertFalse(Self.strippingComments(text).contains("Dictionary(uniqueKeysWithValues:"),
+                       "two displays can share a localizedName; uniqueKeysWithValues traps on it")
+    }
+
     /// The recovery path for a dropped `com.apple.screenIsUnlocked`: the lock manager's poll clears
     /// the state, and something must tell AppDelegate so the self-heal inside
     /// `adjustWindowPosition` is actually reached.

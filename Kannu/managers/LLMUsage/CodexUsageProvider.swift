@@ -5,6 +5,8 @@ struct CodexUsageProvider: UsageProvider {
     /// `$CODEX_HOME` or `~/.codex`; rollouts are read from its `sessions` and `archived_sessions`.
     let codexHome: URL
     let quotaClient: CodexQuotaClient
+    /// A reference shared by every copy of this provider, so what was read survives between refreshes.
+    private let usageCache = JSONLUsageCache(label: "codex", format: .codex)
 
     init(codexHome: URL = CodexRolloutFiles.codexHome(), quotaClient: CodexQuotaClient = CodexQuotaClient()) {
         self.codexHome = codexHome
@@ -19,10 +21,12 @@ struct CodexUsageProvider: UsageProvider {
         if listing.hasLogs {
             // Same rule as the Claude provider, from the same constant: skip files too old to
             // contribute, but decide `logsUnavailable` from the unfiltered listing, compressed
-            // rollouts included.
-            snapshot = JSONLUsageParser.aggregate(
-                records: CodexRolloutFiles.recentRecords(in: listing, now: now),
-                now: now
+            // rollouts included. The cache reads each rollout with the stateful Codex reader and
+            // keeps that reader's state between refreshes, so only appended lines are read.
+            snapshot = await JSONLUsageParser.aggregate(
+                files: UsageWindows.recentlyModified(listing.plain, now: now),
+                now: now,
+                cache: usageCache
             )
         } else {
             snapshot.logsUnavailable = true
