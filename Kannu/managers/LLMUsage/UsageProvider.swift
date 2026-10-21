@@ -113,6 +113,8 @@ struct UsageSnapshot: Equatable {
     var limitsLabel: String? = nil
     /// Additional rate-limit windows beyond the 5h/7d pair, in the order the provider reported them.
     var extraLimits: [NamedLimit] = []
+    /// When those limits were recorded, when that is earlier than `lastUpdated` (Codex's rollout).
+    var quotaObservedAt: Date? = nil
     var onDemandSpendUSD: Double? = nil // billing-cycle on-demand spend from usage-summary
     var models: [ModelUsage] = []
     var lastUpdated: Date = .distantPast
@@ -157,7 +159,8 @@ struct QuotaFetchResult: Equatable {
     var weekLabel: String? = nil
     /// Becomes `UsageSnapshot.weekLimitKey`.
     var weekKey: String = "week"
-    /// Becomes `UsageSnapshot.extraLimits` (Cursor's API pool).
+    /// Windows beyond the session/week pair, as `UsageSnapshot.extraLimits` takes them: Cursor's
+    /// API pool, Codex's other limit families.
     var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil
     var accountTier: String? = nil
@@ -167,8 +170,11 @@ struct QuotaFetchResult: Equatable {
     /// False for transient errors (429, 500+, network hiccup) — those should NOT move the
     /// card from the Usage tab, since the provider IS configured.
     var isAuthFailure: Bool = false
+    /// When the limits were recorded, if not at the read: Codex's rollout holds the figures of
+    /// the last local request. nil means now.
+    var observedAt: Date? = nil
 
-    var hasLimits: Bool { session != nil || week != nil }
+    var hasLimits: Bool { session != nil || week != nil || !extraLimits.isEmpty }
 }
 
 enum UsageResult {

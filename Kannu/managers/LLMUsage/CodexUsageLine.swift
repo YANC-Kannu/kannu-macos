@@ -294,3 +294,111 @@ enum CodexRolloutFiles {
         return listing
     }
 }
+
+/// The rate limits Codex last recorded in a rollout: every `token_count` event carries the
+/// account's `rate_limits` (`TokenCountEvent` in `codex-rs/protocol/src/protocol.rs`), `info: null`
+/// or not. Reading them needs no process and no sign-in, so this is what the background poll uses,
+/// and the fallback when `codex app-server` gives no answer. The figures are as old as the last
+/// Codex request on this Mac; windows whose reset has passed are dropped by the caller.
+///
+/// One bucket per event: upstream records every bucket a response's headers carry (`codex` first,
+/// then the other families in sorted order, `codex-api/src/rate_limits.rs`) and writes the
+/// `token_count` once, with the last one recorded (`core/src/session/turn.rs`,
+/// `state/session.rs`). So on an account whose responses also carry another family, every event
+/// is that other bucket's, and the main bucket is not in the rollout at all. An answer here needs
+/// the main bucket; without it the route falls through.
+enum CodexRolloutRateLimits {
+    /// The newest main-bucket snapshot in `content`, and the newest snapshot of every other bucket
+    /// written after it. Read from the end, so the scan stops at the first main snapshot.
+    static func latestBuckets(in content: String) -> (main: CodexLimits.Bucket?, others: [CodexLimits.Bucket]) {
+        var others: [String: CodexLimits.Bucket] = [:]
+        for line in content.split(separator: "\n").reversed() {
+            guard line.contains("token_count"), line.contains("rate_limits"),
+                  let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  object["type"] as? String == "event_msg",
+                  let payload = object["payload"] as? [String: Any],
+                  payload["type"] as? String == "token_count" else { continue }
+            let observedAt = (object["timestamp"] as? String).flatMap { ClaudeUsageLine.parseDate($0) }
+            guard let bucket = CodexLimits.bucket(payload["rate_limits"], style: .rollout, observedAt: observedAt),
+                  bucket.hasWindow else { continue }
+            let id = bucket.limitID ?? CodexLimits.mainLimitID
+            if id == CodexLimits.mainLimitID { return (bucket, Array(others.values)) }
+            if others[id] == nil { others[id] = bucket }
+        }
+        return (nil, Array(others.values))
+    }
+
+    /// `latestBuckets` in Kannu's slots; nil when the content holds no main-bucket window.
+    static func latest(in content: String) -> CodexLimits? {
+        limits(latestBuckets(in: content))
+    }
+
+    fileprivate static func limits(_ buckets: (main: CodexLimits.Bucket?, others: [CodexLimits.Bucket])) -> CodexLimits? {
+        guard let main = buckets.main else { return nil }
+        let limits = CodexLimits.mapped(main: main, others: buckets.others)
+        return limits.hasLimits ? limits : nil
+    }
+}
+
+extension CodexRolloutFiles {
+    /// How much of a rollout's end is read first. A request writes a `token_count` event, so the
+    /// latest one is nearly always in the last megabyte.
+    static let rateLimitTailBytes = 1 << 20
+    /// How many of the newest rollouts are looked at before giving up.
+    static let rateLimitFilesChecked = 5
+
+    /// The rate limits in the newest rollout that has a main-bucket snapshot, among the few most
+    /// recently modified inside the usage window.
+    static func latestRateLimits(in listing: Listing, now: Date) -> CodexLimits? {
+        let dated = UsageWindows.recentlyModified(listing.plain, now: now).map { file in
+            (file, (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
+        }
+        for (file, _) in dated.sorted(by: { $0.1 > $1.1 }).prefix(rateLimitFilesChecked) {
+            if let limits = rateLimits(inFile: file) { return limits }
+        }
+        return nil
+    }
+
+    /// How far back from a rollout's end the snapshot is looked for, at most. A refresh never reads
+    /// a long file whole (#74): it used to, whenever the last megabyte held no snapshot.
+    static let rateLimitScanBytes = 8 << 20
+
+    /// The file read backwards a chunk (`tailBytes`) at a time, from its end, until a chunk holds a
+    /// snapshot or `scanBytes` have been read: a tail that happens to miss the latest event widens
+    /// instead of reporting less than the file says, without ever holding more than a chunk and the
+    /// one line it cut. A line cut by a chunk's start is carried into the next look back, so a
+    /// snapshot that straddles two chunks still parses. A chunk whose snapshots are all another
+    /// bucket's is an answer, not a miss: the events that file writes carry that bucket (see
+    /// `CodexRolloutRateLimits`), so a main snapshot further back is rare. That file gives nil and
+    /// the next one is tried.
+    static func rateLimits(inFile file: URL, tailBytes: Int = rateLimitTailBytes,
+                           scanBytes: Int = rateLimitScanBytes) -> CodexLimits? {
+        guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
+        defer { try? handle.close() }
+        guard var end = try? handle.seekToEnd() else { return nil }
+        let floor = end > UInt64(scanBytes) ? end - UInt64(scanBytes) : 0
+        // The start of a line the chunk after this one cut: it continues this chunk's last line.
+        var carry = Data()
+        while end > floor {
+            let start = max(floor, end > UInt64(tailBytes) ? end - UInt64(tailBytes) : 0)
+            guard (try? handle.seek(toOffset: start)) != nil,
+                  var chunk = try? handle.read(upToCount: Int(end - start)) else { return nil }
+            chunk.append(carry)
+            var lines = chunk
+            if start == 0 {
+                carry = Data()
+            } else if let newline = chunk.firstIndex(of: 0x0A) {
+                // Not the file's start: the first line may be cut, so it waits for the bytes before it.
+                carry = Data(chunk[chunk.startIndex..<newline])
+                lines = Data(chunk[chunk.index(after: newline)...])
+            } else {
+                carry = chunk
+                lines = Data()
+            }
+            let buckets = CodexRolloutRateLimits.latestBuckets(in: String(decoding: lines, as: UTF8.self))
+            if buckets.main != nil || !buckets.others.isEmpty { return CodexRolloutRateLimits.limits(buckets) }
+            end = start
+        }
+        return nil
+    }
+}

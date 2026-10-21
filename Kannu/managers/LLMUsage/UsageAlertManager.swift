@@ -86,12 +86,24 @@ final class UsageAlertManager: ObservableObject {
             guard case .success(let snapshot)? = results[provider] else { continue }
             let readings = Self.readings(provider: provider.rawValue, session: snapshot.sessionLimit, week: snapshot.weekLimit,
                                          weekKey: snapshot.weekLimitKey, weekLabel: snapshot.weekLimitLabel,
-                                         extra: snapshot.extraLimits, observedAt: snapshot.lastUpdated)
+                                         extra: snapshot.extraLimits, observedAt: snapshot.quotaObservedAt ?? snapshot.lastUpdated)
             guard !readings.isEmpty else { continue }
             foregroundSucceeded.insert(provider.rawValue)
-            providerReadings[provider.rawValue] = readings
+            adopt(readings, provider: provider.rawValue)
         }
         evaluate()
+    }
+
+    /// Replaces a provider's readings unless the ones it has were observed later. Codex's two
+    /// sources differ in age: the app-server is live, the rollout is as old as the last local
+    /// request. A rollout reading, stamped with its own time, must not undo a newer app-server
+    /// reading: the forecast would read the drop between them as a window restart.
+    @discardableResult
+    private func adopt(_ readings: [UsageWindowReading], provider: String) -> Bool {
+        guard let observedAt = readings.map(\.observedAt).max() else { return false }
+        if let current = providerReadings[provider]?.map(\.observedAt).max(), current > observedAt { return false }
+        providerReadings[provider] = readings
+        return true
     }
 
     /// `weekKey` and `weekLabel` are the provider's own for the week slot (Cursor's Auto pool), so
@@ -192,7 +204,10 @@ final class UsageAlertManager: ObservableObject {
             else { continue }
             backgroundInFlight.insert(provider)
             Task { @MainActor [weak self] in
-                let result = provider == "codex" ? await CodexQuotaClient().fetchLimits() : await CursorQuotaClient().fetchLimits()
+                // Codex's background read never starts `codex app-server`: the rollout first.
+                let result = provider == "codex"
+                    ? await CodexQuotaClient().fetchLimits(foreground: false)
+                    : await CursorQuotaClient().fetchLimits()
                 self?.applyBackground(result, provider: provider)
             }
         }
@@ -200,11 +215,11 @@ final class UsageAlertManager: ObservableObject {
 
     private func applyBackground(_ result: QuotaFetchResult, provider: String) {
         backgroundInFlight.remove(provider)
+        // A rollout's figures carry the time Codex recorded them, not the time they were read.
         let readings = Self.readings(provider: provider, session: result.session, week: result.week,
                                      weekKey: result.weekKey, weekLabel: result.weekLabel,
-                                     extra: result.extraLimits, observedAt: Date())
-        guard !readings.isEmpty else { return }
-        providerReadings[provider] = readings
+                                     extra: result.extraLimits, observedAt: result.observedAt ?? Date())
+        guard !readings.isEmpty, adopt(readings, provider: provider) else { return }
         evaluate()
     }
 }
