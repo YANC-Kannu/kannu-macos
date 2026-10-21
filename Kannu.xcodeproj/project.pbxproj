@@ -144,6 +144,8 @@
 		AA10000000000000000000A2 /* BoundedProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000A1 /* BoundedProcessRunner.swift */; };
 		AA1000000000000000000911 /* CodexUsageLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000910 /* CodexUsageLine.swift */; };
 		AA1000000000000000000913 /* KeychainReadPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000912 /* KeychainReadPolicy.swift */; };
+		AA1000000000000000000951 /* CodexAppServerProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000950 /* CodexAppServerProtocol.swift */; };
+		AA1000000000000000000953 /* CodexBinaryLocator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000952 /* CodexBinaryLocator.swift */; };
 		AA1000000000000000000961 /* AntigravityUsageReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000960 /* AntigravityUsageReport.swift */; };
 		F910B9C812C7AEFE2293F7D2 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A9C58195E197C19F691DA62 /* Cocoa.framework */; };
 /* End PBXBuildFile section */
@@ -292,6 +294,8 @@
 		AA10000000000000000000A1 /* BoundedProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BoundedProcessRunner.swift; path = Kannu/managers/BoundedProcessRunner.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000910 /* CodexUsageLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CodexUsageLine.swift; path = Kannu/managers/LLMUsage/CodexUsageLine.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000912 /* KeychainReadPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = KeychainReadPolicy.swift; path = Kannu/managers/LLMUsage/Quota/KeychainReadPolicy.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000950 /* CodexAppServerProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CodexAppServerProtocol.swift; path = Kannu/managers/LLMUsage/Quota/CodexAppServerProtocol.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000952 /* CodexBinaryLocator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CodexBinaryLocator.swift; path = Kannu/managers/LLMUsage/Quota/CodexBinaryLocator.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000960 /* AntigravityUsageReport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AntigravityUsageReport.swift; path = Kannu/managers/LLMUsage/AntigravityUsageReport.swift; sourceTree = SOURCE_ROOT; };
 		DAA671E7B1B26733F02166C5 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F4C1DD09EC134302938E84F6 /* MediaRemoteAdapter.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemoteAdapter.framework; path = Frameworks/MediaRemoteAdapter.framework; sourceTree = SOURCE_ROOT; };
@@ -791,6 +795,8 @@
 				AA10000000000000000000A2 /* BoundedProcessRunner.swift in Sources */,
 				AA1000000000000000000911 /* CodexUsageLine.swift in Sources */,
 				AA1000000000000000000913 /* KeychainReadPolicy.swift in Sources */,
+				AA1000000000000000000951 /* CodexAppServerProtocol.swift in Sources */,
+				AA1000000000000000000953 /* CodexBinaryLocator.swift in Sources */,
 				AA1000000000000000000961 /* AntigravityUsageReport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

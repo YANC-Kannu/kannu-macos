@@ -1,11 +1,71 @@
 import Foundation
 import os
 
-// Codex/ChatGPT rate-limit usage from chatgpt.com/backend-api/wham/usage; request+response shape per OpenUsage.
+/// Codex/ChatGPT rate limits, tried in `CodexQuotaRoute.order` until one answers: `codex
+/// app-server` (foreground only), the newest rollout's `rate_limits`, and last the undocumented
+/// `chatgpt.com/backend-api/wham/usage` with Codex's saved token (request and response shape per
+/// OpenUsage).
+///
+/// TO REMOVE: the wham/usage route. OpenAI's terms bar programmatic extraction, its auth docs
+/// say to treat `auth.json` like a password, and it means Kannu reading Codex's token. It stays
+/// only until the app-server route has been verified on a real Codex install.
 struct CodexQuotaClient {
     private static let log = os.Logger(subsystem: "com.kannu.app", category: "CodexQuota")
     let session: URLSession
-    init(session: URLSession = URLSession(configuration: .ephemeral)) { self.session = session }
+    let appServer: CodexAppServerClient
+    let codexHome: URL
+    init(session: URLSession = URLSession(configuration: .ephemeral), appServer: CodexAppServerClient = CodexAppServerClient(),
+         codexHome: URL = CodexRolloutFiles.codexHome()) {
+        self.session = session
+        self.appServer = appServer
+        self.codexHome = codexHome
+    }
+
+    /// `foreground` has no default on purpose: true starts `codex app-server`, so every caller
+    /// says which it is, and the background poll passes false. `interactive` is passed to the
+    /// wham/usage route alone: only there may a keychain read show macOS's "allow access" dialog,
+    /// and only for a refresh the user asked for. `listing` is the rollout listing a caller
+    /// already made, so the folders are not walked twice.
+    func fetchLimits(interactive: Bool = false, foreground: Bool,
+                     listing: CodexRolloutFiles.Listing? = nil) async -> QuotaFetchResult {
+        let now = Date()
+        let answer = await CodexQuotaRoute.firstAnswer(from: CodexQuotaRoute.order(foreground: foreground)) { route -> QuotaFetchResult? in
+            switch route {
+            case .appServer:
+                let outcome = await appServer.fetch()
+                return Self.result(of: CodexQuotaRoute.step(outcome, now: now))
+            case .rollout:
+                let rollouts = listing ?? CodexRolloutFiles.listing(codexHome: codexHome)
+                return Self.result(of: CodexQuotaRoute.step(rollout: CodexRolloutFiles.latestRateLimits(in: rollouts, now: now),
+                                                            now: now))
+            case .whamUsage:
+                return await fetchFromWhamUsage(interactive: interactive)
+            }
+        }
+        if let answer, answer.route != .whamUsage {
+            QuotaDebugLog.log("CodexQuota", "limits from \(answer.route.rawValue)")
+        }
+        return answer?.answer ?? QuotaFetchResult(errorMessage: "Codex quota unavailable")
+    }
+
+    /// A route's verdict as the card takes it; nil sends the search on to the next route.
+    static func result(of step: CodexRouteStep) -> QuotaFetchResult? {
+        switch step {
+        case .answer(let limits):
+            func limit(_ window: CodexLimits.Window) -> UsageLimit {
+                UsageLimit(used: window.usedPercent, limit: 100, resetsAt: window.resetsAt)
+            }
+            var result = QuotaFetchResult(session: limits.session.map(limit), week: limits.week.map(limit),
+                                          accountTier: limits.planType, errorMessage: nil)
+            result.extraLimits = limits.extras.map { NamedLimit(key: $0.key, limit: limit($0.window), label: $0.label) }
+            result.observedAt = limits.observedAt
+            return result
+        case .notSignedIn:
+            return QuotaFetchResult(errorMessage: "Codex not signed in", isAuthFailure: true)
+        case .next:
+            return nil
+        }
+    }
 
     private struct AuthFile: Decodable {
         struct Tokens: Decodable {
@@ -31,10 +91,10 @@ struct CodexQuotaClient {
     }
 
     // Never throws: any credential/network/parse failure yields (nil, nil).
-    /// `interactive` is true only for a refresh the user asked for; only then may the keychain
-    /// read show macOS's "allow access" dialog. Automatic refreshes and the background poll read
-    /// silently.
-    func fetchLimits(interactive: Bool = false) async -> QuotaFetchResult {
+    /// The last route, marked for removal (see the type's comment). `interactive` is true only for
+    /// a refresh the user asked for; only then may the keychain read show macOS's "allow access"
+    /// dialog. Automatic refreshes and the background poll read silently.
+    private func fetchFromWhamUsage(interactive: Bool) async -> QuotaFetchResult {
         let creds: (accessToken: String, accountId: String?)
         switch loadCredentials(interactive: interactive) {
         case .found(let accessToken, let accountId):

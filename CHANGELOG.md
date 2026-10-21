@@ -23,6 +23,131 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Test: new `ReleaseWorkflowRulesTests` (the hyphen check, the three guarded steps and the
     pre-release flags, with planted copies of the old workflow).
 
+### 2026-10-21 - Act on CodeRabbit's review of #104
+- **Developer label:** CodeRabbit's review of #104: a Keychain gate test depended on a fixed sleep
+- **Agent label:** Claude Code (Opus 5.5) — `testAWaitingCallThatMayPromptHoldsBackNewSilentReads` polls, with a deadline, until the waiting dialog call refuses a non-waiting silent read
+- **Changes:**
+  - The test slept 0.1 s and assumed the dialog call's thread had started waiting by then; on a
+    loaded CI runner it might not have, and a correct gate would have failed the test. It now polls
+    `gate.run(.silent, wait: false)` until it is refused, for up to 2 s. A silent read that gets in
+    before the dialog call waits is harmless: the held silent read keeps that call waiting.
+
+### 2026-10-21 - The Codex rollout's rate limits are looked for a chunk at a time, never by reading the file whole
+- **Developer label:** Handoff of #99/#104 from the Codex session: "CodexRolloutFiles.rateLimits(inFile:) falls back to reading the WHOLE rollout into a String when the last 1 MB has no snapshot. That breaks #74's rule, so make it a bounded backward chunked scan."
+- **Agent label:** Claude Code (Opus 5.5) — `rateLimits(inFile:)` reads backwards a megabyte at a time, carries a cut line into the next look back, and stops at 8 MB
+- **Changes:**
+  - `CodexRolloutFiles.rateLimits(inFile:tailBytes:scanBytes:)` reads the rollout from its end a
+    chunk (`rateLimitTailBytes`, 1 MB) at a time until a chunk holds a snapshot or
+    `rateLimitScanBytes` (8 MB) have been read. It used to read the whole file into a String
+    whenever the last megabyte held no snapshot, on every refresh and poll — the cost #74 removed
+    everywhere else. A line cut by a chunk's start is carried into the next look back, so a
+    snapshot that straddles chunks still parses; a chunk whose snapshots are all another bucket's
+    is still the answer (nil), as before.
+  - Test: `CodexRolloutRateLimitsTests.testTheLookBackIsChunkedAndBounded` (a snapshot cut across
+    64-byte chunks parses; one beyond the scan limit is not read). The widen and other-bucket tests
+    pass unchanged.
+
+### 2026-10-18 - Codex limits come from codex app-server or the newest rollout before Kannu reads Codex's token
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P5 Codex quota through codex app-server (unverified, from docs)
+- **Changes:**
+  - Built from upstream docs and source only. Codex is not installed on the development Mac: no
+    real `codex app-server` has answered any of this, no binary's signature has been checked, and no
+    real rollout has been read. Everything below that touches a live install is UNVERIFIED.
+  - New first route for the Codex card's limits on a foreground refresh: `codex app-server` over
+    stdio (https://learn.chatgpt.com/docs/app-server.md; OpenAI calls the app-server experimental
+    and unsupported for production). Kannu writes `initialize` (`clientInfo` name `kannu`, title
+    `Kannu`, the bundle's version, no capabilities, so no `experimentalApi`), the `initialized`
+    notification (no `params`, as upstream serializes it) and `account/rateLimits/read`, one JSON
+    line each, all at once as the docs' own client does. Codex reads its own sign-in; Kannu never
+    sees a token. No `account/read`: the plan is in every rate-limit snapshot (upstream fills
+    `planType` in from the usage payload, `backend-client/src/client.rs`), and `account/read`'s
+    answer would also put the account's email address on Kannu's stdout. Shapes checked against
+    `codex-rs/app-server-protocol` (`v1.rs` `InitializeParams`; `v2/account.rs`
+    `GetAccountRateLimitsResponse`, `RateLimitSnapshot`, `RateLimitWindow`) and
+    `app-server/src/request_processors/account_processor.rs` for the refusal texts. New
+    Foundation-only `CodexAppServerProtocol` (in the KannuTests target) encodes the requests and
+    decodes the answer; only Kannu's own words (a step and a JSON-RPC code) are logged, never the
+    server's text, stdout or stderr.
+  - Mapping: the main bucket's (`rateLimits`, limit id `codex`) primary window is the 5-hour limit
+    and its secondary the weekly one; a single window longer than a day is the weekly one, not the
+    5-hour one. Every other bucket in `rateLimitsByLimitId` becomes an extra limit keyed
+    `<limitId>.primary`/`.secondary` and labelled with its `limitName` (or id) and window length
+    ("codex_other · 7d"). The plan tier is the main snapshot's `planType`, else another bucket's,
+    with "unknown" shown as none. `QuotaFetchResult` gained `extraLimits`, which the Codex card and
+    the background poll now pass on.
+  - Each route's verdict is decided in `CodexQuotaRoute.step` (Foundation-only, tested) and
+    `CodexQuotaClient` only acts on it: a JSON-RPC -32600 "authentication required to read rate
+    limits" answer is final ("Codex not signed in"), so neither a rollout written before a sign-out
+    nor wham/usage's token read may answer instead; a failed app-server, or one whose windows have
+    all reset, passes to the next route. `fetchLimits`' `foreground` has no default any more, so a
+    new caller cannot start `codex app-server` by leaving it out.
+  - The process (new `CodexAppServerClient`, app target): `codex app-server`, no other flag. The
+    root CLI's `-s` and `-a` exist, but `codex-rs/cli/src/main.rs` does not pass them to the
+    app-server and Kannu never starts a thread, so they were left out (docs/REGRESSIONS.md entry 8).
+    cwd `/`, inherited environment, 10 s; once the answer is in, stdin is closed and the server gets
+    2 s to exit on that EOF before SIGTERM, then SIGKILL after 2 s more. It runs on its own serial
+    utility queue, never the main thread or a Swift concurrency thread. `BoundedProcessRunner` gained
+    `input` (written without blocking, SIGPIPE off for that pipe) and `until` (stdin stays open until
+    the answers are in, because the app-server shuts down on EOF; then EOF, the grace period, and
+    only then the signals; the run is not counted as timed out). Existing callers are unchanged.
+  - UNVERIFIED side effects of starting the app-server: the docs say it starts a local Code Mode
+    host by default. Upstream source (`core/src/code_mode_host.rs`) connects to it lazily, spawning
+    it in its own process group on first use by a session, which Kannu never creates; if a real
+    install does start it, the EOF shutdown above is its chance to be reaped.
+  - Binary (new Foundation-only `CodexBinaryLocator`, in the KannuTests target):
+    `~/.local/bin/codex` (the standalone installer's default), `/opt/homebrew/bin/codex`,
+    `/usr/local/bin/codex`, then npm's native vendor binary under Homebrew's, `~/.npm-global`'s and
+    every nvm Node's global `node_modules` (`@openai/codex-darwin-<arch>/vendor/<triple>/bin/codex`,
+    the same package nested under `@openai/codex`, and the older
+    `@openai/codex/vendor/<triple>/codex/codex`). Symlinks are resolved and the real file is the one
+    checked and run; only a Mach-O file is accepted, so the npm `codex.js` shim never runs. The
+    signature must satisfy `identifier "codex"`, `anchor apple generic` and Developer ID
+    (certificate OIDs 1.2.840.113635.100.6.2.6 and 1.2.840.113635.100.6.1.13), checked with
+    `SecStaticCodeCheckValidity`. The verdict is cached by path under the file's device, inode,
+    size and change time (`stat`), not its size and modification date: those two a payload written
+    over a checked binary can put back (padding, `touch -r`), the change time it cannot, so any write
+    or replacement gets the file checked again. The identifier is from OpenAI's release workflow
+    (`sign_macos_code.sh --identifier "$binary"`). OpenAI's Team ID is UNVERIFIED and NOT pinned: no
+    public source found states it, so any Developer ID holder's binary named "codex" passes. A
+    Homebrew formula built from source is not Developer ID-signed and is skipped.
+  - Second route: the latest `rate_limits` of a `token_count` event in the newest rollouts (up to 5
+    of the most recently modified inside the usage window). No process and no token. Upstream writes
+    one bucket per event, the last the response's headers carried (`codex` first, then the other
+    families sorted; `codex-api/src/rate_limits.rs`, `core/src/session/turn.rs`), so on an account
+    whose responses also carry another family every event is that bucket's. A rollout therefore
+    answers only with a live main-bucket window; another bucket's snapshots alone no longer hide the
+    5-hour and weekly gauges (and, from the background poll, silence their alerts). The last 1 MB of
+    a file is read first and the whole file only when that holds no snapshot at all; a tail of
+    another bucket's snapshots moves on to the next file instead of reading a long file whole on
+    every refresh and poll. Rollouts written before `resets_at` existed (`resets_in_seconds`) count
+    from the event's timestamp. Windows whose reset has passed are dropped. New
+    `CodexRolloutRateLimits` and `CodexRolloutFiles.latestRateLimits` in `CodexUsageLine.swift`.
+  - A rollout reading carries the time Codex recorded it (the main snapshot's `token_count`
+    timestamp, through `CodexLimits.observedAt`, `QuotaFetchResult.observedAt` and
+    `UsageSnapshot.quotaObservedAt`), not the time it was read, and `UsageAlertManager` no longer
+    lets a reading replace one observed later. An older rollout figure arriving after a live
+    app-server one used to be read by the forecast as a window restart.
+  - Third route, kept but marked TO REMOVE in `CodexQuotaClient`: the undocumented
+    `chatgpt.com/backend-api/wham/usage` with Codex's saved token (`auth.json` or the "Codex Auth"
+    keychain item). OpenAI's terms bar programmatic extraction and its auth docs say to treat
+    `auth.json` like a password; it goes once the app-server route is verified on a real install.
+    The keychain approval button still comes only from this route.
+  - Order (`CodexQuotaRoute.order`): a foreground refresh tries the app-server, then the rollout,
+    then wham/usage; the background poll (`UsageAlertManager`, every 5 minutes while a Codex agent
+    works) tries the rollout, then wham/usage, and never starts a process.
+  - Tests: `CodexAppServerProtocolTests` (26: requests, waiting, single- and multi-bucket answers,
+    missing windows, a single long window, refusals, interleaved notifications and garbage, the
+    plan, labels, live windows, route order, and each route's verdict), `CodexRolloutRateLimitsTests`
+    (14: latest event, `info: null`, `resets_in_seconds`, null limits, other buckets, events of
+    another bucket only, the observation time, newest file, falling back to an older file, tail
+    widening and not widening), `CodexBinaryLocatorTests` (16: candidate order, x64, nvm order, the
+    npm shim skipped for its vendor binary, symlinks checked once, untrusted skipped, Mach-O magic,
+    the bare invocation, the requirement compiling and refusing Apple's `/bin/ls`, and the cache key
+    surviving no overwrite or replacement), and six new `BoundedProcessRunnerTests` for `input`,
+    `until` and the EOF grace. The full KannuTests suite ran: 946 tests, 0 failures. Fixtures only;
+    nothing ran against a real Codex.
+
 ### 2026-10-21 - Act on CodeRabbit's review of #99
 - **Developer label:** CodeRabbit's review of #99: a GPL header, and whether a silent Keychain read should give up instead of waiting for a dialog
 - **Agent label:** Claude Code (Opus 5.5) — `JSONLUsageCacheCodexTests.swift` gets the GPL header; the silent read keeps waiting, and `KeychainReader.read` says why

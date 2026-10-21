@@ -36,9 +36,11 @@ struct CodexUsageProvider: UsageProvider {
         // cached bulk at the full rate; on a ChatGPT plan no dollars are billed per token at all.
         snapshot.billedCostOnly = true
 
-        let quota = await quotaClient.fetchLimits(interactive: interactive)
+        let quota = await quotaClient.fetchLimits(interactive: interactive, foreground: true, listing: listing)
         snapshot.sessionLimit = quota.session
         snapshot.weekLimit = quota.week
+        snapshot.extraLimits = quota.extraLimits
+        snapshot.quotaObservedAt = quota.observedAt
         snapshot.quotaError = quota.errorMessage
         snapshot.quotaAction = quota.action
         snapshot.accountTier = quota.accountTier

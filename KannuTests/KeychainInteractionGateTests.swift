@@ -148,8 +148,16 @@ final class KeychainInteractionGateTests: XCTestCase {
             _ = gate.run(.mayPrompt) { order.lock(); sequence.append("prompt"); order.unlock() }
             promptDone.signal()
         }
-        Thread.sleep(forTimeInterval: 0.1)   // let it start waiting
-        XCTAssertNil(gate.run(.silent, wait: false) { 1 }, "a waiting dialog call already blocks new silent reads")
+        // Until the dialog call is waiting, a non-waiting silent read still gets in; once it waits, one is
+        // refused. Polled with a deadline rather than a fixed sleep, so a slow runner cannot fail it. A
+        // silent read that gets in first is harmless: the held one keeps the dialog call waiting.
+        var refused = false
+        let deadline = Date().addingTimeInterval(2)
+        while !refused && Date() < deadline {
+            refused = gate.run(.silent, wait: false) { 1 } == nil
+            if !refused { Thread.sleep(forTimeInterval: 0.01) }
+        }
+        XCTAssertTrue(refused, "a waiting dialog call already blocks new silent reads")
         DispatchQueue.global().async {
             _ = gate.run(.silent) { order.lock(); sequence.append("late silent"); order.unlock() }
             lateDone.signal()
