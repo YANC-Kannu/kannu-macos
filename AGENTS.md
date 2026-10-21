@@ -69,6 +69,8 @@ When asked to find, audit, or modify something: load the relevant skills first; 
 
 Preserve the existing product philosophy. Don't redesign unless explicitly asked, don't add unnecessary UI, don't add animations for flair. Respect reduced-motion preferences where relevant. Preserve notch positioning and window behavior. Avoid hard-coded assumptions that only hold on one Mac configuration; consider Retina scaling, display sizes, and light/dark appearance. If existing UI already implements the intended behavior, modify it rather than rebuilding it.
 
+Notch header: buttons that are always there keep fixed positions on the right; buttons and indicators that come and go appear to their left, so a fixed button never moves. The trailing row is right-aligned, so an item that appears pushes only what is to its left. `KannuTests/HeaderOrderRulesTests.swift` pins the order.
+
 Every icon-only notch control gets a hover tooltip that doubles as its accessibility label — `.hoverTooltip(...)`, never `.help(...)`, which never renders in the notch. Read `docs/TOOLTIPS.md` before adding one.
 
 ### Debugging

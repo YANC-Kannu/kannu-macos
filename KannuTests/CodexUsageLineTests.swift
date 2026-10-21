@@ -394,9 +394,9 @@ final class CodexUsageLineTests: XCTestCase {
     }
 
     /// What `CodexUsageProvider` counts, end to end on disk: discovery under CODEX_HOME, the recency
-    /// filter, the Codex reader (the original bug read rollouts with the Claude one and counted 0)
-    /// and the replay skip.
-    func testRecentRecordsReadEveryRecentRolloutWithTheCodexReader() throws {
+    /// filter, the cache's Codex format (the original bug read rollouts with the Claude reader and
+    /// counted 0), the replay skip and the cross-file dedup.
+    func testTheProvidersPathReadsEveryRecentRolloutWithTheCodexReader() throws {
         let codexHome = tempRoot.appendingPathComponent("codex-home", isDirectory: true)
         let rollout = Self.file([
             Self.sessionMeta,
@@ -418,15 +418,17 @@ final class CodexUsageLineTests: XCTestCase {
         try write("sessions/2026/10/17/rollout-2026-10-17T11-00-00-claude.jsonl", in: codexHome,
                   contents: #"{"type":"assistant","timestamp":"2026-10-17T11:00:01.000Z","requestId":"req_1","message":{"id":"msg_1","model":"claude-sonnet-4-5","usage":{"input_tokens":10,"output_tokens":5}}}"# + "\n")
         try write("sessions/2026/10/01/rollout-2026-10-01T10-00-00-old.jsonl", in: codexHome, contents: rollout)
-        let now = Date()
+        // A fixed "now" a few hours after the fixtures, so the week guard never ages them out.
+        let now = try XCTUnwrap(ClaudeUsageLine.parseDate("2026-10-17T12:00:00.000Z"))
         let old = codexHome.appendingPathComponent("sessions/2026/10/01/rollout-2026-10-01T10-00-00-old.jsonl")
         try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-10 * 86400)], ofItemAtPath: old.path)
 
         let listing = CodexRolloutFiles.listing(codexHome: codexHome)
         XCTAssertEqual(listing.plain.count, 5)
-        let records = CodexRolloutFiles.recentRecords(in: listing, now: now)
-        XCTAssertEqual(records.map(\.inputTokens).sorted(), [700, 12000, 12000, 13000, 13000],
-                       "two copies of the rollout and the fork's own request; the old file is skipped")
-        XCTAssertEqual(Set(records.compactMap(\.dedupKey)).count, 3, "the archived copy shares its keys, so it counts once")
+        let recent = UsageWindows.recentlyModified(listing.plain, now: now)
+        XCTAssertEqual(recent.count, 4, "the old file is skipped")
+        let records = JSONLUsageCache(label: "codex", format: .codex).refresh(files: recent, now: now).records
+        XCTAssertEqual(records.map(\.inputTokens).sorted(), [700, 12000, 13000],
+                       "the rollout's two requests once (the archived copy shares its keys) and the fork's own request")
     }
 }

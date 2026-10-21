@@ -108,7 +108,17 @@ struct CodexUsageLine {
 
     init() {}
 
-    /// Every request in one rollout file's contents.
+    /// True until the first `session_meta` or usage event is read: only then can a `session_meta`
+    /// line still decide whether the file replays a parent's history. Lets a byte-level reader
+    /// skip parsing the copies a replayed history carries, as `consume(_:)` does.
+    var isAwaitingSessionMeta: Bool {
+        if case .undecided = replay { return true }
+        return false
+    }
+
+    /// Every request in one rollout file's contents, read in one go. The Usage tab reads rollouts
+    /// through `JSONLUsageCache(format: .codex)` instead, which keeps this reader's state between
+    /// refreshes; this is the reference that cache is tested against.
     static func records(in content: String) -> [UsageRecord] {
         var reader = CodexUsageLine()
         var records: [UsageRecord] = []
@@ -250,16 +260,6 @@ enum CodexRolloutFiles {
     static func hasRolloutDirectory(codexHome: URL, fileManager: FileManager = .default) -> Bool {
         subdirectories.contains { subdirectory in
             fileManager.fileExists(atPath: codexHome.appendingPathComponent(subdirectory, isDirectory: true).path)
-        }
-    }
-
-    /// Every request in the plain rollouts recent enough to matter, read with the Codex reader. This
-    /// is what the Codex card counts; `CodexUsageProvider` hands it to the aggregator unchanged.
-    /// Decide "has logs" from `listing` itself, never from this.
-    static func recentRecords(in listing: Listing, now: Date) -> [UsageRecord] {
-        UsageWindows.recentlyModified(listing.plain, now: now).flatMap { file -> [UsageRecord] in
-            guard let content = try? String(contentsOf: file, encoding: .utf8) else { return [] }
-            return CodexUsageLine.records(in: content)
         }
     }
 
