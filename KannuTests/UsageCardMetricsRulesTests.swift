@@ -31,6 +31,19 @@ final class UsageCardMetricsRulesTests: XCTestCase {
         XCTAssertEqual(Self.problems(in: source), [])
     }
 
+    /// CodeRabbit on #113: the 5-hour column is budgeted for one bar, and the weekly column for the
+    /// token-total rows Codex and Cursor draw under it; the view must draw to those budgets.
+    func testTheColumnsDrawWithinTheirBudgets() throws {
+        let source = try String(contentsOf: Self.root.appendingPathComponent(Self.viewPath), encoding: .utf8)
+        XCTAssertTrue(source.contains("M.maxWeeklyBars(statusRow: hasStatus, factRows: Self.showsTokenTotals(provider) ? 2 : 0)"),
+                      "the weekly bar limit leaves out the token-total rows")
+        let start = try XCTUnwrap(source.range(of: "private func fiveHourColumn("), "fiveHourColumn is gone")
+        let end = try XCTUnwrap(source.range(of: "private func weeklyColumn(", range: start.upperBound..<source.endIndex))
+        let column = String(source[start.lowerBound..<end.lowerBound])
+        XCTAssertFalse(column.contains("ForEach("), "the 5-hour column draws more bars than its one-bar budget")
+        XCTAssertTrue(column.contains("UsageChip(\"+\\(folded.count)\")"), "other pools' 5-hour windows no longer fold into a chip")
+    }
+
     func testTheScannerCatchesPlantedOffenders() {
         XCTAssertEqual(Self.problems(in: Self.clean), [])
         let plants: [(String, String)] = [

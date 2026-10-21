@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - Act on CodeRabbit's review of #113
+- **Developer label:** CodeRabbit's review of #113 (the agents batch: #96, #100, #101, #102, #105): three findings, all in the usage card and its Settings text
+- **Agent label:** Claude Code (Opus 5.5) — the 5-hour column draws one bar and folds other pools' windows into a chip, the weekly bar limit counts Codex's and Cursor's token-total rows, and the Providers footer says what the Claude card runs
+- **Changes:**
+  - The 5-hour column draws one bar, as `UsageCardMetrics.fiveHourColumnHeight` budgets. Antigravity's
+    other pools' 5-hour windows fold into a "+n" chip beside the title, named on hover, as the
+    weekly column's overflow does; with three pools the column had grown to 106 pt and the card past
+    the 138 pt slot.
+  - `UsageCardMetrics.maxWeeklyBars(statusRow:factRows:)` (and the column heights under it) counts
+    the two token-total rows Codex's and Cursor's weekly column draws under its bars;
+    `NotchLLMUsageView.showsTokenTotals` decides both. Cursor's Auto and API bars with a status row
+    made a 150 pt card; the API bar now folds into the chip. Claude's budget is unchanged.
+  - Brain › Usage's Providers footer no longer says Claude "needs no permission" or names a gauge
+    button the card no longer has: it says Kannu runs Claude Code's /usage while the tab is open and
+    the limits are over 15 minutes old, and that the card's ↻ fetches now and can start Claude
+    Code's sign-in.
+  - Tests: `UsageCardMetricsTests.testTheTokenTotalsCountInTheWeeklyBudget`,
+    `UsageCardMetricsRulesTests.testTheColumnsDrawWithinTheirBudgets`.
+
 ### 2026-10-21 - Act on CodeRabbit's review of #96
 - **Developer label:** CodeRabbit's review of #96 at 9c7ca4f: five findings, fixed on the agents batch (#113)
 - **Agent label:** Claude Code (Opus 5.5) — the "other organization" hint clears after a sign-in in Terminal, a cancelled refresh starts no further step or child, and three new test files carry the GPL header

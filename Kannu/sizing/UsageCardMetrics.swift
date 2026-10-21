@@ -157,14 +157,15 @@ enum UsageCardMetrics {
         sectionHeight(bars: 1) + (noteRowSpacing + noteRowHeight) * 2
     }
 
-    /// The weekly column: title (with the reset beside it) and `bars` bars.
-    static func weeklyColumnHeight(bars: Int) -> CGFloat {
-        sectionHeight(bars: bars)
+    /// The weekly column: title (with the reset beside it), `bars` bars, and `factRows` note rows
+    /// under them (Codex's and Cursor's token totals: Today and Week).
+    static func weeklyColumnHeight(bars: Int, factRows: Int = 0) -> CGFloat {
+        sectionHeight(bars: bars) + (noteRowSpacing + noteRowHeight) * CGFloat(factRows)
     }
 
     /// The split body is as tall as its taller column.
-    static func splitBodyHeight(weeklyBars: Int) -> CGFloat {
-        max(fiveHourColumnHeight, weeklyColumnHeight(bars: weeklyBars))
+    static func splitBodyHeight(weeklyBars: Int, factRows: Int = 0) -> CGFloat {
+        max(fiveHourColumnHeight, weeklyColumnHeight(bars: weeklyBars, factRows: factRows))
     }
 
     /// The stacked fallback: labelled bar rows with no title, then one reset line, all at the
@@ -179,9 +180,12 @@ enum UsageCardMetrics {
         cardPadding * 2 + headerRowHeight + rowSpacing + body + (statusRow ? rowSpacing + statusRowHeight : 0)
     }
 
-    /// The most weekly bars a split card draws and still fits; the rest fold into a "+n" chip.
-    static func maxWeeklyBars(statusRow: Bool) -> Int {
-        (1...8).last { cardHeight(body: splitBodyHeight(weeklyBars: $0), statusRow: statusRow) <= cardHeightLimit } ?? 1
+    /// The most weekly bars a split card draws and still fits, with `factRows` token-total rows
+    /// under them; the rest fold into a "+n" chip.
+    static func maxWeeklyBars(statusRow: Bool, factRows: Int = 0) -> Int {
+        (1...8).last {
+            cardHeight(body: splitBodyHeight(weeklyBars: $0, factRows: factRows), statusRow: statusRow) <= cardHeightLimit
+        } ?? 1
     }
 
     /// The most bars a stacked card draws.

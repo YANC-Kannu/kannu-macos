@@ -224,20 +224,25 @@ struct NotchLLMUsageView: View {
     }
 
     /// Title, bar, the reset, and the forecast in the few words that fit — or an empty line,
-    /// so the column's height never depends on the forecast.
+    /// so the column's height never depends on the forecast. One bar, as `fiveHourColumnHeight`
+    /// budgets: another pool's 5-hour window (Antigravity) folds into a "+n" chip beside the title,
+    /// as the weekly column's overflow does.
     @ViewBuilder
     private func fiveHourColumn(_ bars: [QuotaBar], now: Date) -> some View {
         let first = bars[0]
+        let folded = Array(bars.dropFirst())
         let forecast = outlooks[first.windowID].flatMap { UsageForecast.shortCaption($0, resetsAt: first.resetsAt, now: now) }
         VStack(alignment: .leading, spacing: 0) {
-            sectionTitle(String(localized: "5 hour"), trailing: nil)
-            Spacer().frame(height: M.sectionTitleSpacing)
-            VStack(alignment: .leading, spacing: M.barRowSpacing) {
-                ForEach(bars) { bar in
-                    barRow(bar, warning: bar.id == first.id && forecast?.isWarning == true, tooltip: nil)
-                        .opacity(Self.isStale(bar, now: now) ? M.staleOpacity : 1)
+            sectionTitle(String(localized: "5 hour"), trailing: nil) {
+                if !folded.isEmpty {
+                    UsageChip("+\(folded.count)")
+                        .accessibilityLabel(Self.foldedSummary(folded))
+                        .hoverTooltip(Self.foldedSummary(folded), edge: .below)
                 }
             }
+            Spacer().frame(height: M.sectionTitleSpacing)
+            barRow(first, warning: forecast?.isWarning == true, tooltip: nil)
+                .opacity(Self.isStale(first, now: now) ? M.staleOpacity : 1)
             Spacer().frame(height: M.noteRowSpacing)
             note(resetsIn(first.resetsAt, now: now) ?? "")
             Spacer().frame(height: M.noteRowSpacing)
@@ -250,7 +255,7 @@ struct NotchLLMUsageView: View {
     @ViewBuilder
     private func weeklyColumn(_ bars: [QuotaBar], snap: UsageSnapshot, provider: ProviderID,
                               hasStatus: Bool, showCost: Bool, now: Date) -> some View {
-        let limit = M.maxWeeklyBars(statusRow: hasStatus)
+        let limit = M.maxWeeklyBars(statusRow: hasStatus, factRows: Self.showsTokenTotals(provider) ? 2 : 0)
         let shown = Array(bars.prefix(limit))
         let folded = Array(bars.dropFirst(limit))
         let reset = bars.first?.resetsAt
@@ -272,7 +277,7 @@ struct NotchLLMUsageView: View {
                         .opacity(Self.isStale(bar, now: now) ? M.staleOpacity : 1)
                 }
             }
-            if provider != .claude && provider != .antigravity {
+            if Self.showsTokenTotals(provider) {
                 // Codex and Cursor keep their token totals, in the room under the single bar.
                 // Antigravity keeps no token log at all, so there is no "unavailable" to report.
                 Spacer().frame(height: M.noteRowSpacing)
@@ -285,6 +290,12 @@ struct NotchLLMUsageView: View {
                 }
             }
         }
+    }
+
+    /// Whether the weekly column draws the two token-total rows under its bars: Claude's gauges
+    /// cover that ground, and Antigravity keeps no token log. `maxWeeklyBars` budgets for them.
+    static func showsTokenTotals(_ provider: ProviderID) -> Bool {
+        provider != .claude && provider != .antigravity
     }
 
     /// Too narrow for two columns (three cards in a 640 pt notch): every bar labelled, in one

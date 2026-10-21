@@ -51,6 +51,22 @@ final class UsageCardMetricsTests: XCTestCase {
         XCTAssertEqual(M.cardHeight(body: M.splitBodyHeight(weeklyBars: 2), statusRow: true), 130)
     }
 
+    /// CodeRabbit on #113: Codex's and Cursor's weekly column also draws two token-total rows. Left
+    /// out of the budget, Cursor's Auto and API bars with a status row made a 150 pt card.
+    func testTheTokenTotalsCountInTheWeeklyBudget() {
+        for statusRow in [false, true] {
+            for n in 1...M.maxWeeklyBars(statusRow: statusRow, factRows: 2) {
+                let height = M.cardHeight(body: M.splitBodyHeight(weeklyBars: n, factRows: 2), statusRow: statusRow)
+                XCTAssertLessThanOrEqual(height, M.cardHeightLimit, "\(n) weekly bars and the totals, status \(statusRow)")
+            }
+        }
+        XCTAssertEqual(M.maxWeeklyBars(statusRow: true, factRows: 2), 1)
+        XCTAssertEqual(M.maxWeeklyBars(statusRow: false, factRows: 2), 2)
+        XCTAssertEqual(M.cardHeight(body: M.splitBodyHeight(weeklyBars: 2, factRows: 2), statusRow: true), 150,
+                       "the overflow the review found, now folded into the chip")
+        XCTAssertEqual(M.maxWeeklyBars(statusRow: true), 3, "Claude's budget is unchanged")
+    }
+
     func testTheFiveHourColumnSetsTheHeightUpToTwoWeeklyBars() {
         XCTAssertEqual(M.fiveHourColumnHeight, 66)
         XCTAssertEqual(M.weeklyColumnHeight(bars: 2), 54)
