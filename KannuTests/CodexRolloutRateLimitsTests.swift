@@ -210,6 +210,24 @@ final class CodexRolloutRateLimitsTests: XCTestCase {
                        "read whole, the same file answers")
     }
 
+    /// The look back is chunked and bounded (#74's rule: a refresh never reads a long file whole).
+    /// A snapshot cut across many small chunks still parses, and one beyond the scan limit is not
+    /// read at all.
+    func testTheLookBackIsChunkedAndBounded() throws {
+        let filler = String(repeating: Self.message + "\n", count: 40)
+        let content = Self.tokenCount(at: "2026-10-17T09:00:00.000Z", rateLimits: Self.snapshot(
+            primary: Self.window(33.0, minutes: 300, resetsAt: 1_792_231_200), secondary: nil)) + "\n" + filler
+        let file = try write(content, to: "rollout-chunked.jsonl", modified: Date())
+        let snapshotLine = content.split(separator: "\n").first.map { $0.utf8.count } ?? 0
+        XCTAssertGreaterThan(snapshotLine, 64, "the snapshot line spans several 64-byte chunks")
+        XCTAssertEqual(CodexRolloutFiles.rateLimits(inFile: file, tailBytes: 64)?.session?.usedPercent, 33.0,
+                       "a line cut by chunk starts is carried back until it is whole")
+        XCTAssertNil(CodexRolloutFiles.rateLimits(inFile: file, tailBytes: 64, scanBytes: content.utf8.count - snapshotLine),
+                     "a snapshot beyond the scan limit is never read")
+        XCTAssertEqual(CodexRolloutFiles.rateLimits(inFile: file, tailBytes: 64, scanBytes: content.utf8.count)?.session?.usedPercent,
+                       33.0, "within the limit, it is")
+    }
+
     func testATailWithTheMainSnapshotIsEnough() throws {
         let filler = String(repeating: Self.message + "\n", count: 40)
         let content = filler + Self.tokenCount(at: "2026-10-17T09:00:00.000Z", rateLimits: Self.snapshot(

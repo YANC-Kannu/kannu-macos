@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - The Codex rollout's rate limits are looked for a chunk at a time, never by reading the file whole
+- **Developer label:** Handoff of #99/#104 from the Codex session: "CodexRolloutFiles.rateLimits(inFile:) falls back to reading the WHOLE rollout into a String when the last 1 MB has no snapshot. That breaks #74's rule, so make it a bounded backward chunked scan."
+- **Agent label:** Claude Code (Opus 5.5) — `rateLimits(inFile:)` reads backwards a megabyte at a time, carries a cut line into the next look back, and stops at 8 MB
+- **Changes:**
+  - `CodexRolloutFiles.rateLimits(inFile:tailBytes:scanBytes:)` reads the rollout from its end a
+    chunk (`rateLimitTailBytes`, 1 MB) at a time until a chunk holds a snapshot or
+    `rateLimitScanBytes` (8 MB) have been read. It used to read the whole file into a String
+    whenever the last megabyte held no snapshot, on every refresh and poll — the cost #74 removed
+    everywhere else. A line cut by a chunk's start is carried into the next look back, so a
+    snapshot that straddles chunks still parses; a chunk whose snapshots are all another bucket's
+    is still the answer (nil), as before.
+  - Test: `CodexRolloutRateLimitsTests.testTheLookBackIsChunkedAndBounded` (a snapshot cut across
+    64-byte chunks parses; one beyond the scan limit is not read). The widen and other-bucket tests
+    pass unchanged.
+
 ### 2026-10-18 - Codex limits come from codex app-server or the newest rollout before Kannu reads Codex's token
 - **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
 - **Agent label:** P5 Codex quota through codex app-server (unverified, from docs)

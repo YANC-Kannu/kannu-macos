@@ -359,24 +359,46 @@ extension CodexRolloutFiles {
         return nil
     }
 
-    /// The file's last megabyte first; the whole file only when that holds no snapshot at all, so
-    /// a tail that happens to miss the latest event widens instead of reporting less than the file
-    /// says. A tail whose snapshots are all another bucket's is an answer, not a miss: the events
-    /// that file writes carry that bucket (see `CodexRolloutRateLimits`), so a main snapshot further
-    /// back is rare, and reading a long file whole on every refresh and poll to look for one costs
-    /// more than it can return. That file gives nil and the next one is tried.
-    static func rateLimits(inFile file: URL, tailBytes: Int = rateLimitTailBytes) -> CodexLimits? {
+    /// How far back from a rollout's end the snapshot is looked for, at most. A refresh never reads
+    /// a long file whole (#74): it used to, whenever the last megabyte held no snapshot.
+    static let rateLimitScanBytes = 8 << 20
+
+    /// The file read backwards a chunk (`tailBytes`) at a time, from its end, until a chunk holds a
+    /// snapshot or `scanBytes` have been read: a tail that happens to miss the latest event widens
+    /// instead of reporting less than the file says, without ever holding more than a chunk and the
+    /// one line it cut. A line cut by a chunk's start is carried into the next look back, so a
+    /// snapshot that straddles two chunks still parses. A chunk whose snapshots are all another
+    /// bucket's is an answer, not a miss: the events that file writes carry that bucket (see
+    /// `CodexRolloutRateLimits`), so a main snapshot further back is rare. That file gives nil and
+    /// the next one is tried.
+    static func rateLimits(inFile file: URL, tailBytes: Int = rateLimitTailBytes,
+                           scanBytes: Int = rateLimitScanBytes) -> CodexLimits? {
         guard let handle = try? FileHandle(forReadingFrom: file) else { return nil }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return nil }
-        if size > UInt64(tailBytes) {
-            try? handle.seek(toOffset: size - UInt64(tailBytes))
-            // The first line of the tail is usually cut; it fails to parse and is skipped.
-            let tail = (try? handle.readToEnd()).map { String(decoding: $0, as: UTF8.self) } ?? ""
-            let buckets = CodexRolloutRateLimits.latestBuckets(in: tail)
+        guard var end = try? handle.seekToEnd() else { return nil }
+        let floor = end > UInt64(scanBytes) ? end - UInt64(scanBytes) : 0
+        // The start of a line the chunk after this one cut: it continues this chunk's last line.
+        var carry = Data()
+        while end > floor {
+            let start = max(floor, end > UInt64(tailBytes) ? end - UInt64(tailBytes) : 0)
+            guard (try? handle.seek(toOffset: start)) != nil,
+                  var chunk = try? handle.read(upToCount: Int(end - start)) else { return nil }
+            chunk.append(carry)
+            var lines = chunk
+            if start == 0 {
+                carry = Data()
+            } else if let newline = chunk.firstIndex(of: 0x0A) {
+                // Not the file's start: the first line may be cut, so it waits for the bytes before it.
+                carry = Data(chunk[chunk.startIndex..<newline])
+                lines = Data(chunk[chunk.index(after: newline)...])
+            } else {
+                carry = chunk
+                lines = Data()
+            }
+            let buckets = CodexRolloutRateLimits.latestBuckets(in: String(decoding: lines, as: UTF8.self))
             if buckets.main != nil || !buckets.others.isEmpty { return CodexRolloutRateLimits.limits(buckets) }
+            end = start
         }
-        guard (try? handle.seek(toOffset: 0)) != nil, let data = try? handle.readToEnd() else { return nil }
-        return CodexRolloutRateLimits.latest(in: String(decoding: data, as: UTF8.self))
+        return nil
     }
 }
