@@ -145,6 +145,8 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
         let publish = try XCTUnwrap(Self.body(ofFunction: "publish", in: text),
                                     "publish went away — this pin is now vacuous, update it")
         XCTAssertTrue(publish.contains("fullscreenStatus = newStatus"), "publish(_:) no longer assigns the verdict")
+        XCTAssertTrue(publish.contains("ticket == scanGeneration"),
+                      "a scan that finished late can overwrite a newer verdict (CodeRabbit on #112)")
         XCTAssertTrue(text.contains("@MainActor\n    private func publish("), "publish(_:) must be @MainActor")
         let assignments = Self.strippingComments(text).components(separatedBy: "fullscreenStatus = ").count - 1
         XCTAssertEqual(assignments, 1, "fullscreenStatus is assigned somewhere other than publish(_:)")

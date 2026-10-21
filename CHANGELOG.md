@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - Act on CodeRabbit's review of #112
+- **Developer label:** CodeRabbit on #112: discard stale fullscreen scans before publishing
+- **Agent label:** Claude Code (Opus 5.5) — each fullscreen scan takes a main-actor ticket, and `publish(_:ticket:)` drops a scan a newer one has overtaken
+- **Changes:**
+  - Scans run concurrently now that they leave the main thread (the initial one and each change's,
+    500 ms and 1.5 s after it), so an older Accessibility or window scan could finish after a newer
+    one and overwrite `fullscreenStatus`, leaving `hideOnClosed` wrong until the next change.
+    `FullscreenMediaDetector` bumps `scanGeneration` on the main actor when a scan starts, and
+    `publish(_:ticket:)` assigns only while the scan's ticket is the latest.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsPublishedOnTheMainActor` requires the
+    ticket check.
+
 ### 2026-10-20 - Release hardening for 1.4.0: an unknown task source costs one task, Reminders is entitled, fullscreen publishes on the main actor
 - **Developer label:** "see if everything is solid enough" — the pre-release audit of development
 - **Agent label:** Claude Code (Fable 5.1) — `tasks.json` drops a task from a source this build does not know instead of moving the file aside; `Kannu.entitlements` names the calendars entitlement EventKit needs under hardened runtime; `FullscreenMediaDetector` assigns its main-actor verdict on the main actor; README and docs/ADR.md catch up

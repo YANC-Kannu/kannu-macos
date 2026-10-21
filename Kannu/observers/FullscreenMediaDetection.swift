@@ -31,6 +31,9 @@ class FullscreenMediaDetector: ObservableObject {
     private let detector: MacroVisionKit
     @ObservedObject private var musicManager = MusicManager.shared
     @MainActor @Published private(set) var fullscreenStatus: [String: Bool] = [:]
+    /// Bumped per scan on the main actor. A scan publishes only while it is the latest, so one
+    /// that finishes late cannot overwrite a newer verdict (CodeRabbit on #112).
+    @MainActor private var scanGeneration = 0
     private var notificationTask: Task<Void, Never>?
     private var cancellables: Set<AnyCancellable> = []
 
@@ -114,15 +117,22 @@ class FullscreenMediaDetector: ObservableObject {
     /// Reads the screens and windows where the caller runs — off the main thread, since an
     /// Accessibility read of an unresponsive app can wait — then publishes on the main actor.
     private func updateFullScreenStatus() async {
-        await publish(currentFullscreenStatus())
+        let ticket = await nextScanTicket()
+        await publish(currentFullscreenStatus(), ticket: ticket)
+    }
+
+    @MainActor
+    private func nextScanTicket() -> Int {
+        scanGeneration += 1
+        return scanGeneration
     }
 
     /// `fullscreenStatus` is main-actor state (`KannuViewModel` derives `hideOnClosed` from it):
     /// this is the one place that assigns it. It used to be assigned from whichever thread ran
-    /// the scan.
+    /// the scan. A scan another one has overtaken is dropped: its screens and windows are older.
     @MainActor
-    private func publish(_ newStatus: [String: Bool]) {
-        guard newStatus != fullscreenStatus else { return }
+    private func publish(_ newStatus: [String: Bool], ticket: Int) {
+        guard ticket == scanGeneration, newStatus != fullscreenStatus else { return }
         fullscreenStatus = newStatus
         NSLog("✅ Fullscreen status: \(newStatus)")
     }
