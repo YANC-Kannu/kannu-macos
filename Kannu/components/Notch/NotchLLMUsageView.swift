@@ -58,7 +58,7 @@ struct NotchLLMUsageView: View {
     private var outlooks: [String: UsageForecast.Outlook] { snapshotOutlooks ?? usageAlerts.outlooks }
 
     /// A provider is "active" (shows full card) when:
-    /// - Antigravity: always shown (session info instead of token counts)
+    /// - Antigravity: always shown (its quota bars when `agy` reports them, else session info)
     /// - Others: show unless result is a hard .failure, OR a .success where the provider
     ///   has neither local logs nor quota limits (e.g. Claude with a dead OAuth token, Codex
     ///   not installed — both return .success but have nothing useful to display).
@@ -175,7 +175,7 @@ struct NotchLLMUsageView: View {
         case .failure(let reason):
             note(reason, lines: 2)
         case .success(let snap):
-            if provider == .antigravity {
+            if provider == .antigravity && snap.sessionLimit == nil && snap.weekLimit == nil && snap.extraLimits.isEmpty {
                 note(snap.quotaError ?? String(localized: "No recent sessions"), lines: 2)
             } else {
                 quotaBody(snap, provider: provider, innerWidth: innerWidth, hasStatus: hasStatus, now: now)
@@ -186,10 +186,10 @@ struct NotchLLMUsageView: View {
     @ViewBuilder
     private func quotaBody(_ snap: UsageSnapshot, provider: ProviderID, innerWidth: CGFloat,
                            hasStatus: Bool, now: Date) -> some View {
-        let fiveHour = snap.sessionLimit.flatMap { Self.isLive($0, now: now) ? $0 : nil }
+        let sessions = sessionBars(snap, provider: provider, now: now)
         let weekly = weeklyBars(snap, provider: provider, now: now)
         let showCost = !snap.billedCostOnly
-        if fiveHour == nil && weekly.isEmpty {
+        if sessions.isEmpty && weekly.isEmpty {
             // No server-side windows: the local token totals are all there is.
             VStack(alignment: .leading, spacing: M.noteRowSpacing) {
                 if snap.logsUnavailable {
@@ -204,36 +204,40 @@ struct NotchLLMUsageView: View {
                          + (resetsIn(block.resetsAt, now: now).map { " · " + $0 } ?? ""))
                 }
             }
-        } else if let fiveHour, let columns = M.columns(innerWidth: innerWidth) {
+        } else if !sessions.isEmpty, let columns = M.columns(innerWidth: innerWidth) {
             // The card's two things, side by side in the golden ratio: the 5-hour window (now) is
             // the minor part, the weekly stack (the trend) the major one.
             HStack(alignment: .top, spacing: M.columnSpacing) {
-                fiveHourColumn(fiveHour, provider: provider, now: now)
+                fiveHourColumn(sessions, now: now)
                     .frame(width: columns.minor, alignment: .leading)
                 weeklyColumn(weekly, snap: snap, provider: provider, hasStatus: hasStatus, showCost: showCost, now: now)
                     .frame(width: columns.major, alignment: .leading)
             }
-        } else if fiveHour == nil {
+        } else if sessions.isEmpty {
             // One window only (Cursor's billing cycle): one column across the card.
             weeklyColumn(weekly, snap: snap, provider: provider, hasStatus: hasStatus, showCost: showCost, now: now)
         } else {
-            stackedBody(fiveHour: fiveHour, weekly: weekly, provider: provider, now: now)
+            stackedBody(sessions: sessions, weekly: weekly, now: now)
         }
     }
 
     /// Title, bar, the reset, and the forecast in the few words that fit — or an empty line,
     /// so the column's height never depends on the forecast.
     @ViewBuilder
-    private func fiveHourColumn(_ limit: UsageLimit, provider: ProviderID, now: Date) -> some View {
-        let bar = QuotaBar(limit, windowID: Self.windowID(provider, slot: "session"))
-        let forecast = outlooks[bar.windowID].flatMap { UsageForecast.shortCaption($0, resetsAt: limit.resetsAt, now: now) }
+    private func fiveHourColumn(_ bars: [QuotaBar], now: Date) -> some View {
+        let first = bars[0]
+        let forecast = outlooks[first.windowID].flatMap { UsageForecast.shortCaption($0, resetsAt: first.resetsAt, now: now) }
         VStack(alignment: .leading, spacing: 0) {
             sectionTitle(String(localized: "5 hour"), trailing: nil)
             Spacer().frame(height: M.sectionTitleSpacing)
-            barRow(bar, warning: forecast?.isWarning == true, tooltip: nil)
-                .opacity(Self.isStale(bar, now: now) ? M.staleOpacity : 1)
+            VStack(alignment: .leading, spacing: M.barRowSpacing) {
+                ForEach(bars) { bar in
+                    barRow(bar, warning: bar.id == first.id && forecast?.isWarning == true, tooltip: nil)
+                        .opacity(Self.isStale(bar, now: now) ? M.staleOpacity : 1)
+                }
+            }
             Spacer().frame(height: M.noteRowSpacing)
-            note(resetsIn(limit.resetsAt, now: now) ?? "")
+            note(resetsIn(first.resetsAt, now: now) ?? "")
             Spacer().frame(height: M.noteRowSpacing)
             note(forecast?.text ?? "", tint: forecast?.isWarning == true ? .orange : nil, quiet: true)
         }
@@ -266,8 +270,9 @@ struct NotchLLMUsageView: View {
                         .opacity(Self.isStale(bar, now: now) ? M.staleOpacity : 1)
                 }
             }
-            if provider != .claude {
+            if provider != .claude && provider != .antigravity {
                 // Codex and Cursor keep their token totals, in the room under the single bar.
+                // Antigravity keeps no token log at all, so there is no "unavailable" to report.
                 Spacer().frame(height: M.noteRowSpacing)
                 if snap.logsUnavailable {
                     note(String(localized: "Token totals unavailable"))
@@ -283,10 +288,13 @@ struct NotchLLMUsageView: View {
     /// Too narrow for two columns (three cards in a 640 pt notch): every bar labelled, in one
     /// stack, then one line for both resets.
     @ViewBuilder
-    private func stackedBody(fiveHour: UsageLimit?, weekly: [QuotaBar], provider: ProviderID, now: Date) -> some View {
-        let first = fiveHour.map { [QuotaBar($0, label: String(localized: "5 hour"), windowID: Self.windowID(provider, slot: "session"))] } ?? []
+    private func stackedBody(sessions: [QuotaBar], weekly: [QuotaBar], now: Date) -> some View {
+        // The lone 5-hour bar is named "5 hour" here, where it has no section title of its own.
+        let first = sessions.enumerated().map { index, bar in
+            index == 0 && bar.label == nil ? bar.labelled(String(localized: "5 hour")) : bar
+        }
         let bars = Array((first + weekly).prefix(M.maxStackedBars))
-        let resets = [fiveHour.flatMap { resetsIn($0.resetsAt, now: now) }.map { String(localized: "5h \($0)") },
+        let resets = [sessions.first.flatMap { resetsIn($0.resetsAt, now: now) }.map { String(localized: "5h \($0)") },
                       weekly.first.flatMap { resetsIn($0.resetsAt, now: now) }.map { String(localized: "week \($0)") }]
             .compactMap { $0 }
         VStack(alignment: .leading, spacing: M.barRowSpacing) {
@@ -541,11 +549,26 @@ struct NotchLLMUsageView: View {
     private func weeklyBars(_ snap: UsageSnapshot, provider: ProviderID, now: Date) -> [QuotaBar] {
         var bars: [QuotaBar] = []
         if let week = snap.weekLimit, Self.isLive(week, now: now) {
-            // Cursor's split plan names its first bar "Auto" and keys it apart from "week" (#100).
-            bars.append(.init(week, label: snap.weekLimitLabel ?? String(localized: "All models"),
+            // Cursor's split plan names its first bar "Auto" and keys it apart from "week";
+            // Antigravity's names the model pool it measures.
+            bars.append(.init(week, label: snap.weekLimitLabel ?? snap.limitsLabel ?? String(localized: "All models"),
                               windowID: Self.windowID(provider, slot: snap.weekLimitKey)))
         }
-        for extra in snap.extraLimits where Self.isLive(extra.limit, now: now) {
+        for extra in snap.extraLimits where !extra.isSessionWindow && Self.isLive(extra.limit, now: now) {
+            bars.append(.init(extra.limit, label: extra.label ?? Self.extraLimitLabel(extra),
+                              windowID: Self.windowID(provider, slot: extra.key)))
+        }
+        return bars
+    }
+
+    /// The 5-hour side: the main window, named by the pool it measures when that is not every
+    /// model (Antigravity), then every other pool's 5-hour window — never under Weekly.
+    private func sessionBars(_ snap: UsageSnapshot, provider: ProviderID, now: Date) -> [QuotaBar] {
+        var bars: [QuotaBar] = []
+        if let limit = snap.sessionLimit, Self.isLive(limit, now: now) {
+            bars.append(.init(limit, label: snap.limitsLabel, windowID: Self.windowID(provider, slot: "session")))
+        }
+        for extra in snap.extraLimits where extra.isSessionWindow && Self.isLive(extra.limit, now: now) {
             bars.append(.init(extra.limit, label: extra.label ?? Self.extraLimitLabel(extra),
                               windowID: Self.windowID(provider, slot: extra.key)))
         }
@@ -593,6 +616,21 @@ struct NotchLLMUsageView: View {
             self.windowID = windowID
             self.resetsAt = limit.resetsAt
             self.observedAt = limit.observedAt
+        }
+
+        /// The same bar under another name.
+        func labelled(_ label: String) -> QuotaBar {
+            QuotaBar(copying: self, label: label)
+        }
+
+        private init(copying bar: QuotaBar, label: String?) {
+            self.label = label
+            fraction = bar.fraction
+            percent = bar.percent
+            tint = bar.tint
+            windowID = bar.windowID
+            resetsAt = bar.resetsAt
+            observedAt = bar.observedAt
         }
     }
 

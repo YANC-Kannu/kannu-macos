@@ -68,6 +68,9 @@ struct NamedLimit: Equatable {
     let limit: UsageLimit
     /// The provider's own name for this window, preferred over anything derived from the key.
     var label: String? = nil
+    /// A 5-hour window (Antigravity reports one per model pool), shown with the 5-hour bar instead
+    /// of under Weekly.
+    var isSessionWindow: Bool = false
 }
 
 extension NamedLimit {
@@ -87,6 +90,9 @@ struct UsageSnapshot: Equatable {
     /// The alert and forecast reading key of the `weekLimit` bar. Cursor's Auto pool reads as
     /// "auto", so its forecast never continues a series of blended totals.
     var weekLimitKey: String = "week"
+    /// What `sessionLimit` and `weekLimit` measure when it is not every model: Antigravity's quota
+    /// is per model pool, and these two are its first pool's. nil reads as all models.
+    var limitsLabel: String? = nil
     /// Additional rate-limit windows beyond the 5h/7d pair, in the order the provider reported them.
     var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil // billing-cycle on-demand spend from usage-summary

@@ -13,11 +13,11 @@ import os
 ///   JSON file in that folder).
 /// - Codex:   script `~/.codex/kannu-agent-status.sh`, entries merged into
 ///   `~/.codex/hooks.json`, plus `features.hooks = true` in
-///   `~/.codex/config.toml`.
+///   `~/.codex/config.toml` when that file does not set it already.
 /// - Claude:  script `~/.claude/kannu-agent-status.sh`, entries merged into
 ///   `~/.claude/settings.json` under the `"hooks"` key.
 /// - Antigravity: script `~/.gemini/antigravity-ide/kannu-agent-status.sh`,
-///   entries merged into `~/.gemini/antigravity-ide/hooks.json`.
+///   a `kannu-agent-status` entry merged into `~/.gemini/config/hooks.json`.
 @MainActor
 final class AgentHookInstaller: ObservableObject {
     static let shared = AgentHookInstaller()
@@ -28,7 +28,7 @@ final class AgentHookInstaller: ObservableObject {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     static let scriptName = AgentHookLayout.scriptName
-    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=44"
+    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=46"
 
     private static var home: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -74,6 +74,7 @@ final class AgentHookInstaller: ObservableObject {
         migrateClaudeNotificationHooksIfNeeded()
         migrateCursorHookEventArgumentIfNeeded()
         migrateClaudeStyleHookEventArgumentIfNeeded()
+        migrateAntigravityHookShapeIfNeeded()
         migrateClaudeUsageStatusLineIfNeeded()
         migrateOpencodePluginIfNeeded()
         refresh()
@@ -148,16 +149,16 @@ final class AgentHookInstaller: ObservableObject {
         lastError = nil
         do {
             let files = Self.layout.files(for: provider)
-            // Every file the layout lists, whatever install's write policy: install may have found
-            // an optional one present and merged into it. Only a file install always writes may
-            // fail the uninstall; a broken optional one is skipped.
+            // Every file the layout lists, whatever install's write policy: an older Kannu may have
+            // written one that install now only cleans. Only a file install always writes may fail
+            // the uninstall; a broken cleanup-only one is skipped.
             for config in files.configs {
                 switch (config.shape, config.write) {
                 case (.ownFile, _):
                     try Self.removeIfExists(config.url)
                 case (_, .always):
                     try Self.stripEntries(config)
-                case (_, .onlyIfPresent):
+                case (_, .stripOnly):
                     try? Self.stripEntries(config)
                 }
             }
@@ -173,78 +174,19 @@ final class AgentHookInstaller: ObservableObject {
 
     // MARK: - Event mappings
 
-    /// Cursor hook events (lowerCamelCase) mapped to traffic-light states.
-    /// Cursor emits `afterAgentThought` while reasoning and between tool calls, so we map it
-    /// to thinking. The script keeps yellow sticky during active approval windows to avoid
-    /// repainting green too early.
-    private static let cursorEvents: [(event: String, state: String)] = [
-        ("beforeSubmitPrompt", "thinking"),
-        ("afterAgentThought", "thinking"),
-        ("afterAgentResponse", "executing"),
-        // Fires for every shell command, including auto-approved ones — so it cannot mean
-        // "waiting for you". Genuine approvals still surface via afterAgentResponse's
-        // gated-payload check and via the transcript.
-        ("beforeShellExecution", "executing"),
-        ("preToolUse", "executing"),
-        ("postToolUse", "thinking"),
-        ("postToolUseFailure", "thinking"),
-        ("beforeMCPExecution", "executing"),
-        ("stop", "stopped")
-    ]
+    /// Cursor hook events — see `AgentHookLayout.cursorEvents`.
+    private static var cursorEvents: [(event: String, state: String)] { AgentHookLayout.cursorEvents }
 
     /// VS Code Copilot / Codex hook events — see `AgentHookLayout.claudeStyleEvents`.
     private static var claudeStyleEvents: [(event: String, state: String)] { AgentHookLayout.claudeStyleEvents }
 
-    /// Claude Code hook coverage. Richer than `claudeStyleEvents` because Claude supports
-    /// matcher-scoped groups, which is the only way to reach the states that matter:
-    /// `Notification/agent_completed` is the real "it's done", and matching `PreToolUse` on
-    /// the plan-approval tools is the only signal for "waiting on you to approve a plan".
-    ///
-    /// `matcherKey` is a short token handed to the script so it knows the state is already
-    /// unambiguous and does not re-derive it from the event name.
-    private static let claudeHookEntries: [(event: String, matcher: String?, matcherKey: String, state: String)] = [
-        // idle, not thinking: opening a session must not paint the green "running" light.
-        ("SessionStart", nil, "", "idle"),
-        ("UserPromptSubmit", nil, "", "thinking"),
-        // Must come before the generic PreToolUse entry for readability; Claude runs matcher
-        // groups in parallel with no ordering guarantee, so the script also derives this
-        // state from tool_name as a backstop.
-        ("PreToolUse", "ExitPlanMode|AskUserQuestion", "gated", "awaiting_input"),
-        ("PreToolUse", nil, "", "executing"),
-        // `thinking`, matching what the script derives for this event and what
-        // `claudeStyleEvents` passes. The argument is only a fallback for the no-python
-        // branch, but a value the script contradicts is a trap for the next reader.
-        ("PostToolUse", nil, "", "thinking"),
-        // Counted into `tool_errors` (reset on UserPromptSubmit) for diagnostics only: a failure
-        // the agent recovered from is not the turn's outcome. The card's verdict comes from
-        // StopFailure below and from the transcript's API-error record, never from this count.
-        ("PostToolUseFailure", nil, "", "thinking"),
-        ("PermissionRequest", nil, "", "awaiting_input"),
-        ("Notification", "agent_completed", "completed", "stopped"),
-        ("Notification", "permission_prompt|idle_prompt|agent_needs_input", "needs_input", "awaiting_input"),
-        ("Stop", nil, "", "stopped"),
-        ("StopFailure", nil, "", "stopped"),
-        // A subagent's own start and end, in its own file (v38 `parent_id` names the chat). Without
-        // SubagentStop a finished agent's file said "thinking" until the stale cap.
-        ("SubagentStart", nil, "", "thinking"),
-        ("SubagentStop", nil, "", "stopped"),
-        ("SessionEnd", nil, "", "session_end")
-    ]
+    /// Claude Code hook coverage — see `AgentHookLayout.claudeHookEntries`.
+    private static var claudeHookEntries: [(event: String, matcher: String?, matcherKey: String, state: String)] {
+        AgentHookLayout.claudeHookEntries
+    }
 
-    /// The subset that defines "Claude hooks are installed". Kept intentionally small so the
-    /// table above can grow without invalidating existing installs — see `checkInstalled`.
-    private static let claudeCoreInstalledEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"]
-
-    /// Antigravity hook events (PascalCase).
-    private static let antigravityEvents: [(event: String, state: String)] = [
-        ("SessionStart", "idle"),
-        ("UserPromptSubmit", "thinking"),
-        ("PreInvocation", "thinking"),
-        ("PostInvocation", "thinking"),
-        ("PreToolUse", "executing"),
-        ("PostToolUse", "thinking"),
-        ("Stop", "stopped")
-    ]
+    /// The subset that defines "Claude hooks are installed" — see `checkInstalled`.
+    private static var claudeCoreInstalledEvents: [String] { AgentHookLayout.claudeCoreInstalledEvents }
 
     // MARK: - Shared script
 
@@ -284,6 +226,17 @@ final class AgentHookInstaller: ObservableObject {
             codex) ;;
             gemini|qwen) echo '{}' ;;
             vscode) if [ -n "$COPILOT_CLI" ]; then echo '{}'; else echo '{"permission":"allow","continue":true}'; fi ;;
+            # Cursor's permission hooks document exactly {"permission": ...}; "continue" is not in their schema.
+            # Antigravity: PreToolUse and Stop require a decision (allow defers to the next hook or the
+            # default policy); every other event takes an empty object.
+            antigravity) case "$KANNU_HOOK_EVENT" in
+                           PreToolUse|Stop) echo '{"decision":"allow"}' ;;
+                           *) echo '{}' ;;
+                         esac ;;
+            cursor) case "$KANNU_HOOK_EVENT" in
+                      preToolUse|beforeShellExecution|beforeMCPExecution|subagentStart) echo '{"permission":"allow"}' ;;
+                      *) echo '{"permission":"allow","continue":true}' ;;
+                    esac ;;
             *) echo '{"permission":"allow","continue":true}' ;;
           esac
           [ -n "$KANNU_INPUT_FILE" ] && rm -f "$KANNU_INPUT_FILE"
@@ -379,16 +332,16 @@ final class AgentHookInstaller: ObservableObject {
         # code point, regex classes included, is built with chr().
         HT_OFF_MARKER = ".kannu-hidden-text-off"
         HT_WARN_MARKER = ".kannu-hidden-text-warn-agent"
-        HT_SKIP_EVENTS = {"SessionStart", "SessionEnd", "Notification", "PermissionRequest",
+        HT_SKIP_EVENTS = {"SessionStart", "SessionEnd", "sessionEnd", "Notification", "PermissionRequest",
                           "beforeShellExecution", "beforeMCPExecution"}
         HT_POST_EVENTS = {"PostToolUse", "postToolUse", "PostToolUseFailure", "postToolUseFailure", "AfterTool"}
-        HT_POST_SKIP_KEYS = {"tool_input", "input", "arguments", "tool"}
+        HT_POST_SKIP_KEYS = {"tool_input", "input", "arguments", "tool", "toolCall"}
         HT_WHERE = {
             "tool_response": "tool_result", "tool_output": "tool_result", "result_json": "tool_result",
             "output": "tool_result", "error": "tool_result", "error_message": "tool_result",
             "prompt": "prompt",
             "tool_input": "tool_input", "input": "tool_input", "arguments": "tool_input",
-            "tool": "tool_input", "command": "tool_input", "edits": "tool_input",
+            "tool": "tool_input", "command": "tool_input", "edits": "tool_input", "toolCall": "tool_input",
             "last_assistant_message": "agent_reply", "text": "agent_reply", "prompt_response": "agent_reply",
         }
         HT_KIND_RANK = {"tags": 4, "variation_selectors": 3, "bidi": 2, "zero_width": 1}
@@ -589,9 +542,9 @@ final class AgentHookInstaller: ObservableObject {
                 })
             return out
 
-        def record_hidden_text(entries, hit, now_ms, tool_name, tool_use_id):
+        def record_hidden_text(entries, hit, now_ms, tool_name, tool_use_id, recount=True):
             # True for a new sighting; False when it is the same tool call seen again (parallel
-            # PreToolUse groups, PostToolUse after PreToolUse).
+            # PreToolUse groups, PostToolUse after PreToolUse), or with recount off, a prompt seen again.
             kind, where, chars, preview = hit
             for entry in reversed(entries):
                 if entry["kind"] != kind:
@@ -600,7 +553,7 @@ final class AgentHookInstaller: ObservableObject {
                 same_place = entry["where"] == where and (now_ms - entry["last_ts"] <= HT_WINDOW_MS
                                                           or (preview != "" and preview == entry["preview"]))
                 if same_call or same_place:
-                    if not same_call:
+                    if not same_call and recount:
                         entry["events"] = min(entry["events"] + 1, 999)
                     entry["chars"] = max(entry["chars"], min(chars, 999999))
                     if len(preview) > len(entry["preview"]):
@@ -608,7 +561,7 @@ final class AgentHookInstaller: ObservableObject {
                     entry["last_ts"] = now_ms
                     if tool_use_id:
                         entry["tool_use_id"] = tool_use_id
-                    return not same_call
+                    return not same_call and recount
             entries.append({"kind": kind, "where": where,
                             "tool": tool_name if where in ("tool_result", "tool_input") else "",
                             "chars": min(chars, 999999), "events": 1, "preview": preview,
@@ -637,6 +590,10 @@ final class AgentHookInstaller: ObservableObject {
                     "Kannu found " + what + " in " + seen + ". Details are in Kannu's security findings.")
 
         ALLOW_JSON = '{"permission":"allow","continue":true}'
+        # v45: Cursor's permission hooks document exactly {"permission": ...} (with optional messages), and
+        # "continue" is not in their schema. subagentStart is one of them: allow or deny.
+        CURSOR_ALLOW_JSON = '{"permission":"allow"}'
+        CURSOR_PERMISSION_EVENTS = {"preToolUse", "beforeShellExecution", "beforeMCPExecution", "subagentStart"}
         # Events whose documented output carries context to the model. Never Stop (context there makes
         # Claude keep going). Codex validates strictly: widen a set only after a live check on that host.
         HT_NOTE_EVENTS = {
@@ -647,6 +604,12 @@ final class AgentHookInstaller: ObservableObject {
         }
 
         EMPTY_OBJECT_PROVIDERS = {"gemini", "qwen", "copilot"}
+        # v46: Antigravity documents its own answers (antigravity.google/docs/hooks). PreToolUse and Stop
+        # each require a decision. On PreToolUse "allow" hands the call to the next hook or the default
+        # policy, so it never approves what the user's settings would ask about; on Stop any value but
+        # "continue" lets the agent stop. PostToolUse returns an empty object, and so does every other event.
+        ANTIGRAVITY_DECISION_EVENTS = {"PreToolUse", "Stop"}
+        ANTIGRAVITY_ALLOW_JSON = '{"decision":"allow"}'
 
         def emit(notes=("", "")):
             # The only stdout this script writes. Codex rejects unknown keys ("permission") and takes
@@ -660,10 +623,18 @@ final class AgentHookInstaller: ObservableObject {
             if policy_deny and hook_event in POLICY_DENY_EVENTS.get(provider, ()):
                 if provider == "cursor":
                     out = {"permission": "deny", "user_message": policy_deny, "agent_message": policy_deny}
+                elif provider == "antigravity":
+                    out = {"decision": "deny", "reason": policy_deny}
                 else:
                     out = {"hookSpecificOutput": {"hookEventName": hook_event, "permissionDecision": "deny",
                                                   "permissionDecisionReason": policy_deny}}
                 print(json.dumps(out, separators=(",", ":")))
+                return
+            if provider == "cursor" and hook_event in CURSOR_PERMISSION_EVENTS:
+                print(CURSOR_ALLOW_JSON)
+                return
+            if provider == "antigravity":
+                print(ANTIGRAVITY_ALLOW_JSON if hook_event in ANTIGRAVITY_DECISION_EVENTS else "{}")
                 return
             if provider in EMPTY_OBJECT_PROVIDERS:
                 print("{}")
@@ -693,7 +664,10 @@ final class AgentHookInstaller: ObservableObject {
         # and files that run code at login or configure an agent. Still no backslash anywhere.
         SEC_OFF_MARKER = ".kannu-secrets-off"
         SP_OFF_MARKER = ".kannu-sensitive-paths-off"
-        SEC_PROMPT_EVENTS = {"UserPromptSubmit", "beforeSubmitPrompt", "BeforeAgent"}
+        SEC_PROMPT_EVENTS = {"UserPromptSubmit", "UserPromptExpansion", "beforeSubmitPrompt", "BeforeAgent"}
+        # Claude Code fires UserPromptSubmit and then UserPromptExpansion for one typed slash command, and both
+        # carry the line as typed: the second look adds a sighting that is not on disk yet, never a count.
+        SEC_RECHECK_EVENTS = {"UserPromptExpansion"}
         SEC_TOOL_EVENTS = {"PreToolUse", "preToolUse", "beforeShellExecution", "beforeMCPExecution", "BeforeTool"}
         SP_EVENTS = {"PostToolUse", "postToolUse", "PostToolUseFailure", "postToolUseFailure", "AfterTool"}
         SP_FAILURE_EVENTS = {"PostToolUseFailure", "postToolUseFailure"}
@@ -834,12 +808,13 @@ final class AgentHookInstaller: ObservableObject {
                             "tool_use_id": ht_token(item.get("tool_use_id"))})
             return out
 
-        def record_secret(entries, hit, now_ms, tool_name, tool_use_id):
-            # The same secret in the same place is one sighting; the same tool call never counts twice.
+        def record_secret(entries, hit, now_ms, tool_name, tool_use_id, recount=True):
+            # The same secret in the same place is one sighting; the same tool call never counts twice, and
+            # with recount off neither does a prompt seen again.
             kind, where, prefix, length, fp = hit
             for entry in reversed(entries):
                 if entry["fp"] == fp and entry["where"] == where:
-                    if not (tool_use_id and entry["tool_use_id"] == tool_use_id):
+                    if recount and not (tool_use_id and entry["tool_use_id"] == tool_use_id):
                         entry["events"] = min(entry["events"] + 1, 999)
                     entry["last_ts"] = now_ms
                     if tool_use_id:
@@ -1149,7 +1124,9 @@ final class AgentHookInstaller: ObservableObject {
         POLICY_MAX_RULES = 200
         POLICY_MAX_LEN = 200
         POLICY_MAX_ENTRIES = 3
-        POLICY_DENY_EVENTS = {"claude": {"PreToolUse"},
+        # v46: Antigravity documents a PreToolUse deny ({"decision": "deny", "reason": ...}). Docs only: no
+        # live check on that host yet.
+        POLICY_DENY_EVENTS = {"claude": {"PreToolUse"}, "antigravity": {"PreToolUse"},
                               "cursor": {"beforeShellExecution", "beforeMCPExecution", "preToolUse"}}
         POLICY_SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 
@@ -1257,7 +1234,8 @@ final class AgentHookInstaller: ObservableObject {
                     except Exception:
                         pass
                 if isinstance(item, dict):
-                    for key in ("command", "cmd", "commandLine"):
+                    # CommandLine: what Antigravity's run_command is believed to take (undocumented).
+                    for key in ("command", "cmd", "commandLine", "CommandLine"):
                         value = item.get(key)
                         if isinstance(value, str):
                             out.append(value)
@@ -1451,6 +1429,14 @@ final class AgentHookInstaller: ObservableObject {
                 return ""
             return value
 
+        def antigravity_transcript(value):
+            # v46: an Antigravity transcript is recorded only as a plain, canonical path under ~/.gemini.
+            if not isinstance(value, str) or not value or len(value) > TURN_PATH_MAX:
+                return ""
+            if printable_ascii(value, TURN_PATH_MAX) != value or os.path.normpath(value) != value:
+                return ""
+            return value if value.startswith(os.path.expanduser("~") + "/.gemini/") else ""
+
         def turn_size(path):
             # The transcript's size, without following a symlink: None while it does not exist yet,
             # -1 when it is not a plain file or cannot be read (then no offset is recorded).
@@ -1547,7 +1533,8 @@ final class AgentHookInstaller: ObservableObject {
             # and the host submitting a background task's result as a prompt (Claude Code does), are not new
             # requests. Only a prompt to an agent that has stopped starts one.
             open_turn = bool(turn) and "turn_ended_ms" not in turn
-            starts = (hook_event in TURN_PROMPT_EVENTS and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
+            prompted = hook_event in TURN_PROMPT_EVENTS or antigravity_first_call
+            starts = (prompted and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
             if parent_id and turn and hook_event in TURN_WAKE_EVENTS and parent_turn_start() > turn["turn_started_ms"]:
                 # A subagent resumed in a later request of its chat.
                 starts = True
@@ -1571,7 +1558,8 @@ final class AgentHookInstaller: ObservableObject {
                 if not seen:
                     turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
                     turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
-            if turn and hook_event in TURN_END_EVENTS and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True):
+            if (turn and hook_event in TURN_END_EVENTS and not antigravity_busy_stop
+                    and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True)):
                 # The first Stop ends the turn; a Stop after a stop hook's continuation moves the end.
                 turn["turn_ended_ms"] = now_ms
             if turn and main_thread and hook_event == "Stop" and "turn_ended_ms" in turn:
@@ -1583,7 +1571,20 @@ final class AgentHookInstaller: ObservableObject {
                     turn.pop("turn_bg_agents", None)
             return turn, transcript
 
+        # v45: Cursor runs the hooks in ~/.claude/settings.json as "third-party configs", so Kannu's Claude hook
+        # fired inside Cursor too and filed Cursor chats as Claude sessions. Cursor puts cursor_version on every
+        # payload. Such a call writes nothing (only Kannu's Cursor hook files a Cursor chat), but it still
+        # answers as this provider does, the policy deny included: Cursor maps a Claude PreToolUse
+        # permissionDecision to its own permission, so a user's enforced rule keeps holding inside Cursor.
+        foreign_host = provider != "cursor" and "cursor_version" in data
+
+        # v46: Antigravity names the call in toolCall (name and args), camelCase like its whole payload.
+        antigravity_call = data.get("toolCall") if provider == "antigravity" else None
+        if not isinstance(antigravity_call, dict):
+            antigravity_call = None
+
         tool = pick_str(
+            antigravity_call.get("name") if antigravity_call else None,
             data.get("tool_name"),
             data.get("toolName"),
             data.get("name"),
@@ -1593,7 +1594,9 @@ final class AgentHookInstaller: ObservableObject {
         if nested_tool:
             tool = tool or pick_str(nested_tool.get("name"), nested_tool.get("tool_name"))
 
-        tool_input = data.get("tool_input")
+        tool_input = antigravity_call.get("args") if antigravity_call else None
+        if tool_input is None:
+            tool_input = data.get("tool_input")
         if tool_input is None:
             tool_input = data.get("input") or data.get("arguments")
             if tool_input is None and nested_tool:
@@ -1608,6 +1611,14 @@ final class AgentHookInstaller: ObservableObject {
                 tool = tool or "AskQuestion"
             elif any(key in tool_input for key in ("command", "working_directory", "description")):
                 tool = tool or "Shell"
+
+        # v46: Antigravity has no prompt event. The first model call of a run (invocationNum 0) is the
+        # nearest it documents, so it starts the turn; whether the count restarts for every user message
+        # is not stated. A Stop with fullyIdle false leaves background tasks running: set below.
+        _invocation = data.get("invocationNum")
+        antigravity_first_call = (provider == "antigravity" and hook_event == "PreInvocation"
+                                  and isinstance(_invocation, int) and not isinstance(_invocation, bool) and _invocation == 0)
+        antigravity_busy_stop = False
 
         def is_approval_gated_tool() -> bool:
             # ExitPlanMode means "here is the plan, approve it" — a wait on the user, not work.
@@ -1661,6 +1672,21 @@ final class AgentHookInstaller: ObservableObject {
             if parent_id == conversation_id:
                 parent_id = ""
 
+        # v45: Cursor fires subagentStart and subagentStop in the parent's conversation -- conversation_id and
+        # parent_conversation_id are both the chat's id, subagent_id the Task call that spawned it. Filed as a
+        # Claude subagent is, in a file of its own whose parent_id names the chat, Kannu folds it into that chat;
+        # in the chat's own file a subagentStop would have shown the chat finished while it still ran.
+        # subagentStop documents no subagent id: without one there is no file of its own to end, so nothing is
+        # written.
+        if provider == "cursor" and hook_event in {"subagentStart", "subagentStop"}:
+            _subagent = re.sub("[^A-Za-z0-9_-]", "", pick_str(data.get("subagent_id"), data.get("tool_call_id")))[:64]
+            parent_id = re.sub("[^A-Za-z0-9_-]", "", pick_str(data.get("parent_conversation_id"),
+                                                              data.get("conversation_id")))[:64]
+            if not _subagent or not parent_id or _subagent == parent_id:
+                emit()
+                raise SystemExit(0)
+            conversation_id = _subagent
+
         # v36: Copilot CLI reads the same ~/.copilot/hooks file as VS Code, so its events arrive as
         # "vscode". The CLI sets COPILOT_CLI for what it spawns and runs in a terminal; VS Code's extension
         # host has neither. A conversation already filed either way keeps it (the process walk runs once);
@@ -1673,7 +1699,7 @@ final class AgentHookInstaller: ObservableObject {
             os.close(fd)
             return True
 
-        if provider == "vscode":
+        if provider == "vscode" and not foreign_host:
             if (os.environ.get("COPILOT_CLI") or has_controlling_terminal()
                     or (status_dir / ("copilot-" + conversation_id + ".json")).exists()):
                 provider = "copilot"
@@ -1689,6 +1715,11 @@ final class AgentHookInstaller: ObservableObject {
         # - So WebSearch must NOT set awaiting_input on preToolUse (that paints yellow too late).
         # - afterAgentResponse / transcript catch the proposal while the card is open.
         # - AskQuestion still uses preToolUse for yellow (card is the tool itself).
+        if hook_matcher == "gated" and not is_approval_gated_tool():
+            # v45: VS Code (chat.useClaudeHooks) runs the hooks in ~/.claude/settings.json but ignores matchers,
+            # so the plan-approval group ran for every tool and painted each one yellow. The key vouches only
+            # for the tools the group names.
+            hook_matcher = ""
         if hook_matcher:
             # Matcher-scoped group: the installer already picked the right state for exactly
             # this case, so trust the argument rather than re-deriving from the event name.
@@ -1736,8 +1767,9 @@ final class AgentHookInstaller: ObservableObject {
             state = "stopped"
         elif hook_event in {"postToolUse", "postToolUseFailure", "PostToolUse", "PostToolUseFailure", "PostInvocation"}:
             state = "thinking"
-        elif hook_event in {"stop", "Stop", "StopFailure", "SubagentStop"}:
-            # SubagentStop (v44) ends a subagent's own file: it names the agent, not the chat.
+        elif hook_event in {"stop", "Stop", "StopFailure", "SubagentStop", "subagentStop"}:
+            # SubagentStop (v44) ends a subagent's own file: it names the agent, not the chat. So does
+            # Cursor's subagentStop (v45), filed under the subagent above.
             state = "stopped"
             # Antigravity's Stop payload carries terminationReason/error instead of a
             # separate "quota exceeded" event — there's no other signal that a run ended
@@ -1752,7 +1784,15 @@ final class AgentHookInstaller: ObservableObject {
                 quota_signal = (termination_reason + " " + stop_error).lower()
                 if any(marker in quota_signal for marker in ("quota", "rate_limit", "rate limit", "resource_exhausted")):
                     state = "quota_exceeded"
-        elif hook_event == "SessionEnd":
+                # v46: fullyIdle is false while the agent's background tasks still run. It has not
+                # finished: the light stays green and the turn open until a Stop that says idle.
+                elif data.get("fullyIdle") is False and not stop_error:
+                    state = "thinking"
+                    antigravity_busy_stop = True
+            # v45: Claude Code names the API error in StopFailure's `error`; a rate limit is the same end.
+            if provider == "claude" and hook_event == "StopFailure" and pick_str(data.get("error")).lower() == "rate_limit":
+                state = "quota_exceeded"
+        elif hook_event in {"SessionEnd", "sessionEnd"}:
             state = "session_end"
 
         status_file = status_dir / f"{provider}-{conversation_id}.json"
@@ -1761,7 +1801,7 @@ final class AgentHookInstaller: ObservableObject {
         # the only non-trivial CPU work in the script).
         hidden_off = os.path.exists(str(status_dir / HT_OFF_MARKER))
         hidden_hit = None
-        if not hidden_off and hook_event not in HT_SKIP_EVENTS:
+        if not hidden_off and not foreign_host and hook_event not in HT_SKIP_EVENTS:
             try:
                 hidden_hit = scan_hidden_text(data, hook_event)
             except Exception:
@@ -1771,13 +1811,13 @@ final class AgentHookInstaller: ObservableObject {
         secrets_off = os.path.exists(str(status_dir / SEC_OFF_MARKER))
         paths_off = os.path.exists(str(status_dir / SP_OFF_MARKER))
         secret_hits = []
-        if not secrets_off and (hook_event in SEC_PROMPT_EVENTS or hook_event in SEC_TOOL_EVENTS):
+        if not secrets_off and not foreign_host and (hook_event in SEC_PROMPT_EVENTS or hook_event in SEC_TOOL_EVENTS):
             try:
                 secret_hits = scan_secrets(sec_texts(data, hook_event, tool_input))
             except Exception:
                 secret_hits = []
         path_hits = []
-        if not paths_off and hook_event in SP_EVENTS:
+        if not paths_off and not foreign_host and hook_event in SP_EVENTS:
             try:
                 path_hits = scan_paths(tool, tool_input, early_cwd(data), os.path.expanduser("~"))
             except Exception:
@@ -1797,6 +1837,11 @@ final class AgentHookInstaller: ObservableObject {
             except Exception:
                 policy_hit = None
                 policy_deny = None
+
+        if foreign_host:
+            # Nothing on disk for a chat another host runs: the answer above is all this call gives.
+            emit()
+            raise SystemExit(0)
 
         # Claude runs the matcher-scoped and generic hook groups for one event as separate
         # processes, in parallel, with no ordering guarantee. The STATE_PRIORITY merge below
@@ -1883,7 +1928,8 @@ final class AgentHookInstaller: ObservableObject {
                 try:
                     _ht_tool = ht_token(tool)
                     _ht_new = record_hidden_text(hidden_text, hidden_hit, int(time.time() * 1000), _ht_tool,
-                                                 ht_token(pick_str(data.get("tool_use_id"), data.get("toolUseId"))))
+                                                 ht_token(pick_str(data.get("tool_use_id"), data.get("toolUseId"))),
+                                                 hook_event not in SEC_RECHECK_EVENTS)
                     if _ht_new and os.path.exists(str(status_dir / HT_WARN_MARKER)):
                         hidden_notes_out = hidden_notes(hidden_hit, _ht_tool)
                 except Exception:
@@ -1901,7 +1947,8 @@ final class AgentHookInstaller: ObservableObject {
                 secrets = []
             for _hit in secret_hits:
                 try:
-                    record_secret(secrets, _hit, sighting_ms, sighting_tool, sighting_call)
+                    record_secret(secrets, _hit, sighting_ms, sighting_tool, sighting_call,
+                                  hook_event not in SEC_RECHECK_EVENTS)
                 except Exception:
                     pass
         policy = []
@@ -1938,21 +1985,24 @@ final class AgentHookInstaller: ObservableObject {
         _raw_errors = existing.get("tool_errors")
         tool_errors = _raw_errors if isinstance(_raw_errors, int) and not isinstance(_raw_errors, bool) and _raw_errors >= 0 else 0
         antigravity_stop_error = provider == "antigravity" and hook_event == "Stop" and state != "quota_exceeded" and bool(pick_str(data.get("error")))
-        if hook_event in {"UserPromptSubmit", "beforeSubmitPrompt", "BeforeAgent"}:
+        # v45: Cursor's stop says how the loop ended: "completed", "aborted" (the user stopped it: not an error)
+        # or "error".
+        cursor_stop_error = provider == "cursor" and hook_event == "stop" and pick_str(data.get("status")).lower() == "error"
+        if hook_event in {"UserPromptSubmit", "beforeSubmitPrompt", "BeforeAgent"} or antigravity_first_call:
             tool_errors = 0
         elif hook_event in {"PostToolUseFailure", "postToolUseFailure", "StopFailure"}:
             if data.get("is_interrupt") is not True:
                 tool_errors = min(tool_errors + 1, 999)
-        elif antigravity_stop_error:
+        elif antigravity_stop_error or cursor_stop_error:
             tool_errors = min(tool_errors + 1, 999)
 
         # What the card reports is a run that ENDED on an error, decided from this event's own
-        # state before the parallel-group merge below can substitute a held yellow. A StopFailure,
-        # or an Antigravity Stop carrying an error, is one; a later stopped write that learns
-        # nothing new (Notification/agent_completed landing after Stop) keeps the verdict on disk
-        # so the label cannot flicker. Any non-stopped write is a new turn: cleared.
+        # state before the parallel-group merge below can substitute a held yellow. A StopFailure, an
+        # Antigravity Stop carrying an error, or a Cursor stop whose status is "error" (v45), is one; a
+        # later stopped write that learns nothing new (Notification/agent_completed landing after Stop)
+        # keeps the verdict on disk so the label cannot flicker. Any non-stopped write is a new turn: cleared.
         ended_on_error = state == "stopped" and (
-            hook_event == "StopFailure" or antigravity_stop_error or existing.get("ended_on_error") is True
+            hook_event == "StopFailure" or antigravity_stop_error or cursor_stop_error or existing.get("ended_on_error") is True
         )
 
         # Claude runs the matcher-scoped and generic groups for one event in parallel with no
@@ -1994,6 +2044,11 @@ final class AgentHookInstaller: ObservableObject {
             except Exception:
                 turn = {}
             transcript = ""
+        if provider == "antigravity" and not transcript:
+            # v46: Antigravity's documented transcriptPath, kept as the chat's locator. Nothing in Kannu
+            # reads it yet (only Claude's transcripts are followed for tokens); checked like any path here.
+            transcript = (antigravity_transcript(data.get("transcriptPath"))
+                          or antigravity_transcript(existing.get("transcript_path")))
 
         roots = data.get("workspace_roots") or data.get("workspacePaths") or data.get("workspace_paths")
         project = ""
@@ -2030,8 +2085,14 @@ final class AgentHookInstaller: ObservableObject {
         else:
             name = pick_str(existing.get("name"), existing.get("title"), existing.get("conversation_title"))
 
-        if state == "quota_exceeded":
-            name = "Quota exceeded"  # more useful than whatever chat title was already cached
+        if state == "quota_exceeded" and provider == "antigravity":
+            # More useful than whatever chat title was already cached: Antigravity has no log title. A Claude
+            # chat keeps its own (the hook name outranks ai-title); the raw state still says quota.
+            name = "Quota exceeded"
+        elif name == "Quota exceeded":
+            # v45: the label belongs to the quota stop. Carried into later writes it renamed the chat for good,
+            # and Claude's hook name is the card's title.
+            name = ""
 
         if hook_event in {"preToolUse", "beforeMCPExecution", "postToolUse", "postToolUseFailure", "PreToolUse", "PostToolUse", "PostToolUseFailure", "BeforeTool", "AfterTool"}:
             if normalize_token(name) == normalize_token(tool):
@@ -2156,32 +2217,13 @@ final class AgentHookInstaller: ObservableObject {
         if config["version"] == nil {
             config["version"] = 1
         }
-        var hooks = config["hooks"] as? [String: Any] ?? [:]
-        stripCursorEntries(from: &hooks)
-
-        for (event, state) in cursorEvents {
-            var entries = hooks[event] as? [[String: Any]] ?? []
-            entries.append(["command": "hooks/\(scriptName) \(state) cursor \(event)"])
-            hooks[event] = entries
-        }
-
-        config["hooks"] = hooks
+        config["hooks"] = AgentHookLayout.mergingKannuEntries(into: config["hooks"] as? [String: Any] ?? [:],
+                                                              events: cursorEvents)
         try writeJSON(config, to: cursorHooksConfigURL)
     }
 
     private static func stripCursorEntries(from hooks: inout [String: Any]) {
-        for (event, value) in hooks {
-            guard var entries = value as? [[String: Any]] else { continue }
-            entries.removeAll { entry in
-                let command = entry["command"] as? String ?? ""
-                return command.contains(scriptName) || command.contains("atoll-agent-status")
-            }
-            if entries.isEmpty {
-                hooks.removeValue(forKey: event)
-            } else {
-                hooks[event] = entries
-            }
-        }
+        hooks = AgentHookLayout.strippingKannuEntries(from: hooks)
     }
 
     // MARK: - VS Code Copilot (~/.copilot/hooks/*.json, own file)
@@ -2271,106 +2313,51 @@ final class AgentHookInstaller: ObservableObject {
         stripCodexEntries(from: &hooks)
     }
 
-    // MARK: - Antigravity (~/.gemini/antigravity-ide/hooks.json, matcher-group schema)
+    // MARK: - Antigravity (~/.gemini/config/hooks.json, named hooks, hook v46)
 
+    /// Writes Kannu's `kannu-agent-status` entry into the documented global file and removes every
+    /// entry an older Kannu wrote, from all three files the layout lists. Each file is merged into
+    /// its OWN content: building one document and writing it to all three once destroyed the hooks
+    /// the user had defined in the others. A broken file the install never writes is skipped, never
+    /// overwritten; only a broken primary fails the install.
     private static func mergeAntigravityHooksConfig() throws {
-        // Antigravity reads whichever of these locations exists, so all three may need our
-        // entries — but each must be merged into its OWN content. Building the document from
-        // the IDE config and writing that same document to the other two destroyed whatever
-        // hooks the user had defined in them.
-        // Documented global location first (antigravity.google/docs/hooks lists
-        // ~/.gemini/config/hooks.json), then the IDE-specific and legacy root paths.
         var primaryError: Error?
-
         for config in layout.files(for: .antigravity).configs {
             let target = config.url
-            // The documented path is authoritative and always written. The others are only
-            // updated when they already exist — creating them would scatter config the user
-            // never asked for, and uninstall only strips what it finds.
-            let isPrimary = config.write == .always
-            guard isPrimary || FileManager.default.fileExists(atPath: target.path) else { continue }
-
-            // Match the write-side policy below: a broken non-primary file is skipped
-            // (never overwritten), only a broken primary aborts the install.
-            var config: [String: Any]
-            do {
-                config = try readJSONForMerge(at: target)
-            } catch {
-                if isPrimary { primaryError = error }
-                continue
-            }
-            var hooks = config["hooks"] as? [String: Any] ?? [:]
-            stripAntigravityEntries(from: &hooks)
-
-            for (event, state) in antigravityEvents {
-                var groups = hooks[event] as? [[String: Any]] ?? []
-                groups.append([
-                    "hooks": [[
-                        "type": "command",
-                        "command": "\(antigravityScriptURL.path) \(state) antigravity \(event)",
-                        "timeout": 10
-                    ]]
-                ])
-                hooks[event] = groups
-            }
-
-            config["hooks"] = hooks
-            do {
-                try writeJSON(config, to: target)
-            } catch {
-                if isPrimary { primaryError = error }
+            if config.write == .always {
+                do {
+                    let json = try readJSONForMerge(at: target)
+                    try writeJSON(AgentHookLayout.mergingAntigravityEntry(into: json, script: antigravityScriptURL), to: target)
+                } catch {
+                    primaryError = error
+                }
+            } else {
+                // Rewritten only when an older Kannu entry is in it, so a file that is all the
+                // user's keeps its own formatting.
+                guard let json = readJSON(at: target), antigravityHasKannuEntries(json) else { continue }
+                try? writeJSON(AgentHookLayout.strippingAntigravityEntries(from: json), to: target)
             }
         }
-
         if let primaryError { throw primaryError }
     }
 
-    private static func stripAntigravityEntries(from hooks: inout [String: Any]) {
-        stripCodexEntries(from: &hooks)
+    /// Kannu's named entry, or a group a pre-v46 Kannu left under `hooks`.
+    private static func antigravityHasKannuEntries(_ json: [String: Any]) -> Bool {
+        json[AgentHookLayout.handlerName] != nil || AgentHookLayout.hasLegacyAntigravityGroups(json)
     }
 
-    /// Codex only runs hooks.json when `features.hooks = true` is set in
-    /// `~/.codex/config.toml`. Enables the flag with minimal text edits so the
-    /// rest of the user's TOML is left untouched.
+    /// Codex runs hooks by default and skips each one until the user trusts it in `/hooks`.
+    /// Adds `features.hooks = true` only when config.toml does not set the key at all, with a
+    /// minimal text edit, so the rest of the user's TOML — and a `hooks = false` of their own —
+    /// is left untouched (`AgentHookLayout.codexConfigEnablingHooks`).
     private static func ensureCodexHooksFeatureEnabled() throws {
-        var text = (try? String(contentsOf: codexConfigTomlURL, encoding: .utf8)) ?? ""
-
-        if text.range(of: #"(?m)^\s*features\.hooks\s*=\s*true\b"#, options: .regularExpression) != nil {
-            return
-        }
-        if let dottedFalse = text.range(of: #"(?m)^\s*features\.hooks\s*=\s*false\b"#, options: .regularExpression) {
-            text.replaceSubrange(
-                dottedFalse,
-                with: text[dottedFalse].replacingOccurrences(of: "false", with: "true")
-            )
-            try writeToml(text)
-            return
-        }
-
-        if let sectionRange = text.range(of: #"(?m)^\[features\][^\[]*"#, options: .regularExpression) {
-            let section = String(text[sectionRange])
-            if section.range(of: #"(?m)^\s*hooks\s*=\s*true\b"#, options: .regularExpression) != nil {
-                return
-            }
-            if let falseRange = section.range(of: #"(?m)^\s*hooks\s*=\s*false\b"#, options: .regularExpression) {
-                var updatedSection = section
-                updatedSection.replaceSubrange(
-                    falseRange,
-                    with: section[falseRange].replacingOccurrences(of: "false", with: "true")
-                )
-                text.replaceSubrange(sectionRange, with: updatedSection)
-            } else if let headerEnd = text.range(of: #"(?m)^\[features\][^\n]*\n?"#, options: .regularExpression) {
-                text.insert(contentsOf: "hooks = true\n", at: headerEnd.upperBound)
-            }
-            try writeToml(text)
-            return
-        }
-
-        if !text.isEmpty && !text.hasSuffix("\n") {
-            text += "\n"
-        }
-        text += "\n[features]\nhooks = true\n"
-        try writeToml(text)
+        // Missing is empty; a file that exists but cannot be read fails the install instead of
+        // being replaced by a two-line one.
+        let text = FileManager.default.fileExists(atPath: codexConfigTomlURL.path)
+            ? try String(contentsOf: codexConfigTomlURL, encoding: .utf8)
+            : ""
+        guard let updated = AgentHookLayout.codexConfigEnablingHooks(text) else { return }
+        try writeToml(updated)
     }
 
     private static func writeToml(_ text: String) throws {
@@ -2386,7 +2373,8 @@ final class AgentHookInstaller: ObservableObject {
     /// The events whose entries must be present for a provider to count as installed.
     private static func requiredInstalledEvents(_ provider: AgentHookProvider) -> [String] {
         switch provider {
-        case .cursor: return cursorEvents.map(\.event)
+        // The fixed core, not the whole table, for the same reason as Claude's below.
+        case .cursor: return AgentHookLayout.cursorCoreInstalledEvents
         case .vscode: return []
         case .codex: return claudeStyleEvents.map(\.event)
         case .claude:
@@ -2395,7 +2383,9 @@ final class AgentHookInstaller: ObservableObject {
             // table grows — which flips the Settings toggle off and, worse, makes the version
             // migration skip the very installs that need upgrading.
             return claudeCoreInstalledEvents
-        case .antigravity: return antigravityEvents.map(\.event)
+        // The fixed core of the v46 named entry; a pre-v46 install has none and upgrades through
+        // the version migration, which is gated on the script, not on this check.
+        case .antigravity: return AgentHookLayout.antigravityCoreInstalledEvents
         case .gemini: return ["BeforeAgent", "BeforeTool", "AfterAgent"]
         case .qwen: return ["UserPromptSubmit", "PreToolUse", "Stop"]
         case .opencode: return []
@@ -2436,6 +2426,10 @@ final class AgentHookInstaller: ObservableObject {
         if config.shape == .ownFile {
             return FileManager.default.fileExists(atPath: config.url.path)
         }
+        if config.shape == .namedHooks {
+            guard let json = readJSON(at: config.url) else { return false }
+            return AgentHookLayout.antigravityEntryCovers(json, events: events)
+        }
         guard let json = readJSON(at: config.url), let hooks = json["hooks"] as? [String: Any] else { return false }
         func isOurs(_ handler: [String: Any]) -> Bool { ((handler["command"] as? String)?.contains(scriptName)) == true }
         return events.allSatisfy { event in
@@ -2445,7 +2439,7 @@ final class AgentHookInstaller: ObservableObject {
                 return entries.contains(where: isOurs)
             case .matcherGroups:
                 return entries.contains { (($0["hooks"] as? [[String: Any]])?.contains(where: isOurs)) == true }
-            case .ownFile:
+            case .ownFile, .namedHooks:
                 return true
             }
         }
@@ -2455,12 +2449,18 @@ final class AgentHookInstaller: ObservableObject {
     /// once sent two Antigravity files to the flat-entry stripper, which matched nothing and left
     /// live entries behind in the file install always writes.
     private static func stripEntries(_ config: AgentHookLayout.ConfigFile) throws {
-        guard var json = readJSON(at: config.url),
-              var hooks = json["hooks"] as? [String: Any] else { return }
+        guard var json = readJSON(at: config.url) else { return }
+        if config.shape == .namedHooks {
+            // Antigravity's entry is a top-level key, not a list under `hooks`.
+            guard antigravityHasKannuEntries(json) else { return }
+            try writeJSON(AgentHookLayout.strippingAntigravityEntries(from: json), to: config.url)
+            return
+        }
+        guard var hooks = json["hooks"] as? [String: Any] else { return }
         switch config.shape {
         case .matcherGroups: stripCodexEntries(from: &hooks)
         case .flatEntries: stripCursorEntries(from: &hooks)
-        case .ownFile: return
+        case .ownFile, .namedHooks: return
         }
         json["hooks"] = hooks
         try writeJSON(json, to: config.url)
@@ -2542,14 +2542,11 @@ final class AgentHookInstaller: ObservableObject {
         install(.cursor)
     }
 
-    /// Upgrades VS Code/Codex/Claude hook commands that omit the hook event argument.
+    /// Upgrades VS Code/Codex/Claude hook commands that omit the hook event argument. Antigravity's
+    /// v46 entry always carries it; its older shape is `migrateAntigravityHookShapeIfNeeded`'s.
     private func migrateClaudeStyleHookEventArgumentIfNeeded() {
-        for provider in [AgentHookProvider.vscode, .codex, .claude, .antigravity] {
+        for provider in [AgentHookProvider.vscode, .codex, .claude] {
             guard Self.checkInstalled(provider) else { continue }
-            // Plural: Antigravity's entries can live in any of three files, and install only
-            // touches the two non-primary ones when they already exist. Inspecting the IDE
-            // path alone meant a fresh install — which seeds `~/.gemini/config/hooks.json`
-            // and nothing else — read as "nothing to migrate" and was skipped forever.
             let configURLs: [URL]
             switch provider {
             case .vscode:
@@ -2566,7 +2563,7 @@ final class AgentHookInstaller: ObservableObject {
                 guard needsEventArg else { continue }
                 install(provider)
                 continue
-            case .codex, .claude, .antigravity:
+            case .codex, .claude:
                 // The same files `checkInstalled` accepts: the layout's.
                 configURLs = Self.layout.files(for: provider).configs.filter { $0.shape == .matcherGroups }.map(\.url)
             default:
@@ -2591,6 +2588,20 @@ final class AgentHookInstaller: ObservableObject {
             guard needsEventArg else { continue }
             install(provider)
         }
+    }
+
+    /// Reinstalls Antigravity while any file the layout lists still holds a pre-v46 Kannu group
+    /// under `hooks`. Antigravity 2.6.0 rejects a configuration that can never run, and it reads
+    /// that group as one. The version migration covers the usual upgrade; this covers a current
+    /// script beside an old entry (a restored file). Gated on the script, as that migration is,
+    /// because such an install fails the installed check; install strips every listed file.
+    private func migrateAntigravityHookShapeIfNeeded() {
+        let files = Self.layout.files(for: .antigravity)
+        guard FileManager.default.fileExists(atPath: files.script.path),
+              files.configs.contains(where: { config in
+                  Self.readJSON(at: config.url).map(AgentHookLayout.hasLegacyAntigravityGroups) == true
+              }) else { return }
+        install(.antigravity)
     }
 
     /// Copies status JSON from older `~/.atoll/agent-status` into `~/.kannu/agent-status`.
