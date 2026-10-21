@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - Act on CodeRabbit's review of #104
+- **Developer label:** CodeRabbit's review of #104: a Keychain gate test depended on a fixed sleep
+- **Agent label:** Claude Code (Opus 5.5) — `testAWaitingCallThatMayPromptHoldsBackNewSilentReads` polls, with a deadline, until the waiting dialog call refuses a non-waiting silent read
+- **Changes:**
+  - The test slept 0.1 s and assumed the dialog call's thread had started waiting by then; on a
+    loaded CI runner it might not have, and a correct gate would have failed the test. It now polls
+    `gate.run(.silent, wait: false)` until it is refused, for up to 2 s. A silent read that gets in
+    before the dialog call waits is harmless: the held silent read keeps that call waiting.
+
 ### 2026-10-21 - The Codex rollout's rate limits are looked for a chunk at a time, never by reading the file whole
 - **Developer label:** Handoff of #99/#104 from the Codex session: "CodexRolloutFiles.rateLimits(inFile:) falls back to reading the WHOLE rollout into a String when the last 1 MB has no snapshot. That breaks #74's rule, so make it a bounded backward chunked scan."
 - **Agent label:** Claude Code (Opus 5.5) — `rateLimits(inFile:)` reads backwards a megabyte at a time, carries a cut line into the next look back, and stops at 8 MB
