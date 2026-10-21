@@ -230,6 +230,64 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     the Terminal script's quoting, the environment scrub, binary layouts and version order, the
     5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
     organization filter, per-window reading times and the automatic-fetch cadence.
+
+### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P3 Hook contracts v45
+- **Changes:**
+  - Hook v45: a payload carrying `cursor_version` is never filed under another provider. Cursor runs
+    `~/.claude/settings.json` hooks as third-party configs, so Kannu's Claude hook fired inside Cursor
+    and filed Cursor chats as Claude sessions. Such a call now writes nothing, but it still gives the
+    Claude answer, including the agent-policy deny when blocking is on: Cursor maps Claude's
+    `permissionDecision` to its own `permission`, so an enforced rule keeps refusing the tool inside
+    Cursor, as it did under v44. Cursor chats are tracked, and their secret, hidden-text and
+    sensitive-file findings recorded, only when Kannu's Cursor hook is installed; with only the
+    Claude hook installed, Kannu no longer records them. Verified on this Mac: Cursor's own hook log
+    shows it running Kannu's Claude hook with `cursor_version` in the payload. Unverified: that a JSON
+    deny from a third-party hook blocks the tool in Cursor (the docs give the field mapping, not that).
+  - Cursor's `preToolUse`, `beforeShellExecution`, `beforeMCPExecution` and the new `subagentStart`
+    now answer exactly `{"permission":"allow"}`, with no `continue` key, as Cursor's schema documents.
+    The deny shape and every other Cursor event are unchanged.
+  - The Cursor table gains three events. `sessionEnd` removes the chat's card. `subagentStart` and
+    `subagentStop` write a file of the subagent's own (`subagent_id`, with `parent_conversation_id`
+    as `parent_id`), which Kannu folds into the parent chat. A `subagentStop` without a subagent id
+    writes nothing. Cursor documents no id on `subagentStop`, so a Cursor subagent's file stays
+    `thinking` until the stale cap; it never outranks a working or waiting chat, and the fold ignores
+    it once the chat's turn ends. A Cursor `stop` with `status: "error"` sets `ended_on_error`;
+    `aborted` does not.
+    The installed check reads a fixed core, as Claude's does, so a v44 install still reports
+    installed and upgrades through the version migration. Verified on this Mac: Cursor's log shows
+    the `sessionEnd` reasons (`window_close`, `user_close`) and the `stop` status values.
+    Unverified: the subagent payloads come from Cursor's docs and forum reports only, because Kannu
+    never registered those events before.
+  - The `gated` Claude group (ExitPlanMode, AskUserQuestion) counts as a prompt only when the tool
+    really is one of those. VS Code with `chat.useClaudeHooks` ignores matchers, so the group ran for
+    every tool and turned each one yellow. Unverified on this Mac (VS Code docs only).
+  - Claude `StopFailure` with `error: "rate_limit"` sets `quota_exceeded`, as Antigravity's quota
+    stop does. The Claude chat keeps its own title: only Antigravity, which has no log title, gets
+    "Quota exceeded" as its name, and that label is no longer carried into later writes.
+    Claude's new `UserPromptExpansion` event is registered, and its prompt goes through the secret and
+    hidden-text checks. Claude fires `UserPromptSubmit` and then `UserPromptExpansion` with the same
+    typed line, so the second check adds only a finding that is not recorded yet and never counts
+    the same prompt twice. Unverified on this Mac (Claude Code hooks docs only).
+  - Codex: install no longer flips a user's `features.hooks = false` (or the `codex_hooks` alias,
+    or an inline `features` table) to true. It adds the key only when the file has none. The
+    `[features]` section now runs to the next table header, not to the next `[`, so a bracket in a
+    comment or an array before `hooks = false` can no longer lead to a second `hooks` key (invalid
+    TOML), and an indented `[features]` header is found instead of duplicated. A
+    config.toml that exists but cannot be read now fails the install instead of being overwritten.
+    Settings shows "Open Codex and run /hooks to trust Kannu's hooks." under an installed Codex row,
+    because Codex skips a hook until the user trusts it. Unverified on this Mac (Codex docs only).
+  - The Cursor and Claude event tables and the Cursor and Codex config edits moved into
+    `AgentHookLayout`, so tests can reach them. `scripts/install-cursor-hooks.sh` registers the three
+    new Cursor events too, and `docs/REGRESSIONS.md` entry 1 has a v45 addendum.
+  - Tests: eleven `HookScriptTests` cases, run again under `/usr/bin/python3` 3.9 (seven of the first
+    eight behaviour cases fail against the v44 script; `sessionEnd` removal already worked through
+    the state argument). The policy deny inside Cursor and the once-only slash-command count both
+    fail against the first v45 draft (checked by hand: it printed allow and counted 2). Five
+    `AgentHookLayoutTests` cases cover the tables, the merge and strip, and the TOML edit, and
+    `BackgroundWorkTests` reads the Claude table directly. Full suite: 887 tests, 0 failures. Not
+    verified live: that needs Kannu running, and this change was not run in the app.
 ### 2026-10-19 - Act on CodeRabbit's review of #111
 - **Developer label:** CodeRabbit on #111: check the `typed:` value in the task-start scanner
 - **Agent label:** Claude Code (Opus 5.5) — `TimerTaskLabelRulesTests.startProblems` also requires the session's name to be resolved from `task.title`
@@ -1943,220 +2001,6 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     between two refreshes is not noticed (transcripts are append-only). Lines in a file that is not
     valid UTF-8, or that ends lines with CRLF, now count; the old `String` split dropped them.
 
-### 2026-10-19 - A snapshot board shows the usage cards at 640 and 690
-- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
-- **Agent label:** Follow-up 67 — DEBUG `usage` board for `--kannu-snapshots`
-- **Changes:**
-  - `--kannu-snapshot-tabs usage` renders the Usage tab's cards at the content widths of a 640
-    and a 690 pt notch: one card, two (Claude and Cursor), three (stacked), a sign-in status and
-    a day-old reading — each in the 142-pt slot with a red line at its floor, so a card running
-    past it shows. `NotchLLMUsageView` takes snapshot overrides for the results, the refresh
-    status, the forecasts and the notch width; in the app they are nil.
-  - Fixtures: a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the
-    week, Fable 41 %, Opus 12 %, Sonnet 5 % (so one folds under a status row); Cursor Pro at
-    62 % of its billing cycle with token totals; Codex at 20 / 55 %.
-
-### 2026-10-19 - The Claude card splits in the golden ratio and fits the notch
-- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
-- **Agent label:** Follow-up 67 — the Usage tab's cards in the timer tab's language, 5 hour : Weekly = 1 : φ
-- **Changes:**
-  - The Claude card's two things sit side by side: the 5-hour window (now) as the minor column
-    and the weekly stack (the trend: all models, then each per-model window) as the major one,
-    1 : φ of the card's inner width — 98 : 161 pt with Cursor beside it in a 640-pt notch, 210 :
-    340 alone. Too narrow for two columns (three cards at 640), the card stacks its bars with one
-    line for both resets. The card is at most 138 pt in every state and no longer runs past the
-    notch; the notch never grows for it.
-  - The timer tab's language throughout: explicit type (13 semibold names, 12 semibold values,
-    11 medium text, 10 semibold chips and glyphs), 4-pt capsule bars on white 0.12, chips on
-    white 0.12, a continuous radius-10 glass card at white 0.06, fixed row heights, orange only
-    for an over-threshold band or a warning forecast, `.secondary` and `.tertiary` for everything
-    quiet. Every size reads from `UsageCardMetrics`; `UsageCardMetricsRulesTests` scans the view
-    for a literal size, a text style, a non-continuous rounded rectangle or a refresh tooltip
-    that does not open below, with planted offenders proving the scan.
-  - Forecasts no longer take a row each: under the 5-hour bar the verdict is a few words ("full
-    by 2:05 AM", `UsageForecast.shortCaption`, time only since a 5-hour window never needs the
-    day); on a weekly bar it tints the bar and percent orange and the full sentence is the row's
-    hover tooltip and accessibility value.
-  - A stale reading is a clock glyph in the header with "updated 3h ago" on hover, its bars
-    dimmed, not a text row; the account note is a chip beside the tier.
-  - One status row at a time, one line, the action as a chip beside it, in this order: what the
-    Claude refresh found, then a quota failure with its one-tap fix, then a quota failure alone.
-    The full message is the text's hover tooltip. Before, up to three stacked rows could show.
-  - Weekly bars beyond what fits (3 with a status row, 4 without) fold into a "+n" chip beside
-    the title that names them on hover; the stacked fallback draws three. These are the only
-    lossy rules, and they only bite at four or more per-model windows.
-  - Codex and Cursor on the same card: Codex splits like Claude with its Today/Week totals under
-    the weekly bar; Cursor's one window is titled **Billing cycle** (it was "Weekly", which is
-    wrong for it) with its totals and on-demand spend as facts; Antigravity is header and note.
-  - Not done: a sliding label for a clipped per-model name (the timer's `HoverRevealText` is not
-    on `development`); a long name truncates, and the row's tooltip names it.
-
-### 2026-10-19 - The usage card's sizes add up in one place
-- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
-- **Agent label:** Follow-up 67 — `UsageCardMetrics`: the 142-pt slot, the golden split, the row heights, the worst case proven
-- **Changes:**
-  - Measured first: the open notch is a fixed 200 pt, and after its bottom padding, the header
-    (38 pt on a notched MacBook, 24 without a notch) and the stack spacing, the Usage tab gets
-    142 pt. The Claude card was about 157 pt in its base state, stacking the 5-hour and weekly
-    sections, plus 15 per forecast caption and 35 for a status line — so it ran into the shadow
-    band and the window clipped it, cutting a forecast line or the status button.
-  - New `Kannu/sizing/UsageCardMetrics.swift` (Foundation-only, in the test target): every size
-    of a provider card, the slot arithmetic, the timer's `goldenSplit` (copied while
-    `TimerComposerMetrics` is not on `development`; whichever lands second delegates), the card
-    widths a notch gives one, two or three cards, the 1 : φ columns and the width below which a
-    card stacks (88 pt), the row heights, and the most weekly bars a card may draw with and
-    without a status row (3 and 4).
-  - `UsageCardMetricsTests` pins the slot (142/148/156), the φ split at 640 and 690 pt with one
-    and two cards (210 : 340, 98 : 161, 229 : 371, 108 : 176), that three cards stack, and that
-    every worst case — three weekly bars with a status row (138), four without (136), the
-    stacked fallback (138) — fits under the 138-pt limit.
-
-### 2026-10-19 - The Claude card's first look never shows one organization's numbers as another's
-- **Developer label:** "can we install this token fix onto the super build and see it locally working"
-- **Agent label:** Follow-up 65, the organization gap in #96
-- **Changes:**
-  - Until Kannu's own fetch has recorded which organization Claude Code's sign-in is on, that
-    organization came from `oauthAccount` in `~/.claude.json`, which flips between a person's
-    organizations. Read as Max while the cache held the Team plan's numbers, it put Team's 0 % on
-    the Max card until the first automatic fetch. Now, with desktop history to follow, Claude
-    Code's statusline and cache stay off the card while the organization is unrecorded, the
-    automatic refresh fetches at once (once per launch, whatever the cache's age), and an
-    unrecorded organization's cached weekly reset is not used to date the desktop's week.
-  - The card's line about organizations names the plans when Kannu has seen them ("Claude Code is
-    signed in to Team, so these are Claude Desktop's (Max) readings"). Kannu learns each
-    organization's `organizationType` whenever `~/.claude.json` names it, in the new `Defaults` key
-    `claudeOrganizationTypes`: plan types only, never names or emails.
-  - Tests: the unrecorded organization keeps Claude Code's sources off and asks for one fetch at
-    once; plan types are carried and named.
-
-### 2026-10-18 - Act on the review of #96: the automatic refresh never types, signs in or nags
-- **Developer label:** "The Claude card's Refresh fetches again, and signs Claude Code in when it has to" — review follow-up
-- **Agent label:** Follow-up 64 review — six lenses, two skeptics per finding, 37 findings confirmed, each fixed or answered
-- **Changes:**
-  - What a refresh runs is now a set of pure steps in `ClaudeUsageFetchCommand`, tested path by
-    path. The automatic refresh never reaches the interactive pty spawn (it types blind into a
-    terminal session) and never opens the browser; both happen only on a press.
-  - The probe is `claude --settings '{"disableAllHooks":true}' -p "/usage"`. Measured: it fetches
-    (`fetchedAtMs` advanced, three plan rows, 2.8 s) and, unlike the bare run, leaves no
-    SessionStart status file and fires none of the user's own hooks. The bare probe runs only if it
-    fails outright; Claude Code older than 2.1.263 gets no probe at all, so `/usage` can never reach
-    the model as a billed prompt.
-  - A probe that shows a claude.ai sign-in but returns no limits is answered with "signed in but
-    returned no limits" and Terminal, never a browser sign-in over a working one (that can move
-    Claude Code to another organization). New outcomes for a sign-in that did not finish and an
-    unreadable sign-in state, each with copy that says what a press will do.
-  - The automatic refresh only ever surfaces a missing sign-in; anything else it finds stays quiet
-    and holds it back until a press. A "sign in" line clears itself once Claude Code's cache turns
-    fresher some other way (a sign-in in Terminal, Claude Code's own `/usage`).
-  - Kannu runs only a `claude` signed by Anthropic (Developer ID, team Q6L2SF6YDW, identifier
-    `com.anthropic.claude-code`), checked off the main actor and cached per version: 0.2-0.5 s per
-    binary here, and the npm shim and an Apple-signed binary are rejected. A Homebrew cask's link is
-    now a candidate too. Resolution moved off the main actor.
-  - The environment scrub applies only to an inherited agent session (`CLAUDECODE`,
-    `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID` present). A user's own `launchctl setenv`
-    API key, gateway or cloud provider is inherited as before, so the auth-status gate sees it.
-  - Quitting Kannu stops a running refresh child (`ClaudeUsageRefresh.terminateForAppExit` from
-    `applicationWillTerminate`), so a sign-in no longer outlives the app with its localhost listener
-    open (entry 19). Cancel now escalates to SIGKILL like every other stop.
-  - The probe's own hook file is recognised by its transcript under `~/.claude/projects/-/`: the
-    hook strips a trailing slash, so a run from `/` records no cwd and the old `cwd == "/"` match
-    never fired.
-  - The Terminal sign-in resolves the binary again when pressed; the one a refresh found may have
-    been reaped by an update.
-  - Fresh numbers reach the card at once: the providers' refresh after a fetch bypasses the floor
-    that the card's own poll had just reset.
-  - Desktop values carry `notAfter` (five hours or a week after the sample) and expire at render
-    time, not only at the next read; they borrow the server's exact reset for the same
-    organization, so the 5-hour countdown no longer vanishes and the usage push no longer repeats.
-    A weekly rollover caught after a gap of more than an hour gives no countdown, only a bound: it
-    could have happened anywhere in that gap.
-  - The status line is one line with its action beside it (the stacked note pushed the button out
-    of the fixed-height card), the copy says "this card's ↻", and the "updated …" label waits 30
-    minutes, longer than the automatic fetch, so kept-current bars never dim between runs.
-  - Refresh steps log at `notice`, which `/usr/bin/log show` keeps; `info` was not persisted.
-  - CodeRabbit on #96: a weekly rollover seen in the desktop samples is now projected in whole
-    weeks to the week the newest sample is in, as the anchor is. A later reset can go unseen when
-    usage climbs past the last value before it, and `rollover + 7 days` then lay in the past and hid
-    a current bar. Its other two findings (Cancel against a trapped SIGTERM, an unreadable
-    `auth status` read as "sign in") are fixed above.
-  - Answered without a change: per-model weekly windows share the all-models reset (the cache's
-    Fable `resets_at` equals `seven_day`'s); the "moved" weekly anchor was two organizations'
-    anchors, now kept apart.
-
-### 2026-10-18 - The Claude card follows the organization Claude Desktop is on
-- **Developer label:** "Desktop's org (Max)" — the answer to which organization the Claude card should follow when Claude Code and Claude Desktop are on different ones
-- **Agent label:** Follow-up 64, organization rule — one organization per card, recorded at fetch
-- **Changes:**
-  - One person can belong to several organizations, each with its own limits and weekly reset.
-    Measured on this Mac: Claude Desktop records usage for a Max plan (weekly reset Wednesday
-    00:00Z), while Claude Code's own sign-in is bound to a Team plan of the same person (Monday
-    05:00Z). The card merged them, so a fresh Team "0 %" replaced Max's 43 %.
-  - The card now follows the organization of the desktop history's newest sample — what
-    desktop-hosted agents spend. Claude Code's statusline and cache join only when Claude Code is
-    on that same organization; otherwise they are left out whole, the plan badge (Claude Code's
-    plan) is hidden, the card says Claude Code is signed in to another organization and offers
-    **Sign in in Terminal**, and the automatic refresh stands down, since what it would fetch is
-    not on the card. Another organization's weekly reset is never used to date this one's week.
-  - Which organization Claude Code is on is recorded by Kannu straight after its own fetch.
-    `oauthAccount` in `~/.claude.json` cannot be trusted for it: measured, it read Max before a
-    `claude -p "/usage"`, Team right after it and 90 seconds later, and had read Max again earlier
-    after a desktop-hosted session ran. New `Defaults` key `claudeCodeUsageOrganization`.
-  - Tests: one organization per card, merging as before for one or an unknown organization, the
-    hint, the newest-sample organization, the organization known with no current window, another
-    organization's anchor not applied, and the recorded organization winning over the file.
-  - The desktop-history tests spell their sample offsets as `Double` literals: Swift 6.1 (CI's
-    macos-15 image) cannot convert an integer tuple literal to `(mins: Double, fh: Double?, sd:
-    Double?)`, which failed PR #96's macos-15 build while Xcode's newer compiler accepted it.
-
-### 2026-10-18 - The Claude card's Refresh fetches again, and signs Claude Code in when it has to
-- **Developer label:** "I think the usage tab is broken for claude or is not upto date , check what can be done and if any newer easier way to get usage stat has come up" — then "cant we trigger that / login command also in refresh button so user can get that prompt to enter rest of details easily"
-- **Agent label:** Follow-up 64 — `claude -p "/usage"` probe, sign-in from Refresh, an honest Claude card
-- **Changes:**
-  - Refresh had run nothing since 2026-10-02: Claude Desktop moved its bundled CLI to
-    `claude-code/<version>/<build>/claude.app`, the lookup expected `<version>/claude.app`, found no
-    binary and silently re-read disk. `ClaudeCodeBinary` reads both layouts and `~/.local/bin/claude`
-    and takes the highest version (the terminal copy only updates when `claude` runs). The Homebrew
-    npm shim is not a candidate.
-  - Refresh now runs `claude -p "/usage"`, the non-interactive form of `/usage`: no model turn, no
-    pty, nothing typed, and it writes the same `cachedUsageUtilization` the card reads. The
-    interactive pty spawn stays as the fallback when the probe fails outright, with its guards.
-  - When the probe runs cleanly but prints no plan rows, Claude Code is not signed in to claude.ai
-    (or its sign-in lacks the `user:profile` scope). On a press Kannu then starts Claude Code's own
-    `claude auth login --claudeai`: the browser opens claude.ai, the card says "Finish signing in in
-    your browser…" with Cancel, and Kannu fetches again when it finishes — no second click. Only
-    when `claude auth status` says signed out or claude.ai; an API key, key helper, cloud provider or
-    gateway is never switched over. If the browser route cannot finish, **Sign in in Terminal**
-    opens a `.command` file that runs the same sign-in where its prompt is visible. Kannu never reads
-    or stores the sign-in.
-  - Measured on this Mac with the shipped code in a harness: signed out, the probe exits 0 in 1 s with
-    only the cost summary; sign-in took 49 s including the browser; the fetch after it advanced
-    `fetchedAtMs` from 2 September to now. A rerun inside Claude Code's 60 s write throttle prints
-    plan rows without advancing the stamp and counts as fetched.
-  - The spawn drops every `CLAUDE*` and `ANTHROPIC*` variable it inherits, and adds none. A normal
-    launch has none (plain inheritance, as before); from inside an agent session the inherited
-    desktop-host proxy made the probe fetch on the host session's credentials instead of Claude
-    Code's own — measured with and without them. REGRESSIONS entry 8 has the addendum.
-  - While the Usage tab is on screen, Kannu runs the probe itself when Claude Code's cache is older
-    than 15 minutes and no fetch ran in 15 minutes. It never starts a sign-in, and stands down while
-    the last Refresh is waiting on the user.
-  - The desktop history no longer shows numbers it cannot vouch for: a 5-hour value older than five
-    hours is dropped instead of reading as a live 0 %, and the inferred 5-hour countdown is gone (that
-    window has no fixed grid). The weekly reset comes from Claude Code's cached weekly reset projected
-    in whole weeks, however old, instead of a guess from sampling gaps; a week that ended since the
-    sample is dropped. Only one organization's samples are read: the signed-in account's, else the
-    newest sample's.
-  - Each Claude window keeps its own reading time through the merge. A section whose oldest reading
-    is over ten minutes old says "updated 3h ago" and dims its bars; the forecast uses the real time.
-  - The sign-in line under the bars no longer says "Limits unavailable" or points at Terminal: it
-    says Refresh will fetch them, and the Refresh outcomes have one line each.
-  - Every refresh step is logged under `com.kannu.app` / `ClaudeUsage`: step, Claude Code version,
-    outcome, seconds. Never the output (plan figures, account name) or a path.
-  - Tests: probe classification, plan-row detection, the sign-in decision, `auth status` parsing,
-    the Terminal script's quoting, the environment scrub, binary layouts and version order, the
-    5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
-    organization filter, per-window reading times and the automatic-fetch cadence.
-
-
 ### 2026-10-19 - SonarCloud no longer fails #84 on the Keychain rule it was told about
 - **Developer label:** "#84 is held up by SonarCloud's quality gate, not by CodeRabbit. You need to mark S6288 as Accepted in SonarCloud first. fix this"
 - **Agent label:** Claude Code (Opus 5.5) — `.sonarcloud.properties` leaves `KeychainReader.swift` out of SonarCloud's automatic analysis
@@ -2442,64 +2286,6 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     accepts Google Chrome (skipped where Chrome is not installed). It covers the verdict cache, the
     ctime catching an in-place rewrite, and the kept last quota. Chrome stands in for `agy`, which is
     not installed here.
-
-### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
-- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
-- **Agent label:** P3 Hook contracts v45
-- **Changes:**
-  - Hook v45: a payload carrying `cursor_version` is never filed under another provider. Cursor runs
-    `~/.claude/settings.json` hooks as third-party configs, so Kannu's Claude hook fired inside Cursor
-    and filed Cursor chats as Claude sessions. Such a call now writes nothing, but it still gives the
-    Claude answer, including the agent-policy deny when blocking is on: Cursor maps Claude's
-    `permissionDecision` to its own `permission`, so an enforced rule keeps refusing the tool inside
-    Cursor, as it did under v44. Cursor chats are tracked, and their secret, hidden-text and
-    sensitive-file findings recorded, only when Kannu's Cursor hook is installed; with only the
-    Claude hook installed, Kannu no longer records them. Verified on this Mac: Cursor's own hook log
-    shows it running Kannu's Claude hook with `cursor_version` in the payload. Unverified: that a JSON
-    deny from a third-party hook blocks the tool in Cursor (the docs give the field mapping, not that).
-  - Cursor's `preToolUse`, `beforeShellExecution`, `beforeMCPExecution` and the new `subagentStart`
-    now answer exactly `{"permission":"allow"}`, with no `continue` key, as Cursor's schema documents.
-    The deny shape and every other Cursor event are unchanged.
-  - The Cursor table gains three events. `sessionEnd` removes the chat's card. `subagentStart` and
-    `subagentStop` write a file of the subagent's own (`subagent_id`, with `parent_conversation_id`
-    as `parent_id`), which Kannu folds into the parent chat. A `subagentStop` without a subagent id
-    writes nothing. Cursor documents no id on `subagentStop`, so a Cursor subagent's file stays
-    `thinking` until the stale cap; it never outranks a working or waiting chat, and the fold ignores
-    it once the chat's turn ends. A Cursor `stop` with `status: "error"` sets `ended_on_error`;
-    `aborted` does not.
-    The installed check reads a fixed core, as Claude's does, so a v44 install still reports
-    installed and upgrades through the version migration. Verified on this Mac: Cursor's log shows
-    the `sessionEnd` reasons (`window_close`, `user_close`) and the `stop` status values.
-    Unverified: the subagent payloads come from Cursor's docs and forum reports only, because Kannu
-    never registered those events before.
-  - The `gated` Claude group (ExitPlanMode, AskUserQuestion) counts as a prompt only when the tool
-    really is one of those. VS Code with `chat.useClaudeHooks` ignores matchers, so the group ran for
-    every tool and turned each one yellow. Unverified on this Mac (VS Code docs only).
-  - Claude `StopFailure` with `error: "rate_limit"` sets `quota_exceeded`, as Antigravity's quota
-    stop does. The Claude chat keeps its own title: only Antigravity, which has no log title, gets
-    "Quota exceeded" as its name, and that label is no longer carried into later writes.
-    Claude's new `UserPromptExpansion` event is registered, and its prompt goes through the secret and
-    hidden-text checks. Claude fires `UserPromptSubmit` and then `UserPromptExpansion` with the same
-    typed line, so the second check adds only a finding that is not recorded yet and never counts
-    the same prompt twice. Unverified on this Mac (Claude Code hooks docs only).
-  - Codex: install no longer flips a user's `features.hooks = false` (or the `codex_hooks` alias,
-    or an inline `features` table) to true. It adds the key only when the file has none. The
-    `[features]` section now runs to the next table header, not to the next `[`, so a bracket in a
-    comment or an array before `hooks = false` can no longer lead to a second `hooks` key (invalid
-    TOML), and an indented `[features]` header is found instead of duplicated. A
-    config.toml that exists but cannot be read now fails the install instead of being overwritten.
-    Settings shows "Open Codex and run /hooks to trust Kannu's hooks." under an installed Codex row,
-    because Codex skips a hook until the user trusts it. Unverified on this Mac (Codex docs only).
-  - The Cursor and Claude event tables and the Cursor and Codex config edits moved into
-    `AgentHookLayout`, so tests can reach them. `scripts/install-cursor-hooks.sh` registers the three
-    new Cursor events too, and `docs/REGRESSIONS.md` entry 1 has a v45 addendum.
-  - Tests: eleven `HookScriptTests` cases, run again under `/usr/bin/python3` 3.9 (seven of the first
-    eight behaviour cases fail against the v44 script; `sessionEnd` removal already worked through
-    the state argument). The policy deny inside Cursor and the once-only slash-command count both
-    fail against the first v45 draft (checked by hand: it printed allow and counted 2). Five
-    `AgentHookLayoutTests` cases cover the tables, the merge and strip, and the TOML edit, and
-    `BackgroundWorkTests` reads the Claude table directly. Full suite: 887 tests, 0 failures. Not
-    verified live: that needs Kannu running, and this change was not run in the app.
 
 ### 2026-10-10 - Every icon-only control in the notch names itself in a tooltip, starting with the lyrics button
 - **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
