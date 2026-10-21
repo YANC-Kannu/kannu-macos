@@ -4,6 +4,42 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-21 - A Keychain dialog is never swallowed by a silent read on another thread
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — fixes from an adversarial review of #99's merge with `development`
+- **Changes:**
+  - `KeychainInteractionGate` (Foundation-only, in the test target) replaces `crossAppReadLock`.
+    A silent read turns the process-wide `SecKeychainSetUserInteractionAllowed` switch off, and
+    while it is off no Keychain call can show its dialog: it fails as if the user had declined.
+    The lock covered only `read`, so Kannu's own item read by `genericPassword`, which may need
+    a dialog after another build saved it, could come back empty during a background silent
+    read, and saving that empty value deletes the stored secret. Now:
+    - Every call goes through the gate. Silent reads share the switch (the first turns it off, the
+      last puts it back) and never wait for each other.
+    - A call that may prompt (a read that may ask, `genericPassword`, the fresh add, the delete)
+      never waits for another such call, only for silent reads in flight, which take milliseconds.
+      So the main thread never waits behind a dialog.
+    - New silent reads wait while a dialog may be open, and a waiting dialog call holds them back
+      so it cannot be starved.
+  - One open dialog no longer blocks every other read. Silent reads of Kannu's own task credentials
+    (#106) and the Codex and Cursor quota reads run side by side; only a dialog holds them up.
+  - The save's read of the value it replaces gives up only while a dialog may be open, not
+    whenever any read is in flight. The save's comment says which prior values are not restored.
+  - Codex lines are parsed only when they carry `"token_count"`, `"turn_context"` or
+    `"session_meta"` as a quoted JSON string. A conversation line that merely mentions the words
+    is no longer copied and parsed.
+  - `JSONLUsageCache` drops records once they leave the week instead of keeping them for as long as
+    the file stays listed. A resumed Codex session appends to the same rollout, which can then stay
+    fresh for weeks.
+  - Tests:
+    - `KeychainInteractionGateTests` hold threads inside the gate and pin who is let in while whom
+      is inside.
+    - `KeychainWritePlanTests` pin that every Keychain call in `KeychainReader` goes through the
+      gate, and that the save's prior read is silent.
+    - New `JSONLUsageCacheCodexTests` cases cover the mention line and the pruning, each shown to
+      fail with its fix reverted.
+    - The `JSONLUsageCacheTests` fixture comment no longer calls the top-level shape Codex's.
+
 ### 2026-10-21 - Codex rollouts are read once, then only what was appended
 - **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
 - **Agent label:** Follow-up 68 — #99 brought up to date with `development` (#74's usage cache, #84's Keychain rewrite)

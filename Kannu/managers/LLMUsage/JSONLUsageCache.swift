@@ -59,8 +59,8 @@ struct JSONLUsageScanStats: Equatable {
 ///   entry with everything it learnt from the lines consumed so far, so a refresh that reads only
 ///   the appended bytes continues exactly where the last one stopped. The unterminated last line is
 ///   read with a copy, never the kept reader, so its state is not committed twice. Only lines that
-///   mention `token_count`, `turn_context` or (until the first one) `session_meta` are parsed —
-///   the same words `CodexUsageLine` filters on.
+///   carry `"token_count"`, `"turn_context"` or (until the first one) `"session_meta"` as a quoted
+///   JSON string are parsed: the three kinds `CodexUsageLine` reads.
 ///
 /// For `.claude`, JSON may also spell the key with an escaped letter (`"us\u0061ge"`): no
 /// transcript writer is known to, but such a line is parsed too rather than skipped. Only the five escapes of the key's own
@@ -82,8 +82,10 @@ final class JSONLUsageCache: @unchecked Sendable {
 
     static let chunkSize = 4 << 20
     private static let usageMarker = Array(#""usage""#.utf8)
-    private static let codexMarkers = ["token_count", "turn_context"].map { Array($0.utf8) }
-    private static let codexSessionMetaMarker = Array("session_meta".utf8)
+    /// Quoted, as Codex writes them (`"type":"token_count"`): a conversation or tool-output line that
+    /// only mentions one of the words carries it escaped or bare inside a string, and is never parsed.
+    private static let codexMarkers = [#""token_count""#, #""turn_context""#].map { Array($0.utf8) }
+    private static let codexSessionMetaMarker = Array(#""session_meta""#.utf8)
     /// Where a JSON escape of a letter of "usage" would start, then the five of them.
     private static let letterEscapePrefix = Array(#"\u00"#.utf8)
     private static let usageLetterEscapes = [#"\u0075"#, #"\u0073"#, #"\u0061"#, #"\u0067"#, #"\u0065"#].map { Array($0.utf8) }
@@ -184,6 +186,9 @@ final class JSONLUsageCache: @unchecked Sendable {
         return Refresh(records: counted, stats: stats)
     }
 
+    /// The records kept for `file`, for tests: what the next refresh will walk.
+    func keptRecordCount(for file: URL) -> Int { entries[file.path]?.records.count ?? 0 }
+
     private func update(path: String, weekStart: Date, buffer: UnsafeMutableRawPointer,
                         stats: inout JSONLUsageScanStats) {
         // O_NONBLOCK so a FIFO named *.jsonl cannot hang the queue; it is then refused below.
@@ -205,6 +210,10 @@ final class JSONLUsageCache: @unchecked Sendable {
         if entry.identity != identity || size < entry.offset {
             entry = Entry(identity: identity)
         }
+        // The window moves forward, so a record that has left the week never counts again. Drop it
+        // rather than keep it for as long as the file stays listed: a resumed Codex session appends
+        // to the same rollout, which then stays fresh for weeks.
+        entry.records.removeAll { $0.timestamp < weekStart }
         guard size != entry.scannedSize else {
             entries[path] = entry
             return

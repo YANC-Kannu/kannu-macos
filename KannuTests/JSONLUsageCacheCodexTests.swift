@@ -219,4 +219,29 @@ final class JSONLUsageCacheCodexTests: XCTestCase {
         let stats = JSONLUsageCache(label: "test", format: .codex).refresh(files: [url], now: now).stats
         XCTAssertEqual(stats.linesParsed, Self.session.count - 2, "the two chatter lines are never parsed")
     }
+
+    /// A conversation line that only mentions the words (a user asking about `token_count`, a tool
+    /// printing a rollout) carries them inside a string, escaped or bare, never as `"token_count"`.
+    func testALineThatOnlyMentionsTheWordsIsNotParsed() throws {
+        let mention = #"{"timestamp":"2026-10-17T09:15:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"why is token_count zero after turn_context? see {\"type\":\"token_count\"} and session_meta"}]}}"#
+        let url = try file("mention.jsonl", Self.session + [mention])
+        let result = JSONLUsageCache(label: "test", format: .codex).refresh(files: [url], now: now)
+        XCTAssertEqual(result.stats.linesParsed, Self.session.count - 2)
+        XCTAssertEqual(result.records.map(describe), oneShot(Self.session))
+    }
+
+    /// Records that have left the week are dropped from the file's entry, not just skipped when
+    /// counted, so a rollout that stays listed for weeks does not keep every old request.
+    func testRecordsThatLeaveTheWeekAreNotKept() throws {
+        let url = try file("aging.jsonl", Self.session)
+        let cache = JSONLUsageCache(label: "test", format: .codex)
+        _ = cache.refresh(files: [url], now: now)
+        XCTAssertEqual(cache.keptRecordCount(for: url), 3)
+        let later = now.addingTimeInterval(UsageWindows.week + 3600)
+        XCTAssertTrue(cache.refresh(files: [url], now: later).records.isEmpty)
+        XCTAssertEqual(cache.keptRecordCount(for: url), 0)
+        // The reader's state is kept: a request appended now is still measured against the old total.
+        try append(url, Self.count(at: "2026-10-24T13:00:00.000Z", total: (26000, 1100), last: nil) + "\n")
+        XCTAssertEqual(cache.refresh(files: [url], now: later).records.map(\.inputTokens), [300])
+    }
 }
