@@ -43,6 +43,13 @@ enum KeychainReader {
     /// `errSecInteractionNotAllowed`, which `needsUserApproval` recognises. The LAContext covers an
     /// item in the data-protection keychain the same way. Deprecated API: Apple's DTS still points
     /// to it when the item is not your own.
+    ///
+    /// A silent read waits while a call that may prompt runs, on purpose. Giving up could only report
+    /// the item missing or needing approval — a card saying "not signed in", or a fix-it button for
+    /// nothing. The wait lasts only while a dialog the user asked for is open (a fix-it button's
+    /// read), and holds only silent reads made meanwhile off the main thread — that refresh's other
+    /// providers, which it waits for anyway, or a task source's sync on its own queue — never one on
+    /// the main thread (`setGenericPassword`'s read does not wait).
     static func read(
         service: String,
         account: String? = nil,
