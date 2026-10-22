@@ -44,6 +44,20 @@ final class PrivacyUsageDescriptionRulesTests: XCTestCase {
             "the camera entitlement is on, with nothing that captures video",
         ])
 
+        let deniedEntitlement = entitlements.replacingOccurrences(
+            of: "<key>com.apple.security.device.audio-input</key>\n    <true/>",
+            with: "<key>com.apple.security.device.audio-input</key>\n    <false/>"
+        )
+        XCTAssertNotEqual(deniedEntitlement, entitlements, "the plant did not take")
+        XCTAssertEqual(Self.problems(project: project, entitlements: deniedEntitlement, assistant: assistant),
+                       ["audio input is off"])
+
+        let lateAnswer = assistant.replacingOccurrences(of: "        pendingRecordingAuthorization = nil\n        chatMessagesPanel?.close()",
+                                                        with: "        chatMessagesPanel?.close()")
+        XCTAssertNotEqual(lateAnswer, assistant, "the plant did not take")
+        XCTAssertEqual(Self.problems(project: project, entitlements: entitlements, assistant: lateAnswer),
+                       ["a microphone answer can start a recording after the panels close"])
+
         let unasked = assistant.replacingOccurrences(of: "switch AVCaptureDevice.authorizationStatus(for: .audio) {",
                                                      with: "switch AVAuthorizationStatus.authorized {")
         XCTAssertNotEqual(unasked, assistant, "the plant did not take")
@@ -64,7 +78,7 @@ final class PrivacyUsageDescriptionRulesTests: XCTestCase {
             problems.append("a Desktop folder description, for a folder Kannu never touches")
         }
         if !everyConfiguration("ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;")
-            || !entitlements.contains("<key>com.apple.security.device.audio-input</key>") {
+            || value(of: "com.apple.security.device.audio-input", in: entitlements) != "<true/>" {
             problems.append("audio input is off")
         }
         if !everyConfiguration("ENABLE_RESOURCE_ACCESS_CAMERA = NO;") || entitlements.contains("com.apple.security.device.camera") {
@@ -76,7 +90,21 @@ final class PrivacyUsageDescriptionRulesTests: XCTestCase {
             || !beforeRecorder.contains("AVCaptureDevice.requestAccess(for: .audio)") {
             problems.append("Screen Assistant records without asking for the microphone")
         }
+        let closing = assistant.components(separatedBy: "func closePanels() {").dropFirst().first?
+            .components(separatedBy: "\n    }").first ?? ""
+        if !closing.contains("pendingRecordingAuthorization = nil")
+            || !recording.contains("self.pendingRecordingAuthorization == request") {
+            problems.append("a microphone answer can start a recording after the panels close")
+        }
         return problems
+    }
+
+    /// The element right after `key`'s `<key>` in a plist, so a key is bound to its own value.
+    static func value(of key: String, in plist: String) -> String? {
+        guard let range = plist.range(of: "<key>\(key)</key>") else { return nil }
+        let rest = plist[range.upperBound...].drop { $0.isWhitespace }
+        guard let end = rest.firstIndex(of: ">") else { return nil }
+        return String(rest[...end])
     }
 
     private static func read(_ path: String) throws -> String {

@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Act on CodeRabbit's review of #125
+- **Developer label:** CodeRabbit's review of #125 (the follow-ups batch): a late microphone answer could start a recording, and the entitlement test checked a key, not its value
+- **Agent label:** Claude Code (Opus 5.5) — `ScreenAssistantManager` drops a pending microphone request when its panels close; `PrivacyUsageDescriptionRulesTests` binds `device.audio-input` to `<true/>`; README lists Microphone and Local Network
+- **Changes:**
+  - Pressing Record before the microphone was answered asked for it and started recording from the
+    answer's callback, even if the user had closed the Screen Assistant panels by then. The request
+    now carries an id (`pendingRecordingAuthorization`), `closePanels()` drops it, and the callback
+    records only for the request it belongs to.
+  - `PrivacyUsageDescriptionRulesTests` read the entitlements file for the `audio-input` key alone,
+    so `<false/>` passed. It now reads the value bound to the key (`value(of:in:)`), with planted
+    `<false/>` and a planted `closePanels()` that keeps the request.
+  - ReadMe's Runtime Permissions lists Microphone (Screen Assistant's Record) and Local Network
+    (LocalSend), now that #124 declares them.
+
 ### 2026-10-22 - Microphone and local network get their usage descriptions; unused camera and Desktop access go
 - **Developer label:** "Add missing privacy usage descriptions"
 - **Agent label:** Claude Code (Opus 5.5) — `NSMicrophoneUsageDescription` and `NSLocalNetworkUsageDescription` added, `NSDesktopFolderUsageDescription` removed, audio input on and camera access off in both configurations, `device.audio-input` in the entitlements file, and Screen Assistant asks for the microphone before it records

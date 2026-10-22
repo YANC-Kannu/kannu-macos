@@ -183,7 +183,12 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         }
     }
     
+    /// The microphone request a press of Record is waiting on. Closing the panels drops it, so an
+    /// answer that arrives after the user has moved on never starts a recording.
+    private var pendingRecordingAuthorization: UUID?
+
     func closePanels() {
+        pendingRecordingAuthorization = nil
         chatMessagesPanel?.close()
         chatInputPanel?.close()
         chatMessagesPanel = nil
@@ -285,9 +290,17 @@ class ScreenAssistantManager: NSObject, ObservableObject {
         case .authorized:
             break
         case .notDetermined:
+            let request = UUID()
+            pendingRecordingAuthorization = request
             AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-                guard granted else { return }
-                DispatchQueue.main.async { self?.startRecording() }
+                DispatchQueue.main.async {
+                    // Only the request this press made, and only if the panels are still open:
+                    // closing them drops it, so a late answer never starts a recording.
+                    guard let self, self.pendingRecordingAuthorization == request else { return }
+                    self.pendingRecordingAuthorization = nil
+                    guard granted else { return }
+                    self.startRecording()
+                }
             }
             return
         default:
