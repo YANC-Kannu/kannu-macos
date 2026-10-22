@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Ad-hoc build scripts keep library validation disabled, on purpose
+- **Developer label:** "Fix the dead disable-library-validation strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.cs.disable-library-validation` block from `build-dmg.sh` and `build-launch-app.sh`, which never removed the key and would break the app if it did
+- **Changes:**
+  - Both scripts copied `Kannu/Kannu.entitlements` to a temp file and ran
+    `plutil -remove com.apple.security.cs.disable-library-validation` on it, meaning ad-hoc builds
+    should not disable library validation. plutil reads the dots in the key as a key path, answered
+    "No value to remove at key path", and the block took that for "already absent". So every ad-hoc
+    build from these scripts kept the entitlement.
+  - Making the strip work would break those builds. They are ad-hoc signed, and an ad-hoc signature
+    has no Team ID. With library validation on, dyld refuses the embedded Lottie and Sparkle
+    frameworks ("mapping process and mapped file (non-platform) have different Team IDs"), and the
+    app never starts. An ad-hoc probe app with hardened runtime and an embedded ad-hoc framework
+    shows exactly that on macOS 26, and runs once the entitlement is back.
+  - So the block goes, along with the temp copy and its cleanup trap, which existed only for the
+    two strips. The scripts sign `Kannu/Kannu.entitlements` as it is, with a comment saying why
+    library validation stays off. Nothing that gets built changes.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsLibraryValidation` checks the release
+    workflow, CI and both scripts for a `plutil -remove` or PlistBuddy `Delete` of the key, with
+    planted copies of each.
+
 ### 2026-10-22 - Builds stop pretending to strip the mach-services entitlement
 - **Developer label:** "Fix the release workflow's mach-services strip"
 - **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.mach-services` blocks from the release workflow, CI and both local build scripts; none ever removed the key
