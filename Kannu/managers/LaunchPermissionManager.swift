@@ -53,6 +53,9 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     private let locationManager = CLLocationManager()
     private var downloadsReadable: Bool?
     private var warpReadable: Bool?
+    /// Silent re-reads of a folder whose answer is known to macOS but not to this run (after a
+    /// relaunch), so a denied one shows Not allowed rather than Allowed.
+    private var probesInFlight: Set<LaunchPermission> = []
     private var automationStatus: OSStatus?
     private var cancellables = Set<AnyCancellable>()
 
@@ -209,11 +212,42 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     // MARK: - Status
 
     func refresh() {
+        probeFolderAccessIfUnknown()
         var next: [LaunchPermission: LaunchPermissionStatus] = [:]
         for permission in LaunchPermission.allCases {
             next[permission] = status(of: permission)
         }
         if next != statuses { statuses = next }
+    }
+
+    /// Downloads and Warp have no status API: a read is the only answer. Once asked, macOS has
+    /// answered, so reading again raises no dialog; it runs off the main thread, once at a time.
+    private func probeFolderAccessIfUnknown() {
+        let targets: [(LaunchPermission, URL?, Bool)] = [
+            (.downloads, FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first, downloadsReadable == nil),
+            (.warp, nil, warpReadable == nil),
+        ]
+        for (permission, folder, unknown) in targets
+        where unknown && requestInFlight != permission && !probesInFlight.contains(permission)
+            && Self.answer(for: permission) == .asked {
+            probesInFlight.insert(permission)
+            DispatchQueue.global(qos: .utility).async {
+                let readable: Bool
+                if permission == .warp {
+                    readable = WarpAgentStore.databaseURL.flatMap { try? FileHandle(forReadingFrom: $0) }.map { handle in
+                        try? handle.close()
+                        return true
+                    } ?? false
+                } else {
+                    readable = folder.map { (try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil)) != nil } ?? false
+                }
+                DispatchQueue.main.async {
+                    self.probesInFlight.remove(permission)
+                    if permission == .warp { self.warpReadable = readable } else { self.downloadsReadable = readable }
+                    self.refresh()
+                }
+            }
+        }
     }
 
     private func status(of permission: LaunchPermission) -> LaunchPermissionStatus {
@@ -238,10 +272,13 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
             }
         case .downloads:
             guard answer == .asked else { return .notAsked }
-            return downloadsReadable == false ? .notAllowed : .allowed
+            // Unknown until `probeFolderAccessIfUnknown` reads it, a moment after a relaunch.
+            guard let downloadsReadable else { return .waiting }
+            return downloadsReadable ? .allowed : .notAllowed
         case .warp:
             guard answer == .asked else { return .notAsked }
-            return warpReadable == false ? .notAllowed : .allowed
+            guard let warpReadable else { return .waiting }
+            return warpReadable ? .allowed : .notAllowed
         case .musicAutomation:
             guard answer == .asked else { return .notAsked }
             if automationStatus == OSStatus(errAEEventNotPermitted) { return .notAllowed }
@@ -261,11 +298,16 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
             downloads: Defaults[.enableDownloadListener],
             lockScreenWeather: Defaults[.enableLockScreenWeatherWidget],
             controlsMusicApp: automationBundleID(for: musicSource) != nil,
-            // Asked of Launch Services, so nothing reads Warp's container to find out.
-            warpInstalled: WarpAgentStore.bundleIdentifiers.contains {
-                NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil
-            }
+            warpInstalled: isWarpInstalled
         ))
+    }
+
+    /// Asked of Launch Services, so nothing touches Warp's container to find out: statting its
+    /// database there raises "access data from other apps".
+    nonisolated static var isWarpInstalled: Bool {
+        WarpAgentStore.bundleIdentifiers.contains {
+            NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil
+        }
     }
 
     // MARK: - Automation

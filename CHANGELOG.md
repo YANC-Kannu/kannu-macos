@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Act on CodeRabbit's review of #120
+- **Developer label:** CodeRabbit's review of #120: seven findings on the first-launch permissions
+- **Agent label:** Claude Code (Opus 5.5) — the music controllers, the Warp lookups, the upgrade marker, the clipboard move, the Downloads warm-up, folder status after a relaunch and the weather after a Location grant
+- **Changes:**
+  - **Music.** `MusicManager` starts Spotify or Apple Music only when
+    `LaunchPermissionManager.mayTouch(.musicAutomation)` allows it. Their AppleScript raised the
+    Automation dialog even after a Not now when Now Playing is unavailable, which falls back to
+    Apple Music. A held-back source starts on `.launchPermissionsChanged`. Brain › General ›
+    Permissions shows the "Control …" row for the current source.
+  - **Upgrade marker.** An install from before versioning is marked with
+    `OnboardingProgress.firstVersion`, and only when it has no record at all, so a later version
+    bump still shows it the new onboarding.
+  - **Warp.** `installWatchers()` looks up Warp's database only behind the gate; finding it stats
+    Warp's container. Allowed later, Warp is read by the 30-second safety-net rescan until the
+    next launch adds its watcher; restarting the monitor would drop the agent light.
+    `NotchAgentStatusView` and Brain › Agents detect Warp through Launch Services
+    (`LaunchPermissionManager.isWarpInstalled`) instead of statting the container.
+  - **Clipboard move.** It is marked done only once nothing is left to move. A quit mid-move, or a
+    failed move, is retried at the next launch.
+  - **Downloads.** The warm-up counts only a read that worked, so a later permission change
+    retries after a denial.
+  - **Folder status.** Downloads and Warp no longer show Allowed after a relaunch when macOS denied
+    them. Once asked, a silent read on a background queue (no dialog: macOS has answered), one at a
+    time, sets the status.
+  - **Weather.** It refreshes when Location changes into allowed. The fetch made without a location
+    no longer lingers until the refresh interval.
+  - **Test:** `FirstLaunchRulesTests` checks every Warp database lookup, with planted ungated ones
+    in `installWatchers()` and the notch view.
+
 ### 2026-10-22 - First launch asks for each permission on its own step, then plays the welcome music
 - **Developer label:** "let all the permissions be ready and only after play the music. please design teh installation flow" / a tester's words: "ippo the music and presentation happened when I was showered with a lot of permission request." "please bring this upto standard"
 - **Agent label:** Claude Code (Opus 5.5) — a silent onboarding with a Permissions step (`PermissionsStepView`, `LaunchPermissionManager`, `LaunchPermissionPolicy`); every automatic first touch gated; the welcome music and hello moved to Finish; clipboard files moved to Application Support

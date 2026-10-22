@@ -1317,8 +1317,9 @@ struct GeneralSettings: View {
                 // Onboarding's Permissions rows: what a Not now there held back is allowed here,
                 // one macOS dialog at a time.
                 VStack(spacing: 10) {
-                    ForEach(LaunchPermissionManager.rows(musicSource: .nowPlaying)) { permission in
-                        LaunchPermissionRow(permission: permission, musicSource: .nowPlaying)
+                    // The current music source decides whether a "Control …" row shows.
+                    ForEach(LaunchPermissionManager.rows(musicSource: Defaults[.mediaController])) { permission in
+                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController])
                     }
                 }
                 .settingsHighlight(id: highlightID("Permissions"))
@@ -7780,7 +7781,8 @@ struct AgentStatusSettings: View {
             DetectedEditor(source: .cursor, name: "Cursor", detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)),
             DetectedEditor(source: .claude, name: "Claude Code", detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)),
             DetectedEditor(source: .codex, name: "Codex", detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)),
-            DetectedEditor(source: .warp, name: "Warp", detected: WarpAgentStore.databaseURL != nil),
+            // Launch Services, not Warp's container (whose stat raises a permission dialog).
+            DetectedEditor(source: .warp, name: "Warp", detected: LaunchPermissionManager.isWarpInstalled),
             DetectedEditor(source: .claudeDesktop, name: "Claude Desktop", detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)),
         ]
     }

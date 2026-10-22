@@ -161,11 +161,14 @@ class DownloadManager {
         isWarmingUp = true
         let downloadsDirectory = downloadsDirectory
         DispatchQueue.global(qos: .utility).async {
-            if let downloadsDirectory {
-                _ = try? FileManager.default.contentsOfDirectory(at: downloadsDirectory, includingPropertiesForKeys: nil)
-            }
+            let readable = downloadsDirectory.map {
+                (try? FileManager.default.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil)) != nil
+            } ?? false
             Task { @MainActor [weak self] in
                 self?.isWarmingUp = false
+                // Only a read that worked counts: after a denial, the next permission change (the
+                // user allowing it in System Settings, then Brain) tries again.
+                guard readable else { return }
                 self?.downloadsAccessWarmedUp = true
                 self?.startMonitoringIfNeeded()
             }

@@ -38,6 +38,8 @@ final class FirstLaunchRulesTests: XCTestCase {
         "Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift",
         "Kannu/managers/AnimatedArtworkManager.swift",
         "Kannu/managers/ClipboardManager.swift",
+        "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
+        "Kannu/components/Settings/SettingsView.swift",
     ]
 
     func testTheFirstRunFollowsTheRules() throws {
@@ -126,7 +128,19 @@ final class FirstLaunchRulesTests: XCTestCase {
         XCTAssertEqual(Self.problems(in: planted(
             "Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift",
             "        guard LaunchPermissionManager.mayTouch(.warp) else { return }\n", ""
-        )), ["agent status reads Warp's container without the gate"])
+        )), ["agent status reads Warp's container without the gate", "something looks up Warp's database without the gate"])
+
+        XCTAssertEqual(Self.problems(in: planted(
+            "Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift",
+            "if LaunchPermissionManager.mayTouch(.warp), let warpDB = WarpAgentStore.databaseURL {",
+            "if let warpDB = WarpAgentStore.databaseURL {"
+        )), ["something looks up Warp's database without the gate"])
+
+        XCTAssertEqual(Self.problems(in: planted(
+            "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
+            "detected: LaunchPermissionManager.isWarpInstalled",
+            "detected: WarpAgentStore.databaseURL != nil"
+        )), ["something looks up Warp's database without the gate"])
 
         XCTAssertEqual(Self.problems(in: planted(
             "Kannu/managers/AnimatedArtworkManager.swift",
@@ -181,7 +195,7 @@ final class FirstLaunchRulesTests: XCTestCase {
              "LaunchPermissionManager.mayTouch(.accessibility)", "MediaKeyInterceptor asks for Accessibility without the gate"),
             ("Kannu/managers/LockScreenWeatherManager.swift", "requestWhenInUseAuthorization",
              "LaunchPermissionManager.mayTouch(.location)", "the weather asks for Location without the gate"),
-            ("Kannu/managers/DownloadManager.swift", "contentsOfDirectory(at: downloadsDirectory",
+            ("Kannu/managers/DownloadManager.swift", "let readable = downloadsDirectory.map",
              "LaunchPermissionManager.mayTouch(.downloads)", "DownloadManager reads ~/Downloads without the gate"),
             ("Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift", "WarpAgentStore.loadRecentExchanges",
              "LaunchPermissionManager.mayTouch(.warp)", "agent status reads Warp's container without the gate"),
@@ -193,6 +207,16 @@ final class FirstLaunchRulesTests: XCTestCase {
             if !(enclosingFunction(of: gate.marker, in: source)?.contains(gate.gate) ?? false) {
                 problems.append(gate.problem)
             }
+        }
+
+        // Finding Warp's database stats its container, which raises the same dialog as reading it.
+        let monitor = sources["Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift"] ?? ""
+        let ungatedWarpLookups = monitor.components(separatedBy: "func ").dropFirst()
+            .filter { $0.contains("WarpAgentStore.databaseURL") && !$0.contains("LaunchPermissionManager.mayTouch(.warp)") }
+        let viewsStatWarp = ["Kannu/components/AgentStatus/NotchAgentStatusView.swift", "Kannu/components/Settings/SettingsView.swift"]
+            .contains { (sources[$0] ?? "").contains("WarpAgentStore.databaseURL") }
+        if !ungatedWarpLookups.isEmpty || viewsStatWarp {
+            problems.append("something looks up Warp's database without the gate")
         }
 
         let bluetooth = sources["Kannu/managers/BluetoothAudioManager.swift"] ?? ""

@@ -931,10 +931,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Before any singleton reads it: an install from before onboarding was versioned has
         // already been through it (its hello cleared `firstLaunch`) and answered its permissions,
-        // so it counts as complete and nothing new asks. Its clipboard files leave ~/Documents.
+        // so it is marked done with the first version: nothing new asks now, and a later version
+        // bump still shows it the new onboarding. Its clipboard files leave ~/Documents.
         let isUpgrade = !coordinator.firstLaunch
-        if isUpgrade && !LaunchPermissionManager.isOnboardingComplete {
-            Defaults[.onboardingCompletedVersion] = OnboardingProgress.currentVersion
+        if isUpgrade && Defaults[.onboardingCompletedVersion] == 0 {
+            Defaults[.onboardingCompletedVersion] = OnboardingProgress.firstVersion
         }
         ClipboardManager.migrateLegacyDataIfNeeded(isUpgrade: isUpgrade)
 

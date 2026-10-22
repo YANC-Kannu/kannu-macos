@@ -205,24 +205,45 @@ class ClipboardManager: ObservableObject {
     /// store file names, not paths, so history survives the move.
     static func migrateLegacyDataIfNeeded(isUpgrade: Bool) {
         guard !Defaults[.clipboardDataMigrated] else { return }
-        Defaults[.clipboardDataMigrated] = true
         guard isUpgrade,
               let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
-        else { return }
+        else {
+            // A fresh install has nothing in ~/Documents to move.
+            Defaults[.clipboardDataMigrated] = true
+            return
+        }
         let legacy = documents.appendingPathComponent("ClipboardData", isDirectory: true)
         let destination = clipboardDataDirectory
         DispatchQueue.global(qos: .utility).async {
-            let fileManager = FileManager.default
-            guard let files = try? fileManager.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil) else { return }
-            for file in files {
-                let target = destination.appendingPathComponent(file.lastPathComponent)
-                guard !fileManager.fileExists(atPath: target.path) else { continue }
-                try? fileManager.moveItem(at: file, to: target)
-            }
-            if (try? fileManager.contentsOfDirectory(atPath: legacy.path))?.isEmpty == true {
-                try? fileManager.removeItem(at: legacy)
+            // Marked done only when nothing is left to move: a quit mid-move, or a move that failed,
+            // is retried at the next launch, because history images are read from the new folder only.
+            guard moveLegacyFiles(from: legacy, to: destination) else { return }
+            DispatchQueue.main.async { Defaults[.clipboardDataMigrated] = true }
+        }
+    }
+
+    /// True once nothing is left to move: the old folder is gone, or every file in it reached
+    /// Application Support (a name already there counts as moved). False keeps the move for next time.
+    private static func moveLegacyFiles(from legacy: URL, to destination: URL) -> Bool {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: legacy.path) else { return true }
+        guard let files = try? fileManager.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil) else {
+            return false
+        }
+        var complete = true
+        for file in files {
+            let target = destination.appendingPathComponent(file.lastPathComponent)
+            guard !fileManager.fileExists(atPath: target.path) else { continue }
+            do {
+                try fileManager.moveItem(at: file, to: target)
+            } catch {
+                complete = false
             }
         }
+        if (try? fileManager.contentsOfDirectory(atPath: legacy.path))?.isEmpty == true {
+            try? fileManager.removeItem(at: legacy)
+        }
+        return complete
     }
     
     private init() {

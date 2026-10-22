@@ -88,6 +88,8 @@ enum LaunchPermissionPolicy {
 enum OnboardingProgress {
     /// Bumped when onboarding changes enough that everyone should see it again.
     static let currentVersion = 1
+    /// The version an install from before versioning counts as having finished.
+    static let firstVersion = 1
 
     static func isComplete(completedVersion: Int) -> Bool {
         completedVersion >= currentVersion
