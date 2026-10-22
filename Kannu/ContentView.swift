@@ -1889,6 +1889,11 @@ struct ContentView: View {
         }
     }
 
+    /// The closed notch's music bars: shorter than the shared 14 pt and dimmed, so they sit quietly
+    /// beside the album art.
+    static let closedSpectrumBarHeight: CGFloat = 9
+    static let closedSpectrumOpacity: Double = 0.6
+
     @ViewBuilder
     private func SpectrumVisualizer(
         useMusicVisualizer: Bool,
@@ -1896,14 +1901,17 @@ struct ContentView: View {
     ) -> some View {
         let width = CGFloat(Defaults[.visualizerBarCount]) * 4
         if useMusicVisualizer || forceSpectrum {
+            // Kept subtle beside the album art: shorter bars than the 14 pt the other visualizers
+            // use, and dimmed. David asked for "smaller and dimmer, same place" (2026-10-22).
             Rectangle()
                 .fill((Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray).spectrogramGradient())
                 .frame(width: 50, alignment: .center)
                 .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
                 .mask {
-                    AudioVisualizerView(isPlaying: $musicManager.isPlaying)
-                        .frame(width: width, height: 12)
+                    AudioVisualizerView(isPlaying: $musicManager.isPlaying, barHeight: Self.closedSpectrumBarHeight)
+                        .frame(width: width, height: Self.closedSpectrumBarHeight)
                 }
+                .opacity(Self.closedSpectrumOpacity)
         }
     }
 

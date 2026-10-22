@@ -72,7 +72,7 @@ class SettingsWindowController: NSWindowController {
         // Handle window closing
         window.delegate = self
         
-        ScreenCaptureVisibilityManager.shared.register(window, scope: .panelsOnly)
+        ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
     }
     
     func showWindow() {

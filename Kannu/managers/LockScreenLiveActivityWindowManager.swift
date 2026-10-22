@@ -97,7 +97,7 @@ class LockScreenLiveActivityWindowManager {
         window.alphaValue = 0
         window.animationBehavior = .none
 
-        ScreenCaptureVisibilityManager.shared.register(window, scope: .entireInterface)
+        ScreenCaptureVisibilityManager.shared.register(window, scope: .notch)
 
         self.window = window
         self.hasDelegated = false

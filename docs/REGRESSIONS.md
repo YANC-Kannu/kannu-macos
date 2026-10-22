@@ -1098,6 +1098,12 @@ triggers, and that the repair re-adds rather than re-orders). End to end with th
 log must read "Put 1 notch window(s) back on N spaces after space change" and the window must be back
 on every space.
 
+**2026-10-22 — superseded for the notch by entry 20.** The notch no longer belongs on every space:
+it lives only in Kannu's notch space, and the repair decides from WindowServer's membership, not
+`isOnActiveSpace`. The rule above, its guard (`testOnlyAStrandedNotchIsPutBack`) and its manual check
+now describe the clipboard panel only. For the notch, read entry 20; its `--kannu-strand-notch`
+check replaces the one above.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -1231,6 +1237,58 @@ frameworks only.
 
 ---
 
+## 20. The notch lives only in Kannu's space
+
+(Numbered 20 although the ledger already holds two entries numbered 19.)
+
+**Rule:** every notch window is a member of Kannu's notch space (`NotchSpaceManager`, absolute
+level Int32.max) and of **no other space**. Membership is read back from WindowServer
+(`CGSSpace.spaceIDs(of:)`, mask 0xF) and repaired by `ClosedNotchVisibility.notchSpaceRepair`,
+never inferred from `NSWindow.isOnActiveSpace`, which is false by design for a window that lives
+only in the notch space. A window is never taken off a space before the notch space is confirmed to
+hold it, and one the notch space is not showing goes back on every managed space: seen beats still.
+
+**Broken twice.**
+- `9539db5` (the squashed import, 2026-09-03) already gated the notch-space membership on "Never
+  hide", so on the default options the notch was on `.canJoinAllSpaces` alone and slid with every
+  Space switch: "detaches from the notch and re attaches in the next window". Fixed by `827396c`
+  (2026-10-22), which put every notch window in the notch space.
+- `1b3ad40` (2026-09-30) added the stranded-notch repair, deciding on `isOnActiveSpace`. For a
+  window in the notch space that is always false, so at the first space switch after every launch
+  the repair put the notch back on every desktop and fullscreen space (logged 20:29:53 and 20:40:33
+  on 2026-10-22, and for "Never hide" users since 2026-09-30). While it was a member of those
+  spaces, David saw the music wings close and come back in the next space and an empty notch inside
+  Mission Control's space previews; no media, now-playing or fullscreen state changed at those
+  switches (log correlation, 2026-10-22). macOS also added it to a newly created fullscreen space
+  on its own.
+
+**Why it keeps happening:** space membership is invisible from inside the app. The window is
+ordered in, opaque and correctly placed whichever spaces it is in, and AppKit's one signal,
+`isOnActiveSpace`, reads the healthy state as broken. Each fix was verified against window state
+that the next problem did not change. The only reliable reading is WindowServer's own
+(`CGSCopySpacesForWindows`); an external probe built on it (window number, layer, sharing state,
+spaces with masks 7 and 0xF) answered every question this entry raised.
+
+**Guard — partial.** `ClosedNotchVisibilityTests` pins the decision with the measured memberships
+(nine managed spaces plus 745, a tile sub-space, the healthy state, a window outside the notch
+space, an unseen notch, the state right after a fallback, the lock). `ClosedNotchVisibilityRulesTests`
+pins that the repair asks it, joins before it strips, checks the window is still on screen after
+each strip, keeps the managed-space fallback for an unseen notch and a refused join, and no longer uses `isOnActiveSpace` or empties the
+notch space. `NotchSpaceMembershipTests` pins the pin at creation and after a reposition. Checked by eye on the
+installed build by David on 2026-10-22: swiping between spaces keeps the notch and its music wings
+still, and Mission Control's previews show no notch. A probe at the same time read the notch window
+on screen in the notch space alone. On 2026-10-23 he also checked that right-click menus, a popover
+and an alert opened over the open notch all draw above it; the risk was that a space shown above
+every window level would cover them, which `ModalPresenter`'s level raise (entry 14) could not beat.
+Missing: what Mission Control and the swipe transition draw is checked by eye on the installed
+build, since nothing automated can see it, and so is the menu and alert order; and because the window keeps
+`.canJoinAllSpaces`, a space macOS creates gets a copy of the notch until the first repair after
+switching into it (dropping the flag is a separate, reviewed change). `--kannu-strand-notch` (DEBUG; launch with `open -n Kannu.app --args --kannu-strand-notch`)
+takes the notch out of the notch space and onto the current space; the NotchSpaces log must show
+one `Pinned notch window … joinNotchSpace` line and the probe must read the notch space alone.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -1242,6 +1300,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
 | `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
+| `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
 | `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |

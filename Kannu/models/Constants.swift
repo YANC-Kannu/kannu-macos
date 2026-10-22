@@ -482,6 +482,10 @@ enum HideNotchOption: String, Defaults.Serializable {
     case never
 }
 
+/// Foundation-only in `ScreenCapturePolicy.swift` so the logic target can pin the rule; the
+/// conformance lives next to its key.
+extension ScreenCaptureVisibility: Defaults.Serializable {}
+
 // Define notification names at file scope
 extension Notification.Name {
     static let mediaControllerChanged = Notification.Name("mediaControllerChanged")
@@ -932,7 +936,12 @@ extension Defaults.Keys {
     /// `preferred_screen_name`, which between them could not express "the monitor, while it is
     /// plugged in". See `DisplayPlacementResolver`.
     static let displayPlacement = Key<DisplayPlacement>("displayPlacement", default: .externalTakesOver)
-    static let hideDynamicIslandFromScreenCapture = Key<Bool>("hideDynamicIslandFromScreenCapture", default: false)
+    /// Which Kannu windows stay out of screenshots, recordings and capture-based thumbnails.
+    /// Replaces the `hideDynamicIslandFromScreenCapture` Bool, which `migrateScreenCaptureVisibility`
+    /// reads raw. The old key is never declared again: a declared `Key` registers its default, which
+    /// would make everyone look like they had set it.
+    static let screenCaptureVisibility = Key<ScreenCaptureVisibility>("screenCaptureVisibility", default: .showEverything)
+    static let didMigrateScreenCaptureVisibility = Key<Bool>("didMigrateScreenCaptureVisibility", default: false)
     
         // MARK: Behavior
     /// Seconds the pointer must rest before hover-to-open fires — and, on displays where Kannu
@@ -1665,6 +1674,19 @@ extension Defaults.Keys {
             Defaults[.alwaysShowOverrides] = legacyOverrides.mapValues { !$0 }
         }
         Defaults[.didMigrateNonNotchAlwaysShow] = true
+    }
+
+    /// Only a user who touched the legacy "Hide Kannu during screenshots & recordings" toggle has a
+    /// choice to carry over: on becomes "Hide everything" (what the toggle did), off "Show
+    /// everything". Everyone else keeps the default, "Show everything", which is what the toggle's
+    /// default did, so nobody's screenshots change on update. Reads the legacy key raw, see
+    /// `screenCaptureVisibility`.
+    static func migrateScreenCaptureVisibility() {
+        guard Defaults[.didMigrateScreenCaptureVisibility] == false else { return }
+        if let legacy = UserDefaults.standard.object(forKey: "hideDynamicIslandFromScreenCapture") as? Bool {
+            Defaults[.screenCaptureVisibility] = legacy ? .hideEverything : .showEverything
+        }
+        Defaults[.didMigrateScreenCaptureVisibility] = true
     }
 
     /// Everyone gets the new default, including people who had chosen otherwise.

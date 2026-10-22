@@ -4,6 +4,140 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
+- **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
+- **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change
+- **Changes:**
+  - docs/REGRESSIONS.md entry 20: the open risk that menus, popovers and alerts opened over the open
+    notch would draw below the notch space is checked by eye: right-click menus, a popover and an
+    alert all draw above it (David, 2026-10-23). It stays a manual check; nothing automated can see
+    the order.
+  - The 2026-10-22 "Screenshots keep Kannu by default…" entry's open item now records the result.
+
+### 2026-10-23 - The screenshot setting asks rather than promises, and covers every artwork window
+- **Developer label:** "CodeRabbit should be done now. Read its review body, threads and comments on #126, and fix or answer each finding."
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #126: honest capture descriptions, two artwork windows registered, the post-strip visibility check documented
+- **Changes:**
+  - **The screenshot options no longer promise exclusion.** `NSWindow.sharingType = .none` is all an
+    app has to keep its own windows out of someone else's capture, and Apple documents it as a legacy
+    value not to be relied on; some capture tools ignore it. "Hide the notch" and "Hide everything"
+    now say they ask macOS and that some capture tools ignore this. The mechanism is unchanged; the
+    old toggle used the same one. `ScreenCapturePolicyTests` pins that no description promises it.
+  - **The fullscreen artwork's wallpaper-transition and looping-video windows register with the
+    screenshot setting** as `.notch`, like the artwork's other three windows; "Hide the notch" never
+    reached them. Pinned by `ScreenCapturePolicyTests`.
+  - The check after a notch-space strip reads only WindowServer's on-screen list, not
+    `occlusionState` as the repair's decision also does: AppKit updates `occlusionState` later, so in
+    the turn of the strip it still describes the window before it and would make the check pass
+    every time. Documented on `keepVisibleAfterStrip`; CodeRabbit's suggestion to use the same
+    predicate is answered on the PR.
+
+### 2026-10-22 - Screenshots keep Kannu by default, and the album-art tap reopens every app but Spotify
+- **Developer label:** "raise pr and look for coderabbit comments, see if these changes will lead to any regression or older specific asks"
+- **Agent label:** Claude Code (Opus 5.5) — branch reviewed against older asks before the PR: screenshot default restored, activate-only limited to Spotify, refused-join fallback
+- **Changes:**
+  - **The screenshot default is "Show everything" again.** Hiding the notch by default was meant
+    for the empty notch in a "desktop preview", which turned out to be Mission Control: WindowServer
+    draws it, so `sharingType` never affected it, and the notch-space fix above is what cleared it.
+    Left in, the default would have taken the notch, its volume and brightness HUD, the music and
+    timer controls, the lock-screen widgets and the fullscreen artwork out of every screenshot,
+    recording and screen share for everyone who never touched the old toggle, and out of the
+    screenshots CONTRIBUTING.md asks for. The three-way picker and the scope-aware manager stay:
+    "Hide the notch" now hides only Kannu's notch-side windows, which the old toggle could not do.
+    An explicit old choice still migrates.
+  - **The album-art tap reopens every app but Spotify.** Only a running Spotify is activated
+    instead of reopened, because Spotify answered a reopen with a stray second audio session. Apple
+    Music, browsers and every other player get the reopen back, which brings a closed or minimized
+    window forward, as the 2026-09-10 "open the exact media screen" change expects.
+  - **A refused notch-space join falls back to the managed spaces** and marks the window, so a
+    notch is never left in no space; before, it only logged.
+  - **Checked by David on 2026-10-23, after this entry: they draw above it.** The worry was that for
+    everyone, and no longer only "Never hide" users, the notch
+    window is in a space shown above every window level. A context menu, popover or alert opened over
+    the open notch is drawn in the managed spaces, below it, and `ModalPresenter`'s level raise
+    (docs/REGRESSIONS.md entry 14) cannot beat a space.
+  - Tests: `ScreenCapturePolicyTests` (the default), `MusicAppActivationRulesTests` (Spotify-only),
+    `ClosedNotchVisibilityRulesTests` (both fallbacks).
+
+### 2026-10-22 - Switching Spaces looks like the notch never moved, and the music bars are quieter
+- **Developer label:** "can we make it look like it never moved, beacuse when music is playing it closes and again comes in next tab, the state is not retained" … "even in desktop preview an empty notch is embeded" … "keep it subtle" … "this somehow caused by us, we did something, our notch calling something, find that"
+- **Agent label:** Claude Code (Opus 5.5) — notch window lives only in Kannu's notch space with a WindowServer-read repair; subtler closed-notch music bars; a running music app is activated instead of reopened
+- **Changes:**
+  - **The notch is in Kannu's notch space and no other space.** The stranded-notch repair from
+    2026-09-30 decided on `isOnActiveSpace`, which is false by design for a window in the notch
+    space, so at the first switch after every launch it put the notch back on every desktop and
+    fullscreen space (and macOS added it to a newly created one on its own). While it was there,
+    David saw the music wings close and come back in the next space, and an empty notch in Mission
+    Control's previews; no media or fullscreen state changed at those switches. The repair now reads
+    membership from WindowServer (`CGSSpace.spaceIDs(of:)`, mask 0xF), decides with the new
+    `ClosedNotchVisibility.notchSpaceRepair`, joins the notch space before it leaves any other space,
+    checks the window is still on screen after every strip, and puts an unseen notch back on the
+    managed spaces (seen beats still), remembering that so the next check does not strip it again
+    until a wake, unlock or reposition retries. It runs at creation, on every space change, wake and
+    unlock, and after a reposition, and shows the notch space again each time (`reassertShown`, a
+    precaution). `syncNotchSpaceMembership` and the empty-then-refill re-sync are gone. Every repair
+    logs one `NotchSpaces` line with the spaces before and after. Known gap: the window keeps
+    `.canJoinAllSpaces`, so a space macOS creates gets a copy until the first repair after switching
+    into it.
+  - **The bars beside the album art are smaller and dimmer.** In the closed notch they are 9 pt tall
+    instead of 14 and drawn at 60% opacity, in the same place, for the animated and the real-time
+    visualizer alike (both take a bar height now). The open player, the lock screen and extensions
+    keep their size.
+  - **Tapping the album art no longer reopens a running music app.** `openApplication` sends a
+    running app a reopen event; 0.2 s after one, Spotify started a second, hidden audio session in
+    its helper process, and because Spotify hands every remote command to two handlers, every later
+    Play woke it too: two tracks at once that media keys could not stop. A running app is now
+    activated the way Cmd-Tab does it and never reopened; one whose window is closed comes forward
+    without it (its Dock icon reopens it). An app that is not running is launched as before. The
+    stuck session itself is Spotify's; a Spotify restart clears it.
+  - Checked by David on the installed build: swiping keeps the notch and its music wings still,
+    Mission Control's previews show no notch, and the bars are subtle. A probe read the notch window
+    on screen in the notch space alone. Found by that probe before he looked: the first pin ran in
+    the turn the window was ordered in, when WindowServer does not list it as on screen yet, and
+    fell back onto every space; the creation and reposition pins now run a turn later.
+  - docs/REGRESSIONS.md entry 20 and a danger-zones row. Tests: `ClosedNotchVisibilityTests` (the
+    repair table from measured memberships), `ClosedNotchVisibilityRulesTests` and
+    `NotchSpaceMembershipTests` (the wiring), `MusicAppActivationRulesTests` (a running app is activated, never reopened).
+
+### 2026-10-22 - The notch stays put across Spaces, and screenshots get a three-way setting
+- **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
+- **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`
+- **Changes:**
+  - **The notch no longer slides with a Space switch.** `KannuWindow` is `.canJoinAllSpaces`, and
+    a window on the managed spaces rides the switch animation out with the old space and in with
+    the new one, so the notch visibly detached from the hardware notch and re-attached. Kannu's own
+    top-level `CGSSpace` (`NotchSpaceManager`) is not a managed space and does not move, but only
+    "Never hide" joined it; the default "Hide only when NowPlaying app is in fullscreen" was on the
+    sliding path. Every hide option joins now: `createKannuWindow` inserts unconditionally,
+    `syncNotchSpaceMembership` lost its guard, and the stranded-notch repair re-syncs the space for
+    everyone. The gate's reason, "so FullscreenMediaDetector can hide the notch", never held:
+    hiding is `KannuViewModel.hideOnClosed` in the views, and `.fullScreenAuxiliary` already showed
+    the window over fullscreen apps on every option. The `.hideNotchOption` publisher sink that
+    re-synced membership is gone with the gate. The reviewer's other suggestion, owning the slide
+    with physics, is not available: the slide is WindowServer's transition, not an animation Kannu
+    drives.
+  - **A three-way screenshot setting.** (Its first default, hiding the notch, was reverted the same
+    day: the "Desktop preview" was Mission Control, which this setting cannot affect. See the entry
+    "Screenshots keep Kannu by default…" above.)
+    `hideDynamicIslandFromScreenCapture` (Bool, default off) is replaced by `screenCaptureVisibility`
+    (`ScreenCaptureVisibility`: `hideNotch`, `hideEverything`, `showEverything`).
+    `ScreenCaptureVisibilityManager` now honours the scope a window registered with — `.notch` for
+    the notch, its music and timer satellites, the lock-screen widgets and the fullscreen artwork;
+    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so "Hide the notch" hides
+    the notch and keeps Brain in a screenshot. The old code ignored the scope and hid every
+    registered window together, which is why flipping the Bool's default was not the fix.
+  - **Migration:** a user who had the old toggle on gets "Hide everything"; one who turned it on
+    and off again gets "Show everything"; everyone else gets the default. The legacy key is read
+    raw and never declared again, because a declared `Defaults.Key` registers its default and would
+    make everyone look like they had set it.
+  - Settings: the "Hide Kannu during screenshots & recordings" toggle is now the "Screenshots &
+    recordings" picker, with its search entry and highlight id renamed together.
+  - Tests: `ScreenCapturePolicyTests` (the rule table, stable raw values, the key's default and the
+    raw legacy read, every registration names `.notch` or `.panel` with the `.panel` files pinned)
+    and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
+    option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
+    fallback). `ScreenCapturePolicy.swift` joins the logic target.
+
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
