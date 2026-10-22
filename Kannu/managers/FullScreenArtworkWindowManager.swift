@@ -1491,6 +1491,8 @@ final class FullScreenArtworkWindowManager: ObservableObject {
             let newView = WallpaperTransitionImageView(frame: screenFrame)
             newWindow.contentView = newView
 
+            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)
+
             wallpaperTransitionWindow = newWindow
             wallpaperTransitionView = newView
             window = newWindow
@@ -1546,6 +1548,8 @@ final class FullScreenArtworkWindowManager: ObservableObject {
 
             let newView = LoopingVideoView(frame: screenFrame)
             newWindow.contentView = newView
+
+            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)
 
             videoWindow = newWindow
             videoView = newView

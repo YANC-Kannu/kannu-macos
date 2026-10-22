@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - The screenshot setting asks rather than promises, and covers every artwork window
+- **Developer label:** "CodeRabbit should be done now. Read its review body, threads and comments on #126, and fix or answer each finding."
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #126: honest capture descriptions, two artwork windows registered, the post-strip visibility check documented
+- **Changes:**
+  - **The screenshot options no longer promise exclusion.** `NSWindow.sharingType = .none` is all an
+    app has to keep its own windows out of someone else's capture, and Apple documents it as a legacy
+    value not to be relied on; some capture tools ignore it. "Hide the notch" and "Hide everything"
+    now say they ask macOS and that some capture tools ignore this. The mechanism is unchanged; the
+    old toggle used the same one. `ScreenCapturePolicyTests` pins that no description promises it.
+  - **The fullscreen artwork's wallpaper-transition and looping-video windows register with the
+    screenshot setting** as `.notch`, like the artwork's other three windows; "Hide the notch" never
+    reached them. Pinned by `ScreenCapturePolicyTests`.
+  - The check after a notch-space strip reads only WindowServer's on-screen list, not
+    `occlusionState` as the repair's decision also does: AppKit updates `occlusionState` later, so in
+    the turn of the strip it still describes the window before it and would make the check pass
+    every time. Documented on `keepVisibleAfterStrip`; CodeRabbit's suggestion to use the same
+    predicate is answered on the PR.
+
 ### 2026-10-22 - Screenshots keep Kannu by default, and the album-art tap reopens every app but Spotify
 - **Developer label:** "raise pr and look for coderabbit comments, see if these changes will lead to any regression or older specific asks"
 - **Agent label:** Claude Code (Opus 5.5) — branch reviewed against older asks before the PR: screenshot default restored, activate-only limited to Spotify, refused-join fallback

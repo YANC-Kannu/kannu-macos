@@ -22,8 +22,9 @@ import Defaults
 
 /// Keeps every registered window's `sharingType` in step with `Defaults[.screenCaptureVisibility]`.
 /// A window says what it is when it registers (`ScreenCaptureScope`); the setting says which kinds
-/// stay out of screenshots, recordings and capture-based thumbnails. The scope used to be ignored,
-/// so the one toggle hid the Settings window along with the notch.
+/// ask to be left out of screenshots and recordings. `sharingType = .none` is a request some capture
+/// tools ignore (see `ScreenCaptureVisibility`). The scope used to be ignored, so the one toggle hid
+/// the Settings window along with the notch.
 final class ScreenCaptureVisibilityManager {
     static let shared = ScreenCaptureVisibilityManager()
 

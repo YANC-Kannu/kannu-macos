@@ -100,6 +100,29 @@ final class ScreenCapturePolicyTests: XCTestCase {
         XCTAssertTrue(panelFiles.isDisjoint(with: notchFiles), "a file registers both kinds; make sure that is deliberate")
     }
 
+    /// The fullscreen artwork shows five windows; the wallpaper transition and the looping video
+    /// were the two never registered, so "Hide the notch" did not reach them (CodeRabbit on #126).
+    func testEveryFullscreenArtworkWindowIsRegistered() throws {
+        let source = try Self.source("Kannu/managers/FullScreenArtworkWindowManager.swift")
+        for function in ["func showWallpaperTransition(", "func showVideoWindow("] {
+            let start = try XCTUnwrap(source.range(of: function), "\(function) went away; update this test")
+            let rest = source[start.upperBound...]
+            let end = rest.range(of: "\n    private func ")?.lowerBound ?? rest.endIndex
+            XCTAssertTrue(rest[..<end].contains("ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)"),
+                          "\(function) shows a window the screenshot setting does not know about")
+        }
+    }
+
+    /// The setting can only ask: `sharingType = .none` is a legacy value some capture tools ignore,
+    /// so no description may promise that a window stays out of a capture.
+    func testTheDescriptionsDoNotPromiseExclusion() {
+        for option in [ScreenCaptureVisibility.hideNotch, .hideEverything] {
+            XCTAssertTrue(option.description.contains("Some capture tools ignore this"), "\(option) promises more than macOS gives")
+            XCTAssertFalse(option.description.contains("stay out of") || option.description.contains("stays out of"),
+                           "\(option) promises exclusion")
+        }
+    }
+
     // MARK: - Helpers
 
     private static var repoRoot: URL {

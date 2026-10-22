@@ -28,8 +28,13 @@ enum ScreenCaptureScope: Int {
     case panel
 }
 
-/// Which Kannu windows stay out of screenshots, recordings and capture-based thumbnails
+/// Which Kannu windows ask macOS to be left out of screenshots and recordings
 /// (`NSWindow.sharingType = .none`).
+///
+/// A request, not a guarantee: Apple documents `.none` as a legacy value not to be relied on to
+/// keep content out of a capture, and some capture tools ignore it. It is still the only per-window
+/// signal an app has; excluding windows is otherwise the capturing app's choice (ScreenCaptureKit's
+/// content filter). The descriptions below say so. The old toggle used the same mechanism.
 ///
 /// The default shows everything, as the old toggle's default did. "Hide the notch" keeps the notch
 /// and its satellites out of captures while Brain and the other panels stay capturable, which the
@@ -65,9 +70,9 @@ enum ScreenCaptureVisibility: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .hideNotch:
-            return String(localized: "The notch, its music and timer controls and the lock-screen widgets stay out of screenshots and recordings. Brain and other windows are captured.")
+            return String(localized: "Asks macOS to leave the notch, its music and timer controls and the lock-screen widgets out of screenshots and recordings. Some capture tools ignore this. Brain and other windows are captured.")
         case .hideEverything:
-            return String(localized: "Every Kannu window stays out of screenshots and recordings, Brain included.")
+            return String(localized: "Asks macOS to leave every Kannu window, Brain included, out of screenshots and recordings. Some capture tools ignore this.")
         case .showEverything:
             return String(localized: "Kannu appears in screenshots and recordings.")
         }

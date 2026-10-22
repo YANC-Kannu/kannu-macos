@@ -473,6 +473,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// After a strip the window must still be on screen through the notch space alone. If it is
     /// not, the managed spaces go back and the window is marked, so the next check keeps them.
+    ///
+    /// Only WindowServer's on-screen list is read here, not `occlusionState` as the decision in
+    /// `pinNotchWindows` also does. AppKit updates `occlusionState` when WindowServer later reports
+    /// the change, so in the turn of the strip it still describes the window before it, and adding
+    /// it here would make this check pass every time.
     @MainActor private func keepVisibleAfterStrip(_ window: NSWindow, after reason: String) {
         guard !Self.onScreenWindowNumbers().contains(window.windowNumber) else { return }
         notchSpaceUnseenWindows.insert(window.windowNumber)
