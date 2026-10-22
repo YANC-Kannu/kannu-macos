@@ -613,8 +613,10 @@ struct SettingsView: View {
         }
     }
 
+    /// Every match, best first. It used to stop at eight in index order, so "color" never reached
+    /// Notch fill color behind seven Devices and HUD rows; the list scrolls past eight instead.
     private var searchSuggestions: [SettingsSearchEntry] {
-        Array(searchEntries(matching: searchText).filter { $0.tab != .downloads }.prefix(8))
+        searchEntries(matching: searchText).filter { $0.tab != .downloads }
     }
 
     private func handleSearchSuggestionSelection(_ suggestion: SettingsSearchEntry) {
@@ -681,7 +683,35 @@ struct SettingsView: View {
             )
         }
 
+        /// Past this many matches the list scrolls rather than growing down the sidebar.
+        private static let visibleSuggestionRows = 8
+        /// One suggestion with its divider: 28 pt icon, 7 pt padding above and below, 1 pt divider.
+        private static let suggestionRowHeight: CGFloat = 43
+
         private var suggestionList: some View {
+            Group {
+                if suggestions.count > Self.visibleSuggestionRows {
+                    // Half a row more than fits shows there is more to scroll to.
+                    ScrollView { suggestionRows }
+                        .frame(height: (CGFloat(Self.visibleSuggestionRows) + 0.5) * Self.suggestionRowHeight)
+                } else {
+                    suggestionRows
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.08))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: Color.black.opacity(0.2), radius: 8, y: 4)
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+
+        private var suggestionRows: some View {
             VStack(spacing: 0) {
                 ForEach(suggestions) { suggestion in
                     Button {
@@ -724,16 +754,6 @@ struct SettingsView: View {
                     }
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.08))
-            )
-            .shadow(color: Color.black.opacity(0.2), radius: 8, y: 4)
-            .transition(.opacity.combined(with: .move(edge: .top)))
         }
 
         private func rowBackground(for suggestion: SettingsSearchEntry) -> some View {
@@ -756,12 +776,8 @@ struct SettingsView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
 
-        return settingsSearchIndex
-            .filter { availableTabs.contains($0.tab) }
-            .filter { entry in
-                entry.title.localizedCaseInsensitiveContains(trimmed) ||
-                entry.keywords.contains { $0.localizedCaseInsensitiveContains(trimmed) }
-            }
+        let candidates = settingsSearchIndex.filter { availableTabs.contains($0.tab) }
+        return SettingsSearchRanking.ranked(candidates, query: trimmed, title: \.title, keywords: \.keywords)
             .map(landingOnABuiltRow)
     }
 
