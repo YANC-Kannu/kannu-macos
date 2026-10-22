@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Microphone and local network get their usage descriptions; unused camera and Desktop access go
+- **Developer label:** "Add missing privacy usage descriptions"
+- **Agent label:** Claude Code (Opus 5.5) — `NSMicrophoneUsageDescription` and `NSLocalNetworkUsageDescription` added, `NSDesktopFolderUsageDescription` removed, audio input on and camera access off in both configurations, `device.audio-input` in the entitlements file, and Screen Assistant asks for the microphone before it records
+- **Changes:**
+  - **Screen Assistant** records audio when the user presses Record (`AVAudioRecorder`), but Kannu had
+    no microphone usage description and `ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO`. Under the
+    hardened runtime that means no audio. Now:
+    - the description is added;
+    - audio input is on;
+    - `com.apple.security.device.audio-input` is spelled out in `Kannu.entitlements`, like
+      calendars;
+    - `startRecording()` checks the microphone authorization first. It asks when undetermined and
+      records once allowed; when denied it opens System Settings › Microphone instead of recording
+      nothing.
+  - **LocalSend** joins a multicast group and listens on the local network from the Shelf, with no
+    description. `NSLocalNetworkUsageDescription` now says what it is for.
+  - **Camera:** `ENABLE_RESOURCE_ACCESS_CAMERA = YES` put the camera entitlement on every build, with
+    no description and nothing that captures video. `CameraMonitor` only enumerates devices and
+    reads CoreMediaIO's "running somewhere". A probe built with the hardened runtime and without the
+    entitlement still listed both cameras and read the flag, with no prompt. So it is off.
+  - **Desktop:** the usage description was declared for screenshots Kannu never saves there, and is
+    removed.
+  - **Checked:** the built `Info.plist` has the two new descriptions and no Desktop one.
+  - **Test:** new `PrivacyUsageDescriptionRulesTests`: both descriptions in both configurations, no
+    Desktop description, audio input on, camera off, and the authorization check before the
+    recorder. Planted copies of the old settings are caught.
+
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
