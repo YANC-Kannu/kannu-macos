@@ -1277,10 +1277,11 @@ each strip, keeps the managed-space fallback for an unseen notch and a refused j
 notch space. `NotchSpaceMembershipTests` pins the pin at creation and after a reposition. Checked by eye on the
 installed build by David on 2026-10-22: swiping between spaces keeps the notch and its music wings
 still, and Mission Control's previews show no notch. A probe at the same time read the notch window
-on screen in the notch space alone. Missing: what Mission Control and the swipe transition draw is checked
-by eye on the installed build, since nothing automated can see it; menus, popovers and alerts opened
-over the open notch are drawn in the managed spaces, below the notch space, so `ModalPresenter`'s
-level raise (entry 14) cannot beat it, and that is not yet checked by eye; and because the window keeps
+on screen in the notch space alone. On 2026-10-23 he also checked that right-click menus, a popover
+and an alert opened over the open notch all draw above it; the risk was that a space shown above
+every window level would cover them, which `ModalPresenter`'s level raise (entry 14) could not beat.
+Missing: what Mission Control and the swipe transition draw is checked by eye on the installed
+build, since nothing automated can see it, and so is the menu and alert order; and because the window keeps
 `.canJoinAllSpaces`, a space macOS creates gets a copy of the notch until the first repair after
 switching into it (dropping the flag is a separate, reviewed change). `--kannu-strand-notch` (DEBUG; launch with `open -n Kannu.app --args --kannu-strand-notch`)
 takes the notch out of the notch space and onto the current space; the NotchSpaces log must show

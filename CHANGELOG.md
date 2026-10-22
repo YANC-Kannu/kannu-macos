@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
+- **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
+- **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change
+- **Changes:**
+  - docs/REGRESSIONS.md entry 20: the open risk that menus, popovers and alerts opened over the open
+    notch would draw below the notch space is checked by eye: right-click menus, a popover and an
+    alert all draw above it (David, 2026-10-23). It stays a manual check; nothing automated can see
+    the order.
+  - The 2026-10-22 "Screenshots keep Kannu by default…" entry's open item now records the result.
+
 ### 2026-10-23 - The screenshot setting asks rather than promises, and covers every artwork window
 - **Developer label:** "CodeRabbit should be done now. Read its review body, threads and comments on #126, and fix or answer each finding."
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #126: honest capture descriptions, two artwork windows registered, the post-strip visibility check documented
@@ -41,7 +51,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     window forward, as the 2026-09-10 "open the exact media screen" change expects.
   - **A refused notch-space join falls back to the managed spaces** and marks the window, so a
     notch is never left in no space; before, it only logged.
-  - **Open, not yet checked by eye:** for everyone, and no longer only "Never hide" users, the notch
+  - **Checked by David on 2026-10-23, after this entry: they draw above it.** The worry was that for
+    everyone, and no longer only "Never hide" users, the notch
     window is in a space shown above every window level. A context menu, popover or alert opened over
     the open notch is drawn in the managed spaces, below it, and `ModalPresenter`'s level raise
     (docs/REGRESSIONS.md entry 14) cannot beat a space.
