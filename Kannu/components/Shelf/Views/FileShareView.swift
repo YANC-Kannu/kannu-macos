@@ -227,6 +227,7 @@ struct FileShareView: View {
                             }
                         }
                         .padding()
+                        .notchDarkAppearance()
                         .onAppear { vm.setAutoCloseSuppression(true, token: autoCloseToken) }
                         .onDisappear {
                             // Delay clearing suppression slightly so the close click doesn't immediately close the notch

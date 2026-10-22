@@ -880,6 +880,7 @@ struct MinimalisticMusicPlayerView: View {
                     isHoveringPopover = false
                     updateActivity()
                 }
+                .notchDarkAppearance()
             }
             .onChange(of: isPopoverPresented) { _, presented in
                 if !presented {
@@ -939,6 +940,7 @@ struct MinimalisticMusicPlayerView: View {
                     isHoveringPopover = false
                     updateActivity()
                 }
+                .notchDarkAppearance()
             }
             .onChange(of: isPopoverPresented) { _, presented in
                 if !presented { isHoveringPopover = false }

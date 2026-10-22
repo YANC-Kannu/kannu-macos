@@ -398,6 +398,7 @@ struct KannuBatteryView: View {
             .onHover { hovering in
                 isHoveringPopover = hovering
             }
+            .notchDarkAppearance()
         }
         .onChange(of: showPopupMenu) { _, _ in
             updateBatteryPopoverActiveState()

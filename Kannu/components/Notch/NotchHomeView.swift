@@ -1083,6 +1083,7 @@ private struct MediaOutputPickerButton: View {
                 isHoveringPopover = false
                 updatePopoverActivity()
             }
+            .notchDarkAppearance()
         }
         .onAppear {
             routeManager.refreshDevices()
@@ -1142,6 +1143,7 @@ private struct AirPlayPickerButton: View {
                 isHoveringPopover = false
                 updatePopoverActivity()
             }
+            .notchDarkAppearance()
         }
         .onAppear {
             if isAppleMusicActive {

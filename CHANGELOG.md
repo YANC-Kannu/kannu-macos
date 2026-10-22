@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - The notch picks light or dark text from its fill colour or skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing, do only if there is a very god standard for such implementations"
+- **Agent label:** Claude Code (Opus 5.5) — `NotchContrast` (WCAG 2.x luminance, white kept until it drops below 3:1) sets the notch subtree's `colorScheme` and `notchForeground` from the fill or the skin's average colour under its scrim
+- **Changes:**
+  - New `Kannu/helpers/NotchContrast.swift`, Foundation-only: WCAG 2.x relative luminance and
+    contrast ratio, the black skin scrim, and the rule — white text stays until its contrast
+    against the background drops below 3:1 (WCAG's large-text and UI-component minimum), then
+    black. Plain "whichever contrasts more" was rejected: it puts black text on system blue,
+    red, purple and pink fills.
+  - `ContentView` sets the notch subtree's `colorScheme` and `notchForeground` from what is
+    painted behind it: the skin's average colour under the scrim when a skin shows, otherwise
+    the fill colour. It used to derive `notchForeground` from the fill even under a skin. Dark
+    until a skin's average is known, so the default black notch is unchanged.
+  - `NotchSkinManager` publishes `selectedSkinAverageRGB`, computed once per selected skin off the
+    main thread (Core Image area average, `CGImage.averageSRGB()`).
+  - `Color.isPerceivedLight` / `contrastingForeground` use the same rule (the colour swatches'
+    checkmarks follow it); `perceivedBrightness` is gone.
+  - Popovers opened from the notch stay dark windows whatever the notch's scheme, but SwiftUI
+    hands their content the light scheme — measured: black text on the dark popover. Every notch
+    popover's content now ends in `.notchDarkAppearance()`.
+  - The closed-music shelf badge draws its icon white: the badge paints its own black circle, and
+    the old fill-derived colour made it black on black on a light fill.
+  - Tests: new `NotchContrastTests` (presets, the 3:1 switch at #949494/#959595, the scrim) and
+    `NotchPopoverAppearanceRulesTests` (every notch popover pinned, with planted offenders).
+
 ### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
 - **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"
 - **Agent label:** Claude Code (Opus 5.5) — `release.yml` treats a tag with a hyphen (`v1.4.0-beta.1`) as a pre-release: same build, signing and notarization, published as a GitHub pre-release, no Sparkle export and no appcast commit

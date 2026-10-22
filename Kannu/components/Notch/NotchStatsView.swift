@@ -236,6 +236,7 @@ struct NotchStatsView: View {
                         }
                     }
                 )
+                .notchDarkAppearance()
                 .onDisappear {
                     switch rankingType {
                     case .cpu:

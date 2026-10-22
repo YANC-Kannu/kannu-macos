@@ -23,9 +23,25 @@ private struct NotchForegroundKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
+    /// Black or white: the text colour for whatever fill or skin is painted behind the notch.
+    /// Set beside the notch subtree's `colorScheme` in `ContentView`.
     var notchForeground: Color {
         get { self[NotchForegroundKey.self] }
         set { self[NotchForegroundKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// For notch content that sits on a dark surface of its own rather than on the notch's fill:
+    /// a view that paints its own black background, and the content of every `.popover` opened
+    /// from the notch. The popover window stays dark (VibrantDark, from the notch window's
+    /// darkAqua) whatever the notch's colour scheme, but SwiftUI hands the popover content the
+    /// presenting view's environment — so on a light notch fill its text would draw black on the
+    /// dark popover. Pins both back to dark. `NotchPopoverAppearanceRulesTests` checks every notch
+    /// popover has it.
+    func notchDarkAppearance() -> some View {
+        environment(\.colorScheme, .dark)
+            .environment(\.notchForeground, .white)
     }
 }
 
