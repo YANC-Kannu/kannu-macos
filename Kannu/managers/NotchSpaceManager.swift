@@ -24,6 +24,9 @@ import Foundation
 
 class NotchSpaceManager {
     static let shared = NotchSpaceManager()
+    /// Kannu's own top-level space (absolute level Int32.max). Every notch window joins it, on
+    /// every hide option: it keeps the notch above fullscreen apps and, because it is not a managed
+    /// space, off the Space-switch slide. `AppDelegate.syncNotchSpaceMembership` rebuilds the set.
     let notchSpace: CGSSpace
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?

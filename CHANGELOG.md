@@ -4,6 +4,47 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - The notch stays put across Spaces and out of screenshots by default
+- **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
+- **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`
+- **Changes:**
+  - **The notch no longer slides with a Space switch.** `KannuWindow` is `.canJoinAllSpaces`, and
+    a window on the managed spaces rides the switch animation out with the old space and in with
+    the new one, so the notch visibly detached from the hardware notch and re-attached. Kannu's own
+    top-level `CGSSpace` (`NotchSpaceManager`) is not a managed space and does not move, but only
+    "Never hide" joined it; the default "Hide only when NowPlaying app is in fullscreen" was on the
+    sliding path. Every hide option joins now: `createKannuWindow` inserts unconditionally,
+    `syncNotchSpaceMembership` lost its guard, and the stranded-notch repair re-syncs the space for
+    everyone. The gate's reason, "so FullscreenMediaDetector can hide the notch", never held:
+    hiding is `KannuViewModel.hideOnClosed` in the views, and `.fullScreenAuxiliary` already showed
+    the window over fullscreen apps on every option. The `.hideNotchOption` publisher sink that
+    re-synced membership is gone with the gate. The reviewer's other suggestion, owning the slide
+    with physics, is not available: the slide is WindowServer's transition, not an animation Kannu
+    drives.
+  - **Kannu stays out of screenshots, recordings and capture-based thumbnails by default.** A
+    capture of a notched display shows a continuous menu bar where the hardware notch is, so the
+    closed notch appeared as an empty black blob in a window switcher's Desktop preview.
+    `hideDynamicIslandFromScreenCapture` (Bool, default off) is replaced by `screenCaptureVisibility`
+    (`ScreenCaptureVisibility`: `hideNotch` by default, `hideEverything`, `showEverything`).
+    `ScreenCaptureVisibilityManager` now honours the scope a window registered with — `.notch` for
+    the notch, its music and timer satellites, the lock-screen widgets and the fullscreen artwork;
+    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so the default hides
+    the notch and keeps Brain in a screenshot. The old code ignored the scope and hid every
+    registered window together, which is why flipping the Bool's default was not the fix.
+  - **Migration:** a user who had the old toggle on gets "Hide everything"; one who turned it on
+    and off again gets "Show everything"; everyone else gets the new default. The legacy key is read
+    raw and never declared again, because a declared `Defaults.Key` registers its default and would
+    make everyone look like they had set it. **The new default applies to everyone who never
+    touched the old toggle, so it needs a line in the release notes:** Kannu now stays out of
+    screenshots and screen recordings; Brain › General › Screenshots & recordings puts it back.
+  - Settings: the "Hide Kannu during screenshots & recordings" toggle is now the "Screenshots &
+    recordings" picker, with its search entry and highlight id renamed together.
+  - Tests: `ScreenCapturePolicyTests` (the rule table, stable raw values, the key's default and the
+    raw legacy read, every registration names `.notch` or `.panel` with the `.panel` files pinned)
+    and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
+    option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
+    fallback). `ScreenCapturePolicy.swift` joins the logic target.
+
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight

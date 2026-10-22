@@ -1,0 +1,124 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import XCTest
+
+/// `ScreenCaptureVisibility` decides which Kannu windows carry `NSWindow.sharingType = .none`. The
+/// default hides the notch: a captured notched display shows a continuous menu bar where the
+/// hardware notch is, so Kannu's black shape there read as an empty blob in every screenshot,
+/// recording and capture-based window-switcher thumbnail. Settings and the other panels stay
+/// capturable unless the user asks for everything hidden. The registrations are pinned from the
+/// source because the windows are AppKit and the manager is not in the logic target.
+final class ScreenCapturePolicyTests: XCTestCase {
+
+    // MARK: - The rule
+
+    func testTheDefaultHidesOnlyTheNotch() {
+        XCTAssertTrue(ScreenCaptureVisibility.hideNotch.hides(.notch))
+        XCTAssertFalse(ScreenCaptureVisibility.hideNotch.hides(.panel),
+                       "a screenshot for a bug report must still show the Settings window")
+    }
+
+    func testHideEverythingHidesBothKinds() {
+        XCTAssertTrue(ScreenCaptureVisibility.hideEverything.hides(.notch))
+        XCTAssertTrue(ScreenCaptureVisibility.hideEverything.hides(.panel))
+    }
+
+    func testShowEverythingHidesNothing() {
+        XCTAssertFalse(ScreenCaptureVisibility.showEverything.hides(.notch))
+        XCTAssertFalse(ScreenCaptureVisibility.showEverything.hides(.panel))
+    }
+
+    /// Stored in Defaults: a renamed case silently resets everyone who chose it.
+    func testRawValuesAreStable() {
+        XCTAssertEqual(ScreenCaptureVisibility.allCases.map(\.rawValue), ["hideNotch", "hideEverything", "showEverything"])
+        XCTAssertEqual(ScreenCaptureVisibility(rawValue: "hideNotch"), .hideNotch)
+    }
+
+    // MARK: - The key and the migration
+
+    func testTheKeyDefaultsToHidingTheNotchAndTheLegacyKeyIsReadRaw() throws {
+        let constants = try Self.source("Kannu/models/Constants.swift")
+        XCTAssertTrue(constants.contains("Key<ScreenCaptureVisibility>(\"screenCaptureVisibility\", default: .hideNotch)"),
+                      "the default moved away from hiding the notch")
+        XCTAssertFalse(constants.contains("Key<Bool>(\"hideDynamicIslandFromScreenCapture\""),
+                       "a declared Key registers its default, so object(forKey:) would be non-nil for everyone and the migration would read a choice nobody made")
+        XCTAssertTrue(constants.contains("UserDefaults.standard.object(forKey: \"hideDynamicIslandFromScreenCapture\") as? Bool"),
+                      "the legacy toggle is no longer migrated")
+    }
+
+    // MARK: - Every window says what it is
+
+    /// Windows that register as `.panel` stay in screenshots under the default. A notch satellite
+    /// registering as a panel would leak the notch back into captures, so the set is pinned.
+    private static let panelFiles: Set<String> = [
+        "Kannu/KannuApp.swift",                                           // onboarding window
+        "Kannu/components/Settings/SettingsWindowController.swift",
+        "Kannu/managers/ClipboardWindowManager.swift",
+        "Kannu/components/Clipboard/ClipboardPanel.swift",
+        "Kannu/components/ScreenAssistant/ScreenAssistantPanel.swift",
+        "Kannu/components/ScreenAssistant/ModelSelectionPanel.swift",
+        "Kannu/components/ScreenAssistant/ChatPanels.swift",
+    ]
+
+    func testEveryRegistrationNamesWhatTheWindowIs() throws {
+        let sources = try Self.appSources()
+        XCTAssertGreaterThan(sources.count, 100, "the scan read too few files")
+        var registrations = 0
+        var panelFiles: Set<String> = []
+        var notchFiles: Set<String> = []
+        for (path, text) in sources {
+            for line in text.split(separator: "\n") where line.contains("ScreenCaptureVisibilityManager.shared.register(") {
+                registrations += 1
+                if line.contains("scope: .panel)") {
+                    panelFiles.insert(path)
+                } else if line.contains("scope: .notch)") {
+                    notchFiles.insert(path)
+                } else {
+                    XCTFail("\(path): a registration names neither .notch nor .panel: \(line.trimmingCharacters(in: .whitespaces))")
+                }
+            }
+        }
+        XCTAssertGreaterThanOrEqual(registrations, 20, "the scan found too few registrations")
+        XCTAssertEqual(panelFiles, Self.panelFiles, "the set of windows that stay in screenshots by default changed")
+        XCTAssertTrue(notchFiles.contains("Kannu/components/Notch/KannuWindow.swift"),
+                      "the notch window itself must register as .notch")
+        XCTAssertTrue(panelFiles.isDisjoint(with: notchFiles), "a file registers both kinds; make sure that is deliberate")
+    }
+
+    // MARK: - Helpers
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private static func source(_ path: String) throws -> String {
+        try String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    private static func appSources() throws -> [String: String] {
+        let root = repoRoot.appendingPathComponent("Kannu", isDirectory: true)
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        var out: [String: String] = [:]
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            let relative = "Kannu/" + url.path.dropFirst(root.path.count + 1)
+            out[relative] = try String(contentsOf: url, encoding: .utf8)
+        }
+        return out
+    }
+}

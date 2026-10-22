@@ -801,7 +801,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .general, title: "Quit Kannu", keywords: ["quit", "exit", "close", "stop", "shut down", "terminate"], highlightID: SettingsTab.general.highlightID(for: "Quit Kannu")),
             SettingsSearchEntry(tab: .general, title: "Where Kannu appears", keywords: ["display", "displays", "monitor", "external", "built-in", "all displays", "multi-display", "screen", "placement", "switch", "move", "second screen"], highlightID: SettingsTab.general.highlightID(for: "Where Kannu appears")),
             SettingsSearchEntry(tab: .general, title: "Display", keywords: ["preferred screen", "display picker", "specific display", "choose display"], highlightID: SettingsTab.general.highlightID(for: "Display")),
-            SettingsSearchEntry(tab: .general, title: "Hide Kannu during screenshots & recordings", keywords: ["privacy", "screenshot", "recording"], highlightID: SettingsTab.general.highlightID(for: "Hide Kannu during screenshots & recordings")),
+            SettingsSearchEntry(tab: .general, title: "Screenshots & recordings", keywords: ["privacy", "screenshot", "recording", "capture", "hide", "notch", "screen sharing"], highlightID: SettingsTab.general.highlightID(for: "Screenshots & recordings")),
             SettingsSearchEntry(tab: .general, title: "Enable gestures", keywords: ["gestures", "trackpad"], highlightID: SettingsTab.general.highlightID(for: "Enable gestures")),
             SettingsSearchEntry(tab: .general, title: "Close gesture", keywords: ["pinch", "swipe"], highlightID: SettingsTab.general.highlightID(for: "Close gesture")),
             SettingsSearchEntry(tab: .general, title: "Reverse swipe gestures", keywords: ["reverse", "swipe", "media"], highlightID: SettingsTab.general.highlightID(for: "Reverse swipe gestures")),
@@ -1196,6 +1196,7 @@ struct GeneralSettings: View {
     @Default(.customizePhysicalNotchWidth) var customizePhysicalNotchWidth
     @Default(.notchHeightMode) var notchHeightMode
     @Default(.displayPlacement) var displayPlacement
+    @Default(.screenCaptureVisibility) var screenCaptureVisibility
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
@@ -1320,10 +1321,14 @@ struct GeneralSettings: View {
                 }
                 .disabled(displayPlacement != .chooseDisplay)
                 .settingsHighlight(id: highlightID("Display"))
-                Defaults.Toggle(key: .hideDynamicIslandFromScreenCapture) {
-                    Text("Hide Kannu during screenshots & recordings")
+                SettingsRow("Screenshots & recordings", description: screenCaptureVisibility.description) {
+                    Picker("", selection: $screenCaptureVisibility) {
+                        ForEach(ScreenCaptureVisibility.allCases) { option in
+                            Text(option.localizedName).tag(option)
+                        }
+                    }
                 }
-                .settingsHighlight(id: highlightID("Hide Kannu during screenshots & recordings"))
+                .settingsHighlight(id: highlightID("Screenshots & recordings"))
             } header: {
                 SettingsSectionHeader("System features")
             }

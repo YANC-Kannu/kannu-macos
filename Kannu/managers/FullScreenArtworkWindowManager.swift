@@ -1237,7 +1237,7 @@ final class FullScreenArtworkWindowManager: ObservableObject {
             newWindow.isMovable = false
             newWindow.hasShadow = false
 
-            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .entireInterface)
+            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)
             clickWindow = newWindow
             window = newWindow
             clickWindowDelegated = false
@@ -1287,7 +1287,7 @@ final class FullScreenArtworkWindowManager: ObservableObject {
             newWindow.level = NSWindow.Level(rawValue: Int(CGShieldingWindowLevel()))
             newWindow.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
 
-            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .entireInterface)
+            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)
             artworkOverlayWindow = newWindow
             window = newWindow
             artworkOverlayWindowDelegated = false
@@ -1397,7 +1397,7 @@ final class FullScreenArtworkWindowManager: ObservableObject {
             newHostingView.layer?.backgroundColor = NSColor.clear.cgColor
             newWindow.setHostedContent(newHostingView)
 
-            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .entireInterface)
+            ScreenCaptureVisibilityManager.shared.register(newWindow, scope: .notch)
             lyricsOverlayWindow = newWindow
             window = newWindow
             hostingView = newHostingView

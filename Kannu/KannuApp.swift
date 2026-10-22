@@ -420,12 +420,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         guard !stranded.isEmpty else { return }
         let spaces = CGSSpace.rejoinAllManagedSpaces(stranded)
-        // "Never hide" also pins the notch into Kannu's own top-level space. Clearing first makes
-        // the membership diff actually re-add windows it believes are already there.
-        if Defaults[.hideNotchOption] == .never {
-            NotchSpaceManager.shared.notchSpace.windows = []
-            syncNotchSpaceMembership()
-        }
+        // The notch also lives in Kannu's own top-level space. Clearing first makes the membership
+        // diff actually re-add windows it believes are already there.
+        NotchSpaceManager.shared.notchSpace.windows = []
+        syncNotchSpaceMembership()
         Self.spacesLog.notice(
             "Put \(stranded.count, privacy: .public) notch window(s) back on \(spaces, privacy: .public) spaces after \(reason, privacy: .public)"
         )
@@ -461,17 +459,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         viewModels.removeValue(forKey: id)
     }
 
-    /// Rebuilds the notch's CGSSpace membership from the current hide option and the
-    /// live windows. The space pins the notch above every space (fullscreen included)
-    /// and is used **only** for "Never hide"; the hide options keep the set empty so
-    /// FullscreenMediaDetector can hide the notch. Assigning the whole set lets the
-    /// CGSSpace diff additions/removals, so this is safe to call on any change.
+    /// Rebuilds the notch's CGSSpace membership from the live windows. The space pins the notch
+    /// above every space (fullscreen included) and, because it is not a managed space, keeps the
+    /// window off the Space-switch slide: on `.canJoinAllSpaces` alone the notch rode out with the
+    /// old space and back in with the new one, visibly detaching from the hardware notch. Every
+    /// hide option uses it. Hiding in fullscreen is the views' job (`KannuViewModel.hideOnClosed`)
+    /// and never depended on this membership. Assigning the whole set lets the CGSSpace diff
+    /// additions/removals, so this is safe to call on any change.
     @MainActor
     private func syncNotchSpaceMembership() {
-        guard Defaults[.hideNotchOption] == .never else {
-            NotchSpaceManager.shared.notchSpace.windows = []
-            return
-        }
         if Defaults[.displayPlacement].usesOneWindowPerDisplay {
             NotchSpaceManager.shared.notchSpace.windows = Set(windows.values)
         } else if let window = window {
@@ -517,12 +513,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setHostedContent(hostingView)
 
         window.orderFrontRegardless()
-        // Pin above every space (fullscreen included) only for "Never hide"; the
-        // hide options leave the window on the collectionBehavior path so
-        // FullscreenMediaDetector can hide it. See NotchSpaceManager.
-        if Defaults[.hideNotchOption] == .never {
-            NotchSpaceManager.shared.notchSpace.windows.insert(window)
-        }
+        // Pin above every space, fullscreen included, so the window does not ride the Space-switch
+        // slide. Fullscreen hiding is the views' job (`KannuViewModel.hideOnClosed`) and never
+        // depended on this membership, so every hide option joins. `tearDownWindow` and
+        // `tearDownAllWindows` remove it. See `syncNotchSpaceMembership`.
+        NotchSpaceManager.shared.notchSpace.windows.insert(window)
         //SkyLightOperator.shared.delegateWindow(window)
         return window
     }
@@ -988,6 +983,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateMediaControllerToNowPlaying()
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
+        Defaults.Keys.migrateScreenCaptureVisibility()
         Defaults.Keys.migrateThirdPartyDDCIntegration()
         Defaults.Keys.enforceRemovedFeatureDefaults()
         SecureSecretsStore.migrateFromDefaultsIfNeeded()
@@ -1148,14 +1144,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
 
-        // Pin/unpin the notch above all spaces when the hide option changes:
-        // "Never hide" joins the max-level CGSSpace, the hide options leave it.
-        Defaults.publisher(.hideNotchOption, options: []).sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.syncNotchSpaceMembership()
-            }
-        }.store(in: &cancellables)
-        
         // Observe minimalistic UI setting changes - trigger window resize
         Defaults.publisher(.enableMinimalisticUI, options: []).sink { [weak self] _ in
             // Defaults.publisher is raw KVO with no scheduler: the sink runs inside the
@@ -2008,7 +1996,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.isRestorable = false
             window.identifier = NSUserInterfaceItemIdentifier("OnboardingWindow")
 
-            ScreenCaptureVisibilityManager.shared.register(window, scope: .panelsOnly)
+            ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
 
             onboardingWindowController = NSWindowController(window: window)
         }

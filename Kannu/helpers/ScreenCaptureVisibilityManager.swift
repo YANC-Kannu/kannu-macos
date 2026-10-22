@@ -20,11 +20,10 @@ import AppKit
 import Combine
 import Defaults
 
-enum ScreenCaptureScope: Int {
-    case panelsOnly
-    case entireInterface
-}
-
+/// Keeps every registered window's `sharingType` in step with `Defaults[.screenCaptureVisibility]`.
+/// A window says what it is when it registers (`ScreenCaptureScope`); the setting says which kinds
+/// stay out of screenshots, recordings and capture-based thumbnails. The scope used to be ignored,
+/// so the one toggle hid the Settings window along with the notch.
 final class ScreenCaptureVisibilityManager {
     static let shared = ScreenCaptureVisibilityManager()
 
@@ -32,11 +31,8 @@ final class ScreenCaptureVisibilityManager {
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
-        let interfacePublisher = Defaults.publisher(.hideDynamicIslandFromScreenCapture)
+        Defaults.publisher(.screenCaptureVisibility)
             .map { _ in () }
-            .eraseToAnyPublisher()
-
-        interfacePublisher
             .receive(on: RunLoop.main)
             .sink { [weak self] in
                 self?.updateAllWindows()
@@ -62,8 +58,7 @@ final class ScreenCaptureVisibilityManager {
         }
     }
 
-    private func applyVisibility(to window: NSWindow, scope _: ScreenCaptureScope) {
-        let shouldHide = Defaults[.hideDynamicIslandFromScreenCapture]
-        window.sharingType = shouldHide ? .none : .readOnly
+    private func applyVisibility(to window: NSWindow, scope: ScreenCaptureScope) {
+        window.sharingType = Defaults[.screenCaptureVisibility].hides(scope) ? .none : .readOnly
     }
 }
