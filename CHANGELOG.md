@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
+- **Developer label:** "a color search didnt give the notch color change area"
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
+- **Changes:**
+  - The suggestions were the first eight matches in the index's order. "color" matches about twenty
+    rows, and seven Devices and HUD rows come before Notch fill color, so it was eighth at best and
+    gone whenever another match came first. "colour" missed it entirely, because its title says
+    "color", while "color" missed every row spelled "colour" (Solid colour, Tag colours, Jira colour).
+  - New `Kannu/helpers/SettingsSearchRanking.swift` (Foundation only) ranks each row. Best is a word
+    of the title equal to the query, or a title that starts with it. Then a title word that starts
+    with it, then the query anywhere in the title, then a keyword. Rows of equal rank keep the
+    index order. Case, diacritics and "colour"/"color" are folded on both sides.
+  - `searchEntries` returns rows ranked; `searchSuggestions` no longer cuts to eight. The list
+    scrolls past eight rows, showing half of the ninth so it reads as scrollable. Return still opens
+    the first suggestion, which is now the best match.
+  - Test: new `SettingsSearchRankingTests`.
+    - Both spellings, and each rank.
+    - Ranking keeps order within a rank.
+    - Against the real index: "color", "colour" and "notch colour" each put Notch fill color among
+      the first eight rows.
+    - The suggestions are not cut, with the old `.prefix(8)` planted.
+
 ### 2026-10-22 - Act on CodeRabbit's review of #118
 - **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
 - **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread
