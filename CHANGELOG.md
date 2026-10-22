@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - The extension RPC server listens on loopback only
+- **Developer label:** "Bind the extension RPC server to loopback"
+- **Agent label:** Claude Code (Opus 5.5) — `ExtensionRPCServer`'s listener sets `requiredInterfaceType = .loopback`; the peer check stays
+- **Changes:**
+  - The RPC server's `NWListener` on port 9020 starts at launch and listened on every interface.
+    Any machine on the network could open a connection; `handleNewConnection` dropped a
+    non-loopback peer only after accepting it. With the macOS firewall on, the listener could
+    also raise its "accept incoming connections" dialog.
+  - The listener's parameters now require the loopback interface, so nothing off this Mac can
+    connect. A Network.framework harness on this Mac showed:
+    - **before:** 127.0.0.1, ::1, localhost and the LAN address all connect;
+    - **after:** the three loopback forms connect and the LAN address times out.
+  - No working client is affected. The server only ever accepted loopback peers, and
+    AtollExtensionKit talks to Kannu over XPC, not this socket. The loopback peer check stays as a
+    second line.
+  - Test: new `ExtensionRPCServerRulesTests`. The requirement is set before the listener is
+    built, and the peer check is still there. A planted copy of each is caught.
+
 ### 2026-10-22 - A dropped connection while stapling no longer fails a release
 - **Developer label:** "Retry notarization stapling in release.yml"
 - **Agent label:** Claude Code (Opus 5.5) — `scripts/notarize-dmg.sh` retries `xcrun stapler staple` up to five times with a growing wait
