@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Screenshots keep Kannu by default, and the album-art tap reopens every app but Spotify
+- **Developer label:** "raise pr and look for coderabbit comments, see if these changes will lead to any regression or older specific asks"
+- **Agent label:** Claude Code (Opus 5.5) — branch reviewed against older asks before the PR: screenshot default restored, activate-only limited to Spotify, refused-join fallback
+- **Changes:**
+  - **The screenshot default is "Show everything" again.** Hiding the notch by default was meant
+    for the empty notch in a "desktop preview", which turned out to be Mission Control: WindowServer
+    draws it, so `sharingType` never affected it, and the notch-space fix above is what cleared it.
+    Left in, the default would have taken the notch, its volume and brightness HUD, the music and
+    timer controls, the lock-screen widgets and the fullscreen artwork out of every screenshot,
+    recording and screen share for everyone who never touched the old toggle, and out of the
+    screenshots CONTRIBUTING.md asks for. The three-way picker and the scope-aware manager stay:
+    "Hide the notch" now hides only Kannu's notch-side windows, which the old toggle could not do.
+    An explicit old choice still migrates.
+  - **The album-art tap reopens every app but Spotify.** Only a running Spotify is activated
+    instead of reopened, because Spotify answered a reopen with a stray second audio session. Apple
+    Music, browsers and every other player get the reopen back, which brings a closed or minimized
+    window forward, as the 2026-09-10 "open the exact media screen" change expects.
+  - **A refused notch-space join falls back to the managed spaces** and marks the window, so a
+    notch is never left in no space; before, it only logged.
+  - **Open, not yet checked by eye:** for everyone, and no longer only "Never hide" users, the notch
+    window is in a space shown above every window level. A context menu, popover or alert opened over
+    the open notch is drawn in the managed spaces, below it, and `ModalPresenter`'s level raise
+    (docs/REGRESSIONS.md entry 14) cannot beat a space.
+  - Tests: `ScreenCapturePolicyTests` (the default), `MusicAppActivationRulesTests` (Spotify-only),
+    `ClosedNotchVisibilityRulesTests` (both fallbacks).
+
 ### 2026-10-22 - Switching Spaces looks like the notch never moved, and the music bars are quieter
 - **Developer label:** "can we make it look like it never moved, beacuse when music is playing it closes and again comes in next tab, the state is not retained" … "even in desktop preview an empty notch is embeded" … "keep it subtle" … "this somehow caused by us, we did something, our notch calling something, find that"
 - **Agent label:** Claude Code (Opus 5.5) — notch window lives only in Kannu's notch space with a WindowServer-read repair; subtler closed-notch music bars; a running music app is activated instead of reopened
@@ -44,7 +70,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     repair table from measured memberships), `ClosedNotchVisibilityRulesTests` and
     `NotchSpaceMembershipTests` (the wiring), `MusicAppActivationRulesTests` (a running app is activated, never reopened).
 
-### 2026-10-22 - The notch stays put across Spaces and out of screenshots by default
+### 2026-10-22 - The notch stays put across Spaces, and screenshots get a three-way setting
 - **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
 - **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`
 - **Changes:**
@@ -61,22 +87,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     re-synced membership is gone with the gate. The reviewer's other suggestion, owning the slide
     with physics, is not available: the slide is WindowServer's transition, not an animation Kannu
     drives.
-  - **Kannu stays out of screenshots, recordings and capture-based thumbnails by default.** A
-    capture of a notched display shows a continuous menu bar where the hardware notch is, so the
-    closed notch appeared as an empty black blob in a window switcher's Desktop preview.
+  - **A three-way screenshot setting.** (Its first default, hiding the notch, was reverted the same
+    day: the "Desktop preview" was Mission Control, which this setting cannot affect. See the entry
+    "Screenshots keep Kannu by default…" above.)
     `hideDynamicIslandFromScreenCapture` (Bool, default off) is replaced by `screenCaptureVisibility`
-    (`ScreenCaptureVisibility`: `hideNotch` by default, `hideEverything`, `showEverything`).
+    (`ScreenCaptureVisibility`: `hideNotch`, `hideEverything`, `showEverything`).
     `ScreenCaptureVisibilityManager` now honours the scope a window registered with — `.notch` for
     the notch, its music and timer satellites, the lock-screen widgets and the fullscreen artwork;
-    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so the default hides
+    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so "Hide the notch" hides
     the notch and keeps Brain in a screenshot. The old code ignored the scope and hid every
     registered window together, which is why flipping the Bool's default was not the fix.
   - **Migration:** a user who had the old toggle on gets "Hide everything"; one who turned it on
-    and off again gets "Show everything"; everyone else gets the new default. The legacy key is read
+    and off again gets "Show everything"; everyone else gets the default. The legacy key is read
     raw and never declared again, because a declared `Defaults.Key` registers its default and would
-    make everyone look like they had set it. **The new default applies to everyone who never
-    touched the old toggle, so it needs a line in the release notes:** Kannu now stays out of
-    screenshots and screen recordings; Brain › General › Screenshots & recordings puts it back.
+    make everyone look like they had set it.
   - Settings: the "Hide Kannu during screenshots & recordings" toggle is now the "Screenshots &
     recordings" picker, with its search entry and highlight id renamed together.
   - Tests: `ScreenCapturePolicyTests` (the rule table, stable raw values, the key's default and the

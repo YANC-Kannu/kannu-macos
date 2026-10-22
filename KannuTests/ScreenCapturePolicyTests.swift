@@ -19,11 +19,10 @@
 import XCTest
 
 /// `ScreenCaptureVisibility` decides which Kannu windows carry `NSWindow.sharingType = .none`. The
-/// default hides the notch: a captured notched display shows a continuous menu bar where the
-/// hardware notch is, so Kannu's black shape there read as an empty blob in every screenshot,
-/// recording and capture-based window-switcher thumbnail. Settings and the other panels stay
-/// capturable unless the user asks for everything hidden. The registrations are pinned from the
-/// source because the windows are AppKit and the manager is not in the logic target.
+/// default shows everything, like the old toggle's default, so nobody's screenshots change on
+/// update. "Hide the notch" keeps the notch and its satellites out while Brain and the other panels
+/// stay capturable. The registrations are pinned from the source because the windows are AppKit and
+/// the manager is not in the logic target.
 final class ScreenCapturePolicyTests: XCTestCase {
 
     // MARK: - The rule
@@ -52,10 +51,10 @@ final class ScreenCapturePolicyTests: XCTestCase {
 
     // MARK: - The key and the migration
 
-    func testTheKeyDefaultsToHidingTheNotchAndTheLegacyKeyIsReadRaw() throws {
+    func testTheKeyDefaultsToShowingEverythingAndTheLegacyKeyIsReadRaw() throws {
         let constants = try Self.source("Kannu/models/Constants.swift")
-        XCTAssertTrue(constants.contains("Key<ScreenCaptureVisibility>(\"screenCaptureVisibility\", default: .hideNotch)"),
-                      "the default moved away from hiding the notch")
+        XCTAssertTrue(constants.contains("Key<ScreenCaptureVisibility>(\"screenCaptureVisibility\", default: .showEverything)"),
+                      "the default no longer shows everything; a new default would change everyone's screenshots on update")
         XCTAssertFalse(constants.contains("Key<Bool>(\"hideDynamicIslandFromScreenCapture\""),
                        "a declared Key registers its default, so object(forKey:) would be non-nil for everyone and the migration would read a choice nobody made")
         XCTAssertTrue(constants.contains("UserDefaults.standard.object(forKey: \"hideDynamicIslandFromScreenCapture\") as? Bool"),
@@ -64,7 +63,7 @@ final class ScreenCapturePolicyTests: XCTestCase {
 
     // MARK: - Every window says what it is
 
-    /// Windows that register as `.panel` stay in screenshots under the default. A notch satellite
+    /// Windows that register as `.panel` stay in screenshots under "Hide the notch". A notch satellite
     /// registering as a panel would leak the notch back into captures, so the set is pinned.
     private static let panelFiles: Set<String> = [
         "Kannu/KannuApp.swift",                                           // onboarding window
@@ -95,7 +94,7 @@ final class ScreenCapturePolicyTests: XCTestCase {
             }
         }
         XCTAssertGreaterThanOrEqual(registrations, 20, "the scan found too few registrations")
-        XCTAssertEqual(panelFiles, Self.panelFiles, "the set of windows that stay in screenshots by default changed")
+        XCTAssertEqual(panelFiles, Self.panelFiles, "the set of windows that stay in screenshots under \"Hide the notch\" changed")
         XCTAssertTrue(notchFiles.contains("Kannu/components/Notch/KannuWindow.swift"),
                       "the notch window itself must register as .notch")
         XCTAssertTrue(panelFiles.isDisjoint(with: notchFiles), "a file registers both kinds; make sure that is deliberate")

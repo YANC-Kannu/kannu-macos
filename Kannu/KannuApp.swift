@@ -445,8 +445,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 notchSpace.add([window])
                 let joined = CGSSpace.spaceIDs(of: window)
                 guard joined.contains(notchSpace.spaceID) else {
+                    // Never leave it in no space: seen beats still (2026-09-30).
+                    notchSpaceUnseenWindows.insert(window.windowNumber)
+                    let spaces = CGSSpace.rejoinAllManagedSpaces([window])
                     Self.spacesLog.error(
-                        "Notch space refused window \(window.windowNumber, privacy: .public) after \(reason, privacy: .public); kept its spaces \(joined.sorted().description, privacy: .public)"
+                        "Notch space refused window \(window.windowNumber, privacy: .public) after \(reason, privacy: .public); put it on \(spaces, privacy: .public) managed spaces"
                     )
                     continue
                 }

@@ -209,6 +209,10 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
                        "both strips must check the window is still on screen")
         XCTAssertTrue(pin.contains("notchSpaceUnseen: notchSpaceUnseenWindows.contains(window.windowNumber)"),
                       "the decision no longer hears about an earlier fallback")
+        // A refused join must not leave the window in no space: the fallback and the refused join
+        // both put it back on the managed spaces.
+        XCTAssertEqual(pin.components(separatedBy: "CGSSpace.rejoinAllManagedSpaces([window])").count - 1, 2,
+                       "a refused join or an unseen notch no longer falls back to the managed spaces")
     }
 
     /// The repair that made the notch a member of every space at the first switch after each

@@ -31,10 +31,11 @@ enum ScreenCaptureScope: Int {
 /// Which Kannu windows stay out of screenshots, recordings and capture-based thumbnails
 /// (`NSWindow.sharingType = .none`).
 ///
-/// The default hides the notch. A capture of a notched display shows a continuous menu bar where
-/// the hardware notch is, so Kannu's black shape in that spot reads as an empty blob, not a notch,
-/// in every screenshot and in a window switcher's desktop preview. Brain and the other panels
-/// stay capturable unless the user asks for everything hidden.
+/// The default shows everything, as the old toggle's default did. "Hide the notch" keeps the notch
+/// and its satellites out of captures while Brain and the other panels stay capturable, which the
+/// old toggle could not do: it ignored each window's scope and hid them all together. This setting
+/// cannot affect Mission Control's previews or the Space-switch transition; those are drawn by
+/// WindowServer, not captured.
 ///
 /// Foundation-only so the logic target can pin the rule; the app target adds
 /// `Defaults.Serializable` next to its key.

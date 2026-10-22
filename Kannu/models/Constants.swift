@@ -940,7 +940,7 @@ extension Defaults.Keys {
     /// Replaces the `hideDynamicIslandFromScreenCapture` Bool, which `migrateScreenCaptureVisibility`
     /// reads raw. The old key is never declared again: a declared `Key` registers its default, which
     /// would make everyone look like they had set it.
-    static let screenCaptureVisibility = Key<ScreenCaptureVisibility>("screenCaptureVisibility", default: .hideNotch)
+    static let screenCaptureVisibility = Key<ScreenCaptureVisibility>("screenCaptureVisibility", default: .showEverything)
     static let didMigrateScreenCaptureVisibility = Key<Bool>("didMigrateScreenCaptureVisibility", default: false)
     
         // MARK: Behavior
@@ -1676,11 +1676,11 @@ extension Defaults.Keys {
         Defaults[.didMigrateNonNotchAlwaysShow] = true
     }
 
-    /// Only a user who touched the legacy "Hide Kannu during screenshots & recordings" toggle keeps
-    /// their choice; everyone else gets the new default, which hides the notch. That is deliberate
-    /// and it is in the release notes: a captured notched display shows a continuous menu bar where
-    /// the hardware notch is, so the closed notch appeared as an empty black blob in every
-    /// screenshot and capture-based thumbnail. Reads the legacy key raw, see `screenCaptureVisibility`.
+    /// Only a user who touched the legacy "Hide Kannu during screenshots & recordings" toggle has a
+    /// choice to carry over: on becomes "Hide everything" (what the toggle did), off "Show
+    /// everything". Everyone else keeps the default, "Show everything", which is what the toggle's
+    /// default did, so nobody's screenshots change on update. Reads the legacy key raw, see
+    /// `screenCaptureVisibility`.
     static func migrateScreenCaptureVisibility() {
         guard Defaults[.didMigrateScreenCaptureVisibility] == false else { return }
         if let legacy = UserDefaults.standard.object(forKey: "hideDynamicIslandFromScreenCapture") as? Bool {

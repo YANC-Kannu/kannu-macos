@@ -18,17 +18,20 @@
 
 import XCTest
 
-/// Tapping the album art brings the music app forward. For an app that is already running it must
-/// do that the way Cmd-Tab does, with `activate()`: `NSWorkspace.openApplication` also sends a
-/// running app a reopen event, and 0.2 s after one (2026-10-22, 20:49:00) Spotify started a second,
-/// hidden audio session in its helper process that every later Play command woke as well, so two
-/// tracks played at once. `MusicManager` is AppKit-bound, so the order is read from the source.
+/// Tapping the album art brings the music app forward. A running Spotify must come forward the way
+/// Cmd-Tab does, with `activate()`: `NSWorkspace.openApplication` also sends a running app a reopen
+/// event, and 0.2 s after one (2026-10-22, 20:49:00) Spotify started a second, hidden audio session
+/// in its helper process that every later Play command woke as well, so two tracks played at once.
+/// Every other app keeps the reopen, which brings back a closed or minimized window. `MusicManager`
+/// is AppKit-bound, so the branches are read from the source.
 final class MusicAppActivationRulesTests: XCTestCase {
 
-    func testARunningMusicAppIsActivatedAndNeverReopened() throws {
+    func testARunningSpotifyIsActivatedAndNeverReopened() throws {
         let body = try Self.openMusicAppBody()
-        let running = try XCTUnwrap(body.range(of: "if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {"),
-                                    "openMusicApp no longer looks for the running app first")
+        XCTAssertTrue(body.contains("if bundleID == Self.spotifyBundleID,"),
+                      "the activate-only branch is no longer limited to Spotify; other apps lose the reopen that restores their window")
+        let running = try XCTUnwrap(body.range(of: "let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {"),
+                                    "openMusicApp no longer looks for a running Spotify first")
         let launchBranch = try XCTUnwrap(body.range(of: "} else if let appURL = workspace.urlForApplication(withBundleIdentifier: bundleID) {"),
                                          "an app that is not running is no longer launched")
         let runningBranch = body[running.upperBound..<launchBranch.lowerBound]
@@ -37,8 +40,8 @@ final class MusicAppActivationRulesTests: XCTestCase {
                        "a running app is reopened again; Spotify answered a reopen with a second, hidden player")
     }
 
-    /// `openApplication` is reachable only from the branch for an app that is not running.
-    func testOnlyAnAppThatIsNotRunningIsLaunched() throws {
+    /// `openApplication` is reachable only from the second branch: every app but a running Spotify.
+    func testEveryOtherAppKeepsTheReopen() throws {
         let body = try Self.openMusicAppBody()
         let launchBranch = try XCTUnwrap(body.range(of: "} else if let appURL = workspace.urlForApplication(withBundleIdentifier: bundleID) {"))
         let opens = body.components(separatedBy: "openApplication(").count - 1
