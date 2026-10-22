@@ -28,6 +28,10 @@ final class NotchSkinManager: ObservableObject {
     }
 
     func reloadSelectedSkin() {
+        if let builtIn = BuiltInNotchSkin.with(id: Defaults[.selectedNotchSkinID]) {
+            selectedSkinImage = NSImage(named: builtIn.assetName)
+            return
+        }
         guard let selectedID = Defaults[.selectedNotchSkinID],
               let skin = Defaults[.customNotchSkins].first(where: { $0.id.uuidString == selectedID }),
               FileManager.default.fileExists(atPath: skin.fileURL.path)
@@ -105,6 +109,11 @@ final class NotchSkinManager: ObservableObject {
 
     func selectSkin(_ skin: CustomNotchSkin?) {
         Defaults[.selectedNotchSkinID] = skin?.id.uuidString
+        reloadSelectedSkin()
+    }
+
+    func selectBuiltInSkin(_ skin: BuiltInNotchSkin) {
+        Defaults[.selectedNotchSkinID] = skin.id
         reloadSelectedSkin()
     }
 }

@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Horns ships as a built-in notch skin, and Settings copies an AI prompt that designs one
+- **Developer label:** "rename the default skin image file name with something like halo for devil meaning" / "raise a pr for this and also a sample prompt which would ask user back questions from ai and will finally design them as notch skin"
+- **Agent label:** Claude Code (Opus 5.5) — `BuiltInNotchSkin` (Horns, from the `notch-skin-horns` imageset) beside Default in Settings › Notch skin, a **Copy AI prompt** button with `NotchSkinPrompt`, and `docs/NOTCH-SKINS.md`
+- **Changes:**
+  - Settings › Notch skin offers **Horns**, a red and black skin, next to Default. It is David's
+    skin, made with ChatGPT and copied unchanged into `Assets.xcassets/notch-skin-horns.imageset`
+    (1824 × 862 PNG; its only metadata is OpenAI's content-credentials record).
+  - `BuiltInNotchSkin` (Foundation only) lists built-ins by id, asset name and localized name.
+    Selecting one stores its id, `builtin.horns`, in `selectedNotchSkinID`, the key an uploaded
+    skin's UUID goes in. A built-in id is never UUID-shaped, so the two cannot collide.
+    `NotchSkinManager.reloadSelectedSkin` loads a built-in with `NSImage(named:)` before looking
+    at uploads. Built-ins have no Remove, and **Remove selected** is disabled for one.
+  - **Copy AI prompt** copies `NotchSkinPrompt.text` for ChatGPT or another image AI. The prompt asks
+    five questions, one at a time (mood, colours, motifs, how bold, what to avoid), and generates
+    nothing until they are answered. Then it draws a 1920 × 600 PNG, 3× the default open notch: a
+    dark, quiet middle 60% for Kannu's text, icons and light, decoration toward the edges, a black
+    top centre for the camera, 40 px clear of the clipped corners, no text or faces, and a middle
+    strip that still works when the notch is closed. After a copy, the footer says what to do next.
+  - New `docs/NOTCH-SKINS.md`: picking and uploading a skin, the scrim, sizes and safe areas, and
+    the prompt verbatim. The README's skin bullet and setup step link it.
+  - Test: new `NotchSkinTests`.
+    - The prompt asks before it draws, and states the canvas and what to leave out.
+    - The doc quotes the prompt verbatim.
+    - Built-in ids are unique and never UUID-shaped, with a planted UUID id caught.
+    - Every built-in's imageset names an image file that exists. `BuiltInNotchSkin.swift` and
+      `NotchSkinPrompt.swift` join KannuTests' Sources.
+
 ### 2026-10-22 - Ad-hoc build scripts keep library validation disabled, on purpose
 - **Developer label:** "Fix the dead disable-library-validation strip"
 - **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.cs.disable-library-validation` block from `build-dmg.sh` and `build-launch-app.sh`, which never removed the key and would break the app if it did
