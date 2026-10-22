@@ -4,6 +4,46 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Switching Spaces looks like the notch never moved, and the music bars are quieter
+- **Developer label:** "can we make it look like it never moved, beacuse when music is playing it closes and again comes in next tab, the state is not retained" … "even in desktop preview an empty notch is embeded" … "keep it subtle" … "this somehow caused by us, we did something, our notch calling something, find that"
+- **Agent label:** Claude Code (Opus 5.5) — notch window lives only in Kannu's notch space with a WindowServer-read repair; subtler closed-notch music bars; a running music app is activated instead of reopened
+- **Changes:**
+  - **The notch is in Kannu's notch space and no other space.** The stranded-notch repair from
+    2026-09-30 decided on `isOnActiveSpace`, which is false by design for a window in the notch
+    space, so at the first switch after every launch it put the notch back on every desktop and
+    fullscreen space (and macOS added it to a newly created one on its own). While it was there,
+    David saw the music wings close and come back in the next space, and an empty notch in Mission
+    Control's previews; no media or fullscreen state changed at those switches. The repair now reads
+    membership from WindowServer (`CGSSpace.spaceIDs(of:)`, mask 0xF), decides with the new
+    `ClosedNotchVisibility.notchSpaceRepair`, joins the notch space before it leaves any other space,
+    checks the window is still on screen after every strip, and puts an unseen notch back on the
+    managed spaces (seen beats still), remembering that so the next check does not strip it again
+    until a wake, unlock or reposition retries. It runs at creation, on every space change, wake and
+    unlock, and after a reposition, and shows the notch space again each time (`reassertShown`, a
+    precaution). `syncNotchSpaceMembership` and the empty-then-refill re-sync are gone. Every repair
+    logs one `NotchSpaces` line with the spaces before and after. Known gap: the window keeps
+    `.canJoinAllSpaces`, so a space macOS creates gets a copy until the first repair after switching
+    into it.
+  - **The bars beside the album art are smaller and dimmer.** In the closed notch they are 9 pt tall
+    instead of 14 and drawn at 60% opacity, in the same place, for the animated and the real-time
+    visualizer alike (both take a bar height now). The open player, the lock screen and extensions
+    keep their size.
+  - **Tapping the album art no longer reopens a running music app.** `openApplication` sends a
+    running app a reopen event; 0.2 s after one, Spotify started a second, hidden audio session in
+    its helper process, and because Spotify hands every remote command to two handlers, every later
+    Play woke it too: two tracks at once that media keys could not stop. A running app is now
+    activated the way Cmd-Tab does it and never reopened; one whose window is closed comes forward
+    without it (its Dock icon reopens it). An app that is not running is launched as before. The
+    stuck session itself is Spotify's; a Spotify restart clears it.
+  - Checked by David on the installed build: swiping keeps the notch and its music wings still,
+    Mission Control's previews show no notch, and the bars are subtle. A probe read the notch window
+    on screen in the notch space alone. Found by that probe before he looked: the first pin ran in
+    the turn the window was ordered in, when WindowServer does not list it as on screen yet, and
+    fell back onto every space; the creation and reposition pins now run a turn later.
+  - docs/REGRESSIONS.md entry 20 and a danger-zones row. Tests: `ClosedNotchVisibilityTests` (the
+    repair table from measured memberships), `ClosedNotchVisibilityRulesTests` and
+    `NotchSpaceMembershipTests` (the wiring), `MusicAppActivationRulesTests` (a running app is activated, never reopened).
+
 ### 2026-10-22 - The notch stays put across Spaces and out of screenshots by default
 - **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
 - **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`

@@ -1315,7 +1315,14 @@ class MusicManager: ObservableObject {
         }
 
         let workspace = NSWorkspace.shared
-        if let appURL = workspace.urlForApplication(withBundleIdentifier: bundleID) {
+        // A running app is brought forward the way Cmd-Tab does it, and never reopened.
+        // `openApplication` on a running app sends it a reopen event, and 0.2 s after one
+        // (2026-10-22, 20:49:00) Spotify started a second, hidden audio session in its helper
+        // process that every later Play woke too: two tracks at once. A running app whose window
+        // is closed comes forward without one; its Dock icon reopens it.
+        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            running.activate()
+        } else if let appURL = workspace.urlForApplication(withBundleIdentifier: bundleID) {
             let configuration = NSWorkspace.OpenConfiguration()
             workspace.openApplication(at: appURL, configuration: configuration) { (app, error) in
                 if let error = error {
