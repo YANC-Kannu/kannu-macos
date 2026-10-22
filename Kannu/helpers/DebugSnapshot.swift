@@ -81,6 +81,14 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
+        if request.tabs == nil || request.tabs?.contains("onboardingPermissions") == true {
+            // Every row, in the states this Mac's answers give them; nothing is requested.
+            boards.append(("onboardingPermissions", AnyView(
+                PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
+                                    onLaunchAtLoginChoice: { _ in }, onContinue: {})
+                    .frame(height: 980)
+            )))
+        }
         for (name, view) in boards {
             for dark in [false, true] {
                 let root = AnyView(view

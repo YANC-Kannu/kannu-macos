@@ -411,6 +411,7 @@ class KannuViewModel: NSObject, ObservableObject {
         helloCloseScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
             guard let self else { return }
+            self.coordinator.helloPending = false
             self.coordinator.firstLaunch = false
             withAnimation(self.animationLibrary.animation) {
                 self.close()
