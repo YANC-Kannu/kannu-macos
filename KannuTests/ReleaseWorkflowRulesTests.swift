@@ -66,6 +66,9 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         let plistBuddyStrip = "/usr/libexec/PlistBuddy -c \"Delete :com.apple.security.mach-services\" \"$ENTITLEMENTS\""
         XCTAssertEqual(Self.machServicesProblems(in: plistBuddyStrip, path: "release.yml"),
                        ["release.yml strips the mach-services entitlement"])
+        let quotedStrip = "plutil -remove \"com.apple.security.mach-services\" \"$TEMP_ENTITLEMENTS\""
+        XCTAssertEqual(Self.machServicesProblems(in: quotedStrip, path: "build-dmg.sh"),
+                       ["build-dmg.sh strips the mach-services entitlement"])
     }
 
     private static let buildFiles = [
@@ -73,8 +76,13 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
     ]
 
     static func machServicesProblems(in text: String, path: String) -> [String] {
-        let strips = ["plutil -remove com.apple.security.mach-services", "Delete :com.apple.security.mach-services"]
-        return strips.contains(where: text.contains) ? ["\(path) strips the mach-services entitlement"] : []
+        strips("com.apple.security.mach-services", in: text) ? ["\(path) strips the mach-services entitlement"] : []
+    }
+
+    /// A `plutil -remove` or PlistBuddy `Delete` of `key`, however the shell quotes it.
+    private static func strips(_ key: String, in text: String) -> Bool {
+        let unquoted = text.replacingOccurrences(of: "\"", with: "").replacingOccurrences(of: "'", with: "")
+        return unquoted.contains("plutil -remove \(key)") || unquoted.contains("Delete :\(key)")
     }
 
     // MARK: - Rules

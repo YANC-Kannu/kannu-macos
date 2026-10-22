@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Act on CodeRabbit's review of #115
+- **Developer label:** CodeRabbit's review of #115: the mach-services scanner missed a quoted key
+- **Agent label:** Claude Code (Opus 5.5) — the scanner drops shell quotes before matching, with a planted quoted strip
+- **Changes:**
+  - `plutil -remove "com.apple.security.mach-services"` passed the rule, because it matched the
+    unquoted command only. `machServicesProblems` now goes through a `strips(_:in:)` helper that
+    removes `"` and `'` first, so either quoting of a `plutil -remove` or PlistBuddy `Delete`
+    counts.
+  - Test: a planted quoted `plutil -remove` is reported.
+
 ### 2026-10-22 - Builds stop pretending to strip the mach-services entitlement
 - **Developer label:** "Fix the release workflow's mach-services strip"
 - **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.mach-services` blocks from the release workflow, CI and both local build scripts; none ever removed the key
