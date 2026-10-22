@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - A dropped connection while stapling no longer fails a release
+- **Developer label:** "Retry notarization stapling in release.yml"
+- **Agent label:** Claude Code (Opus 5.5) — `scripts/notarize-dmg.sh` retries `xcrun stapler staple` up to five times with a growing wait
+- **Changes:**
+  - The 1.4.0 beta 2 release run failed after Apple had accepted the DMG. Stapling fetches the
+    ticket from Apple's CloudKit service, the connection dropped ("The network connection was
+    lost", stapler error 68), and the single `xcrun stapler staple` ended the run; a re-run of the
+    whole job went through.
+  - `scripts/notarize-dmg.sh` (the release's Notarize step) now tries the staple up to five times,
+    waiting 15, 30, 45 and 60 seconds between tries, then validates. It fails only when every try
+    fails. `STAPLE_RETRY_DELAY` overrides the 15-second step, for a local test.
+  - Checked against a fake `xcrun`: two failures then success staples on the third try; five
+    failures exit 1.
+  - Test: `ReleaseWorkflowRulesTests.testTheStapleIsRetried` (the step runs the script; the one
+    staple is inside the retry loop), with a planted single-shot staple.
+
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
