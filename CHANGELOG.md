@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Launch no longer reads the Keychain on the main thread
+- **Developer label:** "Stop launch-time Keychain reads on main"
+- **Agent label:** Claude Code (Opus 5.5) — `SecureSecretsStore.migrateFromDefaultsIfNeeded` touches the Keychain only for a value still in Defaults, silently and off main (`LegacySecretMigration` decides each); the legacy Claude credential delete moves off main
+- **Changes:**
+  - Every launch, `continueLaunch()` ran `SecureSecretsStore.migrateFromDefaultsIfNeeded()`, which
+    read all eight Kannu secret items on the main thread with the Keychain dialog allowed, whether
+    or not anything was left to move.
+  - On a fresh Mac those items don't exist, so no dialog appeared. But Debug and Release builds
+    share the service name `com.kannu.app.secure-secrets` and are signed differently, so an item
+    one had saved could raise a SecurityAgent dialog in the other that held the launch until
+    answered.
+  - **The migration now:**
+    - collects the settings that still hold a plaintext value, and returns at once when none do,
+      which is nearly always;
+    - otherwise reads each item silently (`allowInteraction: false`) on a background queue;
+    - decides what to do with new `LegacySecretMigration` (Foundation only, in
+      `KeychainReadPolicy.swift`):
+      - an item already there wins, readable or not, and the plaintext copy is cleared;
+      - the legacy value is stored only where no item exists;
+      - anything else (a locked keychain) waits for the next launch.
+    
+    Defaults are cleared on the main thread.
+  - The one-time delete of the legacy `claude-oauth` item (`LLMUsageManager.configureProviderDefaultsIfNeeded`,
+    also run from `continueLaunch()`) now runs on a background queue too.
+  - Test: new `LegacySecretMigrationTests`.
+    - Every step.
+    - The migration reads nothing before it knows there is something to move, reads silently,
+      off main.
+    - The delete is off main.
+    - Planted copies of the old code are caught.
+
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
