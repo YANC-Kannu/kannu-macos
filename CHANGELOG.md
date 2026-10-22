@@ -30,6 +30,10 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `notchForeground`, as do the text fields' carets (`.tint`).
   - `DebugSnapshot` gains a `notchFills` board: agent dots, recent chats and usage cards on black,
     white, yellow and blue fills, set up the way `ContentView` does.
+  - Built-in skins (Horns, from #117) are averaged like uploaded ones, so the notch's text follows
+    them too; the average is keyed by the skin's String ID (a built-in's `builtin.` ID or an
+    upload's UUID string). `NotchSkinPrompt` and `docs/NOTCH-SKINS.md` no longer say Kannu draws
+    *white* text in the centre, and the guide says the text follows the skin's average colour.
   - Test: `NotchContrastTests` pins the state-colour shading (3:1 on #959595, 7:1 on white, hue
     kept).
 
@@ -57,6 +61,83 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     the old fill-derived colour made it black on black on a light fill.
   - Tests: new `NotchContrastTests` (presets, the 3:1 switch at #949494/#959595, the scrim) and
     `NotchPopoverAppearanceRulesTests` (every notch popover pinned, with planted offenders).
+
+### 2026-10-22 - Horns ships as a built-in notch skin, and Settings copies an AI prompt that designs one
+- **Developer label:** "rename the default skin image file name with something like halo for devil meaning" / "raise a pr for this and also a sample prompt which would ask user back questions from ai and will finally design them as notch skin"
+- **Agent label:** Claude Code (Opus 5.5) — `BuiltInNotchSkin` (Horns, from the `notch-skin-horns` imageset) beside Default in Settings › Notch skin, a **Copy AI prompt** button with `NotchSkinPrompt`, and `docs/NOTCH-SKINS.md`
+- **Changes:**
+  - Settings › Notch skin offers **Horns**, a red and black skin, next to Default. It is David's
+    skin, made with ChatGPT and copied unchanged into `Assets.xcassets/notch-skin-horns.imageset`
+    (1824 × 862 PNG; its only metadata is OpenAI's content-credentials record).
+  - `BuiltInNotchSkin` (Foundation only) lists built-ins by id, asset name and localized name.
+    Selecting one stores its id, `builtin.horns`, in `selectedNotchSkinID`, the key an uploaded
+    skin's UUID goes in. A built-in id is never UUID-shaped, so the two cannot collide.
+    `NotchSkinManager.reloadSelectedSkin` loads a built-in with `NSImage(named:)` before looking
+    at uploads. Built-ins have no Remove, and **Remove selected** is disabled for one.
+  - **Copy AI prompt** copies `NotchSkinPrompt.text` for ChatGPT or another image AI. The prompt asks
+    five questions, one at a time (mood, colours, motifs, how bold, what to avoid), and generates
+    nothing until they are answered. Then it draws a 1920 × 600 PNG, 3× the default open notch: a
+    dark, quiet middle 60% for Kannu's text, icons and light, decoration toward the edges, a black
+    top centre for the camera, 40 px clear of the clipped corners, no text or faces, and a middle
+    strip that still works when the notch is closed. After a copy, the footer says what to do next.
+  - New `docs/NOTCH-SKINS.md`: picking and uploading a skin, the scrim, sizes and safe areas, and
+    the prompt verbatim. The README's skin bullet and setup step link it.
+  - Test: new `NotchSkinTests`.
+    - The prompt asks before it draws, and states the canvas and what to leave out.
+    - The doc quotes the prompt verbatim.
+    - Built-in ids are unique and never UUID-shaped, with a planted UUID id caught.
+    - Every built-in's imageset names an image file that exists. `BuiltInNotchSkin.swift` and
+      `NotchSkinPrompt.swift` join KannuTests' Sources.
+
+### 2026-10-22 - Ad-hoc build scripts keep library validation disabled, on purpose
+- **Developer label:** "Fix the dead disable-library-validation strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.cs.disable-library-validation` block from `build-dmg.sh` and `build-launch-app.sh`, which never removed the key and would break the app if it did
+- **Changes:**
+  - Both scripts copied `Kannu/Kannu.entitlements` to a temp file and ran
+    `plutil -remove com.apple.security.cs.disable-library-validation` on it, meaning ad-hoc builds
+    should not disable library validation. plutil reads the dots in the key as a key path, answered
+    "No value to remove at key path", and the block took that for "already absent". So every ad-hoc
+    build from these scripts kept the entitlement.
+  - Making the strip work would break those builds. They are ad-hoc signed, and an ad-hoc signature
+    has no Team ID. With library validation on, dyld refuses the embedded Lottie and Sparkle
+    frameworks ("mapping process and mapped file (non-platform) have different Team IDs"), and the
+    app never starts. An ad-hoc probe app with hardened runtime and an embedded ad-hoc framework
+    shows exactly that on macOS 26, and runs once the entitlement is back.
+  - So the block goes, along with the temp copy and its cleanup trap, which existed only for the
+    two strips. The scripts sign `Kannu/Kannu.entitlements` as it is, with a comment saying why
+    library validation stays off. Nothing that gets built changes.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsLibraryValidation` checks the release
+    workflow, CI and both scripts for a `plutil -remove` or PlistBuddy `Delete` of the key, with
+    planted copies of each, quoted ones included (it shares #115's `strips(_:in:)` helper).
+
+### 2026-10-22 - Act on CodeRabbit's review of #115
+- **Developer label:** CodeRabbit's review of #115: the mach-services scanner missed a quoted key
+- **Agent label:** Claude Code (Opus 5.5) — the scanner drops shell quotes before matching, with a planted quoted strip
+- **Changes:**
+  - `plutil -remove "com.apple.security.mach-services"` passed the rule, because it matched the
+    unquoted command only. `machServicesProblems` now goes through a `strips(_:in:)` helper that
+    removes `"` and `'` first, so either quoting of a `plutil -remove` or PlistBuddy `Delete`
+    counts.
+  - Test: a planted quoted `plutil -remove` is reported.
+
+### 2026-10-22 - Builds stop pretending to strip the mach-services entitlement
+- **Developer label:** "Fix the release workflow's mach-services strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.mach-services` blocks from the release workflow, CI and both local build scripts; none ever removed the key
+- **Changes:**
+  - `plutil -remove com.apple.security.mach-services` reads the dots in the key as a key path. It
+    answered "No value to remove at key path", which each block took for "already absent", so the
+    key was never removed: the 1.3.4 release, the 1.4.0 beta, CI and every local ad-hoc build all
+    carried it.
+  - Making the strip work was not the fix. Its reason, that amfid kills an ad-hoc app carrying the
+    key, does not hold on macOS 26: an ad-hoc signed app with hardened runtime and this entitlement
+    launches. And a Kannu Dev build without the key started `ExtensionXPCServiceHost`'s listener and
+    ran for hours, against that file's note that it crashes. A working strip would only have changed
+    what CI and the scripts sign.
+  - So the blocks go from `.github/workflows/release.yml`, `.github/workflows/ci.yml`,
+    `scripts/build-dmg.sh` and `scripts/build-launch-app.sh`. Nothing that gets built changes: every
+    build signs the same entitlements as before.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsTheMachServicesEntitlement` checks the four
+    files for a `plutil -remove` or PlistBuddy `Delete` of the key, with planted copies of each.
 
 ### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
 - **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"

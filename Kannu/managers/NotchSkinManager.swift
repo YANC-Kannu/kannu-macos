@@ -15,7 +15,7 @@ final class NotchSkinManager: ObservableObject {
     @Published var importError: String?
 
     private var cancellables = Set<AnyCancellable>()
-    private var averagedSkinID: UUID?
+    private var averagedSkinID: String?
     private var averageTask: Task<Void, Never>?
 
     private init() {
@@ -33,6 +33,12 @@ final class NotchSkinManager: ObservableObject {
     }
 
     func reloadSelectedSkin() {
+        if let builtIn = BuiltInNotchSkin.with(id: Defaults[.selectedNotchSkinID]) {
+            let image = NSImage(named: builtIn.assetName)
+            selectedSkinImage = image
+            averageSelectedSkin(image, id: builtIn.id)
+            return
+        }
         guard let selectedID = Defaults[.selectedNotchSkinID],
               let skin = Defaults[.customNotchSkins].first(where: { $0.id.uuidString == selectedID }),
               FileManager.default.fileExists(atPath: skin.fileURL.path)
@@ -45,12 +51,13 @@ final class NotchSkinManager: ObservableObject {
         }
         let image = NSImage(contentsOf: skin.fileURL)
         selectedSkinImage = image
-        averageSelectedSkin(image, id: skin.id)
+        averageSelectedSkin(image, id: skin.id.uuidString)
     }
 
-    /// Skin files never change under an ID, so the average is computed once per selected skin —
+    /// Skin images never change under an ID (a custom skin's UUID string, a built-in's
+    /// `builtin.` ID), so the average is computed once per selected skin —
     /// `reloadSelectedSkin()` also runs whenever any skin is imported or removed.
-    private func averageSelectedSkin(_ image: NSImage?, id: UUID) {
+    private func averageSelectedSkin(_ image: NSImage?, id: String) {
         guard id != averagedSkinID else { return }
         averageTask?.cancel()
         averagedSkinID = id
@@ -131,6 +138,11 @@ final class NotchSkinManager: ObservableObject {
 
     func selectSkin(_ skin: CustomNotchSkin?) {
         Defaults[.selectedNotchSkinID] = skin?.id.uuidString
+        reloadSelectedSkin()
+    }
+
+    func selectBuiltInSkin(_ skin: BuiltInNotchSkin) {
+        Defaults[.selectedNotchSkinID] = skin.id
         reloadSelectedSkin()
     }
 }
