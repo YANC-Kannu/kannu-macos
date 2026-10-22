@@ -1111,7 +1111,7 @@ struct NoteEditorView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     /// Under a skin the editor paints its own black surface, so its text stays white there.
-    private var editorForeground: Color { notchFill == nil ? notchForeground : .white }
+    private var editorForeground: Color { notchFill == nil ? .white : notchForeground }
 
     @Binding var title: String
     @Binding var content: String

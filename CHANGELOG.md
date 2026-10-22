@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Act on CodeRabbit's review of #118
+- **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
+- **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread
+- **Changes:**
+  - `NoteEditorView.editorForeground` had its branches swapped: white text on a white-filled editor,
+    and the notch's foreground on the black editor under a skin. It is now white under a skin and
+    `notchForeground` on a fill.
+  - `TimerIconAnimation`'s glyph sits on its own coloured circle, so it takes
+    `resolvedColor.contrastingForeground` rather than the notch's foreground (a black solid timer
+    colour drew a black glyph on a black circle on a light notch).
+  - `HoverButton.iconColor` defaults to nil, drawn in `notchForeground`: the home player's
+    play/pause and other buttons that pass no colour stayed white on a light notch. Explicit
+    colours, including every lock-screen caller's, are unchanged.
+  - `NotchContrastTests` and `NotchPopoverAppearanceRulesTests` open with the project's GPL block.
+
 ### 2026-10-22 - Text, icons and washes inside the notch follow its fill and skin
 - **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing" — the full sweep, after the light/dark rule landed
 - **Agent label:** Claude Code (Opus 5.5) — every literal white and gray drawn on the notch's own background reads `notchForeground` or `.secondary`; views with a black surface of their own stay dark

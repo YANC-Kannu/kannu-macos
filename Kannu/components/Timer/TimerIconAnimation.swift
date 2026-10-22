@@ -20,7 +20,6 @@ import SwiftUI
 import Defaults
 
 struct TimerIconAnimation: View {
-    @Environment(\.notchForeground) private var notchForeground
     @ObservedObject var timerManager = TimerManager.shared
     @Default(.timerIconColorMode) private var colorMode
     @Default(.timerSolidColor) private var solidColor
@@ -36,7 +35,7 @@ struct TimerIconAnimation: View {
             
             Image(systemName: "timer")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(notchForeground)
+                .foregroundStyle(resolvedColor.contrastingForeground) // on the circle's own fill
         }
     }
 
