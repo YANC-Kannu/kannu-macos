@@ -793,8 +793,7 @@ struct ContentView: View {
             .padding(.horizontal, isIslandMode ? dynamicIslandShadowInset : 0)
             .padding(.bottom, isIslandMode ? dynamicIslandShadowInset : 0)
             .padding(.top, pillTopOffset)
-            .environment(\.colorScheme, notchColorScheme)
-            .environment(\.notchForeground, notchForegroundColor)
+            .notchAppearance(notchColorScheme, fill: notchSkinManager.selectedSkinImage == nil ? notchFillColor : nil)
             .accessibilityIdentifier("KannuNotch")
     }
 
@@ -1392,10 +1391,10 @@ struct ContentView: View {
                                   HStack(alignment: .center) {
                                       Image(systemName: "music.note")
                                       GeometryReader { geo in
-                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName), textColor: .gray, minDuration: 1, frameWidth: geo.size.width)
+                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName), textColor: .secondary, minDuration: 1, frameWidth: geo.size.width)
                                       }
                                   }
-                                  .foregroundStyle(.gray)
+                                  .foregroundStyle(.secondary)
                                   .padding(.bottom, 10)
                               }
                           }
@@ -1669,7 +1668,7 @@ struct ContentView: View {
                 MusicTitleMarqueeView(
                     text: musicManager.songTitle,
                     isExplicit: musicManager.isCurrentTrackExplicit,
-                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray,
+                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary,
                     minDuration: 0.4,
                     frameWidth: max(0, (effectiveCenterWidth - vm.closedNotchSize.width) / 2 - 12),
                     badgeHeight: 13
@@ -1680,7 +1679,7 @@ struct ContentView: View {
                 Text(musicManager.artistName)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundStyle(Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray)
+                    .foregroundStyle(Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary)
                     .padding(.trailing, 8)
                     .opacity(inlineSneakPeekActive ? 1 : 0)
             } else if coordinator.expandingView.show && coordinator.expandingView.type == .timer {
@@ -1702,7 +1701,7 @@ struct ContentView: View {
             } else if Defaults[.showSongMetadataInClosedNotch] && isNonNotchScreen && !musicManager.songTitle.isEmpty {
                 MarqueeText(
                     .constant("\(musicManager.songTitle) • \(musicManager.artistName)"),
-                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray,
+                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary,
                     minDuration: 3,
                     frameWidth: max(0, effectiveCenterWidth - 16)
                 )
@@ -3354,7 +3353,7 @@ private struct MusicTimerSupplementView: View {
     private var ringView: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.18), lineWidth: 3)
+                .stroke(notchForeground.opacity(0.18), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: clampedProgress)
                 .stroke(accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
@@ -3380,7 +3379,7 @@ private struct MusicTimerSupplementView: View {
 
     private func barView(width: CGFloat) -> some View {
         Capsule()
-            .fill(Color.white.opacity(0.15))
+            .fill(notchForeground.opacity(0.15))
             .frame(width: width, height: 4)
             .overlay(alignment: .leading) {
                 Capsule()

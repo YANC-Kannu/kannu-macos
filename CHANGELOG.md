@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Text, icons and washes inside the notch follow its fill and skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing" — the full sweep, after the light/dark rule landed
+- **Agent label:** Claude Code (Opus 5.5) — every literal white and gray drawn on the notch's own background reads `notchForeground` or `.secondary`; views with a black surface of their own stay dark
+- **Changes:**
+  - About 190 literal colours in the notch's views (home and music, notes and clipboard, timer
+    and its side column, tasks, stats, LLM usage, agent status, shelf, tabs, battery, HUDs, live
+    activities, extensions) become `notchForeground` (text, icons, strokes, white washes as
+    `notchForeground.opacity(x)`) or `.secondary` (the fixed mid-gray). On the default black notch
+    `notchForeground` is exactly the old white and `.secondary` sits a few levels above the old
+    `.gray`; the agent dots and recent-chats snapshots render byte-identical.
+  - Left literal on purpose: the header's black capsule buttons, the hover action chip on a note,
+    every popover's content, accent-filled buttons, the battery glyph's colour fills, album-art
+    tints, the spectrum's gray fallback, the shimmer, and the separate windows (music and timer
+    control overlays, lock screen, OSD, Settings).
+  - New `notchFill` environment value (the fill colour, nil under a skin) and
+    `notchAppearance(_:fill:)`, which sets it with the scheme and `notchForeground`. The notes
+    and clipboard lists' and the timer side column's edge fades fade into the fill instead of
+    black, and the note editor paints the fill instead of a black slab (under a skin it stays
+    black and keeps the dark scheme).
+  - Agent state labels on a light notch shade their neon hue toward black until it reaches 3:1
+    against the darkest fill that gets dark text (`NotchContrast.shadedForLightBackgrounds`), so
+    "Awaiting Input" stays readable on a yellow notch; the dots keep the neon.
+  - The timer's digit boxes (an `NSTextField`) take their text, placeholder and caret colour from
+    `notchForeground`, as do the text fields' carets (`.tint`).
+  - `DebugSnapshot` gains a `notchFills` board: agent dots, recent chats and usage cards on black,
+    white, yellow and blue fills, set up the way `ContentView` does.
+  - Test: `NotchContrastTests` pins the state-colour shading (3:1 on #959595, 7:1 on white, hue
+    kept).
+
 ### 2026-10-22 - The notch picks light or dark text from its fill colour or skin
 - **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing, do only if there is a very god standard for such implementations"
 - **Agent label:** Claude Code (Opus 5.5) — `NotchContrast` (WCAG 2.x luminance, white kept until it drops below 3:1) sets the notch subtree's `colorScheme` and `notchForeground` from the fill or the skin's average colour under its scrim

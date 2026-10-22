@@ -62,6 +62,28 @@ enum NotchContrast {
         contrastRatio(.white, background) < minimumLightForegroundContrast
     }
 
+    /// The darkest background that still gets dark text: white's contrast against it is exactly
+    /// `minimumLightForegroundContrast`. Luminance 0.3, about #959595.
+    static var darkestLightBackgroundLuminance: Double { 1.05 / minimumLightForegroundContrast - 0.05 }
+
+    /// `color` scaled toward black just enough to reach `ratio` against every background that gets
+    /// dark text — for coloured text, such as an agent's state, on a light notch. The hue stays; a
+    /// colour already dark enough is returned unchanged.
+    static func shadedForLightBackgrounds(_ color: RGB, ratio: Double = minimumLightForegroundContrast) -> RGB {
+        let maximumLuminance = (darkestLightBackgroundLuminance + 0.05) / ratio - 0.05
+        guard relativeLuminance(color) > maximumLuminance else { return color }
+        var keep = 0.0, tooLight = 1.0
+        for _ in 0..<32 {
+            let mid = (keep + tooLight) / 2
+            if relativeLuminance(underBlackScrim(color, opacity: 1 - mid)) > maximumLuminance {
+                tooLight = mid
+            } else {
+                keep = mid
+            }
+        }
+        return underBlackScrim(color, opacity: 1 - keep)
+    }
+
     /// The colour a black overlay at `opacity` leaves behind — the skin scrim, composited
     /// source-over the way SwiftUI draws it.
     static func underBlackScrim(_ color: RGB, opacity: Double) -> RGB {

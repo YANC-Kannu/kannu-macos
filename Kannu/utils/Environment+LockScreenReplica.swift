@@ -22,6 +22,10 @@ private struct NotchForegroundKey: EnvironmentKey {
     static let defaultValue: Color = .white
 }
 
+private struct NotchFillKey: EnvironmentKey {
+    static let defaultValue: Color? = nil
+}
+
 extension EnvironmentValues {
     /// Black or white: the text colour for whatever fill or skin is painted behind the notch.
     /// Set beside the notch subtree's `colorScheme` in `ContentView`.
@@ -29,9 +33,26 @@ extension EnvironmentValues {
         get { self[NotchForegroundKey.self] }
         set { self[NotchForegroundKey.self] = newValue }
     }
+
+    /// The notch's solid fill colour, or nil while a skin image is painted instead (and outside
+    /// the notch). For the few views that paint an opaque copy of the notch's background — an
+    /// editor sliding over a list, a list's edge fades — which fall back to black without it.
+    var notchFill: Color? {
+        get { self[NotchFillKey.self] }
+        set { self[NotchFillKey.self] = newValue }
+    }
 }
 
 extension View {
+    /// The notch's appearance for everything inside it: the colour scheme its semantic colours
+    /// and materials resolve against, the literal foreground, and the fill (nil under a skin).
+    /// `ContentView` derives the scheme from the fill or skin through `NotchContrast`.
+    func notchAppearance(_ scheme: ColorScheme, fill: Color?) -> some View {
+        environment(\.colorScheme, scheme)
+            .environment(\.notchForeground, scheme == .dark ? .white : .black)
+            .environment(\.notchFill, fill)
+    }
+
     /// For notch content that sits on a dark surface of its own rather than on the notch's fill:
     /// a view that paints its own black background, and the content of every `.popover` opened
     /// from the notch. The popover window stays dark (VibrantDark, from the notch window's

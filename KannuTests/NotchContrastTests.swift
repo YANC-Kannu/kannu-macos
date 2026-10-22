@@ -73,6 +73,24 @@ final class NotchContrastTests: XCTestCase {
         XCTAssertFalse(NotchContrast.prefersDarkForeground(on: scrimmed))
     }
 
+    func testStateColoursAreShadedToStayReadableOnEveryLightNotch() {
+        let darkestLight = gray(0x95)
+        // The panel's neon green, yellow and red.
+        for neon in [RGB(red: 0.12, green: 1, blue: 0.35), RGB(red: 1, green: 0.86, blue: 0), RGB(red: 1, green: 0.06, blue: 0.16)] {
+            let shaded = NotchContrast.shadedForLightBackgrounds(neon)
+            XCTAssertGreaterThanOrEqual(NotchContrast.contrastRatio(shaded, darkestLight), 3, "\(neon)")
+            XCTAssertGreaterThanOrEqual(NotchContrast.contrastRatio(shaded, .white), 7, "\(neon)")
+            // Shaded, not replaced: the channels keep their proportions, so the hue survives.
+            let scale = shaded.red / neon.red
+            XCTAssertEqual(shaded.green, neon.green * scale, accuracy: 0.0001)
+            XCTAssertEqual(shaded.blue, neon.blue * scale, accuracy: 0.0001)
+            XCTAssertLessThan(scale, 1)
+        }
+        // Already dark enough: unchanged.
+        let navy = RGB(red: 0, green: 0, blue: 0.5)
+        XCTAssertEqual(NotchContrast.shadedForLightBackgrounds(navy), navy)
+    }
+
     func testScrimOpacityIsClamped() {
         XCTAssertEqual(NotchContrast.underBlackScrim(.white, opacity: 2), .black)
         XCTAssertEqual(NotchContrast.underBlackScrim(.white, opacity: -1), .white)

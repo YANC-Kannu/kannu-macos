@@ -50,6 +50,14 @@ extension Color {
         srgbComponents.map(NotchContrast.prefersDarkForeground(on:)) ?? false
     }
 
+    /// This colour shaded just enough to read as text on any light notch
+    /// (`NotchContrast.shadedForLightBackgrounds`); unchanged when it has no RGB form.
+    var shadedForLightNotch: Color {
+        guard let components = srgbComponents else { return self }
+        let shaded = NotchContrast.shadedForLightBackgrounds(components)
+        return Color(.sRGB, red: shaded.red, green: shaded.green, blue: shaded.blue)
+    }
+
     var contrastingForeground: Color {
         isPerceivedLight ? .black : .white
     }

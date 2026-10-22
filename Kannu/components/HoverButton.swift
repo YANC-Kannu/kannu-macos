@@ -56,7 +56,7 @@ struct HoverButton: View {
                 .frame(width: size, height: size)
                 .overlay {
                     Capsule()
-                        .fill(isHovering ? Color.gray.opacity(0.2) : .clear)
+                        .fill(isHovering ? Color.secondary.opacity(0.2) : .clear)
                         .frame(width: size, height: size)
                         .overlay {
                             let baseImage = Image(systemName: icon)

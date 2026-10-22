@@ -273,7 +273,7 @@ struct KannuHeader: View {
             .animation(.easeInOut(duration: 0.15), value: coordinator.currentView == .llmUsage)
             .zIndex(2)
         }
-        .foregroundColor(.gray)
+        .foregroundColor(.secondary)
         .environmentObject(vm)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleClipboardPopover"))) { _ in
             // Handle keyboard shortcut for popover mode
