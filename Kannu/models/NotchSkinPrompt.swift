@@ -37,7 +37,7 @@ enum NotchSkinPrompt {
 
         Then sum up my answers in one short paragraph and generate one image that follows these rules:
         - 1920 × 600 pixels, landscape, PNG.
-        - Keep the centre (about the middle 60% of the width) dark and low in detail. Kannu draws white \
+        - Keep the centre (about the middle 60% of the width) dark and low in detail. Kannu draws \
         text, icons, album art and a small coloured status light there, and they must stay readable.
         - Put the decoration toward the left and right edges, balanced on both sides.
         - Keep the top centre close to black, so it blends into the camera notch.

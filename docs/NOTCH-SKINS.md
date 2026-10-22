@@ -22,8 +22,10 @@ Kannu scales a skin to fill the notch and crops what does not fit, keeping the c
   image of **1920 × 600 pixels** is three times that, so it stays sharp on a Retina display.
 - **Closed:** about 150–200 × 32 points. The full width shows, cropped to roughly the middle half of
   the height.
-- **The centre** holds white text, icons, album art and the coloured agent light, so keep the middle
-  60% of the width dark and quiet. Put decoration toward the left and right edges.
+- **The centre** holds text, icons, album art and the coloured agent light, so keep the middle
+  60% of the width dark and quiet. Put decoration toward the left and right edges. Kannu
+  picks dark or light text from the skin's average colour under its scrim, but a busy or bright
+  centre still reads worse than a dark one.
 - **The top centre** meets the camera housing: keep it close to black.
 - **The corners** are rounded and clipped: keep detail about 40 pixels in from every edge.
 
@@ -47,7 +49,7 @@ First, ask me these questions one at a time, and wait for each answer. Do not ge
 
 Then sum up my answers in one short paragraph and generate one image that follows these rules:
 - 1920 × 600 pixels, landscape, PNG.
-- Keep the centre (about the middle 60% of the width) dark and low in detail. Kannu draws white text, icons, album art and a small coloured status light there, and they must stay readable.
+- Keep the centre (about the middle 60% of the width) dark and low in detail. Kannu draws text, icons, album art and a small coloured status light there, and they must stay readable.
 - Put the decoration toward the left and right edges, balanced on both sides.
 - Keep the top centre close to black, so it blends into the camera notch.
 - Keep important detail at least 40 pixels from every edge: the corners are rounded and clipped.

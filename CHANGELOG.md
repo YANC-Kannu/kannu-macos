@@ -4,6 +4,79 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-22 - Act on CodeRabbit's review of #118
+- **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
+- **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread
+- **Changes:**
+  - `NoteEditorView.editorForeground` had its branches swapped: white text on a white-filled editor,
+    and the notch's foreground on the black editor under a skin. It is now white under a skin and
+    `notchForeground` on a fill.
+  - `TimerIconAnimation`'s glyph sits on its own coloured circle, so it takes
+    `resolvedColor.contrastingForeground` rather than the notch's foreground (a black solid timer
+    colour drew a black glyph on a black circle on a light notch).
+  - `HoverButton.iconColor` defaults to nil, drawn in `notchForeground`: the home player's
+    play/pause and other buttons that pass no colour stayed white on a light notch. Explicit
+    colours, including every lock-screen caller's, are unchanged.
+  - `NotchContrastTests` and `NotchPopoverAppearanceRulesTests` open with the project's GPL block.
+
+### 2026-10-22 - Text, icons and washes inside the notch follow its fill and skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing" — the full sweep, after the light/dark rule landed
+- **Agent label:** Claude Code (Opus 5.5) — every literal white and gray drawn on the notch's own background reads `notchForeground` or `.secondary`; views with a black surface of their own stay dark
+- **Changes:**
+  - About 190 literal colours in the notch's views (home and music, notes and clipboard, timer
+    and its side column, tasks, stats, LLM usage, agent status, shelf, tabs, battery, HUDs, live
+    activities, extensions) become `notchForeground` (text, icons, strokes, white washes as
+    `notchForeground.opacity(x)`) or `.secondary` (the fixed mid-gray). On the default black notch
+    `notchForeground` is exactly the old white and `.secondary` sits a few levels above the old
+    `.gray`; the agent dots and recent-chats snapshots render byte-identical.
+  - Left literal on purpose: the header's black capsule buttons, the hover action chip on a note,
+    every popover's content, accent-filled buttons, the battery glyph's colour fills, album-art
+    tints, the spectrum's gray fallback, the shimmer, and the separate windows (music and timer
+    control overlays, lock screen, OSD, Settings).
+  - New `notchFill` environment value (the fill colour, nil under a skin) and
+    `notchAppearance(_:fill:)`, which sets it with the scheme and `notchForeground`. The notes
+    and clipboard lists' and the timer side column's edge fades fade into the fill instead of
+    black, and the note editor paints the fill instead of a black slab (under a skin it stays
+    black and keeps the dark scheme).
+  - Agent state labels on a light notch shade their neon hue toward black until it reaches 3:1
+    against the darkest fill that gets dark text (`NotchContrast.shadedForLightBackgrounds`), so
+    "Awaiting Input" stays readable on a yellow notch; the dots keep the neon.
+  - The timer's digit boxes (an `NSTextField`) take their text, placeholder and caret colour from
+    `notchForeground`, as do the text fields' carets (`.tint`).
+  - `DebugSnapshot` gains a `notchFills` board: agent dots, recent chats and usage cards on black,
+    white, yellow and blue fills, set up the way `ContentView` does.
+  - Built-in skins (Horns, from #117) are averaged like uploaded ones, so the notch's text follows
+    them too; the average is keyed by the skin's String ID (a built-in's `builtin.` ID or an
+    upload's UUID string). `NotchSkinPrompt` and `docs/NOTCH-SKINS.md` no longer say Kannu draws
+    *white* text in the centre, and the guide says the text follows the skin's average colour.
+  - Test: `NotchContrastTests` pins the state-colour shading (3:1 on #959595, 7:1 on white, hue
+    kept).
+
+### 2026-10-22 - The notch picks light or dark text from its fill colour or skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing, do only if there is a very god standard for such implementations"
+- **Agent label:** Claude Code (Opus 5.5) — `NotchContrast` (WCAG 2.x luminance, white kept until it drops below 3:1) sets the notch subtree's `colorScheme` and `notchForeground` from the fill or the skin's average colour under its scrim
+- **Changes:**
+  - New `Kannu/helpers/NotchContrast.swift`, Foundation-only: WCAG 2.x relative luminance and
+    contrast ratio, the black skin scrim, and the rule — white text stays until its contrast
+    against the background drops below 3:1 (WCAG's large-text and UI-component minimum), then
+    black. Plain "whichever contrasts more" was rejected: it puts black text on system blue,
+    red, purple and pink fills.
+  - `ContentView` sets the notch subtree's `colorScheme` and `notchForeground` from what is
+    painted behind it: the skin's average colour under the scrim when a skin shows, otherwise
+    the fill colour. It used to derive `notchForeground` from the fill even under a skin. Dark
+    until a skin's average is known, so the default black notch is unchanged.
+  - `NotchSkinManager` publishes `selectedSkinAverageRGB`, computed once per selected skin off the
+    main thread (Core Image area average, `CGImage.averageSRGB()`).
+  - `Color.isPerceivedLight` / `contrastingForeground` use the same rule (the colour swatches'
+    checkmarks follow it); `perceivedBrightness` is gone.
+  - Popovers opened from the notch stay dark windows whatever the notch's scheme, but SwiftUI
+    hands their content the light scheme — measured: black text on the dark popover. Every notch
+    popover's content now ends in `.notchDarkAppearance()`.
+  - The closed-music shelf badge draws its icon white: the badge paints its own black circle, and
+    the old fill-derived colour made it black on black on a light fill.
+  - Tests: new `NotchContrastTests` (presets, the 3:1 switch at #949494/#959595, the scrim) and
+    `NotchPopoverAppearanceRulesTests` (every notch popover pinned, with planted offenders).
+
 ### 2026-10-22 - Horns ships as a built-in notch skin, and Settings copies an AI prompt that designs one
 - **Developer label:** "rename the default skin image file name with something like halo for devil meaning" / "raise a pr for this and also a sample prompt which would ask user back questions from ai and will finally design them as notch skin"
 - **Agent label:** Claude Code (Opus 5.5) — `BuiltInNotchSkin` (Horns, from the `notch-skin-horns` imageset) beside Default in Settings › Notch skin, a **Copy AI prompt** button with `NotchSkinPrompt`, and `docs/NOTCH-SKINS.md`
