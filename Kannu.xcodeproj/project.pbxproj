@@ -151,6 +151,7 @@
 		AA1000000000000000000971 /* BuiltInNotchSkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000970 /* BuiltInNotchSkin.swift */; };
 		AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000972 /* NotchSkinPrompt.swift */; };
 		AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000974 /* SettingsSearchRanking.swift */; };
+		AA1000000000000000000977 /* LaunchPermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000976 /* LaunchPermissions.swift */; };
 		F910B9C812C7AEFE2293F7D2 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A9C58195E197C19F691DA62 /* Cocoa.framework */; };
 /* End PBXBuildFile section */
 
@@ -305,6 +306,7 @@
 		AA1000000000000000000970 /* BuiltInNotchSkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BuiltInNotchSkin.swift; path = Kannu/models/BuiltInNotchSkin.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000972 /* NotchSkinPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchSkinPrompt.swift; path = Kannu/models/NotchSkinPrompt.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000974 /* SettingsSearchRanking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsSearchRanking.swift; path = Kannu/helpers/SettingsSearchRanking.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000976 /* LaunchPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchPermissions.swift; path = Kannu/models/LaunchPermissions.swift; sourceTree = SOURCE_ROOT; };
 		DAA671E7B1B26733F02166C5 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F4C1DD09EC134302938E84F6 /* MediaRemoteAdapter.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemoteAdapter.framework; path = Frameworks/MediaRemoteAdapter.framework; sourceTree = SOURCE_ROOT; };
 		F54406E72CD4987A00C7AFD9 /* Kannu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kannu.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -810,6 +812,7 @@
 				AA1000000000000000000971 /* BuiltInNotchSkin.swift in Sources */,
 				AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */,
 				AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */,
+				AA1000000000000000000977 /* LaunchPermissions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

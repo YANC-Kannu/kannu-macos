@@ -85,9 +85,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // (one out, one in). GitHub, Linear, Todoist and Apple Reminders rows and the new "Add a
         // source" row register five more ids; "Add a source" is one more entry. Each new source's
         // own entry lands on its row: Apple Reminders, GitHub, Linear, Todoist.
-        XCTAssertEqual(inventory.entries.count, 242, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
+        // 2026-10-22: General gains Permissions (one entry, one row): what onboarding's
+        // Permissions step put off is allowed there.
+        XCTAssertEqual(inventory.entries.count, 243, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {

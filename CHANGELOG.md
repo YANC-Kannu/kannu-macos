@@ -118,6 +118,102 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
       the first eight rows.
     - The suggestions are not cut, with the old `.prefix(8)` planted.
 
+### 2026-10-22 - Act on CodeRabbit's review of #120
+- **Developer label:** CodeRabbit's review of #120: seven findings on the first-launch permissions
+- **Agent label:** Claude Code (Opus 5.5) — the music controllers, the Warp lookups, the upgrade marker, the clipboard move, the Downloads warm-up, folder status after a relaunch and the weather after a Location grant
+- **Changes:**
+  - **Music.** `MusicManager` starts Spotify or Apple Music only when
+    `LaunchPermissionManager.mayTouch(.musicAutomation)` allows it. Their AppleScript raised the
+    Automation dialog even after a Not now when Now Playing is unavailable, which falls back to
+    Apple Music. A held-back source starts on `.launchPermissionsChanged`. Brain › General ›
+    Permissions shows the "Control …" row for the current source.
+  - **Upgrade marker.** An install from before versioning is marked with
+    `OnboardingProgress.firstVersion`, and only when it has no record at all, so a later version
+    bump still shows it the new onboarding.
+  - **Warp.** `installWatchers()` looks up Warp's database only behind the gate; finding it stats
+    Warp's container. Allowed later, Warp is read by the 30-second safety-net rescan until the
+    next launch adds its watcher; restarting the monitor would drop the agent light.
+    `NotchAgentStatusView` and Brain › Agents detect Warp through Launch Services
+    (`LaunchPermissionManager.isWarpInstalled`) instead of statting the container.
+  - **Clipboard move.** It is marked done only once nothing is left to move. A quit mid-move, or a
+    failed move, is retried at the next launch.
+  - **Downloads.** The warm-up counts only a read that worked, so a later permission change
+    retries after a denial.
+  - **Folder status.** Downloads and Warp no longer show Allowed after a relaunch when macOS denied
+    them. Once asked, a silent read on a background queue (no dialog: macOS has answered), one at a
+    time, sets the status.
+  - **Weather.** It refreshes when Location changes into allowed. The fetch made without a location
+    no longer lingers until the refresh interval.
+  - **Test:** `FirstLaunchRulesTests` checks every Warp database lookup, with planted ungated ones
+    in `installWatchers()` and the notch view.
+
+### 2026-10-22 - First launch asks for each permission on its own step, then plays the welcome music
+- **Developer label:** "let all the permissions be ready and only after play the music. please design teh installation flow" / a tester's words: "ippo the music and presentation happened when I was showered with a lot of permission request." "please bring this upto standard"
+- **Agent label:** Claude Code (Opus 5.5) — a silent onboarding with a Permissions step (`PermissionsStepView`, `LaunchPermissionManager`, `LaunchPermissionPolicy`); every automatic first touch gated; the welcome music and hello moved to Finish; clipboard files moved to Application Support
+- **Changes:**
+  - **What used to happen.** Accepting the Terms ran `continueLaunch()`, which within about a second:
+    - raised four macOS dialogs: Bluetooth (`BluetoothLEBatteryReader`'s `CBCentralManager` on
+      main), Downloads (`DownloadManager` listing `~/Downloads`, even with the listener off),
+      Accessibility (`MediaKeyInterceptor`) and Location (the lock-screen weather);
+    - showed macOS's "Login Item Added" notice;
+    - started the welcome music (`dynamic.m4a`) and the notch's hello;
+    - opened the onboarding window, which popped a "Focus detection mode" dialog of its own.
+    
+    Opening the notch then asked for Documents (clipboard history kept files in
+    `~/Documents/ClipboardData`). Picking Spotify or Apple Music raised Automation at once. With
+    Warp installed, agent status raised "access data from other apps". Despite its name, the
+    `.musicPermission` step asked for nothing.
+  - **The first run now:** Terms, then a silent onboarding:
+    1. Welcome, with no pop-up.
+    2. Music source. The choice is held, not applied.
+    3. Profile.
+    4. Traffic-light style.
+    5. Caffeinate.
+    6. **Permissions** (new): one row per permission this setup's features use. Each row says why,
+       has its own Allow and Not now, and shows live status (Allowed / Not allowed with Open System
+       Settings / Not now). Only one dialog runs at a time. The Focus detection choice and "Open
+       Kannu at login" are on this step too, so the login notice appears here.
+    7. Finish. Only then does the notch open, say hello and play the music (`startHello()`).
+  - **What each row asks:**
+    - Accessibility, Bluetooth, Downloads and Location, each when its feature is on. Bluetooth is
+      always listed, because its device watcher always runs.
+    - "Control Spotify" or "Control Apple Music" when that is the source. This uses
+      `AEDeterminePermissionToAutomateTarget`, and MusicKit too for Apple Music.
+    - Warp's agent sessions, when Warp is installed (found through Launch Services, without reading
+      its container).
+  - **A Not now keeps its feature off** until the user allows it in the new **Brain › General ›
+    Permissions** section, which shows the same rows. A Not now on the music app's row applies Now
+    Playing instead.
+  - **New files:**
+    - `Kannu/models/LaunchPermissions.swift` (Foundation only): `LaunchPermission`,
+      `PermissionAnswer`, `LaunchPermissionPolicy.mayTouch` (before onboarding completes, only an
+      already-answered permission may be touched; after it, never a deferred one) and `rows(for:)`.
+    - `Kannu/managers/LaunchPermissionManager.swift`: reads each answer without prompting, makes the
+      requests, posts `.launchPermissionsChanged`.
+  - **Gated first touches.** Each of these checks the manager and starts on that notification:
+    - `BluetoothAudioManager` starts nothing (observers, IOBluetooth, polling) until allowed; its
+      battery reader is `lazy`.
+    - `DownloadManager` warms up only with the listener on.
+    - `MediaKeyInterceptor` asks only for a permission nobody has asked about yet.
+    - The weather's `prepareAuthorization`, Warp reads in `CursorAgentStatusMonitor`, and
+      `AnimatedArtworkManager`'s MusicKit request.
+  - **Onboarding is versioned:** `onboardingCompletedVersion`. An install from before it (its
+    `firstLaunch` already false) is marked complete at launch, so existing users see nothing new.
+    The hello is keyed off a transient `helloPending` instead of `firstLaunch`, which used to start
+    it at launch.
+  - **Clipboard history** keeps its files in Application Support (no permission). An upgraded
+    install moves them out of `~/Documents/ClipboardData` once, off the main thread.
+  - **Docs:** ReadMe's Runtime Permissions section says when each permission is asked; AGENTS.md
+    Known traps gains the gate rule.
+  - **Tests:**
+    - New `LaunchPermissionPolicyTests`.
+    - New `FirstLaunchRulesTests`, with planted offenders: the music only in `startHello()`, not in
+      `continueLaunch()`; the login item gated; `.permissions` before `.finished`; no dialog in
+      onboarding; the music step not switching the source; each prompt-raising call behind its
+      gate and only in its allowed files; clipboard not touching `~/Documents` outside the
+      upgrade move.
+    - `SettingsHighlightInventoryTests` counts +1 for the new row.
+
 ### 2026-10-22 - Act on CodeRabbit's review of #118
 - **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
 - **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread

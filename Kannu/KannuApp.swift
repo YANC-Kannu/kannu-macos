@@ -929,6 +929,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !launchContinued else { return }
         launchContinued = true
 
+        // Before any singleton reads it: an install from before onboarding was versioned has
+        // already been through it (its hello cleared `firstLaunch`) and answered its permissions,
+        // so it is marked done with the first version: nothing new asks now, and a later version
+        // bump still shows it the new onboarding. Its clipboard files leave ~/Documents.
+        let isUpgrade = !coordinator.firstLaunch
+        if isUpgrade && Defaults[.onboardingCompletedVersion] == 0 {
+            Defaults[.onboardingCompletedVersion] = OnboardingProgress.firstVersion
+        }
+        ClipboardManager.migrateLegacyDataIfNeeded(isUpgrade: isUpgrade)
+
         // Held back until now; this used to run in `KannuApp.init`, before any window.
         LLMUsageManager.configureProviderDefaultsIfNeeded()
 
@@ -955,7 +965,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             deliverImmediately: true
         )
 
-        autoEnableLaunchAtLoginIfNeeded()
+        // A fresh install registers on onboarding's Permissions step instead, so macOS's "Login
+        // Item Added" notice lands there rather than over the welcome music.
+        if LaunchPermissionManager.isOnboardingComplete {
+            autoEnableLaunchAtLoginIfNeeded()
+        }
         repairLoginItemIfStale()
 
         syncStatusItem(visible: Defaults[.menubarIcon])
@@ -1360,12 +1374,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // never followed the pointer at all.
         syncPointerTracking()
         
-        // Skip onboarding window and welcome sound under UI testing.
-        if coordinator.firstLaunch && !AppRuntimeEnvironment.isUITesting {
+        // A fresh install meets onboarding first, and it is silent: every permission is asked on
+        // its Permissions step, one dialog at a time, and the welcome music and the notch's hello
+        // wait for its Finish (`startHello`). They used to start here, together with four
+        // permission dialogs. Skipped under UI testing.
+        if !LaunchPermissionManager.isOnboardingComplete && !AppRuntimeEnvironment.isUITesting {
             DispatchQueue.main.async {
                 self.showOnboardingWindow()
             }
-            playWelcomeSound()
         }
         
         previousScreens = NSScreen.screens
@@ -1587,17 +1603,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDeveloperToolsSettingsFromMenu() {
-        let urls = [
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_DevTools",
-            "x-apple.systempreferences:com.apple.preference.security"
-        ]
-
-        for candidate in urls {
-            guard let url = URL(string: candidate) else { continue }
-            if NSWorkspace.shared.open(url) {
-                return
-            }
-        }
+        DeveloperToolsSettings.open()
     }
 
     @objc private func setLogLevel(_ sender: NSMenuItem) {
@@ -1783,6 +1789,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func playWelcomeSound() {
         let audioPlayer = AudioPlayer()
         audioPlayer.play(fileName: "dynamic", fileExtension: "m4a")
+    }
+
+    /// Onboarding's finale: the notch opens and says hello, with the welcome music. Only
+    /// onboarding's Finish calls it, once every permission has been asked or put off, so nothing
+    /// plays over a dialog.
+    func startHello() {
+        coordinator.helloPending = true
+        playWelcomeSound()
+    }
+
+    /// Marks onboarding done and lets the features it held back start: each one answered on the
+    /// Permissions step now touches its permission without a dialog, and a deferred one stays off.
+    private func completeOnboarding() {
+        Defaults[.onboardingCompletedVersion] = OnboardingProgress.currentVersion
+        NotificationCenter.default.post(name: .launchPermissionsChanged, object: nil)
+    }
+
+    /// Onboarding's "Open Kannu at login". Registering on the Permissions step puts macOS's "Login
+    /// Item Added" notice there; off is remembered as an opt-out, so launch never registers it on
+    /// the user's behalf.
+    private func applyLaunchAtLoginChoice(_ enabled: Bool) {
+        if enabled {
+            autoEnableLaunchAtLoginIfNeeded()
+        } else {
+            Defaults[.didAutoEnableLaunchAtLogin] = true
+            if LaunchAtLogin.isEnabled {
+                LaunchAtLogin.isEnabled = false
+            }
+        }
     }
     
     @objc func screenConfigurationDidChange() {
@@ -1994,14 +2029,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.contentView = NSHostingView(rootView: OnboardingView(
-                onFinish: {
+                onLaunchAtLoginChoice: { [weak self] enabled in
+                    self?.applyLaunchAtLoginChoice(enabled)
+                },
+                onFinish: { [weak self] in
+                    self?.completeOnboarding()
                     window.orderOut(nil)
                     NSApp.setActivationPolicy(.accessory)
                     window.close()
                     NSApp.deactivate()
+                    self?.startHello()
                 },
-                onOpenSettings: {
+                onOpenSettings: { [weak self] in
+                    self?.completeOnboarding()
                     window.close()
+                    self?.startHello()
                     SettingsWindowController.shared.showWindow()
                 }
             ))

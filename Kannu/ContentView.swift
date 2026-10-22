@@ -607,7 +607,7 @@ struct ContentView: View {
     private var shouldPaintClosedNotchBackground: Bool {
         if vm.notchState == .open { return true }
         if vm.hideOnClosed { return false }
-        if coordinator.firstLaunch { return true }
+        if coordinator.helloPending { return true }
 
         if idleScheduleManager.isActive || idlePreviewManager.isActive || easterEggManager.isActive {
             return true
@@ -889,16 +889,17 @@ struct ContentView: View {
                 ? -(vm.closedNotchSize.height + pillTopOffset + currentShadowPadding + 10)
                 : 0
             )
-            .onAppear(perform: {
-                if coordinator.firstLaunch {
-                    // Single open during first launch; closeHello() handles the timed close.
+            .onChange(of: coordinator.helloPending) { _, pending in
+                // Onboarding's finale: a single open once Finish is pressed; closeHello() handles
+                // the timed close. It used to open on appear at launch, under the onboarding window.
+                if pending {
                     runAfter(1) {
                         withAnimation(vm.animation) {
                             openNotch()
                         }
                     }
                 }
-            })
+            }
             .onChange(of: vm.notchState) { _, newState in
                 // Update smart monitoring based on notch state
                 if enableStatsFeature {
@@ -1201,7 +1202,7 @@ struct ContentView: View {
       func NotchLayout() -> some View {
           VStack(alignment: .leading) {
               VStack(alignment: .leading) {
-                  if coordinator.firstLaunch {
+                  if coordinator.helloPending {
                       Spacer()
                       HelloAnimation().frame(width: 200, height: 80).onAppear(perform: {
                           vm.closeHello()
@@ -2288,7 +2289,7 @@ struct ContentView: View {
             && !isMusicHUDDeferredAfterUnlock
             && !isCurrentScreenExpansionVisible
             && (!musicManager.isPlayerIdle || musicManager.bundleIdentifier != nil)
-            && !coordinator.firstLaunch
+            && !coordinator.helloPending
     }
 
     private func handleClosedMusicWaveformTapIfNeeded() -> Bool {
@@ -2749,7 +2750,7 @@ struct ContentView: View {
     }
 
     private func shouldPreventAutoClose() -> Bool {
-        coordinator.firstLaunch || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
+        coordinator.helloPending || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
     }
     
     // Helper to prevent rapid haptic feedback
