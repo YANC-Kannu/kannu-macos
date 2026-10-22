@@ -85,6 +85,33 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         return unquoted.contains("plutil -remove \(key)") || unquoted.contains("Delete :\(key)")
     }
 
+    /// No build strips `com.apple.security.cs.disable-library-validation` either. `build-dmg.sh` and
+    /// `build-launch-app.sh` ran `plutil -remove` on it, which never removed it, for the same key-path
+    /// reason. A strip that worked would break both: their builds are ad-hoc signed, an ad-hoc
+    /// signature has no Team ID, and with library validation on, dyld refuses the embedded Lottie
+    /// and Sparkle frameworks ("mapping process and mapped file (non-platform) have different Team
+    /// IDs"), so the app never starts. An ad-hoc probe app with hardened runtime and an embedded
+    /// ad-hoc framework shows exactly that on macOS 26, and runs once the entitlement is back.
+    func testNoBuildStripsLibraryValidation() throws {
+        for path in Self.buildFiles {
+            XCTAssertEqual(Self.libraryValidationProblems(in: try Self.read(path), path: path), [], path)
+        }
+        let plutilStrip = "if ! plutil_out=$(plutil -remove com.apple.security.cs.disable-library-validation \"$TEMP_ENTITLEMENTS\" 2>&1); then"
+        XCTAssertEqual(Self.libraryValidationProblems(in: plutilStrip, path: "build-dmg.sh"),
+                       ["build-dmg.sh strips disable-library-validation"])
+        let plistBuddyStrip = "/usr/libexec/PlistBuddy -c \"Delete :com.apple.security.cs.disable-library-validation\" \"$TEMP_ENTITLEMENTS\""
+        XCTAssertEqual(Self.libraryValidationProblems(in: plistBuddyStrip, path: "build-launch-app.sh"),
+                       ["build-launch-app.sh strips disable-library-validation"])
+        let quotedStrip = "plutil -remove 'com.apple.security.cs.disable-library-validation' \"$TEMP_ENTITLEMENTS\""
+        XCTAssertEqual(Self.libraryValidationProblems(in: quotedStrip, path: "ci.yml"),
+                       ["ci.yml strips disable-library-validation"])
+    }
+
+    static func libraryValidationProblems(in text: String, path: String) -> [String] {
+        strips("com.apple.security.cs.disable-library-validation", in: text)
+            ? ["\(path) strips disable-library-validation"] : []
+    }
+
     // MARK: - Rules
 
     static func problems(in workflow: String) -> [String] {
