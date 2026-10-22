@@ -278,7 +278,26 @@ class ScreenAssistantManager: NSObject, ObservableObject {
     
     private func startRecording() {
         guard !isRecording else { return }
-        
+        // The microphone dialog belongs to this press of Record, so it is asked for here and the
+        // recording starts once it is allowed. Kannu had no microphone usage description and no
+        // audio-input entitlement, which the hardened runtime needs before it lets audio in.
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            break
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                guard granted else { return }
+                DispatchQueue.main.async { self?.startRecording() }
+            }
+            return
+        default:
+            // Denied or restricted: show the switch rather than recording silence.
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+
         let fileName = "recording_\(Date().timeIntervalSince1970).m4a"
         let audioURL = ScreenAssistantManager.audioDataDirectory.appendingPathComponent(fileName)
         
