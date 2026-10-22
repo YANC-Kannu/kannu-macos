@@ -813,6 +813,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .general, title: "External display style", keywords: ["dynamic island", "pill", "external display", "non-notch", "floating", "capsule"], highlightID: SettingsTab.general.highlightID(for: "External display style")),
             SettingsSearchEntry(tab: .general, title: "Always show on non-notch displays", keywords: ["always show", "hide", "hover", "external", "non-notch", "auto hide", "slide"], highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays")),
             SettingsSearchEntry(tab: .general, title: "Notch display height", keywords: ["display height", "menu bar size"], highlightID: SettingsTab.general.highlightID(for: "Notch display height")),
+            SettingsSearchEntry(tab: .general, title: "Permissions", keywords: ["permission", "privacy", "allow", "accessibility", "bluetooth", "location", "downloads", "warp"], highlightID: SettingsTab.general.highlightID(for: "Permissions")),
 
             // Live Activities
             SettingsSearchEntry(tab: .liveActivities, title: "Enable Screen Recording Detection", keywords: ["screen recording", "indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Screen Recording Detection")),
@@ -1331,6 +1332,22 @@ struct GeneralSettings: View {
                 .settingsHighlight(id: highlightID("Screenshots & recordings"))
             } header: {
                 SettingsSectionHeader("System features")
+            }
+
+            Section {
+                // Onboarding's Permissions rows: what a Not now there held back is allowed here,
+                // one macOS dialog at a time.
+                VStack(spacing: 10) {
+                    // The current music source decides whether a "Control …" row shows.
+                    ForEach(LaunchPermissionManager.rows(musicSource: Defaults[.mediaController])) { permission in
+                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController])
+                    }
+                }
+                .settingsHighlight(id: highlightID("Permissions"))
+            } header: {
+                SettingsSectionHeader("Permissions")
+            } footer: {
+                SettingsFooter("Kannu asks macOS for a permission only when you press Allow. What you skip stays off until you allow it here.")
             }
 
             Section {
@@ -7785,7 +7802,8 @@ struct AgentStatusSettings: View {
             DetectedEditor(source: .cursor, name: "Cursor", detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)),
             DetectedEditor(source: .claude, name: "Claude Code", detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)),
             DetectedEditor(source: .codex, name: "Codex", detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)),
-            DetectedEditor(source: .warp, name: "Warp", detected: WarpAgentStore.databaseURL != nil),
+            // Launch Services, not Warp's container (whose stat raises a permission dialog).
+            DetectedEditor(source: .warp, name: "Warp", detected: LaunchPermissionManager.isWarpInstalled),
             DetectedEditor(source: .claudeDesktop, name: "Claude Desktop", detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)),
         ]
     }
