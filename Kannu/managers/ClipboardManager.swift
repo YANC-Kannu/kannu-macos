@@ -194,16 +194,36 @@ class ClipboardManager: ObservableObject {
         pinnedItems
     }
     
-    // Directory for storing clipboard data files
-    static let clipboardDataDirectory: URL = {
-        let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let clipboardDir = documentsPath.appendingPathComponent("ClipboardData")
-        
-        // Create directory if it doesn't exist
-        try? FileManager.default.createDirectory(at: clipboardDir, withIntermediateDirectories: true)
-        
-        return clipboardDir
-    }()
+    /// Where clipboard history keeps its image files. Application Support needs no permission;
+    /// `~/Documents/ClipboardData`, where they used to live, raised the Documents dialog the first
+    /// time the notch opened, whether or not clipboard history was on.
+    static let clipboardDataDirectory: URL = AppSupportPaths.child("ClipboardData")
+
+    /// Moves an older install's files out of `~/Documents/ClipboardData`, once, off the main thread.
+    /// Only for an install from before the move (`isUpgrade`): it already answered the Documents
+    /// dialog, so this raises none, and a fresh install never touches `~/Documents` at all. Items
+    /// store file names, not paths, so history survives the move.
+    static func migrateLegacyDataIfNeeded(isUpgrade: Bool) {
+        guard !Defaults[.clipboardDataMigrated] else { return }
+        Defaults[.clipboardDataMigrated] = true
+        guard isUpgrade,
+              let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        else { return }
+        let legacy = documents.appendingPathComponent("ClipboardData", isDirectory: true)
+        let destination = clipboardDataDirectory
+        DispatchQueue.global(qos: .utility).async {
+            let fileManager = FileManager.default
+            guard let files = try? fileManager.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil) else { return }
+            for file in files {
+                let target = destination.appendingPathComponent(file.lastPathComponent)
+                guard !fileManager.fileExists(atPath: target.path) else { continue }
+                try? fileManager.moveItem(at: file, to: target)
+            }
+            if (try? fileManager.contentsOfDirectory(atPath: legacy.path))?.isEmpty == true {
+                try? fileManager.removeItem(at: legacy)
+            }
+        }
+    }
     
     private init() {
         lastChangeCount = NSPasteboard.general.changeCount

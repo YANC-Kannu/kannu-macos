@@ -1100,9 +1100,14 @@ private final class LockScreenWeatherLocationProvider: NSObject, CLLocationManag
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
     }
 
+    /// Asks for Location only when `LaunchPermissionManager` allows it: on a fresh install that
+    /// dialog belongs to the onboarding's Permissions step, and after a Not now it waits for the
+    /// user. Until then the weather has no location, as when access is denied. With the widget
+    /// off nothing needs a location, so nothing asks.
     func prepareAuthorization() {
         let status = manager.authorizationStatus
-        if status == .notDetermined {
+        if status == .notDetermined, Defaults[.enableLockScreenWeatherWidget],
+           LaunchPermissionManager.mayTouch(.location) {
             manager.requestWhenInUseAuthorization()
         }
     }

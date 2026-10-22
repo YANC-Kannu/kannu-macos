@@ -2208,6 +2208,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// changed, schedules the rescan that maps it. Rescans meanwhile map the last result.
     private func refreshWarpExchangesIfNeeded(staleMinutes: Int, now: Date) {
         guard !warpRefreshInFlight else { return }
+        // That prompt belongs to the onboarding's Permissions step on a fresh install, and waits
+        // for the user after a Not now: until `LaunchPermissionManager` allows it, Warp is unread.
+        guard LaunchPermissionManager.mayTouch(.warp) else { return }
         warpRefreshInFlight = true
         let since = WarpAgentStore.since(staleMinutes: staleMinutes, now: now)
         DispatchQueue.global(qos: .utility).async { [weak self] in

@@ -916,6 +916,15 @@ extension Defaults.Keys {
     /// Set the first (and only) time Kannu registers itself as a login item on the user's
     /// behalf. Its whole job is to guarantee a later opt-out is never overridden.
     static let didAutoEnableLaunchAtLogin = Key<Bool>("didAutoEnableLaunchAtLogin", default: false)
+    /// `OnboardingProgress.currentVersion` once onboarding is finished; 0 until then. An install
+    /// from before it existed is marked done at launch, because `firstLaunch` is already false.
+    static let onboardingCompletedVersion = Key<Int>("onboardingCompletedVersion", default: 0)
+    /// `LaunchPermission` raw values the user pressed Allow for (the request ran).
+    static let askedLaunchPermissions = Key<[String]>("askedLaunchPermissions", default: [])
+    /// `LaunchPermission` raw values the user said Not now to: their features wait for consent.
+    static let deferredLaunchPermissions = Key<[String]>("deferredLaunchPermissions", default: [])
+    /// Clipboard history's files moved from `~/Documents/ClipboardData` to Application Support.
+    static let clipboardDataMigrated = Key<Bool>("clipboardDataMigrated", default: false)
     /// Bundle path the login item was last registered from, so the stale-path repair can fire
     /// only when the app actually moved instead of on every launch.
     static let lastLoginItemBundlePath = Key<String>("lastLoginItemBundlePath", default: "")
