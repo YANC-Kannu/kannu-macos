@@ -16,7 +16,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     connect. A Network.framework harness on this Mac showed:
     - **before:** 127.0.0.1, ::1, localhost and the LAN address all connect;
     - **after:** the three loopback forms connect and the LAN address times out.
-  - Extension clients use localhost, so they are unaffected. The loopback peer check stays as a
+  - No working client is affected. The server only ever accepted loopback peers, and
+    AtollExtensionKit talks to Kannu over XPC, not this socket. The loopback peer check stays as a
     second line.
   - Test: new `ExtensionRPCServerRulesTests`. The requirement is set before the listener is
     built, and the peer check is still there. A planted copy of each is caught.
