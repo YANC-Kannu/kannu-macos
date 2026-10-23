@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - A note can be deleted from inside it
+- **Developer label:** "still no delete button in the inside view"
+- **Agent label:** Claude Code (Opus 5.5) — a trash in the note editor's toolbar
+- **Changes:**
+  - The note editor's toolbar has a trash before Done, for any note that is saved; a draft or a new
+    note not saved yet shows none (back discards those). Deleting closes the editor without saving
+    the note back, then deletes it here and in Notes, as the list row's trash does.
+  - For a note made in Apple Notes (read-only while sync reads the whole account), it asks first, with
+    the list row's message: it also moves to Recently Deleted in Apple Notes.
+
 ### 2026-10-23 - Apple Notes sync reads the Kannu folder unless you choose your whole account
 - **Developer label:** "give a setting, kannu folder only by default, but whole account if user chooses explicitly, also can this be part of the now expanded setup flow, but keep in mind how we redsigned install flow, so make sure that asks are never broken, are they guarded by docs"
 - **Agent label:** Claude Code (Opus 5.5) — `AppleNotesSyncScope`, an onboarding Notes step and a "Control Notes" permission row behind `mayTouch`, read-only mirrors for whole-account notes
