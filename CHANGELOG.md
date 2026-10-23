@@ -4,6 +4,104 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - A name typed in the timer tab becomes a task, with a task search, and the running task can be edited
+- **Developer label:** "clicking on new task clears it. we want that flow to be somehow handled, a task running also needs edit, a task name that i wrote outside in the notch should be editable and instead of new task, but i should be somehow able to add a new task and work" … "but then would always the timer follow estimate , or can estimate and timer stay independent, check on that" … "maybe give a suggestion if search dynamic typed search is kept in the title tab and user can select that or make new ?"
+- **Agent label:** Claude Code (Opus 5.5) — typed names become local tasks timed as the user's own block (reused by title); a typed search under the session bar and the New Task title; the bar and a new task's title are one text; a preset with the form open starts the form's task; Edit Task on the running card; sessions sized from the estimate follow its edits; Resume when paused in overtime
+- **Changes:**
+  - **A typed name times a task.** A name in "Do you want to name this session?" plus a preset or
+    Start now times a local task instead of a plain session: the first active local task with that
+    title (case and accents ignored; done, archived, Jira and GitLab tasks never match), else the
+    kept New Task draft when it is that title (its estimate, tags and reminder come with it), else
+    a new task with no estimate. It runs as the user's own block: it rings at zero like any preset,
+    never follows the estimate, and takes the task's colour and key. With no name, or tasks off,
+    the session stays plain. Before the task file is read the start waits, as a reminder's Start
+    does, and if no task can start the plain named session starts; typing a name builds the task
+    list ahead of time, while the tab appearing still builds nothing. "Show local tasks in the
+    notch" turns on only when a task is added (`TasksManager.startTyped`, `startBlock`).
+  - **A typed search under the bar and the New Task title** (`TimerTaskSuggestions`). From two
+    characters, it offers up to two tasks the notch lists (the same title first, then titles that
+    start with it, then any other match; `TaskSearch.suggestions`) and a last `New task "…"` row;
+    nothing at all when no task matches, so a plain session's name leaves the composer alone. Two
+    rows and the New row end above Start and Reset, which stay clickable; what the list lies over
+    is hidden, disabled and out of VoiceOver's way (the duration boxes now take SwiftUI's disabled
+    state onto their AppKit fields, so a hidden one takes no Tab, Shift-Tab or click), and a
+    covered ruler gives up its sideways scroll. ↑ ↓ move a highlight (none by default, so Return
+    keeps its meaning), Return picks it, Escape and Tab close only the list; VoiceOver hears the
+    count and the highlighted row. In the
+    bar, a picked task shows its colour, key and time, the next preset or Start times it, and the
+    button beside the bar becomes Edit Task; the New row keeps the text as a new task (＋), even
+    when a task has that title. Editing the text unpicks; a picked task that leaves the list gives
+    the bar back what was typed, and never becomes a local task with its title. In the New Task
+    title, picking a task opens its edit, so no second task is made.
+  - **The bar and a new task's title are one text.** New Task opens on the bar's text: the kept
+    draft whole when it is that title, else the kept draft with the bar's text as its title (its
+    estimate, tags and reminder stay), else a fresh draft (`TaskFormDraft.newTask`). The form's
+    title goes back to the bar as it is typed, so the ×, the notch closing or any other way the
+    form goes leaves it in the bar; Add, Add & Start and every start empty both.
+  - **A preset clicked with a form open starts what the form shows**, timed for the preset's
+    length as a block: a new task is added as typed; an edit is saved (an untouched one as the task
+    reads) and that task is timed. A new task whose estimate cannot be read starts nothing and stays
+    to be fixed, with focus on the estimate; one with no title falls through as if no form were
+    open; an edit whose task has just left the list starts nothing, never the bar's name. Add and
+    Save are now the manager's own (`addTask(from:)`, `applyEdits`), one path for all of these.
+  - **Edit Task on the running card.** A pencil beside the running session's name opens the full
+    task form on its task, in the card's place; Save renames the running session
+    (`TimerManager.updateSessionName`). Clicking the name still renames only the session. The form
+    closes when the session finishes (so Stop is there while the alarm rings), is replaced, or
+    stops; unsaved edits stay kept. The session's task is `TimerManager.sessionTaskID`, so
+    `NotchTimerView` still never reads `TasksManager`.
+  - **A session sized from the estimate follows its edits** (the side column's ▶, Add & Start,
+    Up next, Brain's ▶, a reminder's Start). The estimate and the countdown are independent until
+    now; the new length is the estimate less the time tracked before the session, keeping what has
+    run (`TaskTimeMath.followedLength`, `retargeted`). Below zero is overtime, entered silently;
+    back above zero the alarm stops and the next zero rings again. Removing the estimate, or setting
+    it at or below the time tracked before the session, leaves the countdown alone, as do a preset
+    or typed-length block and a sync. Tracked time never came from the countdown and still does not.
+  - **Paused in overtime shows Resume** in the open notch, its hover controls, the lock-screen
+    widget and the menu-bar popover, and the notch card's second button reads Stop. The closed
+    notch leaves its finished layout when a session leaves overtime, which also fixes it staying
+    pinned after a session in overtime is replaced.
+  - "New task" and the side card's "Edit task" read "New Task" and "Edit Task" (docs/TOOLTIPS.md).
+  - Tests: new `TypedSessionTaskTests`, `TaskSuggestionTests` and `TimerTaskSessionRulesTests`
+    (each detector with a planted offender); `TaskTimeMathTests` and `TimerComposerMetricsTests`
+    gain the retarget and the list's height; `TaskFormWiringTests` follows Add and Save into the
+    manager and pins the one copy-back; `TimerSideColumnRulesTests` (the form's `open:`) and
+    `TimerTaskDetailRulesTests` ("Edit Task") changed with them.
+
+### 2026-10-23 - The bell beside a reminder turns that task's notification on or off, and the task form keeps what was typed
+- **Developer label:** "this button should enable and disable notifications for that particular chat anD THAT CHAT ONLY" … "the text bar should retain text once fed in , even if edit button is clicked or notch shrinks, also give a clear icon or something at end of box for people"
+- **Agent label:** Claude Code (Opus 5.5) — per-task `reminderMuted` and a bell toggle in the notch's task form; `KeptTaskFormDrafts` keeps the form's unsaved drafts and the session name survives the notch closing; clear buttons in the title, tags and session-name boxes
+- **Changes:**
+  - **The bell beside a reminder is a toggle for that task alone.** It was an indicator that only
+    said macOS blocks Kannu's notifications. Now it turns the task's reminder notification on or
+    off, saved with Add or Save like the rest of the form; its tooltip and label say what a click
+    does ("Mute Reminder" / "Unmute Reminder"), and it is orange while it is on but macOS denies
+    Kannu's notifications (read from the new `notificationsDenied`, since `remindersBlocked` is false
+    while every scheduled task is muted). Off is `TaskItem.reminderMuted`, which
+    `TaskReminderPlan.wanted` skips, so a waiting reminder is taken back and the others are
+    untouched; the time still shows, and the task card's due line shows a slashed bell. The mute
+    belongs to its reminder: clearing the schedule clears it, so a reminder added later in Brain
+    notifies. On is no key at all, so existing task files read and write as before, and an older
+    build reads a newer file. The bell asks macOS nothing; only scheduling may (`TaskListRulesTests`).
+  - **The task form keeps what was typed.** The draft lived in the form's own view state, so
+    opening a task's editor or the notch closing lost it. `KeptTaskFormDrafts` (in memory, on
+    `TasksManager`) keeps each unsaved draft by new task or edited task and restores it when that
+    form opens again; Add or Save forgets it. The × on a new task now closes and keeps the text; the
+    × or Escape on an edit still means "without saving" and drops it. An edit's draft comes back
+    only while its task is unchanged, so a draft can never undo a change made elsewhere, and a
+    reminder picked earlier that has passed since comes back as the next whole hour. The timer tab
+    still reopens on its first page, as it always has; "New task" opens on the kept text, and the
+    session-name bar beside it ("Do you want to name this session?") keeps a half-typed name while
+    the notch is closed (`TimerManager.typedSessionName`).
+  - **A clear button at the end of the title, tags and session-name boxes**, a small ⓧ like a
+    search field's, shown once there is text ("Clear Title", "Clear Tags", "Clear Name"). It never
+    takes focus, so a click does not release the notch. The × on a new task reads "Close"; on an
+    edit, "Close Without Saving".
+  - Tests: `TaskReminderPlanTests`, `TaskModelCodingTests`, `TaskDetailSummaryTests`,
+    `TaskFormDraftTests` (the bell edit and the keeper), `TaskFormWiringTests` (the form's and the
+    session bar's wiring, read from the source), and `TimerSideColumnRulesTests` (Escape and the ×
+    now go through `dismiss()`).
+
 ### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
 - **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
 - **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change

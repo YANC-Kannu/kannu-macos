@@ -137,7 +137,9 @@ struct TaskDetailSummary: Equatable {
 
         if task.source == .local, let scheduled = task.scheduledAt {
             let when = TaskReminderPlan.when(scheduled, now: now, calendar: calendar)
-            facts.append(Fact(icon: "calendar", text: dueText(scheduled, when: when), isAlert: when == .overdue))
+            // A slashed bell when the user turned this task's reminder notification off.
+            let icon = task.notifiesForReminder ? "calendar" : "bell.slash"
+            facts.append(Fact(icon: icon, text: dueText(scheduled, when: when), isAlert: when == .overdue))
         } else if let due = remote?.dueDate {
             let day = dueDayText(due, now: now, calendar: calendar)
             facts.append(Fact(icon: "calendar", text: day.text, isAlert: day.isOverdue))
