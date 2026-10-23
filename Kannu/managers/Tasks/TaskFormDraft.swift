@@ -307,3 +307,32 @@ struct KeptTaskFormDrafts: Equatable {
         entries[id] = nil
     }
 }
+
+/// What a preset clicked while the timer tab's task form shows does (`TimerTaskForm.startFromForm`).
+///
+/// Pure, in the logic target.
+enum TimerFormStart: Equatable {
+    /// The form's task is timed (or added and timed): the form's work is done.
+    case started
+    /// A new task whose estimate cannot be read: nothing starts, and the form stays to be fixed,
+    /// as Add waits, with focus on the estimate.
+    case held
+    /// The edited task left the list: nothing starts, and the form closes. An edit never falls
+    /// through to the bar's text or its pick.
+    case gone
+    /// A new task with no title: the start goes on as if no form were open, and the form closes
+    /// keeping its draft.
+    case fallThrough
+
+    /// A new task's form, from its kept draft: added and timed when it can be saved; held while its
+    /// estimate cannot be read; falling through with no title.
+    static func forNewTask(_ kept: TaskFormDraft?) -> TimerFormStart {
+        guard let kept, TaskItem.cleanedTitle(kept.title) != nil else { return .fallThrough }
+        return kept.canSave ? .started : .held
+    }
+
+    /// An edit's form: its task is timed while it is in the list, saved or not.
+    static func forEdit(taskInList: Bool) -> TimerFormStart {
+        taskInList ? .started : .gone
+    }
+}

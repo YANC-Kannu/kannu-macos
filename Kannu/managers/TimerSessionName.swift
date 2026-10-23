@@ -77,3 +77,21 @@ struct TimerSessionPick: Equatable {
         text == name ? self : nil
     }
 }
+
+/// How a session started from the timer tab's bar runs (David, 2026-10-23): plain with tasks off,
+/// or with nothing typed or picked; a picked task, timed as it is; or a typed name timed as a task,
+/// reusing one with that title except after the New row.
+///
+/// Pure, in the logic target.
+enum TimerTypedStart: Equatable {
+    case plain
+    case pickedTask(UUID)
+    case typed(reuse: Bool)
+
+    static func route(tasksAvailable: Bool, typed: String, pick: TimerSessionPick?) -> TimerTypedStart {
+        guard tasksAvailable else { return .plain }
+        if let taskID = pick?.taskID { return .pickedTask(taskID) }
+        guard TimerSessionName.cleaned(typed) != nil else { return .plain }
+        return .typed(reuse: pick == nil)
+    }
+}

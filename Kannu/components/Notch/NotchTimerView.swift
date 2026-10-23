@@ -596,14 +596,14 @@ struct NotchTimerView: View {
     /// The bar's typed search shows: tasks on, nothing picked, a name being typed, while the bar has
     /// focus or the pointer is on the list, until Esc, Return, Tab or a pick closes it.
     private var wantsSuggestions: Bool {
-        isTasksPageAvailable && sessionPick == nil && !pendingSessionName.isEmpty
-            && (focusedNameField == .pending || suggestions.isHovered)
-            && !suggestions.isClosed(for: pendingSessionName)
+        suggestions.wantsToShow(enabled: isTasksPageAvailable && sessionPick == nil, typed: pendingSessionName,
+                                fieldFocused: focusedNameField == .pending)
     }
 
     /// The list has rows, so it covers the duration (never Start and Reset).
     private var showsSuggestions: Bool {
-        wantsSuggestions && !suggestions.rows.isEmpty
+        suggestions.shows(enabled: isTasksPageAvailable && sessionPick == nil, typed: pendingSessionName,
+                          fieldFocused: focusedNameField == .pending)
     }
 
     /// A row picked: a task is timed by the next preset or Start; the New row keeps the typed text
@@ -632,14 +632,22 @@ struct NotchTimerView: View {
         pendingSessionName = pick.typed
     }
 
-    /// Return in the bar: the row the arrows highlighted, else the list closes and typing ends.
+    /// Return in the bar: the row the arrows highlighted, else the list closes and typing ends
+    /// (`answerReturn`).
     private func submitName() {
-        if showsSuggestions, let row = suggestions.highlightedRow {
+        switch suggestions.answerReturn(showing: showsSuggestions) {
+        case .pick(let row):
             pickSuggestion(row)
-        } else {
+        case .closeList, .passOn:
             suggestions.close(on: pendingSessionName)
             focusedNameField = nil
         }
+    }
+
+    /// Escape in the bar closes the typed search on this text, rows or not: the bar has no Escape of
+    /// its own, and rows that arrive later (the task file read, a sync) must not reopen it.
+    private func exitName() {
+        suggestions.close(on: pendingSessionName)
     }
 
     /// Builds the task list ahead of a typed start, so the first one after launch need not wait
@@ -956,8 +964,7 @@ struct NotchTimerView: View {
                 .tint(notchForeground)
                 .focused($focusedNameField, equals: .pending)
                 .onSubmit(submitName)
-                // Escape closes only the typed search's list.
-                .onExitCommand { suggestions.close(on: pendingSessionName) }
+                .onExitCommand(perform: exitName)
                 .accessibilityLabel(Text("Session name"))
                 .accessibilityHint(Text(verbatim: pickHint))
             if isTasksPageAvailable, let taskID = sessionPick?.taskID {
@@ -1017,7 +1024,6 @@ struct NotchTimerView: View {
         // With a form open, a new task's title is the bar's text: read what the form left, not
         // this view's copy, which the form's closing has not refreshed yet.
         let typed = form == nil ? pendingSessionName : timerManager.typedSessionName
-        let pick = isTasksPageAvailable ? sessionPick : nil
         let plain = {
             TimerManager.shared.startTimer(
                 duration: duration,
@@ -1026,10 +1032,11 @@ struct NotchTimerView: View {
                 fallbackName: fallback
             )
         }
-        if isTasksPageAvailable, pick != nil || TimerSessionName.cleaned(typed) != nil {
-            TimerTaskForm.startNamed(typed: typed, pick: pick, duration: duration, preset: preset, otherwise: plain)
-        } else {
+        let route = TimerTypedStart.route(tasksAvailable: isTasksPageAvailable, typed: typed, pick: sessionPick)
+        if route == .plain {
             plain()
+        } else {
+            TimerTaskForm.startNamed(route, typed: typed, duration: duration, preset: preset, otherwise: plain)
         }
         // Written directly as well: "" again would never reach the observer (REGRESSIONS entry 10).
         pendingSessionName = ""

@@ -150,4 +150,50 @@ final class TypedSessionTaskTests: XCTestCase {
         XCTAssertFalse(pick.isNew)
         XCTAssertTrue(TimerSessionPick(taskID: nil, name: "Deep work", typed: "Deep work").isNew)
     }
+
+    // MARK: - How a start from the bar runs
+
+    func testWithTasksOffEveryStartIsPlain() {
+        let pick = TimerSessionPick(taskID: UUID(), name: "Deep work", typed: "deep")
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: false, typed: "Deep work", pick: pick), .plain)
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: false, typed: "Deep work", pick: nil), .plain)
+    }
+
+    func testAPickedTaskIsTimedAsItIs() {
+        let id = UUID()
+        let pick = TimerSessionPick(taskID: id, name: "Deep work", typed: "deep")
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: true, typed: "Deep work", pick: pick), .pickedTask(id))
+    }
+
+    func testATypedNameReusesExceptAfterTheNewRow() {
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: true, typed: "Deep work", pick: nil), .typed(reuse: true))
+        let new = TimerSessionPick(taskID: nil, name: "Deep work", typed: "Deep work")
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: true, typed: "Deep work", pick: new), .typed(reuse: false))
+    }
+
+    func testNothingTypedStartsPlain() {
+        XCTAssertEqual(TimerTypedStart.route(tasksAvailable: true, typed: "   ", pick: nil), .plain)
+    }
+
+    // MARK: - A preset clicked over the task form
+
+    func testANewTasksFormStartsHoldsOrFallsThrough() {
+        XCTAssertEqual(TimerFormStart.forNewTask(nil), .fallThrough, "nothing typed")
+        var untitled = TaskFormDraft()
+        untitled.chooseEstimate(3600)
+        XCTAssertEqual(TimerFormStart.forNewTask(untitled), .fallThrough, "no title: as if no form were open")
+        var unreadable = TaskFormDraft()
+        unreadable.title = "Write spec"
+        unreadable.typeEstimate("2x")
+        XCTAssertEqual(TimerFormStart.forNewTask(unreadable), .held, "the estimate is fixed first")
+        var ready = TaskFormDraft()
+        ready.title = "Write spec"
+        ready.typeEstimate("2h")
+        XCTAssertEqual(TimerFormStart.forNewTask(ready), .started)
+    }
+
+    func testAnEditsFormTimesItsTaskUnlessTheTaskIsGone() {
+        XCTAssertEqual(TimerFormStart.forEdit(taskInList: true), .started)
+        XCTAssertEqual(TimerFormStart.forEdit(taskInList: false), .gone, "never the bar's text or its pick")
+    }
 }

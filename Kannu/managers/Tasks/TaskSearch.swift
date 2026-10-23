@@ -125,6 +125,40 @@ struct TaskSuggestionState: Equatable {
         closedOn == typed
     }
 
+    /// Whether the list shows for its field: `enabled` (the bar with tasks on and nothing picked; a
+    /// new task's title), text typed, the field focused or the pointer on the list while no other
+    /// field has focus, and not closed on this text. With no rows there is nothing to show.
+    func shows(enabled: Bool, typed: String, fieldFocused: Bool, otherFieldFocused: Bool = false) -> Bool {
+        wantsToShow(enabled: enabled, typed: typed, fieldFocused: fieldFocused, otherFieldFocused: otherFieldFocused)
+            && !rows.isEmpty
+    }
+
+    /// `shows`, before the rows are known: the list is in place, to find them.
+    func wantsToShow(enabled: Bool, typed: String, fieldFocused: Bool, otherFieldFocused: Bool = false) -> Bool {
+        enabled && !typed.isEmpty && (fieldFocused || (isHovered && !otherFieldFocused)) && !isClosed(for: typed)
+    }
+
+    /// What a key does while the field has the list.
+    enum KeyAnswer: Equatable {
+        /// The highlighted row is picked.
+        case pick(Row)
+        /// The list closes; the key does nothing else.
+        case closeList
+        /// The field's own meaning: Return leaves the bar or adds; Escape leaves the form.
+        case passOn
+    }
+
+    /// Return picks the highlighted row while the list shows; else it keeps its own meaning.
+    func answerReturn(showing: Bool) -> KeyAnswer {
+        if showing, let row = highlightedRow { return .pick(row) }
+        return .passOn
+    }
+
+    /// Escape closes a showing list first; else it keeps its own meaning.
+    func answerEscape(showing: Bool) -> KeyAnswer {
+        showing ? .closeList : .passOn
+    }
+
     var highlightedRow: Row? {
         highlighted.flatMap { rows.indices.contains($0) ? rows[$0] : nil }
     }

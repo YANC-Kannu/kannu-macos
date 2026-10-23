@@ -95,14 +95,14 @@ struct TimerTaskForm: View {
     /// The title's typed search shows: a new task's title being typed, while the field has focus or
     /// the pointer is on the list (nothing else focused), until Esc, Return, Tab or a pick closes it.
     private var wantsTitleSuggestions: Bool {
-        draft.isNew && draft.canEditTitle && !draft.title.isEmpty
-            && (focused == .title || (focused == nil && titleSuggestions.isHovered))
-            && !titleSuggestions.isClosed(for: draft.title)
+        titleSuggestions.wantsToShow(enabled: draft.isNew && draft.canEditTitle, typed: draft.title,
+                                     fieldFocused: focused == .title, otherFieldFocused: focused != nil && focused != .title)
     }
 
     /// The list has rows, so it covers the rows under the title (never the buttons).
     private var showsTitleSuggestions: Bool {
-        wantsTitleSuggestions && !titleSuggestions.rows.isEmpty
+        titleSuggestions.shows(enabled: draft.isNew && draft.canEditTitle, typed: draft.title,
+                               fieldFocused: focused == .title, otherFieldFocused: focused != nil && focused != .title)
     }
 
     private var editedTask: TaskItem? {
@@ -281,20 +281,20 @@ struct TimerTaskForm: View {
         close()
     }
 
-    /// Escape in the title: the typed search's list first, then the form.
+    /// Escape in the title: the typed search's list first, then the form (`answerEscape`).
     private func exitTitle() {
-        if showsTitleSuggestions {
-            titleSuggestions.close(on: draft.title)
-        } else {
-            dismiss()
+        switch titleSuggestions.answerEscape(showing: showsTitleSuggestions) {
+        case .closeList: titleSuggestions.close(on: draft.title)
+        case .pick, .passOn: dismiss()
         }
     }
 
-    /// Return in the title: the row the arrows highlighted, else Add or Save.
+    /// Return in the title: the row the arrows highlighted, else Add or Save (`answerReturn`).
     private func submitTitle() {
-        if showsTitleSuggestions, let row = titleSuggestions.highlightedRow {
+        switch titleSuggestions.answerReturn(showing: showsTitleSuggestions) {
+        case .pick(let row):
             pickTitleSuggestion(row)
-        } else {
+        case .closeList, .passOn:
             titleSuggestions.close(on: draft.title)
             submit()
         }
@@ -640,21 +640,6 @@ struct TimerTaskForm: View {
 
 // MARK: - The timer tab's ways into the task list
 
-/// What a preset clicked while the form shows did (`TimerTaskForm.startFromForm`).
-enum TimerFormStart: Equatable {
-    /// The form's task is timed (or added and timed): the form's work is done.
-    case started
-    /// A new task whose estimate cannot be read: nothing starts, and the form stays to be fixed,
-    /// as Add waits, with focus on the estimate.
-    case held
-    /// The edited task left the list: nothing starts, and the form closes. An edit never falls
-    /// through to the bar's text or its pick.
-    case gone
-    /// A new task with no title: the start goes on as if no form were open, and the form closes
-    /// keeping its draft.
-    case fallThrough
-}
-
 extension TimerTaskForm {
     /// A preset clicked while the form shows starts what the form shows, timed for the preset's
     /// length as the user's own block (it never follows the estimate). A new task is added as
@@ -666,19 +651,18 @@ extension TimerTaskForm {
         let manager = TasksManager.shared
         switch mode {
         case .add:
-            guard let draft = manager.keptFormDraft(editing: nil), TaskItem.cleanedTitle(draft.title) != nil else {
-                return .fallThrough
+            let kept = manager.keptFormDraft(editing: nil)
+            let outcome = TimerFormStart.forNewTask(kept)
+            if outcome == .held { manager.requestEstimateFocus() }
+            guard outcome == .started, let kept, let id = manager.addTask(from: kept) else {
+                return outcome == .started ? .fallThrough : outcome
             }
-            guard draft.canSave else {
-                manager.requestEstimateFocus()
-                return .held
-            }
-            guard let id = manager.addTask(from: draft) else { return .fallThrough }
             TimerManager.shared.typedSessionName = ""
             manager.startBlock(id, duration: duration, preset: preset)
             return .started
         case .edit(let id):
-            guard let task = manager.activeTasks.first(where: { $0.id == id }) else { return .gone }
+            let task = manager.activeTasks.first { $0.id == id }
+            guard TimerFormStart.forEdit(taskInList: task != nil) == .started, let task else { return .gone }
             // An untouched form keeps no draft: the task as it reads.
             let draft = manager.keptFormDraft(editing: id) ?? TaskFormDraft(editing: task)
             if draft.canSave { manager.applyEdits(draft, to: id) }
@@ -687,22 +671,24 @@ extension TimerTaskForm {
         }
     }
 
-    /// A name typed in the session bar, started with a preset or a typed length (David,
+    /// A session started from the session bar, as `TimerTypedStart.route` says (David,
     /// 2026-10-23): a task picked from the bar's typed search is timed (if it is gone, `otherwise`,
     /// the plain named session, starts: a dead pick never makes or reuses a task); the New row's
     /// pick always makes a new task; plain typed text reuses the first local task with that title or
     /// makes one. Each is the user's own block. `otherwise` also runs when tasks are off or nothing
     /// can start.
-    @MainActor static func startNamed(typed: String, pick: TimerSessionPick?, duration: TimeInterval,
+    @MainActor static func startNamed(_ route: TimerTypedStart, typed: String, duration: TimeInterval,
                                       preset: TimerPreset?, otherwise: @escaping () -> Void) {
         guard Defaults[.enableTasks] else { return otherwise() }
         let manager = TasksManager.shared
-        if let taskID = pick?.taskID {
+        switch route {
+        case .pickedTask(let taskID):
             if !manager.startBlock(taskID, duration: duration, preset: preset) { otherwise() }
-            return
+        case .typed(let reuse):
+            manager.startTyped(typed, reuse: reuse, duration: duration, preset: preset, otherwise: otherwise)
+        case .plain:
+            otherwise()
         }
-        guard TaskItem.cleanedTitle(typed) != nil else { return otherwise() }
-        manager.startTyped(typed, reuse: pick == nil, duration: duration, preset: preset, otherwise: otherwise)
     }
 
     /// Builds the task list ahead of a typed start, so the first one after launch need not wait for

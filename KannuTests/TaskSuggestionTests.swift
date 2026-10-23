@@ -132,4 +132,63 @@ final class TaskSuggestionTests: XCTestCase {
         XCTAssertNil(state.highlightedRow)
         XCTAssertFalse(state.isHovered)
     }
+
+    // MARK: - When the list shows, and which key closes it first
+
+    private func stateWithRows(hovered: Bool = false, closedOn: String? = nil) -> TaskSuggestionState {
+        var state = TaskSuggestionState(closedOn: closedOn)
+        state.show(TaskSuggestionState.rows(for: [TaskItem(title: "Deep work")], typed: "deep"))
+        state.isHovered = hovered
+        return state
+    }
+
+    func testTheListShowsWhileItsFieldIsFocusedWithTextAndRows() {
+        let state = stateWithRows()
+        XCTAssertTrue(state.shows(enabled: true, typed: "deep", fieldFocused: true))
+        XCTAssertFalse(state.shows(enabled: false, typed: "deep", fieldFocused: true), "tasks off, or a task picked")
+        XCTAssertFalse(state.shows(enabled: true, typed: "", fieldFocused: true), "nothing typed")
+        XCTAssertFalse(state.shows(enabled: true, typed: "deep", fieldFocused: false), "focus gone, pointer away")
+        XCTAssertFalse(TaskSuggestionState().shows(enabled: true, typed: "deep", fieldFocused: true),
+                       "no rows: nothing to show, so the composer stays")
+        XCTAssertTrue(TaskSuggestionState().wantsToShow(enabled: true, typed: "deep", fieldFocused: true),
+                      "but the list is in place to find its rows")
+    }
+
+    func testThePointerOnTheListHoldsItOnlyWhileNoOtherFieldHasFocus() {
+        let hovered = stateWithRows(hovered: true)
+        XCTAssertTrue(hovered.shows(enabled: true, typed: "deep", fieldFocused: false),
+                      "a click lands though the field let go of focus")
+        XCTAssertFalse(hovered.shows(enabled: true, typed: "deep", fieldFocused: false, otherFieldFocused: true),
+                       "another field focused under it is never hidden by it")
+    }
+
+    func testAListClosedOnTheTextStaysClosedUntilItChanges() {
+        var state = stateWithRows(closedOn: "deep")
+        XCTAssertFalse(state.shows(enabled: true, typed: "deep", fieldFocused: true))
+        state.textChanged(to: "deep w")
+        XCTAssertTrue(state.shows(enabled: true, typed: "deep w", fieldFocused: true))
+    }
+
+    func testReturnPicksOnlyAHighlightedRowOfAShowingList() {
+        var state = stateWithRows()
+        XCTAssertEqual(state.answerReturn(showing: true), .passOn, "nothing highlighted: Return keeps its meaning")
+        _ = state.move(1)
+        XCTAssertEqual(state.answerReturn(showing: true), .pick(state.highlightedRow!))
+        XCTAssertEqual(state.answerReturn(showing: false), .passOn, "a hidden list never takes Return")
+    }
+
+    /// The bar's Escape closes the list on its text even before rows arrive: rows found later (the
+    /// task file read, a sync) for the same text do not reopen it.
+    func testAListClosedBeforeItsRowsArriveStaysClosedWhenTheyDo() {
+        var state = TaskSuggestionState()
+        state.close(on: "Lunch")
+        state.show(TaskSuggestionState.rows(for: [TaskItem(title: "Lunch with Sam")], typed: "Lunch"))
+        XCTAssertFalse(state.shows(enabled: true, typed: "Lunch", fieldFocused: true))
+    }
+
+    func testEscapeClosesAShowingListBeforeItLeaves() {
+        let state = stateWithRows()
+        XCTAssertEqual(state.answerEscape(showing: true), .closeList)
+        XCTAssertEqual(state.answerEscape(showing: false), .passOn, "then Escape leaves the form")
+    }
 }

@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Act on CodeRabbit's review of #127
+- **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
+- **Agent label:** Claude Code (Opus 5.5) — the timer tab's typed-search and start decisions move into pure helpers with state tests; the source checks keep only the tasks gates and the docs/REGRESSIONS.md entry 10 guards
+- **Changes:**
+  - The finding was valid: AGENTS.md asks for no tests of SwiftUI implementation details, and
+    `TimerTaskSessionRulesTests` matched text such as `.onExitCommand { … }`, `.offset(…)`,
+    `.coveredBySuggestions(…)` and `.zIndex(2)`, so a harmless reorder failed while a behaviour
+    change with the same text passed.
+  - The decisions are now pure, in the logic target, and the views call them:
+    `TaskSuggestionState.shows` / `wantsToShow` (when the typed search shows: enabled, text typed,
+    the field focused or the pointer on the list with no other field focused, not closed on this
+    text, and rows to show), `answerReturn` and `answerEscape` (Return picks only a highlighted row
+    of a showing list; Escape closes a showing list before it leaves), `TimerTypedStart.route` (a
+    start from the bar is plain, a picked task, or a typed name reusing unless the New row was
+    picked) and `TimerFormStart.forNewTask` / `forEdit` (a preset over the form starts, holds on an
+    unreadable estimate, falls through with no title, or starts nothing for a gone task). Behaviour
+    is unchanged: the bar's Escape still closes the list on its text even before rows arrive, so
+    rows found later (the task file read, a sync) never reopen it.
+  - The modifier-order and layout pins are gone (`.offset`, `.coveredBySuggestions` then
+    `.overlay` then `.zIndex`, the exact `.onExitCommand` text). The source checks left are wiring
+    no unit test can see: every way into the task list behind `isTasksPageAvailable`; the entry 10
+    guards (starts clear the stored name directly; the left column and a preset read
+    `shownTaskForm`; the running task's form closes on its session's own signals); a held form or a
+    gone task returning before the bar; a lost pick giving the bar back what was typed; and, in the
+    form, the typed search being a new task's alone, starting closed on the opening title, a pick
+    opening its edit, and a held preset's focus reaching the estimate (`formWiringProblems`).
+  - Tests: state tests for the helpers in `TaskSuggestionTests` and `TypedSessionTaskTests`; the
+    slimmer detectors keep their planted offenders.
+
 ### 2026-10-23 - A name typed in the timer tab becomes a task, with a task search, and the running task can be edited
 - **Developer label:** "clicking on new task clears it. we want that flow to be somehow handled, a task running also needs edit, a task name that i wrote outside in the notch should be editable and instead of new task, but i should be somehow able to add a new task and work" … "but then would always the timer follow estimate , or can estimate and timer stay independent, check on that" … "maybe give a suggestion if search dynamic typed search is kept in the title tab and user can select that or make new ?"
 - **Agent label:** Claude Code (Opus 5.5) — typed names become local tasks timed as the user's own block (reused by title); a typed search under the session bar and the New Task title; the bar and a new task's title are one text; a preset with the form open starts the form's task; Edit Task on the running card; sessions sized from the estimate follow its edits; Resume when paused in overtime
