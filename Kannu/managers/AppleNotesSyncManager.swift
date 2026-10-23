@@ -18,6 +18,7 @@
 
 import Foundation
 import Defaults
+import os
 
 #if canImport(AppKit)
 import AppKit
@@ -25,12 +26,15 @@ import AppKit
 
 enum AppleNotesSyncError: LocalizedError {
     case automationDenied
+    case automationPostponed
     case scriptFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .automationDenied:
             return String(localized: "Allow Kannu to control Notes in System Settings → Privacy & Security → Automation.")
+        case .automationPostponed:
+            return String(localized: "Allow Kannu to control Notes in Brain › General › Permissions.")
         case .scriptFailed(let message):
             return message
         }
@@ -44,6 +48,8 @@ struct RemoteAppleNote: Sendable {
     let creationDate: Date
     let modificationDate: Date
     let kannuId: UUID?
+    /// In Notes' Kannu folder, where the notes Kannu makes go.
+    let inKannuFolder: Bool
 }
 
 @MainActor
@@ -52,6 +58,8 @@ final class AppleNotesSyncManager: ObservableObject {
 
     @Published private(set) var isSyncing = false
     @Published private(set) var lastError: String?
+    /// Counts only, never a title, a folder name or note text.
+    private let logger = os.Logger(subsystem: "com.kannu.app", category: "AppleNotesSync")
 
     private static let syncFolderName = "Kannu"
     private static let fieldSeparator = "\u{241F}"
@@ -68,10 +76,22 @@ final class AppleNotesSyncManager: ObservableObject {
 
     private init() {}
 
+    /// Every AppleScript here raises Notes' Automation dialog the first time. Before onboarding's
+    /// Permissions step, or after its Not now, nothing runs (AGENTS.md: no dialog before the
+    /// Permissions step, none after a Not now).
+    private var mayTouchNotes: Bool {
+        guard LaunchPermissionManager.mayTouch(.notesAutomation) else {
+            lastError = AppleNotesSyncError.automationPostponed.localizedDescription
+            return false
+        }
+        return true
+    }
+
     @discardableResult
     func sync(localNotes: [NoteItem]) async -> [NoteItem]? {
         guard Defaults[.enableAppleNotesSync] else { return nil }
-        guard !isSyncing else { return nil }
+        guard !isSyncing, mayTouchNotes else { return nil }
+        let scope = Defaults[.appleNotesSyncScope]
 
         isSyncing = true
         lastError = nil
@@ -79,8 +99,9 @@ final class AppleNotesSyncManager: ObservableObject {
 
         return await enqueue { [self] in
             do {
-                let remoteNotes = try await fetchRemoteNotes()
-                var merged = try await merge(localNotes: localNotes, remoteNotes: remoteNotes)
+                let remoteNotes = try await fetchRemoteNotes(scope: scope)
+                logger.info("Apple Notes fetched \(remoteNotes.count, privacy: .public): in the Kannu folder \(remoteNotes.filter(\.inKannuFolder).count, privacy: .public), tagged \(remoteNotes.filter { $0.kannuId != nil }.count, privacy: .public)")
+                var merged = try await merge(localNotes: localNotes, remoteNotes: remoteNotes, scope: scope)
                 merged = try await pushUnlinkedLocalNotes(merged)
                 Defaults[.appleNotesLastSyncDate] = Date()
                 return merged
@@ -94,7 +115,8 @@ final class AppleNotesSyncManager: ObservableObject {
     /// Creates or updates `note` in Notes. Returns it with its Apple Notes id and the modification
     /// date Notes reported, or nil when the push failed.
     func pushNote(_ note: NoteItem) async -> NoteItem? {
-        guard Defaults[.enableAppleNotesSync] else { return nil }
+        guard Defaults[.enableAppleNotesSync], mayTouchNotes else { return nil }
+        guard !note.isReadOnlyMirror(syncEnabled: true, scope: Defaults[.appleNotesSyncScope]) else { return nil }
 
         return await enqueue { [self] in
             do {
@@ -117,13 +139,31 @@ final class AppleNotesSyncManager: ObservableObject {
 
     /// Deletes the Apple note linked to `noteId`, including one whose create is still queued.
     func deleteRemoteNote(noteId: UUID, appleNotesId: String?) async {
-        guard Defaults[.enableAppleNotesSync] else { return }
+        guard Defaults[.enableAppleNotesSync], mayTouchNotes else { return }
 
         await enqueue { [self] in
             guard let id = appleNotesId ?? remoteIdByNoteId[noteId] else { return }
             remoteIdByNoteId[noteId] = nil
             do {
                 try await deleteRemoteNote(id: id)
+            } catch {
+                lastError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Shows the note in Notes, for a note the notch shows read-only.
+    func openInNotes(appleNotesId: String) async {
+        guard mayTouchNotes else { return }
+        let escapedId = appleScriptEscape(appleNotesId)
+        await enqueue { [self] in
+            do {
+                try await runScriptVoid("""
+                tell application "Notes"
+                    show note id "\(escapedId)"
+                    activate
+                end tell
+                """)
             } catch {
                 lastError = error.localizedDescription
             }
@@ -143,7 +183,7 @@ final class AppleNotesSyncManager: ObservableObject {
 
     // MARK: - Merge
 
-    private func merge(localNotes: [NoteItem], remoteNotes: [RemoteAppleNote]) async throws -> [NoteItem] {
+    private func merge(localNotes: [NoteItem], remoteNotes: [RemoteAppleNote], scope: AppleNotesSyncScope) async throws -> [NoteItem] {
         var notes = localNotes
         let remoteById = Dictionary(remoteNotes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var linkedRemoteIds = Set<String>()
@@ -160,6 +200,13 @@ final class AppleNotesSyncManager: ObservableObject {
             if notes[index].modificationDate > now { notes[index].modificationDate = remote.modificationDate }
             if notes[index].creationDate > now { notes[index].creationDate = remote.creationDate }
 
+            notes[index].madeInAppleNotes = AppleNotesMergePolicy.madeInAppleNotes(
+                stored: notes[index].madeInAppleNotes,
+                hasKannuId: remote.kannuId != nil,
+                inKannuFolder: remote.inKannuFolder
+            )
+            let mirror = notes[index].isReadOnlyMirror(syncEnabled: true, scope: scope)
+
             switch AppleNotesMergePolicy.decide(
                 localModified: notes[index].modificationDate,
                 remoteModified: remote.modificationDate,
@@ -167,6 +214,9 @@ final class AppleNotesSyncManager: ObservableObject {
             ) {
             case .takeRemote:
                 applyRemote(remote, to: &notes[index])
+            case .pushLocal where mirror:
+                // Only its colour or pin can have changed here, and those live in Kannu alone.
+                notes[index].appleNotesSyncedAt = remote.modificationDate
             case .pushLocal:
                 notes[index].appleNotesSyncedAt = try await updateRemoteNote(id: appleNotesId, note: notes[index])
             case .unchanged:
@@ -179,6 +229,7 @@ final class AppleNotesSyncManager: ObservableObject {
                let index = notes.firstIndex(where: { $0.id == kannuId }) {
                 linkedRemoteIds.insert(remote.id)
                 notes[index].appleNotesId = remote.id
+                notes[index].madeInAppleNotes = false
                 remoteIdByNoteId[kannuId] = remote.id
                 if AppleNotesMergePolicy.decide(
                     localModified: notes[index].modificationDate,
@@ -200,7 +251,12 @@ final class AppleNotesSyncManager: ObservableObject {
                 modificationDate: remote.modificationDate,
                 colorIndex: 0,
                 appleNotesId: remote.id,
-                appleNotesSyncedAt: remote.modificationDate
+                appleNotesSyncedAt: remote.modificationDate,
+                madeInAppleNotes: AppleNotesMergePolicy.madeInAppleNotes(
+                    stored: nil,
+                    hasKannuId: remote.kannuId != nil,
+                    inKannuFolder: remote.inKannuFolder
+                )
             )
             notes.append(imported)
             linkedRemoteIds.insert(remote.id)
@@ -256,13 +312,30 @@ final class AppleNotesSyncManager: ObservableObject {
         end kannuStamp
         """
 
-    private func fetchRemoteNotes() async throws -> [RemoteAppleNote] {
+    /// The Kannu folder, or every note of the default account. Narrowing to the folder drops the
+    /// other notes' local copies on this sync (`merge` removes a linked note Notes no longer
+    /// returns); nothing in Notes is deleted.
+    private func fetchRemoteNotes(scope: AppleNotesSyncScope) async throws -> [RemoteAppleNote] {
+        let source: String
+        // Which fetched notes are in the Kannu folder: nil when only that folder is read. Asked by
+        // id, because `name of container of n` matched no note on a real Mac (2026-10-23), which
+        // made every note, Kannu's own included, read-only.
+        let kannuFolderIds: Set<String>?
+        try await ensureSyncFolderExists()
+        switch scope {
+        case .kannuFolder:
+            source = "notes of folder \"\(Self.syncFolderName)\" of default account"
+            kannuFolderIds = nil
+        case .wholeAccount:
+            source = "notes of default account"
+            kannuFolderIds = try await fetchKannuFolderNoteIds()
+        }
         let script = """
         set fieldSep to "\(Self.fieldSeparator)"
         set recordSep to "\(Self.recordSeparator)"
         tell application "Notes"
             set chunks to {}
-            repeat with n in notes of default account
+            repeat with n in \(source)
                 if password protected of n is false then
                     set notePlain to plaintext of n
                     set notePlain to my sanitizeField(notePlain, fieldSep, recordSep)
@@ -303,10 +376,25 @@ final class AppleNotesSyncManager: ObservableObject {
         """
 
         let output = try await runScriptReturningString(script)
-        return parseRemoteNotes(output)
+        return parseRemoteNotes(output, kannuFolderIds: kannuFolderIds)
     }
 
-    private func parseRemoteNotes(_ payload: String) -> [RemoteAppleNote] {
+    /// The ids of the notes in the Kannu folder (no bodies, so it is quick).
+    private func fetchKannuFolderNoteIds() async throws -> Set<String> {
+        let script = """
+        tell application "Notes"
+            set noteIds to id of notes of folder "\(Self.syncFolderName)" of default account
+            set AppleScript's text item delimiters to "\(Self.recordSeparator)"
+            return (noteIds as text) & ""
+        end tell
+        """
+        let output = try await executeScript(script).stringValue ?? ""
+        return Set(output.split(separator: Character(Self.recordSeparator)).map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        })
+    }
+
+    private func parseRemoteNotes(_ payload: String, kannuFolderIds: Set<String>?) -> [RemoteAppleNote] {
         guard !payload.isEmpty else { return [] }
 
         return payload
@@ -322,7 +410,7 @@ final class AppleNotesSyncManager: ObservableObject {
 
                 let content = String(fields[4])
                 let kannuId = fields.count > 5
-                    ? UUID(uuidString: String(fields[5]))
+                    ? UUID(uuidString: String(fields[5]).trimmingCharacters(in: .whitespaces))
                     : extractKannuId(from: content)
 
                 return RemoteAppleNote(
@@ -331,7 +419,8 @@ final class AppleNotesSyncManager: ObservableObject {
                     content: content,
                     creationDate: created,
                     modificationDate: modified,
-                    kannuId: kannuId
+                    kannuId: kannuId,
+                    inKannuFolder: kannuFolderIds?.contains(id) ?? true
                 )
             }
     }

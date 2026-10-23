@@ -4,6 +4,50 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Apple Notes sync reads the Kannu folder unless you choose your whole account
+- **Developer label:** "give a setting, kannu folder only by default, but whole account if user chooses explicitly, also can this be part of the now expanded setup flow, but keep in mind how we redsigned install flow, so make sure that asks are never broken, are they guarded by docs"
+- **Agent label:** Claude Code (Opus 5.5) — `AppleNotesSyncScope`, an onboarding Notes step and a "Control Notes" permission row behind `mayTouch`, read-only mirrors for whole-account notes
+- **Changes:**
+  - **New setting, Brain › Notes › Notes to sync:** "Kannu folder only" (the default) or "All my
+    notes". Sync used to read every note in the default Notes account. In the Kannu folder mode it
+    reads, writes and deletes only the Kannu folder. An install that has already synced keeps the
+    whole account (its footer said "your existing Apple Notes are imported"), so nothing it shows
+    vanishes on update; `NotesManager.migrateSyncScopeIfNeeded` decides once, at launch, from
+    Defaults alone. Narrowing to the folder asks first, then drops the other notes' copies from the
+    notch only; nothing in Notes is deleted.
+  - **With the whole account, a note made in Notes is read-only in the notch.** Editing it in Kannu
+    rewrote its body as plain text and lost its formatting and attachments, and Clear Notes deleted
+    it in Notes. It now opens read-only with "Open in Notes", and Clear Notes leaves it; only its
+    colour and pin, which live in Kannu, change. Its trash asks first, because it also goes to
+    Recently Deleted in Apple Notes. Clear Notes' alert says how many notes it removes and how many
+    also go to Recently Deleted in Apple Notes.
+  - **Which notes were made in Notes** is decided once per note (`NoteItem.madeInAppleNotes`,
+    `AppleNotesMergePolicy.madeInAppleNotes`): a note made in the notch never is, and a note with
+    Kannu's `kannu:id` tag or a place in Notes' Kannu folder never is either. Folder membership is
+    asked by note id (`id of notes of folder "Kannu"`); a first version compared
+    `name of container of n` with "Kannu", matched nothing on a real Mac, and made every note,
+    Kannu's own included, read-only with no delete. A note with no evidence either way stays
+    read-only, since editing an Apple note in Kannu flattens it. Each sync logs counts only (fetched,
+    in the Kannu folder, tagged).
+  - **Onboarding has a Notes step** before Permissions: no notes (the default), notes in the notch,
+    or sync with the Kannu folder or the whole account. Like the music source, the choice is applied
+    at Finish; choosing sync adds a **Control Notes** row to the Permissions step, and after its Not
+    now the notes stay in the notch with sync off. `OnboardingProgress.currentVersion` is unchanged,
+    so existing installs do not see onboarding again.
+  - **Notes sync is behind the launch-permission gate.** It ran AppleScript, and raised Notes'
+    Automation dialog, with no `mayTouch` check. New `LaunchPermission.notesAutomation`: every entry
+    point of `AppleNotesSyncManager` checks `mayTouch(.notesAutomation)`; the row's Allow opens Notes
+    hidden first, because `AEDeterminePermissionToAutomateTarget` cannot ask an app that is not
+    running; turning the sync switch on after a Not now asks again; allowing it starts the sync it held
+    back. The row is also in Brain › General › Permissions.
+  - The Automation usage description names Apple Notes (English and Turkish), and the ReadMe's
+    permission list says when it is asked.
+  - `FirstLaunchRulesTests` watches `AppleNotesSyncManager.swift` and the Notes step: each sync entry
+    point checks the gate, the step writes nothing, and `AEDeterminePermissionToAutomateTarget` lives
+    only in `LaunchPermissionManager`, each against a planted offender. `LaunchPermissionPolicyTests`
+    pins the new row; the Settings inventory counts the two new search entries and the new row; a
+    Danger-zones row in docs/REGRESSIONS.md; an `onboardingNotes` snapshot board.
+
 ### 2026-10-23 - A clipboard note waits for Done, and the notes list keeps its order
 - **Developer label:** "create from clipboard shouldnt auto save unless clicked on save … also the order keeps on changin dynamically"
 - **Agent label:** Claude Code (Opus 5.5) — `NotesManager` owns every note write; clipboard drafts; no-op saves; Apple Notes push queue, read-back dates and the time-zone fix

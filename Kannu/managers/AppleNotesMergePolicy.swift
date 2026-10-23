@@ -54,6 +54,17 @@ enum AppleNotesMergePolicy {
         }
     }
 
+    /// Whether a note fetched from Notes was made there, not in Kannu (`NoteItem.madeInAppleNotes`).
+    /// Evidence that Kannu made it — its `kannu:id` tag, or a place in Notes' Kannu folder, where
+    /// Kannu puts its own notes — always wins, so a note held read-only by mistake is freed on the
+    /// next sync. Without evidence a decided note keeps its answer, and an undecided one counts as
+    /// made in Notes: editing a note Kannu did not make rewrites it as plain text, so read-only is
+    /// the safe guess.
+    static func madeInAppleNotes(stored: Bool?, hasKannuId: Bool, inKannuFolder: Bool) -> Bool {
+        if hasKannuId || inKannuFolder { return false }
+        return stored ?? true
+    }
+
     /// A date from `AppleNotesSyncManager`'s AppleScript `kannuStamp`: local calendar fields,
     /// `year month day hours minutes seconds`, read in `timeZone` (the Mac's, as AppleScript's
     /// dates are). Subtracting a "1970" date built from `current date` instead, as the scripts did

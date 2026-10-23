@@ -26,7 +26,37 @@ import Foundation
 final class NotesManager {
     static let shared = NotesManager()
 
-    private init() {}
+    private var permissionObserver: NSObjectProtocol?
+
+    private init() {
+        // Allowing "Control Notes" (onboarding, Brain › General › Permissions, or the sync switch)
+        // is what lets a sync that was held back run.
+        permissionObserver = NotificationCenter.default.addObserver(
+            forName: .launchPermissionsChanged, object: nil, queue: .main
+        ) { notification in
+            guard notification.object as? String == LaunchPermission.notesAutomation.rawValue else { return }
+            MainActor.assumeIsolated {
+                NotesManager.shared.syncWithAppleNotes()
+            }
+        }
+    }
+
+    /// Decides the Apple Notes scope once per install, before anything syncs. Sync used to read the
+    /// whole default account and say so ("your existing Apple Notes are imported"), so an install
+    /// that has already synced keeps the whole account and nothing it shows vanishes on update;
+    /// every other install starts with the Kannu folder. Defaults only: no Notes, no dialog.
+    static func migrateSyncScopeIfNeeded() {
+        guard !Defaults[.appleNotesSyncScopeMigrated] else { return }
+        Defaults[.appleNotesSyncScopeMigrated] = true
+        if Defaults[.enableAppleNotesSync], Defaults[.appleNotesLastSyncDate] != nil {
+            Defaults[.appleNotesSyncScope] = .wholeAccount
+        }
+    }
+
+    /// Whether `note` is shown but never written (`NoteItem.isReadOnlyMirror`), as things stand.
+    static func isReadOnlyMirror(_ note: NoteItem) -> Bool {
+        note.isReadOnlyMirror(syncEnabled: Defaults[.enableAppleNotesSync], scope: Defaults[.appleNotesSyncScope])
+    }
 
     /// What an editor holds for one note.
     struct Draft {
@@ -88,7 +118,8 @@ final class NotesManager {
                 modificationDate: now,
                 colorIndex: draft.colorIndex,
                 isPinned: false,
-                imageFileName: imageFileName
+                imageFileName: imageFileName,
+                madeInAppleNotes: false
             ), at: 0)
         }
         Defaults[.savedNotes] = notes
@@ -96,6 +127,7 @@ final class NotesManager {
         return true
     }
 
+    /// Removes the note here and in Notes. For a read-only mirror the row asks first.
     func delete(_ note: NoteItem) {
         var notes = Defaults[.savedNotes]
         guard let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
@@ -105,12 +137,32 @@ final class NotesManager {
         Defaults[.savedNotes] = notes
     }
 
+    /// Every note made in Kannu, and its copy in Notes. A read-only mirror of a note made in Notes
+    /// stays: Clear Notes must never empty the user's Notes account.
     func clearAll() {
-        for note in Defaults[.savedNotes] {
+        let (kept, cleared) = Defaults[.savedNotes].reduce(into: ([NoteItem](), [NoteItem]())) { result, note in
+            if Self.isReadOnlyMirror(note) { result.0.append(note) } else { result.1.append(note) }
+        }
+        for note in cleared {
             deleteRemoteIfLinked(note)
             removeAttachments(of: note)
         }
-        Defaults[.savedNotes] = []
+        Defaults[.savedNotes] = kept
+    }
+
+    /// How many notes Clear Notes would remove, and how many of those are also in Notes.
+    func clearAllCounts() -> (removed: Int, inAppleNotes: Int) {
+        let cleared = Defaults[.savedNotes].filter { !Self.isReadOnlyMirror($0) }
+        let synced = Defaults[.enableAppleNotesSync] ? cleared.filter { $0.appleNotesId != nil }.count : 0
+        return (cleared.count, synced)
+    }
+
+    /// Shows a read-only mirror in Notes, where it is edited.
+    func openInNotes(_ note: NoteItem) {
+        guard let appleNotesId = note.appleNotesId else { return }
+        Task {
+            await AppleNotesSyncManager.shared.openInNotes(appleNotesId: appleNotesId)
+        }
     }
 
     func togglePin(_ note: NoteItem) {
@@ -125,7 +177,9 @@ final class NotesManager {
     /// Runs a two-way sync and applies its result to the notes as they are when it finishes, not to
     /// the snapshot it started from (`AppleNotesMergePolicy.reconcile`).
     func syncWithAppleNotes() {
-        guard Defaults[.enableAppleNotesSync] else { return }
+        // Not while the "Control Notes" dialog is up: a script now would raise a second one.
+        guard Defaults[.enableAppleNotesSync],
+              LaunchPermissionManager.shared.requestInFlight != .notesAutomation else { return }
         let snapshot = Defaults[.savedNotes]
         Task {
             guard let merged = await AppleNotesSyncManager.shared.sync(localNotes: snapshot) else { return }
@@ -138,6 +192,7 @@ final class NotesManager {
                 modified: \.modificationDate,
                 keep: { now, synced in
                     var kept = now
+                    kept.madeInAppleNotes = synced.madeInAppleNotes ?? kept.madeInAppleNotes
                     if kept.appleNotesId == nil {
                         kept.appleNotesId = synced.appleNotesId
                         kept.appleNotesSyncedAt = synced.appleNotesSyncedAt

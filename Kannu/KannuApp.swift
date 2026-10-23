@@ -986,6 +986,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Defaults[.onboardingCompletedVersion] = OnboardingProgress.firstVersion
         }
         ClipboardManager.migrateLegacyDataIfNeeded(isUpgrade: isUpgrade)
+        NotesManager.migrateSyncScopeIfNeeded()
 
         // Held back until now; this used to run in `KannuApp.init`, before any window.
         LLMUsageManager.configureProviderDefaultsIfNeeded()

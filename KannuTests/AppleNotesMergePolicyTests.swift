@@ -61,6 +61,26 @@ final class AppleNotesMergePolicyTests: XCTestCase {
         XCTAssertNil(AppleNotesMergePolicy.date(fromStamp: ""))
     }
 
+    // MARK: - madeInAppleNotes
+
+    func testKannusOwnEvidenceAlwaysFreesANote() {
+        // Held read-only by mistake (the first folder check matched nothing): the next sync frees it.
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: false, inKannuFolder: true))
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: true, inKannuFolder: false))
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: nil, hasKannuId: false, inKannuFolder: true))
+    }
+
+    func testWithoutEvidenceADecidedNoteKeepsItsAnswer() {
+        // A Kannu note moved out of the folder in Notes, its tag gone, stays editable.
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: false, hasKannuId: false, inKannuFolder: false))
+        XCTAssertTrue(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: false, inKannuFolder: false))
+    }
+
+    func testAnUndecidedNoteWithoutEvidenceIsReadOnly() {
+        // Editing a note Kannu did not make rewrites it as plain text, so the safe guess is read-only.
+        XCTAssertTrue(AppleNotesMergePolicy.madeInAppleNotes(stored: nil, hasKannuId: false, inKannuFolder: false))
+    }
+
     // MARK: - content(fromPlaintext:)
 
     func testTheNameLineIsNotContent() {

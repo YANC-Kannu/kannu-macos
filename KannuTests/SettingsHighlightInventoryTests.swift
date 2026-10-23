@@ -87,9 +87,12 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // own entry lands on its row: Apple Reminders, GitHub, Linear, Todoist.
         // 2026-10-22: General gains Permissions (one entry, one row): what onboarding's
         // Permissions step put off is allowed there.
-        XCTAssertEqual(inventory.entries.count, 243, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
+        // 2026-10-23: Notes gains its first two entries ("Sync with Apple Notes", and "Notes to sync",
+        // which lands on the sync switch because its own row shows only while sync is on) and the
+        // "Notes to sync" row.
+        XCTAssertEqual(inventory.entries.count, 245, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {

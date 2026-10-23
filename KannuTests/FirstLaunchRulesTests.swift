@@ -40,6 +40,8 @@ final class FirstLaunchRulesTests: XCTestCase {
         "Kannu/managers/ClipboardManager.swift",
         "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
         "Kannu/components/Settings/SettingsView.swift",
+        "Kannu/managers/AppleNotesSyncManager.swift",
+        "Kannu/components/Onboarding/NotesSelectionView.swift",
     ]
 
     func testTheFirstRunFollowsTheRules() throws {
@@ -57,6 +59,8 @@ final class FirstLaunchRulesTests: XCTestCase {
                        ["BluetoothAudioManager.swift", "LaunchPermissionManager.swift"])
         XCTAssertEqual(Self.files(in: files, containing: "MusicAuthorization.request()"),
                        ["AnimatedArtworkManager.swift", "LaunchPermissionManager.swift"])
+        XCTAssertEqual(Self.files(in: files, containing: "AEDeterminePermissionToAutomateTarget("),
+                       ["LaunchPermissionManager.swift"])
     }
 
     func testTheScannerCatchesTheOldFirstRun() throws {
@@ -148,6 +152,24 @@ final class FirstLaunchRulesTests: XCTestCase {
         )), ["Apple Music artwork asks for MusicKit without the gate"])
 
         XCTAssertEqual(Self.problems(in: planted(
+            "Kannu/managers/AppleNotesSyncManager.swift",
+            "        guard !isSyncing, mayTouchNotes else { return nil }\n",
+            "        guard !isSyncing else { return nil }\n"
+        )), ["Apple Notes sync runs AppleScript without the Notes gate"])
+
+        XCTAssertEqual(Self.problems(in: planted(
+            "Kannu/managers/AppleNotesSyncManager.swift",
+            "guard LaunchPermissionManager.mayTouch(.notesAutomation) else {",
+            "guard true else {"
+        )), ["Apple Notes sync runs AppleScript without the Notes gate"])
+
+        XCTAssertEqual(Self.problems(in: planted(
+            "Kannu/components/Onboarding/NotesSelectionView.swift",
+            "                onContinue(selection)\n",
+            "                Defaults[.enableAppleNotesSync] = true\n                onContinue(selection)\n"
+        )), ["the Notes step turns sync on (Automation dialog) before the Permissions step"])
+
+        XCTAssertEqual(Self.problems(in: planted(
             "Kannu/managers/ClipboardManager.swift",
             "static let clipboardDataDirectory: URL = AppSupportPaths.child(\"ClipboardData\")",
             "static let clipboardDataDirectory: URL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]"
@@ -207,6 +229,22 @@ final class FirstLaunchRulesTests: XCTestCase {
             if !(enclosingFunction(of: gate.marker, in: source)?.contains(gate.gate) ?? false) {
                 problems.append(gate.problem)
             }
+        }
+
+        // Every AppleScript Notes sync runs raises Notes' Automation dialog the first time: each entry
+        // point checks the gate, and the gate is `mayTouch(.notesAutomation)`.
+        let notesSync = sources["Kannu/managers/AppleNotesSyncManager.swift"] ?? ""
+        let gate = body(after: "private var mayTouchNotes: Bool {", in: notesSync) ?? ""
+        let entryPoints = ["func sync(localNotes:", "func pushNote(", "func deleteRemoteNote(noteId:", "func openInNotes("]
+        let ungated = entryPoints.filter { !(body(after: $0, in: notesSync)?.contains("mayTouchNotes") ?? false) }
+        if !gate.contains("guard LaunchPermissionManager.mayTouch(.notesAutomation) else {") || !ungated.isEmpty {
+            problems.append("Apple Notes sync runs AppleScript without the Notes gate")
+        }
+        // The Notes step only chooses; `OnboardingView` applies the choice at Finish.
+        let notesStep = sources["Kannu/components/Onboarding/NotesSelectionView.swift"] ?? ""
+        let notesView = notesStep.range(of: "struct NotesSelectionView").map { String(notesStep[$0.lowerBound...]) } ?? ""
+        if ["Defaults[", "NotesManager", "AppleNotesSyncManager"].contains(where: notesView.contains) {
+            problems.append("the Notes step turns sync on (Automation dialog) before the Permissions step")
         }
 
         // Finding Warp's database stats its container, which raises the same dialog as reading it.
