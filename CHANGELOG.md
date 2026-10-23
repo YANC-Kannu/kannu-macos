@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Scrolling the notes never closes or blurs the notch
+- **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
+- **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21
+- **Changes:**
+  - **A vertical scroll over a list or a note's text is that view's.** Scrolling down through notes
+    is the same trackpad gesture as swipe-up-to-close, and the only thing keeping them apart was a
+    hover token: the note editor never set one, the list's never came on under a pointer that had
+    not moved since "< Notes" or Done, and the notch's scroll monitor kept counting while it was on.
+    New `.ownsVerticalScroll()` (`VerticalScrollOwnership`) marks a view whose vertical scroll is
+    its own; `PanGesture`'s monitor checks the pointer against those views' live frames when each
+    event arrives and counts nothing over them. Applied to the Notes tab (list, editor, split view),
+    the Agents list, the timer tab's side column and the extension tab, which had no guard either.
+    The hover tokens stay as the second guard; the Notes tab now sets one at its root.
+  - **The scroll monitor starts each gesture from nothing.** It resets on `.began`/`.mayBegin` and
+    `.cancelled`, and ends a gesture under way even when the end lands outside the notch, which used
+    to leave the count set for the next gesture.
+  - **The close gesture's blur and dim no longer leak or stick.** The whole tab blurred (up to 8 pt)
+    and dimmed on every unguarded scroll; `handleCloseScrollGesture` now clears that on the end and
+    whenever its guard turns the gesture away, before the guard rather than after it.
+  - Swipe-to-close still works from the tab bar and from content that does not scroll.
+  - docs/REGRESSIONS.md entry 21 and a Danger-zones row; `NotchScrollOwnershipRulesTests` pins the
+    ownership on every tab scroller, the monitor's order and the blur reset, each against a planted
+    offender.
+
 ### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
 - **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
 - **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change

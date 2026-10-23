@@ -126,6 +126,7 @@ struct TimerSideColumn: View {
                         .offset(y: M.sidePagerFooterOffset)
                 }
             }
+            .ownsVerticalScroll()
             .onHover { hovering in
                 updateScrollSuppression(hovering)
             }
