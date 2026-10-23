@@ -102,6 +102,22 @@ enum TimerComposerMetrics {
         return (minor, parts - minor)
     }
 
+    /// The widths `GoldenRow` gives its views across `total`: one view, the whole width; two, the
+    /// golden split, the minor part first; more, the first the minor part and the rest sharing the
+    /// major part evenly. A width that is not finite (an HStack measuring its views) gives none: the
+    /// caller sizes the views by their own widths instead, never by NaN.
+    static func goldenWidths(across total: CGFloat, count: Int, spacing: CGFloat) -> [CGFloat]? {
+        guard total.isFinite else { return nil }
+        switch count {
+        case ..<1: return []
+        case 1: return [max(0, total)]
+        default:
+            let split = goldenSplit(total, spacing: spacing)
+            let rest = max(0, (split.major - spacing * CGFloat(count - 2)) / CGFloat(count - 1))
+            return [split.minor] + Array(repeating: rest, count: count - 1)
+        }
+    }
+
     /// Room the page leaves under itself, above the tab's bottom line.
     static let sideBottomInset: CGFloat = 4
     /// The "Tasks · Presets" labels, shown only when both pages exist. They are an overlay of the

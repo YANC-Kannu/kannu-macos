@@ -64,12 +64,29 @@ final class TaskFormWiringTests: XCTestCase {
                       "Save no longer applies the bell")
         XCTAssertTrue(try Self.body("private func save() {", in: form).contains("manager.applyEdits(draft, to: id)"),
                       "Save no longer goes through the shared edit")
-        let add = try Self.body("func addTask(from draft: TaskFormDraft)", in: manager)
-        let mute = try XCTUnwrap(add.range(of: "setReminderNotifies(false, for: id)"), "Add no longer applies a bell turned off")
-        let schedule = try XCTUnwrap(add.range(of: "setSchedule(reminder, for: id)"))
+        XCTAssertTrue(try Self.body("func addTask(from draft: TaskFormDraft)", in: manager).contains("insertTask(from: draft)"),
+                      "the notch's Add no longer goes through the add Brain shares")
+        let insert = try Self.body("func insertTask(from draft: TaskFormDraft)", in: manager)
+        let mute = try XCTUnwrap(insert.range(of: "setReminderNotifies(false, for: id)"), "Add no longer applies a bell turned off")
+        let schedule = try XCTUnwrap(insert.range(of: "setSchedule(reminder, for: id)"))
         XCTAssertLessThan(mute.lowerBound, schedule.lowerBound, "mute first, so a muted reminder is never sent and taken back")
         XCTAssertTrue(try Self.body("private func add(andStart: Bool) {", in: form).contains("manager.addTask(from: draft)"),
                       "Add no longer goes through the shared add")
+    }
+
+    /// Brain's New Task adds through `insertTask` alone (David, 2026-10-24): a task half-typed in the
+    /// notch stays kept, and the notch's Show local stays as the user left it.
+    func testBrainsNewTaskLeavesTheNotchsFormAlone() throws {
+        let insert = try Self.body("func insertTask(from draft: TaskFormDraft)", in: try Self.manager())
+        XCTAssertFalse(insert.contains("forgetFormDraft("), "Brain's add would discard what the notch's form holds")
+        XCTAssertFalse(insert.contains("showLocalTasks()"), "Brain's add would flip the notch's Show local")
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let sheet = try String(contentsOf: root.appendingPathComponent("Kannu/components/Settings/NewTaskSheet.swift"), encoding: .utf8)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
+        XCTAssertTrue(sheet.contains("manager.insertTask(from:"), "New Task no longer adds through insertTask")
+        XCTAssertFalse(sheet.contains("addTask(from:"), "New Task must not use the notch's add")
     }
 
     func testWhatWasTypedIsKeptWhileTheFormIsClosed() throws {

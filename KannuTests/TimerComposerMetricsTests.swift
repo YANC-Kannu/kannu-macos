@@ -107,6 +107,21 @@ final class TimerComposerMetricsTests: XCTestCase {
         XCTAssertEqual(M.goldenSplit(4, spacing: 8).major, 0)
     }
 
+    /// `GoldenRow`'s widths: the minor part first; one view takes it all; more share the major part;
+    /// and an infinite offer (an HStack measuring) gives none, never NaN.
+    func testGoldenWidthsNeverSplitAnInfiniteOffer() {
+        let split = M.goldenSplit(400, spacing: 8)
+        XCTAssertEqual(M.goldenWidths(across: 400, count: 2, spacing: 8), [split.minor, split.major])
+        XCTAssertEqual(M.goldenWidths(across: 400, count: 1, spacing: 8), [400])
+        XCTAssertEqual(M.goldenWidths(across: 400, count: 0, spacing: 8), [])
+        let three = M.goldenWidths(across: 400, count: 3, spacing: 8) ?? []
+        XCTAssertEqual(three.count, 3)
+        XCTAssertEqual(three[0], split.minor)
+        XCTAssertEqual(three[1], three[2])
+        XCTAssertNil(M.goldenWidths(across: .infinity, count: 2, spacing: 8))
+        XCTAssertGreaterThan(split.major, split.minor)
+    }
+
     func testTheSideColumnHeightsNeverGoNegative() {
         XCTAssertEqual(M.sidePageHeight(budget: 2, style: .manualWithPresets), 0)
         XCTAssertEqual(M.sideTaskRowsHeight(count: -1), 0)

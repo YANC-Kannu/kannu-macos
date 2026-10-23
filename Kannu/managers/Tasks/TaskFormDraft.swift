@@ -28,7 +28,8 @@ import Foundation
 ///
 /// Pure, in the logic target.
 struct TaskFormDraft: Equatable {
-    /// The estimate menu's choices, Brain's add row's too: 15m, 30m, 1h, 2h, 4h, 8h.
+    /// The chevron's presets, in the notch's task form and Brain's typed estimate (New Task, a
+    /// task's Time row, Set Estimate): 15m, 30m, 1h, 2h, 4h, 8h.
     static let estimateChoices = [15, 30, 60, 120, 240, 480].map { $0 * 60 }
 
     enum Edit: Equatable {
@@ -209,7 +210,7 @@ struct TaskFormDraft: Equatable {
     }
 
     /// The menu's choices with the current estimate among them, in order, when it is none of them
-    /// (one set in Brain's Custom sheet), so the menu can show it as chosen.
+    /// (a typed one, such as 45m), so the menu can show it as chosen.
     var estimateMenuChoices: [Int] {
         guard let estimateSeconds, estimateSeconds > 0, !Self.estimateChoices.contains(estimateSeconds) else {
             return Self.estimateChoices
@@ -252,6 +253,14 @@ struct TaskFormDraft: Equatable {
     /// Where a new reminder starts: the next whole hour.
     static func defaultReminder(now: Date, calendar: Calendar) -> Date {
         calendar.dateInterval(of: .hour, for: now)?.end ?? now.addingTimeInterval(3600)
+    }
+
+    /// A reminder picked that has passed since moves to the next whole hour, as a fresh "Add a
+    /// reminder" would, so Add never saves one that can no longer notify. `keeping` is a reminder
+    /// left as it is, overdue or not: an edit's own, unchanged.
+    mutating func movePassedReminder(now: Date, calendar: Calendar, keeping kept: Date? = nil) {
+        guard let picked = reminder, picked <= now, picked != kept else { return }
+        reminder = Self.defaultReminder(now: now, calendar: calendar)
     }
 }
 
@@ -297,9 +306,7 @@ struct KeptTaskFormDrafts: Equatable {
             guard let baseline, entry.baseline == baseline else { return nil }
         }
         var draft = entry.draft
-        if let reminder = draft.reminder, reminder <= now, id == nil || reminder != baseline?.reminder {
-            draft.reminder = TaskFormDraft.defaultReminder(now: now, calendar: calendar)
-        }
+        draft.movePassedReminder(now: now, calendar: calendar, keeping: id == nil ? nil : baseline?.reminder)
         return draft
     }
 
