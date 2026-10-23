@@ -4,6 +4,39 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - A clipboard note waits for Done, and the notes list keeps its order
+- **Developer label:** "create from clipboard shouldnt auto save unless clicked on save … also the order keeps on changin dynamically"
+- **Agent label:** Claude Code (Opus 5.5) — `NotesManager` owns every note write; clipboard drafts; no-op saves; Apple Notes push queue, read-back dates and the time-zone fix
+- **Changes:**
+  - **A note made from the clipboard is a draft.** The clipboard button and Cmd+V in the list open
+    the editor without autosave; Done saves it, and "< Notes" or the notch closing drops it. Notes
+    made with "+" and edits to saved notes autosave as before.
+  - **Opening a note no longer moves it to the top.** Filling the editor fired autosave, which
+    stamped the note's modification date with nothing changed. `NotesManager.save` now compares
+    with the stored note and writes nothing — no date, no image file, no Apple Notes push — when
+    nothing changed. A note left with an empty title keeps "Untitled Note" rather than losing it on
+    the next autosave.
+  - **Apple Notes dates are read correctly.** The scripts subtracted a "1970" date built from
+    `current date`, which counts from local midnight: every Apple note read 5 h 30 min newer than it
+    was here (the zone's offset), rounded to ten seconds. So every sync took Notes' copy over
+    Kannu's and re-dated the note, reshuffling the list. Dates are now read as calendar fields in
+    the Mac's time zone (`AppleNotesMergePolicy.date(fromStamp:)`); a note already carrying a
+    future date from the old reading takes Notes' correct one on the next sync.
+  - **A push read back is not a remote edit.** `NoteItem.appleNotesSyncedAt` keeps Notes'
+    modification date after each push or pull, and a side counts as changed only once its date
+    passes it (`AppleNotesMergePolicy.decide`). Notes' `plaintext` name line is no longer copied
+    into the note's text.
+  - **One Apple note per Kannu note.** Every sync, push and delete waits for the one before it, and
+    a created note's id is remembered at once, so autosave's second push updates instead of making
+    a duplicate, and a note deleted while its first push runs is deleted in Notes too.
+  - **Edits made during a sync survive it.** The sync's result is applied to the notes as they are
+    when it finishes (`AppleNotesMergePolicy.reconcile`), not to the snapshot it started from.
+  - **Cmd+V in the editor pastes at the cursor**, in the title or the text, instead of appending
+    to the end of the text.
+  - The list's thumbnails are read from disk once, off the main thread, instead of on every redraw.
+  - `AppleNotesMergePolicyTests` covers the decisions, the stamp and the reconcile; the merge policy
+    joins the test target's Sources phase. The unused `requestSync` is gone.
+
 ### 2026-10-23 - Scrolling the notes never closes or blurs the notch
 - **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
 - **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21
