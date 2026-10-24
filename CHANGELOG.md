@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - The close-gesture rule checks that the guard clears the blur
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's nitpick on #128 fixed before merging
+- **Changes:**
+  - `NotchScrollOwnershipRulesTests.closeGestureProblems` requires `gestureProgress = .zero` inside the close
+    guard's `else`, before its `return`, not only the guard; a planted offender keeps the guard and drops the
+    reset (CodeRabbit's nitpick on #128).
+
 ### 2026-10-23 - Scrolling the notes never closes or blurs the notch
 - **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
 - **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21

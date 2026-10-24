@@ -155,6 +155,10 @@ final class NotchScrollOwnershipRulesTests: XCTestCase {
         let old = good.replacingOccurrences(of: "guard phase != .ended, !vm.isScrollGestureActive else {\n        gestureProgress = .zero\n        return\n    }",
                                             with: "guard !vm.isScrollGestureActive else { return }")
         XCTAssertEqual(Self.closeGestureProblems(in: old).count, 1)
+        // The guard kept, its reset gone.
+        let noClear = good.replacingOccurrences(of: "        gestureProgress = .zero\n", with: "")
+        XCTAssertNotEqual(noClear, good, "the plant did not take")
+        XCTAssertEqual(Self.closeGestureProblems(in: noClear).count, 1)
     }
 
     // MARK: - Scanners
@@ -219,9 +223,13 @@ final class NotchScrollOwnershipRulesTests: XCTestCase {
 
     private static func closeGestureProblems(in code: String) -> [String] {
         guard let handle = body(of: "handleCloseScrollGesture", in: code) else { return ["handleCloseScrollGesture not found"] }
-        return handle.contains("guard phase != .ended, !vm.isScrollGestureActive else {")
-            ? []
-            : ["the close gesture's end and guard do not clear its blur"]
+        // The guard, and in its else the blur cleared before the return: a guard that only returns
+        // leaves the notch blurred at the gesture's end.
+        guard let guardLine = handle.range(of: "guard phase != .ended, !vm.isScrollGestureActive else {"),
+              let exit = handle.range(of: "return", range: guardLine.upperBound..<handle.endIndex),
+              handle.range(of: "gestureProgress = .zero", range: guardLine.upperBound..<exit.lowerBound) != nil
+        else { return ["the close gesture's end and guard do not clear its blur"] }
+        return []
     }
 
     /// The body of the first `func name(` through its matching brace.
