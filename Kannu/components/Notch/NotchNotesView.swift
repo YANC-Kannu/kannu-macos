@@ -1084,6 +1084,7 @@ struct NoteRow: View {
 }
 
 struct NoteEditorView: View {
+    @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchFill) private var notchFill
     @Environment(\.notchForeground) private var notchForeground
     @Environment(\.colorScheme) private var colorScheme
@@ -1108,6 +1109,8 @@ struct NoteEditorView: View {
     /// first, as the list row's does.
     let deletesInAppleNotes: Bool
     @State private var confirmDelete = false
+    /// Holds the notch open while the delete confirmation shows.
+    @State private var autoCloseToken = UUID()
 
     init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false) {
         self._title = title
@@ -1164,12 +1167,6 @@ struct NoteEditorView: View {
                     .hoverTooltip(String(localized: "Delete Note"), edge: .below)
                     .accessibilityLabel(String(localized: "Delete Note"))
                     .padding(.trailing, 12)
-                    .alert("Delete This Note?", isPresented: $confirmDelete) {
-                        Button("Delete", role: .destructive, action: onDelete)
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
-                    }
                 }
 
                 Button(action: onSave) {
@@ -1340,5 +1337,16 @@ struct NoteEditorView: View {
                 isContentFocused = true
             }
         }
+        // On the editor, not on its trash button, and the notch stays open while it asks.
+        .alert("Delete This Note?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
+        }
+        .onChange(of: confirmDelete) { _, isShowing in
+            vm.setAutoCloseSuppression(isShowing, token: autoCloseToken)
+        }
+        .onDisappear { vm.setAutoCloseSuppression(false, token: autoCloseToken) }
     }
 }
