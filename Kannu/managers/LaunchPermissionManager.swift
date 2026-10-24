@@ -57,6 +57,7 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     /// relaunch), so a denied one shows Not allowed rather than Allowed.
     private var probesInFlight: Set<LaunchPermission> = []
     private var automationStatus: OSStatus?
+    private var notesAutomationStatus: OSStatus?
     private var cancellables = Set<AnyCancellable>()
 
     private override init() {
@@ -96,7 +97,7 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
         case .accessibility: return AXIsProcessTrusted()
         case .bluetooth: return CBManager.authorization != .notDetermined
         case .location: return CLLocationManager().authorizationStatus != .notDetermined
-        case .downloads, .musicAutomation, .warp: return false
+        case .downloads, .musicAutomation, .notesAutomation, .warp: return false
         }
     }
 
@@ -179,6 +180,18 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
                     }
                 }
             }
+        case .notesAutomation:
+            // `AEDeterminePermissionToAutomateTarget` answers procNotFound for an app that is not
+            // running and asks nothing, so Notes is opened first, hidden and in the background.
+            Self.openHidden(bundleID: Self.notesBundleID) {
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let status = Self.automationPermission(bundleID: Self.notesBundleID, ask: true)
+                    DispatchQueue.main.async {
+                        self.notesAutomationStatus = status
+                        self.finishRequest(.notesAutomation)
+                    }
+                }
+            }
         case .warp:
             let database = WarpAgentStore.databaseURL
             DispatchQueue.global(qos: .userInitiated).async {
@@ -202,7 +215,7 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
         case .bluetooth: anchor = "Privacy_Bluetooth"
         case .downloads, .warp: anchor = "Privacy_FilesAndFolders"
         case .location: anchor = "Privacy_LocationServices"
-        case .musicAutomation: anchor = "Privacy_Automation"
+        case .musicAutomation, .notesAutomation: anchor = "Privacy_Automation"
         }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)") {
             NSWorkspace.shared.open(url)
@@ -284,6 +297,11 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
             if automationStatus == OSStatus(errAEEventNotPermitted) { return .notAllowed }
             if automationStatus == OSStatus(procNotFound) { return .askedWhenAppOpens }
             return .allowed
+        case .notesAutomation:
+            guard answer == .asked else { return .notAsked }
+            if notesAutomationStatus == OSStatus(errAEEventNotPermitted) { return .notAllowed }
+            if notesAutomationStatus == OSStatus(procNotFound) { return .askedWhenAppOpens }
+            return .allowed
         }
     }
 
@@ -291,14 +309,18 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
 
     /// The rows for this setup, from Brain's settings as they stand (after onboarding's profile
     /// choice has applied its own).
-    static func rows(musicSource: MediaControllerType) -> [LaunchPermission] {
+    static func rows(
+        musicSource: MediaControllerType,
+        appleNotesSync: Bool = Defaults[.enableNotes] && Defaults[.enableAppleNotesSync]
+    ) -> [LaunchPermission] {
         LaunchPermissionPolicy.rows(for: LaunchPermissionPolicy.Features(
             systemHUD: Defaults[.enableSystemHUD] || Defaults[.enableCustomOSD]
                 || Defaults[.enableVerticalHUD] || Defaults[.enableCircularHUD],
             downloads: Defaults[.enableDownloadListener],
             lockScreenWeather: Defaults[.enableLockScreenWeatherWidget],
             controlsMusicApp: automationBundleID(for: musicSource) != nil,
-            warpInstalled: isWarpInstalled
+            warpInstalled: isWarpInstalled,
+            appleNotesSync: appleNotesSync
         ))
     }
 
@@ -311,6 +333,25 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     }
 
     // MARK: - Automation
+
+    nonisolated static let notesBundleID = "com.apple.Notes"
+
+    /// Opens the app without activating it or showing a window, then runs `completion` on the main
+    /// queue (also when it cannot be opened, so the request still finishes).
+    private static func openHidden(bundleID: String, completion: @escaping @MainActor () -> Void) {
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty,
+              let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else {
+            completion()
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.hides = true
+        configuration.addsToRecentItems = false
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, _ in
+            DispatchQueue.main.async { completion() }
+        }
+    }
 
     nonisolated static func automationBundleID(for source: MediaControllerType) -> String? {
         switch source {

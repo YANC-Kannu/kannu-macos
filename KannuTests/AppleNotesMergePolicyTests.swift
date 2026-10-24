@@ -61,6 +61,26 @@ final class AppleNotesMergePolicyTests: XCTestCase {
         XCTAssertNil(AppleNotesMergePolicy.date(fromStamp: ""))
     }
 
+    // MARK: - madeInAppleNotes
+
+    func testKannusOwnEvidenceAlwaysFreesANote() {
+        // Held read-only by mistake (the first folder check matched nothing): the next sync frees it.
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: false, inKannuFolder: true))
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: true, inKannuFolder: false))
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: nil, hasKannuId: false, inKannuFolder: true))
+    }
+
+    func testWithoutEvidenceADecidedNoteKeepsItsAnswer() {
+        // A Kannu note moved out of the folder in Notes, its tag gone, stays editable.
+        XCTAssertFalse(AppleNotesMergePolicy.madeInAppleNotes(stored: false, hasKannuId: false, inKannuFolder: false))
+        XCTAssertTrue(AppleNotesMergePolicy.madeInAppleNotes(stored: true, hasKannuId: false, inKannuFolder: false))
+    }
+
+    func testAnUndecidedNoteWithoutEvidenceIsReadOnly() {
+        // Editing a note Kannu did not make rewrites it as plain text, so the safe guess is read-only.
+        XCTAssertTrue(AppleNotesMergePolicy.madeInAppleNotes(stored: nil, hasKannuId: false, inKannuFolder: false))
+    }
+
     // MARK: - content(fromPlaintext:)
 
     func testTheNameLineIsNotContent() {
@@ -79,7 +99,8 @@ final class AppleNotesMergePolicyTests: XCTestCase {
         var remoteId: String?
     }
 
-    private func reconcile(current: [Note], merged: [Note], snapshot: [Note]) -> [Note] {
+    private func reconcile(current: [Note], merged: [Note], snapshot: [Note],
+                           dropMissing: @escaping (Note) -> Bool = { _ in false }) -> [Note] {
         AppleNotesMergePolicy.reconcile(
             current: current,
             merged: merged,
@@ -90,7 +111,8 @@ final class AppleNotesMergePolicyTests: XCTestCase {
                 var kept = now
                 kept.remoteId = kept.remoteId ?? synced.remoteId
                 return kept
-            }
+            },
+            dropMissing: dropMissing
         )
     }
 
@@ -126,5 +148,22 @@ final class AppleNotesMergePolicyTests: XCTestCase {
         edited.text = "edited meanwhile"
         edited.modified = at(5)
         XCTAssertEqual(reconcile(current: [edited], merged: [], snapshot: [dropped]), [edited])
+    }
+
+    /// Folder-only sync: a note made in Notes outside the folder leaves even when edited during the
+    /// sync (`dropMissing`); every other note keeps the edit-survives rule, and a note the sync
+    /// returned is never dropped.
+    func testDropMissingOverridesTheEditOnlyForTheNotesItNames() {
+        var outside = Note(id: UUID(), text: "made in Notes", modified: at(0), remoteId: "r")
+        let before = outside
+        outside.modified = at(5)
+        var mine = Note(id: UUID(), text: "made in Kannu", modified: at(0), remoteId: "k")
+        let mineBefore = mine
+        mine.modified = at(5)
+        let returned = Note(id: UUID(), text: "in the folder", modified: at(0), remoteId: "f")
+        let result = reconcile(current: [outside, mine, returned], merged: [returned],
+                               snapshot: [before, mineBefore, returned],
+                               dropMissing: { $0.remoteId == "r" || $0.remoteId == "f" })
+        XCTAssertEqual(result, [returned, mine])
     }
 }

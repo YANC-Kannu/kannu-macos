@@ -36,9 +36,9 @@ final class LaunchPermissionPolicyTests: XCTestCase {
 
     func testRowsFollowTheChosenFeatures() {
         let everything = LaunchPermissionPolicy.Features(systemHUD: true, downloads: true, lockScreenWeather: true,
-                                                         controlsMusicApp: true, warpInstalled: true)
+                                                         controlsMusicApp: true, warpInstalled: true, appleNotesSync: true)
         XCTAssertEqual(LaunchPermissionPolicy.rows(for: everything),
-                       [.accessibility, .bluetooth, .downloads, .location, .musicAutomation, .warp])
+                       [.accessibility, .bluetooth, .downloads, .location, .musicAutomation, .notesAutomation, .warp])
 
         let nothing = LaunchPermissionPolicy.Features(systemHUD: false, downloads: false, lockScreenWeather: false,
                                                       controlsMusicApp: false, warpInstalled: false)
@@ -48,8 +48,19 @@ final class LaunchPermissionPolicyTests: XCTestCase {
         var nowPlayingDefaults = everything
         nowPlayingDefaults.controlsMusicApp = false
         nowPlayingDefaults.warpInstalled = false
+        nowPlayingDefaults.appleNotesSync = false
         XCTAssertEqual(LaunchPermissionPolicy.rows(for: nowPlayingDefaults),
                        [.accessibility, .bluetooth, .downloads, .location])
+    }
+
+    /// Notes sync is off unless the Notes step (or Brain) turns it on, and only then is "Control
+    /// Notes" a row: a feature that is off never touches its permission.
+    func testTheNotesRowFollowsTheNotesChoice() {
+        var features = LaunchPermissionPolicy.Features(systemHUD: false, downloads: false, lockScreenWeather: false,
+                                                       controlsMusicApp: false, warpInstalled: false)
+        XCTAssertEqual(LaunchPermissionPolicy.rows(for: features), [.bluetooth], "off by default")
+        features.appleNotesSync = true
+        XCTAssertEqual(LaunchPermissionPolicy.rows(for: features), [.bluetooth, .notesAutomation])
     }
 
     func testOnboardingProgress() {

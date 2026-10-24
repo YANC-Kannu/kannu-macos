@@ -119,7 +119,13 @@ enum DebugSnapshots {
             boards.append(("onboardingPermissions", AnyView(
                 PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
                                     onLaunchAtLoginChoice: { _ in }, onContinue: {})
-                    .frame(height: 980)
+                    .frame(height: 1080)
+            )))
+        }
+        if request.tabs == nil || request.tabs?.contains("onboardingNotes") == true {
+            boards.append(("onboardingNotes", AnyView(
+                NotesSelectionView(onContinue: { _ in })
+                    .frame(width: 400, height: 600)
             )))
         }
         for (name, view) in boards {

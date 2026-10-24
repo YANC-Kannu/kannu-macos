@@ -1044,7 +1044,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, and to bring an agent's Terminal or iTerm2 tab to the front when you click its chat.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, to bring an agent's Terminal or iTerm2 tab to the front when you click its chat, and to keep your notes in sync with Apple Notes when you turn that on.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Kannu needs Bluetooth access to detect when audio devices connect and display their battery status in the HUD.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Kannu needs access to save and read shelf dragged files.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "Kannu needs access to read files in the downloads folder.";
@@ -1114,7 +1114,7 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
-				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, and to bring an agent's Terminal or iTerm2 tab to the front when you click its chat.";
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, to bring an agent's Terminal or iTerm2 tab to the front when you click its chat, and to keep your notes in sync with Apple Notes when you turn that on.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Kannu needs Bluetooth access to detect when audio devices connect and display their battery status in the HUD.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Kannu needs access to save and read shelf dragged files.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "Kannu needs access to read files in the downloads folder.";

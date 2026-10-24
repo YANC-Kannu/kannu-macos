@@ -813,10 +813,13 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     /// Notes' modification date for this note as last read back, after a push or a pull: each side
     /// counts as changed only once its date passes it (`AppleNotesMergePolicy.decide`).
     var appleNotesSyncedAt: Date? = nil
+    /// Made in Notes, not in Kannu (`AppleNotesMergePolicy.madeInAppleNotes`). Nil until a sync
+    /// decides; a note made in the notch is `false` from the start.
+    var madeInAppleNotes: Bool? = nil
     
     // Internal property for migration
     private enum CodingKeys: String, CodingKey {
-        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId, appleNotesSyncedAt
+        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId, appleNotesSyncedAt, madeInAppleNotes
     }
     
     init(
@@ -829,7 +832,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         isPinned: Bool = false,
         imageFileName: String? = nil,
         appleNotesId: String? = nil,
-        appleNotesSyncedAt: Date? = nil
+        appleNotesSyncedAt: Date? = nil,
+        madeInAppleNotes: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -841,6 +845,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         self.imageFileName = imageFileName
         self.appleNotesId = appleNotesId
         self.appleNotesSyncedAt = appleNotesSyncedAt
+        self.madeInAppleNotes = madeInAppleNotes
     }
     
     init(from decoder: Decoder) throws {
@@ -854,6 +859,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         isPinned = try container.decode(Bool.self, forKey: .isPinned)
         appleNotesId = try container.decodeIfPresent(String.self, forKey: .appleNotesId)
         appleNotesSyncedAt = try container.decodeIfPresent(Date.self, forKey: .appleNotesSyncedAt)
+        madeInAppleNotes = try container.decodeIfPresent(Bool.self, forKey: .madeInAppleNotes)
         
         // Migration logic: if imageData exists but imageFileName doesn't, save it to disk
         if let data = try container.decodeIfPresent(Data.self, forKey: .imageData) {
@@ -878,6 +884,16 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         try container.encode(imageFileName, forKey: .imageFileName)
         try container.encodeIfPresent(appleNotesId, forKey: .appleNotesId)
         try container.encodeIfPresent(appleNotesSyncedAt, forKey: .appleNotesSyncedAt)
+        try container.encodeIfPresent(madeInAppleNotes, forKey: .madeInAppleNotes)
+    }
+
+    /// Shown, never edited: a note made in Notes while sync reads the whole account. Kannu would
+    /// rewrite its body as plain text (losing formatting and attachments), so it is edited in Notes.
+    /// Deleting it asks first, since it goes to Recently Deleted in Notes too; Clear Notes leaves it.
+    /// A linked note not yet decided (`madeInAppleNotes` nil, an install from before the field, until
+    /// its first sync) counts as made in Notes: only Kannu's own notes are written back.
+    func isReadOnlyMirror(syncEnabled: Bool, scope: AppleNotesSyncScope) -> Bool {
+        syncEnabled && scope == .wholeAccount && madeInAppleNotes != false && appleNotesId != nil
     }
     
     static let colors: [Color] = [.yellow, .blue, .red, .green, .purple, .orange]
@@ -1555,6 +1571,10 @@ extension Defaults.Keys {
     static let savedNotes = Key<[NoteItem]>("savedNotes", default: [])
     static let enableAppleNotesSync = Key<Bool>("enableAppleNotesSync", default: false)
     static let appleNotesLastSyncDate = Key<Date?>("appleNotesLastSyncDate", default: nil)
+    /// Which Apple Notes sync reads: the Kannu folder unless the user chose the whole account.
+    static let appleNotesSyncScope = Key<AppleNotesSyncScope>("appleNotesSyncScope", default: .kannuFolder)
+    /// Set once the scope has been decided for this install (`NotesManager.migrateSyncScopeIfNeeded`).
+    static let appleNotesSyncScopeMigrated = Key<Bool>("appleNotesSyncScopeMigrated", default: false)
 
     // MARK: Tasks Feature
     // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),

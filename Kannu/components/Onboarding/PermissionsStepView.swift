@@ -163,7 +163,7 @@ struct LaunchPermissionRow: View {
             Button("Open System Settings") { permissions.openSystemSettings(for: permission) }
                 .buttonStyle(.bordered)
         case .askedWhenAppOpens:
-            Text("macOS asks when \(musicSource.localizedName) opens")
+            Text("macOS asks when \(permission == .notesAutomation ? String(localized: "Notes") : musicSource.localizedName) opens")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -176,6 +176,7 @@ struct LaunchPermissionRow: View {
         case .downloads: return "arrow.down.circle"
         case .location: return "location"
         case .musicAutomation: return "music.note"
+        case .notesAutomation: return "note.text"
         case .warp: return "terminal"
         }
     }
@@ -187,6 +188,7 @@ struct LaunchPermissionRow: View {
         case .downloads: return String(localized: "Downloads folder")
         case .location: return String(localized: "Location")
         case .musicAutomation: return String(localized: "Control \(musicSource.localizedName)")
+        case .notesAutomation: return String(localized: "Control Notes")
         case .warp: return String(localized: "Warp's agent sessions")
         }
     }
@@ -203,6 +205,8 @@ struct LaunchPermissionRow: View {
             return String(localized: "Shows your local weather on the lock screen.")
         case .musicAutomation:
             return String(localized: "Lets the notch play, pause and skip in \(musicSource.localizedName).")
+        case .notesAutomation:
+            return String(localized: "Keeps the notch's notes in sync with Apple Notes.")
         case .warp:
             return String(localized: "Lets the agent light follow agents running in Warp.")
         }

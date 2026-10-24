@@ -28,6 +28,7 @@ struct NotchNotesView: View {
     @Default(.clipboardDisplayMode) var clipboardDisplayMode
     @Default(.enableClipboardManager) var enableClipboardManager
     @Default(.enableAppleNotesSync) var enableAppleNotesSync
+    @Default(.appleNotesSyncScope) var appleNotesSyncScope
     
     @State private var selectedNoteId: UUID?
     @State private var isEditingNewNote = false
@@ -72,7 +73,9 @@ struct NotchNotesView: View {
                             colorIndex: $editorColorIndex,
                             onSave: saveNote,
                             onCancel: cancelEdit,
-                            isNew: isEditingNewNote
+                            isNew: isEditingNewNote,
+                            isReadOnly: editorIsReadOnly,
+                            onOpenInNotes: openEditorNoteInNotes
                         )
                         .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
                     } else {
@@ -159,7 +162,19 @@ struct NotchNotesView: View {
 
     private var isEditing: Bool { isEditingNewNote || selectedNoteId != nil }
 
+    /// The open note was made in Notes and sync reads the whole account: shown, not edited.
+    private var editorIsReadOnly: Bool {
+        guard let id = selectedNoteId, let note = savedNotes.first(where: { $0.id == id }) else { return false }
+        return note.isReadOnlyMirror(syncEnabled: enableAppleNotesSync, scope: appleNotesSyncScope)
+    }
+
+    private func openEditorNoteInNotes() {
+        guard let id = selectedNoteId, let note = savedNotes.first(where: { $0.id == id }) else { return }
+        NotesManager.shared.openInNotes(note)
+    }
+
     private func handlePaste() {
+        guard !editorIsReadOnly else { return }
         let pasteboard = NSPasteboard.general
         
         // Check for file URLs first (higher quality source than icons)
@@ -548,6 +563,7 @@ struct NoteListView: View {
     @Default(.enableNoteColorFiltering) var enableNoteColorFiltering
     @Default(.enableCreateFromClipboard) var enableCreateFromClipboard
     @Default(.enableAppleNotesSync) var enableAppleNotesSync
+    @Default(.appleNotesSyncScope) var appleNotesSyncScope
     
     @State private var searchText = ""
     @State private var selectedColorFilter: Int? = nil
@@ -785,7 +801,8 @@ struct NoteListView: View {
                                     note: note, 
                                     onDelete: { onDeleteItem(note) },
                                     onTogglePin: { onTogglePin(note) },
-                                    isCompact: useGrid
+                                    isCompact: useGrid,
+                                    deletesInAppleNotes: note.isReadOnlyMirror(syncEnabled: enableAppleNotesSync, scope: appleNotesSyncScope)
                                 )
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -822,7 +839,7 @@ struct NoteListView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently removes every saved note and its attachments.")
+            Text(clearNotesMessage)
         }
         .onChange(of: showClearNotesAlert) { _, isShowing in
             vm.setAutoCloseSuppression(isShowing, token: autoCloseToken)
@@ -834,14 +851,35 @@ struct NoteListView: View {
         isSuppressing = hovering
         vm.setScrollGestureSuppression(hovering, token: suppressionToken)
     }
+
+    /// Says what Clear Notes reaches: synced notes go to Notes' Recently Deleted too, and notes made in
+    /// Notes (shown read-only) stay.
+    private var clearNotesMessage: String {
+        let counts = NotesManager.shared.clearAllCounts()
+        var message = String(localized: "This permanently removes \(counts.removed) notes and their attachments.")
+        if counts.inAppleNotes > 0 {
+            message += " " + String(localized: "\(counts.inAppleNotes) of them also move to Recently Deleted in Apple Notes.")
+        }
+        if counts.removed < notes.count {
+            message += " " + String(localized: "Notes made in Apple Notes stay.")
+        }
+        return message
+    }
 }
 
 struct NoteRow: View {
+    @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchForeground) private var notchForeground
     let note: NoteItem
     let onDelete: () -> Void
     let onTogglePin: () -> Void
     let isCompact: Bool
+    /// A note made in Notes and shown read-only: deleting it here sends it to Recently Deleted in
+    /// Notes as well, so the trash asks first.
+    var deletesInAppleNotes = false
+    @State private var confirmDelete = false
+    /// Holds the notch open while the delete confirmation shows.
+    @State private var autoCloseToken = UUID()
     @State private var isHovered = false
     @State private var isCopied = false
     /// Read from disk once per image, off the main thread: reading it in `body` did it on every
@@ -955,7 +993,9 @@ struct NoteRow: View {
                         .hoverTooltip(String(localized: "Copy"), edge: .below)
                         .accessibilityLabel(String(localized: "Copy"))
 
-                        Button(action: onDelete) {
+                        Button(action: {
+                            if deletesInAppleNotes { confirmDelete = true } else { onDelete() }
+                        }) {
                             Image(systemName: "trash")
                                 .font(.system(size: isCompact ? 9 : 11))
                                 .foregroundStyle(.red)
@@ -1013,6 +1053,18 @@ struct NoteRow: View {
             let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
             thumbnail = data.flatMap { NSImage(data: $0) }
         }
+        // On the row, not on the hover-only trash button: the pointer leaving the row removed the
+        // button, and its alert with it. The notch stays open while the alert asks.
+        .alert("Delete This Note?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
+        }
+        .onChange(of: confirmDelete) { _, isShowing in
+            vm.setAutoCloseSuppression(isShowing, token: autoCloseToken)
+        }
+        .onDisappear { vm.setAutoCloseSuppression(false, token: autoCloseToken) }
     }
     
     private func timeAgoString(from date: Date) -> String {
@@ -1039,8 +1091,12 @@ struct NoteEditorView: View {
     let onSave: () -> Void
     let cancelAction: () -> Void
     let isNew: Bool
+    /// A note made in Notes, shown while sync reads the whole account: its text is shown, not
+    /// edited, and "Open in Notes" takes the user to where it is (`NoteItem.isReadOnlyMirror`).
+    let isReadOnly: Bool
+    let onOpenInNotes: () -> Void
     
-    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool) {
+    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}) {
         self._title = title
         self._content = content
         self._imageData = imageData
@@ -1048,6 +1104,8 @@ struct NoteEditorView: View {
         self.onSave = onSave
         self.cancelAction = onCancel
         self.isNew = isNew
+        self.isReadOnly = isReadOnly
+        self.onOpenInNotes = onOpenInNotes
     }
 
     @FocusState private var isContentFocused: Bool
@@ -1067,6 +1125,17 @@ struct NoteEditorView: View {
                 .buttonStyle(PlainButtonStyle())
                 
                 Spacer()
+
+                if isReadOnly {
+                    Button(action: onOpenInNotes) {
+                        Label("Open in Notes", systemImage: "arrow.up.forward.app")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundStyle(editorForeground.opacity(0.8))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .hoverTooltip(String(localized: "Edit this note in Notes"), edge: .below)
+                    .padding(.trailing, 8)
+                }
                 
                 Button(action: onSave) {
                     Text("Done")
@@ -1079,9 +1148,16 @@ struct NoteEditorView: View {
             
             // Title & Color Picker Row
             HStack(alignment: .center, spacing: 12) {
-                TextField("Title", text: $title)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .textFieldStyle(.plain)
+                if isReadOnly {
+                    Text(title)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+                } else {
+                    TextField("Title", text: $title)
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .textFieldStyle(.plain)
+                }
                 
                 Spacer()
                 
@@ -1128,26 +1204,41 @@ struct NoteEditorView: View {
             
             // Content Input
             ZStack(alignment: .topLeading) {
-                if content.isEmpty { // Placeholder
-                    Text("Start typing...")
-                        .font(.system(size: 13, design: .rounded)) // Reduced from 14
-                        .foregroundStyle(.secondary.opacity(0.5))
-                        .padding(.top, 10)
-                        .padding(.leading, 12)
-                        .allowsHitTesting(false)
-                }
-                
-                TextEditor(text: $content)
-                    .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(editorForeground)
-                    .lineSpacing(4)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .padding(.bottom, 20)
-                    .padding(.trailing, imageData != nil ? 75 : 0) // Reduced from 100
-                    .focused($isContentFocused)
+                if isReadOnly {
+                    ScrollView {
+                        Text(content)
+                            .font(.system(size: 13, design: .rounded))
+                            .foregroundStyle(editorForeground)
+                            .lineSpacing(4)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(13)
+                            .padding(.bottom, 20)
+                    }
                     .frame(maxHeight: .infinity)
                     .background(editorForeground.opacity(0.05))
+                } else {
+                    if content.isEmpty { // Placeholder
+                        Text("Start typing...")
+                            .font(.system(size: 13, design: .rounded)) // Reduced from 14
+                            .foregroundStyle(.secondary.opacity(0.5))
+                            .padding(.top, 10)
+                            .padding(.leading, 12)
+                            .allowsHitTesting(false)
+                    }
+                
+                    TextEditor(text: $content)
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(editorForeground)
+                        .lineSpacing(4)
+                        .scrollContentBackground(.hidden)
+                        .padding(8)
+                        .padding(.bottom, 20)
+                        .padding(.trailing, imageData != nil ? 75 : 0) // Reduced from 100
+                        .focused($isContentFocused)
+                        .frame(maxHeight: .infinity)
+                        .background(editorForeground.opacity(0.05))
+                }
                 
                 // Image Overlay in Bottom Right
                 if let data = imageData, let nsImage = NSImage(data: data) {
@@ -1164,19 +1255,21 @@ struct NoteEditorView: View {
                                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(editorForeground.opacity(0.2), lineWidth: 1))
                                     .shadow(color: .black.opacity(0.5), radius: 5, x: 0, y: 2)
                                 
-                                Button(action: {
-                                    withAnimation {
-                                        imageData = nil
+                                if !isReadOnly {
+                                    Button(action: {
+                                        withAnimation {
+                                            imageData = nil
+                                        }
+                                    }) {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.white.opacity(0.9), .black.opacity(0.6))
                                     }
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.white.opacity(0.9), .black.opacity(0.6))
+                                    .buttonStyle(.plain)
+                                    .offset(x: 4, y: -4) // Move out slightly for better accessibility
+                                    .hoverTooltip(String(localized: "Remove Image"), edge: .above)
+                                    .accessibilityLabel(String(localized: "Remove Image"))
                                 }
-                                .buttonStyle(.plain)
-                                .offset(x: 4, y: -4) // Move out slightly for better accessibility
-                                .hoverTooltip(String(localized: "Remove Image"), edge: .above)
-                                .accessibilityLabel(String(localized: "Remove Image"))
                             }
                             .padding(12)
                             .padding(.bottom, 20) // Moved higher as requested
@@ -1208,7 +1301,7 @@ struct NoteEditorView: View {
         .environment(\.colorScheme, notchFill == nil ? .dark : colorScheme)
         .environment(\.notchForeground, editorForeground)
         .onAppear {
-            if isNew {
+            if isNew && !isReadOnly {
                 isContentFocused = true
             }
         }

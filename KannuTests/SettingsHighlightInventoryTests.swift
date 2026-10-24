@@ -87,12 +87,14 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // own entry lands on its row: Apple Reminders, GitHub, Linear, Todoist.
         // 2026-10-22: General gains Permissions (one entry, one row): what onboarding's
         // Permissions step put off is allowed there.
-        // 2026-10-23: All tasks lost its Task order row (David: "no drag and order tasks or
-        // numbering"); the "Task order" entry is gone and its other words moved onto "All tasks".
-        // One entry fewer; registrations and ids unchanged (it landed on the overview's row).
-        XCTAssertEqual(inventory.entries.count, 242, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
+        // 2026-10-23: Notes gains its first two entries ("Sync with Apple Notes", and "Notes to sync",
+        // which lands on the sync switch because its own row shows only while sync is on) and the
+        // "Notes to sync" row. The same day All tasks lost its Task order row (David: "no drag and
+        // order tasks or numbering"): the "Task order" entry is gone and its other words moved onto
+        // "All tasks", one entry fewer with registrations and ids unchanged.
+        XCTAssertEqual(inventory.entries.count, 244, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {

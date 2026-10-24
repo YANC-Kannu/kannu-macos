@@ -54,6 +54,17 @@ enum AppleNotesMergePolicy {
         }
     }
 
+    /// Whether a note fetched from Notes was made there, not in Kannu (`NoteItem.madeInAppleNotes`).
+    /// Evidence that Kannu made it — its `kannu:id` tag, or a place in Notes' Kannu folder, where
+    /// Kannu puts its own notes — always wins, so a note held read-only by mistake is freed on the
+    /// next sync. Without evidence a decided note keeps its answer, and an undecided one counts as
+    /// made in Notes: editing a note Kannu did not make rewrites it as plain text, so read-only is
+    /// the safe guess.
+    static func madeInAppleNotes(stored: Bool?, hasKannuId: Bool, inKannuFolder: Bool) -> Bool {
+        if hasKannuId || inKannuFolder { return false }
+        return stored ?? true
+    }
+
     /// A date from `AppleNotesSyncManager`'s AppleScript `kannuStamp`: local calendar fields,
     /// `year month day hours minutes seconds`, read in `timeZone` (the Mac's, as AppleScript's
     /// dates are). Subtracting a "1970" date built from `current date` instead, as the scripts did
@@ -89,7 +100,9 @@ enum AppleNotesMergePolicy {
     /// - A note edited since the snapshot keeps its current version (`keep` merges in what the sync
     ///   learned about it, such as a new remote id).
     /// - A note deleted since the snapshot stays deleted.
-    /// - A note the sync dropped (gone from Notes) stays dropped, unless it was edited meanwhile.
+    /// - A note the sync dropped (gone from Notes) stays dropped, unless it was edited meanwhile, or
+    ///   `dropMissing` says it goes regardless (a note made in Notes, outside a folder-only sync's
+    ///   folder: the setting says its copy leaves, and an edit is pushed to Notes as it is made).
     /// - Notes the sync imported, and notes created meanwhile, are kept.
     static func reconcile<Note>(
         current: [Note],
@@ -97,7 +110,8 @@ enum AppleNotesMergePolicy {
         snapshot: [UUID: Date],
         id: (Note) -> UUID,
         modified: (Note) -> Date,
-        keep: (_ current: Note, _ merged: Note) -> Note
+        keep: (_ current: Note, _ merged: Note) -> Note,
+        dropMissing: (_ current: Note) -> Bool = { _ in false }
     ) -> [Note] {
         let currentById = Dictionary(current.map { (id($0), $0) }, uniquingKeysWith: { first, _ in first })
         let mergedIds = Set(merged.map(id))
@@ -113,6 +127,7 @@ enum AppleNotesMergePolicy {
             result.append(modified(now) == before ? note : keep(now, note))
         }
         for note in current where !mergedIds.contains(id(note)) {
+            if dropMissing(note) { continue }
             if let before = snapshot[id(note)], modified(note) == before { continue }
             result.append(note)
         }
