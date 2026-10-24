@@ -1,0 +1,207 @@
+import AppKit
+import SwiftUI
+
+enum AgentProviderIconSource: Hashable {
+    case cursor
+    case claude
+    case codex
+    case vscode
+    case antigravity
+    case warp
+    case claudeDesktop
+    /// Terminal agents reported by their hooks; no app bundle to show or activate.
+    case copilotCLI
+    case gemini
+    case qwen
+    case opencode
+    case unknown(String)
+
+    init(providerID: ProviderID) {
+        switch providerID {
+        case .cursor: self = .cursor
+        case .claude: self = .claude
+        case .codex: self = .codex
+        case .antigravity: self = .antigravity
+        }
+    }
+
+    init(rawProvider: String) {
+        switch rawProvider.lowercased() {
+        case "cursor": self = .cursor
+        case "claude": self = .claude
+        case "codex": self = .codex
+        case "vscode": self = .vscode
+        case "antigravity": self = .antigravity
+        case "warp": self = .warp
+        case "claudedesktop", "claude-desktop", "claude_desktop": self = .claudeDesktop
+        case "copilot": self = .copilotCLI
+        case "gemini": self = .gemini
+        case "qwen": self = .qwen
+        case "opencode": self = .opencode
+        default: self = .unknown(rawProvider)
+        }
+    }
+
+    init(hookProvider: AgentHookProvider) {
+        switch hookProvider {
+        case .cursor: self = .cursor
+        case .vscode: self = .vscode
+        case .codex: self = .codex
+        case .claude: self = .claude
+        case .antigravity: self = .antigravity
+        case .gemini: self = .gemini
+        case .qwen: self = .qwen
+        case .opencode: self = .opencode
+        }
+    }
+}
+
+/// App icons resolved once per source instead of on every render (each resolve checks the disk,
+/// asks NSWorkspace and redraws a thumbnail). Re-resolved after ten minutes so an app installed or
+/// updated meanwhile shows its icon.
+@MainActor
+enum AgentProviderIconCache {
+    private static var entries: [AgentProviderIconSource: (image: NSImage?, resolvedAt: Date)] = [:]
+    private static let lifetime: TimeInterval = 600
+
+    static func icon(for source: AgentProviderIconSource, now: Date = Date()) -> NSImage? {
+        if let entry = entries[source], now.timeIntervalSince(entry.resolvedAt) < lifetime {
+            return entry.image
+        }
+        let image = source.resolvedIconImage()
+        entries[source] = (image, now)
+        return image
+    }
+}
+
+struct AgentProviderIconView: View {
+    let source: AgentProviderIconSource
+    var size: CGFloat = 24
+
+    var body: some View {
+        Group {
+            if let icon = AgentProviderIconCache.icon(for: source) {
+                Image(nsImage: icon)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+            } else {
+                AppIconImage(
+                    bundleIdentifiers: source.bundleIdentifiers,
+                    symbolFallback: source.symbolFallback,
+                    symbolColor: source.symbolColor,
+                    size: size
+                )
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+extension AgentProviderIconSource {
+    // Internal, not private: these lists double as the activation targets for
+    // click-through from the notch's agent panel (AgentSessionOpener).
+    var bundleIdentifiers: [String] {
+        switch self {
+        case .cursor:
+            return ["com.cursor.Cursor", "com.todesktop.230313mzl4w4u92"]
+        case .claude:
+            return ["com.anthropic.claude"]
+        case .codex:
+            return ["com.openai.chat", "com.openai.codex"]
+        case .vscode:
+            return ["com.microsoft.VSCode", "com.visualstudio.code.oss"]
+        case .antigravity:
+            return ["com.google.antigravity", "com.google.Antigravity"]
+        case .warp:
+            return WarpAgentStore.bundleIdentifiers
+        case .claudeDesktop:
+            return [ClaudeDesktopAgentSessionStore.bundleIdentifier]
+        case .copilotCLI, .gemini, .qwen, .opencode, .unknown:
+            return []
+        }
+    }
+
+    var applicationPaths: [String] {
+        switch self {
+        case .cursor:
+            return ["/Applications/Cursor.app"]
+        case .claude:
+            return ["/Applications/Claude.app"]
+        case .codex:
+            return ["/Applications/Codex.app", "/Applications/ChatGPT.app"]
+        case .vscode:
+            return ["/Applications/Visual Studio Code.app", "/Applications/Code.app"]
+        case .antigravity:
+            return ["/Applications/Antigravity.app", "/Applications/Google Antigravity.app"]
+        case .warp:
+            return ["/Applications/Warp.app"]
+        case .claudeDesktop:
+            return ["/Applications/Claude.app"]
+        case .copilotCLI, .gemini, .qwen, .opencode, .unknown:
+            return []
+        }
+    }
+
+    var symbolFallback: String {
+        switch self {
+        case .cursor: return "cursorarrow.rays"
+        case .claude: return "sparkles"
+        case .codex: return "terminal"
+        case .vscode: return "chevron.left.forwardslash.chevron.right"
+        case .antigravity: return "atom"
+        case .warp: return "terminal.fill"
+        case .claudeDesktop: return "sparkles"
+        case .copilotCLI: return "terminal"
+        case .gemini: return "sparkle"
+        case .qwen: return "q.circle.fill"
+        case .opencode: return "curlybraces.square"
+        case .unknown: return "app.fill"
+        }
+    }
+
+    var symbolColor: Color {
+        switch self {
+        case .cursor: return .primary
+        case .claude: return Color(red: 0.85, green: 0.47, blue: 0.36)
+        case .codex: return .green
+        case .vscode: return Color(red: 0.27, green: 0.51, blue: 0.85)
+        case .antigravity: return Color(red: 0.26, green: 0.52, blue: 0.96)
+        case .warp: return Color(red: 0.55, green: 0.40, blue: 0.95)
+        case .claudeDesktop: return Color(red: 0.85, green: 0.47, blue: 0.36)
+        case .copilotCLI: return Color(red: 0.51, green: 0.35, blue: 0.85)
+        case .gemini: return Color(red: 0.30, green: 0.45, blue: 0.95)
+        case .qwen: return Color(red: 0.42, green: 0.33, blue: 0.93)
+        case .opencode: return .primary
+        case .unknown: return .secondary
+        }
+    }
+
+    func resolvedIconImage() -> NSImage? {
+        for path in applicationPaths {
+            let expanded = (path as NSString).expandingTildeInPath
+            guard FileManager.default.fileExists(atPath: expanded) else { continue }
+            return Self.thumbnail(from: NSWorkspace.shared.icon(forFile: expanded))
+        }
+
+        for bundleID in bundleIdentifiers {
+            guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { continue }
+            return Self.thumbnail(from: NSWorkspace.shared.icon(forFile: appURL.path))
+        }
+
+        return nil
+    }
+
+    static func thumbnail(from icon: NSImage) -> NSImage {
+        let thumb = NSImage(size: NSSize(width: 32, height: 32))
+        thumb.lockFocus()
+        icon.draw(
+            in: NSRect(origin: .zero, size: NSSize(width: 32, height: 32)),
+            from: NSRect(origin: .zero, size: icon.size),
+            operation: .copy,
+            fraction: 1.0
+        )
+        thumb.unlockFocus()
+        return thumb
+    }
+}

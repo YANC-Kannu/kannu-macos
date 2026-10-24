@@ -1,0 +1,696 @@
+import AppKit
+import Foundation
+import Defaults
+import SwiftUI
+
+struct NotchAgentStatusView: View {
+    @EnvironmentObject private var vm: KannuViewModel
+    @ObservedObject private var monitor = CursorAgentStatusMonitor.shared
+    @ObservedObject private var skinManager = NotchSkinManager.shared
+    @ObservedObject private var caffeinate = CaffeinateManager.shared
+    @ObservedObject private var findingsStore = SecurityFindingsStore.shared
+    @ObservedObject private var usageAlerts = UsageAlertManager.shared
+    @ObservedObject private var adrConnection = ADRConnection.shared
+    @Default(.adrDetectionEnabled) private var detectionEnabled
+    @Default(.adrDetectionConfirmEachRun) private var detectionConfirmEachRun
+    /// Defaults-backed, not @State: this tab is torn down and rebuilt on every tab switch.
+    @Default(.caffeinateEnabled) private var caffeinateEnabled
+    @Default(.smartCaffeinate) private var smartCaffeinate
+    @Default(.agentActiveColor) private var activePaletteColor
+    @Default(.agentAwaitingInputColor) private var awaitingPaletteColor
+    @Default(.agentStoppedColor) private var stoppedPaletteColor
+    /// The 420/340 pt panels have no room for the run-time column; the status line carries the time.
+    @Default(.enableMinimalisticUI) private var minimalistic
+    @State private var isSuppressingScrollGesture = false
+    @State private var redBlinkStartTimes: [String: Date] = [:]
+    /// The pinned finding whose "Copy for agent" was just pressed; cleared after 2 s.
+    @State private var copiedFindingID: String?
+    /// Bumped once when a red badge's blink window ends, so the 10 Hz blink stops on time.
+    @State private var blinkWake = Date.distantPast
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let scrollSuppressionToken = UUID()
+
+    private var hasSkin: Bool { skinManager.selectedSkinImage != nil }
+
+#if DEBUG
+    /// Snapshot boards only (`DebugSnapshots`): fixture sessions and panel mode instead of the live ones.
+    var snapshotSessions: [AgentSessionStatus]? = nil
+    var snapshotMinimalistic: Bool? = nil
+    private var sourceSessions: [AgentSessionStatus] { snapshotSessions ?? monitor.sessions }
+    private var isMinimalistic: Bool { snapshotMinimalistic ?? minimalistic }
+#else
+    private var sourceSessions: [AgentSessionStatus] { monitor.sessions }
+    private var isMinimalistic: Bool { minimalistic }
+#endif
+
+    private var dedupedSessions: [AgentSessionStatus] {
+        AgentTrafficLightMapper.latestSessions(sourceSessions)
+    }
+
+    private var visibleSessions: [AgentSessionStatus] {
+        dedupedSessions.filter(\.isVisible)
+    }
+
+    private var allSessions: [AgentSessionStatus] {
+        visibleSessions.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var recentChats: [AgentSessionStatus] {
+        guard let primaryID = primarySession?.id else { return allSessions }
+        return allSessions.filter { $0.id != primaryID }
+    }
+
+    private var primarySession: AgentSessionStatus? {
+        AgentTrafficLightMapper.primarySession(from: visibleSessions)
+    }
+
+    private struct ProviderInstallStatus {
+        let source: AgentProviderIconSource
+        let name: String
+        let detected: Bool
+    }
+
+    private var providerStatuses: [ProviderInstallStatus] {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        return [
+            ProviderInstallStatus(
+                source: .cursor, name: "Cursor",
+                detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)
+            ),
+            ProviderInstallStatus(
+                source: .claude, name: "Claude Code",
+                detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)
+            ),
+            ProviderInstallStatus(
+                source: .codex, name: "Codex",
+                detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)
+            ),
+            ProviderInstallStatus(
+                source: .antigravity, name: "Antigravity",
+                detected: fm.fileExists(atPath: home.appendingPathComponent(".gemini").path)
+            ),
+            ProviderInstallStatus(
+                source: .warp, name: "Warp",
+                detected: WarpAgentStore.databaseURL != nil
+            ),
+            ProviderInstallStatus(
+                source: .claudeDesktop, name: "Desktop",
+                detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)
+            ),
+        ]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                caffeinateRow
+
+                if let pinned = findingsStore.groupRanking.pinned {
+                    securityPinnedCard(pinned)
+                }
+
+                if let primary = primarySession {
+                    clickableSession(primary) { primaryCard(primary) }
+                } else if dedupedSessions.isEmpty {
+                    emptyStateView
+                }
+
+                if !recentChats.isEmpty {
+                    ForEach(recentChats) { session in
+                        clickableSession(session) { sessionRow(session) }
+                    }
+                } else if !allSessions.isEmpty, primarySession == nil {
+                    ForEach(allSessions) { session in
+                        clickableSession(session) { sessionRow(session) }
+                    }
+                }
+
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .onHover { hovering in
+            updateScrollGestureSuppression(for: hovering)
+        }
+        .onDisappear {
+            updateScrollGestureSuppression(for: false)
+        }
+    }
+
+    @ViewBuilder
+    private var emptyStateView: some View {
+        VStack(spacing: 10) {
+            Text("Your agents are taking a coffee break ☕")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
+            Text("Fire up Cursor, Claude Code, Codex, Antigravity, Warp, or Claude Desktop and start a session — we'll watch the lights for you.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 0) {
+                ForEach(providerStatuses, id: \.name) { status in
+                    HStack(spacing: 5) {
+                        AgentProviderIconView(source: status.source, size: 14)
+                            .opacity(status.detected ? 1 : 0.3)
+                        Text(status.name)
+                            .font(.system(size: 10))
+                            .foregroundStyle(status.detected ? .primary : .tertiary)
+                            .lineLimit(1)
+                        if status.detected {
+                            Circle()
+                                .fill(Color.green.opacity(0.85))
+                                .frame(width: 5, height: 5)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.vertical, 7)
+            .padding(.horizontal, 6)
+            .background {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.05)))
+                if hasSkin {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.white.opacity(0.1))
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 16)
+    }
+
+    /// Top-right caffeinate control, visible in every panel state. Two faces:
+    /// - Smart mode on: a status-only indicator (cup + sparkle) — the Mac stays awake
+    ///   automatically while agents run; clicking opens Settings to change the mode.
+    /// - Smart mode off: the manual switch — on keeps the Mac awake right now, until off.
+    /// In both faces the cup fills and warms only while the assertion is actually held,
+    /// so the icon reports truth, not the switch position.
+    @ViewBuilder
+    private var caffeinateRow: some View {
+        HStack(spacing: 6) {
+            // The chat-list label lives on this line now — it fills the gap left of the
+            // caffeinate control instead of costing its own row. Hidden in the empty state:
+            // a "Recent chats" heading over the coffee-break message would label nothing.
+            if !allSessions.isEmpty {
+                Text("Recent chats")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            // Medium findings never interrupt: one count, one click to Settings.
+            if openFindingCount > 0 {
+                Button {
+                    SettingsWindowController.shared.showWindow(
+                        navigatingToAgentStatusHighlight: SettingsDeepLink.securityFindingsHighlightID
+                    )
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "exclamationmark.shield").font(.system(size: 9))
+                        Text(openFindingCount == 1 ? String(localized: "1 finding") : String(localized: "\(openFindingCount) findings"))
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .hoverTooltip(String(localized: "Security findings — click for Settings"), edge: .below, pointingHandCursor: true)
+            }
+            Spacer(minLength: 0)
+            if smartCaffeinate {
+                Button {
+                    SettingsWindowController.shared.showWindow(
+                        navigatingToAgentStatusHighlight: SettingsDeepLink.smartCaffeinateHighlightID
+                    )
+                } label: {
+                    HStack(spacing: 3) {
+                        // Bare image, not `cupIcon` — `cupIcon`'s own .help would sit inside
+                        // this Button's hit area and shadow the Button-level tooltip below
+                        // whenever the pointer is directly over the cup glyph.
+                        cupImage
+                        // The sparkle marks "smart mode is on" — it stays lit whenever the
+                        // mode is enabled, independent of whether an assertion is currently
+                        // held. Before, an idle smart mode looked identical to everything-off.
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 7))
+                            // Literal colors only: `Color.accentColor` is `controlAccentColor`,
+                            // which AppKit renders gray while the app is inactive — and this
+                            // LSUIElement app's non-activating notch panel is almost never
+                            // active, so the sparkle would sit permanently desaturated.
+                            .foregroundStyle(caffeinate.isKeepingAwake ? Color.orange : Color.blue)
+                    }
+                }
+                .buttonStyle(.plain)
+                .hoverTooltip(
+                    caffeinate.isKeepingAwake
+                        ? String(localized: "Keeping awake — agent running. Click for Settings.")
+                        : String(localized: "Smart caffeinate on. Click for Settings.")
+                , edge: .below, pointingHandCursor: true)
+                .accessibilityLabel("Smart caffeinate is on")
+                .accessibilityHint("Opens caffeinate settings")
+            } else {
+                cupIcon
+                // Custom capsule, not `.toggleStyle(.switch)`: that style is a real NSSwitch,
+                // and NSSwitch draws its ON tint only while its window is key and the app
+                // active. This LSUIElement app's non-activating notch panel is neither on a
+                // hover-open, so an ON switch rendered desaturated gray until first click.
+                // Drawing the fill from SwiftUI state directly is immune to key-window status.
+                // Orange matches the lit cup, so one colour consistently means "caffeinated".
+                // The cup itself still shows assertion truth (it can lag the toggle by the
+                // reconcile hop, and stays dark if the assertion ever fails) — the toggle
+                // shows intent, the cup shows reality.
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        caffeinateEnabled.toggle()
+                    }
+                } label: {
+                    Capsule()
+                        .fill(caffeinateEnabled ? Color.orange : Color.secondary.opacity(0.35))
+                        .frame(width: 26, height: 16)
+                        .overlay(alignment: caffeinateEnabled ? .trailing : .leading) {
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 12, height: 12)
+                                .padding(2)
+                                .shadow(color: .black.opacity(0.2), radius: 0.5, y: 0.5)
+                        }
+                }
+                .buttonStyle(.plain)
+                .hoverTooltip(
+                    caffeinate.isKeepingAwake
+                        ? String(localized: "Keeping awake — click to allow sleep")
+                        : String(localized: "Keep the Mac awake")
+                , edge: .below, pointingHandCursor: true)
+                .accessibilityLabel("Keep the Mac awake")
+                .accessibilityValue(caffeinateEnabled ? String(localized: "On") : String(localized: "Off"))
+                .accessibilityAddTraits(.isToggle)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Open findings other than the pinned one (which has its own card).
+    private var openFindingCount: Int {
+        let groups = findingsStore.groupRanking
+        return groups.visible.count - (groups.pinned == nil ? 0 : 1)
+    }
+
+    /// The one high finding that owns the closed-notch cue, pinned above the primary session.
+    /// Monochrome shield; the severity word is text, so nothing here competes with the lights.
+    @ViewBuilder
+    private func securityPinnedCard(_ row: SecurityFindingGroups.Row) -> some View {
+        let finding = row.group.representative
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.primary)
+                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(finding.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text(finding.severity.label)
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                }
+                Text(finding.summary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                if let evidence = finding.displayedEvidence.first {
+                    Text(evidence)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                HStack(spacing: 8) {
+                    Button(String(localized: "Details")) {
+                        SettingsWindowController.shared.showWindow(
+                            navigatingToAgentStatusHighlight: SettingsDeepLink.securityFindingsHighlightID
+                        )
+                    }
+                    Button(String(localized: "Acknowledge")) {
+                        // The card speaks for a group, so it must settle the group. Writing a single
+                        // legacy finding id did nothing visible whenever the group had more than one
+                        // member — 21 rotated keys, say — because a legacy acknowledgement only
+                        // counts when it covers every member. The shield and pill just stayed up.
+                        let projects = row.group.projects
+                        findingsStore.acknowledgeGroup(row.group,
+                                                       projects: projects.isEmpty ? nil : projects)
+                    }
+                    Button {
+                        findingsStore.copyAgentPrompt(for: finding)
+                        let id = finding.id
+                        copiedFindingID = id
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(2))
+                            if copiedFindingID == id { copiedFindingID = nil }
+                        }
+                    } label: {
+                        // The hidden label keeps the width while "Copied" shows.
+                        Text(String(localized: "Copy for agent"))
+                            .opacity(copiedFindingID == finding.id ? 0 : 1)
+                            .overlay { if copiedFindingID == finding.id { Text(String(localized: "Copied")) } }
+                    }
+                }
+                .controlSize(.small)
+                .padding(.top, 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.08)))
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Security finding, \(finding.severity.label): \(finding.title). \(finding.summary)")
+    }
+
+    /// Bare cup glyph, no tooltip — use inside a container that supplies its own `.help`.
+    private var cupImage: some View {
+        Image(systemName: caffeinate.isKeepingAwake ? "cup.and.saucer.fill" : "cup.and.saucer")
+            .font(.caption)
+            .foregroundStyle(caffeinate.isKeepingAwake ? AnyShapeStyle(Color.orange) : AnyShapeStyle(.secondary))
+            .symbolRenderingMode(.hierarchical)
+    }
+
+    /// Cup glyph with its own tooltip — use standalone (not nested inside another control
+    /// that already has a `.help`, or the two will shadow each other).
+    private var cupIcon: some View {
+        cupImage
+            .hoverTooltip(
+                caffeinate.isKeepingAwake
+                    ? String(localized: "Keeping the Mac awake")
+                    : String(localized: "Keep the Mac awake"),
+                edge: .below
+            )
+    }
+
+    /// Wraps a card/row in a click-through Button when the session's hosting app can be
+    /// located — otherwise returns the content untouched: no hand cursor, no tooltip, no
+    /// dead click. Help text lives on the Button only (a nested .help would shadow it).
+    @ViewBuilder
+    private func clickableSession<Content: View>(_ session: AgentSessionStatus, @ViewBuilder content: () -> Content) -> some View {
+        if let target = AgentSessionOpener.target(for: session) {
+            Button {
+                if AgentSessionOpener.open(session) {
+                    // The user is leaving for the other app; get the notch out of the way.
+                    vm.close()
+                }
+            } label: {
+                content()
+            }
+            .buttonStyle(.plain)
+            .hoverTooltip(target.actionLabel, pointingHandCursor: true)
+            .accessibilityHint("Opens \(target.appName)")
+            .contextMenu { analysisMenu(for: session) }
+        } else {
+            content()
+                .contextMenu { analysisMenu(for: session) }
+        }
+    }
+
+    // MARK: - ADR Detection (explicit request only)
+
+    private func canAnalyze(_ session: AgentSessionStatus) -> Bool {
+        detectionEnabled && adrConnection.detection.isReady
+            && session.provider.lowercased() == "claude"
+            && !session.displayState.isActiveRun
+            && !findingsStore.isAnalyzing(session.conversationID)
+    }
+
+    @ViewBuilder
+    private func analysisMenu(for session: AgentSessionStatus) -> some View {
+        if canAnalyze(session) {
+            Button(String(localized: "Analyze with ADR Detection…")) { requestAnalysis(session) }
+        }
+        if let analysis = findingsStore.analysis(for: session.conversationID) {
+            // No `fileExists` here: this is a view body, and a stat per render is exactly the
+            // filesystem work AGENTS.md keeps out of views. Finder simply shows nothing for a path
+            // that is gone.
+            if let path = analysis.reportPath {
+                Button(String(localized: "Reveal ADR report in Finder")) {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+                }
+            }
+            Button(String(localized: "Forget this analysis")) { findingsStore.forgetAnalysis(for: session.conversationID) }
+        }
+    }
+
+    /// "ADR: clean · 0.08" under the status line, once a chat has been analysed.
+    @ViewBuilder
+    private func analysisLine(for session: AgentSessionStatus) -> some View {
+        if findingsStore.isAnalyzing(session.conversationID) {
+            Text("ADR: analysing…").font(.caption2).foregroundStyle(.secondary)
+        } else if let analysis = findingsStore.analysis(for: session.conversationID) {
+            Text("ADR: \(analysis.shortLabel)")
+                .font(.caption2)
+                .foregroundStyle(analysis.isMalicious ? .primary : .secondary)
+        }
+    }
+
+    /// The consent moment: names what leaves the Mac and where, every time unless the user
+    /// turned that off. Nothing runs without this click.
+    private func requestAnalysis(_ session: AgentSessionStatus) {
+        switch findingsStore.analysisPlan(for: session) {
+        case .failure(let failure):
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Cannot analyse this chat")
+            alert.informativeText = failure.message
+            ModalPresenter.present(alert)
+        case .success(let plan):
+            // An unchanged chat always confirms, even with per-chat confirmation off: silently
+            // re-spending a full reasoning run on the same bytes is never what the click meant.
+            guard detectionConfirmEachRun || plan.unchangedSinceLastVerdict else { findingsStore.runAnalysis(plan); return }
+            let options = SecurityFindingsStore.analysisOptions()
+            let alert = NSAlert()
+            alert.messageText = String(localized: "Send this chat to ADR Detection?")
+            var lines = [String(localized: "The transcript \"\(session.displayChatName)\" (up to \(options.maxMessages) messages) leaves this Mac:")]
+            if plan.unchangedSinceLastVerdict, let previous = findingsStore.analysis(for: session.conversationID) {
+                lines.insert(String(localized: "This chat has not changed since its last analysis (\(previous.shortLabel)) — analysing again re-sends the same transcript."), at: 0)
+            }
+            lines.append(String(localized: "• Anthropic, via \(Defaults[.adrDetectionUseAnthropicAPIKey] ? "your API key" : "your Claude Code login (uses your quota)"), model \(options.reasoningModel)"))
+            if options.triageEnabled { lines.append(String(localized: "• OpenAI, via your API key, model \(options.triageModel) (triage first)")) }
+            lines.append(String(localized: "ADR runs an unattended Claude session on this Mac to reason about it (file edits disallowed). Nothing else is sent, and nothing runs automatically."))
+            alert.informativeText = lines.joined(separator: "\n")
+            alert.addButton(withTitle: String(localized: "Analyze"))
+            alert.addButton(withTitle: String(localized: "Cancel"))
+            alert.showsSuppressionButton = detectionConfirmEachRun
+            alert.suppressionButton?.title = String(localized: "Don't ask again for each chat")
+            // The notch window sits at `.mainMenu + 3`, so an alert at the default level rendered
+            // behind it: a stopped app and no dialog. `runAppModal` activates and raises first.
+            guard ModalPresenter.runAppModal(alert) == .alertFirstButtonReturn else { return }
+            if alert.suppressionButton?.state == .on { detectionConfirmEachRun = false }
+            findingsStore.runAnalysis(plan)
+        }
+    }
+
+    @ViewBuilder
+    private func primaryCard(_ session: AgentSessionStatus) -> some View {
+        HStack(spacing: 12) {
+            AgentProviderIconView(source: .init(rawProvider: session.provider), size: 28)
+            VStack(alignment: .leading, spacing: 4) {
+                AgentChatNameLabel(
+                    text: session.providerLabel,
+                    secondarySuffix: session.displayProjectName,
+                    maxStaticLength: 18,
+                    font: .headline,
+                    nsFont: .headline,
+                    textColor: .primary,
+                    secondaryTextColor: .secondary,
+                    marqueeWidth: 220
+                )
+                statusText(for: session, font: .subheadline)
+                analysisLine(for: session)
+                AgentChatNameLabel(
+                    text: session.displayChatName,
+                    font: .caption2,
+                    textColor: .secondary,
+                    marqueeWidth: 180
+                )
+            }
+            .layoutPriority(1)
+            if isMinimalistic {
+                Spacer(minLength: 0)
+            } else {
+                AgentTurnMetricsView(session: session, prominent: true)
+            }
+            stateBadge(session.displayState, sessionId: session.id, large: true)
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.06)))
+            if hasSkin {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.12))
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionRow(_ session: AgentSessionStatus) -> some View {
+        HStack(spacing: 10) {
+            AgentProviderIconView(source: .init(rawProvider: session.provider), size: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    AgentChatNameLabel(
+                        text: session.providerLabel,
+                        secondarySuffix: session.displayProjectName,
+                        maxStaticLength: 16,
+                        font: .caption.weight(.semibold),
+                        nsFont: .caption1,
+                        textColor: .primary,
+                        secondaryTextColor: .secondary,
+                        marqueeWidth: 160
+                    )
+                }
+                statusText(for: session, font: .caption2)
+                analysisLine(for: session)
+                AgentChatNameLabel(
+                    text: session.displayChatName,
+                    marqueeWidth: 140
+                )
+            }
+            .layoutPriority(1)
+            if isMinimalistic {
+                Spacer(minLength: 0)
+            } else {
+                AgentTurnMetricsView(session: session)
+            }
+            stateBadge(session.displayState, sessionId: session.id, large: false)
+        }
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.04)))
+            if hasSkin {
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+            }
+        }
+    }
+
+    /// The state word and why it stopped. The run time sits in the trailing column
+    /// (`AgentTurnMetricsView`); on the minimalistic panels, which have no room for it, it follows
+    /// here instead.
+    @ViewBuilder
+    private func statusText(for session: AgentSessionStatus, font: Font) -> some View {
+        let suffix = session.runOutcomeSuffix + resumeSuffix(for: session)
+        if isMinimalistic, let display = AgentTurnMetricsView.display(for: session) {
+            switch display {
+            case let .live(since):
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(context.date.timeIntervalSince(since)), font: font)
+                }
+            case let .ended(interval):
+                statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(interval), font: font)
+            }
+        } else {
+            statusLine(session, suffix: suffix, font: font)
+        }
+    }
+
+    private func statusLine(_ session: AgentSessionStatus, suffix: String, font: Font) -> some View {
+        (
+            Text(session.displayState.displayName)
+                .foregroundStyle(stateColor(session.displayState))
+            + Text(suffix)
+                .foregroundStyle(.secondary)
+        )
+        .font(font)
+        .monospacedDigit()
+    }
+
+    /// " · resumes 3:40 PM" on a chat that stopped on a rate limit — only when the matching usage
+    /// window really is full, since a 429 can also be short-term throttling.
+    private func resumeSuffix(for session: AgentSessionStatus) -> String {
+        guard session.displayState == .stopped || session.displayState == .inactive else { return "" }
+        let now = Date()
+        guard let resume = UsageAlertPolicy.resumeDate(provider: session.provider, runError: session.runError,
+                                                       rawState: session.rawState, readings: usageAlerts.readings, now: now)
+        else { return "" }
+        return " · " + String(localized: "resumes \(UsageForecast.clock(resume, now: now))")
+    }
+
+    // Neon variants come from the user's palette choices; the defaults reproduce the
+    // hand-tuned values this panel always used (see AgentTrafficLightPaletteColor.neonColor).
+    private var neonRed: Color { stoppedPaletteColor.neonColor }
+    private var neonYellow: Color { awaitingPaletteColor.neonColor }
+    private var neonGreen: Color { activePaletteColor.neonColor }
+
+    @ViewBuilder
+    private func stateBadge(_ state: AgentTrafficLightState, sessionId: String, large: Bool) -> some View {
+        let width: CGFloat = large ? 28 : 20
+        let height: CGFloat = large ? 36 : 28
+        let dotSize: CGFloat = large ? 8 : 6
+        let _ = blinkWake
+        let blinkStart = redBlinkStartTimes[sessionId]
+        let now = Date()
+        // Bounded to its 5 s window by the one-shot wake below (the 10 Hz timeline used to keep
+        // ticking until something else redrew the panel), and off under Reduce Motion.
+        let shouldBlink = !reduceMotion && state.showsRedTrafficLight && AgentTrafficLightAttention.blinks(startedAt: blinkStart, now: now)
+        let blinkEnd = state.showsRedTrafficLight ? AgentTrafficLightAttention.blinkChange(startedAt: blinkStart, now: now) : nil
+
+        VStack(spacing: 3) {
+            if shouldBlink {
+                TimelineView(.periodic(from: .now, by: 0.1)) { context in
+                    let elapsed = context.date.timeIntervalSince(blinkStart ?? .now)
+                    let pulse = (sin(elapsed * .pi * 4) + 1) / 2 // smooth 0...1 pulse, ~2 blinks/sec
+                    neonDot(neonRed, size: dotSize, opacity: 0.35 + pulse * 0.65, glowRadius: 2 + pulse * (large ? 7 : 5))
+                }
+            } else {
+                neonDot(neonRed, size: dotSize, opacity: state.showsRedTrafficLight ? 1 : 0.2, glowRadius: state.showsRedTrafficLight ? (large ? 5 : 3.5) : 0)
+            }
+            neonDot(neonYellow, size: dotSize, opacity: state.showsYellowTrafficLight ? 1 : 0.2, glowRadius: state.showsYellowTrafficLight ? (large ? 5 : 3.5) : 0)
+            neonDot(neonGreen, size: dotSize, opacity: state.showsGreenTrafficLight ? 1 : 0.2, glowRadius: state.showsGreenTrafficLight ? (large ? 5 : 3.5) : 0)
+        }
+        .frame(width: width, height: height)
+        .task(id: blinkEnd) {
+            guard let blinkEnd else { return }
+            try? await Task.sleep(for: .seconds(max(0, blinkEnd.timeIntervalSinceNow) + 0.05))
+            if !Task.isCancelled { blinkWake = Date() }
+        }
+        .onChange(of: state.showsRedTrafficLight) { _, isRed in
+            if isRed && (blinkStart == nil || Date().timeIntervalSince(blinkStart!) > 5) {
+                redBlinkStartTimes[sessionId] = Date()
+            }
+        }
+    }
+
+    private func neonDot(_ color: Color, size: CGFloat, opacity: Double, glowRadius: CGFloat) -> some View {
+        Circle()
+            .fill(color.opacity(opacity))
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(opacity * 0.9), radius: glowRadius)
+            .shadow(color: color.opacity(opacity * 0.5), radius: glowRadius * 2)
+    }
+
+    private func stateColor(_ state: AgentTrafficLightState) -> Color {
+        switch state {
+        case .executing, .thinking: return neonGreen
+        case .awaitingInput: return neonYellow
+        case .stopped: return neonRed
+        case .inactive: return .secondary
+        }
+    }
+
+    private func updateScrollGestureSuppression(for hovering: Bool) {
+        guard hovering != isSuppressingScrollGesture else { return }
+        isSuppressingScrollGesture = hovering
+        vm.setScrollGestureSuppression(hovering, token: scrollSuppressionToken)
+    }
+}

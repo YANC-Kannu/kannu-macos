@@ -1,0 +1,1055 @@
+# Regressions and the invariants that keep breaking
+
+Kannu's agent-status subsystem has a memory problem: the same handful of rules get
+re-broken by well-intentioned changes, because the rule lives in someone's head (or in a
+comment nobody re-reads) rather than in something that fails.
+
+This file is the ledger. Every entry is a rule that has **actually broken more than once**,
+with the commits to prove it. It is not a style guide and not a wish list — if an entry
+here has never cost a real bug, delete it.
+
+**Read this before touching anything under `Kannu/managers/AgentStatus/`.**
+
+> **The commit hashes cited below predate the 2026-09-03 history reset.** `main` was rebuilt that
+> day on a new root commit, so those hashes do not resolve in a fresh clone — they survive only in
+> archived copies of the pre-reset history. Every rule, failure mode and guard described here is
+> unaffected; treat the hashes as provenance for the story, not as something you can `git show`.
+
+---
+
+## How to use this
+
+- **Before editing** a file listed in [Danger zones](#danger-zones), read the entries that
+  reference it.
+- **When a bug recurs**, add an entry — the second occurrence is the signal, not the tenth.
+- **Prefer a guard to a paragraph.** Every invariant below that broke *after* being written
+  down proves prose alone does not hold. Where a mechanical check is cheap, it is listed
+  under **Guard** and it exists; where it is missing, the entry says so.
+
+---
+
+## 1. The hook script mirror must match the embedded copy
+
+**Rule:** `AgentHookInstaller.swift` embeds the authoritative hook script.
+`scripts/kannu-agent-status.sh` is a generated mirror. They must always carry the same
+`KANNU_HOOK_SCRIPT_VERSION`.
+
+**Broken 3 times.** Drifted at `80ce9e1` (2026-08-06, v24 vs v23) → resynced `709457e`
+(2026-08-09) → drifted again (v26 vs v25) → resynced `fe12f7d` (2026-08-19) → **drifted a
+third time on `development`** and was still drifted when this file was written (v24 vs v23).
+
+**Why it keeps happening:** two copies of one artifact, and only one of them is exercised by
+the app. The embedded copy is what the app installs and what every developer tests; the
+mirror is what `scripts/install-cursor-hooks.sh` hands to users. Nothing links them, so the
+mirror rots invisibly.
+
+**What it cost:** between 2026-08-06 and 2026-08-19, a user who installed Cursor hooks via
+the script got a version without the `flock` serialisation and without the atomic
+temp-then-`os.replace` write — the exact races later measured at 11/200 lost urgent states
+and 14/4825 torn reads.
+
+**Guard — exists.** `.githooks/pre-commit` compares the two version markers and, since v34, the
+bodies too (the embedded literal de-indented by 8 spaces, the marker interpolation substituted,
+against the mirror byte for byte) — a body edit without a matching copy fails the commit.
+`HookScriptTests.testEmbeddedScriptMatchesTheMirror` runs the same comparison in CI.
+
+**v34 addendum — no backslash in the Python.** The embedded copy is a plain Swift string literal:
+`"\n"` in the Python becomes a real newline in the installed script, `"\U000E0000"` does not
+compile, and escaping them makes the two copies differ. Build code points and regex character
+classes with `chr()` (the hidden-text scan does exactly that). The pre-commit hook and the same
+test reject any backslash in the mirror's Python body. v35 keeps to it: the secret patterns use
+lookarounds and character classes, not `\b`, and check the "no word character before" edge in code
+(a leading lookbehind also made a 1 MB scan 40 times slower — a regex that starts with its literal
+lets the engine skip ahead). v37: never read the agent's terminal from the hook's own session —
+Claude Code starts every hook in a session of its own, so v35's lookup found nothing and re-ran on
+every event; the terminal is the nearest ancestor that has one
+(`HookScriptTests.testATerminalIsFoundAboveADetachedHook`). Before this guard existed, the rule was: diff
+the two Python bodies (extract each heredoc, strip the embedded copy's 8-space indent) and expect
+byte identity. Regenerate the mirror from the embedded literal
+rather than hand-editing it; hand-editing is how `quota_exceeded` had to be typed into both copies
+separately (`817f114`). Since v30, `KannuTests/HookScriptTests.swift` executes the mirror as a
+subprocess and pins the merge and lock behaviour, so a behavioural drift in the mirror fails CI even
+when the markers agree. The Claude statusline script (`writeUsageScript` ↔
+`scripts/kannu-usage-status.sh`, `KANNU_USAGE_SCRIPT_VERSION`) has the same two-copy shape; since v4
+the pre-commit hook checks its markers too and `KannuTests/UsageScriptTests.swift` executes its mirror.
+
+**v39 addendum — turn keys ride every write, and never the clock.** `turn_started_ms`,
+`turn_ended_ms`, `turn_tool_calls`, `turn_tool_ids`, `turn_transcript_offset` and
+`transcript_path` are computed after the priority merge and written by all three write paths
+(payload, the 2 s merge's preserved `ts`, the sticky-yellow rewrite of `existing`). They never
+change `state` or `ts` (entry 12). A turn starts only on a prompt event, or on a wake event when the
+file has no turn; work after a Stop without a new prompt reopens the same turn, and (v40) a prompt
+that arrives while the request is still running joins it — keying a restart on "woken after a stop"
+made every background-task wake restart the displayed run time, and keying one on "a prompt" did
+the same, because Claude Code submits a background task's result as a `UserPromptSubmit`
+(measured live: a `sleep` finishing restarted the turn). The
+computation is wrapped in `try/except` with the carried turn as fallback: an uncaught error there
+would cost the light and the allow line. One known hole: a
+file Kannu deletes as stale takes its turn with it — never "fix" that by treating an empty file as
+the end of a turn, which would split it. Guards: the `HookScriptTests` "v39" group, run twice
+(Homebrew's Python and `/usr/bin/python3` 3.9).
+
+**v41 addendum — the payload goes through a file, and the allow line is unconditional.** The v39
+note used to list a second hole, "a payload over ~1 MiB never reaches Python, so that call is
+uncounted". It was worse than uncounted: exported as `KANNU_INPUT`, a tool input past ARG_MAX made
+`execve` fail with "Argument list too long" before the heredoc ran, and the wrapper fell through
+to `exit 0` — no status write, no allow line, so Cursor lost its `permission:allow` for that call
+and every provider's light froze on the previous state (reproduced 2026-09-16 with a 1.5 MB
+`tool_input`; the no-python3 fallback was strictly better, it printed the line). The wrapper now
+writes stdin to a `mktemp` file in the status directory and Python reads and unlinks it, capped at
+16 MiB — past the cap the event still updates the light, uncounted. And the two `write_status`
+calls were the only unwrapped step left on the write path: an `os.replace` failure (full disk, a
+path replaced by a directory) raised past `emit()`. Both are wrapped; the allow line prints no
+matter what the write did. Guards: `testAPayloadPastArgMaxStillWritesTheStatusAndPrintsTheAllowLine`
+and `testAFailedStatusWriteStillPrintsTheAllowLine`.
+
+**v42 addendum — the hook can say no, on two hosts, under the user's own policy.** Until v42 the
+only stdout the script ever wrote was the allow line. `emit()` now has one deny branch, and three
+things gate it, all of them pinned: a rule in `~/.kannu/agent-policy.json` matched (the hook is the
+only matcher; Swift only validates the file, so the two cannot drift), the `.kannu-policy-enforce`
+marker exists (`Defaults[.enforceAgentPolicy]`, off by default), and the host's documented contract
+has a deny — Claude Code `PreToolUse` (`permissionDecision`) and Cursor's pre events (`permission`).
+Every other provider gets the finding only, Codex included: it validates strictly and its deny is
+unverified. Rules: a deny never also says allow; the policy file is untrusted input with caps and
+no regex, and anything malformed means *no policy* — the hook never fails closed on its own
+configuration; the matched rule is recorded, never the command line. Guards: the `HookScriptTests`
+"Agent policy (v42)" group (`…RefusedOnClaudeCodeWhenBlockingIsOn`, `…RefusedOnCursorAndOnlyReportedElsewhere`,
+`…MatchingIsByWordNotBySubstring`, `…MalformedPolicyMeansNoPolicyAndTheHookStillAnswers`),
+`AgentPolicyTests` for the file's shape. Widen `POLICY_DENY_EVENTS` only after a live check on that host.
+
+**v42 follow-up — "cannot drift" drifted, twice, on what counts as valid.** Matching lives only in
+the hook, but *validity* is checked on both sides, and Settings kept calling files valid that the
+hook ignored, so it showed "N rules" while nothing was reported or blocked. First a null reason
+(fixed in the hook; `testANullReasonIsAnAbsentReasonInTheHookToo`). Then, found when "Open in Editor"
+made hand edits the normal path, `JSONSerialization` and Swift strings were more lenient than the
+hook's Python in eight ways: trailing commas, a UTF-8 BOM, UTF-16/32 input, duplicate keys (Swift
+kept the first, Python keeps the last), `version` compared via `intValue` (1.5 passed), the length cap
+counted in grapheme clusters instead of code points, whitespace as a space instead of Unicode
+whitespace, and a symlinked file (the hook `lstat`s). All fixed on the Swift side: the hook is the
+authority and a danger zone. Rule: **whatever `AgentPolicy.parse` accepts, `load_policy` must
+use.** Where the hook is more lenient (NaN in an unused key, a duplicate key), Settings may only err
+toward "not in effect". Guard: `HookScriptTests.testSettingsAndTheHookAgreeOnWhatIsAPolicy` feeds the
+same bytes to both; it failed 12 times against the old parser. Add a case there for any new check.
+
+**v43 addendum — a keychain lookup is not a password read.** Every `security find-*-password` used
+to be recorded as `keychain` and shown as "The agent read the keychain" at High, even without `-w`
+or `-g`, when the command returns no secret, only whether an item exists. v43 records that shape as
+`keychain_item`, which Swift grades Medium with its own wording; `-w`/`-g`, `dump-keychain` and
+`export` stay `keychain`, and any doubt (`-sgithub`, `-a -w`) stays `keychain`. The same change
+closes a gap: `security`'s global `-p` takes a value, which was read as the subcommand, so
+`security -p x find-generic-password -w` recorded nothing at all. Rules: a new category goes into
+`SP_CATEGORIES` too, or `carried_paths` drops it on the session's next write; records written by
+older hooks keep their category and wording, never re-graded after the fact. Guards:
+`HookScriptTests.testAKeychainLookupIsNotAPasswordRead` (fails 4 times against v42),
+`SensitivePathSightingTests`.
+
+---
+
+## 2. The active-state staleness window must exceed the longest tool call
+
+**Rule:** `activeStaleMs` / `runningStaleSeconds` = 360s. Do not shorten it.
+
+**Broken once, and the break was subtle.** 360s from `511e33b` → dropped to **15s** by
+`709457e` (2026-08-09, titled "green traffic light lingering during idle time") → restored
+by `817f114` (2026-08-18) after review caught it.
+
+**Why it keeps happening:** it looks like a tuning knob for a false-*green* complaint. It is
+actually the thing preventing a false-*red* for every hook-only provider. Codex, VS Code and
+Antigravity write **no status file at all during a tool call** — the file is silent for the
+tool's entire duration. A 15s window marks any tool call longer than 15 seconds as stopped.
+
+**The deeper lesson:** the real cause of that false-green was elsewhere (transcript tail
+parsing, `80ce9e1`; the demotion arm, `24b2ef2`). Shortening a timeout to fix a state bug
+trades one wrong colour for another. Fix the state machine, not the clock. (Entry 12 is the
+same lesson on the yellow light: its clock became the only exit, and a true yellow died on it.)
+
+**Guard — exists.** `RegressionGuardTests.testHookOnlyProviderMidToolCallStaysActiveAt*`.
+Verified to fail when the default is set back to `15_000`.
+
+---
+
+## 3. `.unknown` on a live process means working, never idle
+
+**Rule:** when the transcript tail cannot be parsed but the process is alive, map to a
+working state.
+
+**Flipped 3 times, fixed twice independently.** `80ce9e1` → idle. `f46a323` (2026-08-18,
+antigravity branch) → thinking. `24b2ef2` (2026-08-21, development) → idle again, in a
+newly-written function. `397743d` → thinking.
+
+**Why it keeps happening:** "unknown" reads like "nothing is happening", so idle feels like
+the safe default. It is the opposite. `.unknown` is only reachable for a process that is
+demonstrably *running*, and once the reconciler's demote arm began consuming passive
+verdicts, a single unreadable read could dim a correctly-green session.
+
+Round 3 was not a fresh mistake — it was the same wrong default re-derived on a branch that
+never received the first fix. See [Merge hygiene](#merge-hygiene).
+
+**Guard — exists.** `PassiveClaudeStateTests.testUnknownWithQuietFileStaysThinking`.
+**This test must survive the `feat/antigravity-integration` merge.**
+
+**2026-09-12 addendum — "live" has to be decided correctly first.** This whole entry rests on
+knowing that the process is alive. `isClaudeProcessAlive` confirmed identity by requiring the
+kernel's start time to be within five seconds of the session record's `startedAt` — but the CLI
+writes that record *after* it starts, 13 s later for a chat that resumed a 130 MB transcript. The
+live chat was then "dead": the reconciler demoted its green card to stopped, `hostPID` never
+reached it (no click-through), smart caffeinate released, and the card went invisible ten seconds
+later — "this session is not being detected", with the hook file fresh on disk the whole time. The
+check exists for pid reuse, and a reused pid always belongs to a process that started *after* the
+record was written. Rule: `AgentTrafficLightMapper.processMatchesSessionRecord` — the record's own
+`procStart` decides when it has one (±5 s), otherwise the process may start up to ten minutes
+before the record and at most five seconds after it. Never tighten that window to "the record is
+written the instant the process starts"; it is not. Guards:
+`PassiveClaudeStateTests.testALiveSessionWhoseRecordWasWrittenLateIsStillAlive` and
+`...testTheRecordsOwnProcessStartDecidesWhenItHasOne`.
+
+---
+
+## 4. A truncated tail must widen the window, never report `.unknown`
+
+**Rule:** when a read window yields no verdict, escalate to the next window. A failed read
+says nothing about the wider ones — their byte offsets are different.
+
+**Broken by the commit that stated it.** `24b2ef2` introduced both the doc comment ("a
+truncated tail must widen rather than report `.unknown`") and an escalation loop that
+`break`-ed on a nil read. Since `readTrailingLines` seeks to an arbitrary byte offset and
+decoded strictly, any window boundary landing inside a multi-byte character (em dashes,
+arrows, emoji — ubiquitous in transcripts) abandoned escalation entirely. Fixed `397743d`,
+one day later.
+
+**Why it keeps happening:** the comment and the code were written in the same commit and
+still disagreed. Nothing checks a comment against its implementation.
+
+**Guard — exists.** `AgentSessionLogParserTests.testEscalationSurvivesMultibyteWindowBoundary`
+builds a fixture that deliberately straddles a character on the boundary; verified to fail
+against the pre-fix reader.
+
+---
+
+## 5. A chat title must never be resolved against itself, and must never become "Untitled chat"
+
+**Rule:** the display name comes from the log-derived title (`ai-title`, transcript title)
+when one exists. Never a raw prompt, never a bare tool name, never a fallback when a real
+name is available on another session record.
+
+**Broken 5 times** — `04ec047` (2026-07-12), `ae6151f` (07-16), `e6d9abb` (07-20),
+`8caf98d` (07-20), `f46a323` (2026-08-18). Four are explicitly framed as regressions.
+
+Two distinct failure shapes recur:
+- **Self-comparison.** `8caf98d`: both resolvers vetted a candidate title against
+  `sources.logTitles[sessionID]` — which is where the candidate came from — so every real
+  title was rejected as "unreliable". The warning comment from that fix is still in
+  `CursorAgentStatusMonitor.swift` and is worth reading before touching the vetting logic.
+- **Name not carried across the merge seam.** `f46a323`: a repaired hook session did not
+  inherit the passive session's name, and `hasHookSessionBacking` deleted claude/codex hook
+  files whenever the transcript listing missed — welding "no name yet" to "delete the
+  session".
+
+**Why it keeps happening:** name resolution spans four sources (hook payload, transcript
+title, composer metadata, passive session) merged in a ~200-line private method. Every new
+provider adds a path through it.
+
+**Guard — partial.** `RegressionGuardTests.testToolNamesAreRejectedAsChatTitles` and
+`testRealChatTitlesSurviveSanitation` pin `AgentApprovalGatedTools.looksLikeToolName`, the
+primitive both resolvers share.
+
+**Gap:** `resolveHookProviderChatName` and `resolveCursorChatName` are `private` on
+`CursorAgentStatusMonitor`, which the logic-only test target does not compile — so the
+self-comparison bug itself is still untestable. Closing it means lifting those resolvers
+into a pure, testable type (as `looksLikeToolName` already was). **This is the
+highest-value missing test in the repo** — five regressions, no coverage.
+
+**2026-09-11 addendum — a sixth "Untitled chat", two new shapes.**
+1. *One conversation split across ids.* Claude Code fires a subagent's hooks (Agent tool,
+   Explore/Plan) with `agent_id` + `agent_type` beside the parent's `session_id`; since v23 the
+   hook picked `agent_id` first (added for Cursor's agentId), so every subagent wrote its own
+   `claude-<agent_id>.json` → a nameless card under the same project, and its trailing `thinking`
+   could relight a finished chat green for ~6 min. Fix: hook v38 writes `parent_id` into the
+   subagent's own file (state machine untouched) and `AgentTrafficLightMapper.foldSubagentHookSessions`
+   folds it into the parent's card — the more urgent light while the parent's turn is open, nothing
+   once it has ended, a stand-in named from the parent's transcript when the parent has no file.
+   Guards: `SubagentFoldTests`, `HookScriptTests.testAClaudeSubagentEventNamesItsParent` and siblings.
+   Never key a card on anything but the conversation the user sees.
+2. *The title slides past the tail windows.* On a very long transcript a long turn can push the
+   newest title record beyond the 1 MiB window; the name fell back to an older title or the prompt.
+   The last title a tail window found now sticks (`AgentSessionLogParserTests.testTheTitleSticksWhenALongTurnPushesItPastTheTailWindows`,
+   verified to fail when the sticky title is removed).
+
+---
+
+## 6. Migration coverage must equal install coverage must equal uninstall coverage
+
+**Rule:** whatever set of paths `install` writes, `checkInstalled`, the version migration,
+and `uninstall` must all cover the same set.
+
+**Broken twice.** `80ce9e1` established it for Claude ("growing the hook table would make
+existing installs report 'not installed' and skip their own upgrade"). `1cc631c` re-broke it
+for Antigravity: the migration inspected only the IDE config, which install touches only
+when it already exists, so a fresh install was never migrated. Uninstall had the mirror-image
+bug — it stripped fewer locations than install wrote, leaving entries pointing at a deleted
+script while `checkInstalled` still reported installed.
+
+**Why it keeps happening:** the four path sets are written independently in four places, and
+adding a provider means remembering all four.
+
+**Guard — exists (2026-09-11).** The four sets are one now: `AgentHookLayout` lists each
+provider's script and every settings file its entries can be in, with the file's shape and
+whether install always writes it or only merges into it when present. `install` (the Antigravity
+merge), `uninstall` (every listed file, whatever the write policy), `checkInstalled` (any listed
+file with the required entries), `stripEntries` (routed by the listed shape), and the version,
+legacy-script and event-argument migrations all read it. `AgentHookLayoutTests` pins the table
+(a script per provider, an always-written file per provider, one owner per file) and fails if a
+hook path literal reappears in `AgentHookInstaller.swift` code. A new provider is one more case in
+the layout.
+
+---
+
+## 7. A hook session shadows the passive session — carry everything across
+
+**Rule:** when a hook session and a passive session describe the same conversation, the hook
+one wins the display slot. Anything the passive side knows and the hook payload does not must
+be copied across in the reconciler, or it is lost for every hook-tracked session.
+
+**Broken 3 times, in two different fields.**
+
+| # | Field lost | Symptom | Commits |
+|---|---|---|---|
+| 1-2 | `chatName` / `projectName` | every hook-tracked Claude session rendered "Untitled chat" | `8caf98d` (2026-07-20), `f46a323` (2026-08-18) |
+| 3 | `hostPID` / `cwd` | click-through silently inert — no hand cursor, no tooltip, dead click | shipped in `ff2caab`, fixed here |
+
+**Why it keeps happening:** the hook payload is structurally thinner than the passive
+session — no title, no pid — and the shadowing is invisible at the call site. A field added
+to `AgentSessionStatus` is wired through ~14 construction sites and *still* silently dropped
+here unless the reconciler's inheritance helper is updated too. The third occurrence happened
+in the same helper that had just been written to fix the first two.
+
+**How occurrence 3 evaded verification:** the feature was tested against a passive-only
+session (no hook file), which carries its own `hostPID` and worked correctly. Sessions *with*
+hook files — the normal case — were broken the whole time. Measured on the live machine:
+3 of 4 displayed Claude sessions had `hostPID = nil` before the fix; the fourth was the one
+without a hook file.
+
+**Guard — exists (2026-08-26).** The reconciler was lifted verbatim into
+`AgentTrafficLightMapper.reconcileClaudeSessions(...)` (pure, Foundation-only, in the logic
+test target). `ClaudeReconcilerTests.testInheritedFieldsCarryAcrossOnDemote` and
+`...OnUnchangedSession` pin all four inherited fields — verified by temporarily dropping the
+`hostPID` inheritance and watching both tests fail. Entry 5's name-resolution half is NOT
+covered by this: the resolvers still span filesystem/SQLite sources inside the monitor and
+remain untestable until they grow a seam.
+
+**Still true:** when you add a field to `AgentSessionStatus` that a passive session can
+populate, add it to `inheritingPassiveData` (now in `AgentTrafficLightState.swift`) AND to
+the field assertions in `ClaudeReconcilerTests` in the same commit. The field set as of
+2026-09-10: `chatName`, `projectName`, `cwd`, `hostPID`, `desktopSessionID` (Claude Desktop's own
+id for the chat, the click-through locator — carried by `carryingExtras` as `self ?? source`;
+guards: `ClaudeReconcilerTests.testDesktopSessionIDCarriesAcrossBothReconcilerArms`,
+`ClaudeDesktopSessionIndexTests.testDesktopSessionIDSurvivesReconstruction`, the retention test).
+
+**2026-09-08 addendum — additive fields.** `toolErrorCount` and `isUnattended` are `var`s with
+defaults, so the memberwise initialiser compiles happily without them and *silently drops them*
+at every one of the ~14 reconstruction sites. The rule: any `AgentSessionStatus(...)` built from
+another session ends in `.carryingExtras(from:)` (max of the two counts, OR of the flags);
+`inheritingPassiveData` calls it too. Guard: `ClaudeReconcilerTests` asserts both survive the
+demote path and `AgentSecurityFindingTests.testUnattendedFlagSurvivesReconstruction` covers the
+three helper initialisers. When you add another additive field, extend `carryingExtras`, not the
+call sites.
+
+**2026-09-11 addendum — `hiddenText`.** Hook-only sightings of hidden Unicode (hook v34). They ride
+`carryingExtras` as a set union keyed by (kind, location, first seen) — the newer copy of one sighting
+wins, the newest three are kept, empty is the identity — never a replace, or a reconstruction from a
+side that has not seen the sighting would erase it. Guards: `ClaudeReconcilerTests` (demote and
+pass-through arms carry it) and `HiddenTextIncidentTests.testReconstructionHelpersKeepTheField`.
+Since the sightings refactor the field is `sightings` (`HookSightings`, one list per hook-side check)
+and the union is `HookSighting.union` per list; a new check adds a list to `HookSightings`, never a
+new field on `AgentSessionStatus`. v35 adds `secrets` and `sensitivePaths` that way, plus one
+locator, `terminal` (the hook-reported tty, session leader and its start time), carried like
+`desktopSessionID` as `self ?? source`. Guard: `HookSightingsTests.testTerminalLocatorRidesTheSeamAsSelfOrSource`.
+
+**2026-09-09 addendum — the run verdict is not additive.** `runError` (why the run ended, nil for
+a clean finish) is a per-turn *verdict*, replaced by every stopped write. It rides the same
+`carryingExtras` seam but merges as `RunError.preferred` — `self` unless it has none, then the more
+specific reason — never as an OR or a max: under those nil is the identity, so one stale verdict
+would pin "failed" onto every later clean turn. The only things that may set it are run-terminating
+signals (hook `ended_on_error`, the transcript's `isApiErrorMessage`, Warp `Failed`, Desktop
+`result.is_error`); `toolErrorCount` is a count of recovered failures and must never become one.
+Guards: `ClaudeReconcilerTests.testRunVerdictSeamPrefersTheHookThenTheMoreSpecificReason`,
+`RunErrorTests`, and the hook-script cases that pin a recovered or trailing tool failure as clean.
+
+**2026-09-12 addendum — `turn`.** The hook's turn (v39: start, end, tool calls, Claude transcript
+offset) is hook-only and rides `carryingExtras` as `self ?? source`. Two places must NOT take it
+from the seam: the subagent fold (`self ?? source` would hand a parent with no turn its subagent's;
+the fold sets `HookTurn.folding(sub, into: parent)` explicitly on both arms and a stand-in gets
+none) and Cursor's `collapseSubagentSessions` (a rolled-up subagent candidate carries no turn, so
+the parent conversation's own wins whichever arrives first). Guards:
+`ClaudeReconcilerTests.testTheTurnCarriesAcrossEveryReconcilerArm`,
+`AgentTurnMetricsTests.testTheTurnRidesCarryingExtrasAsSelfThenSource`, the three v39
+`SubagentFoldTests`.
+
+---
+
+## 8. Never add a flag or env var to the usage spawn without proving a real fetch
+
+**Rule:** the Claude usage fetch invocation is verified empirically, not reasoned about. Every
+argument and environment variable must be confirmed against an actual `fetchedAtMs` advance before it
+ships.
+
+**Broken twice in one day**, both by additions that looked defensive and harmless:
+
+- `--no-session-persistence` — valid only with `--print`. The interactive session `/usage` requires
+  exited immediately ("can only be used with --print mode"), so the command was typed into a dead
+  process. Symptom: spinner ran, nothing fetched, no error surfaced.
+- `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` — added as "belt-and-braces" against bridge traffic.
+  It suppresses nonessential network traffic, and the usage fetch **is** a network call to
+  `/api/oauth/usage`. Symptom: identical — session started, `/usage` ran, cache never updated.
+
+**Why it keeps happening:** the failure is silent and looks like success. The session starts, the
+spinner spins, the process exits cleanly, and the only signal that anything went wrong is a
+timestamp on disk that did not move. Nothing in the UI or logs says "the fetch was suppressed".
+
+**Guard — exists.** `ClaudeUsageFetchCommand` holds the invocation as data, and
+`KannuTests/ClaudeUsageFetchCommandTests.swift` pins: no print-only flag in any attempt, the
+environment is plain inheritance (`nil`), the forbidden env key is recorded, and the **last attempt
+stays bare** — that bare invocation is the one observed to actually fetch. Both regressions were
+verified to turn the suite red before this was committed.
+
+**2026-09-10 addendum.** The ADR Detection run (`uv run --project <checkout> python
+<adapter> …`) is pinned the same way: `ADRDetectionCommand` holds the arguments and the
+environment whitelist as data, `ADRDetectionCommandTests` pins both, and the embedded adapter is
+tested identical to `scripts/adr-analyze-session.py`. Permission and tool flags never pass
+through Kannu — the adapter alone decides how upstream runs its Claude session.
+
+---
+
+## 9. Notch tooltips are custom; `.help()` is dead there
+
+**Rule:** never use SwiftUI `.help(...)` under `Kannu/components/Notch/` or
+`Kannu/components/AgentStatus/`. Use `.hoverTooltip(...)`.
+
+**Broken across 8 call sites**, all shipped and none ever rendering: `KannuHeader`, `NotchNotesView`
+(x2), `NotchTimerView`, `NotchAgentStatusView` (x4). Then broken three more times while fixing it —
+a competing `.onHover` shadowing the tooltip, `fixedSize(horizontal:)` collapsing the bubble to the
+parent's width, and a `ScrollView` clipping a bubble that opened upward from its first row.
+
+**Why it keeps happening:** `.help()` is the obvious, correct-looking API and fails **silently** —
+it compiles, reads fine in review, and simply never appears. AppKit only shows tooltips for the
+active application, and this accessory app with a non-activating panel is never active. Nothing in
+the type system or the build says so.
+
+**Guard — exists.** `.githooks/pre-commit` rejects any `.help(` in those directories, requires
+`HoverTooltip.swift` to keep a bare `.fixedSize()`, and rejects `fixedSize(horizontal:)` in that one
+file — not directory-wide; `AgentTrafficLightLiveActivity` uses it legitimately.
+The layout rules that cannot be grepped — `edge` versus container clipping, one hover source per
+control — are written up in **docs/TOOLTIPS.md** with the reasoning and a checklist.
+
+**Gap:** none of this is unit-testable; a new tooltip still has to be hovered in a real build.
+
+---
+
+## 10. Never derive observer semantics from the *last* `@Published` bump
+
+**Rule:** a `@Published` counter can be bumped several times in one main-actor turn, and SwiftUI
+delivers them as a single `onChange`. Any side flag the observer reads must describe the whole
+window since it last looked, never the most recent publish.
+
+**Broken once, on the commit that introduced the flag** — `32c260b` (2026-08-26) added
+`lastPulseWasHeartbeat` with a doc comment asserting it was "read synchronously by the pulse
+observer (same main-actor turn as the publish)". It was not: `rescan()` bumps `activityPulse` for
+the session list, again for the traffic light, and last for the heartbeat, so the observer saw
+one change and a flag that said "heartbeat". Strict collapse then swallowed every idle → executing
+and every permission prompt — the reveal the 7s hold (`d3d056a`) was raised to serve. Listed
+despite a single occurrence because the false premise was written down as fact in the code and
+survived two review passes.
+
+**Why it keeps happening:** the publish and the observation feel synchronous when you read the
+code top to bottom; nothing at the call site says "coalesced".
+
+**Guard — exists.** `AgentActivityPulseLatch` (in `AgentTrafficLightState.swift`, logic target)
+is the only source of the verdict and is pinned by `AgentActivityPulseLatchTests`. Keep the
+heartbeat emit last in `rescan()` — it reads the state `applyDisplay` just wrote — and keep
+exactly one consumer of the latch.
+
+**2026-09-12 addendum — turn metrics publish without a pulse.** Since v39 a subagent's tool call
+changes its chat's `turn.toolCalls`, so the session list changes on every subagent write (four
+workflow agents write every few seconds). The list still publishes, but `rescan()` bumps
+`activityPulse` only when `pulseRelevantChange` sees a difference with the turns cleared — or the
+island would never collapse while a workflow runs. The chat's own hook writes still pulse (each
+moves `updatedAt`), exactly as before. Guard: `RegressionGuardTests.testATurnOnlyChangeIsNoRevealPulse`.
+
+---
+
+**Addendum (2026-09-17):** the *other* half of this cost surfaced on a Release build under a busy
+agent: `sessions` publishes on every hook write (up to ~20 Hz through the 50 ms quick-rescan
+path), and `ContentView` observed the whole monitor while reading none of it — 38 % average CPU,
+all SwiftUI re-render churn, notch closed. `ContentView` now observes
+`AgentTrafficLightProjection` (state, visibility, pulse counter), a **mirror written only by the
+monitor's own `didSet`s** — it must never bump or consume the latch, and the latch keeps exactly
+one consumer (`ContentView.noteAgentActivityPulse`, through the un-observed monitor reference).
+Views that render the session list observe the monitor directly, as leaves. Guard:
+`ClosedNotchObservationTests` pins the observer allowlist, the projection's single writer, and
+the single consume site.
+
+## 11. A passive source never does its I/O on the main actor
+
+**What happened (2026-09-09).** `WarpAgentStore.sessions` opened `warp.sqlite` synchronously
+inside `rescan()`. The database lives in Warp's *group container*, and the first `open()` of another
+app's container raises the macOS "access data from other apps" prompt — `open()` blocks until the
+user answers. Every launch that morning froze the whole app (timers, hovers, the notch) for as long
+as the dialog stayed up, and killing the app to rebuild dismissed the dialog unanswered, so the next
+launch prompted again. `sample` showed 100 % of main-thread samples in `guarded_open_np`.
+
+**The rule.** Reads of anything under `~/Library/Group Containers`, `~/Library/Containers`, Desktop,
+Documents, Downloads, or any other TCC-protected path run on a worker queue, one at a time, with the
+result handed to the main actor (`refreshWarpExchangesIfNeeded` is the shape: a cached result the
+rescan maps, a refresh that schedules the next rescan only when the result changed). Same rule for
+any new passive source. AGENTS.md's "first touches of protected resources" trap is this rule stated
+for `AppDelegate.init`; it applies to every later touch too.
+
+**Guard.** `WarpAgentStoreTests.testSessionsFromExchangesNeedNoDatabase` pins the pure mapping, so
+the split cannot quietly grow a file read again.
+
+**2026-09-10 addendum.** The same shape now reads Claude Desktop's session index
+(`ClaudeDesktopSessionIndex.Loader` on a utility worker, `refreshDesktopSessionIndexIfNeeded`):
+not for TCC — `~/Library/Application Support/Claude` is not protected — but because the records
+are 100+ KB each and rewritten on every Desktop turn. Only the reduced id map crosses back, and
+it is compared as a map so a timestamp bump alone never schedules a rescan.
+
+**2026-09-11 addendum — the main actor, not only TCC.** Every FSEvents batch dropped both lists of
+recent transcripts, so an append to a running chat or a hook's status write made the next rescan
+walk `~/.claude/projects` and `~/.cursor/projects` (hundreds to thousands of files) on the main
+actor, and every rescan re-read and parsed the first 32 KB of up to 24 transcripts per provider.
+Under bursty hook traffic Kannu averaged 18 % CPU with 80 % peaks. Rule: drop the lists only when
+`TranscriptListingInvalidation.shouldInvalidate` says a transcript may have appeared, gone or moved
+(or events were lost); appends ride the lists' two-second lifetime. Head-derived facts (snippets,
+Cursor titles) are remembered against (mtime, size), like the title and tail caches. Guards:
+`TranscriptListingInvalidationTests` (flag values pinned to CoreServices),
+`AgentSessionLogParserTests.testAssistantSnippetsFollowTheFileWhenItChanges` (verified to fail
+when the cache ignores a changed file).
+
+**2026-09-12 addendum — turn tokens.** A Claude request's tokens are read from its transcripts
+(the chat's own from the size hook v39 recorded at the turn's start, plus every subagent
+transcript), which run to 175 MB. `ClaudeTurnTokenReader` does all of it on one serial utility
+queue (`ClaudeTurnTokenFollower`); the monitor's rescan only builds the requests. The totals live in
+the follower's own `@Published` map, never on the sessions, so they re-render only the metrics
+view, not the notch, and never bump the reveal pulse (entry 10). Reads stay inside the real path
+of `~/.claude/projects` (symlinks resolved, `O_NOFOLLOW`), so no status file can point Kannu at a
+protected folder. Guards: `ClaudeTurnTokensTests` (symlinks and outside paths refused, catch-up
+never publishes a partial total, copied history outside the time window never counts).
+
+**2026-09-13 addendum — a subprocess is I/O too, and this rule has to reach outside AgentStatus.**
+`BluetoothAudioManager.updateBatteryStatuses(force:)` collects on the *calling* thread, and two of
+its four collectors spawn `system_profiler SPBluetoothDataType` and `pmset -g accps` and wait. Its
+one thread hop is at the publish (`DispatchQueue.main.sync`), which protects the dictionaries, not
+the caller. Three of its four callers are the main thread — a connect, a disconnect, and the
+lock-screen weather refresh — and the 20 s cache does not help because they all pass `force: true`.
+Measured on the main thread with **zero** devices connected, the cheapest possible state: **228 ms**;
+with devices actually connected it is the 2-8 s `HangReport.hangThreshold` was deliberately set
+above, so it could trip the app's own hang watchdog.
+
+This is the third pass over the same rule in one file. `7b3e290` moved the initial scan off main and
+carried a forced rescan *onto* main in the same change ("partly undoing its own goal"); `ed10284`
+fixed that one; `342bafd` added `includeBattery:`. The two remaining refreshes were then listed in
+CHANGELOG under "reviewed and deliberately left as designed" — reversed on 2026-09-13, because the
+lock-screen path was never covered by that decision and the hang watchdog now reads the stall as a
+freeze. Rule: the forced collection runs on `pmsetFetchQueue`, the apply hops back, and it is
+strictly fire-and-forget — the publish is `main.sync`, so waiting on it from main deadlocks.
+
+**Why it broke twice after the rule was written:** this file says to read it before touching
+`Kannu/managers/AgentStatus/`, and `BluetoothAudioManager.swift` is not in there. The instruction was
+narrower than the rule. It is in [Danger zones](#danger-zones) now, and AGENTS.md points at that
+table rather than at one directory.
+
+**And moving it off main is not free — the second half of the rule.** A collector that publishes by
+*replacing* shared state is safe only while collection is synchronous, because then nothing can
+interleave. Off the main thread the collect-to-apply window becomes however long the subprocess takes,
+and anything that writes the same state inside that window is silently reverted to a snapshot taken
+before it. That is exactly what the 2026-09-13 fix did on its first pass: a live Bluetooth LE battery
+read landing during a `system_profiler` run was overwritten by the older scan, with no path back,
+because the live reader only re-reads a device whose level is `nil`. Caught in review, before merge.
+
+Rule: when you move a collector off the main actor, decide explicitly what happens to writes that
+land during the window — and do not reach for "higher wins", which fixes the revert by making the
+value unable to fall. Order the writes instead: the live reader stamps each accepted write with a
+counter, the scan captures that counter on main *before* dispatching, and at apply time only keys
+written after that point survive the snapshot.
+
+**Missing:** no guard for the main-actor spawn. A static "subprocess spawned on the main actor" check
+would be noisy and unreliable. Manual check: after a Bluetooth connect or disconnect, `sample` the app
+and confirm no `system_profiler` or `pmset` frame appears on the main thread. The revert half *is*
+guarded: `BluetoothLiveBatteryWritesTests` pins both directions, including that a scan can still lower
+a value as the battery drains — the half a careless fix breaks.
+
+**2026-09-16 addendum — the fourth pass, and the rule at full width.** The 2026-09-13 fix moved the
+*forced* refresh onto `pmsetFetchQueue` and measured the connect path at 0 ms — with zero devices
+connected. With a device actually connecting, `checkForNewlyConnectedDevices` (main thread: the 3 s
+poll and the connect notification) first built the device through `createBluetoothAudioDevice`'s
+default `includeBattery: true`, whose `getBatteryLevel` ran an *unforced* `updateBatteryStatuses()`;
+on a cache older than 20 s that is both collectors inline, on main, immediately before the connect
+HUD — the original stall, one call earlier than the one that was fixed. Found by a review of the
+merged PR, not by a user, because this Mac has nothing to connect. The rule as the addendum above
+stated it ("the forced collection runs on `pmsetFetchQueue`") was narrower than the rule:
+**no collector runs on the main thread, forced or not.** `getBatteryLevel` and the `includeBattery`
+parameter are gone, so there is no longer a synchronous way to ask for a level;
+`updateBatteryStatuses` is called only from `pmsetFetchQueue` and the launch scan's utility queue.
+
+The launch scan also needed the second half of the rule. It collects off main too, and called the
+forced scan with no `liveWriteBaseline`, so a live BLE write landing during its `system_profiler` run
+was reverted exactly as in the forced-refresh case above; the parameter doc's "nothing can
+interleave" was true only for a caller that collects on main. It reads the counter on main first
+now, and the doc says `nil` is for main-thread callers only. Guards unchanged: the revert half by
+`BluetoothLiveBatteryWritesTests`, the spawn half by the manual `sample` check — still missing.
+
+---
+
+## 12. Yellow follows evidence, not the clock
+
+**Rule:** an `awaiting_input` hook state expires on the 300 s clock (`awaitingInputStaleMs`) only
+when nothing can say whether the prompt is still open. Where liveness evidence exists — a live
+Claude process whose transcript tail still shows the `tool_use` with no result, a Cursor transcript
+with a pending approval — the yellow and, for Claude, its hook file live as long as the evidence
+does. Yellow still *originates* from hooks only; evidence corroborates, never claims.
+
+**What happened (2026-09-10).** A Claude Code prompt left unanswered went dark at 5 minutes and,
+at 30, handed the card to the passive twin as a dim "inactive" chat (or green, when the pending
+`tool_use` read as a running tool). Every earlier yellow fix had made the clock stricter: the
+2026-08-06 sticky-latch fix stopped refreshing `ts` "so the 5-minute escape can still fire", and
+the parallel-group merge preserved `ts` again — after which the clock was yellow's only exit.
+Nobody asked whether a *true* yellow could outlive it.
+
+**How it works now.** `buildClaudeSessions` runs before `parseHookSessions` and hands over
+`liveTailByConversationID`; the parser computes `holdsAwaitingInput` per file, passes
+`holdAwaitingInput:` to `resolveHookState`, and exempts a corroborated Claude prompt from the stale
+deletion (`awaitingInputOutlivesStaleCap`). Hook-only providers (vscode/codex/antigravity, and since v36 copilot/gemini/qwen/opencode — a new
+hook-only provider must join this list or its yellow dies at 5 minutes) hold on
+display and keep the stale cap — it is the end of their yellow. Claude's `idle_prompt`, a dead
+process and Cursor's sticky yellow without an approval stay on the clock. Caffeinate keeps its own
+5-minute bound (`awaitingInputCaffeinateSeconds` + the `awaiting window` recheck), so a held
+yellow cannot keep the Mac awake all night.
+
+**Guards.** `RegressionGuardTests.testHeldAwaitingInputStaysYellowAtOneHour`,
+`…testUnheldAwaitingInputExpiresAfterFiveMinutes`, `…testAwaitingInputHoldFollowsEvidencePerProvider`,
+`…testOnlyACorroboratedClaudePromptOutlivesTheStaleCap`;
+`ClaudeReconcilerTests.testHeldYellowSurvivesPassiveToolInFlight`, `…testHeldYellowDemotesWhenTheProcessDies`,
+`…testAgedYellowIsNotPromotedByPassiveActivity`; `CaffeinateDecisionTests` window and recheck cases.
+**Missing:** the monitor-side ordering and the deletion exemption are not reachable from the logic
+target — manual check: the waiting session's file survives past 30 min in `~/.kannu/agent-status`.
+
+**Never** fix a false yellow by shortening `awaitingInputStaleMs` or by refreshing `ts` in the
+script. Add or remove evidence.
+
+---
+
+## 13. A live Claude session is never resumed
+
+**Rule:** `claude://resume?session=<id>` imports a transcript into Claude Desktop and starts a new
+`claude --resume` host for it. On a session whose process is still alive that is a second consumer
+of the same transcript. Only a chat whose process is gone may be resumed, and only once its card is
+dim. A live chat goes to its terminal, its tmux pane, or nowhere.
+
+**Broken once**, fixed in `b759a4e` (2026-09-11). The opener's own header already said "never resume a
+live session", but the Claude arm resumed any `.inactive` card that had no reachable host. A live but
+idle session in tmux (whose server's parent is launchd), `screen` or ssh has a `hostPID` and no GUI
+app up its parent chain, and its dim card read as "not running" — so a click spawned a duplicate.
+
+**Guard.** The decision moved into `AgentClickThroughPolicy` (logic target);
+`AgentClickThroughPolicyTests.testInactiveLiveSessionNeverResumes` and
+`…testLiveSessionWithoutAHostNeverResumes` pin it. A live process is "live" by `hostPID` today;
+anything that later proves liveness (a hook-reported terminal) must feed the same flag.
+
+---
+
+## 14. Nothing stops the main thread except one helper
+
+**Rule:** `runModal()` and `beginSheetModal` appear only in `Kannu/helpers/ModalPresenter.swift`.
+A file panel is never modal — `NSSavePanel.begin(completionHandler:)` exists. An alert is a sheet
+when a titled window is on screen, and otherwise activated and raised above Kannu's own windows
+before it runs. No sheet is ever anchored to a window that cannot be focused.
+
+**Broken twice**, fixed in `ed7b0ca` (2026-09-12, the five Settings pickers) and `f6c6bfc`
+(2026-09-12, the ban, after the RPC picker and the alerts were found still modal). A user clicked the
+ADR policy picker and Kannu stopped. A sample of
+the live process named it: `choosePolicyFile()` → `-[NSSavePanel runModal]` →
+`-[NSApplication runModalForWindow:]`, parked in `__CFRunLoopRun` for 1,596 of 1,599 samples at 0 %
+CPU with the panel out of reach — which the user reported as a crash, because force-quitting is what
+you do to a frozen app. The same modal loop is what produced the 2026-08-29 SIGABRT in
+`NSHostingView` (CHANGELOG, that date): `ADRConnection`, `SecurityFindingsStore` and the session
+monitor keep publishing on the main queue while the loop is stopped, so SwiftUI re-enters layout
+underneath it. Five Settings pickers were converted; an audit then found four more sites of the same
+shape and eleven alerts that render *underneath* the notch at `.mainMenu + 3`, where the app looks
+stopped and there is no dialog to dismiss.
+
+**Why one helper.** Kannu is an accessory app: nearly every window it owns is a borderless
+`.nonactivatingPanel`, so `NSApp.keyWindow` is the wrong sheet anchor and "the app is frontmost" is
+never a safe assumption. Centralising it also made the hang watchdog possible — because `runModal()`
+exists in exactly one place, that one place can tell `HangWatchdog` a stopped main thread is
+deliberate, and a modal loop entered anywhere else is still reported as the bug it is.
+
+**Guards.** `.githooks/pre-commit` rejects either API outside the helper;
+`ModalPresentationRulesTests` runs the same scan in CI with two meta-tests on its own detector, so a
+regex that stops matching fails loudly instead of passing vacuously.
+
+**Never** answer "the panel did not appear" by activating harder. If a panel or alert is not on
+screen, the question is which window it was anchored to.
+
+---
+
+## 15. A request's clock spans the request, not the last state change
+
+**Rule:** the run time on a card measures one request. `HookTurn.startedAt` is the source wherever a
+turn exists; where none does, `AgentExecutionClock` is, and it restarts only when the request genuinely
+ended. A card being dimmed by the staleness ladder is not a request ending.
+
+**What happened.** Issue #14, "execution time resets when thinking mode happens", was reported against
+the hook path and fixed there across three commits: `c5ee85b` recorded a turn's start on disk,
+`f47a796` made a prompt arriving mid-request *join* it instead of starting a new one, and `069a8ff`
+made the card prefer `turn.startedAt`. Thinking has not moved the clock since.
+
+The same rule was still broken in the fallback that serves everything with no turn — passive sources
+and pre-v39 hook files. `applyExecutionRunState` read "the previous cycle was not an active run" as
+"this is a new request" and stamped `now`, so **any** non-active dip restarted the clock, including the
+`activeStaleMs` demotion that fires during a long quiet phase where the raw state never stopped being
+`executing`. A twenty-minute turn showed a few seconds — the reported symptom, reached by a different
+route than the one that was fixed.
+
+**Why it hid.** The rule lived inside a `private` method on a `@MainActor` monitor with **no test
+anywhere**, so nothing could state it, let alone check it. Fixing it in place would have been
+unverifiable, which is why the change is an extraction first: the rule is now
+`AgentExecutionClock.resolve`, in the logic target, and the monitor keeps only the plumbing.
+
+**The distinction to preserve:** `displayState` is what the staleness ladder concluded; `rawState` is
+what the source reported. Dipped display with active raw state is a demotion — keep the clock. Raw
+state no longer active is an end — clear it, so a genuinely new request after a real stop still
+restarts. Conflating the two is the bug, in either direction.
+
+**Guard.** `AgentExecutionClockTests` pins both halves, including that a demoted-then-resumed run keeps
+its original start *and* that a stop-then-new-request does not.
+
+**Not fixed by this, and deliberately so:** a passive source whose parser reports a genuine `stopped`
+mid-session — Claude Desktop flips raw state per record, including on any `result` record — still
+restarts, because by the time the clock sees it the source has said the request ended. Telling "ended"
+from "emitted a result record" is the parser's job, not the clock's; moving that decision here would
+mean guessing, and a timer that merges two genuinely separate runs is a worse bug than one that splits
+a single run.
+
+**Never** fix a reset by widening a staleness window. Entry 2 and entry 12 are the same lesson: the
+clock is not the state machine.
+
+---
+
+## 16. A rule stated in more than one file must be pinned to the thing that enforces it
+
+**Rule:** `.githooks/pre-commit` is the only authority on the CHANGELOG entry shape. Every file that
+documents that shape carries the hook's literal keys, and a test pins them to the hook's own greps.
+Never describe the shape in a new file without adding it to that test.
+
+**Broken 2 times.** `.agents/skills/kannu-senior-contributor/SKILL.md` documented the entry as
+`### Developer label: <x>` with `- Changes:`, and said the Agent label could be omitted — so every agent
+following the skill wrote a commit the hook rejected. Fixed `995bdb9` (2026-09-13). The identical defect
+was live the whole time in `.cursor/rules/feature-changelog.mdc`, which listed the three keys without
+their literal formatting and is `alwaysApply: true`, so Cursor injected it into every request. It
+survived the first fix because nothing knew it existed.
+
+**Why it keeps happening:** this is entry 1's disease in the instruction files. Four prose copies of one
+rule, and only the parser is ever exercised — nothing links them, so a copy rots invisibly and the
+agent reading it is the one who finds out. The tempting cure is to delete the copies and leave a
+pointer, and this repo's own history says that fails too: "CI runs on `main` only" was a pointer-shaped
+claim that went stale, and entry 11's "read this before touching `Kannu/managers/AgentStatus/`" was a
+pointer *narrower than the rule it pointed at*, which is how it got re-broken twice in a file it did not
+name. A copy checked against the parser is worth more than a pointer checked against nothing.
+
+**Guard — exists.** `KannuTests/ChangelogRuleDocsTests.swift` scrapes the required keys from the hook's
+`grep` patterns rather than from the hook's own error message (which is itself a copy, and can drift
+from the greps forty lines below it), then requires each key to start a line *inside a fenced template*
+in every documenting file — `CONTRIBUTING.md`, `AGENTS.md`, the `.agents/` skill and the `.cursor/` rule.
+A separate test walks every `*.md`/`*.mdc` in the repo and fails if a file mentions the rule without
+carrying the shape, so copy #5 cannot be born quietly. Both were landed **red** against the live
+`.cursor/` drift and then made green, and the scanner has five self-tests so a regex that stops matching
+fails loudly instead of passing vacuously. `.githooks/pre-commit` runs a weaker substring version for
+millisecond local feedback; the test is the gate, because **no CI job runs the hook**.
+
+**Same commit added the split it protects.** `AGENTS.md` is now the canonical vendor-neutral instruction
+file and `CLAUDE.md` imports it with `@AGENTS.md`. The test also pins that the import is the **last**
+line of `CLAUDE.md` — ordering is load-bearing, because the ART contract has to stay first — and that no
+bare `@token` appears outside backticks in either file, since Claude Code parses one as a file import
+and `AGENTS.md` legitimately mentions `@MainActor` twice.
+
+---
+
+## 17. SwiftUI never sizes a panel Kannu sizes
+
+**Rule:** a borderless panel never takes an `NSHostingView` as its `contentView`. Install it with
+`NSWindow.setHostedContent(_:)` (`Kannu/helpers/HostedContent.swift`), which nests the hosting
+view in a plain `HostingContainerView`. Titled windows (Settings, onboarding) keep the direct
+assignment — there, content-driven sizing is the point.
+
+**Broken 2 times.** `Kannu-2026-08-29-234024.ips`: an uncaught `NSGenericException` from
+`-[NSWindow _postWindowNeedsUpdateConstraints]`, reached through
+`NSHostingView.invalidateSafeAreaCornerInsets`. The fix then — recorded in the 2026-08-29
+CHANGELOG entry, pre-reset history — set `sizingOptions = []` on every panel's hosting view.
+`Kannu-2026-09-17-123317.ips`: the same exception on the notch `KannuWindow` (690×175 on an
+external display) with `sizingOptions = []` in place, after 103 near-limit warnings in 13 h.
+
+**Why it keeps happening:** `sizingOptions` is not the switch. When a hosting view *is* the
+window's content view, `NSHostingView.updateRequiredBridges` attaches a `WindowSizeBridge`, and
+`windowDidLayout` asks it to clamp the window to the SwiftUI content's minimum and maximum size,
+resizing the window if it is outside them (`updateAnimatedWindowSize`). Kannu sizes these panels
+itself, so the two fight: Kannu sets a frame, the bridge sets another, the frame change
+invalidates the safe-area corner insets, layout runs again — 45 update-constraints passes in one
+cycle against AppKit's limit of 43, then the throw. Verified on the running notch window with a
+reflection probe: bridge present as the content view, absent as a subview. A simple repro without
+Kannu's content never builds the bridge, which is why the August fix looked sufficient.
+
+**Guard — exists.** `KannuTests/HostedContentRulesTests.swift` scans every Swift file under
+`Kannu/` for a hosting view assigned straight to `contentView`; the titled-window exceptions are
+pinned by file and count, the notch window is required to use the helper, and the scanner has
+self-tests for every shape it must catch and every cure it must leave alone. **Manual check** when
+touching window creation: `/usr/bin/log show --predicate 'category == "DisplayCycle" && eventMessage CONTAINS "Marking window"'`
+should stay empty for Kannu under agent load.
+
+**Addendum, 2026-09-26 — a window is not enough; the view model must know which screen it is on.**
+This entry owns "the window exists but fights its own size". The neighbouring failure is *the window
+exists, is correctly sized, and still shows nothing*, and it shipped in 1.3.0. `vm.screen` was
+assigned in exactly one place, inside `adjustWindowPosition`, **below** both
+`guard !windowsHiddenForLock, !LockScreenManager.shared.isLocked` and a no-screens early return. A
+launch while the screen was locked, in clamshell, or with every display asleep therefore left it nil
+for the whole session — and the fullscreen detector's sink was gated on `$screen.compactMap { $0 }`,
+so it produced no signal at all and `hideOnClosed` kept its `true` initialiser forever. Two
+consequences, not one: the closed notch refused to paint, **and** `effectiveClosedNotchHeight`
+collapsed to 0, because a nil screen read as "notchless" on a notched MacBook — which removed the
+hover target, so it could not be summoned back.
+
+**Rule this adds:** only *positioning and ordering* may sit behind the lock guard. Screen identity,
+window creation, and anything a publisher keys on must be established before any early return — a
+guard that skips bookkeeping leaves state that never recovers, because nothing re-enters the method.
+A dropped `com.apple.screenIsUnlocked` is the same shape: `LockScreenManager`'s poll cleared
+`isLocked` without telling `AppDelegate`, so the self-heal at the top of `adjustWindowPosition` was
+never reached; it now posts `lockStateDidClear`. Related: a missing Accessibility grant made
+`isInNativeFullscreen` answer `true` ("assume fullscreen"), which hid the notch for any *maximized*
+window on a fresh install, since a new code identity drops every TCC grant.
+
+**Guard for the addendum — exists.** `KannuTests/ClosedNotchVisibilityTests.swift` covers the two
+extracted rules in `ClosedNotchVisibility` (Foundation-only, in the logic target, with the app
+delegating to it so there is one copy and not two), including the exact composition that produced the
+bug. `KannuTests/ClosedNotchVisibilityRulesTests.swift` pins what is ordering and defaults rather
+than arithmetic: `hideOnClosed` declared `false`, no `compactMap` gating the detector chain, launch
+seeding the screen before it hands off, the Accessibility fallback not answering `true`, and the
+`lockStateDidClear` round trip. First occurrence, so this is an addendum rather than a numbered
+entry — one commit, and an entry without hashes is an opinion.
+
+**2026-09-30 addendum — the notch alive, opaque, and on the wrong spaces.** The third way this danger
+zone has hidden the notch. After a night of sleep / DarkWake / display-off → lock → unlock cycles,
+the notch window was ordered in, alpha 1 and correctly placed, yet absent from the fullscreen app the
+user was in. `CGSCopySpacesForWindows` put it in two of eleven spaces: the desktop and Safari's
+fullscreen space. **Every** app's all-spaces window was in the same two (Slack, Claude, Control
+Center) — macOS itself had reset them — so this is not a Kannu ordering bug, and nothing Kannu did
+would have undone it: an experiment showed `orderFrontRegardless`, re-assigning
+`collectionBehavior`, and ordering out and back in all leave the membership stuck, while re-adding
+the window to the managed spaces (or building a fresh window) restores it.
+
+**Rule this adds:** the notch must not rely on `.canJoinAllSpaces` holding for the life of the
+process. `rejoinNotchSpacesIfNeeded` checks `isOnActiveSpace` on every space change, wake and unlock
+(`ClosedNotchVisibility.shouldRejoinSpaces` is the decision) and re-adds a stranded window with
+`CGSSpace.rejoinAllManagedSpaces`; it costs nothing while the notch is where it belongs. A notch
+hidden for the lock screen is off every space on purpose and is never touched.
+
+**Guard — exists.** `ClosedNotchVisibilityTests.testOnlyAStrandedNotchIsPutBack` (the decision) and
+`ClosedNotchVisibilityRulesTests.testAStrandedNotchIsCheckedOnSpaceChangeWakeAndUnlock` (the three
+triggers, and that the repair re-adds rather than re-orders). End to end with the DEBUG launch switch
+`--kannu-strand-notch`: the app strands its own notch and delivers the space-change notification; the
+log must read "Put 1 notch window(s) back on N spaces after space change" and the window must be back
+on every space.
+
+---
+
+## 18. Another app's click never opens the notch
+
+**Rule:** On a notched MacBook, only a click that hits Kannu's own window may open the notch, and
+hover opens it only after the pointer has rested on the hardware notch itself for
+`minimumHoverDuration`. Never watch clicks with a *global* `leftMouseDown` monitor in the notch view:
+a global monitor cannot consume the event, so a click meant for a menu item or a tab beside the notch
+lands in that app *and* opens the panel over it.
+
+**Broken twice.** The monitor came from upstream (`startHoverClickMonitor`, "catches clicks outside
+the app window"). First break: a stale `isHovering` across a screen lock made it open the notch on
+every click after unlock (CHANGELOG 2026-09-04, patched by dropping hover state on lock). Second: any
+click beside the notch while hovering the +8 pt growth, a music or agent wing, or the agent band
+opened the panel over the thing clicked (2026-09-21). The global monitor was removed; the local one,
+which sees only clicks on Kannu's window, stays.
+
+**Why it keeps happening:** a global monitor looks like a harmless way to "catch clicks the view
+misses", but on a menu-bar overlay every missed click belongs to someone else.
+
+**Related, same change:** on notched screens hover-open goes through `physicalNotchDwellTask`
+(`HoverDwell` against `NotchInteractionGeometry.physicalNotchRect`), so wings and the band do not
+open on hover, and while open a global `leftMouseUp` monitor closes the panel on a click in another
+app. That one is mouse-*up* so a Finder drag into the shelf, whose mouse-up lands on Kannu's window,
+does not close it.
+
+**Guards:** `NotchInteractionTests` (the rect, and a source scan that fails on a global
+`leftMouseDown` monitor in `ContentView.swift`).
+
+---
+
+## 19. Whoever stops using a resource says so — a default no-op is not saying so
+
+**Rule:** A controller, observer or view model that owns something outside itself — a child process,
+a repeating timer, a socket, a pipe handler, a workspace observer — has an explicit teardown, and the
+owner calls it when it stops using it. `deinit` is not that path: a running task that holds `self`
+keeps the object alive, so `deinit` is unreachable exactly when it matters. And a protocol never
+*defaults* its teardown, because a defaulted requirement makes a missing teardown invisible.
+
+**Broken twice, and the second time in four places at once.** `e7dfc83` found nine
+`mediaremote-adapter.pl` helpers alive at once, eight reparented to `launchd`, the oldest fourteen
+hours old, and fixed it by giving `NowPlayingController` a real `stop()` — writing the rule into
+`MediaControllerProtocol`'s doc comment, and *also* giving that protocol a default no-op "because most
+controllers own nothing of the sort". Two of the five did.
+`AmazonMusicController` owns the same kind of helper and `YouTubeMusicController` owns a 2 s timer and
+a WebSocket, and both silently inherited "release nothing" — so `MusicManager.releaseActiveController()`,
+which had been calling `stop()` and `terminateChildProcessesForAppExit()` correctly all along, released
+nothing, and every Music Source change left one more helper or one more socket behind. The YouTube one
+was worse than a leak: its disconnect handler calls `startPeriodicUpdates()` *and* `scheduleReconnect()`,
+whose only gate was "is the YouTube Music app running" — not "am I still the controller in use" — so a
+dropped controller rebuilt its own timer and socket indefinitely (2026-09-26).
+
+**Two more shapes of the same mistake, found in the same sweep:**
+
+- **A second owner that never releases.** `HUDPreviewViewModel.init` called `start()` on the three
+  shared system controllers so its little preview would animate, and never stopped them. With the HUD
+  feature *off*, merely opening its settings pane started `SystemBrightnessController`'s 6.7 Hz IOKit
+  poll for the rest of the process: turning the feature off again cannot stop it, because
+  `stopObserving()` only runs on a transition and the feature was already off. This is the reported
+  "toggled a lot of settings, then disabling the features didn't help". A preview consumes
+  notifications; it does not start the thing it previews.
+- **A handler left on an EOF pipe.** Once the child exits, the read end is permanently signalled
+  readable: `availableData` returns empty, the closure returns, GCD re-arms the source, and it fires
+  again immediately. Three sites installed a `readabilityHandler` and never cleared it, while three
+  others in the same codebase already did — clear it, and close the descriptor, where the process is
+  torn down.
+- **Discarded observer tokens.** `setupAudioTapMusicObservers` threw away both `addObserver` return
+  values and ran again on every `enableRealTimeWaveform` -> true: two permanent `NSWorkspace`
+  observers per on/off cycle, unbounded.
+
+**Why it keeps happening:** the leak is invisible from inside the app. Nothing crashes, nothing logs,
+and the orphan is reparented to `launchd`, so it survives even the quit-and-relaunch that makes the
+symptom disappear. The cost shows up on someone else's battery, days later, as "Kannu uses 5,000
+Energy Impact" — and because none of it belongs to any one feature, switching features off does not
+help, which reads as a false report.
+
+**The duplication is the mechanism, and SonarCloud measured it:** `AmazonMusicController` and
+`NowPlayingController` share **162 duplicated lines** across five blocks. Two near-copies is why one
+got the fix and the other did not, for months. The order-sensitive teardown now lives once in
+`MediaRemoteAdapterChild`, documented step by step, and both call it; their setup and streaming paths
+stay separate because those genuinely differ. If a third controller ever runs a helper, it calls that
+too — do not copy a `stop()`.
+
+**Guards:** `ResourceTeardownRulesTests` — the protocol may not default either method (verified to
+fail when the default is restored), every conformer must declare both, and every file that installs a
+`readabilityHandler` must also clear one. There is **no guard** for the second-owner shape: "a view
+model must not `start()` a shared singleton" is not mechanically separable from legitimate starts. The
+check is manual, and it is `pgrep -fl "mediaremote-adapter.pl"` and
+`powermetrics --samplers tasks -n 1 | grep -A2 Kannu` after switching a source or a mode a few times —
+an idle-wakeup count out of all proportion to CPU is the signature.
+
+---
+
+## 19. A panel on screen is not content on screen
+
+**Rule:** a view installed with `setHostedContent` fills its panel after every resize, whatever
+order the panel was built in — and a "the panel is not visible" report is checked against the
+*content's* geometry, not only the window's state.
+
+**Broken once, then misdiagnosed three times.** `cc4f50d` (2026-09-17, the entry 17 crash fix)
+moved `ClipboardPanel` from `contentView = hostingView` to `setHostedContent(hostingView)`. The
+clipboard was the one panel created at `contentRect: .zero` and sized *after* installing content,
+so `HostingContainerView` was born 0×0 and, when the window grew to 320×400, autoresizing added the
+whole delta to its child: a **640×800 hosting view in a 320×400 panel** — header above the visible
+area, content offset, the corner mask outside the window. Measured with a real `NSPanel` and
+`NSHostingView` replaying the exact sequence (CURRENT → `MISMATCH`, both fixes → exact fit).
+
+The report was "running, but not visible in full screens", and three fixes chased the window
+instead: `4b848ce` (placement and screen choice), `b90919c` (level, spaces repair, activation),
+`9b6547b` (`hidesOnDeactivate`, `configureAsOverlay`). Each was verified — by a window-server probe
+that honestly showed the panel on screen at layer 1000, on the active space, visible after
+deactivation — and each changed nothing the user could see.
+
+**Why it keeps happening:** the failure is silent at every level anyone checks. The window
+exists, is ordered in, is opaque, has the right level and the right spaces; `CGWindowList` lists
+it. Only the hosting view's frame is wrong, and nothing reads it. A fix verified against window
+state answers a different question than the one the user is asking. And the helper's own
+contract ("holds a hosting view full-size") was implemented with an autoresizing mask, which only
+holds when the container starts at its final size — an assumption no caller was told about.
+
+**Guard — exists.** `HostingContainerView.resizeSubviews(withOldSize:)` now sets every subview to
+`bounds` on every resize, so the contract holds for all 21 callers regardless of call order;
+`ClipboardPanel` is created at its real size like the others. `HostingContainerViewTests` pins it
+with the real helper — a child added to a 0×0 container, repeated resizes, and the exact
+zero-frame-panel sequence — and was run **red** against the old container before the fix. The
+clipboard now logs every show (category `ClipboardPanel`: trigger, frame, content, hosting frame,
+screen, level, space) and an `.error` `GEOMETRY MISMATCH` whenever hosting ≠ content, so the next
+report is answered by `/usr/bin/log show`, not by another theory. `HostedContent.swift` is in the
+logic test target now — the first AppKit/SwiftUI source there, allowed because it depends on system
+frameworks only.
+
+---
+
+## Danger zones
+
+Commit counts across all branches (`--follow`, so pre-rename history counts):
+
+| File | Commits | What edits here have historically broken |
+|---|---|---|
+| `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
+| `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
+| `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
+| `CursorAgentStatusMonitor.swift` (usage spawn) | — | The `/usage` fetch invocation. Two silent breakages in one day from added flags/env (entry 8). |
+| `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
+| `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
+| `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
+| `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
+| `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
+| `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
+| `AgentSessionLogParser.swift` | 8 | `readTrailingLines` and the tail verdict. 4 of 8 commits touch the reader; **2 of those 4 fix the same failure mode** — the reader returning nil and silently sending callers down a wrong path (entry 4). |
+
+If you are changing a *constant* in `AgentTrafficLightState.swift`, assume it is load-bearing
+for a provider you are not testing.
+
+---
+
+## Merge hygiene
+
+`development` and `feat/antigravity-integration` diverged at `dc39f4f` and ran 3 vs 23
+commits apart, with disjoint CHANGELOG sets. That divergence directly caused:
+
+- **The same fix paid for twice** — `.unknown` → working (entry 3) and the lossy UTF-8
+  decode were each derived independently on both branches.
+- **A commit spent purely on merge shape** — `6fea023` exists only to rewrite a helper back
+  into an inline expression so it was *textually* identical to the other branch, because a
+  divergent-but-equivalent fix had turned a no-op merge into a conflicted file. Its message
+  states the risk plainly: that file carries two fixes, so a mis-resolved conflict silently
+  reintroduces a bug.
+- **Known bugs deliberately left unfixed** — `817f114` declined to fix two real bugs to
+  avoid creating a conflict.
+
+**Practices that follow from this:**
+
+1. When fixing something that also exists on the other branch, **match the other branch's
+   text exactly**, even if you would write it differently. Equivalent-but-different is worse
+   than either version.
+2. Before merging, run the conflict forecast and look at *which* files conflict:
+   ```
+   git merge-tree --write-tree --name-only --messages development origin/feat/antigravity-integration
+   ```
+   A conflict in `AgentStatus/` is a hazard, not a chore — resolve it by hand, never with
+   `-X ours` / `-X theirs`.
+3. Check whether a fix needs to land on both branches *at the time you write it*, not at
+   merge time.
+
+---
+
+## Adding an entry
+
+Add one when a bug recurs. Keep the shape: **Rule** (imperative, one line) → **Broken N
+times** (with hashes) → **Why it keeps happening** (the structural cause, not the symptom) →
+**Guard** (the check that catches it, or an honest "missing").
+
+An entry without commit hashes is an opinion. An entry whose guard says "missing" is a to-do
+list item, and that is fine — naming the gap is more useful than pretending it is covered.

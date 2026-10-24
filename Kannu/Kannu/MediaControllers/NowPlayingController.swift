@@ -1,0 +1,440 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * Originally from boring.notch project
+ * Modified and adapted for Kannu (കണ്ണ്)
+ * See NOTICE for details.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import AppKit
+import Combine
+import Foundation
+
+final class NowPlayingController: ObservableObject, MediaControllerProtocol {
+    // Stub for now to conform with ControllerProtocol
+    func updatePlaybackInfo() async {}
+
+    // MARK: - Properties
+    @Published private(set) var playbackState: PlaybackState = .init(
+        bundleIdentifier: "com.apple.Music"
+    )
+
+    var playbackStatePublisher: AnyPublisher<PlaybackState, Never> {
+        $playbackState.eraseToAnyPublisher()
+    }
+    
+    var isWorking: Bool {
+        return process != nil && process?.isRunning == true
+    }
+    private var lastMusicItem:
+        (title: String, artist: String, album: String, duration: TimeInterval, artworkData: Data?)?
+
+    // MARK: - Media Remote Functions
+    private let mediaRemoteBundle: CFBundle
+    private let MRMediaRemoteSendCommandFunction: @convention(c) (Int, AnyObject?) -> Void
+    private let MRMediaRemoteSetElapsedTimeFunction: @convention(c) (Double) -> Void
+    private let MRMediaRemoteSetShuffleModeFunction: @convention(c) (Int) -> Void
+    private let MRMediaRemoteSetRepeatModeFunction: @convention(c) (Int) -> Void
+
+    private var process: Process?
+    private var pipeHandler: JSONLinesPipeHandler?
+    private var streamTask: Task<Void, Never>?
+    /// Held so `stop()` can clear its `readabilityHandler`. Left installed, an EOF pipe reads as
+    /// permanently readable and GCD re-arms the source on every empty read — a tight wakeup loop.
+    private var stderrPipe: Pipe?
+    /// The task `init` starts to spawn the helper. Tracked so `stop()` can cancel it: without this a
+    /// controller stopped during its own setup would see no process, return, and then have setup resume
+    /// and launch a helper nothing owns.
+    private var setupTask: Task<Void, Never>?
+    /// Set by `stop()`. Checked after every `await` in setup, because a controller can be released
+    /// before it has finished starting.
+    private var isStopped = false
+
+    // MARK: - Initialization
+    init?() {
+        guard
+            let bundle = CFBundleCreate(
+                kCFAllocatorDefault,
+                NSURL(fileURLWithPath: "/System/Library/PrivateFrameworks/MediaRemote.framework")),
+            let MRMediaRemoteSendCommandPointer = CFBundleGetFunctionPointerForName(
+                bundle, "MRMediaRemoteSendCommand" as CFString),
+            let MRMediaRemoteSetElapsedTimePointer = CFBundleGetFunctionPointerForName(
+                bundle, "MRMediaRemoteSetElapsedTime" as CFString),
+            let MRMediaRemoteSetShuffleModePointer = CFBundleGetFunctionPointerForName(
+                bundle, "MRMediaRemoteSetShuffleMode" as CFString),
+            let MRMediaRemoteSetRepeatModePointer = CFBundleGetFunctionPointerForName(
+                bundle, "MRMediaRemoteSetRepeatMode" as CFString)
+            
+        else { return nil }
+
+        mediaRemoteBundle = bundle
+        MRMediaRemoteSendCommandFunction = unsafeBitCast(
+            MRMediaRemoteSendCommandPointer, to: (@convention(c) (Int, AnyObject?) -> Void).self)
+        MRMediaRemoteSetElapsedTimeFunction = unsafeBitCast(
+            MRMediaRemoteSetElapsedTimePointer, to: (@convention(c) (Double) -> Void).self)
+        MRMediaRemoteSetShuffleModeFunction = unsafeBitCast(
+            MRMediaRemoteSetShuffleModePointer, to: (@convention(c) (Int) -> Void).self)
+        MRMediaRemoteSetRepeatModeFunction = unsafeBitCast(
+            MRMediaRemoteSetRepeatModePointer, to: (@convention(c) (Int) -> Void).self)
+
+        setupTask = Task { [weak self] in await self?.setupNowPlayingObserver() }
+    }
+
+    /// Kept as a backstop, and **not** the teardown path — see `stop()`. While the stream loop is
+    /// running this is unreachable: the task it owns holds a strong reference back to `self` for the
+    /// duration of a call that never returns.
+    deinit {
+        streamTask?.cancel()
+
+        if let pipeHandler = self.pipeHandler {
+            Task { await pipeHandler.close()
+            }
+        }
+        
+        if let process = self.process {
+            if process.isRunning {
+                process.terminate()
+                process.waitUntilExit()
+            }
+        }
+
+        self.process = nil
+        self.pipeHandler = nil
+    }
+
+    /// Tears down the `mediaremote-adapter.pl` child and the task streaming from it.
+    ///
+    /// `deinit` cannot do this. `streamTask` captures `self` weakly, but once `processJSONStream()` is
+    /// entered the task frame holds `self` strongly, and that call never returns — the pipe loop is a
+    /// `while true` suspended in a continuation. So `self` owns the task, the running task owns `self`,
+    /// and the helper survives even a controller switch inside a live app: measured, nine helpers alive
+    /// at once on the development machine, eight reparented to `launchd`, the oldest fourteen hours,
+    /// three of them from `/Applications`.
+    ///
+    /// The plumbing to break it already existed and nothing called it. `close()` resumes the pending
+    /// continuation with `CancellationError`, which unwinds `processLines`, returns from
+    /// `readJSONLines`, returns from `processJSONStream`, and finally releases `self`.
+    func stop() async {
+        // Set first: setup checks this after its own `await`, so a controller stopped mid-start does
+        // not go on to launch a helper.
+        isStopped = true
+        setupTask?.cancel()
+        setupTask = nil
+        streamTask?.cancel()
+        streamTask = nil
+
+        await MediaRemoteAdapterChild.tearDown(process: process, pipeHandler: pipeHandler, stderrPipe: stderrPipe)
+        stderrPipe = nil
+        pipeHandler = nil
+        process = nil
+    }
+
+    /// See the protocol. Only the child matters here; nothing is awaited, because the app is exiting.
+    /// Touches the same properties `deinit` does, on whatever thread termination runs on.
+    func terminateChildProcessesForAppExit() {
+        // Also blocks a setup still in flight from launching one after this point.
+        isStopped = true
+        MediaRemoteAdapterChild.terminateForAppExit(process: process)
+    }
+
+    // MARK: - Protocol Implementation
+    func play() async {
+        MRMediaRemoteSendCommandFunction(0, nil)
+    }
+
+    func pause() async {
+        MRMediaRemoteSendCommandFunction(1, nil)
+    }
+
+    func togglePlay() async {
+        MRMediaRemoteSendCommandFunction(2, nil)
+    }
+
+    func nextTrack() async {
+        MRMediaRemoteSendCommandFunction(4, nil)
+    }
+
+    func previousTrack() async {
+        MRMediaRemoteSendCommandFunction(5, nil)
+    }
+
+    func seek(to time: Double) async {
+        MRMediaRemoteSetElapsedTimeFunction(time)
+    }
+
+    func isActive() -> Bool {
+        return true
+    }
+    
+    func toggleShuffle() async {
+        // MRMediaRemoteSendCommandFunction(6, nil)
+        MRMediaRemoteSetShuffleModeFunction(playbackState.isShuffled ? 1 : 3)
+        playbackState.isShuffled.toggle()
+    }
+    
+    func toggleRepeat() async {
+        // MRMediaRemoteSendCommandFunction(7, nil)
+        let newRepeatMode = (playbackState.repeatMode == .off) ? 3 : (playbackState.repeatMode.rawValue - 1)
+        playbackState.repeatMode = RepeatMode(rawValue: newRepeatMode) ?? .off
+        MRMediaRemoteSetRepeatModeFunction(newRepeatMode)
+    }
+    
+    // MARK: - Setup Methods
+    private func setupNowPlayingObserver() async {
+        let process = Process()
+        guard
+            let scriptURL = Bundle.main.url(forResource: "mediaremote-adapter", withExtension: "pl"),
+            //let frameworkPath = Bundle.main.privateFrameworksPath?.appending("/MediaRemoteAdapter.framework")
+            let frameworkPath =
+                Bundle.main.resourceURL?
+                    .appendingPathComponent("MediaRemoteAdapter.framework")
+                    .path
+
+        else {
+            assertionFailure("Could not find mediaremote-adapter.pl script or framework path")
+            return
+        }
+        
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+        process.arguments = [scriptURL.path, frameworkPath, "stream"]
+        
+        let pipeHandler = JSONLinesPipeHandler()
+        process.standardOutput = await pipeHandler.getPipe()
+
+        // `getPipe()` is an actor hop, so the controller can have been stopped while this was
+        // suspended. Assigning and launching past that point would hand a released controller a live
+        // child process that nothing would ever terminate.
+        guard !isStopped, !Task.isCancelled else {
+            await pipeHandler.close()
+            return
+        }
+
+        // Capture stderr so framework/script errors are logged
+        let stderrPipe = Pipe()
+        process.standardError = stderrPipe
+        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            guard !data.isEmpty,
+                  let message = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !message.isEmpty
+            else { return }
+            print("NowPlayingController [stderr]: \(message)")
+        }
+        
+        self.process = process
+        self.pipeHandler = pipeHandler
+        self.stderrPipe = stderrPipe
+
+        do {
+            try process.run()
+            streamTask = Task { [weak self] in
+                await self?.processJSONStream()
+            }
+        } catch {
+            assertionFailure("Failed to launch mediaremote-adapter.pl: \(error)")
+        }
+    }
+
+    // MARK: - Async Stream Processing
+    private func processJSONStream() async {
+        guard let pipeHandler = self.pipeHandler else { return }
+        
+        await pipeHandler.readJSONLines(as: NowPlayingUpdate.self) { [weak self] update in
+            await self?.handleAdapterUpdate(update)
+        }
+    }
+
+    // MARK: - Update Methods
+    private func handleAdapterUpdate(_ update: NowPlayingUpdate) async {
+        let payload = update.payload
+        let diff = update.diff ?? false
+
+        var newPlaybackState = PlaybackState(bundleIdentifier: playbackState.bundleIdentifier)
+        
+        newPlaybackState.title = payload.title ?? (diff ? self.playbackState.title : "")
+        newPlaybackState.artist = payload.artist ?? (diff ? self.playbackState.artist : "")
+        newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
+        newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
+        
+        // Match boring.notch behavior: if elapsedTime is provided use it,
+        // if this update is a diff keep the previous currentTime, otherwise default to 0.
+        newPlaybackState.currentTime = payload.elapsedTime ?? (diff ? self.playbackState.currentTime : 0)
+
+        
+        if let shuffleMode = payload.shuffleMode {
+            newPlaybackState.isShuffled = shuffleMode != 1
+        } else if !diff {
+            newPlaybackState.isShuffled = false
+        } else {
+            newPlaybackState.isShuffled = self.playbackState.isShuffled
+        }
+        if let repeatModeValue = payload.repeatMode {
+            newPlaybackState.repeatMode = RepeatMode(rawValue: repeatModeValue) ?? .off
+        } else if !diff {
+            newPlaybackState.repeatMode = .off
+        } else {
+            newPlaybackState.repeatMode = self.playbackState.repeatMode
+        }
+
+        if let artworkDataString = payload.artworkData {
+            newPlaybackState.artwork = Data(
+                base64Encoded: artworkDataString.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        } else if !diff {
+            newPlaybackState.artwork = nil
+        }
+
+        if let dateString = payload.timestamp,
+           let date = ISO8601DateFormatter().date(from: dateString) {
+            newPlaybackState.lastUpdated = date
+        } else if !diff {
+            newPlaybackState.lastUpdated = Date()
+        } else {
+            newPlaybackState.lastUpdated = self.playbackState.lastUpdated
+        }
+
+        newPlaybackState.playbackRate = payload.playbackRate ?? (diff ? self.playbackState.playbackRate : 1.0)
+        newPlaybackState.isPlaying = payload.playing ?? (diff ? self.playbackState.isPlaying : false)
+        newPlaybackState.bundleIdentifier = (
+            payload.parentApplicationBundleIdentifier ??
+            payload.bundleIdentifier ??
+            (diff ? self.playbackState.bundleIdentifier : "")
+        )
+        
+        self.playbackState = newPlaybackState
+    }
+}
+
+struct NowPlayingUpdate: Codable {
+    let payload: NowPlayingPayload
+    let diff: Bool?
+}
+
+struct NowPlayingPayload: Codable {
+    let title: String?
+    let artist: String?
+    let album: String?
+    let duration: Double?
+    let elapsedTime: Double?
+    let shuffleMode: Int?
+    let repeatMode: Int?
+    let artworkData: String?
+    let timestamp: String?
+    let playbackRate: Double?
+    let playing: Bool?
+    let parentApplicationBundleIdentifier: String?
+    let bundleIdentifier: String?
+}
+
+actor JSONLinesPipeHandler {
+    private let pipe: Pipe
+    private let fileHandle: FileHandle
+    private var buffer = ""
+    
+    init() {
+        self.pipe = Pipe()
+        self.fileHandle = pipe.fileHandleForReading
+    }
+    
+    func getPipe() -> Pipe {
+        return pipe
+    }
+    
+    func readJSONLines<T: Decodable>(as type: T.Type, onLine: @escaping (T) async -> Void) async {
+        do {
+            try await self.processLines(as: type) { decodedObject in
+                await onLine(decodedObject)
+            }
+        } catch {
+            print("Error processing JSON stream: \(error)")
+        }
+    }
+    
+    private func processLines<T: Decodable>(as type: T.Type, onLine: @escaping (T) async -> Void) async throws {
+        while true {
+            let data = try await readData()
+            guard !data.isEmpty else { break }
+            
+            if let chunk = String(data: data, encoding: .utf8) {
+                buffer.append(chunk)
+                
+                while let range = buffer.range(of: "\n") {
+                    let line = String(buffer[..<range.lowerBound])
+                    buffer = String(buffer[range.upperBound...])
+                    
+                    if !line.isEmpty {
+                        await processJSONLine(line, as: type, onLine: onLine)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func processJSONLine<T: Decodable>(_ line: String, as type: T.Type, onLine: @escaping (T) async -> Void) async {
+        guard let data = line.data(using: .utf8) else {
+            return
+        }
+        do {
+            let decodedObject = try JSONDecoder().decode(T.self, from: data)
+            await onLine(decodedObject)
+        } catch {
+            // Ignore lines that can't be decoded
+        }
+    }
+    
+    /// Guards the continuation handed to `readabilityHandler`: `close()` clearing the handler
+    /// before it fired left the awaiting task suspended forever (and leaked a checked
+    /// continuation). Whoever gets here first — data or close — resumes it exactly once.
+    private final class PendingRead: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Data, Error>?
+        init(_ continuation: CheckedContinuation<Data, Error>) { self.continuation = continuation }
+        func resume(with result: Result<Data, Error>) {
+            lock.lock()
+            let pending = continuation
+            continuation = nil
+            lock.unlock()
+            pending?.resume(with: result)
+        }
+    }
+    private var pendingRead: PendingRead?
+
+    private func readData() async throws -> Data {
+        return try await withCheckedThrowingContinuation { continuation in
+            let pending = PendingRead(continuation)
+            pendingRead = pending
+            fileHandle.readabilityHandler = { handle in
+                let data = handle.availableData
+                handle.readabilityHandler = nil
+                pending.resume(with: .success(data))
+            }
+        }
+    }
+
+    func close() async {
+        do {
+            fileHandle.readabilityHandler = nil
+            pendingRead?.resume(with: .failure(CancellationError()))
+            pendingRead = nil
+            try fileHandle.close()
+            try pipe.fileHandleForWriting.close()
+        } catch {
+            print("Error closing pipe handler: \(error)")
+        }
+    }
+}

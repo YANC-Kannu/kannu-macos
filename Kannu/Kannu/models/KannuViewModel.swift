@@ -1,0 +1,397 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import Combine
+import Defaults
+import SwiftUI
+
+@MainActor
+class KannuViewModel: NSObject, ObservableObject {
+    @ObservedObject var coordinator = KannuViewCoordinator.shared
+    @ObservedObject var detector = FullscreenMediaDetector.shared
+
+    let animationLibrary: DynamicIslandAnimations = .init()
+    let animation: Animation?
+
+    @Published var contentType: ContentType = .normal
+    @Published private(set) var notchState: NotchState = .closed
+
+    @Published var dragDetectorTargeting: Bool = false
+    @Published var dropZoneTargeting: Bool = false
+    @Published var dropEvent: Bool = false
+    @Published var anyDropZoneTargeting: Bool = false
+    var cancellables: Set<AnyCancellable> = []
+
+    /// Teardown hook ContentView registers in `onAppear`; the window-cleanup path
+    /// invokes it before closing the panel since `.onDisappear` is unreliable for
+    /// borderless panels, preventing leaked hover-polling Tasks from accumulating.
+    var onViewTeardown: (() -> Void)?
+    
+    /// Hides every closed-notch surface while a fullscreen app owns the screen. It starts `false`
+    /// on purpose: the flag's only job is to hide for a *detected* fullscreen app, and defaulting
+    /// to `true` meant "invisible until proven otherwise". `setupDetectorObserver`'s sink is the
+    /// only writer, and while it had no signal the notch both refused to paint
+    /// (`ContentView.shouldPaintClosedNotchBackground`) and collapsed to zero height
+    /// (`effectiveClosedNotchHeight`) — a healthy app with no UI at all.
+    @Published var hideOnClosed: Bool = false
+    @Published var isBatteryPopoverActive: Bool = false
+    @Published var isClipboardPopoverActive: Bool = false
+    @Published var isColorPickerPopoverActive: Bool = false
+    @Published var isStatsPopoverActive: Bool = false
+    @Published var isMediaOutputPopoverActive: Bool = false
+    @Published var isTimerPopoverActive: Bool = false
+    @Published var shouldRecheckHover: Bool = false
+    @Published var isScrollGestureActive: Bool = false
+    private var scrollGestureSuppressionTokens: Set<UUID> = []
+    @Published private(set) var isAutoCloseSuppressed: Bool = false
+    private var autoCloseSuppressionTokens: Set<UUID> = []
+    private let clipboardFocusWindow: TimeInterval = 10
+
+    func setScrollGestureSuppression(_ active: Bool, token: UUID) {
+        if active {
+            let inserted = scrollGestureSuppressionTokens.insert(token).inserted
+            if inserted {
+                isScrollGestureActive = true
+            }
+        } else {
+            if scrollGestureSuppressionTokens.remove(token) != nil {
+                isScrollGestureActive = !scrollGestureSuppressionTokens.isEmpty
+            }
+        }
+    }
+
+    private func resetScrollGestureSuppression() {
+        scrollGestureSuppressionTokens.removeAll()
+        isScrollGestureActive = false
+    }
+
+    func setAutoCloseSuppression(_ active: Bool, token: UUID) {
+        if active {
+            let inserted = autoCloseSuppressionTokens.insert(token).inserted
+            if inserted {
+                isAutoCloseSuppressed = true
+            }
+        } else if autoCloseSuppressionTokens.remove(token) != nil {
+            isAutoCloseSuppressed = !autoCloseSuppressionTokens.isEmpty
+        }
+    }
+
+    private func resetAutoCloseSuppression() {
+        autoCloseSuppressionTokens.removeAll()
+        isAutoCloseSuppressed = false
+    }
+
+    private func focusClipboardTabIfNeeded() {
+        guard !Defaults[.enableMinimalisticUI] else { return }
+        guard Defaults[.enableClipboardManager] else { return }
+        guard Defaults[.clipboardDisplayMode] == .separateTab else { return }
+        guard let lastCopyDate = ClipboardManager.shared.lastCopiedItemDate else { return }
+        guard Date().timeIntervalSince(lastCopyDate) <= clipboardFocusWindow else { return }
+        guard coordinator.currentView != .notes else { return }
+        withAnimation(.smooth) {
+            coordinator.currentView = .notes
+        }
+    }
+    
+    @Published var screen: String?
+
+    @Published var notchSize: CGSize = getClosedNotchSize()
+    @Published var closedNotchSize: CGSize = getClosedNotchSize()
+    
+    @MainActor
+    deinit {
+        destroy()
+    }
+
+    func destroy() {
+        onViewTeardown?()
+        onViewTeardown = nil
+        cancellables.forEach { $0.cancel() }
+        cancellables.removeAll()
+    }
+
+    init(screen: String? = nil) {
+        animation = animationLibrary.animation
+
+        super.init()
+        
+        self.screen = screen
+        notchSize = getClosedNotchSize(screen: screen)
+        closedNotchSize = notchSize
+
+        Publishers.CombineLatest($dropZoneTargeting, $dragDetectorTargeting)
+            .map { value1, value2 in
+                value1 || value2
+            }
+            .assign(to: \.anyDropZoneTargeting, on: self)
+            .store(in: &cancellables)
+        
+        setupDetectorObserver()
+
+        // Observe settings + lyrics changes to dynamically resize the notch
+        let enableLyricsPublisher = Defaults.publisher(.enableLyrics).map { $0.newValue }
+
+        enableLyricsPublisher
+            .combineLatest(MusicManager.shared.$currentLyrics)
+            .removeDuplicates { $0.0 == $1.0 && $0.1 == $1.1 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard Defaults[.enableMinimalisticUI] else { return }
+                let updatedTarget = self.calculateDynamicNotchSize()
+                guard self.notchState == .open else { return }
+                guard self.notchSize != updatedTarget else { return }
+                withAnimation(.smooth) {
+                    self.notchSize = updatedTarget
+                }
+                if let delegate = AppDelegate.shared {
+                    delegate.ensureWindowSize(
+                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                        animated: true,
+                        force: false
+                    )
+                }
+            }
+            .store(in: &cancellables)
+
+        TimerManager.shared.$activeSource
+            .combineLatest(TimerManager.shared.$isTimerActive)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.handleMinimalisticTimerHeightChange()
+            }
+            .store(in: &cancellables)
+
+        coordinator.$statsSecondRowExpansion
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.notchState == .open else { return }
+                let updatedTarget = self.calculateDynamicNotchSize()
+                guard self.notchSize != updatedTarget else { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    self.notchSize = updatedTarget
+                }
+                if let delegate = AppDelegate.shared {
+                    delegate.ensureWindowSize(
+                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                        animated: false,
+                        force: false
+                    )
+                }
+            }
+            .store(in: &cancellables)
+
+        coordinator.$notesLayoutState
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.notchState == .open else { return }
+                let updatedTarget = self.calculateDynamicNotchSize()
+                guard self.notchSize != updatedTarget else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    self.notchSize = updatedTarget
+                }
+                if let delegate = AppDelegate.shared {
+                    delegate.ensureWindowSize(
+                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                        animated: true,
+                        force: false
+                    )
+                }
+            }
+            .store(in: &cancellables)
+
+        Defaults.publisher(.openNotchWidth, options: [])
+            .map { $0.newValue }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.notchState == .open else { return }
+                guard !Defaults[.enableMinimalisticUI] else { return }
+                let updatedTarget = self.calculateDynamicNotchSize()
+                guard self.notchSize != updatedTarget else { return }
+                withAnimation(.smooth) {
+                    self.notchSize = updatedTarget
+                }
+                if let delegate = AppDelegate.shared {
+                    delegate.ensureWindowSize(
+                        addShadowPadding(to: updatedTarget, isMinimalistic: false),
+                        animated: true,
+                        force: false
+                    )
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleMinimalisticTimerHeightChange() {
+        guard Defaults[.enableMinimalisticUI] else { return }
+        guard notchState == .open else { return }
+        let updatedTarget = calculateDynamicNotchSize()
+        guard notchSize != updatedTarget else { return }
+        withAnimation(.smooth) {
+            notchSize = updatedTarget
+        }
+        if let delegate = AppDelegate.shared {
+            delegate.ensureWindowSize(
+                addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                animated: true,
+                force: false
+            )
+        }
+    }
+    
+    private func setupDetectorObserver() {
+        let enabledPublisher = Defaults
+            .publisher(.enableFullscreenMediaDetection)
+            .map(\.newValue)
+
+        // All three inputs are combined flat, and the verdict itself lives in
+        // `ClosedNotchVisibility.shouldHideClosedNotch` so it can be tested.
+        //
+        // This used to gate the chain on `$screen.compactMap { $0 }` feeding a `switchToLatest`.
+        // That swallowed the initial nil screen, and `CombineLatest` emits nothing until every
+        // side has spoken — so a view model whose `screen` was never assigned produced no signal
+        // at all, and `hideOnClosed` kept whatever it was initialised to for the whole session.
+        // A nil screen now simply answers "not fullscreen", so there is no silent state left.
+        Publishers.CombineLatest3($screen, detector.$fullscreenStatus, enabledPublisher)
+            .map { screen, status, enabled in
+                ClosedNotchVisibility.shouldHideClosedNotch(
+                    detectionEnabled: enabled,
+                    screen: screen,
+                    fullscreenStatus: status
+                )
+            }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] shouldHide in
+                withAnimation(.smooth) {
+                    self?.hideOnClosed = shouldHide
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
+    /// Zero only where there is genuinely nothing to occupy: a notchless screen with a fullscreen
+    /// app on it. An *unresolved* screen used to land here too, which read a bookkeeping gap as a
+    /// hardware fact — it collapsed the notch to zero height on a notched MacBook and took the
+    /// hover target with it, so the user could not even point at it to bring it back. The rule
+    /// itself is in `ClosedNotchVisibility` where it is tested; this resolves the screen for it.
+    var effectiveClosedNotchHeight: CGFloat {
+        let currentScreen = NSScreen.screens.first { $0.localizedName == screen } ?? NSScreen.main
+        return ClosedNotchVisibility.effectiveClosedNotchHeight(
+            hideOnClosed: hideOnClosed,
+            topSafeAreaInset: currentScreen?.safeAreaInsets.top,
+            closedHeight: closedNotchSize.height
+        )
+    }
+
+
+    func open() {
+        // A panel or an alert owns the screen while it is up. The notch window overrides
+        // canBecomeKey/canBecomeMain and sits at .mainMenu + 3, so opening it over a file picker
+        // puts it in front of the very panel the user has to answer — the app then looks frozen.
+        // Hover and the global click monitor both reach this, so the guard lives here. Asked of
+        // `ModalPresenter`, not inferred from `NSApp`: `attachedSheet` missed a picker shown with
+        // `panel.begin` (Settings closed) and blocked the notch behind the Spotify sign-in sheet.
+        guard NSApp.modalWindow == nil, !ModalPresenter.isPresenting else { return }
+
+        let targetSize = calculateDynamicNotchSize()
+
+        // This type is @MainActor, so the resize is always synchronous here — which the
+        // force: true resize relies on: it must land before notchState flips to .open. The
+        // Thread.isMainThread branch that used to sit here was unreachable, and had it been
+        // reachable it would have hopped the resize while leaving the @Published writes below
+        // on the calling thread, inverting that ordering.
+        if let delegate = AppDelegate.shared {
+            delegate.ensureWindowSize(
+                addShadowPadding(to: targetSize, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                animated: false,
+                force: true
+            )
+        }
+
+        notchSize = targetSize
+        notchState = .open
+
+        // Force music information update when notch is opened
+        MusicManager.shared.forceUpdate()
+        focusClipboardTabIfNeeded()
+    }
+    
+    private func calculateDynamicNotchSize() -> CGSize {
+        let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen)) : openNotchSize
+        var adjustedSize = baseSize
+
+        if coordinator.currentView == .notes || coordinator.currentView == .clipboard {
+            let preferred = coordinator.notesLayoutState.preferredHeight
+            adjustedSize.height = max(adjustedSize.height, preferred)
+            return adjustedSize
+        }
+
+        return statsAdjustedNotchSize(
+            from: adjustedSize,
+            isStatsTabActive: coordinator.currentView == .stats,
+            secondRowProgress: coordinator.statsSecondRowExpansion
+        )
+    }
+
+    func close() {
+        let targetSize = getClosedNotchSize(screen: screen)
+        notchSize = targetSize
+        closedNotchSize = targetSize
+        notchState = .closed
+        resetScrollGestureSuppression()
+        resetAutoCloseSuppression()
+
+        // Set the current view to shelf if it contains files and the user enables openShelfByDefault.
+        // Otherwise keep the last selected tab (tab retention is always on).
+        if !ShelfStateViewModel.shared.isEmpty && Defaults[.openShelfByDefault] && !Defaults[.enableMinimalisticUI] {
+            coordinator.currentView = .shelf
+        }
+    }
+
+    func closeForLockScreen() {
+        let targetSize = getClosedNotchSize(screen: screen)
+        withAnimation(.none) {
+            notchSize = targetSize
+            closedNotchSize = targetSize
+            notchState = .closed
+            resetScrollGestureSuppression()
+            resetAutoCloseSuppression()
+        }
+    }
+
+    private var helloCloseScheduled = false
+
+    func closeHello() {
+        guard !helloCloseScheduled else { return }
+        helloCloseScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
+            guard let self else { return }
+            self.coordinator.firstLaunch = false
+            withAnimation(self.animationLibrary.animation) {
+                self.close()
+            }
+        }
+    }
+}
