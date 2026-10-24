@@ -134,6 +134,7 @@ struct NotchAgentStatusView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
+        .ownsVerticalScroll()
         .onHover { hovering in
             updateScrollGestureSuppression(for: hovering)
         }

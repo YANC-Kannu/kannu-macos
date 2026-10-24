@@ -40,6 +40,8 @@ struct NotchNotesView: View {
     @State private var editorColorIndex: Int = 0
     @State private var editorNoteId: UUID?
     @State private var autoSaveTask: Task<Void, Never>?
+    @State private var scrollSuppressionToken = UUID()
+    @State private var isSuppressingScroll = false
 
     @Default(.enableNotes) var enableNotes
     
@@ -103,6 +105,13 @@ struct NotchNotesView: View {
             }
         }
         .frame(maxHeight: .infinity)
+        // List, editor, split view and divider: a vertical scroll anywhere here is the notes', never
+        // the notch's close gesture (docs/REGRESSIONS.md entry 21). The hover token is the second
+        // guard, and the only one the editor had was none.
+        .ownsVerticalScroll()
+        .onHover { hovering in
+            updateScrollSuppression(for: hovering)
+        }
         .onAppear {
             updateLayoutState()
             syncWithAppleNotes()
@@ -113,6 +122,7 @@ struct NotchNotesView: View {
             }
         }
         .onDisappear {
+            updateScrollSuppression(for: false)
             if isEditingNewNote || selectedNoteId != nil {
                 persistNote()
             }
@@ -423,6 +433,12 @@ struct NotchNotesView: View {
             editorContent = ""
         }
         updateLayoutState()
+    }
+
+    private func updateScrollSuppression(for hovering: Bool) {
+        guard hovering != isSuppressingScroll else { return }
+        isSuppressingScroll = hovering
+        vm.setScrollGestureSuppression(hovering, token: scrollSuppressionToken)
     }
 
     private func updateLayoutState() {

@@ -85,6 +85,45 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     as an accessibility action, with planted offenders), `TaskColorRulesTests`, `TaskFormDraftTests`,
     `TaskFormWiringTests`, `SettingsLayoutRulesTests`, `IntegrationSecretRulesTests` and
     `SettingsHighlightInventoryTests` (242 entries) updated; the move tests went with the moves.
+### 2026-10-24 - The close-gesture rule checks that the guard clears the blur
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's nitpick on #128 fixed before merging
+- **Changes:**
+  - `NotchScrollOwnershipRulesTests.closeGestureProblems` requires `gestureProgress = .zero` inside the close
+    guard's `else`, before its `return`, not only the guard; a planted offender keeps the guard and drops the
+    reset (CodeRabbit's nitpick on #128).
+
+### 2026-10-23 - Scrolling the notes never closes or blurs the notch
+- **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
+- **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21
+- **Changes:**
+  - **A vertical scroll over a list or a note's text is that view's.** Scrolling down through notes
+    is the same trackpad gesture as swipe-up-to-close, and the only thing keeping them apart was a
+    hover token: the note editor never set one, the list's never came on under a pointer that had
+    not moved since "< Notes" or Done, and the notch's scroll monitor kept counting while it was on.
+    New `.ownsVerticalScroll()` (`VerticalScrollOwnership`) marks a view whose vertical scroll is
+    its own; `PanGesture`'s monitor checks the pointer against those views' live frames when each
+    event arrives and counts nothing over them. Applied to the Notes tab (list, editor, split view),
+    the Agents list, the timer tab's side column and the extension tab, which had no guard either.
+    The hover tokens stay as the second guard; the Notes tab now sets one at its root.
+  - **The scroll monitor starts each gesture from nothing.** It resets on `.began`/`.mayBegin` and
+    `.cancelled`, and ends a gesture under way even when the end lands outside the notch, which used
+    to leave the count set for the next gesture.
+  - **The close gesture's blur and dim no longer leak or stick.** The whole tab blurred (up to 8 pt)
+    and dimmed on every unguarded scroll; `handleCloseScrollGesture` now clears that on the end and
+    whenever its guard turns the gesture away, before the guard rather than after it.
+  - Swipe-to-close still works from the tab bar and from content that does not scroll.
+  - docs/REGRESSIONS.md entry 21 and a Danger-zones row; `NotchScrollOwnershipRulesTests` pins the
+    ownership on every tab scroller, the monitor's order and the blur reset, each against a planted
+    offender.
+### 2026-10-24 - The staple-retry test rejects a loop of one attempt, and the batch takes development
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — #125 brought up to date with development and its last CodeRabbit nitpick fixed before merging
+- **Changes:**
+  - `ReleaseWorkflowRulesTests.stapleProblems` reads `staple_attempts` from `scripts/notarize-dmg.sh` and
+    reports "the staple is not retried" below two attempts; `testTheStapleIsRetried` plants a one-attempt
+    script (CodeRabbit's nitpick on #125).
+  - `development` merged in; the only conflict was `CHANGELOG.md`, where both sides' entries are kept.
 
 ### 2026-10-23 - Act on CodeRabbit's review of #127
 - **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
@@ -346,6 +385,111 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
     option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
     fallback). `ScreenCapturePolicy.swift` joins the logic target.
+### 2026-10-22 - Act on CodeRabbit's review of #125
+- **Developer label:** CodeRabbit's review of #125 (the follow-ups batch): a late microphone answer could start a recording, and the entitlement test checked a key, not its value
+- **Agent label:** Claude Code (Opus 5.5) — `ScreenAssistantManager` drops a pending microphone request when its panels close; `PrivacyUsageDescriptionRulesTests` binds `device.audio-input` to `<true/>`; README lists Microphone and Local Network
+- **Changes:**
+  - Pressing Record before the microphone was answered asked for it and started recording from the
+    answer's callback, even if the user had closed the Screen Assistant panels by then. The request
+    now carries an id (`pendingRecordingAuthorization`), `closePanels()` drops it, and the callback
+    records only for the request it belongs to.
+  - `PrivacyUsageDescriptionRulesTests` read the entitlements file for the `audio-input` key alone,
+    so `<false/>` passed. It now reads the value bound to the key (`value(of:in:)`), with planted
+    `<false/>` and a planted `closePanels()` that keeps the request.
+  - ReadMe's Runtime Permissions lists Microphone (Screen Assistant's Record) and Local Network
+    (LocalSend), now that #124 declares them.
+
+### 2026-10-22 - Microphone and local network get their usage descriptions; unused camera and Desktop access go
+- **Developer label:** "Add missing privacy usage descriptions"
+- **Agent label:** Claude Code (Opus 5.5) — `NSMicrophoneUsageDescription` and `NSLocalNetworkUsageDescription` added, `NSDesktopFolderUsageDescription` removed, audio input on and camera access off in both configurations, `device.audio-input` in the entitlements file, and Screen Assistant asks for the microphone before it records
+- **Changes:**
+  - **Screen Assistant** records audio when the user presses Record (`AVAudioRecorder`), but Kannu had
+    no microphone usage description and `ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO`. Under the
+    hardened runtime that means no audio. Now:
+    - the description is added;
+    - audio input is on;
+    - `com.apple.security.device.audio-input` is spelled out in `Kannu.entitlements`, like
+      calendars;
+    - `startRecording()` checks the microphone authorization first. It asks when undetermined and
+      records once allowed; when denied it opens System Settings › Microphone instead of recording
+      nothing.
+  - **LocalSend** joins a multicast group and listens on the local network from the Shelf, with no
+    description. `NSLocalNetworkUsageDescription` now says what it is for.
+  - **Camera:** `ENABLE_RESOURCE_ACCESS_CAMERA = YES` put the camera entitlement on every build, with
+    no description and nothing that captures video. `CameraMonitor` only enumerates devices and
+    reads CoreMediaIO's "running somewhere". A probe built with the hardened runtime and without the
+    entitlement still listed both cameras and read the flag, with no prompt. So it is off.
+  - **Desktop:** the usage description was declared for screenshots Kannu never saves there, and is
+    removed.
+  - **Checked:** the built `Info.plist` has the two new descriptions and no Desktop one.
+  - **Test:** new `PrivacyUsageDescriptionRulesTests`: both descriptions in both configurations, no
+    Desktop description, audio input on, camera off, and the authorization check before the
+    recorder. Planted copies of the old settings are caught.
+
+### 2026-10-22 - Launch no longer reads the Keychain on the main thread
+- **Developer label:** "Stop launch-time Keychain reads on main"
+- **Agent label:** Claude Code (Opus 5.5) — `SecureSecretsStore.migrateFromDefaultsIfNeeded` touches the Keychain only for a value still in Defaults, silently and off main (`LegacySecretMigration` decides each); the legacy Claude credential delete moves off main
+- **Changes:**
+  - Every launch, `continueLaunch()` ran `SecureSecretsStore.migrateFromDefaultsIfNeeded()`, which
+    read all eight Kannu secret items on the main thread with the Keychain dialog allowed, whether
+    or not anything was left to move.
+  - On a fresh Mac those items don't exist, so no dialog appeared. But Debug and Release builds
+    share the service name `com.kannu.app.secure-secrets` and are signed differently, so an item
+    one had saved could raise a SecurityAgent dialog in the other that held the launch until
+    answered.
+  - **The migration now:**
+    - collects the settings that still hold a plaintext value, and returns at once when none do,
+      which is nearly always;
+    - otherwise reads each item silently (`allowInteraction: false`) on a background queue;
+    - decides what to do with new `LegacySecretMigration` (Foundation only, in
+      `KeychainReadPolicy.swift`):
+      - an item already there wins, readable or not, and the plaintext copy is cleared;
+      - the legacy value is stored only where no item exists;
+      - anything else (a locked keychain) waits for the next launch.
+    
+    Defaults are cleared on the main thread.
+  - The one-time delete of the legacy `claude-oauth` item (`LLMUsageManager.configureProviderDefaultsIfNeeded`,
+    also run from `continueLaunch()`) now runs on a background queue too.
+  - Test: new `LegacySecretMigrationTests`.
+    - Every step.
+    - The migration reads nothing before it knows there is something to move, reads silently,
+      off main.
+    - The delete is off main.
+    - Planted copies of the old code are caught.
+
+### 2026-10-22 - The extension RPC server listens on loopback only
+- **Developer label:** "Bind the extension RPC server to loopback"
+- **Agent label:** Claude Code (Opus 5.5) — `ExtensionRPCServer`'s listener sets `requiredInterfaceType = .loopback`; the peer check stays
+- **Changes:**
+  - The RPC server's `NWListener` on port 9020 starts at launch and listened on every interface.
+    Any machine on the network could open a connection; `handleNewConnection` dropped a
+    non-loopback peer only after accepting it. With the macOS firewall on, the listener could
+    also raise its "accept incoming connections" dialog.
+  - The listener's parameters now require the loopback interface, so nothing off this Mac can
+    connect. A Network.framework harness on this Mac showed:
+    - **before:** 127.0.0.1, ::1, localhost and the LAN address all connect;
+    - **after:** the three loopback forms connect and the LAN address times out.
+  - No working client is affected. The server only ever accepted loopback peers, and
+    AtollExtensionKit talks to Kannu over XPC, not this socket. The loopback peer check stays as a
+    second line.
+  - Test: new `ExtensionRPCServerRulesTests`. The requirement is set before the listener is
+    built, and the peer check is still there. A planted copy of each is caught.
+
+### 2026-10-22 - A dropped connection while stapling no longer fails a release
+- **Developer label:** "Retry notarization stapling in release.yml"
+- **Agent label:** Claude Code (Opus 5.5) — `scripts/notarize-dmg.sh` retries `xcrun stapler staple` up to five times with a growing wait
+- **Changes:**
+  - The 1.4.0 beta 2 release run failed after Apple had accepted the DMG. Stapling fetches the
+    ticket from Apple's CloudKit service, the connection dropped ("The network connection was
+    lost", stapler error 68), and the single `xcrun stapler staple` ended the run; a re-run of the
+    whole job went through.
+  - `scripts/notarize-dmg.sh` (the release's Notarize step) now tries the staple up to five times,
+    waiting 15, 30, 45 and 60 seconds between tries, then validates. It fails only when every try
+    fails. `STAPLE_RETRY_DELAY` overrides the 15-second step, for a local test.
+  - Checked against a fake `xcrun`: two failures then success staples on the third try; five
+    failures exit 1.
+  - Test: `ReleaseWorkflowRulesTests.testTheStapleIsRetried` (the step runs the script; the one
+    staple is inside the retry loop), with a planted single-shot staple.
 
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"
