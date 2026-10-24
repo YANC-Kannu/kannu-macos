@@ -1204,8 +1204,8 @@ private struct TimerTaskDetail: View {
                 .buttonStyle(.plain)
                 .padding(.top, -3)
                 .padding(.trailing, -6)
-                .accessibilityLabel(Text(verbatim: String(localized: "Edit task")))
-                .hoverTooltip(String(localized: "Edit task"), edge: .below)
+                .accessibilityLabel(Text(verbatim: String(localized: "Edit Task")))
+                .hoverTooltip(String(localized: "Edit Task"), edge: .below)
                 Button {
                     close()
                 } label: {

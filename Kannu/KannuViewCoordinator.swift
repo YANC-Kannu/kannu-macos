@@ -135,6 +135,10 @@ class KannuViewCoordinator: ObservableObject {
     /// Not stored: it used to be `firstLaunch`, which started the hello at launch, over the
     /// onboarding window and its permission dialogs.
     @Published var helloPending = false
+    /// Show / Hide Notch's eye opening or closing. Written only by
+    /// `AppDelegate.applyNotchVisibility`, read by every window's `ContentView`. Not stored: a
+    /// launch never plays it.
+    @Published var notchEye = NotchEyeState.settled
     @AppStorage("showWhatsNew") var showWhatsNew: Bool = true
     @AppStorage("musicLiveActivityEnabled") var musicLiveActivityEnabled: Bool = true
     @AppStorage("timerLiveActivityEnabled") var timerLiveActivityEnabled: Bool = true

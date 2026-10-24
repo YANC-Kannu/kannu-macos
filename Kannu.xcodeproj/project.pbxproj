@@ -104,6 +104,7 @@
 		AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A4 /* TaskDetailSummary.swift */; };
 		AA10000000000000000005A7 /* TaskArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A6 /* TaskArchive.swift */; };
 		AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005A8 /* HoverRevealMotion.swift */; };
+		AA10000000000000000009E1 /* NotchEyeTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000009E0 /* NotchEyeTimeline.swift */; };
 		AA10000000000000000005BF /* TodoistAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BE /* TodoistAPI.swift */; };
 		AA10000000000000000005BD /* LinearAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BC /* LinearAPI.swift */; };
 		AA10000000000000000005BB /* GitHubAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005BA /* GitHubAPI.swift */; };
@@ -261,6 +262,7 @@
 		AA10000000000000000005A4 /* TaskDetailSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskDetailSummary.swift; path = Kannu/managers/Tasks/TaskDetailSummary.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A6 /* TaskArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskArchive.swift; path = Kannu/managers/Tasks/TaskArchive.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005A8 /* HoverRevealMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HoverRevealMotion.swift; path = Kannu/components/Notch/HoverRevealMotion.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000009E0 /* NotchEyeTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchEyeTimeline.swift; path = Kannu/components/Notch/NotchEyeTimeline.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005BE /* TodoistAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TodoistAPI.swift; path = Kannu/managers/Tasks/TodoistAPI.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005BC /* LinearAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LinearAPI.swift; path = Kannu/managers/Tasks/LinearAPI.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005BA /* GitHubAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GitHubAPI.swift; path = Kannu/managers/Tasks/GitHubAPI.swift; sourceTree = SOURCE_ROOT; };
@@ -768,6 +770,7 @@
 				AA10000000000000000005A5 /* TaskDetailSummary.swift in Sources */,
 				AA10000000000000000005A7 /* TaskArchive.swift in Sources */,
 				AA10000000000000000005A9 /* HoverRevealMotion.swift in Sources */,
+				AA10000000000000000009E1 /* NotchEyeTimeline.swift in Sources */,
 				AA10000000000000000005BF /* TodoistAPI.swift in Sources */,
 				AA10000000000000000005BD /* LinearAPI.swift in Sources */,
 				AA10000000000000000005BB /* GitHubAPI.swift in Sources */,
@@ -1023,9 +1026,9 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
@@ -1043,11 +1046,12 @@
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, and to bring an agent's Terminal or iTerm2 tab to the front when you click its chat.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Kannu needs Bluetooth access to detect when audio devices connect and display their battery status in the HUD.";
-				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "Kannu needs access to save screenshots to your desktop.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Kannu needs access to save and read shelf dragged files.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "Kannu needs access to read files in the downloads folder.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Kannu finds nearby devices with LocalSend, so you can send files from the Shelf to them.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kannu records your voice for the Screen Assistant when you press Record, and never otherwise.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1092,9 +1096,9 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = YES;
 				ENABLE_RESOURCE_ACCESS_CALENDARS = YES;
-				ENABLE_RESOURCE_ACCESS_CAMERA = YES;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
 				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
 				ENABLE_RESOURCE_ACCESS_LOCATION = YES;
 				ENABLE_RESOURCE_ACCESS_PHOTO_LIBRARY = NO;
@@ -1112,11 +1116,12 @@
 				INFOPLIST_KEY_MetalCaptureEnabled = YES;
 				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Kannu uses AppleScript to control Spotify and Apple Music, to bring the browser tab that is playing to the front when you click the media card, and to bring an agent's Terminal or iTerm2 tab to the front when you click its chat.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Kannu needs Bluetooth access to detect when audio devices connect and display their battery status in the HUD.";
-				INFOPLIST_KEY_NSDesktopFolderUsageDescription = "Kannu needs access to save screenshots to your desktop.";
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "Kannu needs access to save and read shelf dragged files.";
 				INFOPLIST_KEY_NSDownloadsFolderUsageDescription = "Kannu needs access to read files in the downloads folder.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Kannu finds nearby devices with LocalSend, so you can send files from the Shelf to them.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Kannu records your voice for the Screen Assistant when you press Record, and never otherwise.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kannu uses your location to display accurate lock screen weather.";
 				INFOPLIST_KEY_NSRemindersFullAccessUsageDescription = "Kannu lists your incomplete reminders as tasks you can time, when you connect Apple Reminders in Brain › Tasks. It reads them and never changes them.";
 				LD_RUNPATH_SEARCH_PATHS = (
