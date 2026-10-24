@@ -179,6 +179,16 @@ enum TimerComposerMetrics {
     /// The New task button beside the session name field: a square as tall as the field.
     static var newTaskButtonSize: CGFloat { nameFieldHeight }
 
+    // The typed search under the bar and a new task's title (`TimerTaskSuggestions`): two tasks
+    // and the New row (`TaskSearch.suggestionLimit` + 1), short enough to end above Start and Reset
+    // in both composer styles, and above the form's buttons.
+    static let suggestionRowHeight: CGFloat = 20
+    static let suggestionListPadding: CGFloat = 2
+    static let suggestionRowCount = 3
+    static var suggestionListHeight: CGFloat {
+        CGFloat(suggestionRowCount) * suggestionRowHeight + 2 * suggestionListPadding
+    }
+
     /// Every row's height plus the spacing around it, so a short list ends where its last row does.
     static func sideTaskRowsHeight(count: Int) -> CGFloat {
         CGFloat(max(0, count)) * (sideTaskRowHeight + sideRowSpacing)

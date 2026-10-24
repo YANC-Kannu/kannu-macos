@@ -180,4 +180,16 @@ final class TimerComposerMetricsTests: XCTestCase {
         XCTAssertLessThanOrEqual(M.rulerPointerOffset + 12, M.rulerAreaHeight)
         XCTAssertLessThanOrEqual(M.rulerCanvasHeight, M.rulerAreaHeight)
     }
+
+    /// The typed search's list ends above Start and Reset in both composer styles and above the
+    /// form's buttons, so they stay clickable while it shows. The bar's list hangs from the bar's
+    /// bottom edge, the form's from the title's.
+    func testTheTypedSearchListEndsAboveTheButtons() {
+        let list = M.suggestionListHeight
+        XCTAssertLessThanOrEqual(list, M.nameFieldSpacing + M.composerPadding + M.durationFieldHeight + M.rowSpacing)
+        XCTAssertLessThanOrEqual(list, M.nameFieldSpacing + M.composerPadding + M.rulerAreaHeight + M.rulerControlTopPadding)
+        XCTAssertLessThanOrEqual(list, M.taskFormHeight - M.nameFieldHeight - M.buttonHeight)
+        XCTAssertEqual(M.suggestionRowCount, TaskSearch.suggestionLimit + 1, "the tasks and the New row")
+        XCTAssertGreaterThanOrEqual(M.suggestionRowHeight, 18, "a row of 11 pt text and a chip")
+    }
 }
