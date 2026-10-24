@@ -4,6 +4,326 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #131
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — the finding of CodeRabbit's review of the notes stack (#134) that belongs to #131, fixed before merging
+- **Changes:**
+  - The note editor's "Delete This Note?" alert hangs on the editor rather than on its trash button, and the
+    notch stays open while it asks (an auto-close suppression token, released when the editor goes).
+
+### 2026-10-24 - A note can be deleted from inside it
+- **Developer label:** "still no delete button in the inside view"
+- **Agent label:** Claude Code (Opus 5.5) — a trash in the note editor's toolbar
+- **Changes:**
+  - The note editor's toolbar has a trash before Done, for any note that is saved; a draft or a new
+    note not saved yet shows none (back discards those). Deleting closes the editor without saving
+    the note back, then deletes it here and in Notes, as the list row's trash does.
+  - For a note made in Apple Notes (read-only while sync reads the whole account), it asks first, with
+    the list row's message: it also moves to Recently Deleted in Apple Notes.
+### 2026-10-24 - Act on CodeRabbit's review of #130
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — the four findings of CodeRabbit's review of the notes stack (#134) that belong to #130, fixed before merging
+- **Changes:**
+  - A linked note not yet decided (`madeInAppleNotes` nil, until its first sync) is read-only under
+    whole-account sync, like one made in Notes: `isReadOnlyMirror` now wants only an explicit `false` to
+    allow edits, so neither an edit's push nor Clear Notes can rewrite or delete a Notes original.
+  - A scope change while a sync runs is no longer lost: `syncWithAppleNotes` keeps the scope it started
+    with, applies its result (which may hold new Notes ids), then syncs again under the new scope.
+  - Folder-only sync drops a note made in Notes that the sync left out even if it was edited meanwhile
+    (`AppleNotesMergePolicy.reconcile`'s new `dropMissing`); every other note keeps the edit-survives rule.
+  - A row's "Delete This Note?" alert hangs on the row, not on the trash button that only shows on hover,
+    so moving the pointer away no longer dismisses it, and the notch stays open while it asks.
+  - Test: `testDropMissingOverridesTheEditOnlyForTheNotesItNames`.
+
+### 2026-10-23 - Apple Notes sync reads the Kannu folder unless you choose your whole account
+- **Developer label:** "give a setting, kannu folder only by default, but whole account if user chooses explicitly, also can this be part of the now expanded setup flow, but keep in mind how we redsigned install flow, so make sure that asks are never broken, are they guarded by docs"
+- **Agent label:** Claude Code (Opus 5.5) — `AppleNotesSyncScope`, an onboarding Notes step and a "Control Notes" permission row behind `mayTouch`, read-only mirrors for whole-account notes
+- **Changes:**
+  - **New setting, Brain › Notes › Notes to sync:** "Kannu folder only" (the default) or "All my
+    notes". Sync used to read every note in the default Notes account. In the Kannu folder mode it
+    reads, writes and deletes only the Kannu folder. An install that has already synced keeps the
+    whole account (its footer said "your existing Apple Notes are imported"), so nothing it shows
+    vanishes on update; `NotesManager.migrateSyncScopeIfNeeded` decides once, at launch, from
+    Defaults alone. Narrowing to the folder asks first, then drops the other notes' copies from the
+    notch only; nothing in Notes is deleted.
+  - **With the whole account, a note made in Notes is read-only in the notch.** Editing it in Kannu
+    rewrote its body as plain text and lost its formatting and attachments, and Clear Notes deleted
+    it in Notes. It now opens read-only with "Open in Notes", and Clear Notes leaves it; only its
+    colour and pin, which live in Kannu, change. Its trash asks first, because it also goes to
+    Recently Deleted in Apple Notes. Clear Notes' alert says how many notes it removes and how many
+    also go to Recently Deleted in Apple Notes.
+  - **Which notes were made in Notes** is decided once per note (`NoteItem.madeInAppleNotes`,
+    `AppleNotesMergePolicy.madeInAppleNotes`): a note made in the notch never is, and a note with
+    Kannu's `kannu:id` tag or a place in Notes' Kannu folder never is either. Folder membership is
+    asked by note id (`id of notes of folder "Kannu"`); a first version compared
+    `name of container of n` with "Kannu", matched nothing on a real Mac, and made every note,
+    Kannu's own included, read-only with no delete. A note with no evidence either way stays
+    read-only, since editing an Apple note in Kannu flattens it. Each sync logs counts only (fetched,
+    in the Kannu folder, tagged).
+  - **Onboarding has a Notes step** before Permissions: no notes (the default), notes in the notch,
+    or sync with the Kannu folder or the whole account. Like the music source, the choice is applied
+    at Finish; choosing sync adds a **Control Notes** row to the Permissions step, and after its Not
+    now the notes stay in the notch with sync off. `OnboardingProgress.currentVersion` is unchanged,
+    so existing installs do not see onboarding again.
+  - **Notes sync is behind the launch-permission gate.** It ran AppleScript, and raised Notes'
+    Automation dialog, with no `mayTouch` check. New `LaunchPermission.notesAutomation`: every entry
+    point of `AppleNotesSyncManager` checks `mayTouch(.notesAutomation)`; the row's Allow opens Notes
+    hidden first, because `AEDeterminePermissionToAutomateTarget` cannot ask an app that is not
+    running; turning the sync switch on after a Not now asks again; allowing it starts the sync it held
+    back. The row is also in Brain › General › Permissions.
+  - The Automation usage description names Apple Notes (English and Turkish), and the ReadMe's
+    permission list says when it is asked.
+  - `FirstLaunchRulesTests` watches `AppleNotesSyncManager.swift` and the Notes step: each sync entry
+    point checks the gate, the step writes nothing, and `AEDeterminePermissionToAutomateTarget` lives
+    only in `LaunchPermissionManager`, each against a planted offender. `LaunchPermissionPolicyTests`
+    pins the new row; the Settings inventory counts the two new search entries and the new row; a
+    Danger-zones row in docs/REGRESSIONS.md; an `onboardingNotes` snapshot board.
+
+### 2026-10-24 - Act on CodeRabbit's review of #133
+- **Developer label:** CodeRabbit's review of #133: the Clipboard and Screen Assistant shortcuts open the notch and then act on it, even while the eye animation has refused the open
+- **Agent label:** Claude Code (Opus 5.5) — the three notch-backed shortcut paths do nothing while the eye plays, as the open-notch toggle already does; merges development (#127) into the branch
+- **Changes:**
+  - The Clipboard shortcut in popover and separate-tab mode, and the Screen Assistant shortcut in
+    popover mode, now return while Show / Hide Notch's eye is playing. `open()` refuses then, and
+    they went on to post the popover toggle 0.3 s later, or switch to the Notes tab, on a notch
+    that stayed closed. The press is dropped rather than queued, as `toggleNotch` drops it: the
+    eye lasts at most 1.25 s, and a popover opening by itself after it would be the surprise.
+  - `NotchEyeRulesTests` pins the gate on all three paths in `registerOptionalShortcutHandlers`.
+  - development is merged in (#127, typed-name tasks). Only CHANGELOG.md conflicted: both sides'
+    entries are kept, this branch's first.
+  - Found reviewing the merge: an open notch hidden with no eye to play (over a fullscreen app,
+    during the hello) closed and lost its window in the same turn, so the open tab's views could
+    go without `.onDisappear`. #127's typed-search key monitor removes itself there; left
+    installed, it matches every later notch window and swallows Tab and the arrow keys. Such a
+    hide now waits 50 ms, so the closed layout draws and the views leave first. The monitor not
+    being tied to its own window is #127's, and display-change rebuilds still reach it.
+
+### 2026-10-24 - The notch can hide itself, closing like an eye, and the eye's menu brings it back
+- **Developer label:** "we want a simple toggle for users to enable and disable the notch, where do we keep it, reenable is easy, you can just add a show notch button in the eye options" — then "we want this to be part of main notch itself" — then "can we add an animation for show notch where right now the notch expands to 2 sides and shows brightness, instead open and give a bright shimmer like opening and then make it black, its like a light opens and then the notch fills up that place, maybe keep eyes at both sides, 1 eye in 1 side, also while closing reverse this animation like an eye closes" — then "make closing a bit slower and smoother, opening a bit too"
+- **Agent label:** Claude Code (Opus 5.5) — a `showNotch` setting, hidden from the notch's own header button and right-click menu, shown again from the eye's Show Notch; showing opens an eye (light, shimmer, an eye each side, then the notch's fill) and hiding plays it back before the windows tear down; the eye cannot be turned off while the notch is hidden
+- **Changes:**
+  - Showing the notch opens an eye: a seam of light appears at the notch and spreads to both sides,
+    opens into a bright band with a shimmer across it, the notch's own fill (skin or colour) spreads
+    over the light from the notch outward, a white eye opens in each side on that fill, then the
+    eyes fade and the sides draw back to the resting notch, in 1.25 s. The eyes open on the fill,
+    not the light: white on white, the opening could not be seen. On a notched MacBook the light and
+    the shimmer run out from the notch's edges, the only part not behind the cutout. Hiding plays
+    the same frames backwards, like an eye closing, in 1.1 s, and only then tears the windows
+    down; an open notch closes first. Both runs ease in and out (a `timingCurve` that is exactly
+    smoothstep in time, so a reversal knows where it is), and each layer moves in one segment, with
+    no stop halfway. Reduce Motion makes it a 0.2 s fade. It plays only on
+    Show/Hide, never at launch or login.
+  - One value drives it: `NotchEyeState.progress` on `KannuViewCoordinator`, 0 for no notch, 1 for
+    the resting notch, written only by `AppDelegate.applyNotchVisibility` and animated by one
+    eased run. `NotchEyeTimeline` turns it into every layer's frame (pure, in the test target), and
+    `NotchEyeSpacer` / `NotchEyeView` draw it, with no clock of their own. A toggle mid-run reverses
+    on the same windows from the frame on screen; a hide re-checks the switch after its wait. A lock
+    settles the eye at once, finishing a hide. Phases move on AppDelegate's clock, never on a
+    view's completion, and the window's alpha and mouse handling are never touched.
+  - While the eye plays it owns the closed notch: live activities, HUDs and the battery surface give
+    way, `open()`, hover and the toggle shortcut do nothing, and the music control panel hides. A
+    display that hides its island until hover holds it out while the eye plays, or the eye would
+    play off-screen. Hiding closes every display's notch, not only the single-window one, and
+    pointer following is resynced on every show, a reversal of a hide included.
+  - The "expands to 2 sides and shows brightness" on Show was the keyboard-backlight HUD. Every
+    restart of the HUD observer (Show Notch, launch, a HUD-style or DDC change) started the
+    backlight controller, whose first read of the level was sent as a change. That read now only
+    seeds listeners (`.keyboardBacklightDidChange`); a HUD comes from a real change.
+  - New `Defaults[.showNotch]` (default on). It has no Settings row: the control lives in the notch.
+  - The open notch's header has a "Hide Notch" button (eye.slash), between the timer and Brain. The
+    notch's right-click menu gains "Hide Notch" under Brain, which reaches the closed notch and the
+    minimalistic UI, where the header has no buttons. Both only write the setting.
+  - The eye's menu opens with a "Show Notch" item, checked while the notch is visible. It toggles
+    both ways. While the notch is hidden, a plain click on the eye opens the menu too. The
+    "Menubar icon" description says so.
+  - Hiding tears every notch window down, so the views' monitors and the hover poll stop with them.
+    It does not just order the windows out. Showing rebuilds through `applyPlacementChange`, the same
+    path a placement change takes.
+  - Hiding also stops what lives beside the notch or only feeds it. The timer's control panel was
+    hidden only from its view's `.onDisappear`, and Stats sampled until a notch close reached it
+    through `.onChange`; with no window left, both outlived the notch. `applyNotchVisibility` now
+    hides the panel and stops Stats itself.
+  - Opening Kannu again (Finder, Spotlight) brings a hidden notch back. The eye is the usual way, but
+    a crowded menu bar can push it behind the physical notch.
+  - The lock screen's notch-shaped pill, and its flash at the notch on unlock, stay hidden with the
+    notch.
+  - The eye stays in the menu bar while the notch is hidden, whatever "Menubar icon" says. Kannu has
+    no Dock icon, so with both off nothing could bring it back. The stored choice returns with the
+    notch.
+  - Screen changes, placement changes, pointer following, the open-notch shortcut and the Clipboard
+    and Screen Assistant popover/tab shortcuts all check the switch. Launch still seeds `vm.screen`
+    before skipping the window, as entry 17's addendum requires.
+  - The notch HUD counts as off while the notch is hidden: `SystemHUDManager` reads
+    `enableSystemHUD && showNotch`. With no other HUD enabled, the volume and brightness keys get
+    macOS's own OSD back instead of nothing. The DDC restarts (integration, provider, external
+    volume, a helper starting or quitting) now start the HUD observer only while some HUD is on;
+    they used to start it, and so pause the native OSD, with none to show.
+  - `NotchToggleRulesTests` pins the eye's visibility and its Show Notch item, reopening as a way
+    back, the window-path checks, the launch order, the HUD read and DDC guards, the hide path's
+    timer and Stats release, the lock pill, the two in-notch controls only writing the setting, and
+    the backlight start showing no HUD. `HeaderOrderRulesTests` lists the Hide Notch button among
+    the fixed buttons, between the timer and Brain. `NotchEyeTimelineTests` checks the frames:
+    nothing at the start, the resting notch at the end, eyes only in sides fully out, sides drawing
+    in only behind the fill, Reduce Motion a pure fade, the ease matching smoothstep, no layer
+    stopping mid-move, and the reversal math. `NotchEyeRulesTests`
+    pins the single writer, the hide's re-check, Reduce Motion and every-display close, no alpha or
+    mouse changes, the lock settle, no play at launch, the open, hover and toggle gates, the island
+    held out while the eye plays, pointer tracking resynced last, the eye as the closed notch's first
+    branch, and a view with no clock. The timeline tests also check that the eyes open on the fill.
+
+### 2026-10-24 - Brain's All tasks: New Task with everything the notch's form offers, titles and estimates typed in place, no drag
+- **Developer label:** "fix estimate and stuff inside the brain, the outside stuff in notch is perfect, but the stuff inside brain looks very lagging, even the design choice there and overall experience is not good enough. inside brain also estimate should be typeable, the placement of add a task section looks like a toddlers one, random placement, we need golden ration inside the tasks page, that is the all tasks sub page, no drag and order tasks or numbering, spacing everywheer seems messed up" … "1 st picture shows bad allignment, 2nd picture shows we cant add tags here, we want all capabilties that we give for tasks in notch, communicate in a very good way here, a add task button maybe giving popup or deep window, then yea, see if there is any good ux"
+- **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks: one New Task button opening a sheet with the notch form's title, typed estimate, tags and reminder, a local task's title and its reminder's Notify on its page, the estimate typed on a task's page and checked live in Set Estimate, drag and Move Up/Down removed, one Tasks card and one folded Section, rows worked out once per render
+- **Changes:**
+  - **New Task.** All tasks and Local tasks have one Add a task row whose prominent New Task
+    button (or ⌘N, held on the tab's Form so it works with the row scrolled away) opens a sheet
+    with everything the notch's task form takes: a title, a typed estimate and tags side by side
+    in the golden ratio (estimate 1 : tags φ, the notch's order),
+    the tags in use offered as chips in their colours with the typed text as "+ new" (a click or
+    Return completes one, as in the Tags sheet), and "Remind me" with a date and Notify. Add, or
+    Add & Start (⌘↩) while the timer is on, puts the task on top; both wait for a title and an
+    estimate they can read. Cancel keeps what was typed for the next New Task, Clear All empties
+    it, and a reminder that has passed, kept from before or while the sheet stood open, moves to
+    the next whole hour (`TaskFormDraft.movePassedReminder`, which the notch's kept drafts now
+    share). A title an open local task already has says so, with Show Task
+    (`TaskItem.reusable(titled:in:)`, the timer bar's match: case, accents, spacing and anything
+    past 40 characters ignored; Jira, GitLab, done and archived tasks never match; the notch's
+    typed search also shows partial matches). A task All tasks' filters would hide opens on its
+    own page, judged as it will be once Add & Start's session opens; the filters stay.
+  - New Task adds through `TasksManager.insertTask(from:)`, the core of the notch's
+    `addTask(from:)`, which now calls it then forgets the notch's draft and shows local tasks. So
+    a Brain add never discards a task half-typed in the notch and never flips its Show local.
+  - **A task's page is three cards again.** It drew as one, with "Details" centred: the three
+    Sections sat inside a `TimelineView`, which a Form cannot see through. The page's minute clock
+    is now a value moved on by one row's task, so the Sections reach the Form, "Timed … ago" and an
+    overdue reminder stay current, and a timer starting or ending tears down no field being typed
+    in.
+  - **A local task's page matches the notch's form.** Its title is typed in place (a plain field in
+    the body font that wraps up to four lines; Return, another field, leaving the page or closing
+    Brain saves through `renameTask`, which renames a running session too; Escape puts it back),
+    and a reminder gains a Notify switch, with "Notifications are off" and Open Notification
+    Settings while macOS blocks them. Jira and GitLab titles stay their servers'. A typed estimate
+    in the Time row is saved on closing Brain too: closing only orders the window out, so neither
+    leaving the field nor leaving the page happened.
+  - "Notifications are off" in the Schedule and New Task sheets follows macOS's answer
+    (`notificationsDenied`), asked again as each opens, so it warns before the first reminder is
+    set, not only once one waits; it shows only for a reminder that would notify, as on the task
+    page. `setSchedule` judges "blocked" by the check's own rule (something wants to notify), so a
+    muted reminder re-timed while macOS denies notifications no longer turns All tasks' note and
+    the notch's bell orange.
+  - All tasks' on-appear work (the permission check, the archive, the project filter's rewrite)
+    runs on the Find row, not on the Section of every task row, so scrolling the list no longer
+    reruns it.
+  - **A task's page types its estimate in its Time row**, in place of Set Estimate: Return,
+    leaving the field, a preset or leaving the page saves it; Escape puts it back; a Jira or GitLab
+    task shows "2h from Jira" until one is typed. Add Time stays. The estimate takes 45m, 1.5h or
+    2d 3h (`TaskEstimateField`, the notch form's `TaskFormDraft` logic): the presets stay on a
+    chevron, unreadable text turns orange, and "= 19h" shows while it has focus. Right-click › Set
+    Estimate uses the same field, checked as it is typed, and "0" or nothing removes the estimate
+    there too. New Task uses it as well.
+  - **No drag, no stepping, no total.** Rows are neither dragged nor dropped on, and Move Up and
+    Move Down are gone; right-click › Move to Top stays — also a named accessibility action — to
+    pick what the notch's Up next shows first, judged against the whole order, so it still works on
+    a filtered list. The "Task order" row with its "10 open", and its search entry, are gone; while
+    a filter or Find narrows the list a "Filtered" row above the rows still says "3 of 12 tasks".
+    `TasksManager.moveUp/moveDown/move/dropEdge` and `TaskOrdering.movingUp/movingDown/move/dropEdge`
+    went with their only caller.
+  - **Spacing:** one Tasks card (Find, then Add a task, then the rows, with "Right-click a task for
+    more, such as Move to Top." under it) and one folded Section for Recently closed, Archive and
+    Tag colours, where Find and each fold were one-row cards of their own. The page's text fields
+    show as fields. docs/SETTINGS.md gains "a Section earns its gap", a list's Add as one row with a
+    sheet (its shortcut on the Form), the sheet shape, titles typed in place, and the footer rule's
+    one exception for a list's right-click hint.
+  - **Quicker:** a list works its rows out once per render (`TaskListRows`: colour, first in the
+    order, timing; the sources' colours read from Defaults once, `TasksManager.integrationColors`).
+    The right-click menu no longer rebuilds the whole list for every row (95 tasks were 95 passes
+    over the list each render), ▶ no longer observes the manager on every row, the drag handlers
+    are gone, and typing in New Task redraws the sheet alone (`NewTaskDraft`).
+  - `SettingsTagChip` gains `init(adding:kind:)` for a tag offered to add; the one Return takes is
+    ringed and, for VoiceOver, selected, and the Tags sheet's suggestion lines say so too.
+    `GoldenRow`, measured inside an HStack, no longer proposes NaN widths
+    (`TimerComposerMetrics.goldenWidths`); the notch's rows are unchanged.
+  - DEBUG snapshot boards `allTasks`, `newTaskSheet`, `taskPage` and `localTaskPage` render from
+    fixture tasks (`TasksManager.snapshotFile`), never reading or writing tasks.json.
+  - Tests: new `TaskListRowsTests`; golden widths, typed-estimate readings, a passed reminder
+    moving (and the one kept staying), a new task under each filter, live time reading In
+    Progress, New Task adding through `insertTask` and leaving the notch's form alone;
+    `TaskListRulesTests` (no drag or stepping, Move to Top kept in the menu and
+    as an accessibility action, with planted offenders), `TaskColorRulesTests`, `TaskFormDraftTests`,
+    `TaskFormWiringTests`, `SettingsLayoutRulesTests`, `IntegrationSecretRulesTests` and
+    `SettingsHighlightInventoryTests` (242 entries) updated; the move tests went with the moves.
+### 2026-10-24 - The close-gesture rule checks that the guard clears the blur
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's nitpick on #128 fixed before merging
+- **Changes:**
+  - `NotchScrollOwnershipRulesTests.closeGestureProblems` requires `gestureProgress = .zero` inside the close
+    guard's `else`, before its `return`, not only the guard; a planted offender keeps the guard and drops the
+    reset (CodeRabbit's nitpick on #128).
+### 2026-10-23 - A clipboard note waits for Done, and the notes list keeps its order
+- **Developer label:** "create from clipboard shouldnt auto save unless clicked on save … also the order keeps on changin dynamically"
+- **Agent label:** Claude Code (Opus 5.5) — `NotesManager` owns every note write; clipboard drafts; no-op saves; Apple Notes push queue, read-back dates and the time-zone fix
+- **Changes:**
+  - **A note made from the clipboard is a draft.** The clipboard button and Cmd+V in the list open
+    the editor without autosave; Done saves it, and "< Notes" or the notch closing drops it. Notes
+    made with "+" and edits to saved notes autosave as before.
+  - **Opening a note no longer moves it to the top.** Filling the editor fired autosave, which
+    stamped the note's modification date with nothing changed. `NotesManager.save` now compares
+    with the stored note and writes nothing — no date, no image file, no Apple Notes push — when
+    nothing changed. A note left with an empty title keeps "Untitled Note" rather than losing it on
+    the next autosave.
+  - **Apple Notes dates are read correctly.** The scripts subtracted a "1970" date built from
+    `current date`, which counts from local midnight: every Apple note read 5 h 30 min newer than it
+    was here (the zone's offset), rounded to ten seconds. So every sync took Notes' copy over
+    Kannu's and re-dated the note, reshuffling the list. Dates are now read as calendar fields in
+    the Mac's time zone (`AppleNotesMergePolicy.date(fromStamp:)`); a note already carrying a
+    future date from the old reading takes Notes' correct one on the next sync.
+  - **A push read back is not a remote edit.** `NoteItem.appleNotesSyncedAt` keeps Notes'
+    modification date after each push or pull, and a side counts as changed only once its date
+    passes it (`AppleNotesMergePolicy.decide`). Notes' `plaintext` name line is no longer copied
+    into the note's text.
+  - **One Apple note per Kannu note.** Every sync, push and delete waits for the one before it, and
+    a created note's id is remembered at once, so autosave's second push updates instead of making
+    a duplicate, and a note deleted while its first push runs is deleted in Notes too.
+  - **Edits made during a sync survive it.** The sync's result is applied to the notes as they are
+    when it finishes (`AppleNotesMergePolicy.reconcile`), not to the snapshot it started from.
+  - **Cmd+V in the editor pastes at the cursor**, in the title or the text, instead of appending
+    to the end of the text.
+  - The list's thumbnails are read from disk once, off the main thread, instead of on every redraw.
+  - `AppleNotesMergePolicyTests` covers the decisions, the stamp and the reconcile; the merge policy
+    joins the test target's Sources phase. The unused `requestSync` is gone.
+
+### 2026-10-23 - Scrolling the notes never closes or blurs the notch
+- **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
+- **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21
+- **Changes:**
+  - **A vertical scroll over a list or a note's text is that view's.** Scrolling down through notes
+    is the same trackpad gesture as swipe-up-to-close, and the only thing keeping them apart was a
+    hover token: the note editor never set one, the list's never came on under a pointer that had
+    not moved since "< Notes" or Done, and the notch's scroll monitor kept counting while it was on.
+    New `.ownsVerticalScroll()` (`VerticalScrollOwnership`) marks a view whose vertical scroll is
+    its own; `PanGesture`'s monitor checks the pointer against those views' live frames when each
+    event arrives and counts nothing over them. Applied to the Notes tab (list, editor, split view),
+    the Agents list, the timer tab's side column and the extension tab, which had no guard either.
+    The hover tokens stay as the second guard; the Notes tab now sets one at its root.
+  - **The scroll monitor starts each gesture from nothing.** It resets on `.began`/`.mayBegin` and
+    `.cancelled`, and ends a gesture under way even when the end lands outside the notch, which used
+    to leave the count set for the next gesture.
+  - **The close gesture's blur and dim no longer leak or stick.** The whole tab blurred (up to 8 pt)
+    and dimmed on every unguarded scroll; `handleCloseScrollGesture` now clears that on the end and
+    whenever its guard turns the gesture away, before the guard rather than after it.
+  - Swipe-to-close still works from the tab bar and from content that does not scroll.
+  - docs/REGRESSIONS.md entry 21 and a Danger-zones row; `NotchScrollOwnershipRulesTests` pins the
+    ownership on every tab scroller, the monitor's order and the blur reset, each against a planted
+    offender.
+### 2026-10-24 - The staple-retry test rejects a loop of one attempt, and the batch takes development
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — #125 brought up to date with development and its last CodeRabbit nitpick fixed before merging
+- **Changes:**
+  - `ReleaseWorkflowRulesTests.stapleProblems` reads `staple_attempts` from `scripts/notarize-dmg.sh` and
+    reports "the staple is not retried" below two attempts; `testTheStapleIsRetried` plants a one-attempt
+    script (CodeRabbit's nitpick on #125).
+  - `development` merged in; the only conflict was `CHANGELOG.md`, where both sides' entries are kept.
+
 ### 2026-10-24 - The cloud relay is brought up to date with development and its newer Claude hook table
 - **Developer label:** "rest of them needs to be reviewed and then merged" (#72, 268 commits behind `development`)
 - **Agent label:** Claude Code (Opus 5.5) — `origin/development` merged into `feat/cloud-relay-protocol`; the relay takes development's Claude table, learns `UserPromptExpansion`, and leaves the subagent pair out of its hooks
@@ -288,6 +608,111 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
     option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
     fallback). `ScreenCapturePolicy.swift` joins the logic target.
+### 2026-10-22 - Act on CodeRabbit's review of #125
+- **Developer label:** CodeRabbit's review of #125 (the follow-ups batch): a late microphone answer could start a recording, and the entitlement test checked a key, not its value
+- **Agent label:** Claude Code (Opus 5.5) — `ScreenAssistantManager` drops a pending microphone request when its panels close; `PrivacyUsageDescriptionRulesTests` binds `device.audio-input` to `<true/>`; README lists Microphone and Local Network
+- **Changes:**
+  - Pressing Record before the microphone was answered asked for it and started recording from the
+    answer's callback, even if the user had closed the Screen Assistant panels by then. The request
+    now carries an id (`pendingRecordingAuthorization`), `closePanels()` drops it, and the callback
+    records only for the request it belongs to.
+  - `PrivacyUsageDescriptionRulesTests` read the entitlements file for the `audio-input` key alone,
+    so `<false/>` passed. It now reads the value bound to the key (`value(of:in:)`), with planted
+    `<false/>` and a planted `closePanels()` that keeps the request.
+  - ReadMe's Runtime Permissions lists Microphone (Screen Assistant's Record) and Local Network
+    (LocalSend), now that #124 declares them.
+
+### 2026-10-22 - Microphone and local network get their usage descriptions; unused camera and Desktop access go
+- **Developer label:** "Add missing privacy usage descriptions"
+- **Agent label:** Claude Code (Opus 5.5) — `NSMicrophoneUsageDescription` and `NSLocalNetworkUsageDescription` added, `NSDesktopFolderUsageDescription` removed, audio input on and camera access off in both configurations, `device.audio-input` in the entitlements file, and Screen Assistant asks for the microphone before it records
+- **Changes:**
+  - **Screen Assistant** records audio when the user presses Record (`AVAudioRecorder`), but Kannu had
+    no microphone usage description and `ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO`. Under the
+    hardened runtime that means no audio. Now:
+    - the description is added;
+    - audio input is on;
+    - `com.apple.security.device.audio-input` is spelled out in `Kannu.entitlements`, like
+      calendars;
+    - `startRecording()` checks the microphone authorization first. It asks when undetermined and
+      records once allowed; when denied it opens System Settings › Microphone instead of recording
+      nothing.
+  - **LocalSend** joins a multicast group and listens on the local network from the Shelf, with no
+    description. `NSLocalNetworkUsageDescription` now says what it is for.
+  - **Camera:** `ENABLE_RESOURCE_ACCESS_CAMERA = YES` put the camera entitlement on every build, with
+    no description and nothing that captures video. `CameraMonitor` only enumerates devices and
+    reads CoreMediaIO's "running somewhere". A probe built with the hardened runtime and without the
+    entitlement still listed both cameras and read the flag, with no prompt. So it is off.
+  - **Desktop:** the usage description was declared for screenshots Kannu never saves there, and is
+    removed.
+  - **Checked:** the built `Info.plist` has the two new descriptions and no Desktop one.
+  - **Test:** new `PrivacyUsageDescriptionRulesTests`: both descriptions in both configurations, no
+    Desktop description, audio input on, camera off, and the authorization check before the
+    recorder. Planted copies of the old settings are caught.
+
+### 2026-10-22 - Launch no longer reads the Keychain on the main thread
+- **Developer label:** "Stop launch-time Keychain reads on main"
+- **Agent label:** Claude Code (Opus 5.5) — `SecureSecretsStore.migrateFromDefaultsIfNeeded` touches the Keychain only for a value still in Defaults, silently and off main (`LegacySecretMigration` decides each); the legacy Claude credential delete moves off main
+- **Changes:**
+  - Every launch, `continueLaunch()` ran `SecureSecretsStore.migrateFromDefaultsIfNeeded()`, which
+    read all eight Kannu secret items on the main thread with the Keychain dialog allowed, whether
+    or not anything was left to move.
+  - On a fresh Mac those items don't exist, so no dialog appeared. But Debug and Release builds
+    share the service name `com.kannu.app.secure-secrets` and are signed differently, so an item
+    one had saved could raise a SecurityAgent dialog in the other that held the launch until
+    answered.
+  - **The migration now:**
+    - collects the settings that still hold a plaintext value, and returns at once when none do,
+      which is nearly always;
+    - otherwise reads each item silently (`allowInteraction: false`) on a background queue;
+    - decides what to do with new `LegacySecretMigration` (Foundation only, in
+      `KeychainReadPolicy.swift`):
+      - an item already there wins, readable or not, and the plaintext copy is cleared;
+      - the legacy value is stored only where no item exists;
+      - anything else (a locked keychain) waits for the next launch.
+    
+    Defaults are cleared on the main thread.
+  - The one-time delete of the legacy `claude-oauth` item (`LLMUsageManager.configureProviderDefaultsIfNeeded`,
+    also run from `continueLaunch()`) now runs on a background queue too.
+  - Test: new `LegacySecretMigrationTests`.
+    - Every step.
+    - The migration reads nothing before it knows there is something to move, reads silently,
+      off main.
+    - The delete is off main.
+    - Planted copies of the old code are caught.
+
+### 2026-10-22 - The extension RPC server listens on loopback only
+- **Developer label:** "Bind the extension RPC server to loopback"
+- **Agent label:** Claude Code (Opus 5.5) — `ExtensionRPCServer`'s listener sets `requiredInterfaceType = .loopback`; the peer check stays
+- **Changes:**
+  - The RPC server's `NWListener` on port 9020 starts at launch and listened on every interface.
+    Any machine on the network could open a connection; `handleNewConnection` dropped a
+    non-loopback peer only after accepting it. With the macOS firewall on, the listener could
+    also raise its "accept incoming connections" dialog.
+  - The listener's parameters now require the loopback interface, so nothing off this Mac can
+    connect. A Network.framework harness on this Mac showed:
+    - **before:** 127.0.0.1, ::1, localhost and the LAN address all connect;
+    - **after:** the three loopback forms connect and the LAN address times out.
+  - No working client is affected. The server only ever accepted loopback peers, and
+    AtollExtensionKit talks to Kannu over XPC, not this socket. The loopback peer check stays as a
+    second line.
+  - Test: new `ExtensionRPCServerRulesTests`. The requirement is set before the listener is
+    built, and the peer check is still there. A planted copy of each is caught.
+
+### 2026-10-22 - A dropped connection while stapling no longer fails a release
+- **Developer label:** "Retry notarization stapling in release.yml"
+- **Agent label:** Claude Code (Opus 5.5) — `scripts/notarize-dmg.sh` retries `xcrun stapler staple` up to five times with a growing wait
+- **Changes:**
+  - The 1.4.0 beta 2 release run failed after Apple had accepted the DMG. Stapling fetches the
+    ticket from Apple's CloudKit service, the connection dropped ("The network connection was
+    lost", stapler error 68), and the single `xcrun stapler staple` ended the run; a re-run of the
+    whole job went through.
+  - `scripts/notarize-dmg.sh` (the release's Notarize step) now tries the staple up to five times,
+    waiting 15, 30, 45 and 60 seconds between tries, then validates. It fails only when every try
+    fails. `STAPLE_RETRY_DELAY` overrides the 15-second step, for a local test.
+  - Checked against a fake `xcrun`: two failures then success staples on the third try; five
+    failures exit 1.
+  - Test: `ReleaseWorkflowRulesTests.testTheStapleIsRetried` (the step runs the script; the one
+    staple is inside the retry loop), with a planted single-shot staple.
 
 ### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
 - **Developer label:** "a color search didnt give the notch color change area"

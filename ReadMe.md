@@ -44,13 +44,16 @@ Asked on the Permissions step (when the feature is on):
 - **Files & Folders (Downloads)** — download progress in the notch.
 - **Location (When In Use)** — lock screen weather.
 - **Automation (Apple Events)** and **Music (MusicKit)** — when Spotify or Apple Music is your music source: playback controls, and Apple Music's animated artwork.
+- **Automation (Apple Events) for Notes** — when you choose to sync notes with Apple Notes on the Notes step.
 - **Data from other apps** — when Warp is installed: following agents running in Warp.
 - **Login item** — "Open Kannu at login", a switch on the same step.
 
 Asked only when you use the feature:
 
 - **Screen Recording** — Screen Assistant screenshot capture. Screen-recording detection is separate and does not need it.
-- **Automation (Apple Events)** — Apple Notes sync, and opening an agent's terminal tab or a browser tab.
+- **Microphone** — Screen Assistant's Record button, asked the first time you press it.
+- **Local Network** — sending files from the Shelf to nearby devices with LocalSend.
+- **Automation (Apple Events)** — Apple Notes sync when you turn it on later in Brain › Notes, and opening an agent's terminal tab or a browser tab.
 - **Full Disk Access** — custom Focus metadata and optional global Shelf behavior.
 - **Files & Folders (Documents/Downloads)** — Shelf, when Full Disk Access is not granted. Clipboard history keeps its files in Application Support, which needs no permission.
 - **Audio Capture** — real-time waveform and audio-activity features.

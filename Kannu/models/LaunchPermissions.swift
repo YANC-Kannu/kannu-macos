@@ -28,6 +28,8 @@ enum LaunchPermission: String, CaseIterable, Identifiable {
     case location
     /// Automation of the music app chosen as the source (Spotify or Apple Music).
     case musicAutomation
+    /// Automation of Notes, for Apple Notes sync.
+    case notesAutomation
     /// Warp's agent sessions, which live in another app's container.
     case warp
 
@@ -68,6 +70,8 @@ enum LaunchPermissionPolicy {
         /// The music source is Spotify or Apple Music, which Kannu controls with Apple Events.
         var controlsMusicApp: Bool
         var warpInstalled: Bool
+        /// Notes are on and sync with Apple Notes, which Kannu drives with Apple Events.
+        var appleNotesSync: Bool = false
     }
 
     /// The Permissions step's rows, in order: only what the chosen features use. Bluetooth is
@@ -80,6 +84,7 @@ enum LaunchPermissionPolicy {
         if features.downloads { rows.append(.downloads) }
         if features.lockScreenWeather { rows.append(.location) }
         if features.controlsMusicApp { rows.append(.musicAutomation) }
+        if features.appleNotesSync { rows.append(.notesAutomation) }
         if features.warpInstalled { rows.append(.warp) }
         return rows
     }

@@ -1289,6 +1289,43 @@ one `Pinned notch window … joinNotchSpace` line and the probe must read the no
 
 ---
 
+## 21. A scroll inside a tab's content belongs to the content, not the close gesture
+
+**Rule:** a view of the open notch whose content scrolls vertically (a list, a note's text) is
+marked `.ownsVerticalScroll()` (`VerticalScrollOwnership`), and the notch's scroll monitor
+(`PanGesture.swift`) hands every event over one of those views back untouched, counting nothing.
+Ownership is read off the owner's live `NSView` frame when the event arrives. The `.onHover`
+suppression tokens (`vm.setScrollGestureSuppression`) stay as a second guard, never the only one.
+
+**Broken twice, both times by trusting hover to arrive before the scroll.**
+- `741ccf3` (2026-10-11): the timer tab's page swipe beat the ruler's sideways scroll, because it
+  only stood aside once a hover state had reached it through `@State` and a re-render. Fixed by
+  geometry (`ScrollWheelMonitor.sidewaysScrollOwners`), the idiom this entry reuses.
+- The Notes tab (fixed 2026-10-23): scrolling down through notes or a long note is the same trackpad
+  gesture as swipe-up-to-close, and it closed the notch. The editor never set a token at all; the
+  list's token never came on for a list that appeared under a pointer that had not moved (after
+  "< Notes" or Done), and `PanGesture` kept counting while the token was on, so a token that went
+  off mid-gesture closed the notch in one event. Every unguarded scroll also blurred and dimmed the
+  whole tab (`gestureProgress`), and the blur stuck when the guard came on mid-gesture, because the
+  close gesture handled `.ended` after its guard. An end that landed outside the notch's bounds
+  left the count set for the next gesture.
+
+**Why it keeps happening:** the close gesture is a global behaviour, and each scrollable view
+opted out on its own, through hover. Hover is late by construction, and nothing told the author
+of a new scrollable view that it had to opt out. `073a921` (2026-10-11) shows the same tokens
+failing a third way: a window rebuild left them set, and the notch could neither close nor scroll.
+
+**Guard — exists.** `NotchScrollOwnershipRulesTests` reads the sources: every file of open-notch
+tab content that holds a vertical `ScrollView`, `TextEditor` or `List` applies
+`.ownsVerticalScroll()` (a popover is a window of its own and is exempt); `handleScroll` ends a
+gesture under way before its bounds check, restarts on `.began`, and asks the owners before it
+counts a delta; `handleCloseScrollGesture` clears its blur before its guard; an owner's view
+registers and unregisters and takes no hits. Each scanner is checked against planted offenders.
+Missing: that a scroll over the notes really never closes the notch is checked by eye on the
+installed build, since nothing automated drives a trackpad.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -1306,6 +1343,8 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
 | `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
+| `PanGesture.swift`, `VerticalScrollOwnership.swift`, `NotchNotesView.swift` | — | The open notch's swipe-to-close against every scrollable view under it. Each scroller opted out through hover, which a scroll beats, so a list or a note's text closed and blurred the notch (entry 21). Mark a new scroller `.ownsVerticalScroll()`. |
+| `LaunchPermissionManager.swift`, `LaunchPermissions.swift`, `Kannu/components/Onboarding/` | — | Who may raise a macOS dialog, and when. A feature that asks on its own must check `mayTouch` and get a `LaunchPermission` row (AGENTS.md, "No permission dialog before onboarding's Permissions step"); Apple Notes sync ran AppleScript ungated until 2026-10-23. `FirstLaunchRulesTests` pins every gate and the onboarding order (`permissions`, `finished` last). |
 | `AgentSessionLogParser.swift` | 8 | `readTrailingLines` and the tail verdict. 4 of 8 commits touch the reader; **2 of those 4 fix the same failure mode** — the reader returning nil and silently sending callers down a wrong path (entry 4). |
 
 If you are changing a *constant* in `AgentTrafficLightState.swift`, assume it is load-bearing

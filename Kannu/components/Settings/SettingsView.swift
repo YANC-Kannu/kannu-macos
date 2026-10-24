@@ -813,7 +813,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .general, title: "External display style", keywords: ["dynamic island", "pill", "external display", "non-notch", "floating", "capsule"], highlightID: SettingsTab.general.highlightID(for: "External display style")),
             SettingsSearchEntry(tab: .general, title: "Always show on non-notch displays", keywords: ["always show", "hide", "hover", "external", "non-notch", "auto hide", "slide"], highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays")),
             SettingsSearchEntry(tab: .general, title: "Notch display height", keywords: ["display height", "menu bar size"], highlightID: SettingsTab.general.highlightID(for: "Notch display height")),
-            SettingsSearchEntry(tab: .general, title: "Permissions", keywords: ["permission", "privacy", "allow", "accessibility", "bluetooth", "location", "downloads", "warp"], highlightID: SettingsTab.general.highlightID(for: "Permissions")),
+            SettingsSearchEntry(tab: .general, title: "Permissions", keywords: ["permission", "privacy", "allow", "accessibility", "bluetooth", "location", "downloads", "warp", "notes", "automation"], highlightID: SettingsTab.general.highlightID(for: "Permissions")),
 
             // Live Activities
             SettingsSearchEntry(tab: .liveActivities, title: "Enable Screen Recording Detection", keywords: ["screen recording", "indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Screen Recording Detection")),
@@ -953,6 +953,10 @@ struct SettingsView: View {
             // Shortcuts
             SettingsSearchEntry(tab: .shortcuts, title: "Enable global keyboard shortcuts", keywords: ["keyboard", "shortcut"], highlightID: SettingsTab.shortcuts.highlightID(for: "Enable global keyboard shortcuts")),
 
+            // Notes
+            SettingsSearchEntry(tab: .notes, title: "Sync with Apple Notes", keywords: ["apple notes", "notes app", "icloud", "two-way", "sync"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
+            SettingsSearchEntry(tab: .notes, title: "Notes to sync", keywords: ["kannu folder", "whole account", "all notes", "import", "scope"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
+
             // Timer
             SettingsSearchEntry(tab: .timer, title: "Enable timer feature", keywords: ["timer", "enable"], highlightID: SettingsTab.timer.highlightID(for: "Enable timer feature")),
             SettingsSearchEntry(tab: .timer, title: "Mirror macOS Clock timers", keywords: ["system timer", "clock app"], highlightID: SettingsTab.timer.highlightID(for: "Mirror macOS Clock timers")),
@@ -992,11 +996,10 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .tasks, title: "Time to log", keywords: ["tasks", "log time", "log work", "worklog", "time tracking", "spent", "timesheet", "jira", "gitlab"], highlightID: SettingsTab.tasks.highlightID(for: "Time to log")),
             // All tasks' rows, and a task's own page, exist only while open, so their entries land on
             // the overview's All tasks row, which opens it.
-            SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks", "order", "priority", "move to top", "up next", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Find a task", keywords: ["tasks", "find", "search", "look up", "key", "title"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Task order", keywords: ["tasks", "order", "reorder", "move", "drag", "priority", "list", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate", "tags", "reminder"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task tags", keywords: ["tasks", "tags", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Schedule a task", keywords: ["tasks", "schedule", "reminder", "notification", "remind me", "due"], highlightID: SettingsDeepLink.tasksListHighlightID),
@@ -1254,7 +1257,7 @@ struct GeneralSettings: View {
             }
 
             Section {
-                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Brain, updates, restart and quit.") {
+                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
                     Defaults.Toggle(key: .menubarIcon) {
                         Text("Menubar icon")
                     }
@@ -7123,9 +7126,28 @@ struct NotesSettingsView: View {
     @Default(.enableNotes) private var enableNotes
     @Default(.enableAppleNotesSync) private var enableAppleNotesSync
     @Default(.appleNotesLastSyncDate) private var appleNotesLastSyncDate
+    @Default(.appleNotesSyncScope) private var appleNotesSyncScope
+    @State private var confirmNarrowingScope = false
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.notes.highlightID(for: title)
+    }
+
+    /// Narrowing to the Kannu folder drops the local copies of every other note on the next sync
+    /// (nothing in Notes is deleted), so it asks first; widening is the explicit choice it describes.
+    private var scopeSelection: Binding<AppleNotesSyncScope> {
+        Binding(
+            get: { appleNotesSyncScope },
+            set: { scope in
+                guard scope != appleNotesSyncScope else { return }
+                if scope == .kannuFolder, Defaults[.savedNotes].contains(where: { $0.madeInAppleNotes == true }) {
+                    confirmNarrowingScope = true
+                } else {
+                    appleNotesSyncScope = scope
+                    NotesManager.shared.syncWithAppleNotes()
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -7163,8 +7185,33 @@ struct NotesSettingsView: View {
                         Text("Sync with Apple Notes")
                     }
                     .settingsHighlight(id: highlightID("Sync with Apple Notes"))
+                    .onChange(of: enableAppleNotesSync) { _, isOn in
+                        // Turning it on is a click on the feature's own switch: after a Not now on
+                        // "Control Notes", this is where macOS is asked again.
+                        if isOn, LaunchPermissionManager.answer(for: .notesAutomation) == .deferred {
+                            LaunchPermissionManager.shared.request(.notesAutomation, musicSource: Defaults[.mediaController])
+                        }
+                    }
 
                     if enableAppleNotesSync {
+                        Picker(selection: scopeSelection) {
+                            ForEach(AppleNotesSyncScope.allCases) { scope in
+                                Text(scope.localizedName).tag(scope)
+                            }
+                        } label: {
+                            SettingsRowLabel("Notes to sync", description: appleNotesSyncScope.description, tint: nil)
+                        }
+                        .settingsHighlight(id: highlightID("Notes to sync"))
+                        .alert("Sync Only the Kannu Folder?", isPresented: $confirmNarrowingScope) {
+                            Button("Sync Kannu Folder") {
+                                appleNotesSyncScope = .kannuFolder
+                                NotesManager.shared.syncWithAppleNotes()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        } message: {
+                            Text("Notes made in Apple Notes outside the Kannu folder leave the notch. They stay in Apple Notes.")
+                        }
+
                         LabeledContent {
                             HStack(spacing: 8) {
                                 if appleNotesSync.isSyncing {
@@ -7172,12 +7219,7 @@ struct NotesSettingsView: View {
                                         .controlSize(.small)
                                 }
                                 Button("Sync Now") {
-                                    Task {
-                                        let notes = Defaults[.savedNotes]
-                                        if let merged = await appleNotesSync.sync(localNotes: notes) {
-                                            Defaults[.savedNotes] = merged
-                                        }
-                                    }
+                                    NotesManager.shared.syncWithAppleNotes()
                                 }
                                 .disabled(appleNotesSync.isSyncing)
                             }
@@ -7201,7 +7243,7 @@ struct NotesSettingsView: View {
                 } header: {
                     SettingsSectionHeader("Apple Notes")
                 } footer: {
-                    SettingsFooter("Two-way sync with the macOS Notes app. Notes created in Kannu appear in the Kannu folder in Notes, and your existing Apple Notes are imported into the notch. Grant Automation permission for Notes when prompted.")
+                    SettingsFooter("Two-way sync with the macOS Notes app. Notes made in Kannu go to the Kannu folder in Notes. Kannu asks macOS to let it control Notes the first time it syncs, or on the Permissions row in Brain › General.")
                 }
             }
         }

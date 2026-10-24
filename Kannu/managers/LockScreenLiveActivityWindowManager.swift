@@ -105,6 +105,9 @@ class LockScreenLiveActivityWindowManager {
     }
 
     private func lockContext() -> (notchSize: CGSize, screen: NSScreen)? {
+        // This pill is the notch on the lock screen, and it flashes at the notch on unlock: a
+        // notch the user hid stays hidden there too.
+        guard Defaults[.showNotch] else { return nil }
         guard let screen = LockScreenDisplayContextProvider.shared.contextSnapshot()?.screen ?? NSScreen.main else {
             print("[\(timestamp())] LockScreenLiveActivityWindowManager: no main screen available")
             return nil

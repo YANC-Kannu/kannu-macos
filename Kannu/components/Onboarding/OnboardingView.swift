@@ -32,6 +32,7 @@ enum OnboardingStep: CaseIterable {
     case profileSelection
     case trafficLightStyle
     case caffeinateChoice
+    case notes
     case permissions
     case finished
 }
@@ -41,6 +42,8 @@ struct OnboardingView: View {
     /// Applied when onboarding ends: switching to Spotify or Apple Music talks to the app at once,
     /// and that Automation dialog belongs to the Permissions step.
     @State private var musicSource: MediaControllerType = Defaults[.mediaController]
+    /// Applied when onboarding ends, for the same reason: syncing with Apple Notes talks to Notes.
+    @State private var notesChoice: OnboardingNotesChoice = .off
     let onLaunchAtLoginChoice: (Bool) -> Void
     let onFinish: () -> Void
     let onOpenSettings: () -> Void
@@ -83,6 +86,15 @@ struct OnboardingView: View {
             case .caffeinateChoice:
                 CaffeinateSelectionView(
                     onContinue: {
+                        advance(to: .notes)
+                    }
+                )
+                .transition(.opacity)
+
+            case .notes:
+                NotesSelectionView(
+                    onContinue: { choice in
+                        notesChoice = choice
                         advance(to: .permissions)
                     }
                 )
@@ -91,7 +103,10 @@ struct OnboardingView: View {
             case .permissions:
                 // Rows read the settings the profile step just applied.
                 PermissionsStepView(
-                    rows: LaunchPermissionManager.rows(musicSource: musicSource),
+                    rows: LaunchPermissionManager.rows(
+                        musicSource: musicSource,
+                        appleNotesSync: notesChoice.syncsWithAppleNotes
+                    ),
                     musicSource: musicSource,
                     onLaunchAtLoginChoice: onLaunchAtLoginChoice,
                     onContinue: {
@@ -104,10 +119,12 @@ struct OnboardingView: View {
                 OnboardingFinishView(
                     onFinish: {
                         applyMusicSource()
+                        applyNotesChoice()
                         onFinish()
                     },
                     onOpenSettings: {
                         applyMusicSource()
+                        applyNotesChoice()
                         onOpenSettings()
                     }
                 )
@@ -133,5 +150,11 @@ struct OnboardingView: View {
         }
         Defaults[.mediaController] = source
         NotificationCenter.default.post(name: Notification.Name.mediaControllerChanged, object: nil)
+    }
+
+    /// The Notes step's choice. After a Not now on "Control Notes", the notes stay in the notch with
+    /// sync off, so nothing asks later.
+    private func applyNotesChoice() {
+        notesChoice.apply(notesAutomationDeferred: LaunchPermissionManager.answer(for: .notesAutomation) == .deferred)
     }
 }
