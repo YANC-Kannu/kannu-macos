@@ -143,8 +143,24 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     private var pendingTypedStart: (typed: String, reuse: Bool, duration: TimeInterval, preset: TimerPreset?,
                                     otherwise: () -> Void)?
 
+    #if DEBUG
+    /// DEBUG snapshot boards only (`DebugSnapshots`): the tasks the manager starts with, instead of
+    /// reading tasks.json. Set before the first touch. While set, nothing is saved, synced, observed
+    /// or asked of macOS, so a snapshot never writes the user's file.
+    static var snapshotFile: TasksFile?
+    #endif
+
     private init() {
         store = TaskFileStore(directory: { AppSupportPaths.child("Tasks") })
+        #if DEBUG
+        if let file = Self.snapshotFile {
+            tasks = file.tasks
+            drafts = file.drafts
+            tagColors = file.tagColors
+            loadState = .ready
+            return
+        }
+        #endif
         TimerManager.shared.sessionEvents
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -253,7 +269,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         TaskOrdering.active(tasks, listed: listed(filter))
     }
 
-    /// What a Task list move counts: the connected baseline, narrowed by the Task list's filters.
+    /// What the Task list shows: the connected baseline, narrowed by the Task list's filters.
     private func listed(_ filter: TaskFilter) -> TaskOrdering.Listed {
         filter.isNarrowing ? TaskFacets.listed(connected, filter: filter) : connected
     }
@@ -527,13 +543,24 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         return task.id
     }
 
-    /// The task form's new task, as typed: a local task at the top with its tags and reminder, the
-    /// bell before the schedule so a muted reminder is never sent first. The draft is used up, and
-    /// a list hiding local tasks shows them again so the task does not vanish as it is added. One
-    /// path for Add, Add & Start, a preset clicked with the form open, and a typed name whose title
-    /// the form held. Nil when it cannot be saved.
+    /// The notch's task form's new task (`insertTask`); then the draft is used up, and a list
+    /// hiding local tasks shows them again so the task does not vanish as it is added. One path for
+    /// Add, Add & Start, a preset clicked with the form open, and a typed name whose title the form
+    /// held. Nil when it cannot be saved.
     @discardableResult
     func addTask(from draft: TaskFormDraft) -> UUID? {
+        guard let id = insertTask(from: draft) else { return nil }
+        forgetFormDraft(editing: nil)
+        showLocalTasks()
+        return id
+    }
+
+    /// A new task as a form typed it: a local task at the top with its tags and reminder, the bell
+    /// before the schedule so a muted reminder is never sent first. Brain's New Task adds through
+    /// this alone, so a task half-typed in the notch stays kept and the notch's Show local stays as
+    /// the user left it. Nil when it cannot be saved.
+    @discardableResult
+    func insertTask(from draft: TaskFormDraft) -> UUID? {
         guard draft.isNew, draft.canSave, let id = addTask(title: draft.title, estimateSeconds: draft.estimateSeconds) else {
             return nil
         }
@@ -541,8 +568,6 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         if !tags.isEmpty { setTags(tags, for: id) }
         if draft.reminder != nil, !draft.notifies { setReminderNotifies(false, for: id) }
         if let reminder = draft.reminder { setSchedule(reminder, for: id) }
-        forgetFormDraft(editing: nil)
-        showLocalTasks()
         return id
     }
 
@@ -605,29 +630,6 @@ final class TasksManager: ObservableObject, TaskSourceHost {
 
     func moveToTop(_ taskID: UUID) { reorder { TaskOrdering.movingToTop(taskID, in: $0) } }
 
-    /// Up one row of what the Task list shows with `filter`.
-    func moveUp(_ taskID: UUID, filter: TaskFilter = .all) {
-        let listed = listed(filter)
-        reorder { TaskOrdering.movingUp(taskID, in: $0, listed: listed) }
-    }
-
-    func moveDown(_ taskID: UUID, filter: TaskFilter = .all) {
-        let listed = listed(filter)
-        reorder { TaskOrdering.movingDown(taskID, in: $0, listed: listed) }
-    }
-
-    /// A row dragged onto another in the Task list: it takes that row's place among the rows shown.
-    func move(_ taskID: UUID, onto target: UUID, filter: TaskFilter = .all) {
-        let listed = listed(filter)
-        reorder { TaskOrdering.move(id: taskID, onto: target, in: $0, listed: listed) }
-    }
-
-    /// Which edge of `target` a drop of `taskID` lands on among the rows shown; nil when it would
-    /// change nothing.
-    func dropEdge(dragging taskID: UUID, onto target: UUID, filter: TaskFilter = .all) -> TaskOrdering.DropEdge? {
-        TaskOrdering.dropEdge(dragging: taskID, onto: target, in: tasks, listed: listed(filter))
-    }
-
     /// The task's own tags, cleaned (`TaskItem.cleanedTags`). Kannu's only: never sent anywhere.
     func setTags(_ tags: [String], for taskID: UUID) {
         update(taskID) { $0.tags = TaskItem.cleanedTags(tags) }
@@ -664,8 +666,13 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// The colour a task shows: strictly its first tag's, or its integration's when it has no tags
     /// (`TaskColoring.color`).
     func color(of task: TaskItem) -> TaskColor {
-        let integration = TaskColoring.integration(for: task.source, colors: [task.source: Defaults[task.source.colorKey]])
-        return TaskColoring.color(tags: task.tags, tagColors: tagColors, integration: integration)
+        TaskColoring.color(of: task, tagColors: tagColors, integrations: [task.source: Defaults[task.source.colorKey]])
+    }
+
+    /// Every integration's colour, read from Defaults once: a list works its rows' colours out
+    /// with it (`TaskListRows`) instead of reading Defaults on every row.
+    var integrationColors: [TaskSource: TaskColor] {
+        Dictionary(uniqueKeysWithValues: TaskSource.allCases.map { ($0, Defaults[$0.colorKey]) })
     }
 
     // MARK: - Every source at once
@@ -684,6 +691,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
 
     /// Each source whose last sync is stale, never with the Keychain dialog (`SourceSync.syncIfStale`).
     func syncAllIfStale() {
+        #if DEBUG
+        if Self.snapshotFile != nil { return }
+        #endif
         for sync in syncs { sync.syncIfStale(now: Date()) }
     }
 
@@ -772,7 +782,10 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             let permission = await TaskReminders.requestPermission()
             guard let self else { return }
             notificationsDenied = permission == .denied
-            remindersBlocked = permission == .denied
+            // The check's own rule (`checkReminderPermission`): blocked only while something wants
+            // to notify. `persist` has already set the baseline to what the list wants, so a muted
+            // reminder re-timed while macOS denies notifications turns nothing orange.
+            remindersBlocked = permission == .denied && !reminderBaseline.isEmpty
             if permission == .allowed { resendReminders() }
         }
     }
@@ -786,6 +799,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// from an earlier snapshot never takes back what this resend sends.
     func checkReminderPermission() {
         guard isReady else { return }
+        #if DEBUG
+        if Self.snapshotFile != nil { return }
+        #endif
         TaskReminders.serially { [weak self] in
             let permission = await TaskReminders.permission()
             let held = await TaskReminders.held()
@@ -1307,7 +1323,12 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func isSyncing(_ source: TaskSource) -> Bool { syncing(source)?.isSyncing ?? false }
 
     /// A page with the source's row appeared, or its Sync was switched on (`SourceSync.syncIfStale`).
-    func syncIfStale(_ source: TaskSource) { syncing(source)?.syncIfStale(now: Date()) }
+    func syncIfStale(_ source: TaskSource) {
+        #if DEBUG
+        if Self.snapshotFile != nil { return }
+        #endif
+        syncing(source)?.syncIfStale(now: Date())
+    }
 
     /// The user's Refresh, Allow Keychain Access or new filter (`SourceSync.refresh`).
     func refresh(_ source: TaskSource) { syncing(source)?.refresh(now: Date()) }
@@ -1742,6 +1763,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// store drop an older one.
     private func persist() {
         guard isReady else { return }
+        #if DEBUG
+        if Self.snapshotFile != nil { return }
+        #endif
         syncReminders()
         revision += 1
         let revision = revision
