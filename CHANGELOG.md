@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #131
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — the finding of CodeRabbit's review of the notes stack (#134) that belongs to #131, fixed before merging
+- **Changes:**
+  - The note editor's "Delete This Note?" alert hangs on the editor rather than on its trash button, and the
+    notch stays open while it asks (an auto-close suppression token, released when the editor goes).
+
+### 2026-10-24 - A note can be deleted from inside it
+- **Developer label:** "still no delete button in the inside view"
+- **Agent label:** Claude Code (Opus 5.5) — a trash in the note editor's toolbar
+- **Changes:**
+  - The note editor's toolbar has a trash before Done, for any note that is saved; a draft or a new
+    note not saved yet shows none (back discards those). Deleting closes the editor without saving
+    the note back, then deletes it here and in Notes, as the list row's trash does.
+  - For a note made in Apple Notes (read-only while sync reads the whole account), it asks first, with
+    the list row's message: it also moves to Recently Deleted in Apple Notes.
 ### 2026-10-24 - Act on CodeRabbit's review of #130
 - **Developer label:** "rest of them needs to be reviewed and then merged"
 - **Agent label:** Claude Code (Opus 5.5) — the four findings of CodeRabbit's review of the notes stack (#134) that belong to #130, fixed before merging

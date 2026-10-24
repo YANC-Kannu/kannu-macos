@@ -75,7 +75,9 @@ struct NotchNotesView: View {
                             onCancel: cancelEdit,
                             isNew: isEditingNewNote,
                             isReadOnly: editorIsReadOnly,
-                            onOpenInNotes: openEditorNoteInNotes
+                            onOpenInNotes: openEditorNoteInNotes,
+                            onDelete: editorStoredNote == nil ? nil : deleteEditorNote,
+                            deletesInAppleNotes: editorIsReadOnly
                         )
                         .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
                     } else {
@@ -171,6 +173,20 @@ struct NotchNotesView: View {
     private func openEditorNoteInNotes() {
         guard let id = selectedNoteId, let note = savedNotes.first(where: { $0.id == id }) else { return }
         NotesManager.shared.openInNotes(note)
+    }
+
+    /// The open note as stored. Nil for a draft, or a new note not saved yet: nothing to delete.
+    private var editorStoredNote: NoteItem? {
+        guard !editorIsDraft, let id = editorNoteId else { return nil }
+        return savedNotes.first(where: { $0.id == id })
+    }
+
+    /// The editor's trash: the note goes, here and in Notes, and the editor closes without saving
+    /// it back.
+    private func deleteEditorNote() {
+        guard let note = editorStoredNote else { return }
+        closeEditor()
+        NotesManager.shared.delete(note)
     }
 
     private func handlePaste() {
@@ -1077,6 +1093,7 @@ struct NoteRow: View {
 }
 
 struct NoteEditorView: View {
+    @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchFill) private var notchFill
     @Environment(\.notchForeground) private var notchForeground
     @Environment(\.colorScheme) private var colorScheme
@@ -1095,8 +1112,16 @@ struct NoteEditorView: View {
     /// edited, and "Open in Notes" takes the user to where it is (`NoteItem.isReadOnlyMirror`).
     let isReadOnly: Bool
     let onOpenInNotes: () -> Void
-    
-    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}) {
+    /// Nil hides the trash: a draft or an unsaved new note has nothing to delete.
+    let onDelete: (() -> Void)?
+    /// A note made in Notes: deleting it sends it to Recently Deleted there too, so the trash asks
+    /// first, as the list row's does.
+    let deletesInAppleNotes: Bool
+    @State private var confirmDelete = false
+    /// Holds the notch open while the delete confirmation shows.
+    @State private var autoCloseToken = UUID()
+
+    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false) {
         self._title = title
         self._content = content
         self._imageData = imageData
@@ -1106,6 +1131,8 @@ struct NoteEditorView: View {
         self.isNew = isNew
         self.isReadOnly = isReadOnly
         self.onOpenInNotes = onOpenInNotes
+        self.onDelete = onDelete
+        self.deletesInAppleNotes = deletesInAppleNotes
     }
 
     @FocusState private var isContentFocused: Bool
@@ -1136,7 +1163,21 @@ struct NoteEditorView: View {
                     .hoverTooltip(String(localized: "Edit this note in Notes"), edge: .below)
                     .padding(.trailing, 8)
                 }
-                
+
+                if let onDelete {
+                    Button(action: {
+                        if deletesInAppleNotes { confirmDelete = true } else { onDelete() }
+                    }) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .hoverTooltip(String(localized: "Delete Note"), edge: .below)
+                    .accessibilityLabel(String(localized: "Delete Note"))
+                    .padding(.trailing, 12)
+                }
+
                 Button(action: onSave) {
                     Text("Done")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -1305,5 +1346,16 @@ struct NoteEditorView: View {
                 isContentFocused = true
             }
         }
+        // On the editor, not on its trash button, and the notch stays open while it asks.
+        .alert("Delete This Note?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
+        }
+        .onChange(of: confirmDelete) { _, isShowing in
+            vm.setAutoCloseSuppression(isShowing, token: autoCloseToken)
+        }
+        .onDisappear { vm.setAutoCloseSuppression(false, token: autoCloseToken) }
     }
 }
