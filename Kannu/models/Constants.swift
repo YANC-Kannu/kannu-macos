@@ -810,10 +810,13 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     var isPinned: Bool = false
     var imageFileName: String? = nil // Store filename instead of raw data
     var appleNotesId: String? = nil
+    /// Notes' modification date for this note as last read back, after a push or a pull: each side
+    /// counts as changed only once its date passes it (`AppleNotesMergePolicy.decide`).
+    var appleNotesSyncedAt: Date? = nil
     
     // Internal property for migration
     private enum CodingKeys: String, CodingKey {
-        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId
+        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId, appleNotesSyncedAt
     }
     
     init(
@@ -825,7 +828,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         colorIndex: Int,
         isPinned: Bool = false,
         imageFileName: String? = nil,
-        appleNotesId: String? = nil
+        appleNotesId: String? = nil,
+        appleNotesSyncedAt: Date? = nil
     ) {
         self.id = id
         self.title = title
@@ -836,6 +840,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         self.isPinned = isPinned
         self.imageFileName = imageFileName
         self.appleNotesId = appleNotesId
+        self.appleNotesSyncedAt = appleNotesSyncedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -848,6 +853,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         colorIndex = try container.decode(Int.self, forKey: .colorIndex)
         isPinned = try container.decode(Bool.self, forKey: .isPinned)
         appleNotesId = try container.decodeIfPresent(String.self, forKey: .appleNotesId)
+        appleNotesSyncedAt = try container.decodeIfPresent(Date.self, forKey: .appleNotesSyncedAt)
         
         // Migration logic: if imageData exists but imageFileName doesn't, save it to disk
         if let data = try container.decodeIfPresent(Data.self, forKey: .imageData) {
@@ -871,6 +877,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         try container.encode(isPinned, forKey: .isPinned)
         try container.encode(imageFileName, forKey: .imageFileName)
         try container.encodeIfPresent(appleNotesId, forKey: .appleNotesId)
+        try container.encodeIfPresent(appleNotesSyncedAt, forKey: .appleNotesSyncedAt)
     }
     
     static let colors: [Color] = [.yellow, .blue, .red, .green, .purple, .orange]

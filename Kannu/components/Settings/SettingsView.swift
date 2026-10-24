@@ -7171,12 +7171,7 @@ struct NotesSettingsView: View {
                                         .controlSize(.small)
                                 }
                                 Button("Sync Now") {
-                                    Task {
-                                        let notes = Defaults[.savedNotes]
-                                        if let merged = await appleNotesSync.sync(localNotes: notes) {
-                                            Defaults[.savedNotes] = merged
-                                        }
-                                    }
+                                    NotesManager.shared.syncWithAppleNotes()
                                 }
                                 .disabled(appleNotesSync.isSyncing)
                             }

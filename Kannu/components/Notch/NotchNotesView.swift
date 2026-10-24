@@ -23,7 +23,6 @@ struct NotchNotesView: View {
     @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var coordinator = KannuViewCoordinator.shared
-    @ObservedObject private var appleNotesSync = AppleNotesSyncManager.shared
     @FocusState private var isFocused: Bool
     @Default(.savedNotes) var savedNotes
     @Default(.clipboardDisplayMode) var clipboardDisplayMode
@@ -39,6 +38,8 @@ struct NotchNotesView: View {
     @State private var editorImageData: Data? = nil
     @State private var editorColorIndex: Int = 0
     @State private var editorNoteId: UUID?
+    /// Made from the clipboard and not saved yet: no autosave, and leaving drops it.
+    @State private var editorIsDraft = false
     @State private var autoSaveTask: Task<Void, Never>?
     @State private var scrollSuppressionToken = UUID()
     @State private var isSuppressingScroll = false
@@ -79,12 +80,11 @@ struct NotchNotesView: View {
                             notes: savedNotes,
                             onSelect: selectNote,
                             onCreate: createNote,
-                            onDelete: deleteNote,
-                            onDeleteItem: deleteNoteItem,
-                            onClearAll: clearAllNotes,
-                            onTogglePin: togglePin,
+                            onDeleteItem: { NotesManager.shared.delete($0) },
+                            onClearAll: { NotesManager.shared.clearAll() },
+                            onTogglePin: { NotesManager.shared.togglePin($0) },
                             onCreateFromClipboard: createNoteFromClipboard,
-                            onSync: syncWithAppleNotes
+                            onSync: { NotesManager.shared.syncWithAppleNotes() }
                         )
                         .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
                     }
@@ -114,16 +114,17 @@ struct NotchNotesView: View {
         }
         .onAppear {
             updateLayoutState()
-            syncWithAppleNotes()
+            NotesManager.shared.syncWithAppleNotes()
         }
         .onChange(of: enableAppleNotesSync) { _, isEnabled in
             if isEnabled {
-                syncWithAppleNotes()
+                NotesManager.shared.syncWithAppleNotes()
             }
         }
         .onDisappear {
             updateScrollSuppression(for: false)
-            if isEditingNewNote || selectedNoteId != nil {
+            // The notch closing keeps an edit and drops a draft, as "< Notes" does.
+            if isEditing && !editorIsDraft {
                 persistNote()
             }
             coordinator.notesLayoutState = .list
@@ -155,7 +156,9 @@ struct NotchNotesView: View {
     }
     
     // MARK: - Actions
-    
+
+    private var isEditing: Bool { isEditingNewNote || selectedNoteId != nil }
+
     private func handlePaste() {
         let pasteboard = NSPasteboard.general
         
@@ -180,38 +183,40 @@ struct NotchNotesView: View {
         
         // Handle text paste
         if let text = pasteboard.string(forType: .string) {
-            if isEditingNewNote || selectedNoteId != nil {
-                // In editor: insert text at the end of content since we intercepted the shortcut
-                editorContent.append(text)
+            if isEditing {
+                // The shortcut is intercepted here, so hand the paste to whichever field has focus:
+                // it lands at the cursor, in the title or the text. Only with no field focused does
+                // it go to the end of the text.
+                if !NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil) {
+                    editorContent.append(text)
+                }
             } else {
-                // Not in editor: create a new note with the pasted text
-                createNoteWithContent(text)
+                // Not in editor: a draft of a new note with the pasted text
+                createDraft(content: text)
             }
         }
     }
 
     private func updateImageData(_ data: Data) {
         withAnimation {
-            if isEditingNewNote || selectedNoteId != nil {
+            if isEditing {
                 editorImageData = data
             } else {
-                // If not editing, create a new note with this image
-                editorTitle = ""
-                editorContent = ""
-                editorImageData = data
-                editorColorIndex = 0
-                editorNoteId = UUID()
-                isEditingNewNote = true
+                // If not editing, a draft of a new note with this image
+                createDraft(content: "", imageData: data)
             }
         }
     }
 
-    private func createNoteWithContent(_ content: String) {
+    /// A note made from the clipboard (the button, or Cmd+V in the list) is a draft: nothing is saved
+    /// until Done, and going back or closing the notch drops it.
+    private func createDraft(content: String, imageData: Data? = nil) {
         editorTitle = ""
         editorContent = content
-        editorImageData = nil
+        editorImageData = imageData
         editorColorIndex = 0
         editorNoteId = UUID()
+        editorIsDraft = true
         isEditingNewNote = true
     }
     
@@ -221,6 +226,7 @@ struct NotchNotesView: View {
         editorImageData = nil
         editorColorIndex = 0 // Default Yellow
         editorNoteId = UUID()
+        editorIsDraft = false
         isEditingNewNote = true
     }
     
@@ -230,62 +236,26 @@ struct NotchNotesView: View {
         editorImageData = note.getImageData() // Load from disk
         editorColorIndex = note.colorIndex
         editorNoteId = note.id
+        editorIsDraft = false
         selectedNoteId = note.id
         isEditingNewNote = false
     }
     
+    /// Saves the editor's note. `NotesManager` writes nothing when nothing changed, so opening a note
+    /// and going back no longer moves it to the top of the list.
     private func persistNote() {
         guard let id = editorNoteId else { return }
-
-        let isExistingNote = savedNotes.contains(where: { $0.id == id })
-        if !isExistingNote && editorTitle.isEmpty && editorContent.isEmpty && editorImageData == nil {
-            return
-        }
-
-        var notes = savedNotes
-        let now = Date()
-
-        var fileName: String? = nil
-        if let data = editorImageData {
-            let name = "note_image_\(id.uuidString).png"
-            let fileURL = NoteItem.noteImageDataDirectory.appendingPathComponent(name)
-            try? data.write(to: fileURL)
-            fileName = name
-        }
-
-        if let index = notes.firstIndex(where: { $0.id == id }) {
-            // Update
-            if let oldFileName = notes[index].imageFileName, oldFileName != fileName {
-                let oldFileURL = NoteItem.noteImageDataDirectory.appendingPathComponent(oldFileName)
-                try? FileManager.default.removeItem(at: oldFileURL)
-            }
-
-            notes[index].title = editorTitle
-            notes[index].content = editorContent
-            notes[index].imageFileName = fileName
-            notes[index].colorIndex = editorColorIndex
-            notes[index].modificationDate = now
-        } else {
-            // Create
-            let newNote = NoteItem(
-                id: id,
-                title: editorTitle.isEmpty ? "Untitled Note" : editorTitle,
-                content: editorContent,
-                creationDate: now,
-                modificationDate: now,
-                colorIndex: editorColorIndex,
-                isPinned: false,
-                imageFileName: fileName
-            )
-            notes.insert(newNote, at: 0)
-        }
-
-        savedNotes = notes
-        pushNoteToAppleNotes(noteId: id)
+        NotesManager.shared.save(NotesManager.Draft(
+            id: id,
+            title: editorTitle,
+            content: editorContent,
+            imageData: editorImageData,
+            colorIndex: editorColorIndex
+        ))
     }
 
     private func scheduleAutoSave() {
-        guard isEditingNewNote || selectedNoteId != nil else { return }
+        guard isEditing, !editorIsDraft else { return }
 
         autoSaveTask?.cancel()
         autoSaveTask = Task {
@@ -297,8 +267,17 @@ struct NotchNotesView: View {
         }
     }
 
+    /// Done: the one way a draft is saved.
     private func saveNote() {
         persistNote()
+        closeEditor()
+    }
+
+    /// "< Notes": an edit is kept, a draft is dropped.
+    private func cancelEdit() {
+        if !editorIsDraft {
+            persistNote()
+        }
         closeEditor()
     }
     
@@ -310,116 +289,23 @@ struct NotchNotesView: View {
             let imageExtensions = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "heic", "heif"]
             if let firstImageURL = fileURLs.first(where: { imageExtensions.contains($0.pathExtension.lowercased()) }),
                let imageData = try? Data(contentsOf: firstImageURL) {
-                createNoteWithContent("")
-                editorImageData = imageData
+                createDraft(content: "", imageData: imageData)
                 return
             }
         }
         
         // Priority 2: Direct image data
         if let tiffData = pasteboard.data(forType: .tiff) {
-            createNoteWithContent("")
-            editorImageData = tiffData
+            createDraft(content: "", imageData: tiffData)
             return
         } else if let pngData = pasteboard.data(forType: .png) {
-            createNoteWithContent("")
-            editorImageData = pngData
+            createDraft(content: "", imageData: pngData)
             return
         }
         
         if let text = pasteboard.string(forType: .string) {
-            createNoteWithContent(text)
+            createDraft(content: text)
         }
-    }
-    
-    private func deleteNote(_ indexSet: IndexSet) {
-        var notes = savedNotes
-        for index in indexSet {
-            if index < notes.count {
-                deleteRemoteNoteIfNeeded(notes[index])
-                if let fileName = notes[index].imageFileName {
-                    let fileURL = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
-                    try? FileManager.default.removeItem(at: fileURL)
-                }
-            }
-        }
-        notes.remove(atOffsets: indexSet)
-        savedNotes = notes
-    }
-    
-    private func deleteNoteItem(_ note: NoteItem) {
-        var notes = savedNotes
-        if let index = notes.firstIndex(where: { $0.id == note.id }) {
-            deleteRemoteNoteIfNeeded(notes[index])
-            // Clean up image file
-            if let fileName = notes[index].imageFileName {
-                let fileURL = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
-                try? FileManager.default.removeItem(at: fileURL)
-            }
-            notes.remove(at: index)
-            savedNotes = notes
-        }
-    }
-    
-    private func clearAllNotes() {
-        // Clean up all image files
-        for note in savedNotes {
-            deleteRemoteNoteIfNeeded(note)
-            if let fileName = note.imageFileName {
-                let fileURL = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
-                try? FileManager.default.removeItem(at: fileURL)
-            }
-        }
-        savedNotes.removeAll()
-    }
-
-    private func syncWithAppleNotes() {
-        guard enableAppleNotesSync else { return }
-        Task {
-            if let merged = await appleNotesSync.sync(localNotes: savedNotes) {
-                savedNotes = merged
-            }
-        }
-    }
-
-    private func pushNoteToAppleNotes(noteId: UUID) {
-        guard enableAppleNotesSync,
-              let note = savedNotes.first(where: { $0.id == noteId }) else { return }
-
-        Task {
-            if let updated = await appleNotesSync.pushNote(note),
-               let appleNotesId = updated.appleNotesId {
-                var notes = savedNotes
-                if let index = notes.firstIndex(where: { $0.id == noteId }) {
-                    notes[index].appleNotesId = appleNotesId
-                    savedNotes = notes
-                }
-            }
-        }
-    }
-
-    private func deleteRemoteNoteIfNeeded(_ note: NoteItem) {
-        guard enableAppleNotesSync, let appleNotesId = note.appleNotesId else { return }
-        Task {
-            await appleNotesSync.deleteRemoteNote(appleNotesId: appleNotesId)
-        }
-    }
-
-    private func cancelEdit() {
-        persistNote()
-        closeEditor()
-    }
-    
-    private func togglePin(_ note: NoteItem) {
-        var notes = savedNotes
-        if let index = notes.firstIndex(where: { $0.id == note.id }) {
-            notes[index].isPinned.toggle()
-            savedNotes = notes
-        }
-    }
-
-    private func scaleDownEditor() {
-        closeEditor()
     }
     
     private func closeEditor() {
@@ -427,6 +313,7 @@ struct NotchNotesView: View {
         autoSaveTask = nil
         isEditingNewNote = false
         selectedNoteId = nil
+        editorIsDraft = false
         // Tiny delay to clear state after animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             editorTitle = ""
@@ -651,7 +538,6 @@ struct NoteListView: View {
     let notes: [NoteItem]
     let onSelect: (NoteItem) -> Void
     let onCreate: () -> Void
-    let onDelete: (IndexSet) -> Void
     let onDeleteItem: (NoteItem) -> Void
     let onClearAll: () -> Void
     let onTogglePin: (NoteItem) -> Void
@@ -958,7 +844,15 @@ struct NoteRow: View {
     let isCompact: Bool
     @State private var isHovered = false
     @State private var isCopied = false
+    /// Read from disk once per image, off the main thread: reading it in `body` did it on every
+    /// redraw, which a scroll or a hover causes many times a second.
+    @State private var thumbnail: NSImage?
     @Default(.enableNotePinning) var enableNotePinning
+
+    /// Changes when the note's image does (the file keeps its name when the image is replaced).
+    private var thumbnailKey: String {
+        "\(note.imageFileName ?? "")|\(note.modificationDate.timeIntervalSince1970)"
+    }
 
     private var pinTooltip: String {
         note.isPinned ? String(localized: "Unpin Note") : String(localized: "Pin Note")
@@ -1092,7 +986,7 @@ struct NoteRow: View {
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
                 
-                if let imageData = note.getImageData(), let nsImage = NSImage(data: imageData) {
+                if let nsImage = thumbnail {
                     Image(nsImage: nsImage)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -1109,6 +1003,15 @@ struct NoteRow: View {
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovered = hovering
             }
+        }
+        .task(id: thumbnailKey) {
+            guard let fileName = note.imageFileName else {
+                thumbnail = nil
+                return
+            }
+            let url = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
+            let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
+            thumbnail = data.flatMap { NSImage(data: $0) }
         }
     }
     
