@@ -2974,16 +2974,20 @@ struct ContentView: View {
     }
 
     private func handleCloseScrollGesture(translation: CGFloat, phase: NSEvent.Phase) {
-        guard vm.notchState == .open, !vm.isScrollGestureActive else { return }
+        guard vm.notchState == .open else { return }
+        // The end, and a gesture the guard turns away, clear the blur and dim the gesture drew on
+        // the tab: checked after the guard, a guard that came on mid-gesture left them stuck.
+        guard phase != .ended, !vm.isScrollGestureActive else {
+            if gestureProgress != .zero {
+                withAnimation(.smooth) {
+                    gestureProgress = .zero
+                }
+            }
+            return
+        }
 
         withAnimation(.smooth) {
             gestureProgress = (translation / Defaults[.gestureSensitivity]) * -20
-        }
-
-        if phase == .ended {
-            withAnimation(.smooth) {
-                gestureProgress = .zero
-            }
         }
 
         if translation > Defaults[.gestureSensitivity] {

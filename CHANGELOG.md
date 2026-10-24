@@ -96,6 +96,118 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     held out while the eye plays, pointer tracking resynced last, the eye as the closed notch's first
     branch, and a view with no clock. The timeline tests also check that the eyes open on the fill.
 
+### 2026-10-24 - Brain's All tasks: New Task with everything the notch's form offers, titles and estimates typed in place, no drag
+- **Developer label:** "fix estimate and stuff inside the brain, the outside stuff in notch is perfect, but the stuff inside brain looks very lagging, even the design choice there and overall experience is not good enough. inside brain also estimate should be typeable, the placement of add a task section looks like a toddlers one, random placement, we need golden ration inside the tasks page, that is the all tasks sub page, no drag and order tasks or numbering, spacing everywheer seems messed up" … "1 st picture shows bad allignment, 2nd picture shows we cant add tags here, we want all capabilties that we give for tasks in notch, communicate in a very good way here, a add task button maybe giving popup or deep window, then yea, see if there is any good ux"
+- **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks: one New Task button opening a sheet with the notch form's title, typed estimate, tags and reminder, a local task's title and its reminder's Notify on its page, the estimate typed on a task's page and checked live in Set Estimate, drag and Move Up/Down removed, one Tasks card and one folded Section, rows worked out once per render
+- **Changes:**
+  - **New Task.** All tasks and Local tasks have one Add a task row whose prominent New Task
+    button (or ⌘N, held on the tab's Form so it works with the row scrolled away) opens a sheet
+    with everything the notch's task form takes: a title, a typed estimate and tags side by side
+    in the golden ratio (estimate 1 : tags φ, the notch's order),
+    the tags in use offered as chips in their colours with the typed text as "+ new" (a click or
+    Return completes one, as in the Tags sheet), and "Remind me" with a date and Notify. Add, or
+    Add & Start (⌘↩) while the timer is on, puts the task on top; both wait for a title and an
+    estimate they can read. Cancel keeps what was typed for the next New Task, Clear All empties
+    it, and a reminder that has passed, kept from before or while the sheet stood open, moves to
+    the next whole hour (`TaskFormDraft.movePassedReminder`, which the notch's kept drafts now
+    share). A title an open local task already has says so, with Show Task
+    (`TaskItem.reusable(titled:in:)`, the timer bar's match: case, accents, spacing and anything
+    past 40 characters ignored; Jira, GitLab, done and archived tasks never match; the notch's
+    typed search also shows partial matches). A task All tasks' filters would hide opens on its
+    own page, judged as it will be once Add & Start's session opens; the filters stay.
+  - New Task adds through `TasksManager.insertTask(from:)`, the core of the notch's
+    `addTask(from:)`, which now calls it then forgets the notch's draft and shows local tasks. So
+    a Brain add never discards a task half-typed in the notch and never flips its Show local.
+  - **A task's page is three cards again.** It drew as one, with "Details" centred: the three
+    Sections sat inside a `TimelineView`, which a Form cannot see through. The page's minute clock
+    is now a value moved on by one row's task, so the Sections reach the Form, "Timed … ago" and an
+    overdue reminder stay current, and a timer starting or ending tears down no field being typed
+    in.
+  - **A local task's page matches the notch's form.** Its title is typed in place (a plain field in
+    the body font that wraps up to four lines; Return, another field, leaving the page or closing
+    Brain saves through `renameTask`, which renames a running session too; Escape puts it back),
+    and a reminder gains a Notify switch, with "Notifications are off" and Open Notification
+    Settings while macOS blocks them. Jira and GitLab titles stay their servers'. A typed estimate
+    in the Time row is saved on closing Brain too: closing only orders the window out, so neither
+    leaving the field nor leaving the page happened.
+  - "Notifications are off" in the Schedule and New Task sheets follows macOS's answer
+    (`notificationsDenied`), asked again as each opens, so it warns before the first reminder is
+    set, not only once one waits; it shows only for a reminder that would notify, as on the task
+    page. `setSchedule` judges "blocked" by the check's own rule (something wants to notify), so a
+    muted reminder re-timed while macOS denies notifications no longer turns All tasks' note and
+    the notch's bell orange.
+  - All tasks' on-appear work (the permission check, the archive, the project filter's rewrite)
+    runs on the Find row, not on the Section of every task row, so scrolling the list no longer
+    reruns it.
+  - **A task's page types its estimate in its Time row**, in place of Set Estimate: Return,
+    leaving the field, a preset or leaving the page saves it; Escape puts it back; a Jira or GitLab
+    task shows "2h from Jira" until one is typed. Add Time stays. The estimate takes 45m, 1.5h or
+    2d 3h (`TaskEstimateField`, the notch form's `TaskFormDraft` logic): the presets stay on a
+    chevron, unreadable text turns orange, and "= 19h" shows while it has focus. Right-click › Set
+    Estimate uses the same field, checked as it is typed, and "0" or nothing removes the estimate
+    there too. New Task uses it as well.
+  - **No drag, no stepping, no total.** Rows are neither dragged nor dropped on, and Move Up and
+    Move Down are gone; right-click › Move to Top stays — also a named accessibility action — to
+    pick what the notch's Up next shows first, judged against the whole order, so it still works on
+    a filtered list. The "Task order" row with its "10 open", and its search entry, are gone; while
+    a filter or Find narrows the list a "Filtered" row above the rows still says "3 of 12 tasks".
+    `TasksManager.moveUp/moveDown/move/dropEdge` and `TaskOrdering.movingUp/movingDown/move/dropEdge`
+    went with their only caller.
+  - **Spacing:** one Tasks card (Find, then Add a task, then the rows, with "Right-click a task for
+    more, such as Move to Top." under it) and one folded Section for Recently closed, Archive and
+    Tag colours, where Find and each fold were one-row cards of their own. The page's text fields
+    show as fields. docs/SETTINGS.md gains "a Section earns its gap", a list's Add as one row with a
+    sheet (its shortcut on the Form), the sheet shape, titles typed in place, and the footer rule's
+    one exception for a list's right-click hint.
+  - **Quicker:** a list works its rows out once per render (`TaskListRows`: colour, first in the
+    order, timing; the sources' colours read from Defaults once, `TasksManager.integrationColors`).
+    The right-click menu no longer rebuilds the whole list for every row (95 tasks were 95 passes
+    over the list each render), ▶ no longer observes the manager on every row, the drag handlers
+    are gone, and typing in New Task redraws the sheet alone (`NewTaskDraft`).
+  - `SettingsTagChip` gains `init(adding:kind:)` for a tag offered to add; the one Return takes is
+    ringed and, for VoiceOver, selected, and the Tags sheet's suggestion lines say so too.
+    `GoldenRow`, measured inside an HStack, no longer proposes NaN widths
+    (`TimerComposerMetrics.goldenWidths`); the notch's rows are unchanged.
+  - DEBUG snapshot boards `allTasks`, `newTaskSheet`, `taskPage` and `localTaskPage` render from
+    fixture tasks (`TasksManager.snapshotFile`), never reading or writing tasks.json.
+  - Tests: new `TaskListRowsTests`; golden widths, typed-estimate readings, a passed reminder
+    moving (and the one kept staying), a new task under each filter, live time reading In
+    Progress, New Task adding through `insertTask` and leaving the notch's form alone;
+    `TaskListRulesTests` (no drag or stepping, Move to Top kept in the menu and
+    as an accessibility action, with planted offenders), `TaskColorRulesTests`, `TaskFormDraftTests`,
+    `TaskFormWiringTests`, `SettingsLayoutRulesTests`, `IntegrationSecretRulesTests` and
+    `SettingsHighlightInventoryTests` (242 entries) updated; the move tests went with the moves.
+### 2026-10-24 - The close-gesture rule checks that the guard clears the blur
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's nitpick on #128 fixed before merging
+- **Changes:**
+  - `NotchScrollOwnershipRulesTests.closeGestureProblems` requires `gestureProgress = .zero` inside the close
+    guard's `else`, before its `return`, not only the guard; a planted offender keeps the guard and drops the
+    reset (CodeRabbit's nitpick on #128).
+
+### 2026-10-23 - Scrolling the notes never closes or blurs the notch
+- **Developer label:** "the scroll inside the notes app blurs out stuff not needed, also the two finger touch pad scroll down seems to miss behave and closes the notch, see what needs insepction there"
+- **Agent label:** Claude Code (Opus 5.5) — vertical scroll ownership by geometry for the open notch's swipe-to-close, the close gesture's blur cleared before its guard, docs/REGRESSIONS.md entry 21
+- **Changes:**
+  - **A vertical scroll over a list or a note's text is that view's.** Scrolling down through notes
+    is the same trackpad gesture as swipe-up-to-close, and the only thing keeping them apart was a
+    hover token: the note editor never set one, the list's never came on under a pointer that had
+    not moved since "< Notes" or Done, and the notch's scroll monitor kept counting while it was on.
+    New `.ownsVerticalScroll()` (`VerticalScrollOwnership`) marks a view whose vertical scroll is
+    its own; `PanGesture`'s monitor checks the pointer against those views' live frames when each
+    event arrives and counts nothing over them. Applied to the Notes tab (list, editor, split view),
+    the Agents list, the timer tab's side column and the extension tab, which had no guard either.
+    The hover tokens stay as the second guard; the Notes tab now sets one at its root.
+  - **The scroll monitor starts each gesture from nothing.** It resets on `.began`/`.mayBegin` and
+    `.cancelled`, and ends a gesture under way even when the end lands outside the notch, which used
+    to leave the count set for the next gesture.
+  - **The close gesture's blur and dim no longer leak or stick.** The whole tab blurred (up to 8 pt)
+    and dimmed on every unguarded scroll; `handleCloseScrollGesture` now clears that on the end and
+    whenever its guard turns the gesture away, before the guard rather than after it.
+  - Swipe-to-close still works from the tab bar and from content that does not scroll.
+  - docs/REGRESSIONS.md entry 21 and a Danger-zones row; `NotchScrollOwnershipRulesTests` pins the
+    ownership on every tab scroller, the monitor's order and the blur reset, each against a planted
+    offender.
 ### 2026-10-24 - The staple-retry test rejects a loop of one attempt, and the batch takes development
 - **Developer label:** "rest of them needs to be reviewed and then merged"
 - **Agent label:** Claude Code (Opus 5.5) — #125 brought up to date with development and its last CodeRabbit nitpick fixed before merging

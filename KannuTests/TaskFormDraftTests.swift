@@ -37,7 +37,7 @@ final class TaskFormDraftTests: XCTestCase {
                        gitlabWebURL: nil, statusCategory: nil, labels: nil)
     }
 
-    func testTheEstimateChoicesAreBrainsAddRowsOwn() {
+    func testTheEstimatePresetsAreTheChevronsOwn() {
         XCTAssertEqual(TaskFormDraft.estimateChoices, [900, 1800, 3600, 7200, 14_400, 28_800])
     }
 
@@ -102,10 +102,10 @@ final class TaskFormDraftTests: XCTestCase {
         XCTAssertEqual(draft.tags.count, 10, "at most ten")
     }
 
-    func testAnEstimateFromBrainsCustomSheetShowsInTheMenu() {
+    func testATypedEstimateShowsAmongThePresets() {
         var draft = TaskFormDraft()
         XCTAssertEqual(draft.estimateMenuChoices, TaskFormDraft.estimateChoices)
-        draft.estimateSeconds = 45 * 60
+        draft.typeEstimate("45m")
         XCTAssertEqual(draft.estimateMenuChoices, [900, 1800, 2700, 3600, 7200, 14_400, 28_800])
         XCTAssertEqual(draft.estimateLabel, "45m")
     }
@@ -323,5 +323,64 @@ final class TaskFormDraftTests: XCTestCase {
         XCTAssertEqual(kept.draft(editing: overdue.id, baseline: baseline, now: now, calendar: calendar)?.reminder,
                        overdue.scheduledAt, "the task's own overdue time is not moved")
     }
-}
 
+    /// Brain's New Task, opened again on what was typed or added: a reminder that has passed moves to
+    /// the next whole hour; one still to come, none, or the one kept stays as it is.
+    func testAPassedReminderMovesToTheNextHour() {
+        var draft = TaskFormDraft()
+        draft.reminder = now.addingTimeInterval(-60)
+        draft.movePassedReminder(now: now, calendar: calendar)
+        XCTAssertEqual(draft.reminder, TaskFormDraft.defaultReminder(now: now, calendar: calendar))
+
+        let tomorrow = now.addingTimeInterval(86_400)
+        draft.reminder = tomorrow
+        draft.movePassedReminder(now: now, calendar: calendar)
+        XCTAssertEqual(draft.reminder, tomorrow, "a reminder still to come is the user's")
+
+        draft.reminder = nil
+        draft.movePassedReminder(now: now, calendar: calendar)
+        XCTAssertNil(draft.reminder, "no reminder is not given one")
+
+        let own = now.addingTimeInterval(-7200)
+        draft.reminder = own
+        draft.movePassedReminder(now: now, calendar: calendar, keeping: own)
+        XCTAssertEqual(draft.reminder, own, "the reminder kept is left, overdue or not")
+
+        draft.reminder = now.addingTimeInterval(-60)
+        draft.movePassedReminder(now: now, calendar: calendar, keeping: own)
+        XCTAssertEqual(draft.reminder, TaskFormDraft.defaultReminder(now: now, calendar: calendar),
+                       "a passed reminder other than the one kept still moves")
+
+        draft.reminder = now
+        draft.movePassedReminder(now: now, calendar: calendar)
+        XCTAssertEqual(draft.reminder, TaskFormDraft.defaultReminder(now: now, calendar: calendar),
+                       "a reminder due this very moment has passed: it moves")
+    }
+
+    /// Brain's typed estimate (New Task, a task's Time row, Set Estimate) reads what it saves: a
+    /// Jira task with none of Kannu's shows its source's as the prompt; a length settles the
+    /// standard way; nothing or 0 is no estimate; text it cannot read keeps the last readable value
+    /// and Save waits.
+    func testBrainsTypedEstimateReadsWhatItSaves() {
+        let jira = TaskItem(source: .jira, title: "Fix login", remote: remote(key: "ABC-1", estimate: 7200))
+        let page = TaskFormDraft(editing: jira)
+        XCTAssertEqual(page.estimateText, "")
+        XCTAssertEqual(page.estimatePrompt, "2h from Jira")
+        var draft = TaskFormDraft()
+        draft.title = "Write notes"
+        draft.typeEstimate("1.5h")
+        XCTAssertEqual(draft.estimateReading, .length(5400))
+        draft.settleEstimateText()
+        XCTAssertEqual(draft.estimateText, "1h 30m")
+        draft.typeEstimate("")
+        XCTAssertEqual(draft.estimateReading, .none)
+        XCTAssertNil(draft.estimateSeconds)
+        draft.typeEstimate("0")
+        XCTAssertEqual(draft.estimateReading, .none, "0 removes the estimate everywhere now")
+        draft.typeEstimate("2h")
+        draft.typeEstimate("2hx")
+        XCTAssertEqual(draft.estimateReading, .unreadable)
+        XCTAssertEqual(draft.estimateSeconds, 7200, "the last readable length stays")
+        XCTAssertFalse(draft.canSave, "Add and Save wait for it to be fixed")
+    }
+}
