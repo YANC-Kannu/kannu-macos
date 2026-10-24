@@ -884,6 +884,7 @@ struct NoteListView: View {
 }
 
 struct NoteRow: View {
+    @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchForeground) private var notchForeground
     let note: NoteItem
     let onDelete: () -> Void
@@ -893,6 +894,8 @@ struct NoteRow: View {
     /// Notes as well, so the trash asks first.
     var deletesInAppleNotes = false
     @State private var confirmDelete = false
+    /// Holds the notch open while the delete confirmation shows.
+    @State private var autoCloseToken = UUID()
     @State private var isHovered = false
     @State private var isCopied = false
     /// Read from disk once per image, off the main thread: reading it in `body` did it on every
@@ -1019,12 +1022,6 @@ struct NoteRow: View {
                         .buttonStyle(PlainButtonStyle())
                         .hoverTooltip(String(localized: "Delete Note"), edge: .below)
                         .accessibilityLabel(String(localized: "Delete Note"))
-                        .alert("Delete This Note?", isPresented: $confirmDelete) {
-                            Button("Delete", role: .destructive, action: onDelete)
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
-                        }
                     }
                     .padding(.horizontal, isCompact ? 6 : 8)
                     .padding(.vertical, isCompact ? 2 : 3)
@@ -1072,6 +1069,18 @@ struct NoteRow: View {
             let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
             thumbnail = data.flatMap { NSImage(data: $0) }
         }
+        // On the row, not on the hover-only trash button: the pointer leaving the row removed the
+        // button, and its alert with it. The notch stays open while the alert asks.
+        .alert("Delete This Note?", isPresented: $confirmDelete) {
+            Button("Delete", role: .destructive, action: onDelete)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
+        }
+        .onChange(of: confirmDelete) { _, isShowing in
+            vm.setAutoCloseSuppression(isShowing, token: autoCloseToken)
+        }
+        .onDisappear { vm.setAutoCloseSuppression(false, token: autoCloseToken) }
     }
     
     private func timeAgoString(from date: Date) -> String {

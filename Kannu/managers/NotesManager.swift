@@ -181,6 +181,8 @@ final class NotesManager {
         guard Defaults[.enableAppleNotesSync],
               LaunchPermissionManager.shared.requestInFlight != .notesAutomation else { return }
         let snapshot = Defaults[.savedNotes]
+        // The scope this sync reads with: a change while it runs is applied by a second sync after it.
+        let scope = Defaults[.appleNotesSyncScope]
         Task {
             guard let merged = await AppleNotesSyncManager.shared.sync(localNotes: snapshot) else { return }
             let before = Dictionary(snapshot.map { ($0.id, $0.modificationDate) }, uniquingKeysWith: { first, _ in first })
@@ -198,8 +200,17 @@ final class NotesManager {
                         kept.appleNotesSyncedAt = synced.appleNotesSyncedAt
                     }
                     return kept
-                }
+                },
+                // Folder-only: a note made in Notes that the sync left out leaves, even if edited
+                // during the sync, as the setting promises.
+                dropMissing: { note in scope == .kannuFolder && note.madeInAppleNotes == true }
             )
+            // The result is applied first (it may hold ids of notes the sync just created in Notes),
+            // then a scope changed meanwhile gets its own sync; Settings' call was refused while this
+            // one ran.
+            if Defaults[.appleNotesSyncScope] != scope {
+                self.syncWithAppleNotes()
+            }
         }
     }
 
