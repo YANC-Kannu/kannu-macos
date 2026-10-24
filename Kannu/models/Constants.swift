@@ -940,6 +940,9 @@ extension Defaults.Keys {
         // MARK: General
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
+    /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
+    /// while this is off, because its menu is the way back.
+    static let showNotch = Key<Bool>("showNotch", default: true)
     /// Set the first (and only) time Kannu registers itself as a login item on the user's
     /// behalf. Its whole job is to guarantee a later opt-out is never overridden.
     static let didAutoEnableLaunchAtLogin = Key<Bool>("didAutoEnableLaunchAtLogin", default: false)
