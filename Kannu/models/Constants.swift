@@ -890,8 +890,10 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     /// Shown, never edited: a note made in Notes while sync reads the whole account. Kannu would
     /// rewrite its body as plain text (losing formatting and attachments), so it is edited in Notes.
     /// Deleting it asks first, since it goes to Recently Deleted in Notes too; Clear Notes leaves it.
+    /// A linked note not yet decided (`madeInAppleNotes` nil, an install from before the field, until
+    /// its first sync) counts as made in Notes: only Kannu's own notes are written back.
     func isReadOnlyMirror(syncEnabled: Bool, scope: AppleNotesSyncScope) -> Bool {
-        syncEnabled && scope == .wholeAccount && madeInAppleNotes == true && appleNotesId != nil
+        syncEnabled && scope == .wholeAccount && madeInAppleNotes != false && appleNotesId != nil
     }
     
     static let colors: [Color] = [.yellow, .blue, .red, .green, .purple, .orange]

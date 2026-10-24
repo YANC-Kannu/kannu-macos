@@ -100,7 +100,9 @@ enum AppleNotesMergePolicy {
     /// - A note edited since the snapshot keeps its current version (`keep` merges in what the sync
     ///   learned about it, such as a new remote id).
     /// - A note deleted since the snapshot stays deleted.
-    /// - A note the sync dropped (gone from Notes) stays dropped, unless it was edited meanwhile.
+    /// - A note the sync dropped (gone from Notes) stays dropped, unless it was edited meanwhile, or
+    ///   `dropMissing` says it goes regardless (a note made in Notes, outside a folder-only sync's
+    ///   folder: the setting says its copy leaves, and an edit is pushed to Notes as it is made).
     /// - Notes the sync imported, and notes created meanwhile, are kept.
     static func reconcile<Note>(
         current: [Note],
@@ -108,7 +110,8 @@ enum AppleNotesMergePolicy {
         snapshot: [UUID: Date],
         id: (Note) -> UUID,
         modified: (Note) -> Date,
-        keep: (_ current: Note, _ merged: Note) -> Note
+        keep: (_ current: Note, _ merged: Note) -> Note,
+        dropMissing: (_ current: Note) -> Bool = { _ in false }
     ) -> [Note] {
         let currentById = Dictionary(current.map { (id($0), $0) }, uniquingKeysWith: { first, _ in first })
         let mergedIds = Set(merged.map(id))
@@ -124,6 +127,7 @@ enum AppleNotesMergePolicy {
             result.append(modified(now) == before ? note : keep(now, note))
         }
         for note in current where !mergedIds.contains(id(note)) {
+            if dropMissing(note) { continue }
             if let before = snapshot[id(note)], modified(note) == before { continue }
             result.append(note)
         }

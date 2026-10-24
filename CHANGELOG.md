@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #130
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — the four findings of CodeRabbit's review of the notes stack (#134) that belong to #130, fixed before merging
+- **Changes:**
+  - A linked note not yet decided (`madeInAppleNotes` nil, until its first sync) is read-only under
+    whole-account sync, like one made in Notes: `isReadOnlyMirror` now wants only an explicit `false` to
+    allow edits, so neither an edit's push nor Clear Notes can rewrite or delete a Notes original.
+  - A scope change while a sync runs is no longer lost: `syncWithAppleNotes` keeps the scope it started
+    with, applies its result (which may hold new Notes ids), then syncs again under the new scope.
+  - Folder-only sync drops a note made in Notes that the sync left out even if it was edited meanwhile
+    (`AppleNotesMergePolicy.reconcile`'s new `dropMissing`); every other note keeps the edit-survives rule.
+  - A row's "Delete This Note?" alert hangs on the row, not on the trash button that only shows on hover,
+    so moving the pointer away no longer dismisses it, and the notch stays open while it asks.
+  - Test: `testDropMissingOverridesTheEditOnlyForTheNotesItNames`.
+
 ### 2026-10-23 - Apple Notes sync reads the Kannu folder unless you choose your whole account
 - **Developer label:** "give a setting, kannu folder only by default, but whole account if user chooses explicitly, also can this be part of the now expanded setup flow, but keep in mind how we redsigned install flow, so make sure that asks are never broken, are they guarded by docs"
 - **Agent label:** Claude Code (Opus 5.5) — `AppleNotesSyncScope`, an onboarding Notes step and a "Control Notes" permission row behind `mayTouch`, read-only mirrors for whole-account notes
