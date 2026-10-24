@@ -44,13 +44,13 @@ final class ADRConnection: ObservableObject {
             }
         }
 
-        /// The upstream package is not on PyPI for Discovery, so the install line is a git URL;
-        /// Sensor is on PyPI. Both use `uv tool install`, which keeps each tool in its own
-        /// environment and links the executable into `~/.local/bin`.
+        /// The upstream package is not on PyPI for Discovery, so the install line is a git URL,
+        /// pinned to `ADRUpstream.commit`; Sensor is on PyPI. Both use `uv tool install`, which
+        /// keeps each tool in its own environment and links the executable into `~/.local/bin`.
         var installCommand: String {
             switch self {
             case .discovery:
-                return #"uv tool install "adr-discovery @ git+https://github.com/uber/ADR#subdirectory=Discovery""#
+                return ADRUpstream.discoveryInstallCommand
             case .sensor:
                 return "uv tool install adr-sensor"
             }
@@ -59,7 +59,7 @@ final class ADRConnection: ObservableObject {
         var pipxCommand: String {
             switch self {
             case .discovery:
-                return #"pipx install "git+https://github.com/uber/ADR#subdirectory=Discovery""#
+                return ADRUpstream.discoveryPipxCommand
             case .sensor:
                 return "pipx install adr-sensor"
             }
@@ -118,7 +118,7 @@ final class ADRConnection: ObservableObject {
     }
     @Published private(set) var detection = DetectionStatus()
 
-    static let detectionCloneCommand = "git clone https://github.com/uber/ADR && cd ADR/Detection && uv sync"
+    static let detectionCloneCommand = ADRUpstream.detectionCloneCommand
 
     /// `uv` where Homebrew, the uv installer or a user path put it.
     static func uvExecutable(userDirectory: String = Defaults[.adrToolDirectory]) -> URL? {
@@ -135,8 +135,19 @@ final class ADRConnection: ObservableObject {
         guard fileManager.fileExists(atPath: root.appendingPathComponent("pyproject.toml").path) else {
             return .invalid(reason: String(localized: "No pyproject.toml here — choose the ADR/Detection folder"))
         }
-        guard fileManager.fileExists(atPath: root.appendingPathComponent("guardrail/adr_agent/adr_baseline.py").path) else {
+        let baseline = root.appendingPathComponent("guardrail/adr_agent/adr_baseline.py")
+        guard fileManager.fileExists(atPath: baseline.path) else {
             return .invalid(reason: String(localized: "This is not ADR's Detection folder (guardrail/adr_agent missing)"))
+        }
+        // A checkout from before 2026-09-22 cannot read Claude Code 2.1's output, so every run
+        // would fail after minutes of work. Only a file that was read and still has the old code
+        // counts: an unreadable or rewritten one is left to the run to report.
+        if let handle = try? FileHandle(forReadingFrom: baseline) {
+            defer { try? handle.close() }
+            if let head = try? handle.read(upToCount: 4 << 20),
+               ADRUpstream.predatesClaudeCode21OutputFix(baselineSource: String(decoding: head, as: UTF8.self)) {
+                return .invalid(reason: String(localized: "This checkout predates ADR's fix for Claude Code 2.1 (2026-09-22), so every analysis would fail. Update it: in this folder run \(ADRUpstream.detectionUpdateCommand)"))
+            }
         }
         guard fileManager.fileExists(atPath: root.appendingPathComponent(".venv").path) else {
             return .invalid(reason: String(localized: "Not synced yet — run `uv sync` in this folder"))
@@ -145,7 +156,8 @@ final class ADRConnection: ObservableObject {
         return .ready(uv: uv)
     }
 
-    /// Re-validates the configured checkout off the main actor (a few stats and one lookup).
+    /// Re-validates the configured checkout off the main actor (a few stats, one small read and
+    /// one lookup).
     func checkDetection() {
         let path = Defaults[.adrDetectionCheckout]
         let userDirectory = Defaults[.adrToolDirectory]

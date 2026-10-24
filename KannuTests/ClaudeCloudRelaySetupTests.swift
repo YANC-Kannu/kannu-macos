@@ -47,7 +47,7 @@ final class ClaudeCloudRelaySetupTests: XCTestCase {
                 rows.append("\(event)|\(group["matcher"] as? String ?? "")|" + command.dropFirst(prefix.count))
             }
         }
-        let expected = AgentHookLayout.claudeHookEntries.map { entry in
+        let expected = Setup.relayHookEntries.map { entry in
             "\(entry.event)|\(entry.matcher ?? "")|\(entry.state) \(entry.event)"
                 + (entry.matcher == nil ? "" : " \(entry.matcherKey)")
         }
@@ -94,7 +94,17 @@ final class ClaudeCloudRelaySetupTests: XCTestCase {
         XCTAssertEqual(try pythonSet("STATES", in: source), ClaudeCloudRelay.states)
         XCTAssertEqual(try pythonSet("EVENTS", in: source).union(["Check"]), ClaudeCloudRelay.events)
         XCTAssertEqual(try pythonSet("NOTES", in: source).union([""]), ClaudeCloudRelay.notes)
-        XCTAssertTrue(Set(AgentHookLayout.claudeHookEntries.map(\.event)).isSubset(of: try pythonSet("EVENTS", in: source)))
+        XCTAssertTrue(Set(Setup.relayHookEntries.map(\.event)).isSubset(of: try pythonSet("EVENTS", in: source)))
+    }
+
+    /// The relay installs every row of Kannu's Claude table except a subagent's start and end: one
+    /// colour per chat cannot hold a chat green while its background agents run, and a subagent's
+    /// end would paint a working chat red. Any other row the table gains reaches the relay too.
+    func testTheRelayLeavesOutOnlyTheSubagentPair() {
+        let table = Set(AgentHookLayout.claudeHookEntries.map(\.event))
+        let relay = Set(Setup.relayHookEntries.map(\.event))
+        XCTAssertEqual(table.subtracting(relay), ["SubagentStart", "SubagentStop"])
+        XCTAssertEqual(Setup.excludedEvents, ["SubagentStart", "SubagentStop"])
     }
 
     private func pythonSet(_ name: String, in source: String) throws -> Set<String> {

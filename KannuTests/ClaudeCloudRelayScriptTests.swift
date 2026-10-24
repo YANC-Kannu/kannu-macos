@@ -263,7 +263,7 @@ final class ClaudeCloudRelayScriptTests: XCTestCase {
                 XCTAssertEqual(report.state, arguments[0], command)
             }
         }
-        XCTAssertEqual(try requests().count, AgentHookLayout.claudeHookEntries.count)
+        XCTAssertEqual(try requests().count, ClaudeCloudRelaySetup.relayHookEntries.count)
     }
 
     func testOnlyTheProtocolsFieldsLeaveTheSession() throws {

@@ -40,7 +40,8 @@ struct KannuHeader: View {
     @Default(.showBatteryPercentInside) var showBatteryPercentInside
     @Default(.showMinimalisticBatteryIndicator) var showMinimalisticBatteryIndicator
     @Default(.enableMinimalisticUI) var enableMinimalisticUI
-    
+    @Default(.enableTasks) var enableTasks
+
     var body: some View {
         HStack(spacing: 0) {
             HStack {
@@ -73,6 +74,60 @@ struct KannuHeader: View {
 
             HStack(spacing: 4) {
                 if vm.notchState == .open && !enableMinimalisticUI {
+                    // Order: what comes and goes first, what is always there last. The row is
+                    // trailing-aligned, so an item that appears pushes only what is to its left —
+                    // the fixed buttons (clipboard, timer, Brain, battery) never move. Pinned by
+                    // HeaderOrderRulesTests.
+
+                    // Screen Recording Indicator
+                    if Defaults[.enableScreenRecordingDetection] && Defaults[.showRecordingIndicator] && !shouldSuppressStatusIndicators {
+                        RecordingIndicator()
+                            .frame(width: 30, height: 30) // Same size as other header elements
+                    }
+
+                    if Defaults[.enableDoNotDisturbDetection]
+                        && Defaults[.showDoNotDisturbIndicator]
+                        && doNotDisturbManager.isDoNotDisturbActive
+                        && !shouldSuppressStatusIndicators {
+                        FocusIndicator()
+                            .frame(width: 30, height: 30)
+                            .transition(.opacity)
+                    }
+
+                    // Refresh icon for the Usage tab — icon-only, shown only while the Usage tab
+                    // is the active view, so it sits with the other comers and goers.
+                    if coordinator.currentView == .llmUsage {
+                        Button(action: {
+                            // Also clears Antigravity's backoff: a press means try now.
+                            llmUsageManager.refreshRequestedByUser()
+                        }) {
+                            Capsule()
+                                .fill(.black)
+                                .frame(width: 30, height: 30)
+                                .overlay {
+                                    Image(systemName: "arrow.clockwise")
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .imageScale(.medium)
+                                }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(llmUsageManager.isRefreshing)
+                        // Icon-only, so VoiceOver would otherwise announce the SF Symbol name
+                        // rather than what the control does.
+                        .accessibilityLabel("Refresh usage")
+                        .hoverTooltip(String(localized: "Refresh usage"), edge: .below)
+                        .transition(.opacity)
+                    }
+
+                    // Last of the comers and goers, left of the clipboard button. Its own view, so
+                    // TasksManager (and the task file) is touched only with tasks on:
+                    // showsTasksButton includes that.
+                    if showsTasksButton {
+                        TasksHeaderButton()
+                            .transition(.opacity)
+                    }
+
                     if Defaults[.enableClipboardManager]
                         && showClipboardIcon
                         && clipboardDisplayMode != .separateTab {
@@ -98,8 +153,11 @@ struct KannuHeader: View {
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Clipboard"), edge: .below)
+                        .accessibilityLabel(String(localized: "Clipboard"))
                         .popover(isPresented: $showClipboardPopover, arrowEdge: .bottom) {
                             ClipboardPopover()
+                                .notchDarkAppearance()
                         }
                         .onChange(of: showClipboardPopover) { _, isActive in
                             vm.isClipboardPopoverActive = isActive
@@ -116,32 +174,6 @@ struct KannuHeader: View {
                                 clipboardManager.startMonitoring()
                             }
                         }
-                    }
-
-                    // Refresh icon for the Usage tab — moved up here from inside
-                    // NotchLLMUsageView (was a labeled "Refresh" text button in its own
-                    // row there); now icon-only, next to the clipboard button, and only
-                    // shown while the Usage tab is the active view.
-                    if coordinator.currentView == .llmUsage {
-                        Button(action: {
-                            llmUsageManager.refreshAll(force: true)
-                        }) {
-                            Capsule()
-                                .fill(.black)
-                                .frame(width: 30, height: 30)
-                                .overlay {
-                                    Image(systemName: "arrow.clockwise")
-                                        .foregroundColor(.white)
-                                        .padding()
-                                        .imageScale(.medium)
-                                }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .disabled(llmUsageManager.isRefreshing)
-                        // Icon-only, so VoiceOver would otherwise announce the SF Symbol name
-                        // rather than what the control does.
-                        .accessibilityLabel("Refresh usage")
-                        .hoverTooltip("Refresh usage", edge: .below)
                     }
 
                     if Defaults[.enableTimerFeature] && timerDisplayMode == .popover {
@@ -161,8 +193,11 @@ struct KannuHeader: View {
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Timer"), edge: .below)
+                        .accessibilityLabel(String(localized: "Timer"))
                         .popover(isPresented: $showTimerPopover, arrowEdge: .bottom) {
                             TimerPopover()
+                                .notchDarkAppearance()
                         }
                         .onChange(of: showTimerPopover) { _, isActive in
                             vm.isTimerPopoverActive = isActive
@@ -173,7 +208,7 @@ struct KannuHeader: View {
                             }
                         }
                     }
-                    
+
                     if Defaults[.settingsIconInNotch] {
                         Button(action: {
                             SettingsWindowController.shared.showWindow()
@@ -182,28 +217,15 @@ struct KannuHeader: View {
                                 .fill(.black)
                                 .frame(width: 30, height: 30)
                                 .overlay {
-                                    Image(systemName: "gear")
+                                    Image(systemName: "brain")
                                         .foregroundColor(.white)
                                         .padding()
                                         .imageScale(.medium)
                                 }
                         }
                         .buttonStyle(PlainButtonStyle())
-                    }
-                    
-                    // Screen Recording Indicator
-                    if Defaults[.enableScreenRecordingDetection] && Defaults[.showRecordingIndicator] && !shouldSuppressStatusIndicators {
-                        RecordingIndicator()
-                            .frame(width: 30, height: 30) // Same size as other header elements
-                    }
-
-                    if Defaults[.enableDoNotDisturbDetection]
-                        && Defaults[.showDoNotDisturbIndicator]
-                        && doNotDisturbManager.isDoNotDisturbActive
-                        && !shouldSuppressStatusIndicators {
-                        FocusIndicator()
-                            .frame(width: 30, height: 30)
-                            .transition(.opacity)
+                        .accessibilityLabel("Brain")
+                        .hoverTooltip(String(localized: "Brain"), edge: .below)
                     }
                 }
 
@@ -244,9 +266,14 @@ struct KannuHeader: View {
             .opacity(vm.notchState == .closed ? 0 : 1)
             .blur(radius: vm.notchState == .closed ? 20 : 0)
             .animation(.smooth.delay(0.1), value: vm.notchState)
+            // The Tasks and Refresh buttons' show/hide: a plain fade. A tab click changes
+            // currentView with no transaction, so without these the fade never runs. Only what is
+            // to their left moves (the row is trailing).
+            .animation(.easeInOut(duration: 0.15), value: showsTasksButton)
+            .animation(.easeInOut(duration: 0.15), value: coordinator.currentView == .llmUsage)
             .zIndex(2)
         }
-        .foregroundColor(.gray)
+        .foregroundColor(.secondary)
         .environmentObject(vm)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("ToggleClipboardPopover"))) { _ in
             // Handle keyboard shortcut for popover mode
@@ -266,10 +293,28 @@ struct KannuHeader: View {
                 vm.isTimerPopoverActive = false
             }
         }
+        .onChange(of: enableTasks) { _, isOn in
+            // The button goes with the setting; a popover that vanished with it never says it closed.
+            if !isOn {
+                vm.isTasksPopoverActive = false
+            }
+        }
     }
 }
 
 private extension KannuHeader {
+    /// The Tasks button: with tasks on, where the timer tab's task column cannot show — on that
+    /// tab while a timer runs, or on every tab when there is no timer tab (the timer off, or shown
+    /// as a popover). The timer tab exists exactly as `TabSelectionView` builds it.
+    var showsTasksButton: Bool {
+        TasksHeaderVisibility.isShown(
+            enableTasks: enableTasks,
+            currentViewIsTimer: coordinator.currentView == .timer,
+            timerTabExists: enableTimerFeature && timerDisplayMode == .tab,
+            timerIsRunning: timerManager.isTimerActive
+        )
+    }
+
     var shouldSuppressStatusIndicators: Bool {
         Defaults[.settingsIconInNotch]
             && Defaults[.enableClipboardManager]

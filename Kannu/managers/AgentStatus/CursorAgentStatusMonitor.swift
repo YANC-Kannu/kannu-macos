@@ -4,6 +4,7 @@ import CoreServices
 import Darwin
 import Defaults
 import Foundation
+import os
 
 /// The closed notch's narrow window onto the monitor: the traffic-light verdict and the reveal
 /// pulse, nothing else. `ContentView` observes THIS, never the monitor itself — the monitor
@@ -69,6 +70,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
     private var statusDirectoryFD: Int32 = -1
     private var rescanTask: Task<Void, Never>?
     private var quickRescanTask: Task<Void, Never>?
+    /// `AgentRescanPacing`: when the last rescan of either kind started, and when each kind's
+    /// pending one will (nil once it has started).
+    private var lastRescanStartedAt: Date?
+    private var pendingRescanAt: Date?
+    private var pendingQuickRescanAt: Date?
     private var pollTimer: Timer?
     private var isRunning = false
     private var watchedPaths: [String] = []
@@ -85,11 +91,19 @@ final class CursorAgentStatusMonitor: ObservableObject {
     private var lastStatuslineModifiedAt: Date?
     private var claudeUsageCache: ClaudeUsageSnapshot?
     private var claudeUsageDesktop: ClaudeUsageSnapshot?
+    /// Which organization each side was on at the last full read: Claude Desktop's (its history's
+    /// newest sample) and Claude Code's (`oauthAccount`). The card follows the desktop's.
+    private var claudeUsageOrganizations = ClaudeUsageOrganizations()
     /// Chats that went red and then ended, kept on the list for a while (see
     /// `AgentTrafficLightMapper.retainEndedSessions`).
     private var endedRetention: [String: AgentTrafficLightMapper.RetainedEndedSession] = [:]
     private var lastPublishedTrafficLightState: AgentTrafficLightState?
     private var lastPublishedShouldShowTrafficLight: Bool?
+    /// Holds a calming blip (green → ended → green) off the screen until it persists
+    /// (`TrafficLightPersistenceGate`). The hold task re-evaluates by rescanning — the freshest
+    /// disk state decides, never a pair captured when the hold was armed.
+    private var persistenceGate = TrafficLightPersistenceGate()
+    private var gateHoldTask: Task<Void, Never>?
     /// Warp's recent exchanges, read on a worker (see `refreshWarpExchangesIfNeeded`) and
     /// mapped here on every rescan. Empty until the first read returns.
     private var warpExchanges: [WarpAgentStore.Exchange] = []
@@ -122,6 +136,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
         isRunning = false
         rescanTask?.cancel()
         rescanTask = nil
+        gateHoldTask?.cancel()
+        gateHoldTask = nil
+        persistenceGate.reset()
+        pendingRescanAt = nil
+        pendingQuickRescanAt = nil
         pollTimer?.invalidate()
         pollTimer = nil
         if let statusDirectorySource {
@@ -173,7 +192,10 @@ final class CursorAgentStatusMonitor: ObservableObject {
         ]
         // Passive-only sources, watched only when present. Warp's WAL changes on every write
         // (agent or not); the store caches its query for 2 s so a busy terminal costs one read.
-        if let warpDB = WarpAgentStore.databaseURL {
+        // Finding it stats Warp's container, so it waits for `LaunchPermissionManager` too. Allowed
+        // later (onboarding's Permissions step or Brain), Warp is read by the 30 s safety-net
+        // rescan until the next launch adds its watcher; restarting the monitor would drop the light.
+        if LaunchPermissionManager.mayTouch(.warp), let warpDB = WarpAgentStore.databaseURL {
             watchedPaths.append(warpDB.deletingLastPathComponent().path)
         }
         let desktopRoot = ClaudeDesktopAgentSessionStore.defaultRoot
@@ -202,14 +224,26 @@ final class CursorAgentStatusMonitor: ObservableObject {
             let monitor = Unmanaged<CursorAgentStatusMonitor>.fromOpaque(info).takeUnretainedValue()
             // kFSEventStreamCreateFlagUseCFTypes: the paths arrive as a CFArray of CFString.
             let paths = (Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue() as NSArray) as? [String] ?? []
-            let events = (0..<min(numEvents, paths.count)).map { (path: paths[$0], flags: UInt32(eventFlags[$0])) }
+            let allEvents = (0..<min(numEvents, paths.count)).map { (path: paths[$0], flags: UInt32(eventFlags[$0])) }
             Task { @MainActor in
+                // Subagent transcripts, tool-output spills and workflow files inside a session's
+                // folder, and hook writes the kqueue watcher already handles, are not worth a
+                // rescan (AgentWatchEvents; REGRESSIONS entry 11, 2026-10-04 addendum).
+                let events = AgentWatchEvents.worthARescan(
+                    allEvents,
+                    claudeProjectsRoot: AgentSessionLogParser.claudeProjectsDirectory.path,
+                    statusDirectory: AgentHookInstaller.statusDirectory.path
+                )
+                guard !events.isEmpty else { return }
                 // Appends and hook writes leave the transcript lists valid (see
                 // TranscriptListingInvalidation); dropping them on every event re-walked both
                 // project trees on the main actor several times a second while agents worked.
                 if TranscriptListingInvalidation.shouldInvalidate(events: events, transcriptRoots: CursorAgentStatusMonitor.transcriptRootPaths) {
                     CursorTranscriptParser.invalidatePathCache()
                     AgentSessionLogParser.invalidatePathCache()
+                }
+                if TranscriptListingInvalidation.shouldInvalidate(events: events, transcriptRoots: [ClaudeDesktopAgentSessionStore.defaultRoot.path]) {
+                    ClaudeDesktopAgentSessionStore.invalidateListingCache()
                 }
                 monitor.scheduleRescan(delay: 0.35)
             }
@@ -269,32 +303,61 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
     private func scheduleQuickRescan() {
         guard isRunning else { return }
+        let start = AgentRescanPacing.startDate(requestedAt: Date(), delay: 0.05, lastStart: lastRescanStartedAt,
+                                                floor: AgentRescanPacing.hookOnlyFloor)
+        guard AgentRescanPacing.needsScheduling(start: start, pending: pendingQuickRescanAt) else { return }
+        pendingQuickRescanAt = start
         quickRescanTask?.cancel()
         quickRescanTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.rescan(hooksOnly: true)
+            let wait = start.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled, let self else { return }
+            self.pendingQuickRescanAt = nil
+            await self.rescan(hooksOnly: true)
         }
     }
 
     private func scheduleRescan(delay: TimeInterval) {
         guard isRunning else { return }
+        let start = AgentRescanPacing.startDate(requestedAt: Date(), delay: delay, lastStart: lastRescanStartedAt,
+                                                floor: AgentRescanPacing.fullFloor)
+        guard AgentRescanPacing.needsScheduling(start: start, pending: pendingRescanAt) else { return }
+        pendingRescanAt = start
         rescanTask?.cancel()
         rescanTask = Task { [weak self] in
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            }
-            guard !Task.isCancelled else { return }
-            await self?.rescan(hooksOnly: false)
+            let wait = start.timeIntervalSinceNow
+            if wait > 0 { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)) }
+            guard !Task.isCancelled, let self else { return }
+            self.pendingRescanAt = nil
+            await self.rescan(hooksOnly: false)
         }
     }
 
     /// Subagent conversations folded into their parent on the last hook parse (v38 `parent_id`).
     private var foldedSubagentConversationIDs: Set<String> = []
 
+    /// Rescans when a fresh Claude `idle` stops counting as ongoing
+    /// (`AgentTrafficLightMapper.claudeIdleGraceEndMs`): nothing may write then, and without it a
+    /// chat whose background agents all finished stayed lit until the 30 s poll. Its own task, so
+    /// it never cancels or delays a rescan an event scheduled.
+    private var claudeIdleGraceTask: Task<Void, Never>?
+
+    private func armClaudeIdleGraceRecheck(at graceEndMs: Int64?) {
+        claudeIdleGraceTask?.cancel()
+        claudeIdleGraceTask = nil
+        guard let graceEndMs else { return }
+        let delay = max(0, TimeInterval(graceEndMs) / 1000 - Date().timeIntervalSince1970) + 0.1
+        claudeIdleGraceTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.scheduleRescan(delay: 0)
+        }
+    }
+
     private func rescan(hooksOnly: Bool = false) async {
         guard isRunning else { return }
         let now = Date()
+        lastRescanStartedAt = now
         let previousStateByConversationID = latestDisplayStateByConversationID(from: sessions)
 
         let staleMinutes = Defaults[.agentStatusStaleMinutes]
@@ -305,12 +368,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // open (live process, tool_use outstanding) before it ages or deletes a file. No data
         // flows the other way. Cursor's corroboration is the previous cycle's transcript
         // analysis — a lag of a second is nothing to a hold that only matters after five minutes.
-        let (passiveClaudeSessions, deadPIDConversationIDs, liveClaudeTails) = buildClaudeSessions(
+        let (passiveClaudeSessions, deadPIDConversationIDs, liveClaudeTails, claudeWork) = buildClaudeSessions(
             staleMinutes: staleMinutes,
             collapseSeconds: collapseSeconds,
             inactiveSeconds: inactiveSeconds,
             now: now
         )
+        armClaudeIdleGraceRecheck(at: claudeWork.graceEndMs)
         let cursorPendingApprovalIDs = Set(
             cachedTranscriptAnalysisBySession.filter { $0.value.hasPendingToolApproval }.map(\.key)
         )
@@ -322,7 +386,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
             now: now,
             allowBackingDelete: !hooksOnly,
             liveClaudeTails: liveClaudeTails,
-            cursorPendingApprovalIDs: cursorPendingApprovalIDs
+            cursorPendingApprovalIDs: cursorPendingApprovalIDs,
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs
         )
         // Extracted to AgentTrafficLightMapper.reconcileClaudeSessions (pure, tested):
         // this merge has regressed repeatedly while it lived inline here, unreachable by
@@ -333,7 +398,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
             deadPIDConversationIDs: deadPIDConversationIDs,
             collapseMs: Int64(collapseSeconds) * 1_000,
             inactiveMs: Int64(inactiveSeconds) * 1_000,
-            nowMs: Int64(now.timeIntervalSince1970 * 1000)
+            nowMs: Int64(now.timeIntervalSince1970 * 1000),
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs
         )
 
         let transcriptAnalysis: [String: TranscriptAnalysis]
@@ -454,7 +520,21 @@ final class CursorAgentStatusMonitor: ObservableObject {
         lastStatuslineReadAt = now
         lastStatuslineModifiedAt = statuslineModifiedAt
         let statusline = ClaudeUsageSnapshot.load(from: statuslineURL)
-        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop, now: now))
+        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop,
+                                    organizations: claudeUsageOrganizations, now: now))
+    }
+
+    private struct ClaudeUsageOrganizations {
+        var desktop: String?
+        var claudeCode: String?
+        /// Whether `claudeCode` was recorded at Kannu's own fetch, rather than read from a file
+        /// that flips (see `ClaudeUsageSnapshot.cardSources`).
+        var claudeCodeRecorded = true
+        /// Set when Claude Code's sources are held off the card until its organization is known.
+        var claudeCodeUnverified = false
+        /// `oauthAccount`'s organization as `~/.claude.json` names it now, before the recorded one
+        /// overrides it: a sign-in elsewhere (Terminal) moves it, and nothing else tells Kannu.
+        var claudeCodeInConfig: String?
     }
 
     private struct ClaudeUsageLoad {
@@ -462,11 +542,14 @@ final class CursorAgentStatusMonitor: ObservableObject {
         let hint: ClaudeUsageSnapshot.Hint?
         let cache: ClaudeUsageSnapshot?
         let desktop: ClaudeUsageSnapshot?
+        let organizations: ClaudeUsageOrganizations
     }
 
     private func apply(_ load: ClaudeUsageLoad) {
+        settleRefreshStatusIfCacheIsFresher(load.cache)
         claudeUsageCache = load.cache
         claudeUsageDesktop = load.desktop
+        claudeUsageOrganizations = load.organizations
         if load.snapshot != claudeUsage { claudeUsage = load.snapshot }
         if load.hint != claudeUsageHint { claudeUsageHint = load.hint }
     }
@@ -483,13 +566,54 @@ final class CursorAgentStatusMonitor: ObservableObject {
             .appendingPathComponent(AgentHookInstaller.usageFileName)
         // All three are local reads on a 600 s cadence, so reading every one is cheap.
         let statusline = ClaudeUsageSnapshot.load(from: url)
-        return mergeClaudeUsage(statusline: statusline, cache: ClaudeCachedUsage.load(),
-                                desktop: ClaudeDesktopUsageHistory.load(now: now), now: now)
+        // One read of ~/.claude.json for the cache and for what the desktop history needs from
+        // it: this account's organization and the weekly reset anchor.
+        let claude = ClaudeCachedUsage.read()
+        // Claude Code's organization as recorded at Kannu's own last fetch; `oauthAccount` only
+        // until there is one, because desktop-hosted sessions keep rewriting it.
+        var context = claude.context
+        let recorded = Defaults[.claudeCodeUsageOrganization]
+        context.organizationUUID = ClaudeCachedUsage.claudeCodeOrganization(
+            recordedAtFetch: recorded, inConfigNow: context.organizationUUID)
+        // Unrecorded, the cache's weekly reset may be another organization's: none is applied.
+        if recorded == nil { context.weeklyResetAnchor = nil }
+        rememberOrganizationType(claude.context)
+        let desktop = ClaudeDesktopUsageHistory.read(now: now, account: context)
+        return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot, desktop: desktop.snapshot,
+                                organizations: .init(desktop: desktop.organizationUUID,
+                                                     claudeCode: context.organizationUUID,
+                                                     claudeCodeRecorded: recorded != nil,
+                                                     claudeCodeInConfig: claude.context.organizationUUID),
+                                now: now)
+    }
+
+    /// Learns which plan an organization is on whenever `~/.claude.json` names it — the file flips
+    /// between a person's organizations, so over time both are seen.
+    private static func rememberOrganizationType(_ context: ClaudeCachedUsage.AccountContext) {
+        guard let organization = context.organizationUUID, let type = context.organizationType,
+              Defaults[.claudeOrganizationTypes][organization] != type else { return }
+        var types = Defaults[.claudeOrganizationTypes]
+        types[organization] = type
+        Defaults[.claudeOrganizationTypes] = types
+    }
+
+    /// The plans of the two organizations the card is choosing between, when Kannu has seen them.
+    var claudeOrganizationPlanNames: (claudeCode: String?, desktop: String?) {
+        let types = Defaults[.claudeOrganizationTypes]
+        let name = { (id: String?) in id.flatMap { types[$0] }.flatMap(ClaudeCachedUsage.planName) }
+        return (name(claudeUsageOrganizations.claudeCode), name(claudeUsageOrganizations.desktop))
     }
 
     private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
-                                         desktop: ClaudeUsageSnapshot?, now: Date) -> ClaudeUsageLoad {
-        let sources = [statusline, cache, desktop]
+                                         desktop: ClaudeUsageSnapshot?, organizations: ClaudeUsageOrganizations,
+                                         now: Date) -> ClaudeUsageLoad {
+        let card = ClaudeUsageSnapshot.cardSources(
+            statusline: statusline, cache: cache, desktop: desktop,
+            desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode,
+            claudeCodeOrganizationRecorded: organizations.claudeCodeRecorded)
+        var organizations = organizations
+        organizations.claudeCodeUnverified = card.claudeCodeOrganizationUnverified
+        let sources = card.sources
         // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
         // shouldRefresh keeps its cadence gate (a nil snapshot re-reads on every rescan tick).
         let snapshot = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
@@ -497,9 +621,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
             hooksInstalled: AgentHookInstaller.shared.isInstalled(.claude),
             statusline: statusline,
             cache: cache,
+            claudeCodeOnAnotherOrganization: card.claudeCodeOnAnotherOrganization,
             now: now
         )
-        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop)
+        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop,
+                               organizations: organizations)
     }
 
     /// Re-reads the usage sources immediately, bypassing the cadence gate. For the manual button,
@@ -511,157 +637,147 @@ final class CursorAgentStatusMonitor: ObservableObject {
         apply(Self.loadClaudeUsageSnapshot(now: now))
     }
 
-    /// Triggers Claude Code's own usage fetch, which writes `cachedUsageUtilization` to
-    /// `~/.claude.json` — the only local source for the per-model (e.g. Fable) weekly window.
-    ///
-    /// Runs the installed CLI under a pseudo-terminal issuing `/usage`, because that slash command
-    /// only runs in an interactive session (headless `-p` treats it as prompt text). The spawn uses
-    /// the credential Claude already stored in the keychain: silent after a one-time "Always Allow",
-    /// and it reads only limit metadata — no message, no tokens, no cost. Kannu never sees the
-    /// credential; it only re-reads the file the CLI writes.
-    /// True while a user-triggered usage fetch is running; drives the button's spinner and stops
-    /// a second press from spawning a concurrent process.
+    /// True while a refresh (and any sign-in it started) is running; drives the button's spinner
+    /// and stops a second press from spawning a concurrent process.
     @Published private(set) var isRefreshingClaudeUsage = false
 
-    /// Runs Claude Code's own `/usage`, the only thing that refreshes the per-model (Fable) weekly
-    /// window, then reloads the display from what it wrote.
+    /// What the last refresh needs the user to know, when anything. The card renders it.
+    @Published private(set) var claudeRefreshStatus: ClaudeRefreshStatus?
+
+    /// When the status above was found, so data turning fresh some other way can settle it.
+    private var claudeRefreshStatusSetAt: Date?
+    /// The automatic refresh stands down after a refresh that found something only the user can
+    /// change; a press, or data turning fresh some other way, lifts it.
+    private var claudeAutomaticRefreshHeld = false
+    /// When the last refresh started, for the automatic cadence.
+    private var lastClaudeUsageFetchAt: Date?
+
+    /// Refreshes the Claude limits with Claude Code's own `/usage`, then reloads the card from
+    /// what it wrote to `~/.claude.json` — the only local source with exact resets and the
+    /// per-model (e.g. Fable) weekly window. `manual` is a press of the card's Refresh.
     ///
-    /// `/usage` is declared `requires: {ink}`, so it only runs in an interactive session — headless
-    /// `--print` treats it as prompt text. An interactive session normally registers itself as a
-    /// remote-control device (which showed up as a phantom chat and a new-device sign-in warning),
-    /// so the spawn disables that explicitly and persists no session.
-    ///
-    /// The spawn inherits no `CLAUDE_CODE_OAUTH_*` variables, so the CLI uses its keychain sign-in.
-    /// That sign-in must carry the `user:profile` scope or the CLI's fetch returns nothing and the
-    /// cache stays as it was; `claudeUsageHint` tells the user when that is the case.
-    func refreshClaudeUsageFromCLI() {
+    /// What runs is `ClaudeUsageFetchCommand`'s steps: `claude -p "/usage"` (no model turn), and,
+    /// when that shows no claude.ai sign-in, `claude auth status`; on a press only, Claude Code's
+    /// own sign-in, which opens claude.ai in the browser, and a fetch again once it finishes. A
+    /// working claude.ai sign-in, an API key or a cloud provider is never signed in over. Kannu
+    /// never reads the sign-in; Claude Code keeps it in the keychain.
+    func refreshClaudeUsageFromCLI(manual: Bool = true) {
         guard !isRefreshingClaudeUsage else { return }
-        guard let binary = Self.resolveClaudeBinary() else {
-            reloadClaudeUsageNow()
-            return
+        lastClaudeUsageFetchAt = Date()
+        if manual {
+            claudeRefreshStatus = nil
+            claudeAutomaticRefreshHeld = false
         }
         isRefreshingClaudeUsage = true
+        let statusDirectory = AgentHookInstaller.statusDirectory
 
-        // A GCD worker, not a Task: runUsageFetch is up to ~55 s of Thread.sleep, and a
-        // detached Task would pin one cooperative-pool thread (sized to core count) for the
-        // whole fetch, starving every other Task in the process on a small machine.
+        // A GCD worker, not a Task: every step blocks (process waits, sleeps, the signature check),
+        // and a detached Task would pin a cooperative-pool thread for up to the sign-in's five minutes.
         DispatchQueue.global(qos: .userInitiated).async {
-            Self.runUsageFetch(binary: binary)
+            let started = Date()
+            let outcome = ClaudeUsageRefresh.run(manual: manual) {
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self.claudeRefreshStatus = .signingIn }
+                }
+            }
+            let probeIDs = ClaudeUsageRefresh.probeHookConversationIDs(in: statusDirectory, since: started)
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
+                    var remembered = Defaults[.claudeUsageProbeConversationIDs]
+                    for id in probeIDs {
+                        remembered = AgentTrafficLightMapper.rememberingProbeConversationID(id, in: remembered)
+                    }
+                    if remembered != Defaults[.claudeUsageProbeConversationIDs] {
+                        Defaults[.claudeUsageProbeConversationIDs] = remembered
+                    }
+                    if let organization = outcome.fetchedOrganization,
+                       organization != Defaults[.claudeCodeUsageOrganization] {
+                        Defaults[.claudeCodeUsageOrganization] = organization
+                    }
+                    let presented = ClaudeUsageFetchCommand.presentation(of: outcome.status, manual: manual)
+                    self.claudeRefreshStatus = presented.shown
+                    self.claudeRefreshStatusSetAt = Date()
+                    self.claudeAutomaticRefreshHeld = presented.holdsAutomaticRefresh
                     // Order matters: refresh the cache first, then re-run the providers so the
-                    // card renders the new numbers. Doing this at press time would race the fetch.
+                    // card renders the new numbers. The providers' refresh floor would drop this
+                    // one — the card's own poll ran a moment ago — so it bypasses the floor.
                     self.reloadClaudeUsageNow()
-                    LLMUsageManager.shared.refreshAll(force: true)
+                    LLMUsageManager.shared.refreshAll(force: true, bypassFloor: true)
                     self.isRefreshingClaudeUsage = false
                 }
             }
         }
     }
 
-    /// Newest installed Claude Code binary, so this keeps working across version bumps.
-    private nonisolated static func resolveClaudeBinary() -> URL? {
-        let base = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Claude/claude-code")
-        guard let versions = try? FileManager.default.contentsOfDirectory(
-            at: base, includingPropertiesForKeys: nil) else { return nil }
-        return versions
-            .map { $0.appendingPathComponent("claude.app/Contents/MacOS/claude") }
-            .filter { FileManager.default.isExecutableFile(atPath: $0.path) }
-            .sorted { $0.path.compare($1.path, options: .numeric) == .orderedAscending }
-            .last
+    /// The card's poll calls this while the Usage tab is on screen. It fetches only when Claude
+    /// Code's cache is older than `ClaudeUsageSnapshot.autoFetchInterval` and no fetch ran in that
+    /// long, never starts a sign-in, and stands down while the last refresh found something only
+    /// the user can change, or while Claude Code is on another organization than the card's.
+    func refreshClaudeUsageIfStale(now: Date = Date()) {
+        guard !isRefreshingClaudeUsage,
+              !claudeAutomaticRefreshHeld,
+              // Claude Code is on another organization: what it would fetch is not on the card —
+              // unless `~/.claude.json` has moved off the recorded one since, as a sign-in in
+              // Terminal does; then one paced fetch records where it went.
+              claudeUsageHint != .otherOrganization
+                || ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
+                    recorded: Defaults[.claudeCodeUsageOrganization],
+                    inConfigNow: claudeUsageOrganizations.claudeCodeInConfig),
+              ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
+                                                  lastFetch: lastClaudeUsageFetchAt,
+                                                  organizationUnverified: claudeUsageOrganizations.claudeCodeUnverified)
+        else { return }
+        refreshClaudeUsageFromCLI(manual: false)
     }
 
-    private nonisolated static func runUsageFetch(binary: URL) {
-        // Two attempts. The first suppresses the remote-control device registration (the phantom
-        // chat); if that flag turns out to be rejected or ineffective and no fetch lands, fall back
-        // to the bare invocation, which is proven to fetch. Better a working refresh than a clean
-        // one that does nothing.
-        for arguments in ClaudeUsageFetchCommand.attempts {
-            guard ClaudeUsageFetchCommand.isValidForInteractiveSession(arguments: arguments) else { continue }
-            if attemptUsageFetch(binary: binary, arguments: arguments) { return }
+    /// Once Claude Code's cache is newer than the refresh that found something, something else
+    /// fetched in the meantime (a sign-in in Terminal, Claude Code's own `/usage`): a "sign in"
+    /// status is settled, and the automatic refresh resumes.
+    private func settleRefreshStatusIfCacheIsFresher(_ cache: ClaudeUsageSnapshot?) {
+        guard let setAt = claudeRefreshStatusSetAt, let observedAt = cache?.observedAt, observedAt > setAt else { return }
+        if ClaudeUsageFetchCommand.freshCacheSettles(claudeRefreshStatus, setAt: setAt, cacheObservedAt: observedAt) {
+            claudeRefreshStatus = nil
+        }
+        claudeAutomaticRefreshHeld = false
+    }
+
+    /// Stops a sign-in that is waiting on the browser. The refresh then ends as `.signInDidNotFinish`.
+    func cancelClaudeSignIn() {
+        ClaudeUsageRefresh.cancelSignIn()
+    }
+
+    /// Opens Terminal running Claude Code's sign-in, for the case the browser route cannot finish
+    /// (a code to paste, a browser that never opened). A `.command` file opened with `open` needs
+    /// no Automation permission. The binary is resolved again, off the main actor (the signature
+    /// check reads it), because the one a refresh found may since have been reaped by an update.
+    func openClaudeSignInInTerminal() {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let binary = ClaudeUsageRefresh.trustedBinaryURL()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let binary else {
+                        self.claudeRefreshStatus = .notInstalled
+                        return
+                    }
+                    self.writeAndOpenTerminalSignIn(binary: binary)
+                }
+            }
         }
     }
 
-    /// One `/usage` run. Returns true when the on-disk fetch stamp advanced, i.e. it worked.
-    private nonisolated static func attemptUsageFetch(binary: URL, arguments: [String]) -> Bool {
-        let configURL = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".claude.json")
-        func fetchedAtMs() -> Double? {
-            guard let data = try? Data(contentsOf: configURL),
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let cache = json["cachedUsageUtilization"] as? [String: Any] else { return nil }
-            return (cache["fetchedAtMs"] as? NSNumber)?.doubleValue
+    private func writeAndOpenTerminalSignIn(binary: URL) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Kannu", isDirectory: true)
+        let script = directory.appendingPathComponent("claude-sign-in.command")
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try ClaudeUsageFetchCommand.terminalSignInScript(binary: binary)
+                .write(to: script, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: script.path)
+        } catch {
+            ClaudeUsageRefresh.log.error("Usage refresh: could not write the Terminal sign-in script")
+            return
         }
-        let before = fetchedAtMs()
-
-        let process = Process()
-        process.executableURL = binary
-        process.arguments = arguments
-        process.environment = ClaudeUsageFetchCommand.environment()
-        // Deliberately NOT setting `process.environment`: plain inheritance, exactly as the
-        // version that was proven to fetch. Setting CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC here
-        // suppressed nonessential network traffic — which is what the usage fetch is — so the
-        // session started, `/usage` ran, and nothing was ever fetched.
-
-        // A pty is required: `/usage` is declared `requires: {ink}` and only runs interactively.
-        var master: Int32 = 0, slave: Int32 = 0
-        guard openpty(&master, &slave, nil, nil, nil) == 0 else { return false }
-        let masterHandle = FileHandle(fileDescriptor: master, closeOnDealloc: true)
-        let slaveHandle = FileHandle(fileDescriptor: slave, closeOnDealloc: true)
-        process.standardInput = slaveHandle
-        process.standardOutput = slaveHandle
-        process.standardError = slaveHandle
-        // Drain the pty so the child never blocks on a full buffer; the output itself is unused.
-        masterHandle.readabilityHandler = { _ = $0.availableData }
-
-        do { try process.run() } catch {
-            // Reachable: Claude Code self-updates by reaping old version directories, so the
-            // binary resolved a moment ago can be gone. Every other exit path clears the
-            // handler before the handle is dropped — an armed readability source on a
-            // closing descriptor is FileHandle's documented crash — so this one must too.
-            masterHandle.readabilityHandler = nil
-            try? masterHandle.close()
-            try? slaveHandle.close()
-            return false
-        }
-
-        // Give the TUI time to come up before typing, then issue the command.
-        Thread.sleep(forTimeInterval: 3)
-        if !process.isRunning {
-            // Rejected argument or instant exit — nothing was typed, so report failure and let the
-            // caller try the next invocation.
-            masterHandle.readabilityHandler = nil
-            try? masterHandle.close()
-            return false
-        }
-        masterHandle.write(Data("/usage\r".utf8))
-
-        var fetched = false
-        let deadline = Date().addingTimeInterval(20)
-        while Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.25)
-            if let now = fetchedAtMs(), now != before { fetched = true; break }
-            if !process.isRunning { break }
-        }
-
-        if process.isRunning && fetched {
-            masterHandle.write(Data("/exit\r".utf8))
-            let quitDeadline = Date().addingTimeInterval(2)
-            while process.isRunning && Date() < quitDeadline { Thread.sleep(forTimeInterval: 0.1) }
-        }
-        if process.isRunning {
-            // terminate() only signals and the TUI can trap SIGTERM; escalate so waitUntilExit()
-            // can never block this task and strand the spinner.
-            process.terminate()
-            let killDeadline = Date().addingTimeInterval(2)
-            while process.isRunning && Date() < killDeadline { Thread.sleep(forTimeInterval: 0.1) }
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            process.waitUntilExit()
-        }
-        masterHandle.readabilityHandler = nil
-        try? masterHandle.close()
-        return fetched
+        NSWorkspace.shared.open(script)
     }
 
     /// Keeps a still-running agent visible to time-boxed consumers.
@@ -700,20 +816,40 @@ final class CursorAgentStatusMonitor: ObservableObject {
     }
 
     private func publishTrafficLight(state: AgentTrafficLightState, shouldShow: Bool) {
-        var changed = false
-        if lastPublishedTrafficLightState != state {
-            trafficLightState = state
-            lastPublishedTrafficLightState = state
-            changed = true
-        }
-        if lastPublishedShouldShowTrafficLight != shouldShow {
-            shouldShowTrafficLight = shouldShow
-            lastPublishedShouldShowTrafficLight = shouldShow
-            changed = true
-        }
-        if changed {
-            pulseLatch.noteTransition()
-            activityPulse &+= 1
+        switch persistenceGate.decide(state: state, shouldShow: shouldShow, now: Date()) {
+        case .unchanged:
+            // The computed pair matches what is on screen; a pending hold, if any, was a blip
+            // that reverted before it persisted, so nothing was ever published for it.
+            gateHoldTask?.cancel()
+            gateHoldTask = nil
+        case .hold(let until):
+            // A calming change that has not persisted yet. Re-evaluate at the deadline by
+            // rescanning: if the state still holds then, that rescan's decide() publishes it.
+            gateHoldTask?.cancel()
+            gateHoldTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(max(0, until.timeIntervalSinceNow) * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                self?.gateHoldTask = nil
+                self?.scheduleRescan(delay: 0)
+            }
+        case .publish:
+            gateHoldTask?.cancel()
+            gateHoldTask = nil
+            var changed = false
+            if lastPublishedTrafficLightState != state {
+                trafficLightState = state
+                lastPublishedTrafficLightState = state
+                changed = true
+            }
+            if lastPublishedShouldShowTrafficLight != shouldShow {
+                shouldShowTrafficLight = shouldShow
+                lastPublishedShouldShowTrafficLight = shouldShow
+                changed = true
+            }
+            if changed {
+                pulseLatch.noteTransition()
+                activityPulse &+= 1
+            }
         }
     }
 
@@ -1016,7 +1152,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         now: Date = Date(),
         allowBackingDelete: Bool = true,
         liveClaudeTails: [String: AgentSessionLogParser.ClaudeTailState] = [:],
-        cursorPendingApprovalIDs: Set<String> = []
+        cursorPendingApprovalIDs: Set<String> = [],
+        claudeWorkOngoingIDs: Set<String> = []
     ) -> [AgentSessionStatus] {
         let directory = AgentHookInstaller.statusDirectory
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -1071,6 +1208,13 @@ final class CursorAgentStatusMonitor: ObservableObject {
                                       turn: HookTurn(hookFile: json, home: homePath, now: now)))
         }
 
+        // A chat's turn ended with agents left running and Claude says they still are: for the stale
+        // cap, its turn is open (`AgentTrafficLightMapper.isClaudeBackgroundWork`).
+        func hasBackgroundWork(_ provider: String, _ conversationID: String, _ turn: HookTurn) -> Bool {
+            provider.lowercased() == "claude" && turn.endedAt != nil && turn.backgroundAgents > 0
+                && claudeWorkOngoingIDs.contains(conversationID)
+        }
+
         // For the stale-cap rule below: which chats a recently written subagent file names, and
         // which chats have an open turn (since when).
         var freshSubagentParentKeys = Set<String>()
@@ -1081,7 +1225,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
                nowMs - hookFile.tsMs <= staleMs {
                 freshSubagentParentKeys.insert(providerKey + "|" + parent)
             }
-            if let turn = hookFile.turn, turn.endedAt == nil {
+            if let turn = hookFile.turn, turn.endedAt == nil || hasBackgroundWork(hookFile.provider, hookFile.conversationID, turn) {
                 openTurnStartByKey[providerKey + "|" + hookFile.conversationID] = turn.startedAt
             }
         }
@@ -1136,7 +1280,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 rawState: state,
                 processAlive: claudeTail != nil,
                 namedByFreshSubagent: freshSubagentParentKeys.contains(providerKey + "|" + conversationID),
-                subagentOfOpenTurn: subagentOfOpenTurn
+                subagentOfOpenTurn: subagentOfOpenTurn,
+                backgroundWork: hookFile.turn.map { hasBackgroundWork(provider, conversationID, $0) } ?? false
             )
             guard nowMs - tsMs <= staleMs || awaitingOutlivesCap || activeOutlivesCap else {
                 removeIfUnchanged()
@@ -1229,7 +1374,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
 
         // One card per chat: subagents fold into their parent before names are resolved, so a
         // stand-in for a parent with no file of its own is named from the parent's transcript too.
-        let (folded, foldedIDs) = AgentTrafficLightMapper.foldSubagentHookSessions(results, parentByKey: subagentParentByKey)
+        let (folded, foldedIDs) = AgentTrafficLightMapper.foldSubagentHookSessions(
+            results, parentByKey: subagentParentByKey, claudeWorkOngoingIDs: claudeWorkOngoingIDs
+        )
         foldedSubagentConversationIDs = foldedIDs
         let enriched = enrichChatNames(fromComposerStore: folded)
         return enrichProjectNamesFromTranscripts(enriched, maxAgeMinutes: staleMinutes)
@@ -1821,14 +1968,17 @@ final class CursorAgentStatusMonitor: ObservableObject {
         deadPIDConversationIDs: Set<String>,
         /// Tail verdict per conversation whose process is alive this rescan — the evidence the
         /// hook parser needs to keep an unanswered prompt yellow (REGRESSIONS entry 12).
-        liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState]
+        liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState],
+        /// Live conversations whose record says Claude's work goes on (busy, waiting, or a fresh
+        /// idle), and when the earliest fresh idle stops counting.
+        claudeWork: (ongoingIDs: Set<String>, graceEndMs: Int64?)
     ) {
         let sessionsDir = AgentSessionLogParser.claudeSessionsDirectory
         guard FileManager.default.fileExists(atPath: sessionsDir.path),
               let files = try? FileManager.default.contentsOfDirectory(
                 at: sessionsDir,
                 includingPropertiesForKeys: [.contentModificationDateKey]
-              ) else { return ([], [], [:]) }
+              ) else { return ([], [], [:], ([], nil)) }
         refreshDesktopSessionIndexIfNeeded()
 
         let staleMs = Int64(staleMinutes) * 60_000
@@ -1845,6 +1995,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // the live one dead. See the subtraction before `return`.
         var liveConversationIDs: Set<String> = []
         var liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState] = [:]
+        var workOngoingIDs: Set<String> = []
+        var idleGraceEndMs: Int64? = nil
 
         for file in files where file.pathExtension == "json" {
             guard let data = try? Data(contentsOf: file),
@@ -1873,6 +2025,16 @@ final class CursorAgentStatusMonitor: ObservableObject {
             // Skip stale check for live processes — a session may run for many hours.
             if processAlive {
                 liveConversationIDs.insert(sessionId)
+                // Claude's own word on whether its work goes on, background agents included.
+                let status = json["status"] as? String
+                let statusUpdatedAtMs = (json["statusUpdatedAt"] as? NSNumber)?.int64Value
+                if AgentTrafficLightMapper.claudeWorkOngoing(status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
+                    workOngoingIDs.insert(sessionId)
+                }
+                if let graceEnd = AgentTrafficLightMapper.claudeIdleGraceEndMs(
+                    status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
+                    idleGraceEndMs = min(idleGraceEndMs ?? graceEnd, graceEnd)
+                }
             } else {
                 // Recorded before the stale skip: a long-lived session that was SIGKILLed
                 // has an old startedAt, and the reconciler still needs to know it is dead.
@@ -1982,7 +2144,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // id. Without this, resuming a crashed session left it permanently "dead", and the
         // reconciler's `processDead ||` short-circuit bypasses the timestamp guard — flashing
         // red at the moment the user submits a prompt.
-        return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID)
+        return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID,
+                (workOngoingIDs, idleGraceEndMs))
     }
 
     /// The on-disk transcript of a Claude conversation, for features that act on a whole chat
@@ -2048,6 +2211,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// changed, schedules the rescan that maps it. Rescans meanwhile map the last result.
     private func refreshWarpExchangesIfNeeded(staleMinutes: Int, now: Date) {
         guard !warpRefreshInFlight else { return }
+        // That prompt belongs to the onboarding's Permissions step on a fresh install, and waits
+        // for the user after a Not now: until `LaunchPermissionManager` allows it, Warp is unread.
+        guard LaunchPermissionManager.mayTouch(.warp) else { return }
         warpRefreshInFlight = true
         let since = WarpAgentStore.since(staleMinutes: staleMinutes, now: now)
         DispatchQueue.global(qos: .utility).async { [weak self] in

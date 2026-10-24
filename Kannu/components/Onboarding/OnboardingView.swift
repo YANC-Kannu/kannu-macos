@@ -23,19 +23,25 @@
 import SwiftUI
 import Defaults
 
-enum OnboardingStep {
+/// The onboarding window's steps, in order. Nothing in it plays a sound or raises a macOS dialog by
+/// itself: `.permissions` asks for each permission only when the user presses Allow, and the
+/// welcome music and the notch's hello wait for Finish.
+enum OnboardingStep: CaseIterable {
     case welcome
-    case musicPermission
+    case musicSource
     case profileSelection
     case trafficLightStyle
     case caffeinateChoice
+    case permissions
     case finished
 }
 
 struct OnboardingView: View {
     @State private var step: OnboardingStep = .welcome
-    @State private var showFocusMonitoringChoice = false
-    @State private var didPresentFocusMonitoringChoice = false
+    /// Applied when onboarding ends: switching to Spotify or Apple Music talks to the app at once,
+    /// and that Automation dialog belongs to the Permissions step.
+    @State private var musicSource: MediaControllerType = Defaults[.mediaController]
+    let onLaunchAtLoginChoice: (Bool) -> Void
     let onFinish: () -> Void
     let onOpenSettings: () -> Void
 
@@ -44,18 +50,15 @@ struct OnboardingView: View {
             switch step {
             case .welcome:
                 WelcomeView {
-                    withAnimation(.easeInOut(duration: 0.6)) {
-                        step = .musicPermission
-                    }
+                    advance(to: .musicSource)
                 }
                 .transition(.opacity)
 
-            case .musicPermission:
+            case .musicSource:
                 MusicControllerSelectionView(
-                    onContinue: {
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            step = .profileSelection
-                        }
+                    onContinue: { source in
+                        musicSource = source
+                        advance(to: .profileSelection)
                     }
                 )
                 .transition(.opacity)
@@ -64,9 +67,7 @@ struct OnboardingView: View {
                 ProfileSelectionView(
                     onContinue: { profiles in
                         applyProfileSettings(profiles)
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            step = .trafficLightStyle
-                        }
+                        advance(to: .trafficLightStyle)
                     }
                 )
                 .transition(.opacity)
@@ -74,9 +75,7 @@ struct OnboardingView: View {
             case .trafficLightStyle:
                 TrafficLightStyleSelectionView(
                     onContinue: {
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            step = .caffeinateChoice
-                        }
+                        advance(to: .caffeinateChoice)
                     }
                 )
                 .transition(.opacity)
@@ -84,39 +83,55 @@ struct OnboardingView: View {
             case .caffeinateChoice:
                 CaffeinateSelectionView(
                     onContinue: {
-                        withAnimation(.easeInOut(duration: 0.6)) {
-                            step = .finished
-                        }
+                        advance(to: .permissions)
+                    }
+                )
+                .transition(.opacity)
+
+            case .permissions:
+                // Rows read the settings the profile step just applied.
+                PermissionsStepView(
+                    rows: LaunchPermissionManager.rows(musicSource: musicSource),
+                    musicSource: musicSource,
+                    onLaunchAtLoginChoice: onLaunchAtLoginChoice,
+                    onContinue: {
+                        advance(to: .finished)
                     }
                 )
                 .transition(.opacity)
 
             case .finished:
-                OnboardingFinishView(onFinish: onFinish, onOpenSettings: onOpenSettings)
+                OnboardingFinishView(
+                    onFinish: {
+                        applyMusicSource()
+                        onFinish()
+                    },
+                    onOpenSettings: {
+                        applyMusicSource()
+                        onOpenSettings()
+                    }
+                )
             }
         }
         .frame(width: 400, height: 600)
-        .onAppear {
-            guard !didPresentFocusMonitoringChoice else { return }
-            didPresentFocusMonitoringChoice = true
-            showFocusMonitoringChoice = true
-        }
-        .confirmationDialog(
-            "Focus detection mode",
-            isPresented: $showFocusMonitoringChoice,
-            titleVisibility: .visible
-        ) {
-            Button("Use DevTools") {
-                Defaults[.focusMonitoringMode] = .useDevTools
-            }
+    }
 
-            Button("Use without DevTools") {
-                Defaults[.focusMonitoringMode] = .withoutDevTools
-            }
-
-            Button("Later", role: .cancel) {}
-        } message: {
-            Text("This is optional. You can change it any time from the menu bar.")
+    private func advance(to next: OnboardingStep) {
+        withAnimation(.easeInOut(duration: 0.6)) {
+            step = next
         }
+    }
+
+    /// The source chosen on the second step. After a Not now on its "Control …" row, Now Playing
+    /// instead, which needs no Automation, so nothing asks later; the user can pick the app again
+    /// in Brain › Media, where macOS asks in context.
+    private func applyMusicSource() {
+        var source = musicSource
+        if LaunchPermissionManager.answer(for: .musicAutomation) == .deferred,
+           !MusicManager.shared.isNowPlayingDeprecated {
+            source = .nowPlaying
+        }
+        Defaults[.mediaController] = source
+        NotificationCenter.default.post(name: Notification.Name.mediaControllerChanged, object: nil)
     }
 }

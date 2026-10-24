@@ -3,6 +3,8 @@ import Foundation
 struct ClaudeUsageProvider: UsageProvider {
     let id: ProviderID = .claude
     let root: URL
+    /// A reference shared by every copy of this provider, so what was read survives between refreshes.
+    private let usageCache = JSONLUsageCache(label: "claude")
 
     init(root: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/projects")) {
         self.root = root
@@ -19,9 +21,10 @@ struct ClaudeUsageProvider: UsageProvider {
                 // actually read would tell somebody who has not run Claude for eight days that their
                 // logs are unavailable, with a fix-it button for a problem they do not have, instead
                 // of an honest zero.
-                snapshot = JSONLUsageParser.aggregate(
+                snapshot = await JSONLUsageParser.aggregate(
                     files: UsageWindows.recentlyModified(files, now: now),
-                    now: now
+                    now: now,
+                    cache: usageCache
                 )
             } else {
                 snapshot.logsUnavailable = true
@@ -59,11 +62,18 @@ struct ClaudeUsageProvider: UsageProvider {
     /// when nothing usable is cached.
     @MainActor
     private func applyRateLimitWindows(to snapshot: inout UsageSnapshot, now: Date) {
+        // The tier badge is Claude Code's plan. When Claude Code is on another organization than
+        // the one the bars follow, that badge would name the wrong plan beside them.
+        if CursorAgentStatusMonitor.shared.claudeUsageHint == .otherOrganization {
+            snapshot.accountTier = nil
+            snapshot.accountNote = nil
+        }
         guard let usage = CursorAgentStatusMonitor.shared.claudeUsage else { return }
 
         for window in usage.displayWindows(now: now) {
             let limit = UsageLimit(used: window.percent, limit: 100,
-                                   resetsAt: window.resetsAt, severity: window.severity)
+                                   resetsAt: window.resetsAt, severity: window.severity,
+                                   observedAt: window.observedAt ?? usage.observedAt)
             switch window.key {
             case ClaudeUsageSnapshot.fiveHourKey: snapshot.sessionLimit = limit
             case ClaudeUsageSnapshot.sevenDayKey: snapshot.weekLimit = limit

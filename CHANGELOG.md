@@ -4,6 +4,3429 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - The cloud relay is brought up to date with development and its newer Claude hook table
+- **Developer label:** "rest of them needs to be reviewed and then merged" (#72, 268 commits behind `development`)
+- **Agent label:** Claude Code (Opus 5.5) — `origin/development` merged into `feat/cloud-relay-protocol`; the relay takes development's Claude table, learns `UserPromptExpansion`, and leaves the subagent pair out of its hooks
+- **Changes:**
+  - **Conflicts.** `CHANGELOG.md` and `project.pbxproj` kept both sides; the relay's
+    `AA…BC`–`AA…BF` ids are unused on `development`.
+  - **Hook table.** `AgentHookInstaller.swift` takes development's side: the Claude tables and
+    the Antigravity events already live in `AgentHookLayout` there. It keeps #72's note that the
+    relay shares the table.
+  - **Duplicate removed.** Development moved `claudeHookEntries` into `AgentHookLayout` on its own,
+    so the merge held two copies. #72's older one goes. Development's has the v45
+    `UserPromptExpansion` row and the v44 `SubagentStart` / `SubagentStop` rows.
+  - **What the relay gained from that table.** Three events the relay did not know:
+    - `UserPromptExpansion` joins the script's `EVENTS` (and its `scripts/` mirror) and the
+      parser's `ClaudeCloudRelay.events`. It reports `thinking`, as `UserPromptSubmit` does.
+    - **The subagent pair is left out of the relay's hooks** (`ClaudeCloudRelaySetup.excludedEvents`,
+      `relayHookEntries`). The relay sends one colour per chat, so a subagent's end would paint a
+      chat that is still working red, and its start adds nothing. Kannu's local install keeps both:
+      there a subagent writes its own file. `docs/CLOUD-SESSIONS.md` says so.
+  - **Tests.**
+    - #72's pin of the Claude table now lists development's 15 rows.
+    - The relay's hook and vocabulary tests read `relayHookEntries`.
+    - New `testTheRelayLeavesOutOnlyTheSubagentPair` fails if the relay drops any other row.
+
+### 2026-10-23 - Act on CodeRabbit's review of #127
+- **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
+- **Agent label:** Claude Code (Opus 5.5) — the timer tab's typed-search and start decisions move into pure helpers with state tests; the source checks keep only the tasks gates and the docs/REGRESSIONS.md entry 10 guards
+- **Changes:**
+  - The finding was valid: AGENTS.md asks for no tests of SwiftUI implementation details, and
+    `TimerTaskSessionRulesTests` matched text such as `.onExitCommand { … }`, `.offset(…)`,
+    `.coveredBySuggestions(…)` and `.zIndex(2)`, so a harmless reorder failed while a behaviour
+    change with the same text passed.
+  - The decisions are now pure, in the logic target, and the views call them:
+    `TaskSuggestionState.shows` / `wantsToShow` (when the typed search shows: enabled, text typed,
+    the field focused or the pointer on the list with no other field focused, not closed on this
+    text, and rows to show), `answerReturn` and `answerEscape` (Return picks only a highlighted row
+    of a showing list; Escape closes a showing list before it leaves), `TimerTypedStart.route` (a
+    start from the bar is plain, a picked task, or a typed name reusing unless the New row was
+    picked) and `TimerFormStart.forNewTask` / `forEdit` (a preset over the form starts, holds on an
+    unreadable estimate, falls through with no title, or starts nothing for a gone task). Behaviour
+    is unchanged: the bar's Escape still closes the list on its text even before rows arrive, so
+    rows found later (the task file read, a sync) never reopen it.
+  - The modifier-order and layout pins are gone (`.offset`, `.coveredBySuggestions` then
+    `.overlay` then `.zIndex`, the exact `.onExitCommand` text). The source checks left are wiring
+    no unit test can see: every way into the task list behind `isTasksPageAvailable`; the entry 10
+    guards (starts clear the stored name directly; the left column and a preset read
+    `shownTaskForm`; the running task's form closes on its session's own signals); a held form or a
+    gone task returning before the bar; a lost pick giving the bar back what was typed; and, in the
+    form, the typed search being a new task's alone, starting closed on the opening title, a pick
+    opening its edit, and a held preset's focus reaching the estimate (`formWiringProblems`).
+  - Tests: state tests for the helpers in `TaskSuggestionTests` and `TypedSessionTaskTests`; the
+    slimmer detectors keep their planted offenders.
+
+### 2026-10-23 - A name typed in the timer tab becomes a task, with a task search, and the running task can be edited
+- **Developer label:** "clicking on new task clears it. we want that flow to be somehow handled, a task running also needs edit, a task name that i wrote outside in the notch should be editable and instead of new task, but i should be somehow able to add a new task and work" … "but then would always the timer follow estimate , or can estimate and timer stay independent, check on that" … "maybe give a suggestion if search dynamic typed search is kept in the title tab and user can select that or make new ?"
+- **Agent label:** Claude Code (Opus 5.5) — typed names become local tasks timed as the user's own block (reused by title); a typed search under the session bar and the New Task title; the bar and a new task's title are one text; a preset with the form open starts the form's task; Edit Task on the running card; sessions sized from the estimate follow its edits; Resume when paused in overtime
+- **Changes:**
+  - **A typed name times a task.** A name in "Do you want to name this session?" plus a preset or
+    Start now times a local task instead of a plain session: the first active local task with that
+    title (case and accents ignored; done, archived, Jira and GitLab tasks never match), else the
+    kept New Task draft when it is that title (its estimate, tags and reminder come with it), else
+    a new task with no estimate. It runs as the user's own block: it rings at zero like any preset,
+    never follows the estimate, and takes the task's colour and key. With no name, or tasks off,
+    the session stays plain. Before the task file is read the start waits, as a reminder's Start
+    does, and if no task can start the plain named session starts; typing a name builds the task
+    list ahead of time, while the tab appearing still builds nothing. "Show local tasks in the
+    notch" turns on only when a task is added (`TasksManager.startTyped`, `startBlock`).
+  - **A typed search under the bar and the New Task title** (`TimerTaskSuggestions`). From two
+    characters, it offers up to two tasks the notch lists (the same title first, then titles that
+    start with it, then any other match; `TaskSearch.suggestions`) and a last `New task "…"` row;
+    nothing at all when no task matches, so a plain session's name leaves the composer alone. Two
+    rows and the New row end above Start and Reset, which stay clickable; what the list lies over
+    is hidden, disabled and out of VoiceOver's way (the duration boxes now take SwiftUI's disabled
+    state onto their AppKit fields, so a hidden one takes no Tab, Shift-Tab or click), and a
+    covered ruler gives up its sideways scroll. ↑ ↓ move a highlight (none by default, so Return
+    keeps its meaning), Return picks it, Escape and Tab close only the list; VoiceOver hears the
+    count and the highlighted row. In the
+    bar, a picked task shows its colour, key and time, the next preset or Start times it, and the
+    button beside the bar becomes Edit Task; the New row keeps the text as a new task (＋), even
+    when a task has that title. Editing the text unpicks; a picked task that leaves the list gives
+    the bar back what was typed, and never becomes a local task with its title. In the New Task
+    title, picking a task opens its edit, so no second task is made.
+  - **The bar and a new task's title are one text.** New Task opens on the bar's text: the kept
+    draft whole when it is that title, else the kept draft with the bar's text as its title (its
+    estimate, tags and reminder stay), else a fresh draft (`TaskFormDraft.newTask`). The form's
+    title goes back to the bar as it is typed, so the ×, the notch closing or any other way the
+    form goes leaves it in the bar; Add, Add & Start and every start empty both.
+  - **A preset clicked with a form open starts what the form shows**, timed for the preset's
+    length as a block: a new task is added as typed; an edit is saved (an untouched one as the task
+    reads) and that task is timed. A new task whose estimate cannot be read starts nothing and stays
+    to be fixed, with focus on the estimate; one with no title falls through as if no form were
+    open; an edit whose task has just left the list starts nothing, never the bar's name. Add and
+    Save are now the manager's own (`addTask(from:)`, `applyEdits`), one path for all of these.
+  - **Edit Task on the running card.** A pencil beside the running session's name opens the full
+    task form on its task, in the card's place; Save renames the running session
+    (`TimerManager.updateSessionName`). Clicking the name still renames only the session. The form
+    closes when the session finishes (so Stop is there while the alarm rings), is replaced, or
+    stops; unsaved edits stay kept. The session's task is `TimerManager.sessionTaskID`, so
+    `NotchTimerView` still never reads `TasksManager`.
+  - **A session sized from the estimate follows its edits** (the side column's ▶, Add & Start,
+    Up next, Brain's ▶, a reminder's Start). The estimate and the countdown are independent until
+    now; the new length is the estimate less the time tracked before the session, keeping what has
+    run (`TaskTimeMath.followedLength`, `retargeted`). Below zero is overtime, entered silently;
+    back above zero the alarm stops and the next zero rings again. Removing the estimate, or setting
+    it at or below the time tracked before the session, leaves the countdown alone, as do a preset
+    or typed-length block and a sync. Tracked time never came from the countdown and still does not.
+  - **Paused in overtime shows Resume** in the open notch, its hover controls, the lock-screen
+    widget and the menu-bar popover, and the notch card's second button reads Stop. The closed
+    notch leaves its finished layout when a session leaves overtime, which also fixes it staying
+    pinned after a session in overtime is replaced.
+  - "New task" and the side card's "Edit task" read "New Task" and "Edit Task" (docs/TOOLTIPS.md).
+  - Tests: new `TypedSessionTaskTests`, `TaskSuggestionTests` and `TimerTaskSessionRulesTests`
+    (each detector with a planted offender); `TaskTimeMathTests` and `TimerComposerMetricsTests`
+    gain the retarget and the list's height; `TaskFormWiringTests` follows Add and Save into the
+    manager and pins the one copy-back; `TimerSideColumnRulesTests` (the form's `open:`) and
+    `TimerTaskDetailRulesTests` ("Edit Task") changed with them.
+
+### 2026-10-23 - The bell beside a reminder turns that task's notification on or off, and the task form keeps what was typed
+- **Developer label:** "this button should enable and disable notifications for that particular chat anD THAT CHAT ONLY" … "the text bar should retain text once fed in , even if edit button is clicked or notch shrinks, also give a clear icon or something at end of box for people"
+- **Agent label:** Claude Code (Opus 5.5) — per-task `reminderMuted` and a bell toggle in the notch's task form; `KeptTaskFormDrafts` keeps the form's unsaved drafts and the session name survives the notch closing; clear buttons in the title, tags and session-name boxes
+- **Changes:**
+  - **The bell beside a reminder is a toggle for that task alone.** It was an indicator that only
+    said macOS blocks Kannu's notifications. Now it turns the task's reminder notification on or
+    off, saved with Add or Save like the rest of the form; its tooltip and label say what a click
+    does ("Mute Reminder" / "Unmute Reminder"), and it is orange while it is on but macOS denies
+    Kannu's notifications (read from the new `notificationsDenied`, since `remindersBlocked` is false
+    while every scheduled task is muted). Off is `TaskItem.reminderMuted`, which
+    `TaskReminderPlan.wanted` skips, so a waiting reminder is taken back and the others are
+    untouched; the time still shows, and the task card's due line shows a slashed bell. The mute
+    belongs to its reminder: clearing the schedule clears it, so a reminder added later in Brain
+    notifies. On is no key at all, so existing task files read and write as before, and an older
+    build reads a newer file. The bell asks macOS nothing; only scheduling may (`TaskListRulesTests`).
+  - **The task form keeps what was typed.** The draft lived in the form's own view state, so
+    opening a task's editor or the notch closing lost it. `KeptTaskFormDrafts` (in memory, on
+    `TasksManager`) keeps each unsaved draft by new task or edited task and restores it when that
+    form opens again; Add or Save forgets it. The × on a new task now closes and keeps the text; the
+    × or Escape on an edit still means "without saving" and drops it. An edit's draft comes back
+    only while its task is unchanged, so a draft can never undo a change made elsewhere, and a
+    reminder picked earlier that has passed since comes back as the next whole hour. The timer tab
+    still reopens on its first page, as it always has; "New task" opens on the kept text, and the
+    session-name bar beside it ("Do you want to name this session?") keeps a half-typed name while
+    the notch is closed (`TimerManager.typedSessionName`).
+  - **A clear button at the end of the title, tags and session-name boxes**, a small ⓧ like a
+    search field's, shown once there is text ("Clear Title", "Clear Tags", "Clear Name"). It never
+    takes focus, so a click does not release the notch. The × on a new task reads "Close"; on an
+    edit, "Close Without Saving".
+  - Tests: `TaskReminderPlanTests`, `TaskModelCodingTests`, `TaskDetailSummaryTests`,
+    `TaskFormDraftTests` (the bell edit and the keeper), `TaskFormWiringTests` (the form's and the
+    session bar's wiring, read from the source), and `TimerSideColumnRulesTests` (Escape and the ×
+    now go through `dismiss()`).
+
+### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
+- **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
+- **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change
+- **Changes:**
+  - docs/REGRESSIONS.md entry 20: the open risk that menus, popovers and alerts opened over the open
+    notch would draw below the notch space is checked by eye: right-click menus, a popover and an
+    alert all draw above it (David, 2026-10-23). It stays a manual check; nothing automated can see
+    the order.
+  - The 2026-10-22 "Screenshots keep Kannu by default…" entry's open item now records the result.
+
+### 2026-10-23 - The screenshot setting asks rather than promises, and covers every artwork window
+- **Developer label:** "CodeRabbit should be done now. Read its review body, threads and comments on #126, and fix or answer each finding."
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #126: honest capture descriptions, two artwork windows registered, the post-strip visibility check documented
+- **Changes:**
+  - **The screenshot options no longer promise exclusion.** `NSWindow.sharingType = .none` is all an
+    app has to keep its own windows out of someone else's capture, and Apple documents it as a legacy
+    value not to be relied on; some capture tools ignore it. "Hide the notch" and "Hide everything"
+    now say they ask macOS and that some capture tools ignore this. The mechanism is unchanged; the
+    old toggle used the same one. `ScreenCapturePolicyTests` pins that no description promises it.
+  - **The fullscreen artwork's wallpaper-transition and looping-video windows register with the
+    screenshot setting** as `.notch`, like the artwork's other three windows; "Hide the notch" never
+    reached them. Pinned by `ScreenCapturePolicyTests`.
+  - The check after a notch-space strip reads only WindowServer's on-screen list, not
+    `occlusionState` as the repair's decision also does: AppKit updates `occlusionState` later, so in
+    the turn of the strip it still describes the window before it and would make the check pass
+    every time. Documented on `keepVisibleAfterStrip`; CodeRabbit's suggestion to use the same
+    predicate is answered on the PR.
+
+### 2026-10-22 - Screenshots keep Kannu by default, and the album-art tap reopens every app but Spotify
+- **Developer label:** "raise pr and look for coderabbit comments, see if these changes will lead to any regression or older specific asks"
+- **Agent label:** Claude Code (Opus 5.5) — branch reviewed against older asks before the PR: screenshot default restored, activate-only limited to Spotify, refused-join fallback
+- **Changes:**
+  - **The screenshot default is "Show everything" again.** Hiding the notch by default was meant
+    for the empty notch in a "desktop preview", which turned out to be Mission Control: WindowServer
+    draws it, so `sharingType` never affected it, and the notch-space fix above is what cleared it.
+    Left in, the default would have taken the notch, its volume and brightness HUD, the music and
+    timer controls, the lock-screen widgets and the fullscreen artwork out of every screenshot,
+    recording and screen share for everyone who never touched the old toggle, and out of the
+    screenshots CONTRIBUTING.md asks for. The three-way picker and the scope-aware manager stay:
+    "Hide the notch" now hides only Kannu's notch-side windows, which the old toggle could not do.
+    An explicit old choice still migrates.
+  - **The album-art tap reopens every app but Spotify.** Only a running Spotify is activated
+    instead of reopened, because Spotify answered a reopen with a stray second audio session. Apple
+    Music, browsers and every other player get the reopen back, which brings a closed or minimized
+    window forward, as the 2026-09-10 "open the exact media screen" change expects.
+  - **A refused notch-space join falls back to the managed spaces** and marks the window, so a
+    notch is never left in no space; before, it only logged.
+  - **Checked by David on 2026-10-23, after this entry: they draw above it.** The worry was that for
+    everyone, and no longer only "Never hide" users, the notch
+    window is in a space shown above every window level. A context menu, popover or alert opened over
+    the open notch is drawn in the managed spaces, below it, and `ModalPresenter`'s level raise
+    (docs/REGRESSIONS.md entry 14) cannot beat a space.
+  - Tests: `ScreenCapturePolicyTests` (the default), `MusicAppActivationRulesTests` (Spotify-only),
+    `ClosedNotchVisibilityRulesTests` (both fallbacks).
+
+### 2026-10-22 - Switching Spaces looks like the notch never moved, and the music bars are quieter
+- **Developer label:** "can we make it look like it never moved, beacuse when music is playing it closes and again comes in next tab, the state is not retained" … "even in desktop preview an empty notch is embeded" … "keep it subtle" … "this somehow caused by us, we did something, our notch calling something, find that"
+- **Agent label:** Claude Code (Opus 5.5) — notch window lives only in Kannu's notch space with a WindowServer-read repair; subtler closed-notch music bars; a running music app is activated instead of reopened
+- **Changes:**
+  - **The notch is in Kannu's notch space and no other space.** The stranded-notch repair from
+    2026-09-30 decided on `isOnActiveSpace`, which is false by design for a window in the notch
+    space, so at the first switch after every launch it put the notch back on every desktop and
+    fullscreen space (and macOS added it to a newly created one on its own). While it was there,
+    David saw the music wings close and come back in the next space, and an empty notch in Mission
+    Control's previews; no media or fullscreen state changed at those switches. The repair now reads
+    membership from WindowServer (`CGSSpace.spaceIDs(of:)`, mask 0xF), decides with the new
+    `ClosedNotchVisibility.notchSpaceRepair`, joins the notch space before it leaves any other space,
+    checks the window is still on screen after every strip, and puts an unseen notch back on the
+    managed spaces (seen beats still), remembering that so the next check does not strip it again
+    until a wake, unlock or reposition retries. It runs at creation, on every space change, wake and
+    unlock, and after a reposition, and shows the notch space again each time (`reassertShown`, a
+    precaution). `syncNotchSpaceMembership` and the empty-then-refill re-sync are gone. Every repair
+    logs one `NotchSpaces` line with the spaces before and after. Known gap: the window keeps
+    `.canJoinAllSpaces`, so a space macOS creates gets a copy until the first repair after switching
+    into it.
+  - **The bars beside the album art are smaller and dimmer.** In the closed notch they are 9 pt tall
+    instead of 14 and drawn at 60% opacity, in the same place, for the animated and the real-time
+    visualizer alike (both take a bar height now). The open player, the lock screen and extensions
+    keep their size.
+  - **Tapping the album art no longer reopens a running music app.** `openApplication` sends a
+    running app a reopen event; 0.2 s after one, Spotify started a second, hidden audio session in
+    its helper process, and because Spotify hands every remote command to two handlers, every later
+    Play woke it too: two tracks at once that media keys could not stop. A running app is now
+    activated the way Cmd-Tab does it and never reopened; one whose window is closed comes forward
+    without it (its Dock icon reopens it). An app that is not running is launched as before. The
+    stuck session itself is Spotify's; a Spotify restart clears it.
+  - Checked by David on the installed build: swiping keeps the notch and its music wings still,
+    Mission Control's previews show no notch, and the bars are subtle. A probe read the notch window
+    on screen in the notch space alone. Found by that probe before he looked: the first pin ran in
+    the turn the window was ordered in, when WindowServer does not list it as on screen yet, and
+    fell back onto every space; the creation and reposition pins now run a turn later.
+  - docs/REGRESSIONS.md entry 20 and a danger-zones row. Tests: `ClosedNotchVisibilityTests` (the
+    repair table from measured memberships), `ClosedNotchVisibilityRulesTests` and
+    `NotchSpaceMembershipTests` (the wiring), `MusicAppActivationRulesTests` (a running app is activated, never reopened).
+
+### 2026-10-22 - The notch stays put across Spaces, and screenshots get a three-way setting
+- **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
+- **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`
+- **Changes:**
+  - **The notch no longer slides with a Space switch.** `KannuWindow` is `.canJoinAllSpaces`, and
+    a window on the managed spaces rides the switch animation out with the old space and in with
+    the new one, so the notch visibly detached from the hardware notch and re-attached. Kannu's own
+    top-level `CGSSpace` (`NotchSpaceManager`) is not a managed space and does not move, but only
+    "Never hide" joined it; the default "Hide only when NowPlaying app is in fullscreen" was on the
+    sliding path. Every hide option joins now: `createKannuWindow` inserts unconditionally,
+    `syncNotchSpaceMembership` lost its guard, and the stranded-notch repair re-syncs the space for
+    everyone. The gate's reason, "so FullscreenMediaDetector can hide the notch", never held:
+    hiding is `KannuViewModel.hideOnClosed` in the views, and `.fullScreenAuxiliary` already showed
+    the window over fullscreen apps on every option. The `.hideNotchOption` publisher sink that
+    re-synced membership is gone with the gate. The reviewer's other suggestion, owning the slide
+    with physics, is not available: the slide is WindowServer's transition, not an animation Kannu
+    drives.
+  - **A three-way screenshot setting.** (Its first default, hiding the notch, was reverted the same
+    day: the "Desktop preview" was Mission Control, which this setting cannot affect. See the entry
+    "Screenshots keep Kannu by default…" above.)
+    `hideDynamicIslandFromScreenCapture` (Bool, default off) is replaced by `screenCaptureVisibility`
+    (`ScreenCaptureVisibility`: `hideNotch`, `hideEverything`, `showEverything`).
+    `ScreenCaptureVisibilityManager` now honours the scope a window registered with — `.notch` for
+    the notch, its music and timer satellites, the lock-screen widgets and the fullscreen artwork;
+    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so "Hide the notch" hides
+    the notch and keeps Brain in a screenshot. The old code ignored the scope and hid every
+    registered window together, which is why flipping the Bool's default was not the fix.
+  - **Migration:** a user who had the old toggle on gets "Hide everything"; one who turned it on
+    and off again gets "Show everything"; everyone else gets the default. The legacy key is read
+    raw and never declared again, because a declared `Defaults.Key` registers its default and would
+    make everyone look like they had set it.
+  - Settings: the "Hide Kannu during screenshots & recordings" toggle is now the "Screenshots &
+    recordings" picker, with its search entry and highlight id renamed together.
+  - Tests: `ScreenCapturePolicyTests` (the rule table, stable raw values, the key's default and the
+    raw legacy read, every registration names `.notch` or `.panel` with the `.panel` files pinned)
+    and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
+    option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
+    fallback). `ScreenCapturePolicy.swift` joins the logic target.
+
+### 2026-10-22 - Brain's search finds Notch fill color, ranks title matches first, and reads "colour" as "color"
+- **Developer label:** "a color search didnt give the notch color change area"
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsSearchRanking` ranks matches (title word, title word prefix, title, keyword) and folds "colour" to "color"; the suggestion list shows every match and scrolls past eight
+- **Changes:**
+  - The suggestions were the first eight matches in the index's order. "color" matches about twenty
+    rows, and seven Devices and HUD rows come before Notch fill color, so it was eighth at best and
+    gone whenever another match came first. "colour" missed it entirely, because its title says
+    "color", while "color" missed every row spelled "colour" (Solid colour, Tag colours, Jira colour).
+  - New `Kannu/helpers/SettingsSearchRanking.swift` (Foundation only) ranks each row. Best is a word
+    of the title equal to the query, or a title that starts with it. Then a title word that starts
+    with it, then the query anywhere in the title, then a keyword. Rows of equal rank keep the
+    index order. Case, diacritics and "colour"/"color" are folded on both sides.
+  - `searchEntries` returns rows ranked; `searchSuggestions` no longer cuts to eight. The list
+    scrolls past eight rows, showing half of the ninth so it reads as scrollable. Return still opens
+    the first suggestion, which is now the best match.
+  - Test: new `SettingsSearchRankingTests`.
+    - Both spellings, and each rank.
+    - Ranking keeps order within a rank.
+    - Against the real index: "color", "colour" and "notch colour" each put Notch fill color among
+      the first eight rows.
+    - The suggestions are not cut, with the old `.prefix(8)` planted.
+
+### 2026-10-22 - Act on CodeRabbit's review of #120
+- **Developer label:** CodeRabbit's review of #120: seven findings on the first-launch permissions
+- **Agent label:** Claude Code (Opus 5.5) — the music controllers, the Warp lookups, the upgrade marker, the clipboard move, the Downloads warm-up, folder status after a relaunch and the weather after a Location grant
+- **Changes:**
+  - **Music.** `MusicManager` starts Spotify or Apple Music only when
+    `LaunchPermissionManager.mayTouch(.musicAutomation)` allows it. Their AppleScript raised the
+    Automation dialog even after a Not now when Now Playing is unavailable, which falls back to
+    Apple Music. A held-back source starts on `.launchPermissionsChanged`. Brain › General ›
+    Permissions shows the "Control …" row for the current source.
+  - **Upgrade marker.** An install from before versioning is marked with
+    `OnboardingProgress.firstVersion`, and only when it has no record at all, so a later version
+    bump still shows it the new onboarding.
+  - **Warp.** `installWatchers()` looks up Warp's database only behind the gate; finding it stats
+    Warp's container. Allowed later, Warp is read by the 30-second safety-net rescan until the
+    next launch adds its watcher; restarting the monitor would drop the agent light.
+    `NotchAgentStatusView` and Brain › Agents detect Warp through Launch Services
+    (`LaunchPermissionManager.isWarpInstalled`) instead of statting the container.
+  - **Clipboard move.** It is marked done only once nothing is left to move. A quit mid-move, or a
+    failed move, is retried at the next launch.
+  - **Downloads.** The warm-up counts only a read that worked, so a later permission change
+    retries after a denial.
+  - **Folder status.** Downloads and Warp no longer show Allowed after a relaunch when macOS denied
+    them. Once asked, a silent read on a background queue (no dialog: macOS has answered), one at a
+    time, sets the status.
+  - **Weather.** It refreshes when Location changes into allowed. The fetch made without a location
+    no longer lingers until the refresh interval.
+  - **Test:** `FirstLaunchRulesTests` checks every Warp database lookup, with planted ungated ones
+    in `installWatchers()` and the notch view.
+
+### 2026-10-22 - First launch asks for each permission on its own step, then plays the welcome music
+- **Developer label:** "let all the permissions be ready and only after play the music. please design teh installation flow" / a tester's words: "ippo the music and presentation happened when I was showered with a lot of permission request." "please bring this upto standard"
+- **Agent label:** Claude Code (Opus 5.5) — a silent onboarding with a Permissions step (`PermissionsStepView`, `LaunchPermissionManager`, `LaunchPermissionPolicy`); every automatic first touch gated; the welcome music and hello moved to Finish; clipboard files moved to Application Support
+- **Changes:**
+  - **What used to happen.** Accepting the Terms ran `continueLaunch()`, which within about a second:
+    - raised four macOS dialogs: Bluetooth (`BluetoothLEBatteryReader`'s `CBCentralManager` on
+      main), Downloads (`DownloadManager` listing `~/Downloads`, even with the listener off),
+      Accessibility (`MediaKeyInterceptor`) and Location (the lock-screen weather);
+    - showed macOS's "Login Item Added" notice;
+    - started the welcome music (`dynamic.m4a`) and the notch's hello;
+    - opened the onboarding window, which popped a "Focus detection mode" dialog of its own.
+    
+    Opening the notch then asked for Documents (clipboard history kept files in
+    `~/Documents/ClipboardData`). Picking Spotify or Apple Music raised Automation at once. With
+    Warp installed, agent status raised "access data from other apps". Despite its name, the
+    `.musicPermission` step asked for nothing.
+  - **The first run now:** Terms, then a silent onboarding:
+    1. Welcome, with no pop-up.
+    2. Music source. The choice is held, not applied.
+    3. Profile.
+    4. Traffic-light style.
+    5. Caffeinate.
+    6. **Permissions** (new): one row per permission this setup's features use. Each row says why,
+       has its own Allow and Not now, and shows live status (Allowed / Not allowed with Open System
+       Settings / Not now). Only one dialog runs at a time. The Focus detection choice and "Open
+       Kannu at login" are on this step too, so the login notice appears here.
+    7. Finish. Only then does the notch open, say hello and play the music (`startHello()`).
+  - **What each row asks:**
+    - Accessibility, Bluetooth, Downloads and Location, each when its feature is on. Bluetooth is
+      always listed, because its device watcher always runs.
+    - "Control Spotify" or "Control Apple Music" when that is the source. This uses
+      `AEDeterminePermissionToAutomateTarget`, and MusicKit too for Apple Music.
+    - Warp's agent sessions, when Warp is installed (found through Launch Services, without reading
+      its container).
+  - **A Not now keeps its feature off** until the user allows it in the new **Brain › General ›
+    Permissions** section, which shows the same rows. A Not now on the music app's row applies Now
+    Playing instead.
+  - **New files:**
+    - `Kannu/models/LaunchPermissions.swift` (Foundation only): `LaunchPermission`,
+      `PermissionAnswer`, `LaunchPermissionPolicy.mayTouch` (before onboarding completes, only an
+      already-answered permission may be touched; after it, never a deferred one) and `rows(for:)`.
+    - `Kannu/managers/LaunchPermissionManager.swift`: reads each answer without prompting, makes the
+      requests, posts `.launchPermissionsChanged`.
+  - **Gated first touches.** Each of these checks the manager and starts on that notification:
+    - `BluetoothAudioManager` starts nothing (observers, IOBluetooth, polling) until allowed; its
+      battery reader is `lazy`.
+    - `DownloadManager` warms up only with the listener on.
+    - `MediaKeyInterceptor` asks only for a permission nobody has asked about yet.
+    - The weather's `prepareAuthorization`, Warp reads in `CursorAgentStatusMonitor`, and
+      `AnimatedArtworkManager`'s MusicKit request.
+  - **Onboarding is versioned:** `onboardingCompletedVersion`. An install from before it (its
+    `firstLaunch` already false) is marked complete at launch, so existing users see nothing new.
+    The hello is keyed off a transient `helloPending` instead of `firstLaunch`, which used to start
+    it at launch.
+  - **Clipboard history** keeps its files in Application Support (no permission). An upgraded
+    install moves them out of `~/Documents/ClipboardData` once, off the main thread.
+  - **Docs:** ReadMe's Runtime Permissions section says when each permission is asked; AGENTS.md
+    Known traps gains the gate rule.
+  - **Tests:**
+    - New `LaunchPermissionPolicyTests`.
+    - New `FirstLaunchRulesTests`, with planted offenders: the music only in `startHello()`, not in
+      `continueLaunch()`; the login item gated; `.permissions` before `.finished`; no dialog in
+      onboarding; the music step not switching the source; each prompt-raising call behind its
+      gate and only in its allowed files; clipboard not touching `~/Documents` outside the
+      upgrade move.
+    - `SettingsHighlightInventoryTests` counts +1 for the new row.
+
+### 2026-10-22 - Act on CodeRabbit's review of #118
+- **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
+- **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread
+- **Changes:**
+  - `NoteEditorView.editorForeground` had its branches swapped: white text on a white-filled editor,
+    and the notch's foreground on the black editor under a skin. It is now white under a skin and
+    `notchForeground` on a fill.
+  - `TimerIconAnimation`'s glyph sits on its own coloured circle, so it takes
+    `resolvedColor.contrastingForeground` rather than the notch's foreground (a black solid timer
+    colour drew a black glyph on a black circle on a light notch).
+  - `HoverButton.iconColor` defaults to nil, drawn in `notchForeground`: the home player's
+    play/pause and other buttons that pass no colour stayed white on a light notch. Explicit
+    colours, including every lock-screen caller's, are unchanged.
+  - `NotchContrastTests` and `NotchPopoverAppearanceRulesTests` open with the project's GPL block.
+
+### 2026-10-22 - Text, icons and washes inside the notch follow its fill and skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing" — the full sweep, after the light/dark rule landed
+- **Agent label:** Claude Code (Opus 5.5) — every literal white and gray drawn on the notch's own background reads `notchForeground` or `.secondary`; views with a black surface of their own stay dark
+- **Changes:**
+  - About 190 literal colours in the notch's views (home and music, notes and clipboard, timer
+    and its side column, tasks, stats, LLM usage, agent status, shelf, tabs, battery, HUDs, live
+    activities, extensions) become `notchForeground` (text, icons, strokes, white washes as
+    `notchForeground.opacity(x)`) or `.secondary` (the fixed mid-gray). On the default black notch
+    `notchForeground` is exactly the old white and `.secondary` sits a few levels above the old
+    `.gray`; the agent dots and recent-chats snapshots render byte-identical.
+  - Left literal on purpose: the header's black capsule buttons, the hover action chip on a note,
+    every popover's content, accent-filled buttons, the battery glyph's colour fills, album-art
+    tints, the spectrum's gray fallback, the shimmer, and the separate windows (music and timer
+    control overlays, lock screen, OSD, Settings).
+  - New `notchFill` environment value (the fill colour, nil under a skin) and
+    `notchAppearance(_:fill:)`, which sets it with the scheme and `notchForeground`. The notes
+    and clipboard lists' and the timer side column's edge fades fade into the fill instead of
+    black, and the note editor paints the fill instead of a black slab (under a skin it stays
+    black and keeps the dark scheme).
+  - Agent state labels on a light notch shade their neon hue toward black until it reaches 3:1
+    against the darkest fill that gets dark text (`NotchContrast.shadedForLightBackgrounds`), so
+    "Awaiting Input" stays readable on a yellow notch; the dots keep the neon.
+  - The timer's digit boxes (an `NSTextField`) take their text, placeholder and caret colour from
+    `notchForeground`, as do the text fields' carets (`.tint`).
+  - `DebugSnapshot` gains a `notchFills` board: agent dots, recent chats and usage cards on black,
+    white, yellow and blue fills, set up the way `ContentView` does.
+  - Built-in skins (Horns, from #117) are averaged like uploaded ones, so the notch's text follows
+    them too; the average is keyed by the skin's String ID (a built-in's `builtin.` ID or an
+    upload's UUID string). `NotchSkinPrompt` and `docs/NOTCH-SKINS.md` no longer say Kannu draws
+    *white* text in the centre, and the guide says the text follows the skin's average colour.
+  - Test: `NotchContrastTests` pins the state-colour shading (3:1 on #959595, 7:1 on white, hue
+    kept).
+
+### 2026-10-22 - The notch picks light or dark text from its fill colour or skin
+- **Developer label:** "can we make colors inisde the notch work with the notch color and skin, how hard is it , like text colors changing, do only if there is a very god standard for such implementations"
+- **Agent label:** Claude Code (Opus 5.5) — `NotchContrast` (WCAG 2.x luminance, white kept until it drops below 3:1) sets the notch subtree's `colorScheme` and `notchForeground` from the fill or the skin's average colour under its scrim
+- **Changes:**
+  - New `Kannu/helpers/NotchContrast.swift`, Foundation-only: WCAG 2.x relative luminance and
+    contrast ratio, the black skin scrim, and the rule — white text stays until its contrast
+    against the background drops below 3:1 (WCAG's large-text and UI-component minimum), then
+    black. Plain "whichever contrasts more" was rejected: it puts black text on system blue,
+    red, purple and pink fills.
+  - `ContentView` sets the notch subtree's `colorScheme` and `notchForeground` from what is
+    painted behind it: the skin's average colour under the scrim when a skin shows, otherwise
+    the fill colour. It used to derive `notchForeground` from the fill even under a skin. Dark
+    until a skin's average is known, so the default black notch is unchanged.
+  - `NotchSkinManager` publishes `selectedSkinAverageRGB`, computed once per selected skin off the
+    main thread (Core Image area average, `CGImage.averageSRGB()`).
+  - `Color.isPerceivedLight` / `contrastingForeground` use the same rule (the colour swatches'
+    checkmarks follow it); `perceivedBrightness` is gone.
+  - Popovers opened from the notch stay dark windows whatever the notch's scheme, but SwiftUI
+    hands their content the light scheme — measured: black text on the dark popover. Every notch
+    popover's content now ends in `.notchDarkAppearance()`.
+  - The closed-music shelf badge draws its icon white: the badge paints its own black circle, and
+    the old fill-derived colour made it black on black on a light fill.
+  - Tests: new `NotchContrastTests` (presets, the 3:1 switch at #949494/#959595, the scrim) and
+    `NotchPopoverAppearanceRulesTests` (every notch popover pinned, with planted offenders).
+
+### 2026-10-22 - Horns ships as a built-in notch skin, and Settings copies an AI prompt that designs one
+- **Developer label:** "rename the default skin image file name with something like halo for devil meaning" / "raise a pr for this and also a sample prompt which would ask user back questions from ai and will finally design them as notch skin"
+- **Agent label:** Claude Code (Opus 5.5) — `BuiltInNotchSkin` (Horns, from the `notch-skin-horns` imageset) beside Default in Settings › Notch skin, a **Copy AI prompt** button with `NotchSkinPrompt`, and `docs/NOTCH-SKINS.md`
+- **Changes:**
+  - Settings › Notch skin offers **Horns**, a red and black skin, next to Default. It is David's
+    skin, made with ChatGPT and copied unchanged into `Assets.xcassets/notch-skin-horns.imageset`
+    (1824 × 862 PNG; its only metadata is OpenAI's content-credentials record).
+  - `BuiltInNotchSkin` (Foundation only) lists built-ins by id, asset name and localized name.
+    Selecting one stores its id, `builtin.horns`, in `selectedNotchSkinID`, the key an uploaded
+    skin's UUID goes in. A built-in id is never UUID-shaped, so the two cannot collide.
+    `NotchSkinManager.reloadSelectedSkin` loads a built-in with `NSImage(named:)` before looking
+    at uploads. Built-ins have no Remove, and **Remove selected** is disabled for one.
+  - **Copy AI prompt** copies `NotchSkinPrompt.text` for ChatGPT or another image AI. The prompt asks
+    five questions, one at a time (mood, colours, motifs, how bold, what to avoid), and generates
+    nothing until they are answered. Then it draws a 1920 × 600 PNG, 3× the default open notch: a
+    dark, quiet middle 60% for Kannu's text, icons and light, decoration toward the edges, a black
+    top centre for the camera, 40 px clear of the clipped corners, no text or faces, and a middle
+    strip that still works when the notch is closed. After a copy, the footer says what to do next.
+  - New `docs/NOTCH-SKINS.md`: picking and uploading a skin, the scrim, sizes and safe areas, and
+    the prompt verbatim. The README's skin bullet and setup step link it.
+  - Test: new `NotchSkinTests`.
+    - The prompt asks before it draws, and states the canvas and what to leave out.
+    - The doc quotes the prompt verbatim.
+    - Built-in ids are unique and never UUID-shaped, with a planted UUID id caught.
+    - Every built-in's imageset names an image file that exists. `BuiltInNotchSkin.swift` and
+      `NotchSkinPrompt.swift` join KannuTests' Sources.
+
+### 2026-10-22 - Ad-hoc build scripts keep library validation disabled, on purpose
+- **Developer label:** "Fix the dead disable-library-validation strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.cs.disable-library-validation` block from `build-dmg.sh` and `build-launch-app.sh`, which never removed the key and would break the app if it did
+- **Changes:**
+  - Both scripts copied `Kannu/Kannu.entitlements` to a temp file and ran
+    `plutil -remove com.apple.security.cs.disable-library-validation` on it, meaning ad-hoc builds
+    should not disable library validation. plutil reads the dots in the key as a key path, answered
+    "No value to remove at key path", and the block took that for "already absent". So every ad-hoc
+    build from these scripts kept the entitlement.
+  - Making the strip work would break those builds. They are ad-hoc signed, and an ad-hoc signature
+    has no Team ID. With library validation on, dyld refuses the embedded Lottie and Sparkle
+    frameworks ("mapping process and mapped file (non-platform) have different Team IDs"), and the
+    app never starts. An ad-hoc probe app with hardened runtime and an embedded ad-hoc framework
+    shows exactly that on macOS 26, and runs once the entitlement is back.
+  - So the block goes, along with the temp copy and its cleanup trap, which existed only for the
+    two strips. The scripts sign `Kannu/Kannu.entitlements` as it is, with a comment saying why
+    library validation stays off. Nothing that gets built changes.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsLibraryValidation` checks the release
+    workflow, CI and both scripts for a `plutil -remove` or PlistBuddy `Delete` of the key, with
+    planted copies of each, quoted ones included (it shares #115's `strips(_:in:)` helper).
+
+### 2026-10-22 - Act on CodeRabbit's review of #115
+- **Developer label:** CodeRabbit's review of #115: the mach-services scanner missed a quoted key
+- **Agent label:** Claude Code (Opus 5.5) — the scanner drops shell quotes before matching, with a planted quoted strip
+- **Changes:**
+  - `plutil -remove "com.apple.security.mach-services"` passed the rule, because it matched the
+    unquoted command only. `machServicesProblems` now goes through a `strips(_:in:)` helper that
+    removes `"` and `'` first, so either quoting of a `plutil -remove` or PlistBuddy `Delete`
+    counts.
+  - Test: a planted quoted `plutil -remove` is reported.
+
+### 2026-10-22 - Builds stop pretending to strip the mach-services entitlement
+- **Developer label:** "Fix the release workflow's mach-services strip"
+- **Agent label:** Claude Code (Opus 5.5) — removes the `plutil -remove com.apple.security.mach-services` blocks from the release workflow, CI and both local build scripts; none ever removed the key
+- **Changes:**
+  - `plutil -remove com.apple.security.mach-services` reads the dots in the key as a key path. It
+    answered "No value to remove at key path", which each block took for "already absent", so the
+    key was never removed: the 1.3.4 release, the 1.4.0 beta, CI and every local ad-hoc build all
+    carried it.
+  - Making the strip work was not the fix. Its reason, that amfid kills an ad-hoc app carrying the
+    key, does not hold on macOS 26: an ad-hoc signed app with hardened runtime and this entitlement
+    launches. And a Kannu Dev build without the key started `ExtensionXPCServiceHost`'s listener and
+    ran for hours, against that file's note that it crashes. A working strip would only have changed
+    what CI and the scripts sign.
+  - So the blocks go from `.github/workflows/release.yml`, `.github/workflows/ci.yml`,
+    `scripts/build-dmg.sh` and `scripts/build-launch-app.sh`. Nothing that gets built changes: every
+    build signs the same entitlements as before.
+  - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsTheMachServicesEntitlement` checks the four
+    files for a `plutil -remove` or PlistBuddy `Delete` of the key, with planted copies of each.
+
+### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
+- **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"
+- **Agent label:** Claude Code (Opus 5.5) — `release.yml` treats a tag with a hyphen (`v1.4.0-beta.1`) as a pre-release: same build, signing and notarization, published as a GitHub pre-release, no Sparkle export and no appcast commit
+- **Changes:**
+  - The release workflow ran the same steps for every `v*` tag, the last of which commits the appcast
+    to `main` — the feed every installed Kannu reads — and published the GitHub release as Latest.
+    `scripts/RELEASE.md`'s "Test with a pre-release tag" would have shipped a beta to everyone.
+  - Now `Create DMG` sets `RELEASE_PRERELEASE` from the tag: a hyphen in the version makes it a
+    pre-release. For one, `Export Sparkle Update Assets`, `Upload Sparkle Artifact` and
+    `Update appcast on main` are skipped, and the GitHub release is published with
+    `prerelease: true` and `make_latest: false`. Testers download the notarized DMG from the
+    Releases page; Sparkle never offers it.
+  - `scripts/RELEASE.md` replaces the pre-release section with "Beta (pre-release) tags": the tag,
+    the notes file (`docs/release-notes/1.4.0-beta.1.md`), and the build numbering (the beta above
+    the feed's newest, the release above the beta: 1.4.0 beta build 9, 1.4.0 build 10, so Sparkle
+    moves beta testers to the release).
+  - Test: new `ReleaseWorkflowRulesTests` (the hyphen check, the three guarded steps and the
+    pre-release flags, with planted copies of the old workflow).
+
+### 2026-10-21 - Act on CodeRabbit's review of #104
+- **Developer label:** CodeRabbit's review of #104: a Keychain gate test depended on a fixed sleep
+- **Agent label:** Claude Code (Opus 5.5) — `testAWaitingCallThatMayPromptHoldsBackNewSilentReads` polls, with a deadline, until the waiting dialog call refuses a non-waiting silent read
+- **Changes:**
+  - The test slept 0.1 s and assumed the dialog call's thread had started waiting by then; on a
+    loaded CI runner it might not have, and a correct gate would have failed the test. It now polls
+    `gate.run(.silent, wait: false)` until it is refused, for up to 2 s. A silent read that gets in
+    before the dialog call waits is harmless: the held silent read keeps that call waiting.
+
+### 2026-10-21 - The Codex rollout's rate limits are looked for a chunk at a time, never by reading the file whole
+- **Developer label:** Handoff of #99/#104 from the Codex session: "CodexRolloutFiles.rateLimits(inFile:) falls back to reading the WHOLE rollout into a String when the last 1 MB has no snapshot. That breaks #74's rule, so make it a bounded backward chunked scan."
+- **Agent label:** Claude Code (Opus 5.5) — `rateLimits(inFile:)` reads backwards a megabyte at a time, carries a cut line into the next look back, and stops at 8 MB
+- **Changes:**
+  - `CodexRolloutFiles.rateLimits(inFile:tailBytes:scanBytes:)` reads the rollout from its end a
+    chunk (`rateLimitTailBytes`, 1 MB) at a time until a chunk holds a snapshot or
+    `rateLimitScanBytes` (8 MB) have been read. It used to read the whole file into a String
+    whenever the last megabyte held no snapshot, on every refresh and poll — the cost #74 removed
+    everywhere else. A line cut by a chunk's start is carried into the next look back, so a
+    snapshot that straddles chunks still parses; a chunk whose snapshots are all another bucket's
+    is still the answer (nil), as before.
+  - Test: `CodexRolloutRateLimitsTests.testTheLookBackIsChunkedAndBounded` (a snapshot cut across
+    64-byte chunks parses; one beyond the scan limit is not read). The widen and other-bucket tests
+    pass unchanged.
+
+### 2026-10-18 - Codex limits come from codex app-server or the newest rollout before Kannu reads Codex's token
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P5 Codex quota through codex app-server (unverified, from docs)
+- **Changes:**
+  - Built from upstream docs and source only. Codex is not installed on the development Mac: no
+    real `codex app-server` has answered any of this, no binary's signature has been checked, and no
+    real rollout has been read. Everything below that touches a live install is UNVERIFIED.
+  - New first route for the Codex card's limits on a foreground refresh: `codex app-server` over
+    stdio (https://learn.chatgpt.com/docs/app-server.md; OpenAI calls the app-server experimental
+    and unsupported for production). Kannu writes `initialize` (`clientInfo` name `kannu`, title
+    `Kannu`, the bundle's version, no capabilities, so no `experimentalApi`), the `initialized`
+    notification (no `params`, as upstream serializes it) and `account/rateLimits/read`, one JSON
+    line each, all at once as the docs' own client does. Codex reads its own sign-in; Kannu never
+    sees a token. No `account/read`: the plan is in every rate-limit snapshot (upstream fills
+    `planType` in from the usage payload, `backend-client/src/client.rs`), and `account/read`'s
+    answer would also put the account's email address on Kannu's stdout. Shapes checked against
+    `codex-rs/app-server-protocol` (`v1.rs` `InitializeParams`; `v2/account.rs`
+    `GetAccountRateLimitsResponse`, `RateLimitSnapshot`, `RateLimitWindow`) and
+    `app-server/src/request_processors/account_processor.rs` for the refusal texts. New
+    Foundation-only `CodexAppServerProtocol` (in the KannuTests target) encodes the requests and
+    decodes the answer; only Kannu's own words (a step and a JSON-RPC code) are logged, never the
+    server's text, stdout or stderr.
+  - Mapping: the main bucket's (`rateLimits`, limit id `codex`) primary window is the 5-hour limit
+    and its secondary the weekly one; a single window longer than a day is the weekly one, not the
+    5-hour one. Every other bucket in `rateLimitsByLimitId` becomes an extra limit keyed
+    `<limitId>.primary`/`.secondary` and labelled with its `limitName` (or id) and window length
+    ("codex_other · 7d"). The plan tier is the main snapshot's `planType`, else another bucket's,
+    with "unknown" shown as none. `QuotaFetchResult` gained `extraLimits`, which the Codex card and
+    the background poll now pass on.
+  - Each route's verdict is decided in `CodexQuotaRoute.step` (Foundation-only, tested) and
+    `CodexQuotaClient` only acts on it: a JSON-RPC -32600 "authentication required to read rate
+    limits" answer is final ("Codex not signed in"), so neither a rollout written before a sign-out
+    nor wham/usage's token read may answer instead; a failed app-server, or one whose windows have
+    all reset, passes to the next route. `fetchLimits`' `foreground` has no default any more, so a
+    new caller cannot start `codex app-server` by leaving it out.
+  - The process (new `CodexAppServerClient`, app target): `codex app-server`, no other flag. The
+    root CLI's `-s` and `-a` exist, but `codex-rs/cli/src/main.rs` does not pass them to the
+    app-server and Kannu never starts a thread, so they were left out (docs/REGRESSIONS.md entry 8).
+    cwd `/`, inherited environment, 10 s; once the answer is in, stdin is closed and the server gets
+    2 s to exit on that EOF before SIGTERM, then SIGKILL after 2 s more. It runs on its own serial
+    utility queue, never the main thread or a Swift concurrency thread. `BoundedProcessRunner` gained
+    `input` (written without blocking, SIGPIPE off for that pipe) and `until` (stdin stays open until
+    the answers are in, because the app-server shuts down on EOF; then EOF, the grace period, and
+    only then the signals; the run is not counted as timed out). Existing callers are unchanged.
+  - UNVERIFIED side effects of starting the app-server: the docs say it starts a local Code Mode
+    host by default. Upstream source (`core/src/code_mode_host.rs`) connects to it lazily, spawning
+    it in its own process group on first use by a session, which Kannu never creates; if a real
+    install does start it, the EOF shutdown above is its chance to be reaped.
+  - Binary (new Foundation-only `CodexBinaryLocator`, in the KannuTests target):
+    `~/.local/bin/codex` (the standalone installer's default), `/opt/homebrew/bin/codex`,
+    `/usr/local/bin/codex`, then npm's native vendor binary under Homebrew's, `~/.npm-global`'s and
+    every nvm Node's global `node_modules` (`@openai/codex-darwin-<arch>/vendor/<triple>/bin/codex`,
+    the same package nested under `@openai/codex`, and the older
+    `@openai/codex/vendor/<triple>/codex/codex`). Symlinks are resolved and the real file is the one
+    checked and run; only a Mach-O file is accepted, so the npm `codex.js` shim never runs. The
+    signature must satisfy `identifier "codex"`, `anchor apple generic` and Developer ID
+    (certificate OIDs 1.2.840.113635.100.6.2.6 and 1.2.840.113635.100.6.1.13), checked with
+    `SecStaticCodeCheckValidity`. The verdict is cached by path under the file's device, inode,
+    size and change time (`stat`), not its size and modification date: those two a payload written
+    over a checked binary can put back (padding, `touch -r`), the change time it cannot, so any write
+    or replacement gets the file checked again. The identifier is from OpenAI's release workflow
+    (`sign_macos_code.sh --identifier "$binary"`). OpenAI's Team ID is UNVERIFIED and NOT pinned: no
+    public source found states it, so any Developer ID holder's binary named "codex" passes. A
+    Homebrew formula built from source is not Developer ID-signed and is skipped.
+  - Second route: the latest `rate_limits` of a `token_count` event in the newest rollouts (up to 5
+    of the most recently modified inside the usage window). No process and no token. Upstream writes
+    one bucket per event, the last the response's headers carried (`codex` first, then the other
+    families sorted; `codex-api/src/rate_limits.rs`, `core/src/session/turn.rs`), so on an account
+    whose responses also carry another family every event is that bucket's. A rollout therefore
+    answers only with a live main-bucket window; another bucket's snapshots alone no longer hide the
+    5-hour and weekly gauges (and, from the background poll, silence their alerts). The last 1 MB of
+    a file is read first and the whole file only when that holds no snapshot at all; a tail of
+    another bucket's snapshots moves on to the next file instead of reading a long file whole on
+    every refresh and poll. Rollouts written before `resets_at` existed (`resets_in_seconds`) count
+    from the event's timestamp. Windows whose reset has passed are dropped. New
+    `CodexRolloutRateLimits` and `CodexRolloutFiles.latestRateLimits` in `CodexUsageLine.swift`.
+  - A rollout reading carries the time Codex recorded it (the main snapshot's `token_count`
+    timestamp, through `CodexLimits.observedAt`, `QuotaFetchResult.observedAt` and
+    `UsageSnapshot.quotaObservedAt`), not the time it was read, and `UsageAlertManager` no longer
+    lets a reading replace one observed later. An older rollout figure arriving after a live
+    app-server one used to be read by the forecast as a window restart.
+  - Third route, kept but marked TO REMOVE in `CodexQuotaClient`: the undocumented
+    `chatgpt.com/backend-api/wham/usage` with Codex's saved token (`auth.json` or the "Codex Auth"
+    keychain item). OpenAI's terms bar programmatic extraction and its auth docs say to treat
+    `auth.json` like a password; it goes once the app-server route is verified on a real install.
+    The keychain approval button still comes only from this route.
+  - Order (`CodexQuotaRoute.order`): a foreground refresh tries the app-server, then the rollout,
+    then wham/usage; the background poll (`UsageAlertManager`, every 5 minutes while a Codex agent
+    works) tries the rollout, then wham/usage, and never starts a process.
+  - Tests: `CodexAppServerProtocolTests` (26: requests, waiting, single- and multi-bucket answers,
+    missing windows, a single long window, refusals, interleaved notifications and garbage, the
+    plan, labels, live windows, route order, and each route's verdict), `CodexRolloutRateLimitsTests`
+    (14: latest event, `info: null`, `resets_in_seconds`, null limits, other buckets, events of
+    another bucket only, the observation time, newest file, falling back to an older file, tail
+    widening and not widening), `CodexBinaryLocatorTests` (16: candidate order, x64, nvm order, the
+    npm shim skipped for its vendor binary, symlinks checked once, untrusted skipped, Mach-O magic,
+    the bare invocation, the requirement compiling and refusing Apple's `/bin/ls`, and the cache key
+    surviving no overwrite or replacement), and six new `BoundedProcessRunnerTests` for `input`,
+    `until` and the EOF grace. The full KannuTests suite ran: 946 tests, 0 failures. Fixtures only;
+    nothing ran against a real Codex.
+
+### 2026-10-21 - Act on CodeRabbit's review of #99
+- **Developer label:** CodeRabbit's review of #99: a GPL header, and whether a silent Keychain read should give up instead of waiting for a dialog
+- **Agent label:** Claude Code (Opus 5.5) — `JSONLUsageCacheCodexTests.swift` gets the GPL header; the silent read keeps waiting, and `KeychainReader.read` says why
+- **Changes:**
+  - `KannuTests/JSONLUsageCacheCodexTests.swift` starts with the project's GPL header, copied from
+    `CodexUsageLineTests.swift`.
+  - Not changed: `KeychainReader.read(allowInteraction: false)` keeps waiting while a call that may
+    prompt runs. A read that gave up could only report the item missing or needing approval — a
+    card saying "not signed in", or a fix-it button for nothing. The wait lasts only while a dialog
+    the user asked for is open, and holds only silent reads made meanwhile off the main thread (that
+    refresh's other providers, a task source's sync), never one on the main thread. Its doc comment
+    now says so.
+
+### 2026-10-21 - A Keychain dialog is never swallowed by a silent read on another thread
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — fixes from an adversarial review of #99's merge with `development`
+- **Changes:**
+  - `KeychainInteractionGate` (Foundation-only, in the test target) replaces `crossAppReadLock`.
+    A silent read turns the process-wide `SecKeychainSetUserInteractionAllowed` switch off, and
+    while it is off no Keychain call can show its dialog: it fails as if the user had declined.
+    The lock covered only `read`, so Kannu's own item read by `genericPassword`, which may need
+    a dialog after another build saved it, could come back empty during a background silent
+    read, and saving that empty value deletes the stored secret. Now:
+    - Every call goes through the gate. Silent reads share the switch (the first turns it off, the
+      last puts it back) and never wait for each other.
+    - A call that may prompt (a read that may ask, `genericPassword`, the fresh add, the delete)
+      never waits for another such call, only for silent reads in flight, which take milliseconds.
+      So the main thread never waits behind a dialog.
+    - New silent reads wait while a dialog may be open, and a waiting dialog call holds them back
+      so it cannot be starved.
+  - One open dialog no longer blocks every other read. Silent reads of Kannu's own task credentials
+    (#106) and the Codex and Cursor quota reads run side by side; only a dialog holds them up.
+  - The save's read of the value it replaces gives up only while a dialog may be open, not
+    whenever any read is in flight. The save's comment says which prior values are not restored.
+  - Codex lines are parsed only when they carry `"token_count"`, `"turn_context"` or
+    `"session_meta"` as a quoted JSON string. A conversation line that merely mentions the words
+    is no longer copied and parsed.
+  - `JSONLUsageCache` drops records once they leave the week instead of keeping them for as long as
+    the file stays listed. A resumed Codex session appends to the same rollout, which can then stay
+    fresh for weeks.
+  - Tests:
+    - `KeychainInteractionGateTests` hold threads inside the gate and pin who is let in while whom
+      is inside.
+    - `KeychainWritePlanTests` pin that every Keychain call in `KeychainReader` goes through the
+      gate, and that the save's prior read is silent.
+    - New `JSONLUsageCacheCodexTests` cases cover the mention line and the pruning, each shown to
+      fail with its fix reverted.
+    - The `JSONLUsageCacheTests` fixture comment no longer calls the top-level shape Codex's.
+
+### 2026-10-21 - Codex rollouts are read once, then only what was appended
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — #99 brought up to date with `development` (#74's usage cache, #84's Keychain rewrite)
+- **Changes:**
+  - `development`'s fix for the gigabyte footprint (#74) reads each transcript once and then only
+    the appended bytes, through `JSONLUsageCache`; this branch read Codex rollouts whole on every
+    refresh with its own stateful reader. Merged as-is, Codex would have gone back to the old
+    cost. `JSONLUsageCache` now has two formats: `.claude` as before, and `.codex`, which keeps
+    each rollout's `CodexUsageLine` in the file's entry, so an appended read continues with the
+    model, the running total and the fork-replay state the earlier lines set. The unfinished last
+    line is read with a copy of the reader, never the kept one. Lines older than the week still
+    feed the reader; only their records are dropped.
+  - `CodexUsageProvider` lists rollouts under `$CODEX_HOME` (`sessions` and `archived_sessions`)
+    as this branch did and reads them through the cache as `development` does.
+    `CodexRolloutFiles.recentRecords`, the whole-file path, is gone.
+  - `KeychainReader` keeps `development`'s delete-and-add save and its log, and this branch's
+    silent read for other apps' items behind `crossAppReadLock`. The save's read of the value it
+    replaces now tries that lock instead of waiting for it: a save runs on the main thread on every
+    keystroke, and the lock can be held by a read that is showing another app's Keychain dialog.
+    Busy means no prior value to restore, which the save already handled.
+  - `JSONLUsageCacheCodexTests`: every split of a rollout across two refreshes, one refresh per
+    appended line, an unfinished last event, a fork's replay split across refreshes, week-old lines
+    that still feed the reader, a replaced file, an archived copy, and the two formats kept apart.
+    Each is checked against `CodexUsageLine.records(in:)` over the whole file. Mutating the cache
+    to commit the tail's reader, or to drop the reader between refreshes, fails them.
+  - `KeychainWritePlanTests` follow the save's new read and pin that it never waits for the lock.
+
+### 2026-10-18 - Codex token totals count real requests, and only a tap on a card's button may let a keychain read prompt
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P1 Codex usage fixes — rollout token_count parser, CODEX_HOME and archived_sessions, silent keychain reads
+- **Changes:**
+  - Codex token totals in the Usage tab were always 0. `CodexUsageProvider` parsed rollouts with the
+    Claude reader, which looks for `message.usage`; Codex writes usage as `event_msg` lines whose
+    payload is a `token_count` event. New Foundation-only `CodexUsageLine` (in the KannuTests target)
+    counts each request from `info.last_token_usage`, never the cumulative `total_token_usage`; skips
+    `info: null`; skips a re-emitted event whose running total did not move; falls back to the growth
+    of the total when `last_token_usage` is missing; and takes the model from the latest
+    `turn_context` before the event. Input is `input_tokens` (cached reads and
+    `cache_write_input_tokens` included) and output is `output_tokens` (reasoning included), so
+    nothing is added twice. Field names were checked against upstream
+    `codex-rs/protocol/src/protocol.rs` (`TokenUsage`, `TokenUsageInfo`, `TokenCountEvent`,
+    `TurnContextItem`, `SessionMeta`) and ccusage's Codex adapter.
+  - A forked session or spawned subagent no longer counts its parent's usage again. Codex starts
+    such a rollout with the parent's history, `token_count` events included, re-stamped to the fork
+    instant. When the first `session_meta` has `forked_from_id`, `parent_thread_id` or
+    `source.subagent.thread_spawn.parent_thread_id`, the usage events written in one burst after it
+    (each at most 1 s after the previous, starting from `session_meta`) only set the running-total
+    baseline. The 1 s pause and the fixture shapes follow ccusage's `replay.rs` and its tests.
+  - Codex requests are read by `CodexRolloutFiles.recentRecords` (Foundation-only, tested on disk) and
+    summed by `JSONLUsageParser.aggregate(records:now:)`. Claude's reader and results are unchanged.
+  - Rollouts are read from `$CODEX_HOME` (default `~/.codex`), under both `sessions/` and
+    `archived_sessions/`. `.jsonl.zst` files count only toward "Codex has logs": Codex compresses a
+    rollout only after 7 idle days (`MIN_ROLLOUT_AGE`), so none can hold a request inside the week.
+    A verbatim copy of a rollout in both folders counts once (key: line timestamp plus running total).
+    The first-launch check that turns the Codex provider on now looks in the same two folders under
+    the same home, instead of only `~/.codex/sessions`.
+  - The Codex card shows tokens only (`billedCostOnly`), as Claude's does. The pricing table has no
+    cached-input rate, so a dollar estimate would bill Codex's mostly cached input at the full rate.
+  - Keychain: the "Codex Auth" and "cursor-access-token" reads ran with prompts allowed on every
+    automatic refresh and on the background poll. Passing `kSecUseAuthenticationUISkip` does not
+    stop that for these file-based login-keychain items: Apple's `SecItem.cpp` sends the query to the
+    legacy path, which never reads that key, and the SDK's `SecItem.h` says legacy items "will still
+    activate UI if needed". `KeychainReader.read(allowInteraction: false)` now also turns
+    `SecKeychainSetUserInteractionAllowed` off for that one call (lock-serialised, previous value
+    restored) and passes an `LAContext` with `interactionNotAllowed`. A protected item should then
+    fail with `errSecInteractionNotAllowed`, the status the approval button keys on.
+    `KeychainReadPolicy` (Foundation-only, tested) makes the decision: a silent read, then Cursor's
+    state.vscdb, then one read allowed to prompt, only on a user-initiated refresh.
+  - When a sign-in exists only in the keychain and needs approval, the card says so and offers
+    "Show usage limits…" instead of "not signed in": Codex (`grantCodexKeychainAccess`) and, new,
+    Cursor (`grantCursorKeychainAccess`). The Cursor card is kept instead of hidden when it offers
+    the button. A tap refreshes only the provider that owns the button interactively
+    (`QuotaAction.provider`, `refreshAll(interactiveFor:)`), so approving Codex cannot raise
+    Cursor's dialog.
+  - Cursor reads its token once per refresh: a task-local `CredentialReadScope` set by
+    `CursorUsageProvider` and `CursorQuotaClient` replaces up to a dozen reads (quota guard,
+    usage-summary, connect fallback, events check, each events page).
+  - Tests: `CodexUsageLineTests` (23 tests: upstream-shaped `token_count`/`turn_context`/`session_meta`
+    fixtures with `cache_write_input_tokens`, `info: null`, repeats, missing `last_token_usage`,
+    garbage lines, forked and subagent replays, `CODEX_HOME` and `archived_sessions` discovery, the
+    first-launch folder check, and `recentRecords` over a temp `CODEX_HOME`). New
+    `KeychainReadPolicyTests` (10 tests: no prompt outside a user-initiated refresh, at most one
+    prompt, state.vscdb before any prompt, one read per scope through nested scopes and child
+    tasks). `ClaudeTurnTokensTests`' made-up "Codex-shaped" test is now
+    `testTopLevelUsageFallbackStillParses`, pinning only the Claude reader's fallback. Full suite:
+    884 executed, 0 failures.
+  - Verified on this Mac: a Debug build and the full KannuTests suite. Unverified: Codex is not
+    installed here, so real rollouts, forks and subagents were never parsed (fixtures only). No
+    keychain read was made, so it is unproven that the silent read stays silent and returns
+    `errSecInteractionNotAllowed` for the real "Codex Auth" and "cursor-access-token" items, and the
+    approval buttons and their dialog were never tried. The app was not launched.
+
+### 2026-10-21 - Act on CodeRabbit's review of #113
+- **Developer label:** CodeRabbit's review of #113 (the agents batch: #96, #100, #101, #102, #105): three findings, all in the usage card and its Settings text
+- **Agent label:** Claude Code (Opus 5.5) — the 5-hour column draws one bar and folds other pools' windows into a chip, the weekly bar limit counts Codex's and Cursor's token-total rows, and the Providers footer says what the Claude card runs
+- **Changes:**
+  - The 5-hour column draws one bar, as `UsageCardMetrics.fiveHourColumnHeight` budgets. Antigravity's
+    other pools' 5-hour windows fold into a "+n" chip beside the title, named on hover, as the
+    weekly column's overflow does; with three pools the column had grown to 106 pt and the card past
+    the 138 pt slot.
+  - `UsageCardMetrics.maxWeeklyBars(statusRow:factRows:)` (and the column heights under it) counts
+    the two token-total rows Codex's and Cursor's weekly column draws under its bars;
+    `NotchLLMUsageView.showsTokenTotals` decides both. Cursor's Auto and API bars with a status row
+    made a 150 pt card; the API bar now folds into the chip. Claude's budget is unchanged.
+  - Brain › Usage's Providers footer no longer says Claude "needs no permission" or names a gauge
+    button the card no longer has: it says Kannu runs Claude Code's /usage while the tab is open and
+    the limits are over 15 minutes old, and that the card's ↻ fetches now and can start Claude
+    Code's sign-in.
+  - Tests: `UsageCardMetricsTests.testTheTokenTotalsCountInTheWeeklyBudget`,
+    `UsageCardMetricsRulesTests.testTheColumnsDrawWithinTheirBudgets`.
+
+### 2026-10-21 - Act on CodeRabbit's review of #96
+- **Developer label:** CodeRabbit's review of #96 at 9c7ca4f: five findings, fixed on the agents batch (#113)
+- **Agent label:** Claude Code (Opus 5.5) — the "other organization" hint clears after a sign-in in Terminal, a cancelled refresh starts no further step or child, and three new test files carry the GPL header
+- **Changes:**
+  - **The "other organization" hint no longer sticks.** Kannu records Claude Code's organization
+    only at its own fetch, the recorded value wins over `~/.claude.json`, and the automatic refresh
+    stood down while the hint said "another organization" — so after the card's "Sign in in
+    Terminal" to the right organization, the card kept saying "sign in" until a manual ↻.
+    `ClaudeUsageOrganizations` now carries `claudeCodeInConfig` (`oauthAccount`'s organization
+    before the recorded override), and `ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch` lets
+    one paced automatic fetch run when the file names a different organization than the recorded
+    one; Claude Code's own fetch leaves its true organization there, which is what gets recorded.
+    Both "another organization" lines now end "then press this card's ↻".
+    Test: `ClaudeUsageSnapshotTests.testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves`.
+  - **A cancelled refresh stops.** App exit kills the running probe, which then reads as failed,
+    and on a press that alone chose the interactive spawn: a `claude` child started after the exit
+    cleanup had looked, and outlived Kannu (REGRESSIONS entry 19). New pure
+    `ClaudeUsageFetchCommand.step(_:cancelled:signedIn:fetched:)` finishes a cancelled run with
+    what it got to, applied before every step in `ClaudeUsageRefresh.run`; the interactive fetch
+    checks for a cancel before each attempt; and `register(_:)` refuses, and stops, a child that
+    starts after the cancel. Tests: `ClaudeUsageFetchCommandTests.testACancelledRefreshFinishesInsteadOfStartingAnotherStep`
+    and `testTheRefreshWorkerHonoursACancelBeforeEveryStepAndChild`.
+  - `UsageCardMetricsTests.swift`, `UsageCardMetricsRulesTests.swift` and
+    `AntigravityUsageReportTests.swift` start with the project's GPL header.
+  - Not changed: "redsign" and "golden ration" in the CHANGELOG developer labels quote the request
+    verbatim, as the label requires.
+
+
+### 2026-10-21 - The usage card splits with the timer's own golden split
+- **Developer label:** "are these changes merge to dev, not the mcp, the ones needed to fix token usage tab and the redsign only"
+- **Agent label:** Follow-up 68 — #96 brought up to date with `development` before it merges
+- **Changes:**
+  - `development` now carries the timer tab's `TimerComposerMetrics`, so `UsageCardMetrics`
+    stops carrying its own copy of the golden ratio and the split and calls the timer's — the
+    rule the copy's comment set ("whichever lands second delegates"). The split is unchanged:
+    98 : 161 with two cards in a 640 pt notch, pinned as before.
+  - `testGoldenSplitIsTheTimersSplit` checks the usage card's split against the timer's at the
+    widths the card uses.
+  - The redesign entry's "Not done" note gives the real reason the bar labels do not slide.
+
+### 2026-10-19 - A snapshot board shows the usage cards at 640 and 690
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — DEBUG `usage` board for `--kannu-snapshots`
+- **Changes:**
+  - `--kannu-snapshot-tabs usage` renders the Usage tab's cards at the content widths of a 640
+    and a 690 pt notch: one card, two (Claude and Cursor), three (stacked), a sign-in status and
+    a day-old reading — each in the 142-pt slot with a red line at its floor, so a card running
+    past it shows. `NotchLLMUsageView` takes snapshot overrides for the results, the refresh
+    status, the forecasts and the notch width; in the app they are nil.
+  - Fixtures: a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the
+    week, Fable 41 %, Opus 12 %, Sonnet 5 % (so one folds under a status row); Cursor Pro at
+    62 % of its billing cycle with token totals; Codex at 20 / 55 %.
+
+### 2026-10-19 - The Claude card splits in the golden ratio and fits the notch
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — the Usage tab's cards in the timer tab's language, 5 hour : Weekly = 1 : φ
+- **Changes:**
+  - The Claude card's two things sit side by side: the 5-hour window (now) as the minor column
+    and the weekly stack (the trend: all models, then each per-model window) as the major one,
+    1 : φ of the card's inner width — 98 : 161 pt with Cursor beside it in a 640-pt notch, 210 :
+    340 alone. Too narrow for two columns (three cards at 640), the card stacks its bars with one
+    line for both resets. The card is at most 138 pt in every state and no longer runs past the
+    notch; the notch never grows for it.
+  - The timer tab's language throughout: explicit type (13 semibold names, 12 semibold values,
+    11 medium text, 10 semibold chips and glyphs), 4-pt capsule bars on white 0.12, chips on
+    white 0.12, a continuous radius-10 glass card at white 0.06, fixed row heights, orange only
+    for an over-threshold band or a warning forecast, `.secondary` and `.tertiary` for everything
+    quiet. Every size reads from `UsageCardMetrics`; `UsageCardMetricsRulesTests` scans the view
+    for a literal size, a text style, a non-continuous rounded rectangle or a refresh tooltip
+    that does not open below, with planted offenders proving the scan.
+  - Forecasts no longer take a row each: under the 5-hour bar the verdict is a few words ("full
+    by 2:05 AM", `UsageForecast.shortCaption`, time only since a 5-hour window never needs the
+    day); on a weekly bar it tints the bar and percent orange and the full sentence is the row's
+    hover tooltip and accessibility value.
+  - A stale reading is a clock glyph in the header with "updated 3h ago" on hover, its bars
+    dimmed, not a text row; the account note is a chip beside the tier.
+  - One status row at a time, one line, the action as a chip beside it, in this order: what the
+    Claude refresh found, then a quota failure with its one-tap fix, then a quota failure alone.
+    The full message is the text's hover tooltip. Before, up to three stacked rows could show.
+  - Weekly bars beyond what fits (3 with a status row, 4 without) fold into a "+n" chip beside
+    the title that names them on hover; the stacked fallback draws three. These are the only
+    lossy rules, and they only bite at four or more per-model windows.
+  - Codex and Cursor on the same card: Codex splits like Claude with its Today/Week totals under
+    the weekly bar; Cursor's one window is titled **Billing cycle** (it was "Weekly", which is
+    wrong for it) with its totals and on-demand spend as facts; Antigravity is header and note.
+  - A long per-model name truncates and the row's tooltip names it, rather than sliding like the
+    timer's `HoverRevealText`: a weekly bar row already owns a hover for its forecast, and
+    docs/TOOLTIPS.md rule 3 gives a control one hover source.
+
+### 2026-10-19 - The usage card's sizes add up in one place
+- **Developer label:** "with the new designs we did for promodo timer notch, what will you do here maintaining golden ration and to show this in a better way maybe or will you retain this"
+- **Agent label:** Follow-up 67 — `UsageCardMetrics`: the 142-pt slot, the golden split, the row heights, the worst case proven
+- **Changes:**
+  - Measured first: the open notch is a fixed 200 pt, and after its bottom padding, the header
+    (38 pt on a notched MacBook, 24 without a notch) and the stack spacing, the Usage tab gets
+    142 pt. The Claude card was about 157 pt in its base state, stacking the 5-hour and weekly
+    sections, plus 15 per forecast caption and 35 for a status line — so it ran into the shadow
+    band and the window clipped it, cutting a forecast line or the status button.
+  - New `Kannu/sizing/UsageCardMetrics.swift` (Foundation-only, in the test target): every size
+    of a provider card, the slot arithmetic, the timer's `goldenSplit` (copied while
+    `TimerComposerMetrics` is not on `development`; whichever lands second delegates), the card
+    widths a notch gives one, two or three cards, the 1 : φ columns and the width below which a
+    card stacks (88 pt), the row heights, and the most weekly bars a card may draw with and
+    without a status row (3 and 4).
+  - `UsageCardMetricsTests` pins the slot (142/148/156), the φ split at 640 and 690 pt with one
+    and two cards (210 : 340, 98 : 161, 229 : 371, 108 : 176), that three cards stack, and that
+    every worst case — three weekly bars with a status row (138), four without (136), the
+    stacked fallback (138) — fits under the 138-pt limit.
+
+### 2026-10-19 - The Claude card's first look never shows one organization's numbers as another's
+- **Developer label:** "can we install this token fix onto the super build and see it locally working"
+- **Agent label:** Follow-up 65, the organization gap in #96
+- **Changes:**
+  - Until Kannu's own fetch has recorded which organization Claude Code's sign-in is on, that
+    organization came from `oauthAccount` in `~/.claude.json`, which flips between a person's
+    organizations. Read as Max while the cache held the Team plan's numbers, it put Team's 0 % on
+    the Max card until the first automatic fetch. Now, with desktop history to follow, Claude
+    Code's statusline and cache stay off the card while the organization is unrecorded, the
+    automatic refresh fetches at once (once per launch, whatever the cache's age), and an
+    unrecorded organization's cached weekly reset is not used to date the desktop's week.
+  - The card's line about organizations names the plans when Kannu has seen them ("Claude Code is
+    signed in to Team, so these are Claude Desktop's (Max) readings"). Kannu learns each
+    organization's `organizationType` whenever `~/.claude.json` names it, in the new `Defaults` key
+    `claudeOrganizationTypes`: plan types only, never names or emails.
+  - Tests: the unrecorded organization keeps Claude Code's sources off and asks for one fetch at
+    once; plan types are carried and named.
+
+### 2026-10-18 - Act on the review of #96: the automatic refresh never types, signs in or nags
+- **Developer label:** "The Claude card's Refresh fetches again, and signs Claude Code in when it has to" — review follow-up
+- **Agent label:** Follow-up 64 review — six lenses, two skeptics per finding, 37 findings confirmed, each fixed or answered
+- **Changes:**
+  - What a refresh runs is now a set of pure steps in `ClaudeUsageFetchCommand`, tested path by
+    path. The automatic refresh never reaches the interactive pty spawn (it types blind into a
+    terminal session) and never opens the browser; both happen only on a press.
+  - The probe is `claude --settings '{"disableAllHooks":true}' -p "/usage"`. Measured: it fetches
+    (`fetchedAtMs` advanced, three plan rows, 2.8 s) and, unlike the bare run, leaves no
+    SessionStart status file and fires none of the user's own hooks. The bare probe runs only if it
+    fails outright; Claude Code older than 2.1.263 gets no probe at all, so `/usage` can never reach
+    the model as a billed prompt.
+  - A probe that shows a claude.ai sign-in but returns no limits is answered with "signed in but
+    returned no limits" and Terminal, never a browser sign-in over a working one (that can move
+    Claude Code to another organization). New outcomes for a sign-in that did not finish and an
+    unreadable sign-in state, each with copy that says what a press will do.
+  - The automatic refresh only ever surfaces a missing sign-in; anything else it finds stays quiet
+    and holds it back until a press. A "sign in" line clears itself once Claude Code's cache turns
+    fresher some other way (a sign-in in Terminal, Claude Code's own `/usage`).
+  - Kannu runs only a `claude` signed by Anthropic (Developer ID, team Q6L2SF6YDW, identifier
+    `com.anthropic.claude-code`), checked off the main actor and cached per version: 0.2-0.5 s per
+    binary here, and the npm shim and an Apple-signed binary are rejected. A Homebrew cask's link is
+    now a candidate too. Resolution moved off the main actor.
+  - The environment scrub applies only to an inherited agent session (`CLAUDECODE`,
+    `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID` present). A user's own `launchctl setenv`
+    API key, gateway or cloud provider is inherited as before, so the auth-status gate sees it.
+  - Quitting Kannu stops a running refresh child (`ClaudeUsageRefresh.terminateForAppExit` from
+    `applicationWillTerminate`), so a sign-in no longer outlives the app with its localhost listener
+    open (entry 19). Cancel now escalates to SIGKILL like every other stop.
+  - The probe's own hook file is recognised by its transcript under `~/.claude/projects/-/`: the
+    hook strips a trailing slash, so a run from `/` records no cwd and the old `cwd == "/"` match
+    never fired.
+  - The Terminal sign-in resolves the binary again when pressed; the one a refresh found may have
+    been reaped by an update.
+  - Fresh numbers reach the card at once: the providers' refresh after a fetch bypasses the floor
+    that the card's own poll had just reset.
+  - Desktop values carry `notAfter` (five hours or a week after the sample) and expire at render
+    time, not only at the next read; they borrow the server's exact reset for the same
+    organization, so the 5-hour countdown no longer vanishes and the usage push no longer repeats.
+    A weekly rollover caught after a gap of more than an hour gives no countdown, only a bound: it
+    could have happened anywhere in that gap.
+  - The status line is one line with its action beside it (the stacked note pushed the button out
+    of the fixed-height card), the copy says "this card's ↻", and the "updated …" label waits 30
+    minutes, longer than the automatic fetch, so kept-current bars never dim between runs.
+  - Refresh steps log at `notice`, which `/usr/bin/log show` keeps; `info` was not persisted.
+  - CodeRabbit on #96: a weekly rollover seen in the desktop samples is now projected in whole
+    weeks to the week the newest sample is in, as the anchor is. A later reset can go unseen when
+    usage climbs past the last value before it, and `rollover + 7 days` then lay in the past and hid
+    a current bar. Its other two findings (Cancel against a trapped SIGTERM, an unreadable
+    `auth status` read as "sign in") are fixed above.
+  - Answered without a change: per-model weekly windows share the all-models reset (the cache's
+    Fable `resets_at` equals `seven_day`'s); the "moved" weekly anchor was two organizations'
+    anchors, now kept apart.
+
+### 2026-10-18 - The Claude card follows the organization Claude Desktop is on
+- **Developer label:** "Desktop's org (Max)" — the answer to which organization the Claude card should follow when Claude Code and Claude Desktop are on different ones
+- **Agent label:** Follow-up 64, organization rule — one organization per card, recorded at fetch
+- **Changes:**
+  - One person can belong to several organizations, each with its own limits and weekly reset.
+    Measured on this Mac: Claude Desktop records usage for a Max plan (weekly reset Wednesday
+    00:00Z), while Claude Code's own sign-in is bound to a Team plan of the same person (Monday
+    05:00Z). The card merged them, so a fresh Team "0 %" replaced Max's 43 %.
+  - The card now follows the organization of the desktop history's newest sample — what
+    desktop-hosted agents spend. Claude Code's statusline and cache join only when Claude Code is
+    on that same organization; otherwise they are left out whole, the plan badge (Claude Code's
+    plan) is hidden, the card says Claude Code is signed in to another organization and offers
+    **Sign in in Terminal**, and the automatic refresh stands down, since what it would fetch is
+    not on the card. Another organization's weekly reset is never used to date this one's week.
+  - Which organization Claude Code is on is recorded by Kannu straight after its own fetch.
+    `oauthAccount` in `~/.claude.json` cannot be trusted for it: measured, it read Max before a
+    `claude -p "/usage"`, Team right after it and 90 seconds later, and had read Max again earlier
+    after a desktop-hosted session ran. New `Defaults` key `claudeCodeUsageOrganization`.
+  - Tests: one organization per card, merging as before for one or an unknown organization, the
+    hint, the newest-sample organization, the organization known with no current window, another
+    organization's anchor not applied, and the recorded organization winning over the file.
+  - The desktop-history tests spell their sample offsets as `Double` literals: Swift 6.1 (CI's
+    macos-15 image) cannot convert an integer tuple literal to `(mins: Double, fh: Double?, sd:
+    Double?)`, which failed PR #96's macos-15 build while Xcode's newer compiler accepted it.
+
+### 2026-10-18 - The Claude card's Refresh fetches again, and signs Claude Code in when it has to
+- **Developer label:** "I think the usage tab is broken for claude or is not upto date , check what can be done and if any newer easier way to get usage stat has come up" — then "cant we trigger that / login command also in refresh button so user can get that prompt to enter rest of details easily"
+- **Agent label:** Follow-up 64 — `claude -p "/usage"` probe, sign-in from Refresh, an honest Claude card
+- **Changes:**
+  - Refresh had run nothing since 2026-10-02: Claude Desktop moved its bundled CLI to
+    `claude-code/<version>/<build>/claude.app`, the lookup expected `<version>/claude.app`, found no
+    binary and silently re-read disk. `ClaudeCodeBinary` reads both layouts and `~/.local/bin/claude`
+    and takes the highest version (the terminal copy only updates when `claude` runs). The Homebrew
+    npm shim is not a candidate.
+  - Refresh now runs `claude -p "/usage"`, the non-interactive form of `/usage`: no model turn, no
+    pty, nothing typed, and it writes the same `cachedUsageUtilization` the card reads. The
+    interactive pty spawn stays as the fallback when the probe fails outright, with its guards.
+  - When the probe runs cleanly but prints no plan rows, Claude Code is not signed in to claude.ai
+    (or its sign-in lacks the `user:profile` scope). On a press Kannu then starts Claude Code's own
+    `claude auth login --claudeai`: the browser opens claude.ai, the card says "Finish signing in in
+    your browser…" with Cancel, and Kannu fetches again when it finishes — no second click. Only
+    when `claude auth status` says signed out or claude.ai; an API key, key helper, cloud provider or
+    gateway is never switched over. If the browser route cannot finish, **Sign in in Terminal**
+    opens a `.command` file that runs the same sign-in where its prompt is visible. Kannu never reads
+    or stores the sign-in.
+  - Measured on this Mac with the shipped code in a harness: signed out, the probe exits 0 in 1 s with
+    only the cost summary; sign-in took 49 s including the browser; the fetch after it advanced
+    `fetchedAtMs` from 2 September to now. A rerun inside Claude Code's 60 s write throttle prints
+    plan rows without advancing the stamp and counts as fetched.
+  - The spawn drops every `CLAUDE*` and `ANTHROPIC*` variable it inherits, and adds none. A normal
+    launch has none (plain inheritance, as before); from inside an agent session the inherited
+    desktop-host proxy made the probe fetch on the host session's credentials instead of Claude
+    Code's own — measured with and without them. REGRESSIONS entry 8 has the addendum.
+  - While the Usage tab is on screen, Kannu runs the probe itself when Claude Code's cache is older
+    than 15 minutes and no fetch ran in 15 minutes. It never starts a sign-in, and stands down while
+    the last Refresh is waiting on the user.
+  - The desktop history no longer shows numbers it cannot vouch for: a 5-hour value older than five
+    hours is dropped instead of reading as a live 0 %, and the inferred 5-hour countdown is gone (that
+    window has no fixed grid). The weekly reset comes from Claude Code's cached weekly reset projected
+    in whole weeks, however old, instead of a guess from sampling gaps; a week that ended since the
+    sample is dropped. Only one organization's samples are read: the signed-in account's, else the
+    newest sample's.
+  - Each Claude window keeps its own reading time through the merge. A section whose oldest reading
+    is over ten minutes old says "updated 3h ago" and dims its bars; the forecast uses the real time.
+  - The sign-in line under the bars no longer says "Limits unavailable" or points at Terminal: it
+    says Refresh will fetch them, and the Refresh outcomes have one line each.
+  - Every refresh step is logged under `com.kannu.app` / `ClaudeUsage`: step, Claude Code version,
+    outcome, seconds. Never the output (plan figures, account name) or a path.
+  - Tests: probe classification, plan-row detection, the sign-in decision, `auth status` parsing,
+    the Terminal script's quoting, the environment scrub, binary layouts and version order, the
+    5-hour age rule, the weekly anchor (including Wed Sep 9 to Wed Oct 21 from real data), the
+    organization filter, per-window reading times and the automatic-fetch cadence.
+
+### 2026-10-18 - Cursor chats stop showing up as Claude sessions, and each hook answers as its host documents
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P3 Hook contracts v45
+- **Changes:**
+  - Hook v45: a payload carrying `cursor_version` is never filed under another provider. Cursor runs
+    `~/.claude/settings.json` hooks as third-party configs, so Kannu's Claude hook fired inside Cursor
+    and filed Cursor chats as Claude sessions. Such a call now writes nothing, but it still gives the
+    Claude answer, including the agent-policy deny when blocking is on: Cursor maps Claude's
+    `permissionDecision` to its own `permission`, so an enforced rule keeps refusing the tool inside
+    Cursor, as it did under v44. Cursor chats are tracked, and their secret, hidden-text and
+    sensitive-file findings recorded, only when Kannu's Cursor hook is installed; with only the
+    Claude hook installed, Kannu no longer records them. Verified on this Mac: Cursor's own hook log
+    shows it running Kannu's Claude hook with `cursor_version` in the payload. Unverified: that a JSON
+    deny from a third-party hook blocks the tool in Cursor (the docs give the field mapping, not that).
+  - Cursor's `preToolUse`, `beforeShellExecution`, `beforeMCPExecution` and the new `subagentStart`
+    now answer exactly `{"permission":"allow"}`, with no `continue` key, as Cursor's schema documents.
+    The deny shape and every other Cursor event are unchanged.
+  - The Cursor table gains three events. `sessionEnd` removes the chat's card. `subagentStart` and
+    `subagentStop` write a file of the subagent's own (`subagent_id`, with `parent_conversation_id`
+    as `parent_id`), which Kannu folds into the parent chat. A `subagentStop` without a subagent id
+    writes nothing. Cursor documents no id on `subagentStop`, so a Cursor subagent's file stays
+    `thinking` until the stale cap; it never outranks a working or waiting chat, and the fold ignores
+    it once the chat's turn ends. A Cursor `stop` with `status: "error"` sets `ended_on_error`;
+    `aborted` does not.
+    The installed check reads a fixed core, as Claude's does, so a v44 install still reports
+    installed and upgrades through the version migration. Verified on this Mac: Cursor's log shows
+    the `sessionEnd` reasons (`window_close`, `user_close`) and the `stop` status values.
+    Unverified: the subagent payloads come from Cursor's docs and forum reports only, because Kannu
+    never registered those events before.
+  - The `gated` Claude group (ExitPlanMode, AskUserQuestion) counts as a prompt only when the tool
+    really is one of those. VS Code with `chat.useClaudeHooks` ignores matchers, so the group ran for
+    every tool and turned each one yellow. Unverified on this Mac (VS Code docs only).
+  - Claude `StopFailure` with `error: "rate_limit"` sets `quota_exceeded`, as Antigravity's quota
+    stop does. The Claude chat keeps its own title: only Antigravity, which has no log title, gets
+    "Quota exceeded" as its name, and that label is no longer carried into later writes.
+    Claude's new `UserPromptExpansion` event is registered, and its prompt goes through the secret and
+    hidden-text checks. Claude fires `UserPromptSubmit` and then `UserPromptExpansion` with the same
+    typed line, so the second check adds only a finding that is not recorded yet and never counts
+    the same prompt twice. Unverified on this Mac (Claude Code hooks docs only).
+  - Codex: install no longer flips a user's `features.hooks = false` (or the `codex_hooks` alias,
+    or an inline `features` table) to true. It adds the key only when the file has none. The
+    `[features]` section now runs to the next table header, not to the next `[`, so a bracket in a
+    comment or an array before `hooks = false` can no longer lead to a second `hooks` key (invalid
+    TOML), and an indented `[features]` header is found instead of duplicated. A
+    config.toml that exists but cannot be read now fails the install instead of being overwritten.
+    Settings shows "Open Codex and run /hooks to trust Kannu's hooks." under an installed Codex row,
+    because Codex skips a hook until the user trusts it. Unverified on this Mac (Codex docs only).
+  - The Cursor and Claude event tables and the Cursor and Codex config edits moved into
+    `AgentHookLayout`, so tests can reach them. `scripts/install-cursor-hooks.sh` registers the three
+    new Cursor events too, and `docs/REGRESSIONS.md` entry 1 has a v45 addendum.
+  - Tests: eleven `HookScriptTests` cases, run again under `/usr/bin/python3` 3.9 (seven of the first
+    eight behaviour cases fail against the v44 script; `sessionEnd` removal already worked through
+    the state argument). The policy deny inside Cursor and the once-only slash-command count both
+    fail against the first v45 draft (checked by hand: it printed allow and counted 2). Five
+    `AgentHookLayoutTests` cases cover the tables, the merge and strip, and the TOML edit, and
+    `BackgroundWorkTests` reads the Claude table directly. Full suite: 887 tests, 0 failures. Not
+    verified live: that needs Kannu running, and this change was not run in the app.
+
+### 2026-10-21 - Act on CodeRabbit's review of #112
+- **Developer label:** CodeRabbit on #112: discard stale fullscreen scans before publishing
+- **Agent label:** Claude Code (Opus 5.5) — each fullscreen scan takes a main-actor ticket, and `publish(_:ticket:)` drops a scan a newer one has overtaken
+- **Changes:**
+  - Scans run concurrently now that they leave the main thread (the initial one and each change's,
+    500 ms and 1.5 s after it), so an older Accessibility or window scan could finish after a newer
+    one and overwrite `fullscreenStatus`, leaving `hideOnClosed` wrong until the next change.
+    `FullscreenMediaDetector` bumps `scanGeneration` on the main actor when a scan starts, and
+    `publish(_:ticket:)` assigns only while the scan's ticket is the latest.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsPublishedOnTheMainActor` requires the
+    ticket check.
+
+### 2026-10-20 - Release hardening for 1.4.0: an unknown task source costs one task, Reminders is entitled, fullscreen publishes on the main actor
+- **Developer label:** "see if everything is solid enough" — the pre-release audit of development
+- **Agent label:** Claude Code (Fable 5.1) — `tasks.json` drops a task from a source this build does not know instead of moving the file aside; `Kannu.entitlements` names the calendars entitlement EventKit needs under hardened runtime; `FullscreenMediaDetector` assigns its main-actor verdict on the main actor; README and docs/ADR.md catch up
+- **Changes:**
+  - `TaskItem` throws `UnknownSource` for a `source` raw value it does not know, and `TasksFile`
+    decodes its tasks through `KnownSourceTask`, which drops exactly those tasks and throws
+    everything else on. Before, one unknown source failed the whole file, which `TaskFileStore`
+    moved aside as `tasks.corrupt-<date>.json`, and the list started empty. A `logPolicy` this
+    version does not know reads as `ask`. `docs/TASK-SOURCES.md` says what going back to an older
+    build now costs: that source's tasks and their recorded time, not the list.
+    Test: `TaskModelCodingTests.testATaskFromAnUnknownSourceIsDroppedAndTheRestReads` (a malformed
+    task still fails the file).
+  - `Kannu.entitlements` gains `com.apple.security.personal-information.calendars`. Hardened runtime
+    denies the EventKit store without it; `ENABLE_RESOURCE_ACCESS_CALENDARS` injects it at signing,
+    but the only build checked so far used a custom entitlements file, so the key is spelled out.
+  - `FullscreenMediaDetector.updateFullScreenStatus()` is async: `currentFullscreenStatus()` reads
+    screens and windows where the caller runs (an Accessibility read of an unresponsive app can
+    wait, so not on main), and `publish(_:)`, the one `@MainActor` function that assigns
+    `fullscreenStatus`, runs on the main actor. The property was `@MainActor @Published` yet
+    assigned from whichever thread ran the scan; the fullscreen fix added five more callers. The
+    detection-off reset no longer traps on two displays with the same name
+    (`uniquingKeysWith`). Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsPublishedOnTheMainActor`.
+  - `ReadMe.md` describes Tasks and the six sources, lists Reminders and Notifications under
+    Runtime Permissions, and names `Kannu.1.3.4.dmg`; `docs/ADR.md` says Brain › Agent Security
+    where it said Settings › Agents.
+### 2026-10-19 - Act on CodeRabbit's review of #111
+- **Developer label:** CodeRabbit on #111: check the `typed:` value in the task-start scanner
+- **Agent label:** Claude Code (Opus 5.5) — `TimerTaskLabelRulesTests.startProblems` also requires the session's name to be resolved from `task.title`
+- **Changes:**
+  - The task-start scanner checked the raw-key prefix and the short key, but a name that was not
+    the task's title (`typed: "Timer"`) passed while the key was right. It now requires
+    `name: TimerSessionName.resolved(typed: task.title`. Test:
+    `TimerTaskLabelRulesTests.testTheStartScannerCatchesANameThatIsNotTheTitle`, and the raw-key
+    planted offender now reports it too.
+
+### 2026-10-19 - A timed task shows its title, with its key as a chip
+- **Developer label:** "the task view while running shows still the full ticket heading i guess, check that if it is proper label"
+- **Agent label:** Claude Code (Opus 5.5) — a task's timer session is named by its title; the short key (`TaskDetailSummary.shortKey`) rides beside it as a chip in the open timer and in the popover
+- **Changes:**
+  - Root cause: `TasksManager.start` named the session with the source's raw key followed by the title,
+    cut at 40 characters with no ellipsis. A GitLab task in a nested group read
+    "discern_security/applications/ds-vendors" (no number and no title) in the closed notch's
+    label, the open timer, the music-and-timer view, the sneak peek and the timer popover.
+  - The session's name is now the task's title, so every place that shows the session's name shows
+    the title. Clearing a rename still returns to it.
+  - New `TimerManager.sessionTaskKey`: the task's short key ("ds-vendors #4264", "ABC-123",
+    "repo #12", "app !12"), set by `startTimer(… taskKey:)` and cleared with every session like
+    `sessionTint`. Local, Todoist and Reminders tasks have none.
+  - The open timer shows the key as a chip under the name (`SideChip`, now shared from
+    `TimerSideColumn`), read from the session, so `NotchTimerView` still never reads `TasksManager`.
+  - The Tasks popover's Now card and Up next captions show the short key, not the raw one.
+  - Test: new `TimerTaskLabelRulesTests` pins the title name and the key passed at start, the key
+    set and cleared with its session, the chip in the open timer and the popover's short keys, each
+    rule with a planted offender.
+
+### 2026-10-19 - Act on CodeRabbit's review of #110
+- **Developer label:** CodeRabbit on #110: restart hidden-edge hover polling when the timer stops
+- **Agent label:** Claude Code (Opus 5.5) — `ContentView` syncs the hidden-edge poll whenever `timerOwnsClosedNotch` changes
+- **Changes:**
+  - On a display without a notch, with Always show off, a running timer keeps the island out, so
+    `shouldHideUntilHover` is false and the hidden-edge hover poll ends. When the timer stopped the
+    island hid again, but nothing restarted the poll, so resting the pointer on the top edge could not
+    bring it back until some other event did. `.onChange(of: timerOwnsClosedNotch)` now calls
+    `syncHiddenEdgeHoverPolling()`, which covers the timer starting or stopping and its live activity
+    being switched on or off.
+  - Test: `ClosedNotchTimerRulesTests.testTheHoverPollFollowsTheTimer`.
+
+### 2026-10-19 - A running timer keeps the closed notch, with the agent light in its centre
+- **Developer label:** "when a timer runs you can see it clearly on the notch right, i felt like sometimes it missed that"
+- **Agent label:** Claude Code (Opus 5.5) — the closed notch's priority chain gives a running timer its place: the agent light rides in its centre, Caps Lock flashes instead of holding the notch, and a hide-until-hover island stays out
+- **Changes:**
+  - Root cause: the closed notch draws the first match of one if/else-if chain, and the standalone
+    agent traffic light sat above the timer. With no music playing, the light took the whole notch
+    for 7 s after every agent change, while the pointer was on the notch, and for as long as a high
+    security finding waited, and the timer was not drawn at all.
+  - New `timerOwnsClosedNotch` in `ContentView`, one definition for "a running timer has the closed
+    notch". The standalone light gives way to it, and `TimerLiveActivity` now takes the light
+    (`TimerAgentLight`) and draws it in its centre, below a physical notch at the agent band's height,
+    the way the music pill already does. The light holds steady there instead of blinking with each
+    agent change. A pending high finding shows as the shield in the light; its text pill waits for the
+    standalone light, as beside the music pill.
+  - Caps Lock: its indicator no longer outranks a running timer. Pressing Caps Lock while a timer runs
+    flashes the indicator for the usual 1.5 s HUD time instead of holding the notch until released,
+    and a timer that starts while Caps Lock is on ends the held indicator (`CapsLockManager`). Other
+    HUDs are never ended by it.
+  - On a display without a notch, with Always show off, the island no longer hides until hover while a
+    timer runs; it hides again when the timer stops.
+  - Unchanged: the music pill (it already carries the timer and the light), downloads, HUD sneak
+    peeks, fullscreen hiding, and hovering a running timer opening the Timer tab.
+  - Test: new `ClosedNotchTimerRulesTests` pins the chain, the steady light, the hide-until-hover
+    term, the timer's centre drawing the light, and Caps Lock's flash and its end, each with a planted
+    copy of the old code.
+
+### 2026-10-18 - Brain's Productivity section sits right under AI Agents
+- **Developer label:** "bring productivity settings to just below the ai section in brain"
+- **Agent label:** Claude Code (Opus 5.5) — the sidebar's section order changes, and General and Appearance get a "General" header
+- **Changes:**
+  - Brain's sidebar now reads AI Agents, Productivity (Timer, Notes, and Tasks where present),
+    then General and Appearance, then Media & Display, System, Utilities, Developer,
+    Integrations and About.
+  - General and Appearance get a "General" header: unlabelled, right under Productivity, they
+    read as part of it.
+  - `availableTabs` follows the same order, since search jumps to the first match in it.
+  - Test: `SettingsSidebarOrderTests` (the section order, the General header, and search's order
+    following the sidebar's).
+
+### 2026-10-15 - The new gate file's project ids stay unique next to the task branches
+- **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `TrafficLightPersistenceGate.swift`'s two `project.pbxproj` ids moved from `…00E0`/`…00E1` to
+    `…05A0`/`…05A1`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - A green chat no longer pins the notch out, and a momentary blip never flickers the light
+- **Developer label:** "if some how green or any state is being serially refreshing that is preventing it from closing, that shouldnt happen … the minimum a transition state is shown in notch only if it is persisted for 1 second or more, else we have to retain the continous one"
+- **Agent label:** Claude Code (Fable 5) — a 1 s persistence gate at the traffic light's single publish point, and reveal windows re-armed only by a published change
+- **Changes:**
+  - New `TrafficLightPersistenceGate` (pure, in the logic test target): a calming change — leaving
+    executing/thinking/awaiting-input, or hiding the light — must persist 1 s before it is
+    published; anything that lights up (green or yellow appearing) still publishes at once. A
+    green → ended → green blip inside that second was never published, so the notch never reacts.
+  - `publishTrafficLight` consults the gate; a held change re-evaluates by rescanning at the
+    deadline, so what is published is always recomputed from disk, never a value captured when the
+    hold was armed. `stop()` cancels the hold and resets the gate.
+  - `noteAgentActivityPulse` re-arms the island's 7 s reveal only when the published light actually
+    changed. Every hook write of a working chat used to re-arm it, which kept the notch out for the
+    whole of a long green run (for example over fullscreen video). The heartbeat fast-path and the
+    pulse latch's single-consumer contract are unchanged.
+  - A visible consequence, intended: a finished chat's red appears about a second late, and a chat
+    that stays green reveals the island once for 7 s and then lets it retract.
+  - Guards: `TrafficLightPersistenceGateTests`, `TrafficLightGateRulesTests`, and a dated addendum
+    under `docs/REGRESSIONS.md` entry 10.
+
+### 2026-10-19 - A window rebuild also clears the Tasks popover's flag
+- **Developer label:** Bringing #91 up to date with development: the Tasks popover (#85) is a popover the rebuild's reset did not know
+- **Agent label:** Claude Code (Opus 5.5) — `resetTransientInteractionState` clears `isTasksPopoverActive` too, as `NotchTeardownRulesTests` requires of every flag `hasAnyActivePopovers()` reads
+- **Changes:**
+  - `KannuViewModel.resetTransientInteractionState()` sets `isTasksPopoverActive` to false. The
+    Tasks popover landed on development with #88 after #91 was written, so a window rebuild with it
+    open left the flag set and the new notch never auto-closed. `NotchTeardownRulesTests.testTheResetClearsEveryFlagThePopoverCheckReads`
+    caught it on the merge.
+
+### 2026-10-11 - A window rebuild no longer leaves the notch unable to close or scroll
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — audit risk R-D: `KannuViewModel.resetTransientInteractionState()` on the window-rebuild path, pinned by `NotchTeardownRulesTests`
+- **Changes:**
+  - A display or resolution change rebuilds the notch window through `tearDownAllWindows` and
+    reuses the single `KannuViewModel`. The torn-down views get no reliable `.onDisappear` on a
+    borderless panel, so a scroll-gesture or auto-close suppression token held by a hovered view,
+    or a popover flag left `true`, survived into the new window: a notch that never auto-closed
+    and never scrolled until the next explicit close. `close()` clears the tokens, but the rebuild
+    only calls it while the notch is already closed.
+  - `KannuViewModel.resetTransientInteractionState()` clears both token sets and all six popover
+    flags `ContentView.hasAnyActivePopovers()` reads; `tearDownAllWindows` calls it after the old
+    window is closed and released, so the publish never reaches the detached view's
+    `.onChange(of: vm.isBatteryPopoverActive)` / `isStatsPopoverActive`, which would otherwise
+    schedule a `vm.close()` against the window built next. The per-display lifecycle already
+    drops its view model with the window and needs nothing.
+  - `NotchTeardownRulesTests` pins the call inside `tearDownAllWindows`, both token resets, and
+    keeps the reset's flag list equal to what `hasAnyActivePopovers()` reads and what the view
+    model declares — scanning both files, so a flag added to one without the other fails. The
+    declaration scan accepts access modifiers (`@Published private(set) var`), and planted
+    offenders pin every spelling it must see.
+
+### 2026-10-19 - The hover-slide tests skip where motion cannot be seen
+- **Developer label:** #106's first CI run on development: `HoverRevealTextTests` failed on both macOS runners
+- **Agent label:** Claude Code (Opus 5.5) — the two motion tests skip under Reduce Motion and on GitHub Actions, where the clipped text never moved; the stillness test still runs everywhere
+- **Changes:**
+  - `HoverRevealTextTests.testAClippedLineSlidesWhileActive` and `testAClippedTitleSlidesUpWhileActive`
+    render the view in a window and compare its pixels before and after the slide's start delay.
+    On GitHub's hosted runners the pixels never changed (run 39302104033, macOS 15 and 26), while
+    every local run sees the slide. The stacked PRs that added them never had a CI build, so this
+    was the first run there.
+  - They now skip when Reduce Motion is on (the view holds still by design) and when
+    `GITHUB_ACTIONS` is set. `testTextThatFitsOrIsNotHoveredStaysStill` runs everywhere, as before.
+
+### 2026-10-19 - The GitLab reconnect note ends its Brain path at the tab
+- **Developer label:** Bringing #106 up to date with development: `BrainPathRulesTests` (from #87's review) checks a note in the timer tab's Tasks page
+- **Agent label:** Claude Code (Opus 5.5) — "Reconnect GitLab in Brain › Tasks to see them." becomes "To see them, reconnect GitLab in Brain › Tasks."
+- **Changes:**
+  - The timer tab's GitLab reconnect note puts its Brain path last, so the path names the Tasks tab
+    and nothing after it. `BrainPathRulesTests.testEveryBrainPathStartsAtATabTheSidebarHas` reads
+    the words after "Brain ›" up to the next stop, and "Tasks to see them" is no tab.
+  - The rest of that review's commit (GitLab's Connect race guards) is already in the shared
+    `SourceSync` engine here: a Connect counts itself in flight before its first await, re-checks
+    the generation before and after saving, and Remove Token refuses while one is in flight
+    (`SourceSyncTests`). Its `JiraSyncRulesTests` edits stay out with the file, which
+    `SourceSyncTests` replaced.
+
+### 2026-10-19 - Act on CodeRabbit's review of #108
+- **Developer label:** CodeRabbit's review of #108 (the review batch for #97, #103 and #106): four findings, all in the task sources
+- **Agent label:** Claude Code (Opus 5.5) — a Disconnect during a Connect's save wins; the user's own names come from every source; GitHub's "open" leaves the row caption; the Sync-switch scan catches the generic read
+- **Changes:**
+  - `SourceSync.connect` checks the generation again after the Keychain save. A Disconnect during
+    the save queued its removal behind it, which took the token just saved, and the Connect then put
+    the connection back on screen and synced with a token that was gone. Test:
+    `SourceSyncTests.testADisconnectDuringTheSaveIsNotUndoneByTheConnect`.
+  - New `TaskSource.selfNames`: every connected account's display name, plus GitLab's and GitHub's
+    usernames. The task page and the notch card both use it; they kept their own copy, of Jira and
+    GitLab only, so every GitHub task showed the user's own login as its person and spent one of
+    the card's four facts on it. Test: `TimerTaskDetailRulesTests.testTheUsersOwnNamesComeFromEverySourceInOnePlace`.
+  - A GitHub row's caption drops "Open" as a GitLab row drops "opened": every open issue says it.
+    Test: `TaskRowCaptionTests.testAGitHubRowDropsOpenToo`.
+  - `TimerSideColumnRulesTests`' Sync-switch scan matches `enabledKey` on its own. Behind the
+    capital "Enabled" check it could never match the generic `Defaults[$0.enabledKey]` read; the
+    planted offenders now include that line.
+
+### 2026-10-19 - How to add a task source, written down
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 8 of the task-sources PR: docs/TASK-SOURCES.md
+- **Changes:**
+  - New docs/TASK-SOURCES.md maps the pieces every source has and lists the eight steps to add one: the case and its facts, its settings keys, its API file, client and provider, credential store, manager wiring, Brain, and tests. It also states the rules every source keeps: when it syncs, where a token may go, that macOS's questions come only from a click, and that older builds cannot read a task list holding a newer source's tasks.
+  - docs/SETTINGS.md: a row that exists only in some states (a source's row, only while connected) has a standing row its search entries land on until then, Add a source.
+
+### 2026-10-19 - Todoist is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 7 of the task-sources PR: Todoist, read-only, through its API v1
+- **Changes:**
+  - Brain › Tasks › Add a source › Todoist takes the API token from Todoist (Integrations › Developer). Kannu checks it with `GET /user`, which also says whose account it is. Token and account are kept together in the Keychain (`todoist-credential`).
+  - A sync reads the projects (for their names) and the open tasks through Todoist's unified API v1 (`api.todoist.com/api/v1`, cursor pages; the old REST v2 is shut down): at most two pages of 100 each. Tasks assigned to someone else are skipped.
+  - An optional Todoist filter on Todoist's page ("today | overdue", "#Work") narrows what is fetched. Return applies it.
+  - Each task's project is its Todoist project, so the source's page lists the projects. Priority 4/3/2 reads P1/P2/P3. A due date shows as the task's due date. Todoist's duration becomes the estimate, a day being 8 hours. A task opens at `app.todoist.com/app/task/<id>`.
+  - A refused token (401 or 403) reads as refused. A rate limit follows `Retry-After`. A 410 says Todoist retired the API Kannu uses.
+  - Linear's and Todoist's messages say "in Linear, under Security & access" and "in Todoist, under Integrations › Developer", so Brain's naming rule (never "Settings" for a page) holds.
+  - New `TodoistAPI.swift` (logic target), `TodoistClient.swift` (logging wrapper and provider), and the `todoistFilter` key.
+  - Tests: new `TodoistAPITests` (37 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
+### 2026-10-19 - Linear is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 6 of the task-sources PR: Linear, read-only, by personal API key
+- **Changes:**
+  - Brain › Tasks › Add a source › Linear takes a personal API key. Kannu checks it with Linear's GraphQL API, which also gives the workspace (`https://linear.app/<workspace>`). Key and workspace are kept together in the Keychain (`linear-credential`). The key goes in `Authorization` as Linear wants it, without "Bearer".
+  - A sync reads the issues assigned to the user that are not done or canceled, at most two pages of 100. Each issue's key is `ENG-123`, so its team is its project. A started state is In Progress. Due date, priority, parent, cycle and labels show on its page; Linear's estimates are points, not time, so none is taken. Its link opens only when it is under the connected workspace.
+  - Linear reports errors inside the answer, so they are read on any status. A refused key reads as refused. A rate limit (`RATELIMITED`, or HTTP 429) is timed from Linear's reset header, which is in milliseconds. Any other error's message is shown with the key taken out.
+  - New `LinearAPI.swift` (logic target) and `LinearClient.swift` (logging wrapper and provider).
+  - Tests: new `LinearAPITests` (35 tests); the `Authorization` owners and the inventory entry count are re-pinned.
+
+### 2026-10-19 - GitHub Issues is a task source, from github.com or GitHub Enterprise Server
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 5 of the task-sources PR: GitHub, read-only, including Enterprise Server
+- **Changes:**
+  - Brain › Tasks › Add a source › GitHub takes a server (github.com, or a GitHub Enterprise Server address; a pasted `/api/v3` is accepted) and a personal access token. Both are checked with `GET /user` before anything is saved, then kept together in the Keychain (`github-credential`).
+  - A sync reads the open issues assigned to the user (`GET /issues?filter=assigned`), at most two pages of 100. Kannu builds page 2 itself and never follows a URL from an answer. "Include pull requests" on GitHub's page adds the assigned pull requests; switching it drops a sync in flight and fetches again.
+  - Each issue's key is `owner/repo#7`, so its repository is its project ("repo #7" in captions). A pull request counts as In Progress; an issue is In Progress when a label says so. Its labels, milestone, assignee and comment count show on its page. Its link opens only when it is on the connected server.
+  - A 403 or 429 with `x-ratelimit-remaining: 0` or `Retry-After` is a rate limit, timed from GitHub's own reset. Any other 403 reads "needs read access to issues, or SSO authorisation".
+  - New `GitHubAPI.swift` (logic target): credential, host rules, requests, decoding, mapping and wording, plus `GitHubReader`. `GitHubClient.swift` holds the logging wrapper and the provider.
+  - Tests:
+    - New `GitHubAPITests` (36 tests) covers host forms, requests, decoding, mapping, the rate-limit remap, a two-page run through a stubbed `URLProtocol` and redaction.
+    - `IntegrationSecretRulesTests` now lets each source's own API file set its `Authorization` header and no other file.
+    - Inventory entry count re-pinned.
+
+### 2026-10-19 - Apple Reminders is a task source
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 4 of the task-sources PR: Apple Reminders through EventKit, read-only
+- **Changes:**
+  - Brain › Tasks › Add a source › Apple Reminders asks macOS for Reminders. That is the only place Kannu asks, and only on that click. Then every incomplete reminder, from every list, becomes a task. Each list is a project, so the source's page shows the lists. Reminders' priority shows as High, Medium or Low, and its due date as the task's due date. Kannu never changes a reminder.
+  - A change in Reminders (added, completed or edited, on this Mac or synced from iPhone) asks for a quiet sync. Several changes during a sync come to one more sync. The listener runs only while Reminders is connected, its sync is on and tasks are on.
+  - EventKit is touched only through `AppleRemindersStore`. Its `EKEventStore` is built and read on a queue of its own, on first use, never at launch. A sync reads macOS's answer without asking. If access is turned off later, the source reads "macOS no longer lets Kannu read your reminders" with an "Open Privacy & Security" button.
+  - At most 200 reminders, soonest due first. A longer list marks the sync incomplete, so nothing is marked gone because of the cap.
+  - The app's Info gains `NSRemindersFullAccessUsageDescription`. The search entry "Apple Reminders" lands on its row, or on Add a source until it is connected.
+  - Tests:
+    - New `AppleRemindersMappingTests` covers order, cap, priority names, the list as key and project, and merging.
+    - `IntegrationSecretRulesTests` pins that only `AppleRemindersStore` asks for access, only from `connectAppleReminders`, and that a sync's read never asks.
+    - Inventory entry count re-pinned.
+
+### 2026-10-19 - Brain › Tasks shows the sources you use, with one Add a source for the rest
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 3 of the task-sources PR: the overview with Add a source, one connection page for every source, one connect sheet for the new ones
+- **Changes:**
+  - Brain › Tasks › Sources lists Local tasks, then each connected source with "N open ›", then one "Add a source" row whose Connect… menu lists the sources not connected. A source not connected has no row of its own. Its search entries land on Add a source (`landingOnABuiltRow`), and the tasks it kept stay in All tasks.
+  - Every source's page has the same Connection section: who it is connected as and Disconnect…; what needs fixing (a refused token, Keychain access, Reminders access); Sync; its colour; Refresh with what the last sync found; and its own options (Jira's issue filter under Advanced, GitLab's Include merge requests). The Jira and GitLab sections written twice are gone.
+  - One Disconnect dialog serves every source ("Disconnect GitHub?", Keep or Remove its tasks). Disconnecting from a source's page also leaves that page.
+  - New `SourceConnectSheet` connects GitHub (server and token), Linear (API key), Todoist (API token) and Apple Reminders (macOS's own question). Jira and GitLab keep their sheets.
+  - Deep links: "Sources" lands on the always-present Local tasks row. Jira's row has its own id, and each new source's row gets one, along with "Add a source". The notch's "Manage tasks…" and "Add a source…" still land on Sources.
+  - "Ask to Log" and "Never Ask to Log" show only for sources whose time can be logged (Jira and GitLab).
+  - Tests:
+    - `SettingsHighlightInventoryTests`: re-pinned counts (236 entries, 271 registrations, 265 ids, with a dated note), the new landing map, and a new test that a source not connected lands on Add a source.
+    - `SettingsLayoutRulesTests`: the third connect sheet's padding.
+
+### 2026-10-19 - Jira and GitLab sync through one engine that every source will share
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 2 of the task-sources PR: `SourceSync` and `CredentialStore`, with Jira and GitLab moved onto them
+- **Changes:**
+  - New `SourceSync` (logic target) holds one source's sync: its state, generation, in-flight marker, kept refresh, Connect guards and token removal. TasksManager no longer keeps a copy per source. It holds one engine each for Jira and GitLab (`jira`, `gitlab`), is their `TaskSourceHost` (it merges their items with `TaskMerge` and publishes their changes), and loses about 420 lines.
+  - What does not change: a page appearing syncs only a stale source, never with the Keychain dialog and never after a refused token. Refresh asked during a sync is kept and runs after it, with the new options, except after a refusal, a sign-in to reconnect or a declined dialog. A result for an older connection is dropped. Connect saves nothing until the source accepted the credential, nor over a Disconnect that landed meanwhile. Remove Token waits for a Connect in flight.
+  - Fix: GitLab now has Jira's guards. A Refresh asked during a GitLab sync is kept instead of dropped. A GitLab Connect counts itself in flight and re-checks before saving. Remove GitLab Token waits for it.
+  - New `CredentialStore` replaces the twin `JiraCredentialStore` and `GitLabCredentialStore`: one serial queue per item, with the Keychain reached through a `SecretSlot` so the store is tested without it. The items and their contents are exactly those saved before (`TaskCredentials.jira`, `.gitlab`), so nobody connects again.
+  - `JiraTaskSource` and `GitLabTaskSource` are the two sources' providers: where a credential may be sent, one fetch, and their own wording for failures and Connect errors, moved unchanged out of TasksManager. Time to log and GitLab's linked merge requests read the shared stores and the engines' generations, so `WorklogConsentRulesTests` holds as it was.
+  - The Settings rows call the generic `syncState(_:)`, `refresh(_:)`, `syncIfStale(_:)`, `disconnect(_:removeTasks:)` and so on.
+  - `RemoteIssue.webURL` and `TaskFacets.labelCategory` are ready for the new sources. A Connect's check now returns the credential to save, since some sources learn part of it while checking.
+  - Tests:
+    - `JiraSyncRulesTests`, which read TasksManager's text for Jira's names, is replaced by `SourceSyncTests`: 17 tests that drive the engine with a fake source and pin each rule by what it does.
+    - New `CredentialStoreTests`: the items Kannu already saved read back, and saves write the same text byte for byte.
+    - `IntegrationSecretRulesTests` now scans the engine's on-appear syncs and token removal, and pins that the manager keeps no sync state of its own.
+
+### 2026-10-19 - Every source's facts and settings live in one place, ready for GitHub, Linear, Todoist and Apple Reminders
+- **Developer label:** "Todoist and others: not supported yet … Next is the source refactor, then Apple Reminders, Todoist, Linear and GitHub Issues, one PR each. do these as a single mr"
+- **Agent label:** Claude Code (Opus 5.5) — step 1 of the task-sources PR: source facts and generic signatures, no visible change
+- **Changes:**
+  - `TaskSource` gains `github`, `linear`, `todoist` and `appleReminders`, in the order Brain and the notch list them. The stored raw values of the existing three do not change. Nothing creates tasks from the new sources yet.
+  - New `TaskSourceFacts.swift` (logic target) holds what Kannu knows about each source in one switch per fact: its name and title, whether its time can be logged (Jira and GitLab only), whether it uses a token, how its keys read (which also gives its project), what its items are called, and its "Open in …" label.
+  - New `TaskSourceSettings.swift` maps each source to its Defaults keys: Sync, connection display copy, account name, colour and Show in notch. New keys were added for the four new sources.
+  - New `TaskSourcePreferences` keeps the notch's Show in notch and the connected sources current for the Tasks popover, the source menu and the timer tab's list. They no longer each hold three `@Default`s.
+  - The logic is generalised:
+    - `TaskSourceFilter` covers every source.
+    - `TaskOrdering.viewFilter(hidden:alwaysListed:)` replaces the three-flag form.
+    - `TaskColoring.integration(for:colors:)`, `TaskSyncSummary` and `TimerSidePage.initial` take any set of sources.
+    - `TaskDetailSummary`'s "Open in …" label and short keys (GitHub reads "repo #7") follow the facts.
+  - Fix: Time to log drafts are made only for sources whose time can be logged (`TaskSource.logsTime`). Before, every task that was not local made one.
+  - The notch's source menu lists Local tasks and each connected source, with "Add a source…" for the rest. Its Refresh and sync lines cover every source that syncs, through `TasksManager.syncStates`, `syncAllIfStale()`, `refreshAll()` and `browseURL(for:)`.
+  - Tests:
+    - New `TaskSourceFactsTests`.
+    - Updated for the new signatures: `TaskSourceFilterTests`, `TaskColorTests`, `TasksPopoverLogicTests` and `TimerSidePageTests`.
+    - `TasksPopoverRulesTests` now pins every source's Show in notch key and "Add a source…".
+    - `TimerSideColumnRulesTests` and `TimerTaskDetailRulesTests` pin the generic calls.
+
+### 2026-10-18 - Brain › Tasks is a tree: Source › Project › Task, with All tasks beside it
+- **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
+- **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks rebuilt as nested pages with one shared row design, split out of one 1,727-line file
+- **Changes:**
+  - The overview lists the sources (Local tasks, Jira Cloud, GitLab), each with "N open ›", then All tasks, Time to log, Interrupted sessions and the Tasks options. A source not connected offers Connect…, and its page too while it still holds kept tasks. A source with a problem reads "Needs attention" there, and shows the problem in full on its page.
+  - A source's page holds its connection rows: Connect or Disconnect, problems, Keychain access, Sync, colour, Refresh, and Jira's issue filter or GitLab's merge requests. These used to sit on the overview. Then come its projects, one row each ("ds-vendors", group path below, "40 open ›"), or its tasks directly when there is one project or none. Local tasks has its colour, Add a task and its tasks.
+  - A project's page lists its tasks; their captions drop the project the page already names ("#4326").
+  - A task's page is new. It shows the title with its short key and status and ▶/■; labels; tags as chips that remove themselves, with Add Tags; time and overtime, with Set Estimate and Add Time; the same facts as the notch card; a local task's reminder; Open in Jira or GitLab and an "Ask to log its time" switch; then Mark Done, Archive or Delete, or Reopen and Restore once closed or archived. Deleting the task leaves its page.
+  - All tasks replaces the Task list. A Find row holds a search field (never saved) and one Filter menu with the Source, Project, Status and Tag filters and Show All; its icon fills while filtering. "Filtered · 3 of 12 tasks" and Show All now cover Find too. Recently closed, the Archive and Tag colours fold up at the end.
+  - Every list shares one row: colour dot, title (two lines at most), one short caption (`TaskRowCaption`), ▶/■ and ›. The ⋯ menu on every row became a right-click menu that opens with Show Details and keeps every item. Move Up and Move Down are also accessibility actions. Drag to reorder is unchanged, and closed and archived rows lead with the short key.
+  - Navigation is a path of pages. Each page opens at its top; the back row goes up one level and names where it goes ("‹ GitLab"); going back scrolls to the row that opened the page. A search or deep link returns to the overview, scrolled to its row, except All tasks' own link ("Show all in Brain", a reminder's click).
+  - Search entries for a source page's rows now land on that source's row on the overview. Two new deep links, `tasksLocalSourceHighlightID` and `tasksGitLabSourceHighlightID`, name those rows. Two new entries, "Local tasks" and "Find a task", were added. The dead `landingOnABuiltRow` redirect is gone, since those rows no longer depend on a connection.
+  - `TasksSettings.swift` was split into flat files beside it: `TaskSourcePages`, `TaskConnectSheets`, `TaskRowList`, `AllTasksPage` and `TaskDetailPage`.
+  - docs/SETTINGS.md: sub-pages may nest as a tree; the back row names its parent; long lists keep their overflow in a right-click menu with a › to the item's page.
+  - Tests:
+    - `TaskListRulesTests` pins the shared rows, the right-click menu and the page path.
+    - `SettingsHighlightInventoryTests` pins that rows below the overview register nothing and that each page's entries land on the row that opens it. Counts are now 235 entries, 266 registrations and 260 ids.
+    - `TaskColorRulesTests`, `IntegrationSecretRulesTests` (the Keychain scan covers all six files) and `SettingsLayoutRulesTests` point at the new files.
+
+### 2026-10-18 - The pieces for a Brain › Tasks tree: counts per source and project, Find, and a short row caption
+- **Developer label:** "this task list page is a mess, how would you clean it up, follow a different design and inward pages and tree but should be clean to manage tasks from different places"
+- **Agent label:** Claude Code (Opus 5.5) — pure helpers for the Source › Project › Task tree, tested before any view uses them
+- **Changes:**
+  - `TaskFacets.sourceCounts` and `TaskFacets.projectCounts(in:)` give each source and each project its number of tasks; projects sort by their short name, then by full key, with "No project" last.
+  - `TaskFacets.projectShortName` ("ds-vendors" for "discern_security/applications/ds-vendors") and `projectGroup` (the group path that tells two "app" projects apart). `TaskDetailSummary.shortKey` now uses the short name and can drop the project ("#4326") where a page already names it.
+  - `TaskSourceFilter(_:)` turns a source into its filter.
+  - `TaskFilter.query` holds what All tasks' Find field will hold. It is matched with `TaskSearch` alongside the four filters and is never saved; spaces alone hide nothing.
+  - `TaskRowCaption` is the one line under a task's title: the short key, the status unless it is GitLab's "Open", timing now or paused, time against the estimate and any overtime (orange), when it is due (orange once overdue), and the tags. With nothing tracked and no estimate it says nothing about time, instead of "No estimate" on every new task.
+  - Tests: `TaskRowCaptionTests` (new), and four `TaskFacetsTests` for counts, short names, project pages and Find.
+
+### 2026-10-18 - The notch's estimate is typed, in minutes, hours or days, with the presets one click away
+- **Developer label:** "in notch ability to add estimate is drop down, change it to allow hours days and minutes, or something with more flexibility without breaking our design"
+- **Agent label:** Claude Code (Opus 5.5) — typed estimate field in the timer tab's task form; a day unit for typed lengths
+- **Changes:**
+  - The timer tab's task form takes the estimate as typed text in the same golden-ratio slot the menu held: "45", "90m", "1.5h", "2d 3h". A chevron beside it still offers No estimate and the presets.
+  - While the field is focused it shows what it understood when that differs from what was typed ("= 19h"); leaving it writes the length the standard way ("90m" becomes "1h 30m").
+  - Text that is not a length, or is under a minute, turns orange and Add/Save waits until it is fixed, so a typo is never dropped silently. An emptied field or 0 means no estimate.
+  - A Jira or GitLab task with no Kannu estimate shows the source's own ("2h from Jira") as the field's prompt.
+  - `WorkDuration.parse` reads days (`d`, `day`, `days`). A day is a workday of 8 hours (`WorkDuration.hoursPerDay`), as GitLab and Jira count one by default, so "2d" is 16 hours. Lengths are still shown in hours. This also applies to Brain's Custom estimate sheet, Add Time and Time to log; the Custom sheet's hint now mentions "2d".
+  - Tests: `WorkDurationTests.testDaysAreWorkdays`; four `TaskFormDraftTests` for reading, echo, settling, presets and the remote prompt; `TimerSideColumnRulesTests` pins the field in the golden row and its settle-on-leave.
+
+### 2026-10-18 - A task card's linked merge requests open as a list
+- **Developer label:** "We need text about linked mr's inside the task to open a list of linked mr's and that page should have back on left and close on right and list of linked mr's with click through"
+- **Agent label:** Claude Code (Opus 5.5) — the "linked MRs" fact becomes a button that opens a page of the merge requests closing the issue (`closed_by`), each opening in the browser
+- **Changes:**
+  - On a GitLab issue's card, "2 linked MRs" is a button (a chevron after it, tooltip "Show
+    linked merge requests"), and ranks right after the due date, conflicts and health, so it is
+    always among the four facts the card has room for.
+  - It opens a page in the card's frame: Back on the left (to the card), "Linked merge requests",
+    Close on the right (to the list, which kept its place). Each merge request is a row with its
+    state as a dot (open green, merged purple, closed red), its title (sliding when clipped), and
+    "!12 · Merged · Kim Lee" (with Draft when it is one); a click opens it in the browser. While
+    loading, a spinner; then no merge requests, a failure with Try Again, the Keychain refused
+    with Try Again, or Reconnect GitLab. More than a page of them offers "More on GitLab".
+  - The list is GitLab's `closed_by` for the issue: the merge requests that close it when merged,
+    the same set its `merge_requests_count` counts, so the card's number and the list agree.
+    `GitLabAPI.closingMergeRequestsRequest` (read-only, the token in its header only),
+    `LinkedMergeRequest`, `GitLabReader.closingMergeRequests`, and
+    `TasksManager.linkedMergeRequests(for:)`: a click asks, so the Keychain may be read with its
+    dialog, as Refresh does; a loaded list is kept until the task's next sync or a new connection;
+    a refused token marks GitLab as needing reconnecting. Logs carry counts only.
+  - Tests: new `LinkedMergeRequestTests` (the request, the cases that send nothing, each answer as
+    a row: references, a page on another server dropped, an unknown state); `GitLabReaderTests`
+    (the list, more than a page, 401, rate limit, redirect, a server Kannu would not use);
+    `TaskDetailSummaryTests` (the fact is the only one with an action, within the first four);
+    `TimerTaskDetailRulesTests.testTheLinkedMergeRequestsPage`.
+
+### 2026-10-18 - Closing a task card finds the list where it was
+- **Developer label:** "the close button of a task should keep the list at previously scrolled position or at the position of closed task , see which is easy but the current way how they close back to top is not acceptable"
+- **Agent label:** Claude Code (Opus 5.5) — the task list stays in the view tree under a card or the Log page, hidden and inert, so its scroll position survives
+- **Changes:**
+  - Opening a card used to swap the task list out for it, so closing the card rebuilt the list at
+    the top. The list now stays under the card (and under the Time to log page), hidden, taking no
+    clicks or hovers and skipped by VoiceOver, and is never rebuilt: closing returns to exactly the
+    place it was scrolled to, with no jump. Keeping the list was both easier and exact, against
+    scrolling back to the closed task.
+  - Opening a card clears the hovered row, so no row goes on sliding its text under the card.
+  - Test: `TimerTaskDetailRulesTests.testClosingACardKeepsTheListsPlace`.
+
+### 2026-10-18 - Clipped text on the task card and rows slides into view on hover again
+- **Developer label:** "the animation to reveal the clipped text on hover is not working"
+- **Agent label:** Claude Code (Opus 5.5) — the reveal measures its sizes into state instead of through preference keys, and starts once they arrive; found and checked with a rendering harness
+- **Changes:**
+  - `HoverRevealText` never slid: it measured the truncated frame and the full text through two
+    preference keys, and in this view their `onPreferenceChange` reported zero sizes and never the
+    real ones (seen in a harness that renders the view and prints what it measured). With no
+    overflow, nothing counted as clipped.
+  - Each size is now written straight to state as it appears and whenever it changes
+    (`SizeReader`). The harness then measured every case (a fact, a two-line title, a row's title
+    and caption) and rendered each sliding.
+  - The slide also starts when the sizes arrive after the hover (`trigger`: the hover and whether
+    the text is clipped), so text that appears under the pointer slides too.
+  - Tests: new `HoverRevealTextTests` host the view in a window and compare its pixels: a clipped
+    line and a clipped title move while active; text that fits, or is not hovered, stays still;
+    and the sizes never go back through preferences. `HoverRevealText.swift` joins the logic
+    target (pbxproj ids 5B0/5B1).
+
+### 2026-10-18 - The notch's task form offers the tags already in use
+- **Developer label:** "also is adding tags in a task from notch does not provide existing tags ?"
+- **Agent label:** Claude Code (Opus 5.5) — while tags are typed in the timer tab's task form, the tags in use show as chips with their colours, from Brain's own suggestions
+- **Changes:**
+  - While the form's tags field has focus, the reminder's row shows the tags in use as chips, each
+    with its colour dot (none for plain glass): Brain's own suggestions
+    (`TaskTagEditing.suggestions`), so the first few with nothing typed, then those that start with
+    what is typed, then those that contain it, then the typed text as a new tag (a +). A tag
+    already typed is never offered; nothing is once ten are.
+  - A click completes the tag in place of what was being typed and adds a comma, ready for the
+    next; the field keeps its focus (chips are not focusable, and stay while the pointer is on them
+    so a click always lands). Chips that do not fit are left off the end, never wrapped, so the
+    row stays 24 pt. The reminder row comes back when the field lets go.
+  - `TaskFormDraft` gains `tagFragment`, `tagsBeforeFragment`, `tagSuggestions(existing:)` and
+    `completeTag(_:)`.
+  - Tests: `TaskFormDraftTests` (the fragment, completion, Brain's suggestions skipping typed
+    tags, nothing at ten); `TimerSideColumnRulesTests` (the form uses the suggestions, chips are
+    not focusable and never wrap).
+
+### 2026-10-18 - The task icons sit in a small rail between the timer tab's two columns
+- **Developer label:** "how would moving the 3 icons in the third picture to go vertically between the 2 sides of the tab work, also make them smaller and go in with genereal design"
+- **Agent label:** Claude Code (Opus 5.5) — search, filter, Refresh and the Time to log clock move from the Tasks page's top row into a vertical rail on the divider's line, with the hairline continuing below
+- **Changes:**
+  - The Tasks page's icons move out of its top row into a rail in the gap between the composer and
+    the list, centred on the divider's line: search, the filter, Refresh (while Jira or GitLab
+    syncs), and the Time to log clock (while an entry asks), top to bottom, the first level with
+    the session name field. Under them the divider's hairline runs to the page's bottom.
+  - Smaller and in the notch's own style (`TimerRailIcon`): 21 pt squares with a dim fill and a
+    10 pt glyph, brighter while what they open is open. The filter menu draws the same square
+    (`TaskSourceMenu` style `.rail`).
+  - The rail is an overlay hung into the gap (`TimerComposerMetrics.railOffset`), so it takes no
+    room: the gap stays 41 pt and nothing moves when the page changes. The divider steps aside
+    while the Tasks page shows; Presets keeps it.
+  - The list gets the whole page back: three rows, ending where Start and Reset do. Search opens
+    a field at the top of the page (the name field's look); opening it closes an open card or the
+    Log page. The clock toggles the Log page. The rail stays beside the card and the Log page.
+  - "Filtered · Show all" leaves with the row: the filter's square brightens while it hides a
+    source, its menu gains Show all (the popover's too), and "Nothing to show" offers Show all.
+  - Tests: `TimerSideColumnRulesTests` (the rail hangs in the gap, the divider steps aside, no
+    toolbar row, the icons' order, planted offenders); `TimerComposerMetricsTests` (the rail fits
+    the gap clear of both columns, centred on the divider, four slots fit; two rows under the
+    search field).
+
+### 2026-10-18 - The timer tab's columns split in the golden ratio and end on one line
+- **Developer label:** "fix allignements, keeo golden ratio wherever possible ... golden ratio is the goal"
+- **Agent label:** Claude Code (Opus 5.5) — the composer and the task column share the notch's width 1.618 : 1, the column ends where Start and Reset do, and the task form's rows split in the golden ratio
+- **Changes:**
+  - The composer and the side column split the tab's width in the golden ratio around the 41 pt
+    gap, at every notch width (`TimerComposerMetrics.sideColumnWidth(notchWidth:)`): 327 : 202 in
+    the narrowest notch, 349 : 215 in a 675 pt one, instead of a fixed 240 pt column. The notch
+    never grows for it; the columns share what it has. The width comes from the open notch's own
+    width, not the view model's, which shrinks to the closed size before the tab fades out.
+  - The width is passed down to the task list, the task card (its two fact columns follow) and the
+    Time to log page.
+  - The side page is the composer's height, name field included (`sidePageHeight(budget:style:)`),
+    so the list, the card and the divider end on the line Start and Reset end on, at every notch
+    height; three task rows fit beside the stacked composer.
+  - The task form is exactly the composer's height (rows 8 pt apart: 122), so the two swap without
+    anything moving. Its estimate and tags, and Add and Add & Start, split 1 : φ (`GoldenRow`, a
+    small `Layout`); Save alone fills its row. The reminder row is inset like the fields' text.
+  - Tests: `TimerComposerMetricsTests` (the golden split at five widths, the floor, the split
+    adding up, the page ending with the composer, the form equal to the composer);
+    `TimerSideColumnRulesTests` (the open notch's width, the divider and page ending together, the
+    form's golden rows); `TimerTaskDetailRulesTests` (the card takes the column's width).
+
+### 2026-10-18 - The timer's duration digits always show whole
+- **Developer label:** "also ui in timer broken randomly"
+- **Agent label:** Claude Code (Opus 5.5) — the composer's Hours, Minutes and Seconds boxes are an NSTextField of Kannu's own, sized to the box, under no clip
+- **Changes:**
+  - The duration boxes sometimes showed only the top half of their 22 pt digits. Each was a SwiftUI
+    `TextField`, which sizes itself from its text; rebuilt mid-animation (switching tabs, a timer
+    stopping, and since the task form, every time it closes) it could be measured for the default
+    13 pt font, about 16 pt tall, and it sat under two clip masks. The cause is likely, not
+    confirmed on screen, so both suspects go.
+  - New `DurationDigitField`: an `NSTextField` with the font set when it is made, the box's size
+    always (`sizeThatFits`), and a cell that centres the digits. While the user types, an update
+    never overwrites their text unless it no longer says the value.
+  - Typing works like a clock's display (`TimerDurationDigits`): digits only, a digit typed past two
+    pushes the first one out (typing 5 into "00" reads "05"), never past the range.
+  - The box and the composer draw a filled shape behind instead of a clip over the fields.
+  - Tests: `TimerDurationDigitsTests`; `TimerDurationFieldRulesTests` (the wrapper, no clip over
+    the boxes or the composer, the font and size fixed, the digits' line height fits the box,
+    planted offenders).
+
+### 2026-10-18 - New task and Edit task turn the timer tab's left panel into a task form
+- **Developer label:** "a seperate add taks doesnt make sense, the left part does that, for a detailed task edit, keep a small icon by reducing that pills width, keep a minimal size button with hover tool tip and that converts that one full notch patch to a editable task form with a close button and controls to add a task"
+- **Agent label:** Claude Code (Opus 5.5) — a New task button beside the session name field, a pencil on the task card, and one form in the composer's place for both
+- **Changes:**
+  - Beside the session name field, with tasks on, a small New task button (tooltip "New task").
+    The field is 30 pt narrower for it and keeps 259 pt at the smallest notch.
+  - The button turns the left panel into a task form in the composer's frame (116 pt, under the
+    composer's 122, so the notch never grows): the title with a × where the button was; the
+    estimate (Brain's choices) and tags, comma separated; a local task's reminder, a field date
+    picker (a compact one's calendar is a popover window the notch would close under), with an
+    orange bell while macOS blocks Kannu's notifications; then Add and Add & Start.
+  - The pencil on an expanded task card opens the same form on that task, with Save. Only what
+    changed is saved (`TaskFormDraft.edits`). A Jira or GitLab task's title shows but stays the
+    server's, and reminders are for local tasks.
+  - Add & Start starts the task the way its ▶ does; the typed session name gives way to it. Add
+    puts Local back in the notch if it was hidden, as the popover's Add does.
+  - The form's fields and its estimate menu hold the notch open while in use, under tokens of
+    their own, released when the focus goes, the form goes, or the notch's window stops being key.
+    Escape and the × leave without saving. A timer starting or stopping, the tab appearing, or
+    tasks going off brings the composer back.
+  - `TasksManager.addTask` returns the new task's id (its two callers check for nil), and
+    `renameTask` renames a local task; Brain's add row shares the estimate choices.
+  - Tests: `TaskFormDraftTests`; `TimerComposerMetricsTests` (the form fits, the name field keeps
+    its room); `TimerSideColumnRulesTests.testTheTaskFormOwnsTheManagerAndLetsTheNotchGo`;
+    `TimerLifecycleRulesTests` (the form is cleared when a timer starts or stops);
+    `TimerTaskDetailRulesTests` (the pencil's tooltip); `TasksPopoverRulesTests` (the form is a
+    notch task view: no `.help`, no Keychain, no tickers).
+
+### 2026-10-18 - The timer tab's task column has search, the filter, Refresh and Time to log
+- **Developer label:** "instead of tasks buttons,keep the refrsh button and on hover show the integrations last synced time, refrsh should trigger resync, search , filter will be icons, taking up a row similar to the name session ... in right the row will have search and filter option, possibly load the search dynamically ... also do we miss anything else from the task icon click feauture, check and make sure no feature is lost in this overhaul"
+- **Agent label:** Claude Code (Opus 5.5) — a toolbar on the Tasks page, the popover's Refresh rule and Time to log cards shared, the header button shown only where the column cannot be
+- **Changes:**
+  - The Tasks page has a toolbar level with the session name field (same height, same gap):
+    search, the Show in notch filter (the popover's `TaskSourceMenu`, with Connect and Manage
+    tasks…), Refresh while Jira or GitLab syncs, and Time to log, a clock with the yellow dot,
+    while an entry asks. "Filtered · Show all" leads the row while the filter hides a source.
+  - Search turns the row into a field that narrows the list as you type, in memory
+    (`TaskSearch`: title, key, short key, tags and labels, every word, case and accents
+    ignored). The × or Escape ends it.
+  - Refresh's tooltip says when each source last synced ("Jira: Synced 10:42 · GitLab: Offline");
+    a click resyncs both, with a spinner while syncing, off while rate limited. The rule is the
+    popover's, now one place (`TaskSyncSummary`), and the popover uses it too.
+  - The clock opens the Time to log cards in the column, with a × back; they are the popover's
+    cards (`LogTimeCards`, moved out of the popover with `StackedCardStyle`), so Log goes the one
+    way it does everywhere. The page closes when the last entry is answered.
+  - The list honours Show in notch, as the popover does, then the search; empty, it says "No
+    tasks", "No matching tasks" or "Nothing to show". An expanded card and the Log page take the
+    whole page; the list sits under the toolbar (`sideListHeight`, two rows at the smallest
+    notch).
+  - The search field, a Time to log card's fields (through `worklogFieldFocus`, nil in Brain) and
+    an open menu hold the notch open, each under its own token, released when the focus goes, the
+    page goes, or the notch's window stops being key.
+  - The header's Tasks button shows only where the column cannot: on the timer tab while a timer
+    runs, and on every tab with no timer tab (timer off, or a popover). Nothing the popover has is
+    lost: the running task's clock, pause and stop, Up next and Time to log stay there while
+    timing, and with no timer tab everything stays there.
+  - Tests: `TaskSearchTests`; `TasksHeaderVisibilityTests` (16-row table, the running-timer case);
+    `TasksPopoverLogicTests` (sync lines, tooltip, refresh rule); `TimerComposerMetricsTests`
+    (toolbar level with the name field, two rows under it); `TimerSideColumnRulesTests` (filter
+    and search, focus and menu holds, Refresh's rule, the toolbar over the list only);
+    `TasksPopoverRulesTests` (the header gate passes the running timer).
+
+### 2026-10-18 - A local task never timed says so on its card
+- **Developer label:** "for local taks without no logs, just maybe show a greyed out text that goes like no time logged , please start task to see or something more proffessiona"
+- **Agent label:** Claude Code (Opus 5.5) — a muted note on the timer tab's task card for a local task with no recorded time
+- **Changes:**
+  - `TaskDetailSummary` gains `note`: "No time recorded yet. Start the task to track it." for a
+    local task with no sessions and nothing running. A reminder is not time, so a reminded task
+    still says it; a Jira or GitLab task never does, since its facts and its server's time speak
+    for it.
+  - The card shows the note in grey where the facts go, after any facts, and gives way before
+    them when a two-line title leaves less room (`ViewThatFits`), so the card stays contained.
+  - Tests: `TaskDetailSummaryTests.testALocalTaskNeverTimedSaysSo`,
+    `TimerTaskDetailRulesTests.testANeverTimedLocalTaskShowsItsNote`.
+
+### 2026-10-19 - The archive keeps its own time, and the usage Refresh tooltip is translatable
+- **Developer label:** CodeRabbit on #107 (covering this branch): "Archive processing never runs while the app stays open and no sync happens." and "Localize the Refresh tooltip."
+- **Agent label:** Claude Code (Opus 5.5) — `TasksManager.refreshArchive()` on a new day and when Brain's Task list appears; `String(localized:)` on the header's Refresh tooltip
+- **Changes:**
+  - Closed tasks move to the Archive after 3 days, and archived Jira and GitLab tasks clear after 7. Before, that ran only at launch and after a Jira or GitLab sync. A local-only user's done tasks could sit in Recently closed, reading "archiving now", until Kannu restarted. Now `refreshArchive()` runs when the day changes (`NSCalendarDayChanged`) and when Brain's Task list appears. It protects the task being timed, as a sync does.
+  - The header's "Refresh usage" tooltip goes through `String(localized:)`, like every user-facing string.
+  - `TaskListRulesTests.testTheArchiveRunsOnANewDayAndWhenTheListAppears` pins both triggers.
+
+### 2026-10-18 - Clipped text on the task card slides into view on hover, the status pill no longer looks clickable, and no fact wears a refresh icon
+- **Developer label:** "the open hint text shows but nothing happens on clicking the ticket pill, refresh symbol near iteration is confusing , user might feel some refresh is intended, also none of the clipped text shows on hover, ideally they should slide and show that clipped .. text"
+- **Agent label:** Claude Code (Opus 5.5) — a hover-only reveal for clipped text, the pill's tooltip reworded, three icons replaced
+- **Changes:**
+  - New `HoverRevealText`: text that is clipped slides into view while the pointer rests on it,
+    once, then settles back — one line sideways, the card's two-line title upward, line by line.
+    The truncated text still defines the frame, so nothing around it moves; whether it is clipped
+    is measured, not guessed. It waits 0.4 s (brushing past starts nothing), runs only while
+    hovered and only when clipped, does nothing at rest, and stays still under Reduce Motion. The
+    timing lives in `HoverRevealMotion` (pure, tested). Kannu's `MarqueeText` is left as it is: a
+    wrap-around ticker for the music title, not a hover reveal.
+  - Used for the card's title, every fact, the time beside Start, and each list row's title and
+    caption (one hover per row drives both).
+  - The task-number pill's tooltip said only the status word, and GitLab's "Open" read as an
+    action that did nothing. It now says "Status: Open"; VoiceOver reads "ds-vendors #42, status
+    Open". The pill stays a label.
+  - The iteration fact used Kannu's sync arrows and read as a refresh button; it shows an
+    hourglass. "Timed …" (a circular clock arrow) shows a stopwatch, and sessions (the music
+    repeat glyph) a numbered list.
+  - Guards: `HoverRevealMotionTests`, `TaskDetailSummaryTests` (the new icons),
+    `TimerTaskDetailRulesTests` (each clipped text uses the reveal, the row's one hover, the pill's
+    "Status:" tooltip).
+
+### 2026-10-17 - The task card shows status as the key pill's colour, and archives at a tap
+- **Developer label:** "open, in progress and closed can be colors, no need to show mnaybe in card … open and to do can be yellow,. in progress can be green and closed or ended can be red"
+- **Agent label:** Claude Code (Opus 5.5) — the status chip folded into the key pill as a colour, a closed phase, and an archive button on the card
+- **Changes:**
+  - The card no longer spells the status out in a chip of its own. The task number's pill
+    (`ds-vendors #42`, or "Local") takes its colour: yellow for To Do or Open, green for In
+    Progress, red for closed or ended. The word stays as the pill's hover tooltip and is what
+    VoiceOver reads ("ds-vendors #42, In Progress").
+  - A closed phase: a task is red when its server says it is done, or it has left the task order
+    (marked done, no longer listed by its source, archived), reading "Closed" ("Done" for a local
+    task marked done).
+  - An archive button (archive box, tooltip "Archive") sits at the card's bottom right before the
+    trash or open-in icon: any task goes to the archive at once, and the card closes as the task
+    leaves the list.
+  - The chip row paints above the fact grid, so the status tooltip opening downward is never
+    covered; the title row stays above both for the ×.
+  - Guards: `TaskDetailSummaryTests` (the closed phase from every cause), `TimerTaskDetailRulesTests`
+    (no status chip, the pill's colour and tooltip, the colour for each phase, archive on the card).
+
+### 2026-10-17 - Tasks have an archive: closed ones move there after 3 days, archived Jira and GitLab tasks clear after 7, and nothing with time to log is ever lost
+- **Developer label:** "after a few days of being closed tikcet should go in to archive and not show up in any other list other than archive, user can alos immediately archive or delete the tasks, archice other than local tasks can auto clear in 7 days"
+- **Agent label:** Claude Code (Opus 5.5) — a new archived state with its own clock (`TaskArchive`), merge rules that keep it, and Brain's Recently closed and Archive sections
+- **Changes:**
+  - New `.archived` state. A task marked done, or one its source stops listing (closed, unassigned,
+    out of the filter), is Recently closed for 3 days, then archived; the archive is out of every
+    list but its own. Any task can be archived at once (Brain's ⋯ › Archive); for a Jira or GitLab
+    task that is its delete, since a deleted one would only come back on the next sync. Local tasks
+    keep Delete. Hide is gone: tasks hidden before read as archived by the user.
+  - An archived Jira or GitLab task clears itself 7 days after it was archived — never while it
+    holds time not yet logged (an open Time to log entry, an interrupted session, or finished time
+    that would round to something loggable), never while its server still lists it (it would only
+    come back as new), never the task being timed. Local tasks are never cleared.
+  - Sync: a task turning "no longer listed" is stamped with when; one archived on its own that the
+    source lists again comes back to the order with its time, as a gone one always has; one the
+    user archived stays archived.
+  - `TaskArchive` (pure, logic target) holds the rules; `TasksManager` runs it after loading and
+    after each sync — no timer. The tasks file is version 2 and reads its state leniently: a state
+    a build does not know reads as active instead of costing the whole list.
+  - Brain › Tasks › Task list: "Done and hidden" is now "Recently closed" ("archives in 2d",
+    Reopen or Archive) and a new "Archive" ("clears in 5d", "kept until its time is logged", "kept
+    while still open in its source"; Restore, and Delete for local tasks). Search finds both.
+  - Guards: `TaskArchiveTests` (both boundaries, the seed for older files, every reason clearing
+    waits, drafts that go with a task), `TaskMergeTests`, `TaskModelCodingTests`,
+    `TaskReminderPlanTests`, `SettingsHighlightInventoryTests`.
+
+### 2026-10-17 - The task card stays inside its column, lines up, and fills its space with an icon grid of facts
+- **Developer label:** "fix allignemets and also see if some other valid info is there to show , plan how we can show things there in proper spacing but contained in the tab itself"
+- **Agent label:** Claude Code (Opus 5.5) — a fixed-size card, a chip row that gives way, a two-column fact grid sized to the height left over, and the noise removed
+- **Changes:**
+  - Contained: the card is exactly the column's width and the page's height. A long label
+    (`workflow::sprint_backlog`) made the chip row wider than the column, the card grew with it,
+    and the × and the open icon were pushed off the notch. The chip row now tries every label and
+    gives way one at a time through `ViewThatFits`, with a "+N" for the rest; when even the key and
+    status do not fit, the key truncates in the middle.
+  - Aligned: the colour dot is gone — it drew nothing for plain glass yet still took its width,
+    indenting the title past the chips — and the card's own tint carries the colour. Title, chips
+    and facts share one leading edge; the × sits in the corner.
+  - Filled: the facts are a two-column grid of an icon and a few words, up to four, most important
+    first — due date, conflicts, health, milestone, iteration, weight, parent, someone else's name,
+    checklist ("2 of 5 done"), linked MRs, comments, updated ("Updated 2d ago"), then Jira's
+    priority and type and logged time. A local task shows its reminder, when it was last timed and
+    how many sessions it has. The grid takes the height left over and shows two rows, one, or none,
+    so a two-line title never pushes Start out of the card.
+  - Quieter: the user's own name is never a fact (every issue on the list is assigned to them, so
+    "you" said nothing); "No estimate" no longer sits beside Start when there is no estimate and
+    nothing tracked; a scoped label shows its value (`sprint_backlog`); a draft merge request gets
+    a "Draft" chip; conflicts and an at-risk health read in orange.
+  - Guards: `TaskDetailSummaryTests` (facts and icons in order, the user's own name, health words,
+    relative times, scoped labels, draft, local facts, when time shows) and
+    `TimerTaskDetailRulesTests` (the card's fixed frame, `ViewThatFits` on both axes, no dot).
+
+### 2026-10-17 - The sync keeps what a ticket's activity says: updated, comments, checklist, linked MRs, iteration, health, and an MR's draft, conflicts and author
+- **Developer label:** "see if some other valid info is there to show"
+- **Agent label:** Claude Code (Opus 5.5) — fields the same GitLab responses already carry, now decoded leniently and kept; Jira adds `updated`
+- **Changes:**
+  - `RemoteTaskInfo` gains `updatedAt`, `commentCount`, `checklistDone` / `checklistTotal`,
+    `linkedMergeRequests`, `iteration`, `healthStatus`, `isDraft`, `hasConflicts` and `author`,
+    all optional, written to the tasks file and read leniently like the facts before them.
+  - GitLab: `updated_at`, `user_notes_count`, `task_completion_status`, `merge_requests_count`,
+    `iteration` (an untitled one reads "Iteration 5"), `health_status`, and for merge requests
+    `draft`, `has_conflicts` and `author` — all already in the issue and merge-request lists, so no
+    request is added. Each is read on its own (`LenientField`): a value in a shape this version
+    does not expect costs that field, never the item or the page.
+  - Jira: the search also asks for `updated`, whose offset has no colon (`+0000`);
+    `RemoteTaskInfo.serverTimestamp` reads both servers' timestamps.
+  - A sync refreshes each of them, and one the server cleared is cleared here.
+  - Guards: `GitLabDecodingTests` (including a malformed-field item), `JiraDecodingTests`,
+    `JiraRequestTests`, `TaskMergeTests`, `TaskModelCodingTests` (round trip, the timestamp parser).
+
+### 2026-10-17 - The task card reads like its ticket: the title first, then a short key, status and labels as chips, the standard facts, and its time beside Start
+- **Developer label:** "THIS IS NOT WHAT WE WANT TO SHOW … we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the card and row redesigned around the issue's own title and the facts the sync now keeps
+- **Changes:**
+  - The first card put the full GitLab path key in front of the title inside a two-line text, so
+    `discern_security/applications/ds-vendors#4264` ate both lines and the title never showed.
+    The title is now the issue's own, alone, 13 pt on up to two lines that cannot collapse; the
+    key is a short chip of its own — `ds-vendors #4264`, `app !12`, `PROJ-123` — and the list's
+    rows lead with the title too, with the short key in their caption.
+  - A chip row under the title: the key (or "Local"), where the task stands as a tinted capsule
+    (To Do neutral, In Progress blue, in the source's own word: "Open", "In Review"), then as many
+    labels as fit and a "+N" for the rest — GitLab and Jira labels first, the user's tags as
+    "#tag" after.
+  - A facts line in the order they matter on 240 pt: the due date ("Due 20 Oct", "Due today",
+    "Overdue 14 Oct" in orange; a local reminder keeps Brain's words), milestone, "Weight 8", the
+    assignee ("you" when it is the connected account), the parent, Jira's priority and type, then
+    "Jira logged 3h" / "GitLab spent 3h".
+  - The bottom row keeps Start, with the time against the estimate beside it ("42m of 2h ·
+    10m over"), and the trash or open-in icon at the right; the inline delete confirm is unchanged.
+    The top row paints above the chips so the × tooltip is never covered.
+  - `TaskDetailSummary` rewritten for these words (`shortKey(for:)`, `chips(fitting:)`, the facts
+    order, `dueDayText`), pinned by `TaskDetailSummaryTests`; `TimerTaskDetailRulesTests` adds the
+    rule that the title is never prefixed by the key and the row leads with the title.
+
+### 2026-10-17 - The sync keeps a ticket's standard facts: weight, milestone, due date, assignee, parent, priority and type
+- **Developer label:** "we need to show the proper title, and standard informations with a clean ux and proper design in the space"
+- **Agent label:** Claude Code (Fable 5.1) — the data half of the task card redesign: fields the servers already send, now decoded, merged and stored
+- **Changes:**
+  - `RemoteTaskInfo` gains `weight`, `milestone`, `dueDate`, `assignee`, `parentTitle`, `priority`
+    and `issueType`, all optional, written to the tasks file and read leniently, so a file from
+    before them still reads and a newer file never costs the list. A due date is the server's
+    date-only value kept as the start of that day in the local time zone (`RemoteTaskInfo.dayDate`).
+  - GitLab: the issue and merge-request lists already carry `weight`, `milestone`, `due_date`,
+    `assignees` and `epic`; they are decoded now (assignees leniently, like labels). A merge
+    request keeps only its assignee — it has no weight, milestone, due date or epic.
+  - Jira: the search asks for `priority`, `assignee`, `duedate`, `issuetype`, `parent` and
+    `labels` as well, and keeps each. Never `description` (heavy, private) and never a sprint
+    (a per-site custom field). Jira labels now reach the task like GitLab's.
+  - A sync refreshes every one of them: a value the server changed changes, one it cleared is
+    cleared, and either counts as a change worth saving (`TaskMerge`).
+  - Like titles, these sit in the 0600 tasks file, are never logged and are never sent anywhere.
+  - Guards: `GitLabDecodingTests`, `JiraDecodingTests`, `JiraRequestTests` (the new fields list),
+    `TaskMergeTests`, `TaskModelCodingTests` (round trip, old file, the day-date parser).
+
+### 2026-10-16 - A task capsule in the timer tab expands into its card: detail, Start, close, and delete for local tasks
+- **Developer label:** "on clicking the task it should expand into that area and show full detail of a task with start option and the top right having a cross button, local tasks should have a delete icon at botton right"
+- **Agent label:** Claude Code (Fable 5.1) — an in-place task card in the side column, its words from a pure summary, delete confirmed inline
+- **Changes:**
+  - Clicking a task's text in the timer tab's Tasks page replaces the list with that task's card,
+    in the column's own frame (the notch does not grow): key and title with its colour dot, where it
+    comes from and stands ("Jira · PROJ · In Progress", "GitLab · group/app · Merge request · Open",
+    "Local"), its time ("42m of 2h", "10m over" in orange, "Jira logged 3h", "Due Today 15:00",
+    "#tags"), then Start. The ▶ on the row still starts the task without opening the card.
+  - A × at the card's top right collapses it. A local task gets a trash icon at the bottom right;
+    the card's bottom row then asks "Delete? Its recorded time goes too." with Keep and Delete —
+    inline, no alert, since modals under the notch have misbehaved before. A Jira or GitLab task
+    cannot be deleted (the next sync would bring it back), so it gets an open-in-browser icon in
+    that spot instead.
+  - A task that leaves the list while its card is open (deleted, done, resynced away) collapses
+    the card; swiping to Presets does too. Expanding and collapsing use the page switch's animation
+    and respect Reduce Motion. Every icon-only button carries a hover tooltip.
+  - New `TaskDetailSummary` (pure, in the logic test target) holds the card's words, mirroring
+    Brain's row caption; `TaskDetailSummaryTests` pins them. `TimerTaskDetailRulesTests` pins the
+    wiring: the card takes the manager as a parameter, delete is local-only and inline-confirmed,
+    the icon buttons carry tooltips, reduced motion is honoured, and a vanished task collapses it.
+
+### 2026-10-19 - Act on CodeRabbit's review of #109
+- **Developer label:** CodeRabbit's review of #109 (the fixes batch for #91, #92, #93 and #98): two findings, both in fullscreen detection
+- **Agent label:** Claude Code (Opus 5.5) — fullscreen is read again when the Accessibility grant changes, and the no-Accessibility fallback looks once more after the menu bar's slide
+- **Changes:**
+  - `FullscreenMediaDetector` observes `AccessibilityPermissionStore.isAuthorized`. Granting
+    Accessibility from Brain › Media moves the verdict from the menu-bar fallback to `AXFullScreen`,
+    and revoking it moves it back, but neither was a space, playback or setting change, so a
+    fallback misreading stood until one came along.
+  - Without Accessibility, `handleChange` reads fullscreen a second time 1 s after its 500 ms settle.
+    The fallback reads the menu bar from a window snapshot, and the menu bar's slide out of (or back
+    into) a fullscreen space can outlast the settle. macOS posts no public notice for the menu bar's
+    own show and hide, so this is the recheck; each pass still takes one snapshot, and with
+    Accessibility granted nothing waits.
+  - Test: `ClosedNotchVisibilityRulesTests.testTheVerdictIsReadAgainWhenItsInputsChange`.
+
+### 2026-10-15 - The new fallback file's project ids stay unique next to the task branches
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — project-file id renumbering only, no code change
+- **Changes:**
+  - `FullscreenFallbackVerdict.swift`'s two `project.pbxproj` ids moved from `…00E2`/`…00E3` to
+    `…05A2`/`…05A3`: the open task-stack branches already use the `E0`–`F1` range for their own
+    files, and merging both would have put duplicate ids in one project file.
+
+### 2026-10-15 - The notch hides over fullscreen video again: detection re-checks when playback starts, and survives a missing Accessibility grant
+- **Developer label:** "i have observed the notch to not crawl back while playing media in amazon prime in full screen"
+- **Agent label:** Claude Code (Fable 5) — fullscreen media detection re-checked on its real inputs, with a menu-bar fallback when `AXFullScreen` cannot be read
+- **Changes:**
+  - Fullscreen detection ran only on a space change, so fullscreen entered before pressing play was
+    never re-checked and the notch stayed out for the whole video. It now also re-checks when the
+    now-playing app or its play state changes and when the hide option changes — all through the
+    existing 500 ms settle, no polling.
+  - Without the Accessibility grant the "really fullscreen?" check silently answered no, so every
+    re-signed install stopped hiding for good (the grant dies with the code identity). It now falls
+    back to `FullscreenFallbackVerdict`: fullscreen when the window covers the whole screen frame
+    (nothing maximized can) or when that screen's menu bar is gone. A maximized window keeps the
+    menu bar, so the old maximized-hides-the-notch regression stays fixed; the one blind spot is a
+    menu bar set to auto-hide, and the one-time log says so.
+  - Brain › Media shows an "Accessibility access" row under the hide picker while the grant is
+    missing, with an Open System Settings button. The picker registered a highlight id, and two
+    search entries ("Hide in fullscreen", "Accessibility access") land on it — the conditional row
+    is never a search target.
+  - Guards: `FullscreenFallbackVerdictTests`; the settings inventory counts moved by the two new
+    entries and registrations.
+
+### 2026-10-19 - A Clock timer's delayed cleanup ends only the session that finished
+- **Developer label:** CodeRabbit on #107 (covering this branch's timer fix): "Bind delayed cleanup to the finished session."
+- **Agent label:** Claude Code (Opus 5.5) — `SystemTimerBridge.clearLogState` captures the finished session before its 3.2 s wait
+- **Changes:**
+  - When a Clock timer finishes, Kannu ends it 3.2 seconds later. That cleanup now checks it is still the same session (`TimerManager.sessionID`). Before, a second Clock timer that started and also finished within those 3.2 seconds was ended by the first one's cleanup.
+  - `TimerLifecycleRulesTests` pins the session check alongside the finished check, with a planted offender for each.
+
+### 2026-10-12 - The timer rules tests share one modifier scanner
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on duplicated new lines (4.2%, limit 3%)
+- **Changes:**
+  - `TimerNamingRulesTests` and `TimerLifecycleRulesTests` each carried the same 24-line
+    `modifiers(_:in:)` scanner, which reads a SwiftUI modifier and its closure out of a view's
+    source. It now lives once, in `KannuTests/SwiftModifierScan.swift`, and both tests call it.
+    No test changes what it checks.
+
+### 2026-10-16 - The timer tab's first task capsule sits level with the name field
+- **Developer label:** "the do you wnt name patch should be inline with the right side 1st capsule( somethung), rn the top is black and feels misalligned"
+- **Agent label:** Claude Code (Fable 5.1) — side-list top inset removed, and the top fade shown only once the list has scrolled
+- **Changes:**
+  - The Tasks and Presets lists in the timer tab's side column started their first row 2 pt down
+    and painted a 16 pt black fade over its top even when nothing had scrolled, so the first
+    capsule looked lower than the "Do you want to name this session?" field with a black band
+    above it. The top inset is gone (the bottom one stays, so the list height is unchanged and the
+    notch does not grow), and the top fade now appears only once rows have scrolled under it,
+    tracked through a scroll-offset preference (macOS 14 has no `onScrollGeometryChange`).
+  - The bottom fade, the row heights, the pager footer and every `TimerComposerMetrics` value are
+    untouched; `TimerSideColumnRulesTests` and `TimerComposerMetricsTests` pin them as before.
+
+### 2026-10-12 - Searching Brain for a Jira or GitLab setting lands on that source while it is disconnected
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: CodeRabbit on this PR, search entries whose rows are not built while their source is disconnected
+- **Changes:**
+  - Brain › Tasks builds Sync Jira, Jira colour, Jira issues and the Issue filter only while Jira is
+    connected, and Sync GitLab, GitLab colour, Include merge requests and GitLab items only while
+    GitLab is. Searching for one of them while its source was disconnected opened Tasks and scrolled
+    to nothing. Search now lands those entries on the source's own row (Jira Cloud, GitLab), which
+    is always there, and on the row itself once the source is connected.
+  - `SettingsHighlightInventoryTests` keeps the two lists in `SettingsView` equal to the rows
+    `TaskSourcesSection` builds inside its connected blocks, so a new connected-only row cannot
+    scroll to nothing again.
+
+### 2026-10-18 - GitLab's Connect has Jira's race guards, and Brain paths name the right tab
+- **Developer label:** CodeRabbit's full review of the task stack (#87): "`connectGitLab` and `retryRemovingGitLabToken` need the race guards that `connectJira` has", and "Include the Agents section in this path"
+- **Agent label:** Claude Code (Opus 5.5) — the GitLab connect counts itself in flight and re-checks the generation before saving; three security messages point at Brain › Agent Security
+- **Changes:**
+  - `connectGitLab` counts itself in flight before its first await (`gitlabConnectsInFlight`), and
+    re-checks cancellation and the generation together right before the save, as `connectJira`
+    does. A Disconnect that finishes during the verify is no longer undone by the Connect saving
+    anyway.
+  - `retryRemovingGitLabToken` refuses while a Connect is in flight: the display copies still say
+    disconnected until its save lands, and a delete queued behind that save took the new token
+    with it, leaving GitLab shown as connected with an empty Keychain.
+  - "Session analysis is off" now says Brain › Agent Security › Analyze chats with ADR Detection
+    (it said Brain › Security findings, a section). Two other messages said Brain › Agents › for
+    rows in the Agent Security tab: Security findings and Agent policy now name Agent Security.
+  - Tests: `JiraSyncRulesTests.testGitLabRemoveTokenRefusesWhileAConnectIsInFlight` (the Jira
+    connect scanner, now for either source); new `BrainPathRulesTests` (every "Brain › …" in the
+    app's strings starts at a tab or section the sidebar has; the three messages pinned).
+
+### 2026-10-11 - A worklog refused with an old token no longer marks a reconnected source as rejected
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Opus 5.5) — concurrency audit risk R-B, found when the stack's merge-up brought `JiraSyncRulesTests` (#80) next to the worklog send (#83)
+- **Changes:**
+  - A worklog send now remembers which connection its token belongs to (the source's generation,
+    read right after the token is loaded). A 401 marks the Sources row only if that connection is
+    still the current one, through `markJiraRejected` / `markGitLabRejected`. Before, a 401 for a
+    token sent just before a Disconnect and Connect marked the new connection rejected and stopped
+    its background syncs.
+  - `finishSend(_:verdict:source:)` no longer writes the sync state itself, so
+    `JiraSyncRulesTests.testEverySyncStateWriteSitsBehindTheGenerationCheck` covers this path too.
+
+### 2026-10-11 - A finished Clock timer closes with its 1 s ease again, and the timer notes say what a closed notch drops
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review follow-up on the timer lifecycle fix: the Clock-timer close's animation, and two notes that overstated what the fix keeps
+- **Changes:**
+  - When the 3 s close fires for a finished Clock timer it now animates the live activity shut with
+    the same 1 s ease-in-out as before and then ends the session. The previous entry's fix ended the
+    session first, so that close ran with the reset's `.smooth` curve instead; the finished Clock
+    timer was the only path where the delayed close still animated anything.
+  - `NotchTimerView`'s resign-key note and the previous entry no longer say the typed name is kept:
+    dropping the focus lets the notch auto-close, and closing the notch removes the view and the
+    half-typed next-session name with it. Keeping it would mean holding the draft outside the view.
+  - `TimerLifecycleRulesTests`' doc comment no longer presents the re-arming close as something that
+    shipped: the old close was a bare `asyncAfter` block that stacked on repeated completion reports,
+    and re-arming is the shape the fix would have had without the rule.
+
+### 2026-10-11 - A stopped timer no longer ends the next session, the alarm stops when a new session starts, and the name field no longer holds the notch open
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — timer lifecycle review: the stop's delayed close, the finished alarm, the countdown tick and the name field's focus each bound to their own session
+- **Changes:**
+  - Stopping a timer arms a 3 s smooth close of the live activity. It used to be a bare `asyncAfter`
+    block that ended whichever session it found running, so a timer started inside those 3 s (a
+    preset card, Start, or an adopted Clock timer) kept counting with its controls dead. The close is
+    now a `DispatchWorkItem` armed for one session: `startTimer` and `adoptExternalTimer` cancel it,
+    and the block re-checks the session before closing anything.
+  - A close already pending for a session is kept, not re-armed: a finished Clock timer is reported
+    again every second while it rings, and re-arming on each report would have held the live
+    activity open until the Clock timer was dismissed.
+  - When the close fires for a finished Clock timer it also ends the session, so Start and pause
+    work again. Before, `activeSource` stayed `.external` and the manual controls stayed disabled
+    until the next Clock timer was adopted.
+  - A Clock timer restarted inside the finished one's 3 s is left running: `updateExternalTimer`
+    cancels the pending close, and the bridge's 3.2 s cleanup ends only a timer that is still
+    finished.
+  - `startTimer` stops the finished alarm, which loops until stopped and used to keep ringing under
+    the new session.
+  - Each countdown tick queues its work on the main actor; the job now checks that its session is
+    still the current one, so a tick that fires just before a stop no longer reads the reset's
+    `remainingTime == 0` as a finish and rings the alarm with no timer showing.
+  - In the notch, focusing the "Name this session" field keeps the notch open while you type. A
+    click into another app left the field focused, so the notch never auto-closed again; the window
+    going to the background, and the timer stopping, now drop the focus (a half-typed name is
+    dropped with the closed notch).
+  - Tests: `TimerLifecycleRulesTests` pins each rule from the source, with planted offenders for the
+    manager (including a close that re-arms and a tick that checks outside its main-actor job), the
+    bridge and the notch view.
+
+### 2026-10-10 - The timer popover's "Click to rename" hint shows on hover
+- **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
+- **Agent label:** Claude Code (Opus 5.5) — tooltip principle follow-up: a dead .help on the timer popover's session title, found by the new tooltip coverage scan
+- **Changes:**
+  - The timer popover's session title used `.help("Click to rename")`, which never renders in the
+    notch or its popovers because Kannu is never the active app (docs/TOOLTIPS.md). It now uses
+    `.hoverTooltip(..., edge: .below, pointingHandCursor: true)`, like the notch's own title.
+  - Found when the tooltip coverage scan (#89, which widens the `.help` guard to `Timer/`) ran
+    over this branch.
+
+### 2026-10-11 - The Set End Time picker keeps a live clock and only mentions a later session when there is one
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the interrupted-session end bound: live picker ceiling, conditional explanation
+- **Changes:**
+  - `TaskTimeMath.nextStart(after:in:)` (pure, logic target): the earliest start of any segment on the
+    task that began after the given one, or nil. Clock-free; `endBound` is now expressed through it.
+  - `InterruptedSession` carries that `nextSessionStart` instead of an `endBound` stamped with the
+    `Date()` of the last task-list render, and the Set End Time… sheet caps it at its own `Date()` when
+    it renders. A Brain window left open no longer forbids the stretch between the list's last render
+    and now; `setEndTime` still clamps with fresh segments and a fresh now.
+  - The sheet's explanation says "It cannot end after a later session on this task began." only when a
+    later session exists; with none, the two-sentence text is back.
+  - Tests: `TaskTimeMathTests` covers `nextStart` (nil with no later segment, the earliest later
+    start otherwise, earlier ones ignored); the source pin now requires `nextSessionStart` and a live
+    `Date()` on the picker's range line.
+
+### 2026-10-11 - Interrupted sessions cannot end past a later session on the same task
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on PR #79: `TaskTimeMath.endBound`, `setEndTime` clamp, Set End Time picker range and copy
+- **Changes:**
+  - `TaskTimeMath.endBound(for:in:now:)` (pure, logic target): the latest end an interrupted segment
+    may be given is the earliest start of any segment on the task that began after it, capped at now
+    and never before its own start. A segment that began before it is an earlier session and does not
+    bound it.
+  - `TasksManager.setEndTime` clamps to that bound instead of to now alone, so after a crash at
+    10:00, re-timing 10:05–11:00, then ending the interrupted session at 11:00, the tracked total and
+    the folded log drafts count 10:05–11:00 once. `InterruptedSession` carries the bound; the Set End
+    Time… sheet uses it as the picker's upper limit and its explanation says why the picker stops
+    there.
+  - Tests: `TaskTimeMathTests` covers no later segment (now), a later segment (its start, whatever
+    the array order, live or ended), an earlier segment (ignored), the now and start caps, and that
+    ending at the bound counts the re-timed work once; a source pin checks that `setEndTime` clamps
+    through the helper and the picker's range stops at the bound.
+
+### 2026-10-11 - Jira sync review follow-up: the refresh pin checks the order inside finishJiraSync, and the notes name the filter row
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync review follow-up: finishJiraSync ordering pin, wording fix
+- **Changes:**
+  - `JiraSyncRulesTests.refreshProblems` now requires `finishJiraSync` to clear the in-flight sync, publish
+    its state and consume `pendingJiraRefresh` before it calls `refreshJira()`. Run earlier, `refreshJira`'s
+    guards read the sync that is ending: the refresh is kept again and stuck until some later sync, or the
+    rate-limit guard still sees `.syncing`, a new sync starts, and `jiraSync = state` overwrites its
+    `.syncing` with the ended sync's result. Two planted offenders — the call moved above
+    `jiraSyncInFlight = nil`, and above `jiraSync = state` — pin the problem text.
+  - The entry below and the `refreshJira` doc comment no longer say Refresh can be pressed during a sync:
+    the Refresh button is disabled and the Keychain row hidden while one runs, so the Issue filter's
+    Return and Reset are the only way into the kept refresh.
+
+### 2026-10-11 - Jira sync: a filter edited mid-sync is not lost, a late 401 cannot reject a fresh connection, and Remove Token waits for a Connect
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Jira sync race review: pending refresh, generation-pinned finish, Connect in-flight count
+- **Changes:**
+  - Return or Reset on the Issue filter during a running sync is kept instead of dropped (Refresh is
+    disabled and the Keychain row hidden while one runs, so the filter row is the only way in):
+    `refreshJira` records `pendingJiraRefresh` while a sync is in flight, `finishJiraSync` consumes it
+    and runs the refresh for the new filter once that sync ends — after clearing the in-flight sync and
+    publishing its state, which `refreshJira`'s guards read — and Connect and Disconnect clear it with
+    the sync they replace. Not after `.authFailed`, `.needsReconnect` or `.needsKeychainApproval`: a new
+    filter changes none of those answers, re-sending a refused token can lock the account, and the user
+    just declined the Keychain dialog — Allow Keychain Access carries that retry with the current filter.
+  - The 401 path stays behind the generation check: `didFetchJira` and `finishJiraSync` only write
+    `jiraSync` after `guard generation == jiraGeneration`, and every `finishJiraSync(` call passes the
+    generation its sync captured, so a late answer for a replaced token never marks the new sign-in refused.
+  - Remove Token refuses while a Connect is in flight (`jiraConnectsInFlight`, counted before the first
+    await, uncounted on every return): `isJiraConnected` stays false until the Connect's save lands, and
+    a delete queued behind that save would have taken the new token with it. The Connect re-checks
+    cancellation and the generation in one guard right before the save, with no await between the save
+    and the display copies.
+  - New `KannuTests/JiraSyncRulesTests.swift`: source pins for all three rules, each with a
+    planted-offender test, including a `finishJiraSync(jiraGeneration, …)` call that would make the
+    guard inside hold vacuously, and a `finishJiraSync` that runs the kept refresh before clearing the
+    in-flight sync or publishing its state.
+
+### 2026-10-11 - The worklog recheck's tests pin that the wait is the configured delay
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review of the two-read recheck: the wait is proven to be `recheckDelay`, and its comment says only tests change it
+- **Changes:**
+  - WorklogPosterTests: the reporting clock records how long the one sleep asked for, and the
+    cancellation test asserts it is at least 59 s of the 60 s handed in; the two-miss send is timed
+    and must finish under 1 s on its 20 ms delay. A `verifyLostJiraWorklog` that stopped reading
+    `recheckDelay` and slept a constant 3 s now fails a test instead of only slowing the suite.
+  - `WorklogPoster.recheckDelay`'s comment said tests only shorten it; they also stretch it to pin a
+    wait cut short, so it now says only tests change it, and in which directions.
+
+### 2026-10-11 - A lost Jira worklog answer is checked twice before Kannu says nothing was logged
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — CodeRabbit on #83: a lost Jira POST is read back twice, 3 s apart, before it counts as not logged; a wait cut short stays uncertain
+- **Changes:**
+  - `WorklogPoster.verifyLostJiraWorklog`: after a POST whose answer was lost (timeout, dropped
+    connection, 502/504), one read-only `GET` that finds nothing is no longer an answer, because
+    Jira may still be committing the POST. It waits `recheckDelay` (3 s) and reads once more; only
+    two misses give `.checkedNotFound` (failed, Retry), a read that fails gives `.uncertain`, and a
+    wait cut short by cancellation gives `.uncertain` too — never "not logged" on a guess, which is
+    what let Keep Local Only drop an entry Jira holds. Found on either read is logged. The marker is
+    still matched first, then author, start and length.
+  - The wait sleeps on an injected `clock: any Clock<Duration>` (default `ContinuousClock`), so the
+    test of a cut-short wait can see the wait begin instead of racing the first read's cancellation.
+  - `WorklogDrafts.Verdict.checkedNotFound` and `TasksManager.confirmWorklog`'s steps say two checks.
+  - Tests: WorklogPosterTests — found on the second read is logged with the same `GET` repeated; not
+    found twice is `.checkedNotFound` with exactly `POST, GET, GET`; a miss then a failed read
+    (offline, 500, 401, unreadable JSON) is `.uncertain`; a 60 s wait cancelled once a reporting
+    clock says it began is `.uncertain` with no second read and ends with the cancellation.
+
+### 2026-10-11 - Reminders are re-added with their current dates, survive a click during launch, and finish their action before macOS is told
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — Brain Tasks PR7 review pass: resend on grant, pre-gate reminder delegate with buffered clicks, completion after the answer, baseline reset on Tasks off and on, one chain for the notification-center work
+- **Changes:**
+  - `TaskReminderPlan.reconcile` with `canAdd` now sends every wanted reminder still ahead again
+    (`resend`), held or not, judged at the same instant as its removals: a request macOS kept while
+    notifications were off carries the date and title the task had then, and only a resend replaces
+    it. Permission granted, the task file read, Tasks turned on and the Task list opened all go
+    through it.
+  - `TaskReminderCenter.shared.install()` moved from `continueLaunch()` to
+    `applicationDidFinishLaunching`, before the Terms of Use gate: a click on a reminder while Kannu
+    is not running launches it, and macOS hands the response to the delegate set by the time that
+    method returns, so one set after the terms missed it. Installing sets the delegate and the Start
+    category only — no permission prompt, no file read, no `TasksManager`. A response arriving before
+    `continueLaunch()` waits in `TaskReminderCenter` (`launchContinued` and `waiting`, main-actor
+    state) and is answered by `launchDidContinue()`, which `continueLaunch()` calls last; the Enable
+    tasks check and the Start and default actions are unchanged.
+  - The notification's completion handler runs after the click is answered, not before it: Start's
+    completion goes to `TasksManager.startFromReminder(_:otherwise:completion:)` and runs after the
+    start, the Task-list fallback or the load's failure; a Start replaced by a second click before
+    the file is read is completed when it is discarded; a click on the banner completes once the
+    Task list has opened.
+  - Tasks off empties `reminderBaseline` along with macOS, and a save with Tasks off wants nothing,
+    so Tasks on sends every reminder again at once instead of only what changed since. Tasks on also
+    restores the baseline to the list first, as at load: left empty, the next save counted every
+    reminder as changed and took a reminder that had fired in between off the screen.
+  - `TaskReminders.serially` runs the notification-center operations one after another —
+    `withdrawAll` and `TasksManager.checkReminderPermission` both go through it. Each reads what
+    macOS holds and then changes it, and Tasks turned off and on again within a moment could
+    otherwise have the removal, computed first, take back the reminders the resend had just sent.
+  - Tests: TaskReminderPlanTests (the reconcile resends what is ahead and judges additions and
+    removals at one instant; an empty baseline takes back a reminder that fired), LaunchGateRulesTests
+    (the delegate is installed once, before the gate, and asks, reads and builds nothing; a click
+    waits for the launch and is answered last; a planted offender for each), TaskListRulesTests (the
+    completion after the answer, the baseline emptied on Tasks off and restored on Tasks on, both
+    operations on the chain). The 2026-10-06 entry below is corrected where it placed the delegate
+    in `continueLaunch()`.
+
+### 2026-10-11 - The timer tab's page swipe yields to the ruler by geometry, not by hover
+- **Developer label:** "review till now, what do you think , are we solid on the code without any race condition or stuff"
+- **Agent label:** Claude Code (Fable 5.1) — review finding R-G on the timer tab's page swipe: the ruler's `ScrollWheelMonitor` owns the sideways scroll and the swipe's monitor yields over the owner's live frame before an event is offered, so a sideways scroll over the ruler sets minutes even before the hover-derived `isSuspended` has caught up; the rule pinned by a new test
+- **Changes:**
+  - `ScrollWheelMonitor` gains `ownsSidewaysScroll` and `yieldsToOwners`, with a weak, main-actor
+    `sidewaysScrollOwners` registry. An owning monitor registers its `NSView` while installed and
+    unregisters it in `removeMonitor`; a yielding monitor's `shouldOffer` converts the pointer to
+    window coordinates and hands back any event that lies inside an owner's view in the same window,
+    before `onScroll` sees it. The frame is read live off the owner's view at event time, so no hover
+    callback, `@State` or re-render has to have run first. The ruler (`RulerTimerPicker`) owns the
+    sideways scroll; the page swipe (`HorizontalSwipeMonitor`) yields.
+  - Before, the swipe stood aside over the ruler only through `isSuspended`, which `NotchTimerView`
+    sets from the ruler's `onScrollAreaHover` and which reaches the monitor through `@State` and a
+    re-render. Both monitors are local `NSEvent` monitors that AppKit runs in no promised order, so a
+    sideways scroll that arrived before that chain completed, or over a ruler that appeared under a
+    still pointer (no hover event at all), could be consumed by the swipe and turn the page instead
+    of setting minutes. `isSuspended` stays as the second guard.
+  - Doc comments in `ScrollWheelMonitor`, `HorizontalSwipeMonitor`, `NotchTimerView` and
+    `RulerTimerPicker` state the geometry-first order and why the hover is only the second guard.
+  - Tests: `TimerSideColumnRulesTests` gains a rule that the ruler's monitor owns the sideways
+    scroll, the swipe's monitor yields, an owner's view is registered under the `ownsSidewaysScroll`
+    guard only (an unguarded registration would make the swipe yield to its own view, tab-wide) and
+    unregistered on removal, and `shouldOffer` contains the whole yield statement, handing the event
+    back, ahead of the `return true` that offers it. Its scanner is checked against planted
+    offenders: no ownership, no yield, no registration, unguarded registration, no unregistration,
+    the check missing, the check in a later helper, the check with an empty body, the check after
+    `return true`, and the offer before `shouldOffer`. The existing `isSuspended` rule now matches
+    the yielding monitor's call.
+
+### 2026-10-10 - Tasks take a colour from their first tag or their source
+- **Developer label:** "also allow color for each tag, and by default a task will be tagged with its integration too( but that should be hidden to user) and while setting up an integration ask user to select a color for a integration for eg gitlab is orange or local is white. there should be a default option which is glass grey opaque like now, other colors also should be glass opaque finish, lets jus give them a few presets to select from, now if a tag is added by user to a ticket, the color should be given to related to the tag that is highest in order , the order can be based on tags, the tags listing is a list change that to small tabs and only seletctd tags should be shown in a list, the list should be able to be reordered, or if it can be better dones as small pills it self do that, but the first one there will be the color for the task, dont show integration tag on that list, this would be considered excluding that"
+- **Agent label:** Claude Code (Opus 5.5) — task colours: ten glass presets (plain grey glass the default), a colour per tag and per source (local, Jira, GitLab), a task strictly coloured by its first tag or, untagged, by its source; reorderable tag pills with their own colour swatch, a Tag colours list in Brain, a colour picker in the Jira and GitLab connect sheets, and the colour shown in Brain's task rows, the notch Tasks popover, the timer tab's Tasks page and the running timer's accent
+- **Changes:**
+  - New `TaskColor` (`Kannu/managers/Tasks/TaskColor.swift`, in the logic test target): ten
+    presets, `glass` first and the default, each with `localizedName` and `description`.
+    `TaskColoring.color` gives a task strictly its first tag's colour (glass when that tag has
+    none); only a task with no tags takes its source's colour. The source is never a tag, so it
+    never shows as one.
+  - Tag colours are saved in tasks.json as `tagColors`, keyed by the cleaned, lower-cased tag;
+    glass is never stored. Each entry decodes on its own, so a malformed or unknown value costs only
+    that tag's colour, never the file or the other colours.
+  - Source colours are three `Defaults` keys (`tasksLocalColor`, `jiraTaskColor`,
+    `gitlabTaskColor`), default glass. `TasksManager` gains `tagColor(for:)`, `setTagColor`,
+    `setTagColors` and `color(of:)`, and republishes when a source colour changes.
+  - New `TaskColorViews.swift`: `TaskGlassBackground` (glass is exactly the old fill; a colour adds a
+    translucent tint and a thin tinted edge), `TaskColorDot`, and `TaskColorPickerButton`, a swatch
+    that opens the presets through the shared swatch grid.
+  - The Tags sheet shows the task's tags as capsule pills (`SettingsTagChip` gains `tint:`), each with
+    its colour swatch. Pills reorder by drag and drop, by a right-click Move to Front / Move Left /
+    Move Right menu, and by the same moves as VoiceOver actions (`TaskTagEditing.moving`). Done saves
+    the tags and the colours picked there; Cancel saves neither.
+  - Brain › Tasks: a colour row per source in Sources (Local always, Jira and GitLab once
+    connected), a "Tag colours" section at the end of the Task list, and a colour picker in the Jira
+    and GitLab connect sheets, saved only when Connect succeeds. Each swatch's VoiceOver label names
+    what it colours. Task list rows lead with a colour dot once any listed task has a colour; an
+    all-glass list looks as before. New search entries for the three source rows and Tag colours.
+  - The notch Tasks popover's Up next rows and Now card, and the timer tab's Tasks page rows, draw
+    their background through `TaskGlassBackground` with the task's colour.
+  - The running timer's accent: `TimerManager.startTimer` takes the timed task's colour as
+    `sessionTint`, cleared whenever a session ends or a Clock-app timer takes over, and
+    `sessionAccent` (the tint, else the preset's colour) is what every accent site reads. A change
+    of tag, tag colour or source colour recolours the running session. `NotchTimerView` re-locks its
+    accent whenever `sessionAccent` changes, so a session that replaces a preset session without a
+    colour no longer keeps the preset's accent.
+  - docs/SETTINGS.md notes the chip's capsule shape and `tint:`.
+  - Tests: new `TaskColorTests` (the colour rule, file round trips, odd and partly bad
+    `tagColors`) and `TaskColorRulesTests` (the tinted rows, Brain's dot, no `.help(` in the colour
+    views, the pills' reorder paths including the VoiceOver action, Done/Cancel saving, every accent
+    site reading `sessionAccent`, the tint cleared with each session), each scanner with planted
+    offenders; `TaskTagEditingTests` covers the reorder helpers; `SettingsHighlightInventoryTests`
+    counts move to 232 entries, 274 registrations and 268 distinct ids.
+
+### 2026-10-10 - A two-finger swipe turns the timer tab's page over the preset cards too
+- **Developer label:** "swiping on any part of the tab shoulw work, current i think swipe does not work on top of preset capsules"
+- **Agent label:** Claude Code (Opus 5.5) — timer tab page swipe over the Presets page: the preset cards scroll in a `ScrollView` of a `LazyVStack` instead of a `List`, so the trackpad gesture reaches the tab's swipe monitor there too; the rule pinned by a new test
+- **Changes:**
+  - The Presets page of the timer tab's side column (`TimerSideColumn.presetsPage`) is a
+    `ScrollView(.vertical)` of a `LazyVStack`, in the Tasks page's style, instead of a SwiftUI
+    `List`. A `List` is an `NSTableView` in an `NSScrollView`, which can follow a trackpad gesture
+    in an event loop of its own once the gesture's first event reaches it; the tab's swipe monitor
+    is a local `NSEvent` monitor, which never sees events such a loop takes, so a swipe over the
+    preset cards did not turn the page. Each card keeps its 2 pt above and below, the same edge
+    fades, the same height (60 pt a preset plus 4, capped at the page height) and no scroll
+    indicators; the cards themselves are unchanged.
+  - Nothing else on the timer tab hosts a `List` or another scrolling view: the composer, ruler,
+    labels and name fields have none, and the Tasks page's vertical-only `ScrollView` gets no
+    sideways event the monitor takes, since the monitor consumes every horizontal-dominant
+    trackpad event before the view under the pointer sees it.
+  - Doc comments in `TimerSideColumn` and `HorizontalSwipeMonitor` state why the pages are
+    `ScrollView`s and never a `List`.
+  - Tests: `TimerSideColumnRulesTests` gains a rule that `TimerSideColumn.swift` builds no `List`
+    (`List {` or `List(`), with a planted-offender test for its scanner.
+
+### 2026-10-09 - Fixed buttons in the notch header keep their place; what comes and goes appears to their left
+- **Developer label:** "the refesh button in usage tab also should be one left, basically non changing buttons shoulkd have statis position priottized,  and dynamic ones come to their left only"
+- **Agent label:** Claude Code (Opus 5.5) — notch header order: the screen-recording and Do Not Disturb indicators, the Usage tab's Refresh button and the Tasks button sit left of the clipboard, timer, Brain and battery, so a fixed button never moves; the rule stated in AGENTS.md and pinned by a new test
+- **Changes:**
+  - `KannuHeader`'s trailing row now reads, left to right: screen-recording indicator, Do Not
+    Disturb indicator, Refresh (Usage tab only), Tasks, then clipboard, timer (popover mode), Brain
+    and battery. The row is trailing-aligned, so an item that appears or disappears pushes only
+    what is to its left; the buttons that are always there keep their place. Before, Refresh sat
+    between the clipboard and the timer, and both indicators sat right of Brain, so they shifted
+    the fixed buttons whenever they came and went. This corrects the previous entry's "front of the
+    trailing row" for the Tasks button: it is now the last of the items that come and go.
+  - The Refresh button fades in and out like the Tasks button: a plain `.transition(.opacity)`,
+    driven by an `.easeInOut(duration: 0.15)` animation on `currentView == .llmUsage`, since a tab
+    click changes the view with no transaction.
+  - AGENTS.md ("UI") states the principle: fixed buttons keep fixed positions on the right, and
+    buttons and indicators that come and go appear to their left.
+  - Comments in `TasksHeaderButton` and `NotchLLMUsageView` that still placed those buttons "first"
+    or "next to the clipboard icon" now describe the new order.
+  - Tests: new `HeaderOrderRulesTests` pins the order from the source (every item once, inside the
+    open, non-minimalistic block; what comes and goes left of the leftmost fixed button; each group
+    in its own order; the battery block last in the row) and the Refresh button's fade, each scanner
+    with planted offenders. `BrainNamingRulesTests` now ends the Brain button's span at the battery
+    block instead of the recording indicator, and the `TasksPopoverRulesTests` doc comment no longer
+    says the Tasks button sits first.
+
+### 2026-10-09 - The timer tab's page labels sit in the footer, it swipes anywhere, and its Tasks button sits left of the clipboard
+- **Developer label:** "i want the layout spacing differently, name this session optional change it to Do you want to name this session ? the swipe doesnt work on the whole surface area task and preset can be centered to the bottom of that subsection,and can go a line space below the current line we hold for the tabs in current design, creeoping that into footer is fine, but the tabs section both timer and task list can stay same, make the task scroller a bit wider and taller all tasks not needed as that same page has task list at top  near brain, also that should only be near brain in that promodo tab, also move it to left of clipboard, that change animation between tabs donot need to be comnplicated"
+- **Agent label:** Claude Code (Opus 5.5) — timer tab layout follow-up: "Tasks · Presets" in the footer, a tab-wide page swipe that leaves the ruler alone, a wider and taller task list without "All tasks ›", the Tasks header button left of the clipboard on the timer tab only, and the new session-name placeholder
+- **Changes:**
+  - The session name placeholder is "Do you want to name this session?" in the notch tab and in the
+    timer popover.
+  - "Tasks · Presets" no longer sits on top of the side column. It is a bottom overlay of the
+    column, centred on it and pushed 14 pt down into the notch's footer, so it takes no layout room
+    and neither the tab nor the notch grows. `TimerComposerMetrics.sidePagerHeight` and
+    `sidePagerFooterOffset` replace the old header metrics; the footer arithmetic (6 pt tab padding
+    plus the open notch's 12 pt bottom padding, 4 pt clear of the edge) is in the metric's doc
+    comment. The labels stay clickable, keep their VoiceOver picker, and the page switch keeps its
+    fade.
+  - The side column is 240 pt wide (was 210), and its page runs from the session name field's line
+    down to the tab's bottom line less a 4 pt inset, so the task list is wider and taller. The
+    stacked composer still fits beside it at the narrowest (640 pt) open notch.
+  - "All tasks ›" is gone, with its metrics and the column's link into Brain; an empty Tasks page
+    just says "No tasks".
+  - A two-finger sideways swipe turns the page anywhere on the tab, not only over the column:
+    `HorizontalSwipeMonitor` moved from `TimerSideColumn` to the background of `NotchTimerView`'s
+    whole tab, attached only with both pages and no timer running, and reaching down into the footer
+    (`pageSwipeFooterReach`) so the labels are swipeable too. Label clicks and swipes share
+    `NotchTimerView.selectSidePage`. Over the ruler the swipe stands aside, so a sideways scroll
+    there still sets the minutes (`RulerTimerPicker.onScrollAreaHover`, `isOverRuler`). Only
+    horizontal-dominant scrolls are taken, so a vertical scroll over the composer still reaches the
+    notch.
+  - `ScrollWheelMonitor` is offered only scrolls delivered to its own window, so a swipe inside the
+    Tasks or clipboard popover over the tab no longer turns the column's page behind it.
+  - The header's Tasks button moved to the front of the trailing row, left of the clipboard button.
+    With a timer tab it shows only on that tab; with no timer tab (the timer off, or shown as a
+    popover) it shows on every tab. The rule is the pure `TasksHeaderVisibility.isShown` (logic
+    target). It fades in and out with a plain 0.15 s opacity animation, and is still never built
+    with tasks off.
+  - Tests: new `TasksHeaderVisibilityTests` (truth table); `TasksPopoverRulesTests` now pins the
+    button before the clipboard button, shown through `TasksHeaderVisibility.isShown`, with its fade
+    animated on that gate; `TimerComposerMetricsTests` checks the list area, the footer labels, the
+    swipe area's reach and the 240 pt column at the narrowest notch; `TimerSideColumnRulesTests`
+    checks no "All tasks" link, the swipe hosted by `NotchTimerView` and reaching the footer, the
+    ruler exclusion honoured by `HorizontalSwipeMonitor`, the labels as a footer overlay, and no
+    `.help(`. Each new check has planted offenders.
+
+### 2026-10-07 - The timer tab's side column has Tasks and Presets pages you can swipe between
+- **Developer label:** "the focus break pills should be a sub tab which could be swipeable to see the task list latest order and a click available to full task list but here its for user to start easily, that is default main tab for anyone when they turn on itegrations else the deep work tab will be default view"
+- **Agent label:** Claude Code (Opus 5.5) — timer tab side column: Tasks · Presets pages with clickable labels and a two-finger swipe, Tasks first when Jira or GitLab is connected, ▶ to start a task, All tasks › into Brain
+- **Changes:**
+  - The timer tab's right-hand column (`TimerSideColumn`, 210 pt as before) has two pages. Tasks
+    lists the task order, each row with its key, title, "42m of 2h" and ▶, then "All tasks ›" into
+    Brain's Task list ("No tasks" plus the same link when empty). Presets is the preset cards,
+    unchanged. Tasks exists with tasks and the timer on, Presets with Show presets in the notch tab
+    on; with only one page there are no labels.
+  - With both, small "Tasks · Presets" labels switch pages (VoiceOver reads them as a two-option
+    picker), and so does a two-finger sideways swipe: once per gesture, only when clearly
+    horizontal and at least 40 pt. A vertical scroll still scrolls the list.
+  - The tab opens on Tasks when Jira or GitLab is connected (a host is set, whether Sync is on or
+    paused), otherwise on Presets. It is chosen afresh each time the tab appears and never saved.
+    The pure `TimerSidePage` (logic target) decides the first page and the swipe.
+  - ▶ starts the task through `TasksManager.start`; its name replaces a typed session name, and a
+    failed start does nothing else. `NotchTimerView` never touches `TasksManager`, and the Tasks
+    page is built only while shown, so the manager is never created with tasks off. Showing the
+    page refreshes a stale Jira or GitLab sync, as the Tasks popover does, never with the Keychain
+    dialog.
+  - The notch does not grow: the labels, rows and link take their sizes from
+    `TimerComposerMetrics`, and the composer's stacked layout follows whenever the column shows.
+    The Tasks list keeps at least two rows of room, so the first row's tooltip, which opens below,
+    is not clipped; the other rows' open above.
+  - Hovering the column holds off the notch's scroll gesture, so scrolling the preset or task list
+    no longer blurs or closes the notch. The ruler's scroll monitor moved into the shared
+    `ScrollWheelMonitor` (`HorizontalSwipeMonitor.swift`) with its behaviour unchanged, and both
+    scroll-suppression tokens are `@State`, so a re-render no longer loses them.
+  - Tests: `TimerSidePageTests` (the first-page truth table; swipe threshold, direction,
+    vertical-dominant gestures ignored, one flip per gesture, a scroll down and back up never
+    flips), `TimerComposerMetricsTests` (the column fits the 130 pt floor; one task leaves room
+    for its tooltip) and `TimerSideColumnRulesTests` (no `TasksManager` in `NotchTimerView`,
+    `@State` tokens, "connected" never reads Sync Jira or Sync GitLab, sync on appear, no
+    `.help(`), with planted offenders. The new notch files join `TasksPopoverRulesTests.newFiles`.
+
+### 2026-10-06 - The timer tab fits without the notch growing: the timer is smaller instead
+- **Developer label:** "rather than resizing the noth in timer tab, you could have just shrinked the timer, theresize looks like a glitch, please fix that"
+- **Agent label:** Timer composer sized by TimerComposerMetrics to the tab's existing budget; the notch-height change is reverted
+- **Changes:**
+  - Reverts the previous fix, which made the open notch 270 pt tall on the timer tab: the notch
+    jumped in size when you switched to the tab. The notch's sizing is exactly as before.
+  - The composer is smaller so it fits the tab's 130 pt budget with the session name field above it:
+    the name field is 24 pt, the duration fields 34 pt with 22 pt digits and a smaller caption,
+    Start/Reset 26 pt with 13 pt labels, and tighter padding and spacing. The ruler style's strip
+    is 46 pt and its Start Timer button and readout are smaller. The running-timer card is unchanged.
+  - Every one of those sizes is a named constant in `TimerComposerMetrics` (pure, in the logic
+    target), read by `NotchTimerView` and `RulerTimerPicker`.
+  - Tests: `TimerComposerMetricsTests` (every style — manual with presets, manual without, ruler —
+    fits the 130 pt floor with 4 pt to spare; buttons stay at least 24 pt tall) and
+    `TimerComposerMetricsRulesTests` (the views take their sizes from the metrics; nothing gives the
+    timer tab its own notch height), with planted offenders.
+
+### 2026-10-07 - Each task view has its own filter, and tags are added one at a time with clearer names
+- **Developer label:** "the filter applies outside in notch applies to list in the brain and that doesnt show any fiter applies, besides what to filter in drop down in notch is something local, the task list should show everything connected, but also provide a seperate view only filter and should apply on there. the tags and add tine manually have trailling ... for no reason, also please fix spacing and naming like these, for eg tag should add tags, with option to add multiple tags for a ticket, with the popup tag add ui to be adding 1 item at a time and giving option like create new tag or use existing tag"
+- **Agent label:** Claude Code (Opus 5.5) — Brain Tasks PR8: connection-only Sources, view-only Task list filter with a Filtered row, notch-only Show in notch filter, one-tag-at-a-time Tags sheet, naming and spacing pass
+- **Changes:**
+  - Sync Jira and Sync GitLab only decide what is fetched (`isJiraSyncOn` / `isGitLabSyncOn`). The
+    task order is now the connected baseline, `TaskOrdering.connectedFilter`: local tasks, Jira and
+    GitLab tasks (synced, paused or kept after a disconnect), GitLab merge requests while Include
+    merge requests is on or GitLab is not connected, and the task being timed. It reads no view
+    setting. A paused source's Sync row says "Sync paused. Jira tasks stay listed."
+  - The "Local tasks" switch, its search entry and the `showLocalTasks` key are gone, and so is
+    `TasksManager.isListed(_:)`. Inventory pins: 228 entries, 271 registrations, 265 ids.
+  - Brain's Task list filters are view-only. While they narrow, the list opens with a "Filtered" row
+    ("3 of 12 tasks") whose Show All resets source, project, status and tag; "No tasks match" offers
+    the same Show All. The Tasks page's "Task list" row and the Project and Tag pickers count every
+    connected task, not the filtered ones.
+  - The notch has its own filter, Show in notch (`tasksPopoverShowLocal`, `tasksPopoverShowJira`,
+    `tasksPopoverShowGitLab`, all on by default), through the pure `TaskOrdering.viewFilter` and
+    `isNarrowingView`. `TaskSourceMenu` binds only those keys, under a "Show in notch" header, with
+    the tooltip and accessibility label "Filter tasks"; a source that is not connected still offers
+    "Connect Jira…" / "Connect GitLab…" and is never counted as hidden.
+  - The popover's Up next, its count and its empty state follow Show in notch, with one quiet
+    "Filtered · Show all" line while a source is hidden. Adding a task with Local hidden turns Local
+    back on so the new task shows, and "The filter hides every open task." appears only when the
+    filter actually hides one.
+  - Add Tags opens the new `TaskTagsSheet`: the task's tags as removable chips
+    (`SettingsTagChip` in a `SettingsFlowLayout`), one "Add a tag" field, and under it "#name" for
+    tags in use and "Create tag “name”" for a new one, or a few quick picks while the field is empty.
+    Return adds a tag in use that starts with the text, or else creates the text, then clears the
+    field for the next tag; text that is already on the task adds nothing; Done adds any text still
+    typed before saving. At 10 tags the field disables with "10 tags is the most".
+  - Pure `TaskTagEditing` (logic target): `suggestions(for:existing:current:)`, `returnPick`,
+    `adding` and `removing`, all through `TaskItem.cleanedTags`.
+  - Names: the task ⋯ menu reads Set Estimate, Add Time, Add Tags, Schedule, Clear Schedule and
+    Delete, with no "…"; also Set End Time, Custom and Time to log's Log. Sheets confirm with Save,
+    Done, Add or Schedule. "Mark as Logged" and "Never Ask to Log" everywhere; every filter's
+    default reads "All".
+  - Row captions: the schedule is one segment ("Due Today 15:00", "Overdue Mon 10:00"), tags come
+    last, a merge request drops the "MR" word next to its !12 key, and GitLab states are
+    capitalised ("Open"). ▶ and ⋯ share one image scale, and every Done and hidden row ends in
+    Reopen or Show, then ⋯. The overview row's spacing uses the new `SettingsMetrics.iconGap`.
+  - docs/SETTINGS.md: the Task list's filter is view-only and shows a Filtered row; a menu item that
+    acts in place, opens a small sheet or asks a confirmation carries no ellipsis.
+  - Tests: TaskSourceFilterTests rewritten for the connected baseline and the notch filter; new
+    TaskTagEditingTests (use or create, prefix-first ranking, current tags excluded, case, leading
+    "#", 10-tag limit, 24-character cut, quick picks, what Return adds); TasksPopoverRulesTests
+    (TaskSourceMenu never reads the sync keys); TaskListRulesTests (the Filtered row resets all four
+    filters, no "…" in the task menu); pins in SettingsHighlightInventoryTests,
+    SettingsLayoutRulesTests, TaskFacetsTests, WorkDurationTests and WorklogDraftTests updated.
+
+### 2026-10-06 - Brain › Tasks gets a Task list page with filters, tags and reminders, real drag and drop, and shorter text
+- **Developer label:** "there should be drag and drop and for all explaination we give like this, try to make it cleaner; also where is seperate tab for task listing with filtered tabs and all"
+- **Agent label:** Brain Tasks PR7: Task list sub-page (Source/Project/Status/Tag filters, tags, local-task reminders), draggable/dropDestination reordering, copy pass
+- **Changes:**
+  - The Tasks page now holds Sources, the Tasks options, Time to log, Interrupted sessions and a
+    "Task list" row ("12 to do · 3 in progress") whose Open button swaps the tab's content for the
+    Task list (an in-tab view swap: Brain has no navigation stack). The Task list has a "‹ Tasks"
+    back row; Filters (Source as a segmented All | Local | Jira | GitLab, then Project, Status — To
+    Do + In Progress / To Do / In Progress — and Tag menus, all kept in Defaults:
+    `tasksListSourceFilter`, `tasksListProjectFilter`, `tasksListStatusFilter`,
+    `tasksListTagFilter`); Add a task; the task rows; and Done and hidden. "No tasks match" offers
+    Clear Filters. Any Tasks search or deep link closes the Task list so its row is on screen,
+    except the Task list's own deep link (`SettingsDeepLink.tasksListOpenID`, registered on the back
+    row), which opens it. The task order's count reads "15 open" (to do and in progress together).
+  - Pure `TaskFacets` (logic target): project from a Jira key prefix or a GitLab `references.full`
+    path (or the key `#project:N`, shown as "Project N", for a GitLab project known only by its
+    id; a filter saved as the old "Project N" label is rewritten to the key), status from the status category (a local task is In Progress once it has
+    recorded time; a GitLab issue is In Progress with an in-progress, doing or WIP label, a merge
+    request always), the filter match, and the projects and tags on offer.
+  - Model, all optional and decoded leniently so an older `tasks.json` still reads:
+    `RemoteTaskInfo.statusCategory` (Jira's `status.statusCategory.key`, carried through
+    `JiraAPI.remoteIssue`, `GitLabAPI.remoteIssue` and `TaskMerge`) and `labels` (GitLab labels,
+    decoded so another shape costs the labels, never the item); `TaskItem.tags` (Kannu only, never
+    sent: trimmed, no leading "#", at most 24 characters, at most 10, de-duplicated ignoring case)
+    and `scheduledAt` (local tasks only).
+  - The ⋯ menu gains Tags… (any task) and Schedule… / Clear Schedule (local tasks), through
+    `TaskValueSheet`. Rows show the schedule ("Today 15:00", "Tomorrow 09:30", "Overdue · Mon
+    10:00") and the tags ("#writing #urgent").
+  - Reminders: `TaskReminders` schedules a `UNUserNotificationCenter` notification with a Start
+    action, from the pure `TaskReminderPlan` (what to add or take back after each change: done,
+    hidden, deleted and cleared schedules are taken back; a reminder already shown is left alone).
+    Permission is asked only on the user's first schedule; the resend once it is allowed only adds,
+    so another task's reminder on screen stays. After the task file is read and whenever the Task
+    list opens, `TaskReminderPlan.reconcile` compares with what macOS actually holds (pending and
+    delivered, by the `kannu.task-reminder.` prefix): requests for tasks that are gone are taken
+    back, and while notifications are allowed any wanted reminder still ahead that macOS is missing
+    is added, so notifications turned on while Kannu was not running, or a replaced `tasks.json`,
+    are caught. Turning Enable tasks off takes back every task reminder, waiting or shown.
+    `TaskReminderCenter` is installed in `applicationDidFinishLaunching`, before the terms gate (a
+    delegate and a category only: no prompt, no file read, `TasksManager` stays lazy; a click that
+    arrives before the launch continued waits for it); Start times the task, a
+    click opens Brain on the Task list itself. A Start that cannot start (the timer is off, the task
+    is gone, the file could not be read) opens the Task list instead of doing nothing. Kannu never
+    starts a timer on its own. With notifications off, the Task list and the Schedule sheet show
+    "Notifications are off" with Open Notification Settings.
+  - Real drag and drop: each row is `.draggable(task.id.uuidString)` and a
+    `.dropDestination(for: String.self)`, replacing `ForEach.onMove`, which never drags inside a
+    grouped Form on macOS. An insertion line shows on the side the task will land. Drops go through
+    the pure `TaskOrdering.move(id:onto:in:listed:)` (dragged down, it lands after the target; up,
+    before it), and Move Up / Move Down now pass the active filters too, so moves count only the
+    rows shown. ⋯ › Move to Top / Up / Down stay. `TaskOrdering.moving(activeOffsets:)` and
+    `TasksManager.move(activeOffsets:)` are gone.
+  - Shorter copy across `TasksSettings.swift`, `TimeToLogSection.swift` and the notch Tasks
+    popover: each description says what the control does in about eight words, without "Off: …"
+    sentences or mechanics; footers keep only privacy and trust facts ("Tokens stay in your
+    Keychain. Kannu writes nothing until you choose Log.", "Jira watchers aren't emailed."); error
+    and recovery text stays specific but short.
+  - Search: new entries Task list, Task list filters, Task tags and Schedule a task, and the
+    existing Add a task, Task order and Done and hidden tasks entries, all land on the visible
+    "Task list" row (`SettingsDeepLink.tasksListHighlightID`, replacing `tasksOrderHighlightID`).
+    Inventory pins: 229 entries, 272 registrations, 266 ids.
+  - Tests: TaskFacetsTests (project, status, GitLab labels, filters, what the filters offer, a
+    filtered move, tag cleaning, coding of the new fields including odd and older files, the sync
+    carrying category and labels, a Project filter saved as a label), TaskReminderPlanTests (a
+    resend never takes anything back; the reconcile adds what macOS is missing, takes back what the
+    list no longer wants, and takes back everything with tasks off), TaskListRulesTests (rows use
+    `draggable`/`dropDestination` and never `onMove`, drops and moves pass the filters, permission is
+    asked only from `setSchedule`, only Start starts a task, with planted offenders; the reminder
+    and Task list deep-link wiring above), the drop cases
+    in TaskOrderTests and TaskSourceFilterTests, JiraDecodingTests expecting the category,
+    LaunchGateRulesTests (the delegate is installed once, before the gate, and asks nothing and
+    builds no `TasksManager`), and BrainNamingRulesTests
+    allowing "Open Notification Settings" and the Notifications pane's URL. docs/SETTINGS.md
+    records the in-tab sub-page rule, names its back row as the one sanctioned lone leading
+    button, and replaces the old caption rule with the new copy rule (descriptions in about eight
+    words, footers for privacy and trust facts only, short specific errors).
+
+### 2026-10-04 - The notch has a Tasks button: what you are timing, what to log, and what is next
+- **Developer label:** "maybe a button with integration toggle for people to switch and then getting a click through to a tab in settings to manage integrations"
+- **Agent label:** Brain Tasks PR6: notch Tasks button and popover (Now, Log time?, Up next, source toggles, Manage tasks… to Brain › Tasks › Sources)
+- **Changes:**
+  - A Tasks button (SF Symbol `checklist`) in the open notch's header, after the timer button and
+    before the Brain button, shown only with Enable tasks on and the minimalistic UI off. A yellow
+    dot shows while a Time to log entry waits for an answer (asked, refused, or maybe logged; not
+    while it is being sent, nor after Not now). VoiceOver reads "Tasks" or "Tasks, 2 entries
+    waiting to be logged"; the tooltip is `.hoverTooltip`, never `.help`. It is its own view
+    (`TasksHeaderButton`), so `TasksManager` is created only with tasks on.
+  - Clicking it opens `TasksPopover` (the `TimerPopover` pattern): a header with the source menu,
+    Refresh with one caption line per synced source ("Jira · Synced 10:42", "GitLab · Offline",
+    "Rate limited until 10:52"), and a Brain glyph; Now (the task being timed: key, title, its
+    recorded time as a running clock, "42m of 2h" with "10m over" in orange, Pause/Resume and
+    Stop); Log time? (up to two cards, then "N more in Brain"); Up next (Add a task…, which adds a
+    local task at the top of the order, then the task order without the timed task: key, title,
+    "42m of 2h" and ▶, at most 6 rows, fewer under a Now card or Log time? cards); an empty state
+    ("Connect Jira or GitLab in Brain"); and Show all in Brain.
+  - The source menu (`TaskSourceMenu`) has check items Jira, GitLab and Local, bound to
+    `jiraEnabled`, `gitlabEnabled` and `showLocalTasks` (the Sources toggles in Brain). A source
+    that is not connected shows "Connect Jira…" / "Connect GitLab…" instead. Those, "Manage
+    tasks…" and the Brain glyph close the popover and open Brain › Productivity › Tasks at Sources
+    through the existing deep link (`SettingsDeepLink.tasksSourcesHighlightID`). A token is typed
+    only in Brain's Connect sheet, never in the notch.
+  - Opening the popover sets `vm.isTasksPopoverActive`, which `ContentView.hasAnyActivePopovers()`
+    now includes, so the notch does not auto-close under it. The button clears it when it leaves
+    (the notch closing, tasks or the minimalistic UI switched), and `KannuHeader` clears it when
+    tasks are turned off.
+  - The live time ticks only through `TimelineView(.periodic(from: .now, by: 1))`, while the Now
+    card is on screen and running; Refresh comes back on time after a rate limit through an explicit
+    `TimelineView`, with no polling. Opening the popover syncs Jira and GitLab only when their last
+    sync is stale, without the Keychain dialog; Refresh is the user's click and may ask for it.
+  - Log time? reuses Brain's Time to log card: `TimeToLogSection.swift` gains `WorklogDraftCard`,
+    which both places show (in the popover, stacked by a `LabeledContentStyle`), so Log, Retry and
+    Send Again still go only through `TasksManager.confirmWorklog`.
+  - `TasksManager` gains `pauseTiming()` and `resumeTiming()` (guarded like `stopTiming()`: only the
+    session timing a task). `SettingsDeepLink` gains `tasksOrderHighlightID` (Show all in Brain) and
+    `tasksTimeToLogHighlightID` (N more in Brain), both rows already registered: highlight inventory
+    unchanged at 225 entries, 273 registrations, 267 ids.
+  - Pure helpers in the logic target: `WorklogDrafts.isAskingNow` / `needsAnswer` /
+    `waitingCount`, `TaskOrdering.upNext` / `upNextRows`, `TaskTimeMath.progress` (Brain › Tasks'
+    task rows now use it too, unchanged), `WorkDuration.clock`, and `SourceSyncState.shortCaption` /
+    `rateLimitEnd`.
+  - Tests: TasksPopoverRulesTests (source scan with planted offenders: the popover sets the flag and
+    leaving clears it, `hasAnyActivePopovers` includes it, the button has `accessibilityLabel` and
+    `hoverTooltip` and sits after the timer button only with tasks on, no `.help(` in any
+    `components/Notch` or `components/AgentStatus` file — the CI side of the pre-commit check —
+    Manage tasks…, Connect… and the Brain glyph use the Sources deep link, no Keychain access and no
+    timers in the new views) and TasksPopoverLogicTests (the dot and the cards, Up next and its row
+    budget, "42m of 2h" and overtime from a whole minute, the clock, the sync captions).
+    docs/REGRESSIONS.md entry 9 names the new CI guard.
+
+### 2026-10-04 - Brain › Tasks: Time to log asks before your recorded time goes to Jira or GitLab
+- **Developer label:** "task will have option to add estimate and also record the actual time, work on how we could manage jira tickets well"
+- **Agent label:** Brain Tasks PR5: ask, then log — Jira worklogs and GitLab spent time, sent only from the user's click, written ahead, reconciled once
+- **Changes:**
+  - When timing a Jira or GitLab task ends (stop, a replaced session, or quitting Kannu), its
+    unlogged time is folded into one draft per task, rounded to the nearest 15 minutes (a total
+    that rounds to 0 carries over). A pause or a sleep only closes the segment, so no card appears
+    while the task is still being timed; time a crash left unfolded is offered at the next launch.
+  - New "Time to log" section in Brain › Productivity › Tasks, shown only while entries wait, with a
+    search entry and highlight. One card per entry: "Log 1h 15m to PROJ-123?" / "Log 45m to
+    group/app!12?", "started today 14:02 · Jira", an editable length (`WorkDuration.parse`, sent in
+    whole minutes), an optional comment for Jira, Log to Jira / Log to GitLab, Not now (the card
+    folds into one line until more time is added to it), and ⋯ with Keep local only, Never ask for
+    this task and Open in Jira / GitLab. Return in the length field does not send: only Log does. A
+    length typed for a Log that sent nothing survives the next fold and a relaunch: new time is
+    added to it instead of replacing it with the rounded total. A remote task's ⋯ in the task order
+    gains Never Ask to Log Time / Ask to Log Time.
+  - Only `TasksManager.confirmWorklog` sends anything, from Log, Retry or Send Again. It marks the
+    draft `.sending` and waits for `tasks.json` to be written before any request (a failed save
+    sends nothing); a relaunch that finds `.sending` treats it as uncertain, and its card says so
+    ("May already be logged — check GitLab", or for Jira that Retry checks Jira first). The token is
+    read from the Keychain off the main actor and used only with the site or server the time was
+    recorded against. After the last wait (the save, the Keychain dialog, Jira's check), Kannu looks
+    again immediately before building the request, so a Disconnect meanwhile sends nothing; a
+    request already out cannot be recalled, and an answer for an entry removed meanwhile is only
+    logged.
+  - Jira: `POST /rest/api/3/issue/{id}/worklog?adjustEstimate=auto&notifyUsers=false` with
+    `timeSpentSeconds`, `started` as `yyyy-MM-dd'T'HH:mm:ss.SSSZ` (`en_US_POSIX`, the Mac's offset),
+    an ADF comment only when one was typed, and `properties [{key:"kannu", value:{entry:<draft id>}}]`.
+    2xx is logged with the worklog id; 400/403/404 fail with Jira's own reason; 401 asks to
+    reconnect (and the Sources row shows the refused token); 429 and offline fail, retryable; a lost
+    answer (timeout, dropped connection, 502/504) is checked with up to two read-only `GET
+    …/worklog?startedAfter=…&startedBefore=…&expand=properties`, 3 s apart, matching the marker, then
+    author, start and length: found is logged, missing twice fails retryable, a failed check or a
+    wait cut short stays uncertain. A Jira retry always checks first, so an entry is never logged
+    twice.
+  - GitLab: `POST /api/v4/projects/:id/issues/:iid/add_spent_time?duration=1h15m`, or
+    `merge_requests/:iid/add_spent_time` for a merge request, token only in `PRIVATE-TOKEN`. A
+    read_api token offers only Keep local only, and says why. A lost answer reads "May already be
+    logged — check GitLab" with Mark Logged and Send Again, since GitLab cannot identify one entry.
+  - Disconnect keeps the entries: kept local, or sent once reconnected to the same site or server.
+    Footers and the Connect sheets now say Kannu writes only when you log time; both Sources footers
+    still say the token is kept in your Keychain.
+  - New pure file in the logic target: `WorklogPoster` (the send and the read-only checks over
+    `IntegrationHTTP`). `JiraAPI` gains the worklog and check request builders, the marker match and
+    Jira's refusal reason; `GitLabAPI` the spend request and duration; `WorklogDrafts` the verdicts,
+    availability, card text and `deferredAt`; `JiraSite.apiURL` takes a query. App file:
+    `TimeToLogSection`.
+  - Tests: JiraWorklogRequestTests (`started` at +0000, +0530 and across DST, the marker, ADF,
+    `notifyUsers=false`, `adjustEstimate=auto`, the check request and matching),
+    GitLabSpendRequestTests (issue vs merge request path, duration format, `PRIVATE-TOKEN` only),
+    WorklogPosterTests (a `URLProtocol` stub: every outcome, at most two checks on Jira, none on
+    GitLab), WorklogDraftTests extended (15-minute rounding, `.sending` saved then relaunched is
+    uncertain with its card's reason, a typed length surviving the next fold, reconcile found is
+    logged, Not now, availability), WorklogConsentRulesTests (source scan with planted offenders:
+    the request builders and senders only inside `confirmWorklog`, it only from
+    `Kannu/components/`, write-ahead before the request, `canStillSend` after the last wait before
+    each request, no `.onSubmit` in a view that sends), and IntegrationSecretRulesTests
+    (Time to log never touches the Keychain). Highlight inventory 225 entries, 273 registrations, 267
+    ids.
+
+### 2026-10-04 - Brain › Tasks: GitLab as a source, with your issues and merge requests in the task order
+- **Developer label:** "not just jira, i want gotlab too"
+- **Agent label:** Brain Tasks PR4: GitLab read (gitlab.com and self-managed servers, issues and merge requests, token in the Keychain, read-only)
+- **Changes:**
+  - A GitLab row in Brain › Productivity › Tasks › Sources, below Jira Cloud and in the same shape:
+    "Connected as @dana · gitlab.com (can log time)", "(read-only)" or "Not connected", Connect… or
+    Disconnect…, Sync GitLab, Include merge requests (on by default), GitLab items with Refresh and
+    "Synced 10:42 · 5 items" / "Showing the first N" / "Offline" / "Rate limited until 10:52", Allow
+    Keychain Access when macOS asks, and Remove Token when a Disconnect could not delete it. The
+    Sources footer gains a GitLab line.
+  - Connect… opens a sheet: Server (starts at `https://gitlab.com`; any HTTPS server, with a port or a
+    path prefix, on a private or LAN address too), Personal access token in a `SecureField`, the
+    caption "`api` to log time; `read_api` lists only", and "Create token…" to
+    `<server>/-/user_settings/personal_access_tokens`. Kannu checks the token with `GET /api/v4/user`
+    and reads its scopes with `GET /api/v4/personal_access_tokens/self` before storing anything: a
+    token without `api` is shown read-only (`gitlabCanLogTime` off, also when the server will not
+    say: it refuses or redirects the scopes request, as before GitLab 15.5), and one that has neither
+    `api` nor `read_api` is refused. A scopes request that fails for a reason that may pass next time
+    (429, 5xx, timeout, offline, TLS) fails Connect with a try-again message instead of saving a
+    guess, since nothing reads the scopes again. Only then is `{baseURL, token}` saved
+    (`SecureSecretKey.gitlabCredential`) and the field cleared. Disconnect asks whether to keep or
+    remove the GitLab tasks on this Mac.
+  - Your open issues (`/issues?scope=assigned_to_me&state=opened`) and, with Include merge requests
+    on, the open merge requests assigned to you or waiting for your review
+    (`/merge_requests?scope=assigned_to_me…` and `?reviewer_username=<you>&state=opened&scope=all`)
+    join the task order: "group/app#45 · opened · 42m of 2h · GitLab spent 3h" and "group/app!12 · MR
+    · review requested", titles verbatim, with Open in GitLab and Hide in the ⋯ menu. Up to 2 pages
+    of 100 per list through `X-Next-Page` (6 requests a sync at most); more is reported as
+    incomplete and marks nothing gone. A merge request in both lists counts once. Turning Include
+    merge requests off takes the merge requests out of the task order at once, with no request (a
+    listing filter, as Sync GitLab is), and the next complete sync moves them to Done and hidden;
+    turning it on brings them back in place. Switching it during a sync drops that sync's result
+    and starts a new one; when no sync can run (offline, rate limited, Sync GitLab off), the next
+    page visit syncs.
+  - `RemoteTaskInfo` gains `gitlabKind` (issue or merge request) and `gitlabWebURL`, both optional, so
+    an existing `tasks.json` still reads, and an unknown kind reads as nil instead of costing the
+    file. A GitLab task matches on its global id with its kind (`issue:76`, `mr:31`), since issues and
+    merge requests number their ids separately. `TaskMerge` carries the project, number, kind and
+    page; switching server makes the old server's tasks gone.
+  - The token travels only in the `PRIVATE-TOKEN` header, never in a URL or a log, and only to the
+    Keychain item's own server (`GitLabHost.normalize`: HTTPS only, no user info, query, fragment,
+    `..`, percent escapes or IPv6 literals; checked again before every request). Requests use
+    `IntegrationHTTP` (ephemeral, 20 s, every redirect refused) with system trust only: a
+    self-signed certificate macOS does not trust fails the request. A `web_url` is kept and opened
+    only when it is on the same host, port and path prefix. A 429 honours `Retry-After`, else
+    GitLab's `RateLimit-Reset`, else 60 s (clamped to 1 s – 1 h).
+  - Each source syncs on its own: page appear (when over 5 minutes old, never after a refused token,
+    never with the Keychain dialog), Refresh, Connect, and switching Include merge requests. A Jira
+    failure never shows on or stops GitLab, and the other way round. Nothing at launch, no polling.
+  - `JiraSyncState` becomes `SourceSyncState`, shared by both sources. `TaskOrdering.listedFilter`
+    gains `showGitLab` and `showGitLabMergeRequests`. New pure file in the logic target: `GitLabAPI` (credential, decoders, request
+    builders, `X-Next-Page` paging, scopes, and `GitLabReader`, the fetch loop over `IntegrationHTTP`).
+    App file: `GitLabClient` (logging) with `GitLabCredentialStore` (Keychain off the main actor).
+    `HTTPOutcome` reads `RateLimit-Reset`; `HTTPExchange` carries the response for its headers.
+    Defaults: `gitlabEnabled`, `gitlabHost`, `gitlabUsername`, `gitlabAccountDisplayName`,
+    `gitlabCanLogTime`, `gitlabIncludeMergeRequests`. No time is logged to GitLab yet.
+  - Tests: GitLabHostTests, GitLabRequestTests, GitLabDecodingTests (handwritten fixtures, scope
+    detection), GitLabReaderTests (a `URLProtocol` stub: paging, the two-page cap, merge requests
+    counted once, a failed page failing the sync, `RateLimit-Reset`, scopes, a scopes request that
+    may pass next time failing Connect, a refused redirect), and GitLab cases in TaskMergeTests,
+    TaskModelCodingTests, HTTPOutcomeTests, TaskSourceFilterTests (Sync GitLab, and Include merge
+    requests hiding only merge requests) and IntegrationSecretRulesTests (`PRIVATE-TOKEN` set only in `GitLabAPI`,
+    the GitLab sync on appear non-interactive and never retrying a refused token, the token removal
+    result used). Highlight inventory 224 entries, 272 registrations, 266 ids; the TasksSettings
+    padding pin is 3 (the Connect GitLab sheet).
+
+### 2026-10-04 - Brain › Tasks: Jira Cloud as a source, with your Jira issues in the task order
+- **Developer label:** "what about jira page, i want a section in main brain in productivity for task management"
+- **Agent label:** Brain Tasks PR3: Jira read inside Productivity › Tasks (Sources section, read-only sync, token in the Keychain)
+- **Changes:**
+  - New Sources section at the top of Brain › Productivity › Tasks (shown while Enable tasks is on):
+    a Jira Cloud row ("Connected as Dana" or "Not connected", "Site acme.atlassian.net · Filter: my
+    open issues", Connect… or Disconnect…), Sync Jira, Jira issues with Refresh and "Synced 10:42 ·
+    12 issues" / "Showing the first 200 — narrow the filter" / "Offline" / "Rate limited until 10:52",
+    an Advanced Issue filter (JQL) with Reset, Allow Keychain Access when macOS asks, and Local tasks.
+    There is no separate Integrations page; GitLab follows in its own PR.
+  - Connect… opens a sheet (site, email, API token in a `SecureField`, "Create API token…"). Kannu
+    checks the token with `GET /rest/api/3/myself` before storing anything; only then does it go to
+    the Keychain (`SecureSecretKey.jiraCredential`, JSON with the site), and the field is cleared.
+    Disconnect asks, in a SwiftUI dialog, whether to keep or remove the Jira tasks on this Mac. If
+    the Keychain refuses to delete the saved token, Sources says it is still there, with Remove Token
+    to try again and where to find it in Keychain Access.
+  - Jira issues join the task order beside local tasks: "PROJ-123 · In Progress · 42m of 2h · Jira
+    logged 3h", titles verbatim, and a ⋯ menu with Open in Jira and Hide in place of Mark Done and
+    Delete. Done and hidden rows lead with the key. Turning off Local tasks or Sync Jira takes those
+    tasks out of the order, and Move Up / Down and drags count only the tasks on screen.
+  - A sync runs when the Tasks page appears and the last one is over 5 minutes old, on Refresh, and
+    right after Connect: nothing at launch, no timer, no polling. Once Jira has refused the token, or
+    the saved sign-in needs reconnecting, the page never syncs on its own again: only Refresh, Allow
+    Keychain Access or Connect retries, so a revoked token is not re-sent on every visit (repeated
+    failed sign-ins can lock the Atlassian account behind a CAPTCHA). `POST /rest/api/3/search/jql`, at
+    most 2 pages of 100; a 429 honours `Retry-After` (1 s to 1 h). `TaskMerge` folds the result into
+    the list on the main actor: matched on the issue id within the site, it keeps the user's order,
+    estimate, recorded time and hidden or done state; new issues are appended; only a complete fetch
+    marks missing active tasks gone, a capped one marks nothing, a failed one changes nothing, and a
+    different site's tasks go. The task being timed never goes: its row holds the Stop button, and
+    the first sync after its timing ends decides.
+  - Requests go through `IntegrationHTTP`: an ephemeral session (no cookies, cache or credential
+    storage), 20 s timeouts, every redirect refused, bodies over 5 MB dropped. The token is sent only
+    as HTTP Basic to the Keychain item's own `<site>.atlassian.net` host (`JiraSite.normalize`
+    refuses http, userinfo, other ports, IPs, look-alikes and non-ASCII), never in a URL or a log.
+  - Every Keychain access runs on a serial queue off the main actor; the page reads none. A sync the
+    page starts never shows the Keychain dialog: it shows Allow Keychain Access instead. Logs carry
+    counts and status codes only.
+  - Pure files in the logic target: `IntegrationHosts`, `HTTPOutcome`, `JiraAPI`, `TaskMerge`,
+    `IntegrationHTTP`, `JiraSyncState`; `TaskOrdering` gains a `listed` filter. App files: `JiraClient` (with
+    `JiraCredentialStore`). `SecureSecretsStore.read(_:allowInteraction:)`. Defaults: `showLocalTasks`,
+    `jiraEnabled`, `jiraSiteHost`, `jiraAccountID`, `jiraAccountDisplayName`, `jiraJQL`.
+  - Tests: JiraSiteTests, JiraRequestTests, JiraDecodingTests, TaskMergeTests, JiraSyncStateTests, HTTPOutcomeTests,
+    RedirectGuardTests (a `URLProtocol` stub: the redirect target is never asked for anything, with a
+    meta-test that an unguarded session would follow it), IntegrationSecretRulesTests (source scans
+    with planted offenders), TaskSourceFilterTests. Highlight inventory 220 entries, 268
+    registrations, 262 ids; the TasksSettings padding pin is 2 (the Connect sheet).
+
+### 2026-10-04 - Brain › Tasks: an ordered task list with estimates, and the actual time recorded by Kannu's timer
+- **Developer label:** "task will have option to add estimate and also record the actual time"
+- **Agent label:** Brain Tasks PR2: local tasks, estimates, timer session events, recorded actual time
+- **Changes:**
+  - New Brain › Tasks tab (Productivity group, after Notes, `checklist` icon): Enable tasks (off by
+    default), Default session length (25 min), Sound when the estimate is reached (off by default),
+    Add a task (title plus an estimate menu: none, 15m, 30m, 1h, 2h, 4h, 8h, Custom…), the task order
+    with "42m of 2h" and an orange "10m over", ▶ to time a task (■ while it is timed), a ⋯ menu (Set
+    Estimate…, Add Time Manually…, Move to Top / Up / Down, Mark Done, Delete…, disabled while timed),
+    Interrupted sessions (Set End Time… or Discard), and a Done and hidden disclosure with Reopen.
+  - `TimerManager.sessionEvents` sends started, paused, resumed and ended(stopped | replaced) for
+    timers started in Kannu only; `.ended` is sent before `resetTimer()` mints the next id, and a
+    replace ends the old session before the new one starts. `startTimer(playsSoundOnFinish:)`.
+  - `TasksManager` (lazy `@MainActor` singleton, nothing at launch) links a timed session to its task
+    and records segments from each event's own date; sleep closes and wake reopens without pausing the
+    timer; quit closes the open segment with one synchronous write; a segment found open at load
+    becomes an interrupted session that counts for nothing until the user sets its end.
+  - `tasks.json` in Application Support/Kannu/Tasks, written by the `TaskFileStore` actor: atomic,
+    mode 0600 (folder 0700), revision-ordered so a stale save is dropped, a corrupt file moved aside.
+  - Pure model in the logic target (`TimerSessionEvent`, `TaskModels`, `TaskTimeMath`, `TaskOrdering`,
+    `WorklogDrafts`, `TaskFileStore`): log entries round to the nearest 15 minutes, 0 makes no draft
+    and carries over; tracked totals stay exact. `TaskSource`/`RemoteTaskInfo` exist for later Jira
+    and GitLab work; no network, credentials or Keychain code.
+  - Tests: TaskModelCodingTests, TaskTimeMathTests, WorkDurationTests, TaskOrderTests,
+    WorklogDraftTests, TaskFileStoreTests, TimerSessionEventRulesTests (source scan with planted
+    offenders). Highlight inventory 214 entries, 263 registrations, 257 ids.
+
+### 2026-10-04 - Name a timer session before it starts, and rename it while it runs
+- **Developer label:** "in promod timer i need to able to name a timer session"
+- **Agent label:** Timer session names: an optional field before Start, click-to-rename while running
+- **Changes:**
+  - The timer tab in the notch, and the popover, have a one-line "Name this session (optional)"
+    field. The next session takes that name, whether it starts from a preset card (Focus, Break,
+    Deep Work) or from the custom Start. Without one it keeps the preset's name or "Custom Timer",
+    as before, and the field clears once the session starts. The notch stays open while you type.
+  - Clicking a running session's name in the notch or the popover turns it into a text field.
+    Return saves the new name, and so does anything else that ends the edit: a click elsewhere in
+    the tab or the popover card, a click into another app, closing the notch or the popover, or
+    switching tabs. Escape keeps the old name, and clearing it goes back to the default. The closed
+    notch shows the new name for a few seconds. Clock-app timers keep the Clock app's name.
+  - `TimerSessionName` (pure, in the logic target) makes a typed name one clean line of at most
+    40 characters, counting an emoji once, and never empty. `TimerManager.renameSession(to:session:)`
+    renames only timers started in Kannu, and only the session the rename began in
+    (`TimerManager.sessionID`), because a save on close can land after a new session started.
+  - Tests: `TimerSessionNameTests`, and `TimerNamingRulesTests`, which pins from the source that
+    every start path in both views takes the typed name, both views can rename a running session,
+    both save a rename when they go away and pass its session, and the notch saves when its window
+    goes to the background, with planted-offender self-tests for both scanners.
+
+### 2026-10-18 - A usage line whose key is spelled with an escape still counts
+- **Developer label:** CodeRabbit on #74: the quick filter skips a valid JSON line whose `usage` key is escaped (`"usage"`), undercounting usage
+- **Agent label:** Claude Code (Opus 5.5) — the usage pre-filter also lets through a line with an escape of one of the key's letters, and nothing else extra
+- **Changes:**
+  - `JSONLUsageCache.consume()` parses a line that has the bytes `"usage"`, or, failing that, a
+    JSON escape of one of the key's own letters (`u`, `s`, `a`, `g`,
+    `e`). No transcript writer is known to escape plain letters, but such a line now counts
+    instead of being skipped.
+  - Only those five escapes: the `\u001b` of a tool output's terminal colours, common in
+    transcripts, is still never parsed, so the memory fix's saving holds.
+  - Test: `JSONLUsageCacheTests.testAKeySpelledWithAnEscapeStillCountsAndColourEscapesAreNotParsed`
+    (the escaped line counts and matches the parse-every-line oracle; the colour line is not parsed).
+
+### 2026-10-04 - Token usage no longer drives Kannu past a gigabyte: transcripts are read once, then only what was appended
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Incremental usage aggregator — per-file offset cache, `"usage"` pre-filter, chunked reads off the cooperative pool
+- **Changes:**
+  - Root cause: `JSONLUsageParser.aggregate` loaded every transcript whole with
+    `String(contentsOf:)`, split it as a `String` and JSON-parsed every line, on every refresh, for
+    Claude and Codex at once. `ClaudeUsageProvider` lists subagent transcripts too (they are real
+    usage), so on this Mac that is 131 files and 659 MB, the largest 233.5 MB. Replayed on a clone of
+    those transcripts, one pass of the old code peaked at **1.1 GB** footprint, took 14 s, and left
+    887 MB resident afterwards.
+  - New `JSONLUsageCache`, one per provider: per file (keyed by path) the device + inode, the offset
+    just past the last newline consumed, and the in-week records those lines produced. A refresh
+    reads only appended bytes, in 4 MB `pread` chunks into one reused buffer, each chunk inside an
+    `autoreleasepool`. An unfinished last line is read again next time (it counts meanwhile only if
+    it already parses, as the old split counted it, and is never committed, so never twice). A new
+    inode or a file shorter than the offset is re-read from 0; a file that leaves the listing is
+    forgotten; a clock set back starts over.
+  - Only lines containing the bytes `"usage"` are JSON-parsed: `ClaudeUsageLine` reads tokens from a
+    `usage` object only (Claude's `message.usage`, the Codex-shaped top-level `usage`), so no other
+    line can be a record. 47,827 of 204,308 lines on this Mac.
+  - De-duplication unchanged: listing order, then line order, the week guard before the key claim,
+    first message id + request id wins. `JSONLUsageParser.snapshot(counting:now:)` folds the counted
+    records into the totals exactly as before.
+  - The work runs on the cache's own serial utility queue (`records(files:now:)`); the provider
+    awaits it instead of holding a cooperative-pool thread for the whole pass. One `os.Logger` line
+    per refresh (`com.kannu.app` / `UsageAggregator`): files, files read, bytes, lines parsed,
+    records, ms — counts only.
+  - Same transcripts, new code: **29.9 MB** peak, 3.9 s for the first pass, and an unchanged second
+    pass reads 0 bytes in 4 ms. The counted records are identical to the old parse (4,121 records,
+    same tokens, same digest).
+  - Tests: `JSONLUsageCacheTests` (13) — an unchanged refresh reads nothing, an append reads only the
+    delta and equals a full re-parse, truncated and replaced files are re-read without double
+    counting, a partial last line waits for its newline, the pre-filter matches parsing every line for
+    every shape, cross-file de-duplication and the week guard hold, lines straddling a chunk boundary.
+    The old algorithm is kept in the test as the oracle. `JSONLUsageCache.swift` joins the logic test
+    target (pbxproj ids C8/C9).
+  - Not covered, on purpose: a file rewritten in place under the same inode to an equal or larger size
+    between two refreshes is not noticed (transcripts are append-only). Lines in a file that is not
+    valid UTF-8, or that ends lines with CRLF, now count; the old `String` split dropped them.
+
+### 2026-10-19 - SonarCloud no longer fails #84 on the Keychain rule it was told about
+- **Developer label:** "#84 is held up by SonarCloud's quality gate, not by CodeRabbit. You need to mark S6288 as Accepted in SonarCloud first. fix this"
+- **Agent label:** Claude Code (Opus 5.5) — `.sonarcloud.properties` leaves `KeychainReader.swift` out of SonarCloud's automatic analysis
+- **Changes:**
+  - SonarCloud reported swift:S6288 (a Keychain item without user authentication) on `KeychainReader.swift`'s one `SecItemAdd`. That dropped #84's security rating to C and failed its quality gate. Kannu's items stay readable without a prompt on purpose: its tokens are read in the background, where no prompt can be answered.
+  - SonarCloud's automatic analysis ignored the `// NOSONAR` on that line and offers no per-rule ignore from the repository. New `.sonarcloud.properties` therefore leaves the file out of Sonar's analysis, with the reason, what still guards the file (`KeychainWritePlanTests`, `IntegrationSecretRulesTests`, CodeRabbit), and how to bring it back (delete the line and mark S6288 Accepted on sonarcloud.io).
+  - Merged development into the branch, keeping both sides of the CHANGELOG.
+
+### 2026-10-18 - The Sonar note sits on the line Sonar reports
+- **Developer label:** SonarCloud on #84 still failed after the `// NOSONAR`: S6288 is reported on the `SecItemAdd` call, not on the accessibility attribute
+- **Agent label:** Claude Code (Opus 5.5) — `// NOSONAR` moves to the `SecItemAdd` line; the reason stays on the attribute; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword`: `// NOSONAR` moves from the `kSecAttrAccessible` line to the
+    `return SecItemAdd(…)` line, where SonarCloud reports S6288, with a one-line pointer to the
+    reason above it. No behaviour change.
+
+### 2026-10-18 - The Keychain's accessibility choice says why it skips user authentication
+- **Developer label:** SonarCloud on #84: S6288, "iOS and macOS Keychain keys should require user authentication", at `KeychainReader.swift:81`
+- **Agent label:** Claude Code (Opus 5.5) — a written reason and `// NOSONAR` on the one flagged line; no behaviour change
+- **Changes:**
+  - `KeychainReader.addGenericPassword` keeps `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, now
+    with the reason beside it: Kannu reads these tokens in the background (usage refreshes, task
+    syncs), where an authentication prompt could never be answered, and the item is this-device
+    only with an access list that trusts only Kannu. The same value was already in use before
+    this branch; moving it into the new `SecItemAdd` call made SonarCloud count it as new code.
+  - `// NOSONAR` on that line, so the quality gate reflects the decision instead of failing on it.
+
+### 2026-10-04 - A saved secret always gets a fresh keychain item that only Kannu can read
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Keychain saves delete-then-add through `KeychainWritePlan`; other apps' items stay read-only
+- **Changes:**
+  - Audit of every keychain write: the only saver is `SecureSecretsStore` (service
+    `com.kannu.app.secure-secrets` — the AI provider API keys, Pushover keys, webhook URL and
+    Spotify cookie), and the only other delete is the one-time cleanup of
+    `com.kannu.app.llm-credentials`. Kannu writes no other app's item; Codex's `Codex Auth` and
+    Cursor's `cursor-access-token` are only ever read, so no write path had to stay as it was.
+  - `KeychainReader.setGenericPassword` used to update an existing item in place and add one only
+    when none existed. An update keeps the item's access list, so an item pre-planted under Kannu's
+    service and account with a list that lets any app read it would have received the secret. A save
+    now deletes the item and adds it fresh, and `SecItemAdd` gives the new item an access list that
+    trusts only Kannu. Same attributes (`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`), same `Bool`
+    result for callers.
+  - New `KeychainWritePlan` (pure; joins the logic test target, pbxproj ids 2B0/2B1): `.recreate` for
+    a `com.kannu.app.` service, `.refuse` for anything else, and `deleteLeftNothing(_:)` — the add runs
+    only after a delete that returned success or not-found, so a denied or failed delete stops the save
+    instead of falling back to an update. `deleteGenericPassword` also refuses a service Kannu does not
+    own.
+  - Delete-then-add is not atomic, so a failed add after a successful delete would have left no item
+    and lost the secret the user already had (the in-place update left it untouched on failure). The
+    save now reads the prior value first, silently (`allowInteraction: false`, so a save never raises a
+    keychain prompt), and when the add fails re-adds it through the same fresh add
+    (`KeychainWritePlan.valueToRestore(afterAdd:prior:)`). The add lives in a private
+    `addGenericPassword` that only the save calls. Failures log the account name and `OSStatus`
+    through `os.Logger` (category `Keychain`), never the value. A save still returns `false` on failure.
+  - `KeychainWritePlanTests` (13 tests): the plan for Kannu and foreign services, the delete-status
+    rule, the restore rule, every write call site names a Kannu service, no
+    `SecItemUpdate`/`SecKeychainItemModify` in any non-comment line under `Kannu/`, `SecItemAdd` only in
+    `KeychainReader.swift` and only inside the private add the save calls, the save's order (plan, read
+    prior, delete, add, restore on failure), and self-tests that catch the old in-place save and a
+    delete-then-add save that cannot restore.
+  - No `docs/REGRESSIONS.md` entry covers this, so the dated note lives at the code
+    (`KeychainWritePlan.swift`, `KeychainReader.swift`).
+
+### 2026-10-18 - Cursor chat names come back, and the Cursor card splits Auto from API
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P2 Cursor storage and quota
+- **Changes:**
+  - Cursor 3.x moved its composer headers (chat name, timestamps) out of the `ItemTable` key
+    `composer.composerHeaders` into a `composerHeaders` table. `CursorComposerStore` now reads
+    that table by primary key, one row per requested id, and uses the old key when the table is
+    missing or does not hold an id. Same read-only, bounded queries as before; no table scan.
+    **Verified on this Mac (Cursor 3.19.19):** the table exists and the old key has 0 rows. A
+    read-only harness asked the new reader for the 10 newest transcript ids and got 10 headers,
+    all with names and timestamps, in 5 ms. Only schema, JSON key names and counts were printed.
+  - A header fills only what a chat's `composerData` lacks (the name, mostly); `composerData`
+    keeps its status and activity time, and a header alone still backs a chat with no
+    `composerData`. Before, the newer whole record won the merge. **Verified on this Mac,
+    read-only, counts only:** none of the 25 newest headers has a `status`, all 25
+    `composerData` records do, and 1 header was 178 s newer than its `composerData`, so the old
+    merge dropped that chat's status. By the mapper's rules an aborted chat could then light
+    green; that was not observed. On a pre-table profile a legacy header no longer overrides
+    `composerData`'s status or time either.
+  - The 3 s header cache adds the ids it has not read yet instead of replacing them, so the
+    different id sets of one rescan (transcript ids, chat-title ids, one hook session's id) do
+    not each reread the database or re-parse the legacy blob. `ComposerHeaderCache` is a plain
+    struct with a test.
+  - The Cursor quota's main bar is the Auto pool (`autoPercentUsed`). The API pool
+    (`apiPercentUsed`) is a second bar labelled "API". When Cursor sends no split, the bar
+    falls back to the blended `totalPercentUsed` (or a percent derived from spend and limit). The
+    split is read from both `usage-summary` and `GetCurrentPeriodUsage`. On a single-pool plan
+    (`membershipType` "start" or "express", after paseo PR 3717) the blended total is the bar even
+    when the split is sent, and there is no API bar. If an enterprise account has no `plan` and a
+    null `overall.limit`, the parser returns no bar (and no fake 0 %); on-demand spend is still
+    read. **Unverified:** the split field names come from third-party reports (ClaudeBar issue
+    303, paseo PR 3717). Paseo matches the single-pool names against `GetPlanInfo`'s `planName`,
+    and whether `membershipType` spells them the same way is unknown. The enterprise shape (no
+    `plan`, null `overall.limit`) is synthetic, taken from the task description; neither source
+    shows it. This change reads no live Cursor response and calls no Cursor API.
+  - Which bar is main, its key and its label ("auto"/"Auto", "api"/"API", "week" and the default
+    label for the blend) are decided in `CursorPlanUsage` and pinned by tests. The Auto pool
+    reads as alert and forecast key `cursor:auto`, so its forecast never continues the saved
+    `cursor:week` series of blended totals, and its near-limit push says "Cursor Auto limit".
+  - The Cursor card's long-window section is titled "Billing cycle", not "Weekly". Claude and
+    Codex still say "Weekly".
+  - The background quota poll now passes the extra limits and the main bar's key and label
+    through, as the Usage tab does.
+  - **Untested and not seen (app not launched):** the card layout, the "Billing cycle" title,
+    copying the bars into the snapshot in `CursorUsageProvider`, and the background poll's
+    pass-through. Those files are not in the test target.
+  - The vestigial fallback `GET cursor.com/api/usage?user=<id>` and its decoder are removed.
+    Only `CursorUsageProvider` used them. The usage-events, quota-only and not-configured
+    branches are unchanged.
+  - New `CursorPlanUsage.swift` (Foundation-only) replaces `CursorAPIHelpers.parsePercent`.
+    `CursorComposerStore.swift` and `CursorPlanUsage.swift` join the test target.
+    `CursorComposerStoreTests` (11) and `CursorPlanUsageTests` (14) use temp SQLite fixtures in
+    both layouts, the header/`composerData` merge, the header cache, and quota fixtures: split
+    present, split absent, single-pool, enterprise (synthetic), and the bars. The merge and cache
+    tests were checked to fail with the old merge and the old replace-on-miss cache.
+  - `docs/REGRESSIONS.md` entry 5 has a 2026-10-18 addendum on the moved name source and on the
+    header that won the merge.
+
+### 2026-10-18 - ADR installs are pinned to upstream 6b33dff, and Kannu reads ADR's new forbidden-asset finding
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P4 ADR refresh — pin to uber/ADR 6b33dff, forbidden_asset, Cline and managed MCP files, schema 1.2, stale Detection checkout
+- **Changes:**
+  - Every ADR install line Kannu hands out (Settings and `docs/ADR.md`) is pinned to uber/ADR `main`
+    at `6b33dffecd719708c435f772c9e93f1210944e31` (2026-10-16): `uv tool install "adr-discovery @
+    git+https://github.com/uber/ADR@<sha>#subdirectory=Discovery"`, the pipx line, and
+    `git clone … && git checkout <sha> && cd Detection && uv sync`. The pin lives once, in
+    `ADRUpstream` (`ADRDiscoveryCommand.swift`); `ADRDiscoveryCommandTests` and `ADRDocsTests` pin
+    the lines and that the page carries the same ones, and a source scan pins that `ADRConnection`
+    (what Settings' Copy buttons and the Detection checkout row read, outside the test target) uses
+    those constants and calls the stale-checkout check, and that no app source carries an unpinned
+    install line. Upstream still calls Discovery 0.2.0, so the version shown cannot tell an old
+    install from a pinned one.
+  - ADR's policy: since upstream a3ab5f7 (2026-10-12) `forbidden` and the new `forbidden_indicators`
+    (`mcp_endpoint`, `package`, `name`, `skill_sha256`, `file_sha256`) raise a high
+    `forbidden_asset` finding, MCP servers included. The drafting prompt and `docs/ADR.md` §6 said
+    these lists never flag an MCP server and raise no finding; both now describe them (kept opt-in in
+    the prompt, with the warning that a bad indicator fails every scan), and the test that pinned the
+    old wording now pins the new. An `mcp_endpoint` url is to hold scheme, host, port and path only:
+    upstream's `normalize_url` drops user info, query and fragment before comparing, so copying them
+    from an MCP config would only put a URL's key in `policy.json`; a server whose path carries a key
+    is to be named with a `name` indicator instead.
+  - `forbidden_asset` has a title ("Forbidden by your ADR policy") and its own guide family with
+    what-it-means and what-to-do text; ADR's own summary stays the summary.
+  - Kannu's new-MCP-server watch, and the scan trigger built on it, read the two macOS MCP files
+    upstream Discovery added in a1b433c: Cline's
+    `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+    and `/Library/Application Support/ClaudeCode/managed-mcp.json` (format checked against Cline's
+    and Claude Code's docs: `mcpServers`). The first read of each is learned silently, as for every
+    file. Claude Desktop's and VS Code's macOS paths were already watched; `~/.claude/settings*.json`
+    are not added (Claude Code declares no servers there). Upstream reads Cline only under stock VS
+    Code, and so does Kannu, so Settings and `docs/ADR.md` say "Cline in VS Code": Cline in Cursor,
+    another editor or the Cline CLI is not watched.
+  - Snapshot schema 1.2 (84ed18c, ff3028b) decodes unchanged — no field Kannu reads moved — and a
+    new test decodes a 1.2 snapshot with a `forbidden_asset` finding. Settings' newest-scan line
+    shows the schema version next to the catalog version.
+  - **Acknowledgements reset once.** Discovery schema 1.1 puts the declaring file into an MCP
+    server's (and a skill's) identity, so the asset ids Kannu keys Discovery findings and
+    acknowledgements on change once when Discovery is upgraded past 2026-10-12; those findings show
+    again and need one more Acknowledge.
+  - ADR Detection: a checkout without upstream's Claude Code 2.1 fix (1c8ecd6, 2026-09-22, which added
+    `if isinstance(claude_result, list):` after both `claude_result = json.loads(` lines in
+    `guardrail/adr_agent/adr_baseline.py`) is reported on the Detection checkout row as stale, with
+    the update line, instead of failing every analysis. Only the old code counts: the file must have
+    the `json.loads` line and no `isinstance(claude_result` check, true of all three upstream
+    revisions before the fix and false of both since (checked in a scratch clone). A later rewrite
+    without that line, or an empty file, is not called stale, so the update line never moves a
+    newer checkout back to the pin.
+  - ADR Detection's verdict carries no tactic at the pinned commit (`DetectionResult` has no field
+    for one; the only `threat_tactic` upstream writes is triage's prior suspicion, in its debug log),
+    so the docs stop promising one: a malicious chat reads "malicious · 0.91" and "Malicious activity
+    in this chat". The adapter is not changed to read the debug log.
+  - Adapter v6 drops `reasoning_agent.max_tokens`, which upstream has never read; the run is bounded
+    by `--max-turns` and `--timeout`. Embedded copy and `scripts/adr-analyze-session.py` stay
+    byte-identical.
+  - The Detection run's environment whitelist gains `PYTHON_DOTENV_DISABLED=1`: at the pinned commit
+    upstream's `guardrail` package imports a detector (a6076aa) that calls `load_dotenv()` at import,
+    which would load the first `.env` found in or above the checkout into the run and the Claude CLI.
+    Verified against python-dotenv 1.2.2's source (the version in upstream's `uv.lock`).
+  - `docs/ADR.md` §8 now says where upstream writes inside the checkout
+    (`Detection/ads_reasoning_workspace/`, `debug_logs*/conversation_*.json`, overwritten each run,
+    holding the raw Claude output and, when the hidden-Unicode check fires, the decoded text) and
+    that the Claude CLI keeps the reasoning session under `~/.claude/projects/`.
+  - `adr-discovery`'s new `--resolve` (DNS lookups) and `--archive-skills` flags join the arguments
+    Kannu refuses to pass.
+  - Verified on this Mac: the Debug build and the full `KannuTests` suite (858 tests, 0 failures).
+    Unverified: ADR is not installed here, and installing it is the user's call, so no Discovery
+    scan, no Detection run and no pinned install line was executed; every upstream fact above is
+    from uber/ADR's source at `6b33dff`, read in a scratch clone.
+
+### 2026-10-18 - Antigravity hooks use the shape Antigravity documents, and its card can show model quotas
+- **Developer label:** "check other ai providers if they have updates, check uber adr also if they have such source updates"
+- **Agent label:** P6 Antigravity hooks v46 and agy /usage
+- **Changes:**
+  - Hook v46: Antigravity's hooks.json now maps a hook name to its configuration
+    (antigravity.google/docs/hooks). Kannu writes one `kannu-agent-status` entry to
+    `~/.gemini/config/hooks.json`, the one global file the docs list. `SessionStart`, `PreInvocation`,
+    `PostInvocation` and `Stop` hold flat lists of handlers; `PreToolUse` and `PostToolUse` hold one
+    matcher group with matcher `""` (every tool). `UserPromptSubmit` is gone: it is not an
+    Antigravity event, and Antigravity 2.6.0 rejects hook configurations that can never run. If the
+    user sets `enabled: false` on Kannu's entry, a reinstall keeps it. UNVERIFIED: built from the docs
+    and changelog only; Antigravity is not installed on this Mac.
+  - Migration: install removes the v45 Claude-style `hooks.<event>` groups Kannu wrote, from all
+    three files (`~/.gemini/config/hooks.json`, `~/.gemini/antigravity-ide/hooks.json`,
+    `~/.gemini/hooks.json`). The user's own groups and hooks stay. A file that holds nothing of
+    Kannu's is not rewritten. The two older files are now cleanup-only, because the docs no longer
+    name them. Install never writes there, and uninstall strips both shapes from all three files. A
+    v45 install upgrades through the script-version migration. A new
+    `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script. The
+    installed check reads a fixed core (`PreInvocation`, `PreToolUse`, `Stop`), as Claude's and
+    Cursor's do. UNVERIFIED on a real install.
+  - The hook script reads Antigravity's camelCase payload: `toolCall.name` and `toolCall.args` (so
+    the secret, hidden-text and agent-policy checks see the tool call), `transcriptPath` (kept as the
+    chat's `transcript_path`, only as a canonical path under `~/.gemini`; nothing reads it yet) and
+    `fullyIdle`. A `Stop` with `fullyIdle: false` and no error keeps the light green and the turn
+    open, because background tasks are still running. Antigravity has no prompt event, so the first
+    model call of a run (`PreInvocation` with `invocationNum` 0) starts a turn; the docs do not say
+    whether that count restarts for each user message. `CommandLine` is read as a command too, the
+    key `run_command` is believed to take; undocumented. UNVERIFIED.
+  - Antigravity answers: `PreToolUse` and `Stop` print `{"decision":"allow"}`, since the docs mark
+    `decision` required on both. On `PreToolUse`, `allow` passes the call to the next hook or the
+    default policy, so nothing is auto-approved. Every other event prints `{}` (the documented
+    `PostToolUse` answer). The no-python fallback answers the same. With agent-policy blocking on, a
+    matched `PreToolUse` gets the documented deny, `{"decision":"deny","reason":…}`. That widens
+    `POLICY_DENY_EVENTS` on the docs alone, so `docs/REGRESSIONS.md` entry 1 has a v46 addendum
+    naming the exception. UNVERIFIED that Antigravity honours either answer.
+  - What the user opts into changed with it, so the Settings › Agents › **Block matching tool calls**
+    row now reads "On: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell
+    the agent why." The `enforceAgentPolicy` doc comment, the row's search keywords (`antigravity`)
+    and `docs/ADR.md` section 9 name Antigravity too, so a user turning blocking on is told that
+    Antigravity calls are refused, not only flagged. `ADRDocsTests` now fails when a host in
+    `POLICY_DENY_EVENTS` is missing from the row, the doc comment or the section 9 heading.
+  - Usage: the Antigravity card reads `agy -p "/usage" --output-format json`, which CLI v1.1.11
+    (2026-08-07) answers without an agent turn. `agy` is looked for in `~/.local/bin` (the official
+    installer), `/opt/homebrew/bin` and `/usr/local/bin`. No public source shows an `agy` inside
+    Antigravity.app, so no bundle path is guessed. Only a binary with a valid Developer ID signature
+    from team `EQHXZ8M8AV` (Google LLC) is run. That team ID comes from Antigravity.app's published
+    signature (third-party sources) and from Google Chrome on this Mac, where the requirement string
+    was checked: Chrome and GoogleUpdater pass, `/bin/ls` and Cursor fail. How the `agy` binary
+    itself is signed is UNVERIFIED; if it is signed any other way, the reader never runs.
+  - The run goes through `BoundedProcessRunner` on a utility queue, with a 20 s timeout, stdin from
+    `/dev/null`, the temporary folder as working directory and Kannu's environment unchanged. Its
+    output is never logged; the log says only how the run ended. Kannu never reads Antigravity's
+    OAuth files and never calls its local language server.
+  - After a run that gives no quota, Kannu leaves `agy` alone for 15 minutes. Only the Usage tab's
+    Refresh button lifts that wait (`LLMUsageManager.refreshRequestedByUser`). The 30 s tick, opening
+    the tab and the Claude refresh paths wait it out. The wait is not keyed on `interactive`:
+    Refresh never sets it, and only Claude's keychain button does. UNVERIFIED with a real `agy`.
+  - One failed run does not blank the bars. The last quota `agy` gave stays on the card for up to
+    540 s, the same bound `LLMUsageManager` keeps a last-good result for, after a run that gives none
+    (a timeout, a non-zero exit, a run the wait skipped). A window whose reset has passed is dropped.
+    Kept bars carry the time `agy` reported them, so the manager's own bound does not add to it.
+    UNVERIFIED with a real `agy`.
+  - A signature verdict, pass or fail, is reused while the file's device, inode, size, mtime and
+    ctime are unchanged. A same-user rewrite in place with the mtime put back still changes the ctime,
+    so it is checked again. An `agy` signed some other way is not hashed again on every refresh.
+    Not closed: a swap between the check and the exec. That needs a suspended spawn checked by pid,
+    which `BoundedProcessRunner` does not do.
+  - The JSON field names are undocumented, so `AntigravityUsageReport` (new, Foundation-only, in
+    the test target) accepts the plausible shapes and ignores the rest. A pool is any object with a
+    5-hour or weekly window, wherever it sits, including the headless envelope's `response` given
+    as JSON text. A window is a used or remaining percentage, fraction or count, with an optional
+    ISO 8601 or epoch reset. A failed headless `status`, token `usage`, daily caps and unnamed
+    per-model fractions give nothing. The first pool with a 5-hour window fills the 5-hour and
+    weekly bars. Every other pool's windows become extra bars labelled with its name. Another
+    pool's 5-hour bar sits under "5 hour" (`NamedLimit.isSessionWindow`), and the primary pool's
+    name replaces "All models" when there is more than one (`UsageSnapshot.limitsLabel`). The hook
+    session line stays as the card's secondary text, or the whole card without quotas. UNVERIFIED
+    against a real `agy`.
+  - Because `/usage` reaches Google's backend, the Antigravity provider is no longer a local-file
+    provider: it refreshes on the network floor (180 s, 10 s for Refresh), not on every 30 s tick
+    of the Usage tab. Its hook session line now refreshes on that floor too. The Providers footer in
+    Settings › Usage says Kannu runs `agy /usage`.
+  - Tests: a v46 `HookScriptTests` group (answers, camelCase fields, the enforced deny, turns and
+    `fullyIdle`, the transcript path), run again under `/usr/bin/python3` 3.9. Three existing cases
+    moved off `UserPromptSubmit` and the old answer. `AgentHookLayoutTests` cases cover the
+    documented shape, the v45 migration, uninstall of both shapes and a kept `enabled: false`.
+    `AntigravityUsageReportTests` covers the pinned invocation and plausible fixtures. Fixtures,
+    not captured output. It also pins the network floor (`AntigravityUsageCommand.reachesNetwork`).
+    It checks that the code requirement compiles, refuses `/bin/ls` and `/usr/bin/python3`, and
+    accepts Google Chrome (skipped where Chrome is not installed). It covers the verdict cache, the
+    ctime catching an in-place rewrite, and the kept last quota. Chrome stands in for `agy`, which is
+    not installed here.
+
+### 2026-10-10 - Every icon-only control in the notch names itself in a tooltip, starting with the lyrics button
+- **Developer label:** "on the lyrics icon in music tab, on persistent mouse hovered over it for few seconds show tool tip, keep that as general design principle for such icons"
+- **Agent label:** Claude Code (Opus 5.5) — notch tooltip principle: hover-driven bubble for shared icon buttons, every icon-only control covered, coverage scan and widened .help guard
+- **Changes:**
+  - Of 74 icon-only notch controls, 55 had no tooltip (the lyrics button among them, in both
+    players) and 2 used `.help`, which never renders in the notch. Every one now shows a tooltip
+    after the existing 0.4 s hover, and the same text is its accessibility label, so VoiceOver no
+    longer reads SF Symbol names.
+  - `HoverTooltip.swift`: the bubble and its show/hide timing are shared. The existing
+    `.hoverTooltip(_:edge:)` keeps its look and 22 pt offset; a new
+    `.hoverTooltip(_:edge:alignment:isHovering:)` is driven by a control's own hover state (one
+    hover source, docs/TOOLTIPS.md rule 3) and sits 8 pt clear of the control, so it never covers a
+    large glyph. `alignment: .leading` serves controls at a window's left edge.
+  - Shared buttons take `tooltip:`: `HoverButton`, the minimal player's squircle buttons,
+    `TabButton` (which now owns the tab's only hover handler; hover-to-switch moved into its
+    `onHover:`), and `TimerControlButton` (its second hover source is gone). The music rows use
+    `MusicControlButton.label`; the corner lyrics buttons open below.
+  - Header clipboard, timer and gear buttons, Notes, the clipboard popover and panel, the share
+    switch and the process popover all name their icon buttons. Note colours get localized names.
+  - The floating music and timer overlays are fitted to their button row, so no bubble can show
+    there: they get accessibility labels only (the timer overlay's dead `.help` is removed).
+  - docs/TOOLTIPS.md states the principle; AGENTS.md points to it; REGRESSIONS entry 9 gains a
+    dated addendum. The pre-commit `.help(` scan widens from 2 folders to 8, and the new
+    `NotchTooltipCoverageRulesTests` fails on a `.help(`, a shared icon button without `tooltip:`,
+    or an icon-only `Button` without `.hoverTooltip(` (allowlist with reasons, planted offenders).
+
+### 2026-10-04 - Settings is now Brain, with a brain icon in the notch and ⌘, to open it
+- **Developer label:** "rename settings to brain and use that icon, it is more going to be a place where do all the management"
+- **Agent label:** Brain rename (user-visible text only), notch brain icon, live ⌘, command, BrainNamingRulesTests
+- **Changes:**
+  - Everywhere users see Kannu's Settings window it is now **Brain**: the window title (Kannu
+    Brain), the menu bar icon's menu and the notch's right-click menu, the search field (Search
+    Brain), the "Brain icon in notch" row together with its search entry (keywords brain, settings,
+    gear), the menu bar icon caption, the hints in the notch's Stats, Timer and agent views and the
+    timer popover, onboarding (the finish button and the "change this later" lines), the
+    security-finding advice, push text and analysis error, the closed-notch findings caption, the
+    Spotify login hints, the ADR policy-drafting prompt, and ReadMe.md. Code names do not change:
+    the `Settings` folder and types, `KannuSettingsWindow`, `settingsIconInNotch`, comments.
+  - The notch header's button shows the `brain` SF Symbol instead of `gear`, with an accessibility
+    label and a `.hoverTooltip` reading "Brain". Screen Assistant keeps `brain.head.profile`.
+  - Kept as "Settings", because none of them is Kannu's window: every "System Settings" string and
+    the "Open … Settings" menu items that open macOS panes, "Settings file:" (an agent's config),
+    BetterDisplay's Settings, the Clipboard section header, "Global Settings", the permission
+    callout's default "Open Settings" button, "Battery Settings" and "Open Model Settings".
+  - ⌘, works. `commands` held a `CommandGroup(replacing: .appSettings)` that no scene attached, so
+    the shortcut did nothing. It is now attached to the app's scene, reads "Brain…", carries
+    `.keyboardShortcut(",", modifiers: .command)`, and still brings the Terms of Use back before
+    they are accepted. Like any menu key equivalent it fires while Kannu is the active app, which
+    the Brain window (and the terms and onboarding windows) make it; with only the notch on screen
+    the key belongs to the app in front. The never-attached "Check for Updates…" group is removed
+    rather than attached, because the Kannu menu built by `installTopMenuItemsIfNeeded` already
+    carries that item.
+  - `docs/SETTINGS.md` says the window is shown to users as Brain while the code keeps the Settings
+    names. `Localizable.xcstrings` is untouched, as for every recent string: the new keys show in
+    English in every locale until the catalog is synced and translated.
+  - New `BrainNamingRulesTests`: scans every string literal under `Kannu/` (comments skipped; plain,
+    multi-line, raw and interpolated literals read correctly) and fails on "Settings" outside an
+    11-entry allowlist plus the phrase "System Settings", each entry with its reason and each
+    required to match exactly one string. It also pins the window title, the header's `brain`
+    symbol, label and tooltip (no `gear`, no `.help(`, no `brain.head.profile`), the attached ⌘,
+    command with its terms guard, the menus, the search field and the renamed row's search
+    keywords, and carries a planted-offender self-test. `SettingsHighlightInventoryTests` counts
+    are unchanged (208 entries, 257 registrations, 251 ids): the rename swaps one entry and its id.
+
+### 2026-10-12 - A doc comment's token placeholder no longer reads as a leaked GitLab token
+- **Developer label:** "where are we"
+- **Agent label:** Claude Code (Opus 5.5) — release clean-up: SonarCloud's quality gate on this PR failed on a blocker it took for a leaked GitLab token
+- **Changes:**
+  - `ClipboardCapturePolicy.isSecret`'s doc comment used `glpat-your-token-goes-here` as its example
+    of a lower-case word the rule turns away. That is exactly 20 characters after `glpat-`, the shape
+    of a real GitLab token, so SonarCloud's secret scanner reported it as one. The example is now
+    `glpat-your-token-here`, which the rule turns away for the same reason. No code changed.
+
+### 2026-10-04 - Kannu's clipboard history skips copied access tokens
+- **Developer label:** "do we write now save these tokens in a secure way right, noone can just come and read it from us right"
+- **Agent label:** Clipboard history skips token-shaped text — the hook script's secret formats plus Atlassian
+- **Changes:**
+  - The clipboard history (off by default) persists what it records to UserDefaults in plain text,
+    and a token page's copy button carries no concealed marker: a GitLab or Atlassian token copied
+    from its settings page was recorded in Kannu's preferences file. `ClipboardManager.checkClipboard()`
+    now drops a copy whose text, URL or rich text's plain text holds a token-shaped secret, after
+    the read and before anything is recorded.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(text:)` / `secretKind(in:)`. Its
+    format list is the hook script's `SEC_PATTERNS` character for character (private keys,
+    Anthropic, OpenAI, AWS, GitHub, GitLab, Slack, Stripe, Google, npm, Hugging Face) plus
+    Atlassian `ATATT` API tokens (100+ characters), with the hook's acceptance rules: a whole token
+    (no word character just before it), the vendors' minimum lengths, no placeholder words
+    (`EXAMPLE`, `XXXXXXXX`, …), and at least 8 distinct characters after the vendor prefix. So
+    `task-…`, `risk-…`, `xoxo` and AWS's documentation key are still recorded.
+  - Two deliberate differences from the hook, both because a missed token is persisted in plain
+    text while a false alarm only drops one history entry. The body must hold a digit **or** both
+    upper and lower case (an AWS key ID, upper case by format, neither): the hook's digit rule
+    misses about 1 GitLab token in 20 to 30, 1 AWS key ID in 30 and every Hugging Face token
+    (letters only), while lower-case words such as `glpat-your-token-goes-here` still fail it. And a
+    private key needs one base64 run of 64+ characters after its header, footer or not: raw or
+    written-out `\n` line breaks continue the run, anything else ends it, so a copy cut short of
+    its footer or a service-account JSON is caught, and prose or code that only names the header
+    is not.
+  - `ClipboardCapturePolicyTests` covers every format alone and inside a sentence, tokens on one
+    line of a multi-line `.env`, script, JSON or URL copy, tokens with no digit, private keys
+    without a footer, with CRLF, encrypted or inside JSON, near misses one character short, glued to
+    a word or made of lower-case words, prose and code that name a key header, ordinary prose and
+    identifiers, a 1 MB scan of near misses under a second, and pins the list to the hook's: every
+    `SEC_PATTERNS` kind with identical anchors and pattern, `SEC_LITERAL_PREFIXES` and
+    `SEC_PLACEHOLDER_WORDS`, read from `AgentHookInstaller.swift`. The
+    capture-order test now also pins the text check between the read and the record. Fixture
+    tokens are assembled at run time, so no token-shaped literal is committed.
+
+### 2026-10-02 - Act on CodeRabbit's review of #71
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — review follow-up
+- **Agent label:** CodeRabbit #71 — recheck the pasteboard after reading it
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` checked a copy's privacy markers and then read its
+    contents, and the pasteboard is no snapshot: a concealed copy landing between the two reads
+    could be recorded under the earlier decision. It now rechecks `changeCount` after reading and
+    drops the read if anything changed (deleting the temporary image file a read may have
+    written); the next poll checks the new contents afresh.
+  - Not taken: a second recheck right before the deferred insert. Once the count matched after
+    the read, the item belongs to the copy whose markers were checked, so a later change cannot
+    make it private; that check would only drop a genuine copy made in quick succession.
+  - `ClipboardCapturePolicyTests.testTheCaptureChecksTypesFirstAndRechecksAfterReading` pins the
+    order from the source: markers, read, recheck, record.
+
+### 2026-10-02 - Kannu's clipboard history skips copies their app marked private
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — prerequisite: the relay key Kannu will copy must not persist in its own clipboard history
+- **Agent label:** Cloud relay PR A — honour nspasteboard.org's concealed and transient markers
+- **Changes:**
+  - `ClipboardManager.checkClipboard()` now returns early when the pasteboard carries
+    `org.nspasteboard.ConcealedType` or `org.nspasteboard.TransientType`, the convention password
+    managers use to mark a copied secret or a momentary automation copy. The history persists what
+    it records to UserDefaults in plain text, so such a copy used to outlive the password manager's
+    own clear-after-90-seconds, in Kannu's preferences file.
+  - The decision is pure `ClipboardCapturePolicy.shouldRecord(types:)` in the logic test target,
+    pinned by `ClipboardCapturePolicyTests`; `AutoGeneratedType` (not a privacy marker) is still
+    recorded.
+  - The upcoming cloud-session relay copies its key with the concealed marker, which is why this
+    lands first.
+
+### 2026-10-04 - Kannu stays light while several agents work at once
+- **Developer label:** "how did we end up using so much memory i had to restart app"
+- **Agent label:** Rescan storm: filter watched-file events, pace rescans, cache the Desktop audit-log walk
+- **Changes:**
+  - Changes inside a Claude session's own folder no longer trigger a rescan: subagent
+    transcripts, tool-output spills and workflow files, which Kannu never reads. Neither do the
+    hook status folder's per-file writes, which its kqueue watcher already handles; before, each
+    write cost two rescans. Lost-event flags still always rescan (`AgentWatchEvents`).
+  - Rescans are at least 0.3 s apart (hook-only) or 0.5 s apart (full), and a new request never
+    postpones the one already pending (`AgentRescanPacing`). A steady storm of writes used to
+    postpone the light instead of bounding the work.
+  - Claude Desktop's audit-log listing is cached for 2 s, and dropped when a log is added, removed
+    or renamed. The cache hands out fresh `URL`s, so a grown log is never read with its old size.
+  - `docs/REGRESSIONS.md` entry 11: a dated addendum.
+  - Tests: `RescanStormTests` (the filter, the pacing, and a simulated 20 ms write storm that must
+    keep rescanning, at a bounded rate).
+
+### 2026-10-04 - The paired-activity badge sits beside the album art, not over it
+- **Developer label:** "if you look at the timer placing, its over the small thumbnail adjust that"
+- **Agent label:** Closed music wing: badge beside the art via `ClosedMusicWingLayout`, hidden during inline sneak peek
+- **Changes:**
+  - In the closed notch, while music plays alongside a timer, a recording, Focus, Caps Lock, an
+    extension or the shelf, that activity's badge now sits 4 pt to the right of the album art,
+    vertically centred. It used to cover the art's bottom-right quarter. The left wing grows by the
+    badge and its gap (17 pt at the default notch height) only while a badge is shown.
+  - The art keeps its size and position from the wing's edge, so the open/close animation and the
+    pull-down gesture are unchanged.
+  - New `ClosedMusicWingLayout` (`Kannu/sizing/`) gives one width to both the wing's frame and the
+    notch, so the black shape always fits what it holds. It is in the logic test target
+    (pbxproj ids CA/CB).
+  - No badge during an inline sneak peek: that window is a fixed 460 pt, and a wider wing would be
+    cut off at both edges.
+  - Removed the unused `badgeOverlayOffset` and `badgeDisplaySize`.
+  - Tests: `ClosedMusicWingLayoutTests` (the art never moves, the badge never overlaps it, widths
+    and sizes) and `ClosedMusicWingRulesTests` (source pins: the badge is a child of the art's
+    HStack with no `.offset`, and the notch and the wing share one width), with planted offenders
+    including the old shape.
+
+### 2026-10-04 - A chat stays lit while the agents it started are still running
+- **Developer label:** "now we have background taks right, but kannu doesnt show that as chat still running"
+- **Agent label:** Background-agent detection: hook v44 counts what a Stop leaves running, Claude's session record confirms it
+- **Changes:**
+  - A Claude chat whose turn ended with background agents or a workflow still running stays green,
+    with "agents in background" beside its state and its clock still running from your prompt. It
+    turns red the moment Claude reports all of them finished. Before, it went red at the turn's
+    end while Claude went on working and spending tokens.
+  - Hook v44 records how many agents and workflows a Claude `Stop` leaves running (its
+    `background_tasks`), as a count only: the tasks' descriptions and commands are never written.
+    Kannu reads Claude Code's own session record (`~/.claude/sessions/<pid>.json`), which says
+    `busy` until the last of them finishes. Neither signal alone lights the chat. A fresh `idle`
+    counts for 3 s, and Kannu rescans when that ends, so the chat never flashes finished between
+    an agent ending and Claude reading its result.
+  - While that background work runs, a background agent's own light counts again: one waiting on
+    permission turns the chat yellow. The chat's status file is kept past the stale cap, so a long
+    workflow does not lose its card.
+  - Hook v44 also listens for `SubagentStart` and `SubagentStop`, so a finished agent's file says
+    `stopped` instead of "thinking" until the stale cap. Existing installs upgrade through the
+    hook version migration.
+  - `docs/REGRESSIONS.md`: a dated addendum to entry 5, whose rule changes on purpose, and a v44
+    note on entry 1.
+  - Tests: `BackgroundWorkTests` (Claude's status, the reconciler, the fold, the clock, the stale
+    cap and the turn parse) and four `HookScriptTests` cases (the count, what clears it, an older
+    Claude, and a subagent's own start and stop).
+
+### 2026-10-01 - Ship 1.3.4 "Heimdall"
+- **Developer label:** "release .4 with all these changes we made since .3"
+- **Agent label:** 1.3.4 release mechanics
+- **Changes:**
+  - `MARKETING_VERSION` 1.3.3 -> **1.3.4** and `CURRENT_PROJECT_VERSION` 7 -> **8** in both
+    configurations. Last published is 1.3.3 (build 7), and the live feed's newest item is build 7,
+    so 8 is offered to everyone. The codename stays **Heimdall** for a patch.
+  - Carries #67 (the notch goes back on screen when macOS strands it off the current Space after
+    sleep or lock), #68 (the clipboard panel shows its content again: the shared hosting container
+    now fills every panel; broken since 1.3.0; REGRESSIONS entry 19) and #69 (a Quit Kannu row in
+    Settings that searching "quit" or "exit" finds).
+  - `origin/main` (the v1.3.3 appcast item and the pricing-data commits) merged into the release
+    branch first, so the release PR cannot drop the build-7 item from the feed.
+  - Curated notes at `docs/release-notes/1.3.4.md`. They lead with the clipboard fix, because it
+    was visibly broken for every user of the clipboard panel since 1.3.0.
+
 ### 2026-10-02 - The cloud-session relay's protocol: the script, Kannu's parser and their tests
 - **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — build the relay (opt-in)
 - **Agent label:** Cloud relay, part 2 of 3 — signed ntfy protocol, relay script and parser; not wired into the app yet

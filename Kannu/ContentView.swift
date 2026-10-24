@@ -80,6 +80,7 @@ struct ContentView: View {
     @Default(.timerProgressStyle) var timerProgressStyle
     @Default(.timerIconColorMode) var timerIconColorMode
     @Default(.timerSolidColor) var timerSolidColor
+    /// Not read here: observed so an edited preset colour redraws `timerManager.sessionAccent`.
     @Default(.timerPresets) var timerPresets
     @Default(.showCapsLockLabel) var showCapsLockLabel
     @Default(.capsLockIndicatorTintMode) var capsLockTintMode
@@ -224,12 +225,17 @@ struct ContentView: View {
     @State private var agentHoverTask: Task<Void, Never>?
 
     /// Non-notch hide-until-hover reveal windows. `revealHoldDeadline` keeps the island on
-    /// screen; `agentLightDeadline` keeps the traffic light lit. Both are refreshed by agent
-    /// activity and on hover-exit, and are per-screen because the island, its hover state and
-    /// its offset are all per-`ContentView` — see `performViewTeardown` for cancellation.
+    /// screen; `agentLightDeadline` keeps the traffic light lit. Both are refreshed when the
+    /// published light changes and on hover-exit, and are per-screen because the island, its
+    /// hover state and its offset are all per-`ContentView` — see `performViewTeardown` for
+    /// cancellation.
     @State private var revealHoldDeadline: Date?
     @State private var agentLightDeadline: Date?
     @State private var revealExpiryTask: Task<Void, Never>?
+    /// The light pair `noteAgentActivityPulse` last re-armed for: a pulse re-arms the reveal
+    /// only when the published light actually changed, never on bare session activity.
+    @State private var lastRevealedLightState: AgentTrafficLightState?
+    @State private var lastRevealedLightShown: Bool?
 
     @State private var gestureProgress: CGFloat = .zero
     @State private var skipGestureActiveDirection: MusicManager.SkipDirection?
@@ -508,8 +514,9 @@ struct ContentView: View {
         // While a music pill is already on screen the light is drawn inside it, so keep it
         // steady rather than blinking a dot in and out of a persistent container. Uses the
         // shared snapshot — testing `isPlaying` alone missed the paused-but-still-shown pill,
-        // which is exactly when the blink was visible.
-        if isClosedMusicPairingEligible { return true }
+        // which is exactly when the blink was visible. A running timer is the same kind of
+        // container: the light sits in its centre for as long as it runs.
+        if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
         // A pending high finding is a cue in its own right. With no agent activity there is no
         // deadline and no hover, and the shield the Settings copy promises ("stays beside the
         // traffic light until you acknowledge") never appeared on a notched Mac.
@@ -522,6 +529,17 @@ struct ContentView: View {
         revealHoldDeadline != nil
     }
 
+    /// A running timer has the closed notch: nothing but a HUD, Caps Lock's flash or the music pill
+    /// (which carries the timer itself) is drawn over it, the agent light sits in its centre, and an
+    /// island that hides until hover stays out while it runs. The timer used to give way to the
+    /// light for 7 s after every agent change, and to Caps Lock until it was released.
+    private var timerOwnsClosedNotch: Bool {
+        vm.notchState == .closed
+            && timerManager.isTimerActive
+            && coordinator.timerLiveActivityEnabled
+            && !vm.hideOnClosed
+    }
+
     /// Whether the notch/island should hide off-screen when closed on a non-notch display.
     /// Temporarily reveals the notch when a sneakPeek HUD (volume, brightness, music, etc.) is active.
     private var shouldHideUntilHover: Bool {
@@ -529,6 +547,7 @@ struct ContentView: View {
             && vm.notchState == .closed
             && !isSneakPeekVisibleOnCurrentScreen
             && !showAgentTrafficLight
+            && !timerOwnsClosedNotch
     }
 
     /// Whether the fallback top-edge hover detector should run.
@@ -588,7 +607,7 @@ struct ContentView: View {
     private var shouldPaintClosedNotchBackground: Bool {
         if vm.notchState == .open { return true }
         if vm.hideOnClosed { return false }
-        if coordinator.firstLaunch { return true }
+        if coordinator.helloPending { return true }
 
         if idleScheduleManager.isActive || idlePreviewManager.isActive || easterEggManager.isActive {
             return true
@@ -774,8 +793,29 @@ struct ContentView: View {
             .padding(.horizontal, isIslandMode ? dynamicIslandShadowInset : 0)
             .padding(.bottom, isIslandMode ? dynamicIslandShadowInset : 0)
             .padding(.top, pillTopOffset)
-            .environment(\.notchForeground, notchFillColor.contrastingForeground)
+            .notchAppearance(notchColorScheme, fill: notchSkinManager.selectedSkinImage == nil ? notchFillColor : nil)
             .accessibilityIdentifier("KannuNotch")
+    }
+
+    /// The notch's appearance follows what is actually painted behind it: the skin's average colour
+    /// under its scrim, or the fill colour. Setting it as the subtree's colour scheme flips every
+    /// `.primary`/`.secondary` and material in the notch; literal colours read `notchForeground`.
+    /// Dark until a skin's average is known — the notch's look before this existed.
+    private var notchColorScheme: ColorScheme {
+        let background: NotchContrast.RGB?
+        if notchSkinManager.selectedSkinImage != nil {
+            background = notchSkinManager.selectedSkinAverageRGB
+                .map { NotchContrast.underBlackScrim($0, opacity: notchSkinScrimOpacity) }
+        } else {
+            background = notchFillColor.srgbComponents
+        }
+        guard let background else { return .dark }
+        return NotchContrast.prefersDarkForeground(on: background) ? .light : .dark
+    }
+
+    /// `notchForeground` for ContentView itself, which sits above the environment it sets.
+    private var notchForegroundColor: Color {
+        notchColorScheme == .dark ? .white : .black
     }
 
     private var configuredMainLayout: some View {
@@ -849,16 +889,17 @@ struct ContentView: View {
                 ? -(vm.closedNotchSize.height + pillTopOffset + currentShadowPadding + 10)
                 : 0
             )
-            .onAppear(perform: {
-                if coordinator.firstLaunch {
-                    // Single open during first launch; closeHello() handles the timed close.
+            .onChange(of: coordinator.helloPending) { _, pending in
+                // Onboarding's finale: a single open once Finish is pressed; closeHello() handles
+                // the timed close. It used to open on appear at launch, under the onboarding window.
+                if pending {
                     runAfter(1) {
                         withAnimation(vm.animation) {
                             openNotch()
                         }
                     }
                 }
-            })
+            }
             .onChange(of: vm.notchState) { _, newState in
                 // Update smart monitoring based on notch state
                 if enableStatsFeature {
@@ -937,7 +978,7 @@ struct ContentView: View {
             }
             .sensoryFeedback(.alignment, trigger: haptics)
             .contextMenu {
-                Button("Settings") {
+                Button("Brain") {
                     SettingsWindowController.shared.showWindow()
                 }
             }
@@ -1011,6 +1052,12 @@ struct ContentView: View {
             }
             .onChange(of: displayStyleOverrides) { _, _ in
                 clearRevealState()
+                syncHiddenEdgeHoverPolling()
+            }
+            // A running timer holds a hide-until-hover island out, which ends the hidden-edge poll;
+            // when the timer stops (or its live activity is turned off) the island hides again, and
+            // without the poll the top edge could not bring it back.
+            .onChange(of: timerOwnsClosedNotch) { _, _ in
                 syncHiddenEdgeHoverPolling()
             }
             .onChange(of: vm.notchState) { _, state in
@@ -1155,7 +1202,7 @@ struct ContentView: View {
       func NotchLayout() -> some View {
           VStack(alignment: .leading) {
               VStack(alignment: .leading) {
-                  if coordinator.firstLaunch {
+                  if coordinator.helloPending {
                       Spacer()
                       HelloAnimation().frame(width: 200, height: 80).onAppear(perform: {
                           vm.closeHello()
@@ -1236,7 +1283,7 @@ struct ContentView: View {
                                       ? AnyTransition.move(edge: .trailing).combined(with: .opacity)
                                       : AnyTransition.opacity
                               )
-                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked {
+                      } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked && !timerOwnsClosedNotch {
                           InlineHUD(type: .constant(.capsLock), value: .constant(1.0), icon: .constant(""), hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
@@ -1245,8 +1292,9 @@ struct ContentView: View {
                           MusicLiveActivity(secondary: musicSecondary)
                               .id("closed-music-live-activity")
                               .transition(closedLiveActivitySwapTransition)
-                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
-                          // No music playing: standalone traffic light.
+                      } else if !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed && !timerOwnsClosedNotch {
+                          // No music and no timer: standalone traffic light. A running timer
+                          // carries the light in its centre instead (below).
                             AgentTrafficLightLiveActivity(
                                 isHovering: isHovering,
                                 gestureProgress: gestureProgress,
@@ -1262,8 +1310,15 @@ struct ContentView: View {
                                 }
                             )
                             .transition(.blurReplace.animation(.interactiveSpring(dampingFraction: 1.2)))
-                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && vm.notchState == .closed && timerManager.isTimerActive && coordinator.timerLiveActivityEnabled && !vm.hideOnClosed {
-                          TimerLiveActivity()
+                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
+                          TimerLiveActivity(
+                              agentLight: showAgentTrafficLight
+                                  ? TimerAgentLight(
+                                      expandedHeight: shouldExpandPhysicalNotchForAgent ? physicalNotchAgentHeight : nil,
+                                      verticalOffset: physicalNotchAgentVerticalOffset
+                                  )
+                                  : nil
+                          )
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .recording) && vm.notchState == .closed && (recordingManager.isRecording || !recordingManager.isRecorderIdle) && Defaults[.enableScreenRecordingDetection] && !vm.hideOnClosed && !musicPairingEligible {
                           RecordingLiveActivity()
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .download) && vm.notchState == .closed && downloadManager.isDownloading && Defaults[.enableDownloadListener] && !vm.hideOnClosed {
@@ -1337,10 +1392,10 @@ struct ContentView: View {
                                   HStack(alignment: .center) {
                                       Image(systemName: "music.note")
                                       GeometryReader { geo in
-                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName), textColor: .gray, minDuration: 1, frameWidth: geo.size.width)
+                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName), textColor: .secondary, minDuration: 1, frameWidth: geo.size.width)
                                       }
                                   }
-                                  .foregroundStyle(.gray)
+                                  .foregroundStyle(.secondary)
                                   .padding(.bottom, 10)
                               }
                           }
@@ -1503,13 +1558,18 @@ struct ContentView: View {
         // In pill mode the capsule's rounded ends clip flush content (album art / spectrum),
         // so give the wings breathing room from the curved edges.
         let wingEdgeInset: CGFloat = isDynamicIslandMode ? 6 : 0
-        let notchWidth = wingBaseWidth + effectiveCenterWidth + rightWingWidth + wingEdgeInset * 2
-        let badgeBaseSize = max(13, notchContentHeight * 0.36)
-        let badgeDisplaySize = badgeDisplaySize(for: secondary, baseSize: badgeBaseSize)
-        let badgeOffset = badgeOverlayOffset(for: secondary, badgeSize: badgeDisplaySize)
+        // The art, and beside it (never over it) the paired activity's badge. One width for the
+        // wing's frame and the notch, so the black shape always fits what it holds.
+        let leftWing = ClosedMusicWingLayout(
+            artSlotWidth: wingBaseWidth,
+            contentHeight: notchContentHeight,
+            hasPairedActivity: secondary != nil,
+            inlineSneakPeekActive: inlineSneakPeekActive
+        )
+        let notchWidth = leftWing.width + effectiveCenterWidth + rightWingWidth + wingEdgeInset * 2
 
         HStack(spacing: 0) {
-            ZStack(alignment: .bottomTrailing) {
+            HStack(alignment: .center, spacing: ClosedMusicWingLayout.badgeSpacing) {
                 Color.clear
                     .aspectRatio(1, contentMode: .fit)
                     .background(
@@ -1521,12 +1581,14 @@ struct ContentView: View {
                     .clipped()
                     .matchedGeometryEffect(id: "albumArt", in: albumArtNamespace)
                     .albumArtFlip(angle: musicManager.flipAngle)
-                albumArtBadge(for: secondary, badgeSize: badgeDisplaySize)
-                    .offset(x: badgeOffset.width, y: badgeOffset.height)
-                    .id(secondary?.id ?? "music-badge")
-                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: leftWing.artSlotWidth, height: notchContentHeight)
+                if leftWing.showsBadge, let secondary {
+                    albumArtBadge(for: secondary, badgeSize: leftWing.badgeSize)
+                        .id(secondary.id)
+                        .contentTransition(.symbolEffect(.replace))
+                }
             }
-            .frame(width: wingBaseWidth, height: notchContentHeight)
+            .frame(width: leftWing.width, height: notchContentHeight, alignment: .leading)
             .padding(.leading, wingEdgeInset)
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -1607,7 +1669,7 @@ struct ContentView: View {
                 MusicTitleMarqueeView(
                     text: musicManager.songTitle,
                     isExplicit: musicManager.isCurrentTrackExplicit,
-                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray,
+                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary,
                     minDuration: 0.4,
                     frameWidth: max(0, (effectiveCenterWidth - vm.closedNotchSize.width) / 2 - 12),
                     badgeHeight: 13
@@ -1618,7 +1680,7 @@ struct ContentView: View {
                 Text(musicManager.artistName)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .foregroundStyle(Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray)
+                    .foregroundStyle(Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary)
                     .padding(.trailing, 8)
                     .opacity(inlineSneakPeekActive ? 1 : 0)
             } else if coordinator.expandingView.show && coordinator.expandingView.type == .timer {
@@ -1640,7 +1702,7 @@ struct ContentView: View {
             } else if Defaults[.showSongMetadataInClosedNotch] && isNonNotchScreen && !musicManager.songTitle.isEmpty {
                 MarqueeText(
                     .constant("\(musicManager.songTitle) • \(musicManager.artistName)"),
-                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray,
+                    textColor: Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.secondary,
                     minDuration: 3,
                     frameWidth: max(0, effectiveCenterWidth - 16)
                 )
@@ -1745,66 +1807,46 @@ struct ContentView: View {
         max(baseWidth, max(centerBaseWidth * factor, baseWidth + extra))
     }
 
-    @ViewBuilder
-    private func albumArtBadge(for secondary: MusicSecondaryLiveActivity?, badgeSize: CGFloat) -> some View {
-        if let secondary, badgeSize > 0 {
-            ZStack {
+    /// The paired activity's badge, drawn beside the closed notch's album art (`ClosedMusicWingLayout`).
+    private func albumArtBadge(for secondary: MusicSecondaryLiveActivity, badgeSize: CGFloat) -> some View {
+        ZStack {
+            Circle()
+                .fill(Color.black)
+
+            switch secondary {
+            case .timer:
+                Image(systemName: "timer")
+                    .font(.system(size: badgeSize * 0.55, weight: .semibold))
+                    .foregroundStyle(timerAccentColor)
+            case .focus(let mode):
+                mode.resolvedActiveIcon(usePrivateSymbol: true)
+                    .renderingMode(.template)
+                    .font(.system(size: badgeSize * 0.5, weight: .semibold))
+                    .foregroundStyle(mode.accentColor)
+            case .recording:
                 Circle()
-                    .fill(Color.black)
-
-                switch secondary {
-                case .timer:
-                    Image(systemName: "timer")
-                        .font(.system(size: badgeSize * 0.55, weight: .semibold))
-                        .foregroundStyle(timerAccentColor)
-                case .focus(let mode):
-                    mode.resolvedActiveIcon(usePrivateSymbol: true)
-                        .renderingMode(.template)
-                        .font(.system(size: badgeSize * 0.5, weight: .semibold))
-                        .foregroundStyle(mode.accentColor)
-                case .recording:
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: badgeSize * 0.45, height: badgeSize * 0.45)
-                        .modifier(PulsingModifier())
-                case .capsLock:
-                    Image(systemName: "capslock.fill")
-                        .font(.system(size: badgeSize * 0.5, weight: .semibold))
-                        .foregroundStyle(capsLockTintMode.color)
-                case .extensionPayload(let payload):
-                    ExtensionBadgeIconView(
-                        descriptor: payload.descriptor.leadingIcon,
-                        accent: payload.descriptor.accentColor.swiftUIColor,
-                        size: badgeSize
-                    )
-                case .shelf:
-                    Image(systemName: "tray.and.arrow.down.fill")
-                        .font(.system(size: badgeSize * 0.50, weight: .semibold))
-                        .foregroundStyle(notchFillColor.contrastingForeground)
-                }
+                    .fill(Color.red)
+                    .frame(width: badgeSize * 0.45, height: badgeSize * 0.45)
+                    .modifier(PulsingModifier())
+            case .capsLock:
+                Image(systemName: "capslock.fill")
+                    .font(.system(size: badgeSize * 0.5, weight: .semibold))
+                    .foregroundStyle(capsLockTintMode.color)
+            case .extensionPayload(let payload):
+                ExtensionBadgeIconView(
+                    descriptor: payload.descriptor.leadingIcon,
+                    accent: payload.descriptor.accentColor.swiftUIColor,
+                    size: badgeSize
+                )
+            case .shelf:
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.system(size: badgeSize * 0.50, weight: .semibold))
+                    .foregroundStyle(.white) // on the badge's own black circle, not the notch
             }
-            .frame(width: badgeSize, height: badgeSize)
-            .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
-            .transition(.opacity.combined(with: .scale))
-        } else {
-            EmptyView()
         }
-    }
-
-    private func badgeDisplaySize(for secondary: MusicSecondaryLiveActivity?, baseSize: CGFloat) -> CGFloat {
-        guard let secondary else { return baseSize }
-        switch secondary {
-        default:
-            return baseSize
-        }
-    }
-
-    private func badgeOverlayOffset(for secondary: MusicSecondaryLiveActivity?, badgeSize: CGFloat) -> CGSize {
-        guard let secondary else { return CGSize(width: badgeSize * 0.2, height: badgeSize * 0.25) }
-        switch secondary {
-        default:
-            return CGSize(width: badgeSize * 0.2, height: badgeSize * 0.25)
-        }
+        .frame(width: badgeSize, height: badgeSize)
+        .shadow(color: .black.opacity(0.35), radius: 3, x: 0, y: 1)
+        .transition(.opacity.combined(with: .scale))
     }
 
     @ViewBuilder
@@ -1835,7 +1877,7 @@ struct ContentView: View {
             // File count badge: bold white number, like a minimal pill
             Text("\(count)")
                 .font(.system(.callout, design: .rounded, weight: .bold))
-                .foregroundStyle(notchFillColor.contrastingForeground)
+                .foregroundStyle(notchForegroundColor)
                 .contentTransition(.numericText(countsDown: false))
                 .animation(.smooth(duration: 0.3), value: count)
                 .frame(alignment: .center)
@@ -1847,6 +1889,11 @@ struct ContentView: View {
         }
     }
 
+    /// The closed notch's music bars: shorter than the shared 14 pt and dimmed, so they sit quietly
+    /// beside the album art.
+    static let closedSpectrumBarHeight: CGFloat = 9
+    static let closedSpectrumOpacity: Double = 0.6
+
     @ViewBuilder
     private func SpectrumVisualizer(
         useMusicVisualizer: Bool,
@@ -1854,14 +1901,17 @@ struct ContentView: View {
     ) -> some View {
         let width = CGFloat(Defaults[.visualizerBarCount]) * 4
         if useMusicVisualizer || forceSpectrum {
+            // Kept subtle beside the album art: shorter bars than the 14 pt the other visualizers
+            // use, and dimmed. David asked for "smaller and dimmer, same place" (2026-10-22).
             Rectangle()
                 .fill((Defaults[.coloredSpectrogram] ? Color(nsColor: musicManager.avgColor) : Color.gray).spectrogramGradient())
                 .frame(width: 50, alignment: .center)
                 .matchedGeometryEffect(id: "spectrum", in: albumArtNamespace)
                 .mask {
-                    AudioVisualizerView(isPlaying: $musicManager.isPlaying)
-                        .frame(width: width, height: 12)
+                    AudioVisualizerView(isPlaying: $musicManager.isPlaying, barHeight: Self.closedSpectrumBarHeight)
+                        .frame(width: width, height: Self.closedSpectrumBarHeight)
                 }
+                .opacity(Self.closedSpectrumOpacity)
         }
     }
 
@@ -1882,7 +1932,7 @@ struct ContentView: View {
 
                             Image(systemName: musicManager.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(notchFillColor.contrastingForeground.opacity(isHoveringClosedMusicWaveformControl ? 0.98 : 0.0))
+                                .foregroundStyle(notchForegroundColor.opacity(isHoveringClosedMusicWaveformControl ? 0.98 : 0.0))
                                 .contentTransition(.symbolEffect(.replace))
                         }
                         .padding(.horizontal, 14)
@@ -1903,11 +1953,7 @@ struct ContentView: View {
     private var timerAccentColor: Color {
         switch timerIconColorMode {
         case .adaptive:
-            if let presetId = timerManager.activePresetId,
-               let preset = timerPresets.first(where: { $0.id == presetId }) {
-                return preset.color
-            }
-            return timerManager.timerColor
+            return timerManager.sessionAccent ?? timerManager.timerColor
         case .solid:
             return timerSolidColor
         }
@@ -2251,7 +2297,7 @@ struct ContentView: View {
             && !isMusicHUDDeferredAfterUnlock
             && !isCurrentScreenExpansionVisible
             && (!musicManager.isPlayerIdle || musicManager.bundleIdentifier != nil)
-            && !coordinator.firstLaunch
+            && !coordinator.helloPending
     }
 
     private func handleClosedMusicWaveformTapIfNeeded() -> Bool {
@@ -2308,8 +2354,8 @@ struct ContentView: View {
 
     // MARK: - Non-notch reveal windows
 
-    /// An agent did something: pull the island back into view and relight the traffic light,
-    /// each for its own window. Only meaningful when the island is hidden by default.
+    /// The traffic light changed: pull the island back into view and relight the light, each
+    /// for its own window. Only meaningful when the island is hidden by default.
     private func noteAgentActivityPulse() {
         guard hideUntilHoverAppliesHere || isPhysicalNotchScreen, enableAgentStatusFeature else { return }
         // Strict collapse: the running-agent heartbeat keeps other consumers informed but
@@ -2319,6 +2365,16 @@ struct ContentView: View {
         if agentStatusMonitor.consumeActivityPulseWasHeartbeatOnly() && !physicalNotchAgentBandFollowsHeartbeat {
             return
         }
+        // Only a *published* light change re-arms the windows. Session-list churn also bumps the
+        // pulse (every hook write of a working chat moves `updatedAt`), and re-arming on each one
+        // pinned the island out for as long as a chat stayed green — the reveal is a glance at a
+        // change, not a mirror of activity. The values read here are post-gate
+        // (`TrafficLightPersistenceGate`), so a sub-second green → ended → green blip never
+        // reaches this comparison either.
+        guard agentLight.trafficLightState != lastRevealedLightState
+            || agentLight.shouldShowTrafficLight != lastRevealedLightShown else { return }
+        lastRevealedLightState = agentLight.trafficLightState
+        lastRevealedLightShown = agentLight.shouldShowTrafficLight
         let now = Date()
         let lightDeadline = now.addingTimeInterval(notchRevealHoldSeconds)
         let holdDeadline = now.addingTimeInterval(notchRevealHoldSeconds)
@@ -2697,11 +2753,12 @@ struct ContentView: View {
          vm.isColorPickerPopoverActive || 
          vm.isStatsPopoverActive ||
          vm.isTimerPopoverActive ||
+         vm.isTasksPopoverActive ||
          vm.isMediaOutputPopoverActive
     }
 
     private func shouldPreventAutoClose() -> Bool {
-        coordinator.firstLaunch || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
+        coordinator.helloPending || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
     }
     
     // Helper to prevent rapid haptic feedback
@@ -3305,7 +3362,7 @@ private struct MusicTimerSupplementView: View {
     private var ringView: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.18), lineWidth: 3)
+                .stroke(notchForeground.opacity(0.18), lineWidth: 3)
             Circle()
                 .trim(from: 0, to: clampedProgress)
                 .stroke(accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
@@ -3331,7 +3388,7 @@ private struct MusicTimerSupplementView: View {
 
     private func barView(width: CGFloat) -> some View {
         Capsule()
-            .fill(Color.white.opacity(0.15))
+            .fill(notchForeground.opacity(0.15))
             .frame(width: width, height: 4)
             .overlay(alignment: .leading) {
                 Capsule()

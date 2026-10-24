@@ -44,6 +44,7 @@ struct TabModel: Identifiable {
 }
 
 struct TabSelectionView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @ObservedObject var coordinator = KannuViewCoordinator.shared
     @ObservedObject private var extensionNotchExperienceManager = ExtensionNotchExperienceManager.shared
     @StateObject private var quickShareService = QuickShareService.shared
@@ -72,35 +73,35 @@ struct TabSelectionView: View {
         var tabsArray: [TabModel] = []
 
         if homeTabVisible {
-            tabsArray.append(TabModel(label: "Now Playing", icon: "music.note.list", view: .home))
+            tabsArray.append(TabModel(label: String(localized: "Now Playing"), icon: "music.note.list", view: .home))
         }
 
         if Defaults[.dynamicShelf] {
-            tabsArray.append(TabModel(label: "Shelf", icon: "tray.fill", view: .shelf))
+            tabsArray.append(TabModel(label: String(localized: "Shelf"), icon: "tray.fill", view: .shelf))
         }
-        
+
         if enableTimerFeature && timerDisplayMode == .tab {
-            tabsArray.append(TabModel(label: "Timer", icon: "timer", view: .timer))
+            tabsArray.append(TabModel(label: String(localized: "Timer"), icon: "timer", view: .timer))
         }
 
         // Stats tab only shown when stats feature is enabled and at least one graph is active
         let anyGraphEnabled = Defaults[.showCpuGraph] || Defaults[.showMemoryGraph]
             || Defaults[.showGpuGraph] || Defaults[.showNetworkGraph] || Defaults[.showDiskGraph]
         if Defaults[.enableStatsFeature] && anyGraphEnabled {
-            tabsArray.append(TabModel(label: "Stats", icon: "chart.xyaxis.line", view: .stats))
+            tabsArray.append(TabModel(label: String(localized: "Stats"), icon: "chart.xyaxis.line", view: .stats))
         }
 
         // Usage tab only shown when LLM usage feature is enabled
         if Defaults[.enableLLMUsageFeature] {
-            tabsArray.append(TabModel(label: "Usage", icon: "chart.bar.doc.horizontal", view: .llmUsage))
+            tabsArray.append(TabModel(label: String(localized: "Usage"), icon: "chart.bar.doc.horizontal", view: .llmUsage))
         }
 
         if Defaults[.enableAgentStatusFeature] {
-            tabsArray.append(TabModel(label: "Agent", icon: "light.beacon.max", view: .agentStatus))
+            tabsArray.append(TabModel(label: String(localized: "Agent"), icon: "light.beacon.max", view: .agentStatus))
         }
 
         if Defaults[.enableNotes] || (Defaults[.enableClipboardManager] && Defaults[.clipboardDisplayMode] == .separateTab) {
-            let label = Defaults[.enableNotes] ? "Notes" : "Clipboard"
+            let label = Defaults[.enableNotes] ? String(localized: "Notes") : String(localized: "Clipboard")
             let icon = Defaults[.enableNotes] ? "note.text" : "doc.on.clipboard"
             tabsArray.append(TabModel(label: label, icon: icon, view: .notes))
         }
@@ -126,33 +127,39 @@ struct TabSelectionView: View {
         HStack(spacing: 24) {
             ForEach(Array(tabs.enumerated()), id: \.element.id) { idx, tab in
                 let isSelected = isSelected(tab)
-                let activeAccent = tab.accentColor ?? .white
+                let activeAccent = tab.accentColor ?? notchForeground
 
                 // Render the tab button
-                TabButton(label: tab.label, icon: tab.icon, selected: isSelected) {
+                // Hover-to-switch goes through TabButton's `onHover:` rather than a second
+                // `.onHover` here: two hover handlers on one control fight, and the tooltip loses.
+                TabButton(
+                    tooltip: tab.label,
+                    icon: tab.icon,
+                    selected: isSelected,
+                    onHover: { hovering in
+                        hoverTask?.cancel()
+                        guard hovering else { return }
+                        hoverTask = Task {
+                            try? await Task.sleep(nanoseconds: 80_000_000)
+                            guard !Task.isCancelled else { return }
+                            await MainActor.run {
+                                if tab.view == .extensionExperience {
+                                    coordinator.selectedExtensionExperienceID = tab.experienceID
+                                }
+                                coordinator.currentView = tab.view
+                            }
+                        }
+                    }
+                ) {
                     if tab.view == .extensionExperience {
                         coordinator.selectedExtensionExperienceID = tab.experienceID
                     }
                     coordinator.currentView = tab.view
                 }
-                .onHover { hovering in
-                    hoverTask?.cancel()
-                    guard hovering else { return }
-                    hoverTask = Task {
-                        try? await Task.sleep(nanoseconds: 80_000_000)
-                        guard !Task.isCancelled else { return }
-                        await MainActor.run {
-                            if tab.view == .extensionExperience {
-                                coordinator.selectedExtensionExperienceID = tab.experienceID
-                            }
-                            coordinator.currentView = tab.view
-                        }
-                    }
-                }
-                .foregroundStyle(isSelected ? activeAccent : .gray)
+                .foregroundStyle(isSelected ? activeAccent : .secondary)
                 .background {
                     if isSelected {
-                        let accent = tab.accentColor ?? Color.white
+                        let accent = tab.accentColor ?? notchForeground
                         if hasSkin {
                             Circle()
                                 .fill(.ultraThinMaterial)

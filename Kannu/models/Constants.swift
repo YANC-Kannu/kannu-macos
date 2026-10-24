@@ -418,7 +418,7 @@ enum ADRHighAlertMode: String, CaseIterable, Defaults.Serializable, Identifiable
         case .glyphOnly:
             return String(localized: "Only a small shield beside the traffic light; no pill.")
         case .off:
-            return String(localized: "Nothing in the closed notch. Findings still appear in the panel and in Settings.")
+            return String(localized: "Nothing in the closed notch. Findings still appear in the panel and in Brain.")
         }
     }
 
@@ -481,6 +481,10 @@ enum HideNotchOption: String, Defaults.Serializable {
     case nowPlayingOnly
     case never
 }
+
+/// Foundation-only in `ScreenCapturePolicy.swift` so the logic target can pin the rule; the
+/// conformance lives next to its key.
+extension ScreenCaptureVisibility: Defaults.Serializable {}
 
 // Define notification names at file scope
 extension Notification.Name {
@@ -870,7 +874,17 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     }
     
     static let colors: [Color] = [.yellow, .blue, .red, .green, .purple, .orange]
-    
+
+    /// Display names for `colors`, index for index: the swatches' tooltip and accessibility label.
+    static let colorNames: [String] = [
+        String(localized: "Yellow"),
+        String(localized: "Blue"),
+        String(localized: "Red"),
+        String(localized: "Green"),
+        String(localized: "Purple"),
+        String(localized: "Orange")
+    ]
+
     // Directory for storing note image files
     static let noteImageDataDirectory: URL = {
         let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -906,6 +920,15 @@ extension Defaults.Keys {
     /// Set the first (and only) time Kannu registers itself as a login item on the user's
     /// behalf. Its whole job is to guarantee a later opt-out is never overridden.
     static let didAutoEnableLaunchAtLogin = Key<Bool>("didAutoEnableLaunchAtLogin", default: false)
+    /// `OnboardingProgress.currentVersion` once onboarding is finished; 0 until then. An install
+    /// from before it existed is marked done at launch, because `firstLaunch` is already false.
+    static let onboardingCompletedVersion = Key<Int>("onboardingCompletedVersion", default: 0)
+    /// `LaunchPermission` raw values the user pressed Allow for (the request ran).
+    static let askedLaunchPermissions = Key<[String]>("askedLaunchPermissions", default: [])
+    /// `LaunchPermission` raw values the user said Not now to: their features wait for consent.
+    static let deferredLaunchPermissions = Key<[String]>("deferredLaunchPermissions", default: [])
+    /// Clipboard history's files moved from `~/Documents/ClipboardData` to Application Support.
+    static let clipboardDataMigrated = Key<Bool>("clipboardDataMigrated", default: false)
     /// Bundle path the login item was last registered from, so the stale-path repair can fire
     /// only when the app actually moved instead of on every launch.
     static let lastLoginItemBundlePath = Key<String>("lastLoginItemBundlePath", default: "")
@@ -913,7 +936,12 @@ extension Defaults.Keys {
     /// `preferred_screen_name`, which between them could not express "the monitor, while it is
     /// plugged in". See `DisplayPlacementResolver`.
     static let displayPlacement = Key<DisplayPlacement>("displayPlacement", default: .externalTakesOver)
-    static let hideDynamicIslandFromScreenCapture = Key<Bool>("hideDynamicIslandFromScreenCapture", default: false)
+    /// Which Kannu windows stay out of screenshots, recordings and capture-based thumbnails.
+    /// Replaces the `hideDynamicIslandFromScreenCapture` Bool, which `migrateScreenCaptureVisibility`
+    /// reads raw. The old key is never declared again: a declared `Key` registers its default, which
+    /// would make everyone look like they had set it.
+    static let screenCaptureVisibility = Key<ScreenCaptureVisibility>("screenCaptureVisibility", default: .showEverything)
+    static let didMigrateScreenCaptureVisibility = Key<Bool>("didMigrateScreenCaptureVisibility", default: false)
     
         // MARK: Behavior
     /// Seconds the pointer must rest before hover-to-open fires — and, on displays where Kannu
@@ -1238,6 +1266,15 @@ extension Defaults.Keys {
     /// Conversation ids of Kannu's own `/usage` probe sessions, so they never show as chats —
     /// persisted because the probe's dead session file outlives the process that spawned it.
     static let claudeUsageProbeConversationIDs = Key<[String]>("claudeUsageProbeConversationIDs", default: [])
+    /// The organization Claude Code's own sign-in fetched usage for, read right after Kannu's last
+    /// successful `/usage` fetch. `oauthAccount` in `~/.claude.json` cannot say it: every Claude
+    /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
+    /// and Claude Code's own sign-in with its token's, so it flips between them.
+    static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
+    /// Organization id to `oauthAccount.organizationType` ("claude_max", "claude_team"…), learned
+    /// whenever `~/.claude.json` names both, so the card can say which plan each side is on even
+    /// while the file names the other one. Plan types only, never names or emails.
+    static let claudeOrganizationTypes = Key<[String: String]>("claudeOrganizationTypes", default: [:])
 
     // MARK: Security findings (connection to a separately installed ADR — github.com/uber/ADR)
     /// Extra directory searched for the `adr-discovery` / `adr-sensor` executables, before the
@@ -1264,7 +1301,7 @@ extension Defaults.Keys {
     /// Kannu-run scans that failed in a row (no snapshot written). The next one comes after 1, 2,
     /// 4, 8, 16 hours, never later than the daily scan; a scan that writes a snapshot resets it.
     static let adrKannuScanFailures = Key<Int>("adrKannuScanFailures", default: 0)
-    /// Optional `--policy` file for Discovery (tenant domains, approved, forbidden).
+    /// Optional `--policy` file for Discovery (tenant domains, approved and forbidden lists).
     static let adrPolicyFile = Key<String>("adrPolicyFile", default: "")
     /// How an unacknowledged high finding shows in the closed notch.
     static let adrHighAlertMode = Key<ADRHighAlertMode>("adrHighAlertMode", default: .untilAcknowledged)
@@ -1286,8 +1323,9 @@ extension Defaults.Keys {
     // Kannu's "new MCP server" check: local reads of agents' MCP settings, nothing sent.
     static let watchMCPServers = Key<Bool>("watchMCPServers", default: true)
     /// The agent policy (`~/.kannu/agent-policy.json`, hook v42): off means every match is reported
-    /// and the call runs; on means Claude Code and Cursor refuse it. Off by default — a change to
-    /// what an agent does is opt-in, and the file itself is the first opt-in.
+    /// and the call runs; on means Claude Code, Cursor and Antigravity refuse it (Antigravity's deny,
+    /// hook v46, is from its docs and has not been tested on a real install). Off by default — a
+    /// change to what an agent does is opt-in, and the file itself is the first opt-in.
     static let enforceAgentPolicy = Key<Bool>("enforceAgentPolicy", default: false)
     static let mcpServerBaseline = Key<MCPServerWatch.Baseline>("mcpServerBaseline", default: MCPServerWatch.Baseline())
     static let mcpServerAdditions = Key<[MCPServerWatch.Addition]>("mcpServerAdditions", default: [])
@@ -1507,7 +1545,94 @@ extension Defaults.Keys {
     static let savedNotes = Key<[NoteItem]>("savedNotes", default: [])
     static let enableAppleNotesSync = Key<Bool>("enableAppleNotesSync", default: false)
     static let appleNotesLastSyncDate = Key<Date?>("appleNotesLastSyncDate", default: nil)
-    
+
+    // MARK: Tasks Feature
+    // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),
+    // not here: they hold recorded time, and a Defaults write is a whole-plist rewrite.
+    static let enableTasks = Key<Bool>("enableTasks", default: false)
+    /// How long a task's timer runs when the task has no estimate left, in minutes.
+    static let tasksDefaultSessionMinutes = Key<Int>("tasksDefaultSessionMinutes", default: 25)
+    /// Off by default: a task's timer runs on past its estimate silently.
+    static let tasksSoundAtEstimate = Key<Bool>("tasksSoundAtEstimate", default: false)
+    // Jira Cloud (Brain › Tasks › Sources). These are display copies only: the token, and the one
+    // host it may be sent to, live together in the Keychain (`SecureSecretKey.jiraCredential`). A
+    // site here that differs from the Keychain's means "reconnect", never a request to this host.
+    /// "Sync Jira": Jira issues are fetched. On after Connect. Off pauses fetching only: the Jira
+    /// tasks stay in the task order.
+    static let jiraEnabled = Key<Bool>("jiraEnabled", default: false)
+    /// The connected site's host (`acme.atlassian.net`); empty when not connected.
+    static let jiraSiteHost = Key<String>("jiraSiteHost", default: "")
+    static let jiraAccountID = Key<String>("jiraAccountID", default: "")
+    static let jiraAccountDisplayName = Key<String>("jiraAccountDisplayName", default: "")
+    /// The issue filter. Empty means the default (`JiraAPI.defaultJQL`).
+    static let jiraJQL = Key<String>("jiraJQL", default: JiraAPI.defaultJQL)
+    // GitLab (Brain › Tasks › Sources). Display copies too: the token and the one server it may be
+    // sent to live together in the Keychain (`SecureSecretKey.gitlabCredential`). A server here that
+    // differs from the Keychain's means "reconnect", never a request to this server.
+    /// "Sync GitLab": GitLab issues (and merge requests) are fetched. Off pauses fetching only: the
+    /// GitLab tasks stay in the task order.
+    static let gitlabEnabled = Key<Bool>("gitlabEnabled", default: false)
+    /// The connected server's base URL (`https://gitlab.com`); empty when not connected.
+    static let gitlabHost = Key<String>("gitlabHost", default: "")
+    /// The token owner's user name, for the "waiting for my review" list. Checked before each use.
+    static let gitlabUsername = Key<String>("gitlabUsername", default: "")
+    static let gitlabAccountDisplayName = Key<String>("gitlabAccountDisplayName", default: "")
+    /// The token has the `api` scope. Off for `read_api`, and when the server did not say.
+    static let gitlabCanLogTime = Key<Bool>("gitlabCanLogTime", default: false)
+    /// Open merge requests assigned to the user or waiting for their review join the task order.
+    static let gitlabIncludeMergeRequests = Key<Bool>("gitlabIncludeMergeRequests", default: true)
+    // GitHub, Linear, Todoist and Apple Reminders (Brain › Tasks › each source's page). Display
+    // copies too, as for Jira and GitLab: a token and where it may be sent live together in the
+    // Keychain; a scope here that differs from the Keychain's means "reconnect". Each "Sync" switch
+    // pauses fetching only: that source's tasks stay in the task order.
+    static let githubEnabled = Key<Bool>("githubEnabled", default: false)
+    /// The connected server's base URL (`https://github.com`, or a GitHub Enterprise Server's);
+    /// empty when not connected.
+    static let githubHost = Key<String>("githubHost", default: "")
+    static let githubUsername = Key<String>("githubUsername", default: "")
+    static let githubAccountDisplayName = Key<String>("githubAccountDisplayName", default: "")
+    /// Open pull requests assigned to the user join the task order too.
+    static let githubIncludePullRequests = Key<Bool>("githubIncludePullRequests", default: false)
+    static let linearEnabled = Key<Bool>("linearEnabled", default: false)
+    /// The connected workspace's address (`https://linear.app/acme`); empty when not connected.
+    static let linearWorkspace = Key<String>("linearWorkspace", default: "")
+    static let linearAccountDisplayName = Key<String>("linearAccountDisplayName", default: "")
+    static let todoistEnabled = Key<Bool>("todoistEnabled", default: false)
+    /// The connected account (`todoist:<user id>`); empty when not connected.
+    static let todoistAccount = Key<String>("todoistAccount", default: "")
+    static let todoistAccountDisplayName = Key<String>("todoistAccountDisplayName", default: "")
+    /// A Todoist filter ("today | overdue", "#Work"); empty lists every open task.
+    static let todoistFilter = Key<String>("todoistFilter", default: "")
+    static let appleRemindersEnabled = Key<Bool>("appleRemindersEnabled", default: false)
+    /// "reminders" once the user connected Reminders (and macOS allowed it); empty otherwise.
+    static let appleRemindersScope = Key<String>("appleRemindersScope", default: "")
+    // Brain › Tasks › Task list filters (`TaskFilter`). This Mac only; never sent anywhere.
+    /// All, or one source.
+    static let tasksListSourceFilter = Key<TaskSourceFilter>("tasksListSourceFilter", default: .all)
+    /// `TaskFacets.anyProject` (""), `TaskFacets.noProject`, or a project name.
+    static let tasksListProjectFilter = Key<String>("tasksListProjectFilter", default: TaskFacets.anyProject)
+    static let tasksListStatusFilter = Key<TaskStatusFilter>("tasksListStatusFilter", default: .toDoAndInProgress)
+    /// `TaskFacets.anyTag` (""), or a tag.
+    static let tasksListTagFilter = Key<String>("tasksListTagFilter", default: TaskFacets.anyTag)
+    // The notch's Tasks popover: Show in notch (`TaskSourceMenu`). What Up next shows, and nothing
+    // else — never what is fetched or what Brain's Task list shows (`TaskOrdering.viewFilter`).
+    static let tasksPopoverShowLocal = Key<Bool>("tasksPopoverShowLocal", default: true)
+    static let tasksPopoverShowJira = Key<Bool>("tasksPopoverShowJira", default: true)
+    static let tasksPopoverShowGitLab = Key<Bool>("tasksPopoverShowGitLab", default: true)
+    static let tasksPopoverShowGitHub = Key<Bool>("tasksPopoverShowGitHub", default: true)
+    static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
+    static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
+    static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
+    // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
+    static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)
+    static let jiraTaskColor = Key<TaskColor>("jiraTaskColor", default: .glass)
+    static let gitlabTaskColor = Key<TaskColor>("gitlabTaskColor", default: .glass)
+    static let githubTaskColor = Key<TaskColor>("githubTaskColor", default: .glass)
+    static let linearTaskColor = Key<TaskColor>("linearTaskColor", default: .glass)
+    static let todoistTaskColor = Key<TaskColor>("todoistTaskColor", default: .glass)
+    static let appleRemindersTaskColor = Key<TaskColor>("appleRemindersTaskColor", default: .glass)
+
     // Use Now Playing as the default media controller for new installs.
     static var defaultMediaController: MediaControllerType {
         .nowPlaying
@@ -1549,6 +1674,19 @@ extension Defaults.Keys {
             Defaults[.alwaysShowOverrides] = legacyOverrides.mapValues { !$0 }
         }
         Defaults[.didMigrateNonNotchAlwaysShow] = true
+    }
+
+    /// Only a user who touched the legacy "Hide Kannu during screenshots & recordings" toggle has a
+    /// choice to carry over: on becomes "Hide everything" (what the toggle did), off "Show
+    /// everything". Everyone else keeps the default, "Show everything", which is what the toggle's
+    /// default did, so nobody's screenshots change on update. Reads the legacy key raw, see
+    /// `screenCaptureVisibility`.
+    static func migrateScreenCaptureVisibility() {
+        guard Defaults[.didMigrateScreenCaptureVisibility] == false else { return }
+        if let legacy = UserDefaults.standard.object(forKey: "hideDynamicIslandFromScreenCapture") as? Bool {
+            Defaults[.screenCaptureVisibility] = legacy ? .hideEverything : .showEverything
+        }
+        Defaults[.didMigrateScreenCaptureVisibility] = true
     }
 
     /// Everyone gets the new default, including people who had chosen otherwise.
@@ -1659,3 +1797,9 @@ enum ReleaseInfo {
 /// `DisplayPlacement` lives in the logic test target, which does not link Defaults, so the storage
 /// conformance is declared here. A `String`-backed enum needs nothing more.
 extension DisplayPlacement: Defaults.Serializable {}
+
+/// The Task list's filters live in the logic test target too (`TaskFacets.swift`).
+extension TaskSourceFilter: Defaults.Serializable {}
+extension TaskStatusFilter: Defaults.Serializable {}
+/// `TaskColor.swift` is in the logic test target as well.
+extension TaskColor: Defaults.Serializable {}

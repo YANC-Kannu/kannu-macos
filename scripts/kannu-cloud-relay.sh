@@ -30,8 +30,8 @@ VERSION = 1
 REFRESH_MS = 240000
 YELLOW_HOLD_MS = 2000
 STATES = {"idle", "thinking", "executing", "awaiting_input", "stopped", "session_end"}
-EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure",
-          "PermissionRequest", "Notification", "Stop", "StopFailure", "SessionEnd"}
+EVENTS = {"SessionStart", "UserPromptSubmit", "UserPromptExpansion", "PreToolUse", "PostToolUse",
+          "PostToolUseFailure", "PermissionRequest", "Notification", "Stop", "StopFailure", "SessionEnd"}
 NOTES = {"permission_prompt", "idle_prompt", "agent_needs_input", "agent_completed"}
 QUESTION_TOOLS = {"AskUserQuestion", "ExitPlanMode"}
 SESSION_RE = re.compile(r"^(session|cse)_[A-Za-z0-9]{1,64}$")

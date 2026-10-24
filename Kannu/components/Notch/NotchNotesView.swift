@@ -20,6 +20,7 @@ import SwiftUI
 import Defaults
 
 struct NotchNotesView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var coordinator = KannuViewCoordinator.shared
     @ObservedObject private var appleNotesSync = AppleNotesSyncManager.shared
@@ -54,7 +55,7 @@ struct NotchNotesView: View {
                 
                 if enableNotes {
                     Divider()
-                        .background(Color.white.opacity(0.15))
+                        .background(notchForeground.opacity(0.15))
                 }
             }
             
@@ -443,6 +444,8 @@ struct NotchNotesView: View {
 // MARK: - Subviews
 
 struct NotchClipboardList: View {
+    @Environment(\.notchFill) private var notchFill
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var clipboardManager = ClipboardManager.shared
     @State private var hoveredItemId: UUID?
@@ -458,7 +461,7 @@ struct NotchClipboardList: View {
             HStack {
                 Text("Clipboard")
                     .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(notchForeground)
                 
                 Spacer()
                 
@@ -468,10 +471,12 @@ struct NotchClipboardList: View {
                             .font(.system(size: 14))
                             .foregroundStyle(.red)
                             .padding(6)
-                            .background(Color.white.opacity(0.1))
+                            .background(notchForeground.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .hoverTooltip(String(localized: "Clear History"), edge: .below)
+                    .accessibilityLabel(String(localized: "Clear History"))
                 }
             }
             .padding(.horizontal, 20)
@@ -525,12 +530,12 @@ struct NotchClipboardList: View {
                         .padding(.bottom, 20)
                     }
 
-                    LinearGradient(colors: [Color.black.opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [(notchFill ?? .black).opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: 16)
                         .allowsHitTesting(false)
                         .frame(maxHeight: .infinity, alignment: .top)
 
-                    LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [.clear, (notchFill ?? .black).opacity(0.65)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 16)
                         .allowsHitTesting(false)
                         .frame(maxHeight: .infinity, alignment: .bottom)
@@ -570,6 +575,7 @@ struct NotchClipboardList: View {
 }
 
 struct NotchClipboardItemRow: View {
+    @Environment(\.notchForeground) private var notchForeground
     let item: ClipboardItem
     let isHovered: Bool
     let justCopied: Bool
@@ -582,7 +588,7 @@ struct NotchClipboardItemRow: View {
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 32, height: 32)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(notchForeground.opacity(0.1), lineWidth: 0.5))
             } else {
                 Image(systemName: justCopied ? "checkmark.circle.fill" : item.type.icon)
                     .font(.system(size: 14))
@@ -593,7 +599,7 @@ struct NotchClipboardItemRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.preview)
                     .font(.system(size: 13))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(notchForeground)
                     .lineLimit(1)
                 
                 HStack {
@@ -622,6 +628,8 @@ struct NotchClipboardItemRow: View {
 
 
 struct NoteListView: View {
+    @Environment(\.notchFill) private var notchFill
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject private var appleNotesSync = AppleNotesSyncManager.shared
     let notes: [NoteItem]
@@ -665,18 +673,23 @@ struct NoteListView: View {
         }
     }
 
+    /// The magnifying glass opens search and/or the colour filter, whichever is enabled.
+    private var searchToggleTooltip: String {
+        enableNoteSearch ? String(localized: "Search Notes") : String(localized: "Filter Notes")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
                 Text("Notes")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(notchForeground)
 
                 if enableAppleNotesSync {
                     Image(systemName: appleNotesSync.isSyncing ? "arrow.triangle.2.circlepath" : "apple.logo")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(appleNotesSync.isSyncing ? .yellow : .white.opacity(0.45))
+                        .foregroundStyle(appleNotesSync.isSyncing ? .yellow : notchForeground.opacity(0.45))
                         .rotationEffect(.degrees(appleNotesSync.isSyncing ? 360 : 0))
                         .animation(
                             appleNotesSync.isSyncing
@@ -693,14 +706,15 @@ struct NoteListView: View {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(.system(size: 13))
                             .frame(width: 16, height: 16)
-                            .foregroundStyle(appleNotesSync.isSyncing ? .yellow : .white.opacity(0.6))
+                            .foregroundStyle(appleNotesSync.isSyncing ? .yellow : notchForeground.opacity(0.6))
                             .padding(5)
-                            .background(Color.white.opacity(0.1))
+                            .background(notchForeground.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(appleNotesSync.isSyncing)
                     .hoverTooltip(String(localized: "Sync with Apple Notes"), edge: .below)
+                    .accessibilityLabel(String(localized: "Sync with Apple Notes"))
                 }
 
                 if enableNoteSearch || enableNoteColorFiltering {
@@ -713,12 +727,14 @@ struct NoteListView: View {
                             .font(.system(size: 14, weight: isSearchExpanded ? .bold : .medium))
                             .symbolVariant(isSearchExpanded ? .circle.fill : .none)
                             .frame(width: 16, height: 16) // Fixed frame to stabilize
-                            .foregroundStyle(isSearchExpanded ? .blue : .white.opacity(0.6))
+                            .foregroundStyle(isSearchExpanded ? .blue : notchForeground.opacity(0.6))
                             .padding(5)
-                            .background(Color.white.opacity(0.1))
+                            .background(notchForeground.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .hoverTooltip(searchToggleTooltip, edge: .below)
+                    .accessibilityLabel(searchToggleTooltip)
                 }
 
                 if enableCreateFromClipboard {
@@ -726,13 +742,14 @@ struct NoteListView: View {
                         Image(systemName: "doc.on.clipboard")
                             .font(.system(size: 13))
                             .frame(width: 16, height: 16)
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(notchForeground.opacity(0.6))
                             .padding(5)
-                            .background(Color.white.opacity(0.1))
+                            .background(notchForeground.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .hoverTooltip("Create from Clipboard", edge: .below)
+                    .hoverTooltip(String(localized: "Create from Clipboard"), edge: .below)
+                    .accessibilityLabel(String(localized: "Create from Clipboard"))
                 }
                 
                 if !notes.isEmpty {
@@ -742,22 +759,26 @@ struct NoteListView: View {
                             .frame(width: 16, height: 16)
                             .foregroundStyle(.red)
                             .padding(5)
-                            .background(Color.white.opacity(0.1))
+                            .background(notchForeground.opacity(0.1))
                             .clipShape(Circle())
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .hoverTooltip(String(localized: "Clear Notes"), edge: .below)
+                    .accessibilityLabel(String(localized: "Clear Notes"))
                 }
 
                 Button(action: onCreate) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
                         .frame(width: 16, height: 16)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(notchForeground)
                         .padding(5)
-                        .background(Color.white.opacity(0.1))
+                        .background(notchForeground.opacity(0.1))
                         .clipShape(Circle())
                 }
                 .buttonStyle(PlainButtonStyle())
+                .hoverTooltip(String(localized: "New Note"), edge: .below)
+                .accessibilityLabel(String(localized: "New Note"))
             }
             .padding(.horizontal, 16) // Reduced from 20
             .padding(.top, 8)
@@ -780,11 +801,13 @@ struct NoteListView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .buttonStyle(.plain)
+                                .hoverTooltip(String(localized: "Clear Search"), edge: .below)
+                                .accessibilityLabel(String(localized: "Clear Search"))
                             }
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4) // Reduced from 6
-                        .background(Color.white.opacity(0.05))
+                        .background(notchForeground.opacity(0.05))
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .padding(.horizontal, 16)
                     }
@@ -797,7 +820,7 @@ struct NoteListView: View {
                                         .font(.system(size: 10, weight: .medium))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
-                                        .background(selectedColorFilter == nil ? Color.blue.opacity(0.3) : Color.white.opacity(0.1))
+                                        .background(selectedColorFilter == nil ? Color.blue.opacity(0.3) : notchForeground.opacity(0.1))
                                         .clipShape(Capsule())
                                 }
                                 .buttonStyle(.plain)
@@ -808,7 +831,7 @@ struct NoteListView: View {
                                         .frame(width: 14, height: 14)
                                         .overlay(
                                             Circle()
-                                                .stroke(Color.white, lineWidth: selectedColorFilter == index ? 2 : 0)
+                                                .stroke(notchForeground, lineWidth: selectedColorFilter == index ? 2 : 0)
                                                 .padding(-2)
                                         )
                                         .onTapGesture {
@@ -816,10 +839,18 @@ struct NoteListView: View {
                                                 selectedColorFilter = (selectedColorFilter == index) ? nil : index
                                             }
                                         }
+                                        // `.above`: an earlier sibling in the VStack draws
+                                        // underneath, while the notes grid below draws on top.
+                                        .hoverTooltip(NoteItem.colorNames[index], edge: .above)
+                                        .accessibilityLabel(NoteItem.colorNames[index])
+                                        .accessibilityAddTraits(.isButton)
                                 }
                             }
                             .padding(.horizontal, 16)
                         }
+                        // A ScrollView clips both axes; without this the bubble is swallowed.
+                        // The row is ~150pt against its 160pt maximum, so nothing scrolls today.
+                        .scrollClipDisabled()
                     }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -864,12 +895,12 @@ struct NoteListView: View {
                         .padding(.bottom, 20)
                     }
 
-                    LinearGradient(colors: [Color.black.opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [(notchFill ?? .black).opacity(0.65), .clear], startPoint: .top, endPoint: .bottom)
                         .frame(height: 16)
                         .allowsHitTesting(false)
                         .frame(maxHeight: .infinity, alignment: .top)
 
-                    LinearGradient(colors: [.clear, Color.black.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [.clear, (notchFill ?? .black).opacity(0.65)], startPoint: .top, endPoint: .bottom)
                         .frame(height: 16)
                         .allowsHitTesting(false)
                         .frame(maxHeight: .infinity, alignment: .bottom)
@@ -904,6 +935,7 @@ struct NoteListView: View {
 }
 
 struct NoteRow: View {
+    @Environment(\.notchForeground) private var notchForeground
     let note: NoteItem
     let onDelete: () -> Void
     let onTogglePin: () -> Void
@@ -911,7 +943,11 @@ struct NoteRow: View {
     @State private var isHovered = false
     @State private var isCopied = false
     @Default(.enableNotePinning) var enableNotePinning
-    
+
+    private var pinTooltip: String {
+        note.isPinned ? String(localized: "Unpin Note") : String(localized: "Pin Note")
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: isCompact ? 8 : 12) {
@@ -930,13 +966,13 @@ struct NoteRow: View {
                         }
                         Text(note.title)
                             .font(.system(size: isCompact ? 12 : 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(notchForeground)
                             .lineLimit(1)
                     }
                     
                     Text(note.content.isEmpty ? "No content" : note.content)
                         .font(.system(size: isCompact ? 10 : 12))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(notchForeground.opacity(0.7))
                         .lineLimit(isCompact ? 1 : 2)
                         .multilineTextAlignment(.leading)
                 }
@@ -951,7 +987,7 @@ struct NoteRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(isHovered ? 0.12 : 0.08))
+                .fill(notchForeground.opacity(isHovered ? 0.12 : 0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(note.color.opacity(0.2), lineWidth: 1)
@@ -972,6 +1008,10 @@ struct NoteRow: View {
                                     .clipShape(Circle())
                             }
                             .buttonStyle(PlainButtonStyle())
+                            // `.below`: rows sit in a ScrollView and the first rows are the most
+                            // hovered; the grid's bottom padding leaves room under the last one.
+                            .hoverTooltip(pinTooltip, edge: .below)
+                            .accessibilityLabel(pinTooltip)
                         }
 
                         Button(action: {
@@ -1002,6 +1042,8 @@ struct NoteRow: View {
                                 .clipShape(Circle())
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Copy"), edge: .below)
+                        .accessibilityLabel(String(localized: "Copy"))
 
                         Button(action: onDelete) {
                             Image(systemName: "trash")
@@ -1012,6 +1054,8 @@ struct NoteRow: View {
                                 .clipShape(Circle())
                         }
                         .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Delete Note"), edge: .below)
+                        .accessibilityLabel(String(localized: "Delete Note"))
                     }
                     .padding(.horizontal, isCompact ? 6 : 8)
                     .padding(.vertical, isCompact ? 2 : 3)
@@ -1038,7 +1082,7 @@ struct NoteRow: View {
                         .aspectRatio(contentMode: .fill)
                         .frame(width: isCompact ? 32 : 50, height: isCompact ? 32 : 50)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(notchForeground.opacity(0.2), lineWidth: 1))
                         .shadow(color: .black.opacity(0.3), radius: 3, x: 0, y: 1)
                         .padding(.trailing, isCompact ? 4 : 8)
                 }
@@ -1062,6 +1106,13 @@ struct NoteRow: View {
 }
 
 struct NoteEditorView: View {
+    @Environment(\.notchFill) private var notchFill
+    @Environment(\.notchForeground) private var notchForeground
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// Under a skin the editor paints its own black surface, so its text stays white there.
+    private var editorForeground: Color { notchFill == nil ? .white : notchForeground }
+
     @Binding var title: String
     @Binding var content: String
     @Binding var imageData: Data?
@@ -1092,7 +1143,7 @@ struct NoteEditorView: View {
                         Text("Notes")
                     }
                     .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(editorForeground)
                 }
                 .buttonStyle(PlainButtonStyle())
                 
@@ -1124,7 +1175,7 @@ struct NoteEditorView: View {
                                 .frame(width: 16, height: 16)
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.white, lineWidth: colorIndex == index ? 2 : 0)
+                                        .stroke(editorForeground, lineWidth: colorIndex == index ? 2 : 0)
                                         .padding(-2)
                                 )
                                 .onTapGesture {
@@ -1132,11 +1183,19 @@ struct NoteEditorView: View {
                                         colorIndex = index
                                     }
                                 }
+                                // `.above`: the toolbar is an earlier VStack sibling and draws
+                                // underneath; the editor below would draw over a `.below` bubble.
+                                .hoverTooltip(NoteItem.colorNames[index], edge: .above)
+                                .accessibilityLabel(NoteItem.colorNames[index])
+                                .accessibilityAddTraits(.isButton)
                         }
                     }
                     .padding(.vertical, 4)
                     .padding(.horizontal, 4)
                 }
+                // A ScrollView clips both axes; without this the bubble is swallowed.
+                // The row is ~144pt against its 160pt maximum, so nothing scrolls today.
+                .scrollClipDisabled()
                 .frame(maxWidth: 160)
             }
             .padding(.leading, 16)
@@ -1144,7 +1203,7 @@ struct NoteEditorView: View {
             .padding(.bottom, 8)
             
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(editorForeground.opacity(0.1))
 
 
             
@@ -1161,7 +1220,7 @@ struct NoteEditorView: View {
                 
                 TextEditor(text: $content)
                     .font(.system(size: 13, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(editorForeground)
                     .lineSpacing(4)
                     .scrollContentBackground(.hidden)
                     .padding(8)
@@ -1169,7 +1228,7 @@ struct NoteEditorView: View {
                     .padding(.trailing, imageData != nil ? 75 : 0) // Reduced from 100
                     .focused($isContentFocused)
                     .frame(maxHeight: .infinity)
-                    .background(Color.white.opacity(0.05))
+                    .background(editorForeground.opacity(0.05))
                 
                 // Image Overlay in Bottom Right
                 if let data = imageData, let nsImage = NSImage(data: data) {
@@ -1183,7 +1242,7 @@ struct NoteEditorView: View {
                                     .aspectRatio(contentMode: .fill)
                                     .frame(width: 55, height: 55) // Reduced from 80
                                     .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(editorForeground.opacity(0.2), lineWidth: 1))
                                     .shadow(color: .black.opacity(0.5), radius: 5, x: 0, y: 2)
                                 
                                 Button(action: {
@@ -1197,6 +1256,8 @@ struct NoteEditorView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .offset(x: 4, y: -4) // Move out slightly for better accessibility
+                                .hoverTooltip(String(localized: "Remove Image"), edge: .above)
+                                .accessibilityLabel(String(localized: "Remove Image"))
                             }
                             .padding(12)
                             .padding(.bottom, 20) // Moved higher as requested
@@ -1223,7 +1284,10 @@ struct NoteEditorView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure VStack takes full space
-        .background(Color.black) // Ensure solid background
+        .background(notchFill ?? .black) // Solid, so the list never shows through mid-slide
+        // Under a skin the editor paints black, so it keeps the dark scheme there.
+        .environment(\.colorScheme, notchFill == nil ? .dark : colorScheme)
+        .environment(\.notchForeground, editorForeground)
         .onAppear {
             if isNew {
                 isContentFocused = true

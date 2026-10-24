@@ -4,6 +4,7 @@ import Defaults
 import SwiftUI
 
 struct NotchAgentStatusView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject private var vm: KannuViewModel
     @ObservedObject private var monitor = CursorAgentStatusMonitor.shared
     @ObservedObject private var skinManager = NotchSkinManager.shared
@@ -28,6 +29,7 @@ struct NotchAgentStatusView: View {
     /// Bumped once when a red badge's blink window ends, so the 10 Hz blink stops on time.
     @State private var blinkWake = Date.distantPast
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
     private let scrollSuppressionToken = UUID()
 
     private var hasSkin: Bool { skinManager.selectedSkinImage != nil }
@@ -92,7 +94,9 @@ struct NotchAgentStatusView: View {
             ),
             ProviderInstallStatus(
                 source: .warp, name: "Warp",
-                detected: WarpAgentStore.databaseURL != nil
+                // Launch Services, not Warp's container: statting that raises "access data from
+                // other apps", which belongs to onboarding's Permissions step.
+                detected: LaunchPermissionManager.isWarpInstalled
             ),
             ProviderInstallStatus(
                 source: .claudeDesktop, name: "Desktop",
@@ -172,12 +176,12 @@ struct NotchAgentStatusView: View {
             .padding(.horizontal, 6)
             .background {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.05)))
+                    .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(notchForeground.opacity(0.05)))
                 if hasSkin {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(notchForeground.opacity(0.1))
                     RoundedRectangle(cornerRadius: 8)
-                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5)
+                        .strokeBorder(notchForeground.opacity(0.18), lineWidth: 0.5)
                 }
             }
         }
@@ -217,7 +221,7 @@ struct NotchAgentStatusView: View {
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
-                .hoverTooltip(String(localized: "Security findings — click for Settings"), edge: .below, pointingHandCursor: true)
+                .hoverTooltip(String(localized: "Security findings — click to open Brain"), edge: .below, pointingHandCursor: true)
             }
             Spacer(minLength: 0)
             if smartCaffeinate {
@@ -246,8 +250,8 @@ struct NotchAgentStatusView: View {
                 .buttonStyle(.plain)
                 .hoverTooltip(
                     caffeinate.isKeepingAwake
-                        ? String(localized: "Keeping awake — agent running. Click for Settings.")
-                        : String(localized: "Smart caffeinate on. Click for Settings.")
+                        ? String(localized: "Keeping awake — agent running. Click to open Brain.")
+                        : String(localized: "Smart caffeinate on. Click to open Brain.")
                 , edge: .below, pointingHandCursor: true)
                 .accessibilityLabel("Smart caffeinate is on")
                 .accessibilityHint("Opens caffeinate settings")
@@ -316,7 +320,7 @@ struct NotchAgentStatusView: View {
                     Text(finding.severity.label)
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                        .background(Capsule().fill(notchForeground.opacity(0.12)))
                 }
                 Text(finding.summary)
                     .font(.caption)
@@ -367,9 +371,9 @@ struct NotchAgentStatusView: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.08)))
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(notchForeground.opacity(0.08)))
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.5)
+                .strokeBorder(notchForeground.opacity(0.22), lineWidth: 0.5)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Security finding, \(finding.severity.label): \(finding.title). \(finding.summary)")
@@ -529,12 +533,12 @@ struct NotchAgentStatusView: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.06)))
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(notchForeground.opacity(0.06)))
             if hasSkin {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.12))
+                    .fill(notchForeground.opacity(0.12))
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
+                    .strokeBorder(notchForeground.opacity(0.2), lineWidth: 0.5)
             }
         }
     }
@@ -574,12 +578,12 @@ struct NotchAgentStatusView: View {
         .padding(10)
         .background {
             RoundedRectangle(cornerRadius: 10)
-                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.04)))
+                .fill(hasSkin ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(notchForeground.opacity(0.04)))
             if hasSkin {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(notchForeground.opacity(0.08))
                 RoundedRectangle(cornerRadius: 10)
-                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                    .strokeBorder(notchForeground.opacity(0.14), lineWidth: 0.5)
             }
         }
     }
@@ -589,7 +593,7 @@ struct NotchAgentStatusView: View {
     /// here instead.
     @ViewBuilder
     private func statusText(for session: AgentSessionStatus, font: Font) -> some View {
-        let suffix = session.runOutcomeSuffix + resumeSuffix(for: session)
+        let suffix = session.runOutcomeSuffix + session.backgroundWorkSuffix + resumeSuffix(for: session)
         if isMinimalistic, let display = AgentTurnMetricsView.display(for: session) {
             switch display {
             case let .live(since):
@@ -607,7 +611,7 @@ struct NotchAgentStatusView: View {
     private func statusLine(_ session: AgentSessionStatus, suffix: String, font: Font) -> some View {
         (
             Text(session.displayState.displayName)
-                .foregroundStyle(stateColor(session.displayState))
+                .foregroundStyle(stateTextColor(session.displayState))
             + Text(suffix)
                 .foregroundStyle(.secondary)
         )
@@ -677,6 +681,13 @@ struct NotchAgentStatusView: View {
             .frame(width: size, height: size)
             .shadow(color: color.opacity(opacity * 0.9), radius: glowRadius)
             .shadow(color: color.opacity(opacity * 0.5), radius: glowRadius * 2)
+    }
+
+    /// The state's colour as text. On a light notch the neon hue is shaded until it reads
+    /// (`Color.shadedForLightNotch`); the dots beside it keep the neon.
+    private func stateTextColor(_ state: AgentTrafficLightState) -> Color {
+        guard colorScheme == .light, state != .inactive else { return stateColor(state) }
+        return stateColor(state).shadedForLightNotch
     }
 
     private func stateColor(_ state: AgentTrafficLightState) -> Color {

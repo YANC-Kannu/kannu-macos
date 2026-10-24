@@ -14,7 +14,7 @@ final class LLMUsageManager: ObservableObject {
     /// A forced request that arrived while a refresh was already in flight. Dropping it lost
     /// the user's action (e.g. the limits toggle mid-poll) until the next timer tick, which the
     /// 180s floor could then reject — the card sat empty for minutes.
-    private var pendingForcedRefresh: (force: Bool, interactive: Bool)?
+    private var pendingForcedRefresh: (force: Bool, interactiveFor: Set<ProviderID>)?
     // 180s matches the documented safe polling cadence for Anthropic's oauth/usage endpoint;
     // anything faster earns per-token 429s even with a correct User-Agent.
     private static let minRefreshInterval: TimeInterval = 180
@@ -42,7 +42,10 @@ final class LLMUsageManager: ObservableObject {
         if !ud.bool(forKey: "llmProviderDefaultsConfigured") {
             ud.set(fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path), forKey: "enableClaudeProvider")
             ud.set(fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path), forKey: "enableCursorProvider")
-            ud.set(fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path), forKey: "enableCodexProvider")
+            // Where the Codex provider looks: $CODEX_HOME (default ~/.codex), sessions/ or
+            // archived_sessions/. Checking only ~/.codex/sessions left a CODEX_HOME or
+            // archived-only user with Codex disabled while discovery would have found the logs.
+            ud.set(CodexRolloutFiles.hasRolloutDirectory(codexHome: CodexRolloutFiles.codexHome()), forKey: "enableCodexProvider")
             ud.set(true, forKey: "llmProviderDefaultsConfigured")
         }
         // Antigravity detection runs independently each launch so existing installs
@@ -74,20 +77,28 @@ final class LLMUsageManager: ObservableObject {
         return Self.allProviders.filter { Defaults[$0.id.enabledKey] }
     }
 
-    /// `interactive` marks a refresh the user asked for directly, letting providers take
-    /// steps that may show a system prompt (e.g. approving a cross-app keychain read).
-    /// Automatic and timer-driven refreshes must leave it false so nothing blocks on a dialog.
-    func refreshAll(force: Bool = false, interactive: Bool = false) {
-        refreshAll(force: force, interactive: interactive, drainingParkedRequest: false)
+    /// `interactiveFor` names the providers the user asked to unblock directly (a card's fix-it
+    /// button), letting only those take steps that may show a system prompt (e.g. approving a
+    /// cross-app keychain read). Every other provider in the same refresh stays silent: a Codex
+    /// approval tap must not raise Cursor's dialog. Automatic and timer-driven refreshes leave it
+    /// empty so nothing blocks on a dialog.
+    /// `bypassFloor` is for a caller whose own data just changed and that has paced itself — the
+    /// Claude usage fetch completing. The card's poll runs a refresh moments before that fetch
+    /// lands, so the floor would otherwise drop it and leave the new numbers off the card for
+    /// minutes. It never prompts (that is `interactiveFor`).
+    func refreshAll(force: Bool = false, interactiveFor: Set<ProviderID> = [], bypassFloor: Bool = false) {
+        refreshAll(force: force, interactiveFor: interactiveFor, drainingParkedRequest: bypassFloor)
     }
 
-    /// `drainingParkedRequest` is true only for the re-entry that drains `pendingForcedRefresh`.
+    /// `drainingParkedRequest` is true for the re-entry that drains `pendingForcedRefresh`, and for
+    /// a public `bypassFloor` request.
     /// That request was parked *because* a refresh was already in flight, and `lastRefresh` is
     /// stamped at refresh start — so by the time it drains, the elapsed time is almost always
     /// under the interactive floor and the parked intent would be silently dropped, which is
     /// the exact loss the parking exists to prevent. It already waited out a full refresh;
     /// letting it through adds at most one request per genuine user action.
-    private func refreshAll(force: Bool, interactive: Bool, drainingParkedRequest: Bool) {
+    private func refreshAll(force: Bool, interactiveFor: Set<ProviderID>, drainingParkedRequest: Bool) {
+        let interactive = !interactiveFor.isEmpty
         let allEnabled = enabledProviders
         let localProviders = allEnabled.filter { $0.isLocalFileProvider }
         let networkProviders = allEnabled.filter { !$0.isLocalFileProvider }
@@ -96,8 +107,9 @@ final class LLMUsageManager: ObservableObject {
         let enabledIDs = Set(allEnabled.map { $0.id })
         results = results.filter { enabledIDs.contains($0.key) }
 
-        // Local file providers (Antigravity) read from disk: no network, nothing that can be
-        // rate-limited, so they refresh on every open and never gate on `isRefreshing`.
+        // Local file providers read from disk: no network, nothing that can be rate-limited, so
+        // they refresh on every open and never gate on `isRefreshing`. (Antigravity was one until
+        // it learned to ask `agy` for its quotas, which reaches Google's backend.)
         if !localProviders.isEmpty {
             for provider in localProviders {
                 // Keep the current card — success or failure — while refreshing; only a
@@ -106,7 +118,7 @@ final class LLMUsageManager: ObservableObject {
                 if results[provider.id] != nil { continue }
                 results[provider.id] = .loading
             }
-            Task { await runRefresh(providers: localProviders, interactive: interactive, ownsRefreshFlag: false) }
+            Task { await runRefresh(providers: localProviders, interactiveFor: interactiveFor, ownsRefreshFlag: false) }
         }
 
         guard !networkProviders.isEmpty else { return }
@@ -119,7 +131,7 @@ final class LLMUsageManager: ObservableObject {
             if force || interactive {
                 pendingForcedRefresh = (
                     force: force || (pendingForcedRefresh?.force ?? false),
-                    interactive: interactive || (pendingForcedRefresh?.interactive ?? false)
+                    interactiveFor: interactiveFor.union(pendingForcedRefresh?.interactiveFor ?? [])
                 )
             }
             return
@@ -141,23 +153,31 @@ final class LLMUsageManager: ObservableObject {
             if results[provider.id] != nil { continue }
             results[provider.id] = .loading
         }
-        Task { await runRefresh(providers: networkProviders, interactive: interactive, ownsRefreshFlag: true) }
+        Task { await runRefresh(providers: networkProviders, interactiveFor: interactiveFor, ownsRefreshFlag: true) }
     }
 
-    /// Retries a provider's quota with prompts allowed, after the user taps the card's fix-it button.
+    /// The Usage tab's Refresh button. The user asked for fresh figures, so it also lifts
+    /// Antigravity's failure backoff: someone who has just signed in to `agy` should not wait out
+    /// 15 minutes. Every other caller of `refreshAll` leaves the backoff alone.
+    func refreshRequestedByUser() {
+        AntigravityQuotaReader.shared.clearBackoff()
+        refreshAll(force: true)
+    }
+
+    /// Retries the quota of the provider that owns `action` with prompts allowed, after the user
+    /// taps that card's fix-it button. Only that provider may prompt.
     func resolveQuotaAction(_ action: QuotaAction) {
-        switch action {
-        case .grantClaudeKeychainAccess: refreshAll(force: true, interactive: true)
-        }
+        refreshAll(force: true, interactiveFor: [action.provider])
     }
 
     /// `ownsRefreshFlag` is true only for the network pass. The local pass must leave
-    /// `isRefreshing` alone: Antigravity reads a file and finishes almost immediately, so
+    /// `isRefreshing` alone: a local provider reads a file and finishes almost immediately, so
     /// clearing the flag there would unblock the UI mid-network-request.
-    private func runRefresh(providers: [UsageProvider], interactive: Bool, ownsRefreshFlag: Bool) async {
+    private func runRefresh(providers: [UsageProvider], interactiveFor: Set<ProviderID>, ownsRefreshFlag: Bool) async {
         let now = Date()
         await withTaskGroup(of: (ProviderID, UsageResult).self) { group in
             for provider in providers {
+                let interactive = interactiveFor.contains(provider.id)
                 group.addTask {
                     do { return (provider.id, .success(try await provider.fetchSnapshot(now: now, interactive: interactive))) }
                     catch { return (provider.id, .failure(error.localizedDescription)) }
@@ -194,7 +214,7 @@ final class LLMUsageManager: ObservableObject {
         if let pending = pendingForcedRefresh {
             pendingForcedRefresh = nil
             Task { @MainActor in
-                self.refreshAll(force: pending.force, interactive: pending.interactive, drainingParkedRequest: true)
+                self.refreshAll(force: pending.force, interactiveFor: pending.interactiveFor, drainingParkedRequest: true)
             }
         }
     }

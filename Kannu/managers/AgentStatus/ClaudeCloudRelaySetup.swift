@@ -35,9 +35,20 @@ enum ClaudeCloudRelaySetup {
     /// The `hooks` object for the repository's `.claude/settings.json`, one group per row of the
     /// table Kannu's own Claude install uses. Every hook is async, so a slow relay never holds a
     /// turn up, and the script decides for itself that it is in a cloud session.
+    /// Claude events the relay leaves out of its hooks. The relay sends one colour per chat, so a
+    /// subagent's end would paint a chat that is still working red, and its start adds nothing the
+    /// chat's own events don't already say. Kannu's local install keeps them: there a subagent writes
+    /// its own file, which is how a chat stays green while its background agents run.
+    static let excludedEvents: Set<String> = ["SubagentStart", "SubagentStop"]
+
+    /// The rows of `AgentHookLayout.claudeHookEntries` the relay installs.
+    static var relayHookEntries: [(event: String, matcher: String?, matcherKey: String, state: String)] {
+        AgentHookLayout.claudeHookEntries.filter { !excludedEvents.contains($0.event) }
+    }
+
     static func hooksJSON() -> String {
         var hooks: [String: [[String: Any]]] = [:]
-        for entry in AgentHookLayout.claudeHookEntries {
+        for entry in relayHookEntries {
             let matcherArgument = entry.matcher == nil ? "" : " \(entry.matcherKey)"
             var group: [String: Any] = [
                 "hooks": [[
@@ -139,8 +150,8 @@ VERSION = 1
 REFRESH_MS = 240000
 YELLOW_HOLD_MS = 2000
 STATES = {"idle", "thinking", "executing", "awaiting_input", "stopped", "session_end"}
-EVENTS = {"SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PostToolUseFailure",
-          "PermissionRequest", "Notification", "Stop", "StopFailure", "SessionEnd"}
+EVENTS = {"SessionStart", "UserPromptSubmit", "UserPromptExpansion", "PreToolUse", "PostToolUse",
+          "PostToolUseFailure", "PermissionRequest", "Notification", "Stop", "StopFailure", "SessionEnd"}
 NOTES = {"permission_prompt", "idle_prompt", "agent_needs_input", "agent_completed"}
 QUESTION_TOOLS = {"AskUserQuestion", "ExitPlanMode"}
 SESSION_RE = re.compile(r"^(session|cse)_[A-Za-z0-9]{1,64}$")

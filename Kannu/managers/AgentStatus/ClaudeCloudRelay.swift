@@ -41,7 +41,7 @@ enum ClaudeCloudRelay {
     static let protocolVersion = 1
     static let payloadKeys: Set<String> = ["v", "kind", "session", "state", "event", "note", "repo", "ts"]
     static let states: Set<String> = ["idle", "thinking", "executing", "awaiting_input", "stopped", "session_end"]
-    static let events: Set<String> = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+    static let events: Set<String> = ["SessionStart", "UserPromptSubmit", "UserPromptExpansion", "PreToolUse", "PostToolUse",
                                       "PostToolUseFailure", "PermissionRequest", "Notification",
                                       "Stop", "StopFailure", "SessionEnd", "Check"]
     static let notes: Set<String> = ["", "permission_prompt", "idle_prompt", "agent_needs_input", "agent_completed"]

@@ -21,6 +21,7 @@
  */
 
 import ApplicationServices
+import Combine
 import Defaults
 import MacroVisionKit
 import SwiftUI
@@ -30,13 +31,17 @@ class FullscreenMediaDetector: ObservableObject {
     private let detector: MacroVisionKit
     @ObservedObject private var musicManager = MusicManager.shared
     @MainActor @Published private(set) var fullscreenStatus: [String: Bool] = [:]
+    /// Bumped per scan on the main actor. A scan publishes only while it is the latest, so one
+    /// that finishes late cannot overwrite a newer verdict (CodeRabbit on #112).
+    @MainActor private var scanGeneration = 0
     private var notificationTask: Task<Void, Never>?
+    private var cancellables: Set<AnyCancellable> = []
 
     private init() {
         self.detector = MacroVisionKit.shared
         detector.configuration.includeSystemApps = true
         setupNotificationObservers()
-        updateFullScreenStatus()
+        Task { [weak self] in await self?.updateFullScreenStatus() }
     }
 
     private func setupNotificationObservers() {
@@ -56,33 +61,95 @@ class FullscreenMediaDetector: ObservableObject {
                     let screenParameterNotifications = NSWorkspace.shared.notificationCenter.notifications(
                         named:  NSApplication.didChangeScreenParametersNotification
                     )
-                    
+
                     for await _ in screenParameterNotifications {
                         await  self?.handleChange()
                     }
                 }
             }
         }
+
+        // A space change is not the only input to the verdict. Fullscreen entered *before*
+        // pressing play never re-checked, so the notch stayed out for the whole video: the
+        // now-playing app and its play state are inputs too, as is the hide option itself.
+        // Everything funnels through `handleChange`'s 500 ms settle.
+        musicManager.$bundleIdentifier
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in Task { await self?.handleChange() } }
+            .store(in: &cancellables)
+        musicManager.$isPlaying
+            .removeDuplicates()
+            .dropFirst()
+            .sink { [weak self] _ in Task { await self?.handleChange() } }
+            .store(in: &cancellables)
+        Defaults.publisher(.hideNotchOption, options: [])
+            .sink { [weak self] _ in Task { await self?.handleChange() } }
+            .store(in: &cancellables)
+        Defaults.publisher(.enableFullscreenMediaDetection, options: [])
+            .sink { [weak self] _ in Task { await self?.handleChange() } }
+            .store(in: &cancellables)
+        // Granting Accessibility (Brain › Media's row) moves the verdict from the menu-bar
+        // fallback to `AXFullScreen`, and revoking it moves it back: neither is a space, playback
+        // or setting change, so a fallback misreading used to stand until one came along.
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            AccessibilityPermissionStore.shared.$isAuthorized
+                .removeDuplicates()
+                .dropFirst()
+                .sink { [weak self] _ in Task { await self?.handleChange() } }
+                .store(in: &self.cancellables)
+        }
     }
 
     private func handleChange() async {
         try? await Task.sleep(for: .milliseconds(500))
-        self.updateFullScreenStatus()
+        await self.updateFullScreenStatus()
+        // Without Accessibility the verdict reads the menu bar from a window snapshot, and the
+        // menu bar's slide out of (or back into) a fullscreen space can outlast the 500 ms
+        // settle. macOS posts no public notice for the menu bar's own show and hide, so the
+        // fallback looks once more after it has finished; still one snapshot per pass.
+        guard !AXIsProcessTrusted() else { return }
+        try? await Task.sleep(for: .milliseconds(1000))
+        await self.updateFullScreenStatus()
     }
 
-    private func updateFullScreenStatus() {
+    /// Reads the screens and windows where the caller runs — off the main thread, since an
+    /// Accessibility read of an unresponsive app can wait — then publishes on the main actor.
+    private func updateFullScreenStatus() async {
+        let ticket = await nextScanTicket()
+        await publish(currentFullscreenStatus(), ticket: ticket)
+    }
+
+    @MainActor
+    private func nextScanTicket() -> Int {
+        scanGeneration += 1
+        return scanGeneration
+    }
+
+    /// `fullscreenStatus` is main-actor state (`KannuViewModel` derives `hideOnClosed` from it):
+    /// this is the one place that assigns it. It used to be assigned from whichever thread ran
+    /// the scan. A scan another one has overtaken is dropped: its screens and windows are older.
+    @MainActor
+    private func publish(_ newStatus: [String: Bool], ticket: Int) {
+        guard ticket == scanGeneration, newStatus != fullscreenStatus else { return }
+        fullscreenStatus = newStatus
+        NSLog("✅ Fullscreen status: \(newStatus)")
+    }
+
+    private func currentFullscreenStatus() -> [String: Bool] {
         guard Defaults[.enableFullscreenMediaDetection] else {
-            let reset = Dictionary(uniqueKeysWithValues: NSScreen.screens.map { ($0.localizedName, false) })
-            if reset != fullscreenStatus {
-                fullscreenStatus = reset
-            }
-            return
+            // Two displays can share a name; nothing is fullscreen here, so the first entry stands.
+            return Dictionary(NSScreen.screens.map { ($0.localizedName, false) }, uniquingKeysWith: { first, _ in first })
         }
         
 
         let apps = detector.detectFullscreenApps(debug: false)
         let names = NSScreen.screens.map { $0.localizedName }
         let hideOption = Defaults[.hideNotchOption]
+        // One window snapshot per pass: the AX-denied fallback reads each screen's menu-bar
+        // visibility, and must not pay a CGWindowList walk per candidate app.
+        let menuBarByScreen = AXIsProcessTrusted() ? nil : menuBarVisibilityByScreen()
 
         var newStatus: [String: Bool] = [:]
         for name in names {
@@ -90,17 +157,18 @@ class FullscreenMediaDetector: ObservableObject {
                 guard app.screen.localizedName == name,
                       app.bundleIdentifier != "com.apple.finder" else { return false }
 
-                // The notch stays on display by default (the window's collectionBehavior
-                // rides along with fullscreen spaces). It only hides when the user's
-                // "Hide DynamicIsland" option asks for it.
+                // The notch window stays on display in every fullscreen space (it sits in the
+                // max-level notch space on every hide option). Hiding is the views' job: this
+                // verdict drives `KannuViewModel.hideOnClosed`, never the window, and only when
+                // the user's "Hide DynamicIsland" option asks for it.
                 switch hideOption {
                 case .always:
                     // Hide for any app in genuine native fullscreen on this screen.
-                    return isInNativeFullscreen(app)
+                    return isInNativeFullscreen(app, menuBarVisibleByScreen: menuBarByScreen)
                 case .nowPlayingOnly:
                     // Hide only when the currently playing media app is in fullscreen.
                     return app.bundleIdentifier == musicManager.bundleIdentifier
-                        && isInNativeFullscreen(app)
+                        && isInNativeFullscreen(app, menuBarVisibleByScreen: menuBarByScreen)
                 case .never:
                     // Always on display; never hide.
                     return false
@@ -108,17 +176,15 @@ class FullscreenMediaDetector: ObservableObject {
             }
         }
 
-        if newStatus != fullscreenStatus {
-            fullscreenStatus = newStatus
-            NSLog("✅ Fullscreen status: \(newStatus)")
-        }
+        return newStatus
     }
 
     /// Says once, not on every window scan, that fullscreen detection is degraded. Without the
-    /// grant Kannu cannot tell fullscreen from maximized, so it stops hiding the notch at all.
+    /// grant Kannu cannot read `AXFullScreen`, so it falls back to the menu-bar probe
+    /// (`FullscreenFallbackVerdict`), which misreads only when the menu bar is set to auto-hide.
     private static let accessibilityWarningOnce: Void = {
-        NSLog("⚠️ Kannu: Accessibility is not granted, so fullscreen cannot be told apart from "
-              + "maximized. The notch will stay visible over fullscreen apps until it is granted.")
+        NSLog("⚠️ Kannu: Accessibility is not granted, so fullscreen cannot be read exactly. "
+              + "Falling back to the menu-bar probe; grant Accessibility for exact detection.")
     }()
 
     private static func warnAboutMissingAccessibilityOnce() {
@@ -133,13 +199,23 @@ class FullscreenMediaDetector: ObservableObject {
     /// Without the Accessibility grant this used to answer `true` — "assume fullscreen" — which
     /// meant a freshly installed build (a new code identity drops every TCC grant) hid the notch
     /// for any *maximized* window under `.always`, and for a maximized media window under
-    /// `.nowPlayingOnly`. Hiding the entire product on an unverifiable guess is the worse error,
-    /// so an untrusted process now answers `false` and says so once in the log. Showing the notch
-    /// over a fullscreen app is a cosmetic miss; hiding it everywhere reads as a broken app.
-    private func isInNativeFullscreen(_ app: MacroVisionKit.FullscreenWindowInfo) -> Bool {
+    /// `.nowPlayingOnly`. Hiding the entire product on an unverifiable guess is the worse error.
+    /// A later build answered a flat `false`, which erred the other way: every re-signed install
+    /// silently stopped hiding over fullscreen video for good. An untrusted process now asks
+    /// `FullscreenFallbackVerdict`: fullscreen iff the window covers the *whole* screen frame
+    /// (nothing maximized can) or that screen's menu bar is gone — the one signal a maximized
+    /// window can't fake without the menu bar set to auto-hide.
+    private func isInNativeFullscreen(_ app: MacroVisionKit.FullscreenWindowInfo,
+                                      menuBarVisibleByScreen: [String: Bool]?) -> Bool {
         guard AXIsProcessTrusted() else {
             Self.warnAboutMissingAccessibilityOnce()
-            return false
+            // Unknown visibility reads as "menu bar there" — the safe bias: show the notch.
+            let menuBarVisible = menuBarVisibleByScreen?[app.screen.localizedName] ?? true
+            return FullscreenFallbackVerdict.isLikelyFullscreen(
+                windowFrame: app.windowFrame,
+                screenFrame: app.screen.frame,
+                menuBarVisible: menuBarVisible
+            )
         }
 
         let appElement = AXUIElementCreateApplication(app.processId)
@@ -169,6 +245,37 @@ class FullscreenMediaDetector: ObservableObject {
         guard AXUIElementCopyAttributeValue(element, attribute, &value) == .success,
               let typed = value as? T else { return nil }
         return typed
+    }
+
+    /// Each screen's menu-bar visibility from one `CGWindowList` snapshot, converted to AppKit
+    /// coordinates the way MacroVisionKit converts its own. Only taken while the Accessibility
+    /// grant is missing — with the grant, `AXFullScreen` answers and this never runs.
+    private func menuBarVisibilityByScreen() -> [String: Bool] {
+        let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+        let mainQuartzHeight = CGDisplayBounds(CGMainDisplayID()).height
+        let menuBarLayer = Int(CGWindowLevelForKey(.mainMenuWindow))
+        let records: [FullscreenFallbackVerdict.WindowRecord] = raw.compactMap { info in
+            guard let layer = info[kCGWindowLayer as String] as? Int,
+                  let boundsDict = info[kCGWindowBounds as String] as? NSDictionary,
+                  let quartzFrame = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) else { return nil }
+            let appKitOrigin = CGPoint(
+                x: quartzFrame.origin.x,
+                y: mainQuartzHeight - quartzFrame.origin.y - quartzFrame.height
+            )
+            return FullscreenFallbackVerdict.WindowRecord(
+                layer: layer,
+                frame: CGRect(origin: appKitOrigin, size: quartzFrame.size)
+            )
+        }
+        var byScreen: [String: Bool] = [:]
+        for screen in NSScreen.screens {
+            byScreen[screen.localizedName] = FullscreenFallbackVerdict.menuBarIsVisible(
+                onScreenWithFrame: screen.frame,
+                windows: records,
+                menuBarLayer: menuBarLayer
+            )
+        }
+        return byScreen
     }
 
     private func cleanupNotificationObservers() {

@@ -40,12 +40,15 @@ struct KannuApp: App {
         MenuBarExtra("Kannu", isInserted: .constant(false)) {
             EmptyView()
         }
+        // SwiftUI builds the main menu only from commands attached to a scene. Menu key
+        // equivalents fire while Kannu is the active app, which the Brain window makes it.
+        .commands { commands }
     }
 
     @CommandsBuilder
     var commands: some Commands {
         CommandGroup(replacing: .appSettings) {
-            Button("Settings…") {
+            Button(String(localized: "Brain…")) {
                 // Settings runs the agent-hook migrations; nothing does that before the terms
                 // are accepted, so before then this brings the terms back instead.
                 guard appDelegate.launchContinued else {
@@ -54,13 +57,7 @@ struct KannuApp: App {
                 }
                 SettingsWindowController.shared.showWindow()
             }
-        }
-        CommandGroup(after: .appInfo) {
-            if SparkleUpdaterController.shared.isEnabled {
-                Button("Check for Updates…") {
-                    SparkleUpdaterController.shared.checkForUpdates(nil)
-                }
-            }
+            .keyboardShortcut(",", modifiers: .command)
         }
     }
 }
@@ -122,6 +119,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowsHiddenForLock = false
     /// The pending post-space-switch check, so a burst of switches runs one.
     private var spaceCheckWorkItem: DispatchWorkItem?
+    /// Notch windows the notch space failed to show at an earlier check; their managed spaces are
+    /// kept until a wake, unlock or reposition retries the strip. See `notchSpaceRepair`.
+    private var notchSpaceUnseenWindows: Set<Int> = []
     private var optionalShortcutHandlersRegistered = false
     private weak var focusWithoutDevToolsMenuItem: NSMenuItem?
     private weak var focusUseDevToolsMenuItem: NSMenuItem?
@@ -336,6 +336,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // reparented to launchd. Synchronous on purpose: this is the last chance to signal it.
         MusicManager.shared.stopActiveControllerForTermination()
 
+        // Same for a Claude usage refresh: a sign-in left running would keep its localhost
+        // listener open after Kannu is gone.
+        ClaudeUsageRefresh.terminateForAppExit()
+
         // Restore Lunar's native OSD if integration was active
         LunarManager.shared.appWillTerminate()
 
@@ -396,42 +400,102 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static let spacesLog = os.Logger(subsystem: "com.kannu.app", category: "NotchSpaces")
 
-    /// Puts the notch back on every space if macOS has left it off the one the user is on.
+    /// Keeps every notch window in Kannu's notch space and in no other space.
     ///
-    /// Around a sleep or a lock macOS can reset every app's all-spaces windows to a couple of spaces,
-    /// which left the notch missing from every other fullscreen app until relaunch — alive, ordered
-    /// in, opaque, and invisible (2026-09-30). `ClosedNotchVisibility.shouldRejoinSpaces` is the
-    /// decision; re-adding to the managed spaces is the only repair that works (ordering front and
-    /// re-assigning `collectionBehavior` were both measured to leave the membership stuck). Runs on
-    /// each space change, wake and unlock, so it costs nothing while the notch is where it belongs.
+    /// Membership is not fixed. Around a sleep or a lock macOS can reset every app's all-spaces
+    /// windows (2026-09-30, when the notch went missing from other fullscreen apps until relaunch),
+    /// and macOS added the notch to a newly created fullscreen space on its own (2026-10-22). So on
+    /// each space change, wake and unlock the space is shown again and every window's real
+    /// membership is read back and repaired by `pinNotchWindows`.
     @MainActor
     private func rejoinNotchSpacesIfNeeded(after reason: String) {
         let notchWindows = Defaults[.displayPlacement].usesOneWindowPerDisplay
             ? Array(windows.values)
             : [window].compactMap { $0 }
-        let stranded = notchWindows.filter {
-            ClosedNotchVisibility.shouldRejoinSpaces(
-                isOnActiveSpace: $0.isOnActiveSpace,
-                isOrderedIn: $0.isVisible,
+        guard !notchWindows.isEmpty else { return }
+        // A plain space change keeps the marks, so a fallback is not undone at every switch; the
+        // other triggers are where a hidden notch space could have come back, so they retry.
+        if reason != "space change" { notchSpaceUnseenWindows.removeAll() }
+        NotchSpaceManager.shared.notchSpace.reassertShown()
+        pinNotchWindows(notchWindows, after: reason)
+    }
+
+    /// Puts each window in the notch space and takes it out of every other space, deciding with
+    /// `ClosedNotchVisibility.notchSpaceRepair` from what WindowServer reports. A window is never
+    /// taken off a space before the notch space is confirmed to hold it; and one the notch space is
+    /// not showing goes back on every managed space, because seen beats still.
+    @MainActor private func pinNotchWindows(_ notchWindows: [NSWindow], after reason: String) {
+        let notchSpace = NotchSpaceManager.shared.notchSpace
+        let onScreen = Self.onScreenWindowNumbers()
+        for window in notchWindows {
+            let before = CGSSpace.spaceIDs(of: window)
+            let repair = ClosedNotchVisibility.notchSpaceRepair(
+                memberships: before,
+                notchSpaceID: notchSpace.spaceID,
+                isOrderedIn: window.isVisible,
+                isOnScreen: onScreen.contains(window.windowNumber) || window.occlusionState.contains(.visible),
+                notchSpaceUnseen: notchSpaceUnseenWindows.contains(window.windowNumber),
                 hiddenForLock: windowsHiddenForLock,
                 screenLocked: LockScreenManager.shared.isLocked
             )
+            switch repair {
+            case .none:
+                continue
+            case .joinNotchSpace:
+                notchSpace.add([window])
+                let joined = CGSSpace.spaceIDs(of: window)
+                guard joined.contains(notchSpace.spaceID) else {
+                    // Never leave it in no space: seen beats still (2026-09-30).
+                    notchSpaceUnseenWindows.insert(window.windowNumber)
+                    let spaces = CGSSpace.rejoinAllManagedSpaces([window])
+                    Self.spacesLog.error(
+                        "Notch space refused window \(window.windowNumber, privacy: .public) after \(reason, privacy: .public); put it on \(spaces, privacy: .public) managed spaces"
+                    )
+                    continue
+                }
+                CGSSpace.remove([window], fromSpaces: joined.subtracting([notchSpace.spaceID]))
+                keepVisibleAfterStrip(window, after: reason)
+            case .leaveOtherSpaces(let others):
+                CGSSpace.remove([window], fromSpaces: others)
+                keepVisibleAfterStrip(window, after: reason)
+            case .fallBackToManagedSpaces:
+                notchSpaceUnseenWindows.insert(window.windowNumber)
+                let spaces = CGSSpace.rejoinAllManagedSpaces([window])
+                Self.spacesLog.error(
+                    "Notch window \(window.windowNumber, privacy: .public) is in the notch space but not on screen after \(reason, privacy: .public); put it back on \(spaces, privacy: .public) managed spaces"
+                )
+            }
+            Self.spacesLog.notice(
+                "Pinned notch window \(window.windowNumber, privacy: .public) after \(reason, privacy: .public): \(String(describing: repair), privacy: .public); spaces \(before.sorted().description, privacy: .public) -> \(CGSSpace.spaceIDs(of: window).sorted().description, privacy: .public), visible=\(window.occlusionState.contains(.visible), privacy: .public)"
+            )
         }
-        guard !stranded.isEmpty else { return }
-        let spaces = CGSSpace.rejoinAllManagedSpaces(stranded)
-        // "Never hide" also pins the notch into Kannu's own top-level space. Clearing first makes
-        // the membership diff actually re-add windows it believes are already there.
-        if Defaults[.hideNotchOption] == .never {
-            NotchSpaceManager.shared.notchSpace.windows = []
-            syncNotchSpaceMembership()
-        }
-        Self.spacesLog.notice(
-            "Put \(stranded.count, privacy: .public) notch window(s) back on \(spaces, privacy: .public) spaces after \(reason, privacy: .public)"
+    }
+
+    /// After a strip the window must still be on screen through the notch space alone. If it is
+    /// not, the managed spaces go back and the window is marked, so the next check keeps them.
+    ///
+    /// Only WindowServer's on-screen list is read here, not `occlusionState` as the decision in
+    /// `pinNotchWindows` also does. AppKit updates `occlusionState` when WindowServer later reports
+    /// the change, so in the turn of the strip it still describes the window before it, and adding
+    /// it here would make this check pass every time.
+    @MainActor private func keepVisibleAfterStrip(_ window: NSWindow, after reason: String) {
+        guard !Self.onScreenWindowNumbers().contains(window.windowNumber) else { return }
+        notchSpaceUnseenWindows.insert(window.windowNumber)
+        let spaces = CGSSpace.rejoinAllManagedSpaces([window])
+        Self.spacesLog.error(
+            "Notch window \(window.windowNumber, privacy: .public) left the screen with the notch space alone after \(reason, privacy: .public); put it back on \(spaces, privacy: .public) managed spaces"
         )
     }
 
-    /// A space switch is where a stranded notch shows. Deferred a beat: during the switch animation
-    /// `isOnActiveSpace` can still describe the space being left.
+    /// Window numbers WindowServer has on screen right now. Reads numbers only, which needs no
+    /// screen-recording permission.
+    private static func onScreenWindowNumbers() -> Set<Int> {
+        let info = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+        return Set(info.compactMap { $0[kCGWindowNumber as String] as? Int })
+    }
+
+    /// A space switch is where a stranded notch shows. Deferred a beat so the switch has settled
+    /// before membership is read back.
     @objc private func activeSpaceDidChange(_ notification: Notification) {
         spaceCheckWorkItem?.cancel()
         let work = DispatchWorkItem { [weak self] in
@@ -458,26 +522,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.close()
         windows.removeValue(forKey: id)
         viewModels.removeValue(forKey: id)
-    }
-
-    /// Rebuilds the notch's CGSSpace membership from the current hide option and the
-    /// live windows. The space pins the notch above every space (fullscreen included)
-    /// and is used **only** for "Never hide"; the hide options keep the set empty so
-    /// FullscreenMediaDetector can hide the notch. Assigning the whole set lets the
-    /// CGSSpace diff additions/removals, so this is safe to call on any change.
-    @MainActor
-    private func syncNotchSpaceMembership() {
-        guard Defaults[.hideNotchOption] == .never else {
-            NotchSpaceManager.shared.notchSpace.windows = []
-            return
-        }
-        if Defaults[.displayPlacement].usesOneWindowPerDisplay {
-            NotchSpaceManager.shared.notchSpace.windows = Set(windows.values)
-        } else if let window = window {
-            NotchSpaceManager.shared.notchSpace.windows = [window]
-        } else {
-            NotchSpaceManager.shared.notchSpace.windows = []
-        }
     }
 
     private func createKannuWindow(for screen: NSScreen, with viewModel: KannuViewModel)
@@ -516,11 +560,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setHostedContent(hostingView)
 
         window.orderFrontRegardless()
-        // Pin above every space (fullscreen included) only for "Never hide"; the
-        // hide options leave the window on the collectionBehavior path so
-        // FullscreenMediaDetector can hide it. See NotchSpaceManager.
-        if Defaults[.hideNotchOption] == .never {
-            NotchSpaceManager.shared.notchSpace.windows.insert(window)
+        // The notch lives in Kannu's notch space, on every hide option, and in no other space.
+        // Fullscreen hiding is the views' job (`KannuViewModel.hideOnClosed`) and never depended on
+        // this membership. The pin drops the space `orderFrontRegardless` put it on. It runs a turn
+        // later: in the same turn WindowServer does not list the new window as on screen yet, and
+        // the repair read that as an unseen notch and fell back (measured 2026-10-22, 22:11:06).
+        // `tearDownWindow` and `tearDownAllWindows` take it out of the notch space.
+        NotchSpaceManager.shared.notchSpace.windows.insert(window)
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let self, let window else { return }
+            self.pinNotchWindows([window], after: "create")
         }
         //SkyLightOperator.shared.delegateWindow(window)
         return window
@@ -837,7 +886,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func statusItemMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: String(localized: "Settings"),
+        menu.addItem(withTitle: String(localized: "Brain"),
                      action: #selector(statusMenuOpenSettings), keyEquivalent: "").target = self
         if SparkleUpdaterController.shared.isEnabled {
             menu.addItem(withTitle: String(localized: "Check for Updates…"),
@@ -891,6 +940,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // able to arrive), and the reaper, which only ever stops Kannu's own orphaned helpers.
         startLaunchInvariants()
 
+        // The task reminders' delegate, before the gate: a click on a reminder while Kannu is not
+        // running launches it, and macOS hands the response to whatever delegate is set when this
+        // method returns — set once the launch continued, it missed the click. Installing sets the
+        // delegate and its Start button only: no permission prompt, no file read, no `TasksManager`.
+        // The response waits inside `TaskReminderCenter` until the launch has continued.
+        TaskReminderCenter.shared.install()
+
         // Nothing else — no helper, no permission prompt, no hook written into ~/.claude or ~/.cursor,
         // no notch — until the current Terms of Use are accepted. UI tests skip the gate.
         if TermsOfUse.isAccepted(acceptedVersion: Defaults[.termsAcceptedVersion])
@@ -921,6 +977,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard !launchContinued else { return }
         launchContinued = true
 
+        // Before any singleton reads it: an install from before onboarding was versioned has
+        // already been through it (its hello cleared `firstLaunch`) and answered its permissions,
+        // so it is marked done with the first version: nothing new asks now, and a later version
+        // bump still shows it the new onboarding. Its clipboard files leave ~/Documents.
+        let isUpgrade = !coordinator.firstLaunch
+        if isUpgrade && Defaults[.onboardingCompletedVersion] == 0 {
+            Defaults[.onboardingCompletedVersion] = OnboardingProgress.firstVersion
+        }
+        ClipboardManager.migrateLegacyDataIfNeeded(isUpgrade: isUpgrade)
+
         // Held back until now; this used to run in `KannuApp.init`, before any window.
         LLMUsageManager.configureProviderDefaultsIfNeeded()
 
@@ -947,7 +1013,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             deliverImmediately: true
         )
 
-        autoEnableLaunchAtLoginIfNeeded()
+        // A fresh install registers on onboarding's Permissions step instead, so macOS's "Login
+        // Item Added" notice lands there rather than over the welcome music.
+        if LaunchPermissionManager.isOnboardingComplete {
+            autoEnableLaunchAtLoginIfNeeded()
+        }
         repairLoginItemIfStale()
 
         syncStatusItem(visible: Defaults[.menubarIcon])
@@ -972,7 +1042,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         _ = CaffeinateManager.shared
         extensionXPCServiceHost.start()
         extensionRPCServer.start()
-        
+
         // Migrate legacy progress bar settings
         Defaults.Keys.migrateProgressBarStyle()
         Defaults.Keys.migrateMusicAuxControls()
@@ -980,6 +1050,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateMediaControllerToNowPlaying()
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
+        Defaults.Keys.migrateScreenCaptureVisibility()
         Defaults.Keys.migrateThirdPartyDDCIntegration()
         Defaults.Keys.enforceRemovedFeatureDefaults()
         SecureSecretsStore.migrateFromDefaultsIfNeeded()
@@ -1140,14 +1211,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
 
-        // Pin/unpin the notch above all spaces when the hide option changes:
-        // "Never hide" joins the max-level CGSSpace, the hide options leave it.
-        Defaults.publisher(.hideNotchOption, options: []).sink { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.syncNotchSpaceMembership()
-            }
-        }.store(in: &cancellables)
-        
         // Observe minimalistic UI setting changes - trigger window resize
         Defaults.publisher(.enableMinimalisticUI, options: []).sink { [weak self] _ in
             // Defaults.publisher is raw KVO with no scheduler: the sink runs inside the
@@ -1276,14 +1339,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSWorkspace.screensDidWakeNotification, object: nil)
 
         #if DEBUG
-        // `--kannu-strand-notch`: strand the notch off the current space the way a sleep or lock
-        // can, then deliver the space-change notification, so the repair runs on the real window.
+        // `--kannu-strand-notch`: take the notch out of the notch space and put it on the current
+        // space, the way macOS can, then deliver the space-change notification, so the repair runs
+        // on the real window. Launch with `open -n Kannu.app --args --kannu-strand-notch`.
         if CommandLine.arguments.contains("--kannu-strand-notch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
                 guard let self else { return }
                 let notch = [self.window].compactMap { $0 } + Array(self.windows.values)
-                CGSSpace.debugStrandFromActiveSpace(notch)
-                Self.spacesLog.notice("DEBUG stranded \(notch.count, privacy: .public) notch window(s); onActive=\(notch.map(\.isOnActiveSpace).description, privacy: .public)")
+                NotchSpaceManager.shared.notchSpace.debugStrand(notch)
+                Self.spacesLog.notice("DEBUG stranded \(notch.count, privacy: .public) notch window(s); spaces=\(notch.map { CGSSpace.spaceIDs(of: $0).sorted() }.description, privacy: .public)")
                 NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: NSWorkspace.shared)
             }
         }
@@ -1352,12 +1416,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // never followed the pointer at all.
         syncPointerTracking()
         
-        // Skip onboarding window and welcome sound under UI testing.
-        if coordinator.firstLaunch && !AppRuntimeEnvironment.isUITesting {
+        // A fresh install meets onboarding first, and it is silent: every permission is asked on
+        // its Permissions step, one dialog at a time, and the welcome music and the notch's hello
+        // wait for its Finish (`startHello`). They used to start here, together with four
+        // permission dialogs. Skipped under UI testing.
+        if !LaunchPermissionManager.isOnboardingComplete && !AppRuntimeEnvironment.isUITesting {
             DispatchQueue.main.async {
                 self.showOnboardingWindow()
             }
-            playWelcomeSound()
         }
         
         previousScreens = NSScreen.screens
@@ -1381,6 +1447,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             shelfURLsAwaitingAcceptance.removeAll()
             _ = handleIncomingShelfURLs(waiting)
         }
+
+        // Last of all: a task reminder clicked while Kannu was launching, or while the terms were
+        // up, is answered now that the Settings window and `TasksManager` may be built.
+        TaskReminderCenter.shared.launchDidContinue()
     }
 
     private func installTopMenuItemsIfNeeded() {
@@ -1575,17 +1645,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDeveloperToolsSettingsFromMenu() {
-        let urls = [
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_DevTools",
-            "x-apple.systempreferences:com.apple.preference.security"
-        ]
-
-        for candidate in urls {
-            guard let url = URL(string: candidate) else { continue }
-            if NSWorkspace.shared.open(url) {
-                return
-            }
-        }
+        DeveloperToolsSettings.open()
     }
 
     @objc private func setLogLevel(_ sender: NSMenuItem) {
@@ -1772,6 +1832,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let audioPlayer = AudioPlayer()
         audioPlayer.play(fileName: "dynamic", fileExtension: "m4a")
     }
+
+    /// Onboarding's finale: the notch opens and says hello, with the welcome music. Only
+    /// onboarding's Finish calls it, once every permission has been asked or put off, so nothing
+    /// plays over a dialog.
+    func startHello() {
+        coordinator.helloPending = true
+        playWelcomeSound()
+    }
+
+    /// Marks onboarding done and lets the features it held back start: each one answered on the
+    /// Permissions step now touches its permission without a dialog, and a deferred one stays off.
+    private func completeOnboarding() {
+        Defaults[.onboardingCompletedVersion] = OnboardingProgress.currentVersion
+        NotificationCenter.default.post(name: .launchPermissionsChanged, object: nil)
+    }
+
+    /// Onboarding's "Open Kannu at login". Registering on the Permissions step puts macOS's "Login
+    /// Item Added" notice there; off is remembered as an opt-out, so launch never registers it on
+    /// the user's behalf.
+    private func applyLaunchAtLoginChoice(_ enabled: Bool) {
+        if enabled {
+            autoEnableLaunchAtLoginIfNeeded()
+        } else {
+            Defaults[.didAutoEnableLaunchAtLogin] = true
+            if LaunchAtLogin.isEnabled {
+                LaunchAtLogin.isEnabled = false
+            }
+        }
+    }
     
     @objc func screenConfigurationDidChange() {
         let currentScreens = NSScreen.screens
@@ -1846,6 +1935,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NotchSpaceManager.shared.notchSpace.windows.remove(window)
             window.close()
             self.window = nil
+            // The single-window lifecycle reuses `vm` for the next window, and the views that held
+            // suppression tokens or set a popover flag are gone without an `.onDisappear`. Reset
+            // after the old content view is detached: it still observes `vm`, and a popover flag
+            // flipping to false there schedules a `vm.close()` against the window built next.
+            vm.resetTransientInteractionState()
         }
     }
 
@@ -1957,6 +2051,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        // A window moved to another display without being rebuilt (pointer follow, a chosen
+        // display) must still live only in the notch space there. A turn later, for the same reason
+        // as the pin in `createKannuWindow`: a window ordered in this turn is not on screen yet.
+        DispatchQueue.main.async { [weak self] in
+            self?.rejoinNotchSpacesIfNeeded(after: "reposition")
+        }
     }
     
     
@@ -1977,21 +2077,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.contentView = NSHostingView(rootView: OnboardingView(
-                onFinish: {
+                onLaunchAtLoginChoice: { [weak self] enabled in
+                    self?.applyLaunchAtLoginChoice(enabled)
+                },
+                onFinish: { [weak self] in
+                    self?.completeOnboarding()
                     window.orderOut(nil)
                     NSApp.setActivationPolicy(.accessory)
                     window.close()
                     NSApp.deactivate()
+                    self?.startHello()
                 },
-                onOpenSettings: {
+                onOpenSettings: { [weak self] in
+                    self?.completeOnboarding()
                     window.close()
+                    self?.startHello()
                     SettingsWindowController.shared.showWindow()
                 }
             ))
             window.isRestorable = false
             window.identifier = NSUserInterfaceItemIdentifier("OnboardingWindow")
 
-            ScreenCaptureVisibilityManager.shared.register(window, scope: .panelsOnly)
+            ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
 
             onboardingWindowController = NSWindowController(window: window)
         }
