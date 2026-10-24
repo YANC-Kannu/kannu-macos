@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #72
+- **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
+- **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
+- **Changes:**
+  - `ClaudeCloudRelay.parse` checks the signature, then validates the session id and the
+    repository name with ICU regular expressions ending in `$`. ICU's `$` also matches before a
+    final newline, so a signed payload could carry one into the session id, the card and
+    conversation ids, the chat name and the project name. All six validators now end in `\z`: the
+    secret, the repository, the topic, the session id (both forms) and the hex decoder.
+  - The script's bash-only lines (the remote and secret guard, the python3/curl check, the
+    `--check` test) use `[[ ]]`, as SonarCloud asked. The shebang is bash and the hooks run it with
+    bash. Both copies are changed: `ClaudeCloudRelaySetup.scriptSource` and
+    `scripts/kannu-cloud-relay.sh`, which `testTheMirrorIsTheScriptKannuHandsOut` keeps identical.
+  - Test: `testATrailingNewlineIsRejected` covers a signed payload whose `session_` id, `cse_` id
+    or repository ends in a newline, and `normalizedSessionID` given one.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #131
 - **Developer label:** "rest of them needs to be reviewed and then merged"
 - **Agent label:** Claude Code (Opus 5.5) — the finding of CodeRabbit's review of the notes stack (#134) that belongs to #131, fixed before merging
@@ -323,6 +339,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     reports "the staple is not retried" below two attempts; `testTheStapleIsRetried` plants a one-attempt
     script (CodeRabbit's nitpick on #125).
   - `development` merged in; the only conflict was `CHANGELOG.md`, where both sides' entries are kept.
+
+### 2026-10-24 - The cloud relay is brought up to date with development and its newer Claude hook table
+- **Developer label:** "rest of them needs to be reviewed and then merged" (#72, 268 commits behind `development`)
+- **Agent label:** Claude Code (Opus 5.5) — `origin/development` merged into `feat/cloud-relay-protocol`; the relay takes development's Claude table, learns `UserPromptExpansion`, and leaves the subagent pair out of its hooks
+- **Changes:**
+  - **Conflicts.** `CHANGELOG.md` and `project.pbxproj` kept both sides; the relay's
+    `AA…BC`–`AA…BF` ids are unused on `development`.
+  - **Hook table.** `AgentHookInstaller.swift` takes development's side: the Claude tables and
+    the Antigravity events already live in `AgentHookLayout` there. It keeps #72's note that the
+    relay shares the table.
+  - **Duplicate removed.** Development moved `claudeHookEntries` into `AgentHookLayout` on its own,
+    so the merge held two copies. #72's older one goes. Development's has the v45
+    `UserPromptExpansion` row and the v44 `SubagentStart` / `SubagentStop` rows.
+  - **What the relay gained from that table.** Three events the relay did not know:
+    - `UserPromptExpansion` joins the script's `EVENTS` (and its `scripts/` mirror) and the
+      parser's `ClaudeCloudRelay.events`. It reports `thinking`, as `UserPromptSubmit` does.
+    - **The subagent pair is left out of the relay's hooks** (`ClaudeCloudRelaySetup.excludedEvents`,
+      `relayHookEntries`). The relay sends one colour per chat, so a subagent's end would paint a
+      chat that is still working red, and its start adds nothing. Kannu's local install keeps both:
+      there a subagent writes its own file. `docs/CLOUD-SESSIONS.md` says so.
+  - **Tests.**
+    - #72's pin of the Claude table now lists development's 15 rows.
+    - The relay's hook and vocabulary tests read `relayHookEntries`.
+    - New `testTheRelayLeavesOutOnlyTheSubagentPair` fails if the relay drops any other row.
 
 ### 2026-10-23 - Act on CodeRabbit's review of #127
 - **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
@@ -3827,6 +3867,39 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     branch first, so the release PR cannot drop the build-7 item from the feed.
   - Curated notes at `docs/release-notes/1.3.4.md`. They lead with the clipboard fix, because it
     was visibly broken for every user of the clipboard panel since 1.3.0.
+
+### 2026-10-02 - The cloud-session relay's protocol: the script, Kannu's parser and their tests
+- **Developer label:** "cloud sessions are not detected by us, nor cowork, what can be done to cover that in our claude detection?" — build the relay (opt-in)
+- **Agent label:** Cloud relay, part 2 of 3 — signed ntfy protocol, relay script and parser; not wired into the app yet
+- **Changes:**
+  - Claude Code cloud sessions only run hooks committed to the repository, and nothing about them
+    reaches this Mac. `scripts/kannu-cloud-relay.sh` (authoritative copy
+    `ClaudeCloudRelaySetup.scriptSource`, pinned identical) is that repository hook. It runs only
+    when `CLAUDE_CODE_REMOTE=true` and `KANNU_RELAY_SECRET` is set, and posts the session's light to
+    an ntfy relay as `KC1 <HMAC> <payload>`: eight content-free fields, on a topic and with a key
+    both derived from the secret. It sends only when the colour changes, plus a 240 s refresh
+    (ntfy's quota is per IP and cloud sessions share their IPs), ports the main hook's rules, never
+    prints and always exits 0. `--check` explains a setup and sends a test message.
+  - `ClaudeCloudRelay` (pure; Foundation, CryptoKit and Security; in the logic test target): key
+    derivation, a capped line splitter, a strict parser (topic, sizes, signature, a closed schema,
+    allowlists, a 600 s clock skew, reports dated by the relay and never later than now), a
+    latest-wins store capped at 32 sessions, the subscribe URL and backoff, and cards through the
+    same `resolveHookState` ladder hook files use, with yellow held only while the relay stream is
+    healthy.
+  - `ClaudeCloudRelaySetup`: the hooks for a repository's `.claude/settings.json`, generated from
+    the table Kannu's own Claude install uses; a prompt for the user's agent that carries the script
+    and the hooks and never a key; the cloud environment's lines; the consent text.
+  - `claudeHookEntries` moved verbatim from `AgentHookInstaller` to `AgentHookLayout`, so the install
+    and the relay share one table, and a new test pins every row. `providerLabel` names
+    `claudecloud` "Claude Cloud".
+  - `docs/CLOUD-SESSIONS.md`: the protocol, the privacy table, the light, the sending budget,
+    `--check` and the limits.
+  - Tests: `ClaudeCloudRelayTests` (29), `ClaudeCloudRelayScriptTests` (25: the real script with a
+    fake `curl`; markers planted in prompts, tool input and output, paths and notification text
+    never leave the session, and every committed hook round-trips into the parser),
+    `ClaudeCloudRelaySetupTests` (5), `ClaudeCloudDocsTests` (5: the docs and the consent text name
+    exactly the payload's fields) and two `RegressionGuardTests` (the refresh stays inside the green
+    window; a cloud yellow is held only while the relay is listening).
 
 ### 2026-10-01 - Quit Kannu has a row in Settings, and searching "quit" or "exit" finds it
 - **Developer label:** "the settings should have a quit app, or at least on search of quit or exit i should get the tab with that button to come up as result"
