@@ -11,10 +11,10 @@
 ,
     {
       "id": "anthropic/claude-sonnet-4",
-      "name": "Anthropic: Claude Sonnet 4",
+      "name": "",
       "pricing": {
-        "prompt": "0.000003",
-        "completion": "0.000015"
+        "prompt": "",
+        "completion": ""
       }
     }
 ,
@@ -117,5 +117,5 @@
       }
     }
   ],
-  "last_updated": "2026-09-28T02:23:00Z"
+  "last_updated": "2026-10-24T04:11:35Z"
 }
