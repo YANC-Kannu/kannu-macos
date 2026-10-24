@@ -50,6 +50,8 @@ Asked on the Permissions step (when the feature is on):
 Asked only when you use the feature:
 
 - **Screen Recording** — Screen Assistant screenshot capture. Screen-recording detection is separate and does not need it.
+- **Microphone** — Screen Assistant's Record button, asked the first time you press it.
+- **Local Network** — sending files from the Shelf to nearby devices with LocalSend.
 - **Automation (Apple Events)** — Apple Notes sync, and opening an agent's terminal tab or a browser tab.
 - **Full Disk Access** — custom Focus metadata and optional global Shelf behavior.
 - **Files & Folders (Documents/Downloads)** — Shelf, when Full Disk Access is not granted. Clipboard history keeps its files in Application Support, which needs no permission.
