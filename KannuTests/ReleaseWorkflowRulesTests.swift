@@ -125,6 +125,11 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         XCTAssertNotEqual(singleShot, script, "the plant did not take")
         XCTAssertEqual(Self.stapleProblems(workflow: try Self.read(Self.workflowPath), script: singleShot),
                        ["the staple is not retried"])
+        // The loop kept, but given one attempt: one try is no retry.
+        let oneAttempt = script.replacingOccurrences(of: "staple_attempts=5\n", with: "staple_attempts=1\n")
+        XCTAssertNotEqual(oneAttempt, script, "the plant did not take")
+        XCTAssertEqual(Self.stapleProblems(workflow: try Self.read(Self.workflowPath), script: oneAttempt),
+                       ["the staple is not retried"])
         XCTAssertEqual(Self.stapleProblems(workflow: "run: xcrun notarytool submit build/Kannu.dmg --wait", script: script),
                        ["the Notarize step does not run scripts/notarize-dmg.sh"])
     }
@@ -137,7 +142,10 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         let loop = script.range(of: "for attempt in $(seq 1 \"$staple_attempts\"); do").map { String(script[$0.upperBound...]) } ?? ""
         let loopBody = loop.components(separatedBy: "\ndone").first ?? ""
         let staples = script.components(separatedBy: "xcrun stapler staple").count - 1
-        if staples != 1 || !loopBody.contains("xcrun stapler staple") || !loopBody.contains("sleep") {
+        // The loop's count, as the script sets it: at least two tries, or it is no retry.
+        let attempts = script.split(separator: "\n").first { $0.hasPrefix("staple_attempts=") }
+            .flatMap { Int($0.dropFirst("staple_attempts=".count)) } ?? 0
+        if staples != 1 || !loopBody.contains("xcrun stapler staple") || !loopBody.contains("sleep") || attempts < 2 {
             problems.append("the staple is not retried")
         }
         return problems

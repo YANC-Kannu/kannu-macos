@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - The staple-retry test rejects a loop of one attempt, and the batch takes development
+- **Developer label:** "rest of them needs to be reviewed and then merged"
+- **Agent label:** Claude Code (Opus 5.5) — #125 brought up to date with development and its last CodeRabbit nitpick fixed before merging
+- **Changes:**
+  - `ReleaseWorkflowRulesTests.stapleProblems` reads `staple_attempts` from `scripts/notarize-dmg.sh` and
+    reports "the staple is not retried" below two attempts; `testTheStapleIsRetried` plants a one-attempt
+    script (CodeRabbit's nitpick on #125).
+  - `development` merged in; the only conflict was `CHANGELOG.md`, where both sides' entries are kept.
+
 ### 2026-10-23 - Act on CodeRabbit's review of #127
 - **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
 - **Agent label:** Claude Code (Opus 5.5) — the timer tab's typed-search and start decisions move into pure helpers with state tests; the source checks keep only the tasks gates and the docs/REGRESSIONS.md entry 10 guards
