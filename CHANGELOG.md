@@ -4,6 +4,266 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-23 - Act on CodeRabbit's review of #127
+- **Developer label:** CodeRabbit's review of #127: the new rules tests pinned SwiftUI modifier chains instead of behaviour
+- **Agent label:** Claude Code (Opus 5.5) — the timer tab's typed-search and start decisions move into pure helpers with state tests; the source checks keep only the tasks gates and the docs/REGRESSIONS.md entry 10 guards
+- **Changes:**
+  - The finding was valid: AGENTS.md asks for no tests of SwiftUI implementation details, and
+    `TimerTaskSessionRulesTests` matched text such as `.onExitCommand { … }`, `.offset(…)`,
+    `.coveredBySuggestions(…)` and `.zIndex(2)`, so a harmless reorder failed while a behaviour
+    change with the same text passed.
+  - The decisions are now pure, in the logic target, and the views call them:
+    `TaskSuggestionState.shows` / `wantsToShow` (when the typed search shows: enabled, text typed,
+    the field focused or the pointer on the list with no other field focused, not closed on this
+    text, and rows to show), `answerReturn` and `answerEscape` (Return picks only a highlighted row
+    of a showing list; Escape closes a showing list before it leaves), `TimerTypedStart.route` (a
+    start from the bar is plain, a picked task, or a typed name reusing unless the New row was
+    picked) and `TimerFormStart.forNewTask` / `forEdit` (a preset over the form starts, holds on an
+    unreadable estimate, falls through with no title, or starts nothing for a gone task). Behaviour
+    is unchanged: the bar's Escape still closes the list on its text even before rows arrive, so
+    rows found later (the task file read, a sync) never reopen it.
+  - The modifier-order and layout pins are gone (`.offset`, `.coveredBySuggestions` then
+    `.overlay` then `.zIndex`, the exact `.onExitCommand` text). The source checks left are wiring
+    no unit test can see: every way into the task list behind `isTasksPageAvailable`; the entry 10
+    guards (starts clear the stored name directly; the left column and a preset read
+    `shownTaskForm`; the running task's form closes on its session's own signals); a held form or a
+    gone task returning before the bar; a lost pick giving the bar back what was typed; and, in the
+    form, the typed search being a new task's alone, starting closed on the opening title, a pick
+    opening its edit, and a held preset's focus reaching the estimate (`formWiringProblems`).
+  - Tests: state tests for the helpers in `TaskSuggestionTests` and `TypedSessionTaskTests`; the
+    slimmer detectors keep their planted offenders.
+
+### 2026-10-23 - A name typed in the timer tab becomes a task, with a task search, and the running task can be edited
+- **Developer label:** "clicking on new task clears it. we want that flow to be somehow handled, a task running also needs edit, a task name that i wrote outside in the notch should be editable and instead of new task, but i should be somehow able to add a new task and work" … "but then would always the timer follow estimate , or can estimate and timer stay independent, check on that" … "maybe give a suggestion if search dynamic typed search is kept in the title tab and user can select that or make new ?"
+- **Agent label:** Claude Code (Opus 5.5) — typed names become local tasks timed as the user's own block (reused by title); a typed search under the session bar and the New Task title; the bar and a new task's title are one text; a preset with the form open starts the form's task; Edit Task on the running card; sessions sized from the estimate follow its edits; Resume when paused in overtime
+- **Changes:**
+  - **A typed name times a task.** A name in "Do you want to name this session?" plus a preset or
+    Start now times a local task instead of a plain session: the first active local task with that
+    title (case and accents ignored; done, archived, Jira and GitLab tasks never match), else the
+    kept New Task draft when it is that title (its estimate, tags and reminder come with it), else
+    a new task with no estimate. It runs as the user's own block: it rings at zero like any preset,
+    never follows the estimate, and takes the task's colour and key. With no name, or tasks off,
+    the session stays plain. Before the task file is read the start waits, as a reminder's Start
+    does, and if no task can start the plain named session starts; typing a name builds the task
+    list ahead of time, while the tab appearing still builds nothing. "Show local tasks in the
+    notch" turns on only when a task is added (`TasksManager.startTyped`, `startBlock`).
+  - **A typed search under the bar and the New Task title** (`TimerTaskSuggestions`). From two
+    characters, it offers up to two tasks the notch lists (the same title first, then titles that
+    start with it, then any other match; `TaskSearch.suggestions`) and a last `New task "…"` row;
+    nothing at all when no task matches, so a plain session's name leaves the composer alone. Two
+    rows and the New row end above Start and Reset, which stay clickable; what the list lies over
+    is hidden, disabled and out of VoiceOver's way (the duration boxes now take SwiftUI's disabled
+    state onto their AppKit fields, so a hidden one takes no Tab, Shift-Tab or click), and a
+    covered ruler gives up its sideways scroll. ↑ ↓ move a highlight (none by default, so Return
+    keeps its meaning), Return picks it, Escape and Tab close only the list; VoiceOver hears the
+    count and the highlighted row. In the
+    bar, a picked task shows its colour, key and time, the next preset or Start times it, and the
+    button beside the bar becomes Edit Task; the New row keeps the text as a new task (＋), even
+    when a task has that title. Editing the text unpicks; a picked task that leaves the list gives
+    the bar back what was typed, and never becomes a local task with its title. In the New Task
+    title, picking a task opens its edit, so no second task is made.
+  - **The bar and a new task's title are one text.** New Task opens on the bar's text: the kept
+    draft whole when it is that title, else the kept draft with the bar's text as its title (its
+    estimate, tags and reminder stay), else a fresh draft (`TaskFormDraft.newTask`). The form's
+    title goes back to the bar as it is typed, so the ×, the notch closing or any other way the
+    form goes leaves it in the bar; Add, Add & Start and every start empty both.
+  - **A preset clicked with a form open starts what the form shows**, timed for the preset's
+    length as a block: a new task is added as typed; an edit is saved (an untouched one as the task
+    reads) and that task is timed. A new task whose estimate cannot be read starts nothing and stays
+    to be fixed, with focus on the estimate; one with no title falls through as if no form were
+    open; an edit whose task has just left the list starts nothing, never the bar's name. Add and
+    Save are now the manager's own (`addTask(from:)`, `applyEdits`), one path for all of these.
+  - **Edit Task on the running card.** A pencil beside the running session's name opens the full
+    task form on its task, in the card's place; Save renames the running session
+    (`TimerManager.updateSessionName`). Clicking the name still renames only the session. The form
+    closes when the session finishes (so Stop is there while the alarm rings), is replaced, or
+    stops; unsaved edits stay kept. The session's task is `TimerManager.sessionTaskID`, so
+    `NotchTimerView` still never reads `TasksManager`.
+  - **A session sized from the estimate follows its edits** (the side column's ▶, Add & Start,
+    Up next, Brain's ▶, a reminder's Start). The estimate and the countdown are independent until
+    now; the new length is the estimate less the time tracked before the session, keeping what has
+    run (`TaskTimeMath.followedLength`, `retargeted`). Below zero is overtime, entered silently;
+    back above zero the alarm stops and the next zero rings again. Removing the estimate, or setting
+    it at or below the time tracked before the session, leaves the countdown alone, as do a preset
+    or typed-length block and a sync. Tracked time never came from the countdown and still does not.
+  - **Paused in overtime shows Resume** in the open notch, its hover controls, the lock-screen
+    widget and the menu-bar popover, and the notch card's second button reads Stop. The closed
+    notch leaves its finished layout when a session leaves overtime, which also fixes it staying
+    pinned after a session in overtime is replaced.
+  - "New task" and the side card's "Edit task" read "New Task" and "Edit Task" (docs/TOOLTIPS.md).
+  - Tests: new `TypedSessionTaskTests`, `TaskSuggestionTests` and `TimerTaskSessionRulesTests`
+    (each detector with a planted offender); `TaskTimeMathTests` and `TimerComposerMetricsTests`
+    gain the retarget and the list's height; `TaskFormWiringTests` follows Add and Save into the
+    manager and pins the one copy-back; `TimerSideColumnRulesTests` (the form's `open:`) and
+    `TimerTaskDetailRulesTests` ("Edit Task") changed with them.
+
+### 2026-10-23 - The bell beside a reminder turns that task's notification on or off, and the task form keeps what was typed
+- **Developer label:** "this button should enable and disable notifications for that particular chat anD THAT CHAT ONLY" … "the text bar should retain text once fed in , even if edit button is clicked or notch shrinks, also give a clear icon or something at end of box for people"
+- **Agent label:** Claude Code (Opus 5.5) — per-task `reminderMuted` and a bell toggle in the notch's task form; `KeptTaskFormDrafts` keeps the form's unsaved drafts and the session name survives the notch closing; clear buttons in the title, tags and session-name boxes
+- **Changes:**
+  - **The bell beside a reminder is a toggle for that task alone.** It was an indicator that only
+    said macOS blocks Kannu's notifications. Now it turns the task's reminder notification on or
+    off, saved with Add or Save like the rest of the form; its tooltip and label say what a click
+    does ("Mute Reminder" / "Unmute Reminder"), and it is orange while it is on but macOS denies
+    Kannu's notifications (read from the new `notificationsDenied`, since `remindersBlocked` is false
+    while every scheduled task is muted). Off is `TaskItem.reminderMuted`, which
+    `TaskReminderPlan.wanted` skips, so a waiting reminder is taken back and the others are
+    untouched; the time still shows, and the task card's due line shows a slashed bell. The mute
+    belongs to its reminder: clearing the schedule clears it, so a reminder added later in Brain
+    notifies. On is no key at all, so existing task files read and write as before, and an older
+    build reads a newer file. The bell asks macOS nothing; only scheduling may (`TaskListRulesTests`).
+  - **The task form keeps what was typed.** The draft lived in the form's own view state, so
+    opening a task's editor or the notch closing lost it. `KeptTaskFormDrafts` (in memory, on
+    `TasksManager`) keeps each unsaved draft by new task or edited task and restores it when that
+    form opens again; Add or Save forgets it. The × on a new task now closes and keeps the text; the
+    × or Escape on an edit still means "without saving" and drops it. An edit's draft comes back
+    only while its task is unchanged, so a draft can never undo a change made elsewhere, and a
+    reminder picked earlier that has passed since comes back as the next whole hour. The timer tab
+    still reopens on its first page, as it always has; "New task" opens on the kept text, and the
+    session-name bar beside it ("Do you want to name this session?") keeps a half-typed name while
+    the notch is closed (`TimerManager.typedSessionName`).
+  - **A clear button at the end of the title, tags and session-name boxes**, a small ⓧ like a
+    search field's, shown once there is text ("Clear Title", "Clear Tags", "Clear Name"). It never
+    takes focus, so a click does not release the notch. The × on a new task reads "Close"; on an
+    edit, "Close Without Saving".
+  - Tests: `TaskReminderPlanTests`, `TaskModelCodingTests`, `TaskDetailSummaryTests`,
+    `TaskFormDraftTests` (the bell edit and the keeper), `TaskFormWiringTests` (the form's and the
+    session bar's wiring, read from the source), and `TimerSideColumnRulesTests` (Escape and the ×
+    now go through `dismiss()`).
+
+### 2026-10-23 - Menus, popovers and alerts draw above the open notch, checked
+- **Developer label:** "Checked right-click menus, a popover and an alert over the open notch: they all draw above it."
+- **Agent label:** Claude Code (Opus 5.5) — records David's by-eye check in docs/REGRESSIONS.md entry 20 and the CHANGELOG; no code change
+- **Changes:**
+  - docs/REGRESSIONS.md entry 20: the open risk that menus, popovers and alerts opened over the open
+    notch would draw below the notch space is checked by eye: right-click menus, a popover and an
+    alert all draw above it (David, 2026-10-23). It stays a manual check; nothing automated can see
+    the order.
+  - The 2026-10-22 "Screenshots keep Kannu by default…" entry's open item now records the result.
+
+### 2026-10-23 - The screenshot setting asks rather than promises, and covers every artwork window
+- **Developer label:** "CodeRabbit should be done now. Read its review body, threads and comments on #126, and fix or answer each finding."
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #126: honest capture descriptions, two artwork windows registered, the post-strip visibility check documented
+- **Changes:**
+  - **The screenshot options no longer promise exclusion.** `NSWindow.sharingType = .none` is all an
+    app has to keep its own windows out of someone else's capture, and Apple documents it as a legacy
+    value not to be relied on; some capture tools ignore it. "Hide the notch" and "Hide everything"
+    now say they ask macOS and that some capture tools ignore this. The mechanism is unchanged; the
+    old toggle used the same one. `ScreenCapturePolicyTests` pins that no description promises it.
+  - **The fullscreen artwork's wallpaper-transition and looping-video windows register with the
+    screenshot setting** as `.notch`, like the artwork's other three windows; "Hide the notch" never
+    reached them. Pinned by `ScreenCapturePolicyTests`.
+  - The check after a notch-space strip reads only WindowServer's on-screen list, not
+    `occlusionState` as the repair's decision also does: AppKit updates `occlusionState` later, so in
+    the turn of the strip it still describes the window before it and would make the check pass
+    every time. Documented on `keepVisibleAfterStrip`; CodeRabbit's suggestion to use the same
+    predicate is answered on the PR.
+
+### 2026-10-22 - Screenshots keep Kannu by default, and the album-art tap reopens every app but Spotify
+- **Developer label:** "raise pr and look for coderabbit comments, see if these changes will lead to any regression or older specific asks"
+- **Agent label:** Claude Code (Opus 5.5) — branch reviewed against older asks before the PR: screenshot default restored, activate-only limited to Spotify, refused-join fallback
+- **Changes:**
+  - **The screenshot default is "Show everything" again.** Hiding the notch by default was meant
+    for the empty notch in a "desktop preview", which turned out to be Mission Control: WindowServer
+    draws it, so `sharingType` never affected it, and the notch-space fix above is what cleared it.
+    Left in, the default would have taken the notch, its volume and brightness HUD, the music and
+    timer controls, the lock-screen widgets and the fullscreen artwork out of every screenshot,
+    recording and screen share for everyone who never touched the old toggle, and out of the
+    screenshots CONTRIBUTING.md asks for. The three-way picker and the scope-aware manager stay:
+    "Hide the notch" now hides only Kannu's notch-side windows, which the old toggle could not do.
+    An explicit old choice still migrates.
+  - **The album-art tap reopens every app but Spotify.** Only a running Spotify is activated
+    instead of reopened, because Spotify answered a reopen with a stray second audio session. Apple
+    Music, browsers and every other player get the reopen back, which brings a closed or minimized
+    window forward, as the 2026-09-10 "open the exact media screen" change expects.
+  - **A refused notch-space join falls back to the managed spaces** and marks the window, so a
+    notch is never left in no space; before, it only logged.
+  - **Checked by David on 2026-10-23, after this entry: they draw above it.** The worry was that for
+    everyone, and no longer only "Never hide" users, the notch
+    window is in a space shown above every window level. A context menu, popover or alert opened over
+    the open notch is drawn in the managed spaces, below it, and `ModalPresenter`'s level raise
+    (docs/REGRESSIONS.md entry 14) cannot beat a space.
+  - Tests: `ScreenCapturePolicyTests` (the default), `MusicAppActivationRulesTests` (Spotify-only),
+    `ClosedNotchVisibilityRulesTests` (both fallbacks).
+
+### 2026-10-22 - Switching Spaces looks like the notch never moved, and the music bars are quieter
+- **Developer label:** "can we make it look like it never moved, beacuse when music is playing it closes and again comes in next tab, the state is not retained" … "even in desktop preview an empty notch is embeded" … "keep it subtle" … "this somehow caused by us, we did something, our notch calling something, find that"
+- **Agent label:** Claude Code (Opus 5.5) — notch window lives only in Kannu's notch space with a WindowServer-read repair; subtler closed-notch music bars; a running music app is activated instead of reopened
+- **Changes:**
+  - **The notch is in Kannu's notch space and no other space.** The stranded-notch repair from
+    2026-09-30 decided on `isOnActiveSpace`, which is false by design for a window in the notch
+    space, so at the first switch after every launch it put the notch back on every desktop and
+    fullscreen space (and macOS added it to a newly created one on its own). While it was there,
+    David saw the music wings close and come back in the next space, and an empty notch in Mission
+    Control's previews; no media or fullscreen state changed at those switches. The repair now reads
+    membership from WindowServer (`CGSSpace.spaceIDs(of:)`, mask 0xF), decides with the new
+    `ClosedNotchVisibility.notchSpaceRepair`, joins the notch space before it leaves any other space,
+    checks the window is still on screen after every strip, and puts an unseen notch back on the
+    managed spaces (seen beats still), remembering that so the next check does not strip it again
+    until a wake, unlock or reposition retries. It runs at creation, on every space change, wake and
+    unlock, and after a reposition, and shows the notch space again each time (`reassertShown`, a
+    precaution). `syncNotchSpaceMembership` and the empty-then-refill re-sync are gone. Every repair
+    logs one `NotchSpaces` line with the spaces before and after. Known gap: the window keeps
+    `.canJoinAllSpaces`, so a space macOS creates gets a copy until the first repair after switching
+    into it.
+  - **The bars beside the album art are smaller and dimmer.** In the closed notch they are 9 pt tall
+    instead of 14 and drawn at 60% opacity, in the same place, for the animated and the real-time
+    visualizer alike (both take a bar height now). The open player, the lock screen and extensions
+    keep their size.
+  - **Tapping the album art no longer reopens a running music app.** `openApplication` sends a
+    running app a reopen event; 0.2 s after one, Spotify started a second, hidden audio session in
+    its helper process, and because Spotify hands every remote command to two handlers, every later
+    Play woke it too: two tracks at once that media keys could not stop. A running app is now
+    activated the way Cmd-Tab does it and never reopened; one whose window is closed comes forward
+    without it (its Dock icon reopens it). An app that is not running is launched as before. The
+    stuck session itself is Spotify's; a Spotify restart clears it.
+  - Checked by David on the installed build: swiping keeps the notch and its music wings still,
+    Mission Control's previews show no notch, and the bars are subtle. A probe read the notch window
+    on screen in the notch space alone. Found by that probe before he looked: the first pin ran in
+    the turn the window was ordered in, when WindowServer does not list it as on screen yet, and
+    fell back onto every space; the creation and reposition pins now run a turn later.
+  - docs/REGRESSIONS.md entry 20 and a danger-zones row. Tests: `ClosedNotchVisibilityTests` (the
+    repair table from measured memberships), `ClosedNotchVisibilityRulesTests` and
+    `NotchSpaceMembershipTests` (the wiring), `MusicAppActivationRulesTests` (a running app is activated, never reopened).
+
+### 2026-10-22 - The notch stays put across Spaces, and screenshots get a three-way setting
+- **Developer label:** "even in desktop preview an empty notch is embeded, how do you avoid that without causing any other regression … kannu detaches from the notch... and re attaches in the next window.. ippo it feels like a bug"
+- **Agent label:** Claude Code (Fable 5.1) — every notch window joins the max-level notch space; `ScreenCaptureVisibility` three-way setting with the notch hidden by default; scope-aware `ScreenCaptureVisibilityManager`
+- **Changes:**
+  - **The notch no longer slides with a Space switch.** `KannuWindow` is `.canJoinAllSpaces`, and
+    a window on the managed spaces rides the switch animation out with the old space and in with
+    the new one, so the notch visibly detached from the hardware notch and re-attached. Kannu's own
+    top-level `CGSSpace` (`NotchSpaceManager`) is not a managed space and does not move, but only
+    "Never hide" joined it; the default "Hide only when NowPlaying app is in fullscreen" was on the
+    sliding path. Every hide option joins now: `createKannuWindow` inserts unconditionally,
+    `syncNotchSpaceMembership` lost its guard, and the stranded-notch repair re-syncs the space for
+    everyone. The gate's reason, "so FullscreenMediaDetector can hide the notch", never held:
+    hiding is `KannuViewModel.hideOnClosed` in the views, and `.fullScreenAuxiliary` already showed
+    the window over fullscreen apps on every option. The `.hideNotchOption` publisher sink that
+    re-synced membership is gone with the gate. The reviewer's other suggestion, owning the slide
+    with physics, is not available: the slide is WindowServer's transition, not an animation Kannu
+    drives.
+  - **A three-way screenshot setting.** (Its first default, hiding the notch, was reverted the same
+    day: the "Desktop preview" was Mission Control, which this setting cannot affect. See the entry
+    "Screenshots keep Kannu by default…" above.)
+    `hideDynamicIslandFromScreenCapture` (Bool, default off) is replaced by `screenCaptureVisibility`
+    (`ScreenCaptureVisibility`: `hideNotch`, `hideEverything`, `showEverything`).
+    `ScreenCaptureVisibilityManager` now honours the scope a window registered with — `.notch` for
+    the notch, its music and timer satellites, the lock-screen widgets and the fullscreen artwork;
+    `.panel` for Settings, onboarding, the clipboard and the Screen Assistant — so "Hide the notch" hides
+    the notch and keeps Brain in a screenshot. The old code ignored the scope and hid every
+    registered window together, which is why flipping the Bool's default was not the fix.
+  - **Migration:** a user who had the old toggle on gets "Hide everything"; one who turned it on
+    and off again gets "Show everything"; everyone else gets the default. The legacy key is read
+    raw and never declared again, because a declared `Defaults.Key` registers its default and would
+    make everyone look like they had set it.
+  - Settings: the "Hide Kannu during screenshots & recordings" toggle is now the "Screenshots &
+    recordings" picker, with its search entry and highlight id renamed together.
+  - Tests: `ScreenCapturePolicyTests` (the rule table, stable raw values, the key's default and the
+    raw legacy read, every registration names `.notch` or `.panel` with the `.panel` files pinned)
+    and `NotchSpaceMembershipTests` (the insert is unguarded, the sync is not gated on the hide
+    option, both teardown paths still leave the space, `KannuWindow` keeps its managed-space
+    fallback). `ScreenCapturePolicy.swift` joins the logic target.
 ### 2026-10-22 - Act on CodeRabbit's review of #125
 - **Developer label:** CodeRabbit's review of #125 (the follow-ups batch): a late microphone answer could start a recording, and the entitlement test checked a key, not its value
 - **Agent label:** Claude Code (Opus 5.5) — `ScreenAssistantManager` drops a pending microphone request when its panels close; `PrivacyUsageDescriptionRulesTests` binds `device.audio-input` to `<true/>`; README lists Microphone and Local Network
