@@ -144,6 +144,15 @@ final class ClaudeCloudRelayTests: XCTestCase {
         }
     }
 
+    /// ICU's `$` also matches before a final newline, so a signed payload could carry one into the
+    /// session id and the project name. The validators anchor with `\z`.
+    func testATrailingNewlineIsRejected() throws {
+        XCTAssertEqual(try parse(payload(["session": "session_abc\n"])), .ignored(.badPayload))
+        XCTAssertEqual(try parse(payload(["session": "cse_abc\n"])), .ignored(.badPayload))
+        XCTAssertEqual(try parse(payload(["repo": "kannu\n"])), .ignored(.badPayload))
+        XCTAssertNil(Relay.normalizedSessionID("session_abc\n"))
+    }
+
     func testACseIDIsNormalized() throws {
         guard case .event(let report) = try parse(payload(["session": "cse_Abc123"])) else { return XCTFail("expected an event") }
         XCTAssertEqual(report.sessionID, "session_Abc123", "claude.ai's URLs use the session_ form")

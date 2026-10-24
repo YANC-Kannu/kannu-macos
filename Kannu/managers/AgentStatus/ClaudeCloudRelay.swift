@@ -64,7 +64,7 @@ enum ClaudeCloudRelay {
     /// The topic and signing key for a relay secret (64 lowercase hex characters), or nil.
     static func credentials(secret: String) -> Credentials? {
         let secret = secret.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard secret.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else { return nil }
+        guard secret.range(of: "^[0-9a-f]{64}\\z", options: .regularExpression) != nil else { return nil }
         let topicHash = hex(Data(SHA256.hash(data: Data("kannu-relay-topic|\(secret)".utf8))))
         let macKey = Data(SHA256.hash(data: Data("kannu-relay-mac|\(secret)".utf8)))
         return Credentials(topic: "kannu-" + topicHash.prefix(32), macKey: macKey)
@@ -187,7 +187,7 @@ enum ClaudeCloudRelay {
               payload.v == protocolVersion, payload.kind == "kannu-cloud",
               states.contains(payload.state), events.contains(payload.event), notes.contains(payload.note),
               let sessionID = normalizedSessionID(payload.session),
-              payload.repo.range(of: "^[A-Za-z0-9._-]{0,64}$", options: .regularExpression) != nil,
+              payload.repo.range(of: "^[A-Za-z0-9._-]{0,64}\\z", options: .regularExpression) != nil,
               payload.ts > 0 else {
             return .ignored(.badPayload)
         }
@@ -252,7 +252,7 @@ enum ClaudeCloudRelay {
 
     /// `<server>/<topic>/json?since=…`: ntfy's newline-delimited JSON stream for one topic.
     static func subscribeURL(server: String, topic: String, since: Since) -> URL? {
-        guard topic.range(of: "^kannu-[0-9a-f]{32}$", options: .regularExpression) != nil,
+        guard topic.range(of: "^kannu-[0-9a-f]{32}\\z", options: .regularExpression) != nil,
               var components = URLComponents(string: server.trimmingCharacters(in: .whitespacesAndNewlines)),
               components.scheme == "https", components.host?.isEmpty == false,
               components.query == nil, components.fragment == nil else { return nil }
@@ -279,7 +279,7 @@ enum ClaudeCloudRelay {
     static func sessionID(conversationID: String) -> String? {
         guard conversationID.hasPrefix(conversationPrefix) else { return nil }
         let id = String(conversationID.dropFirst(conversationPrefix.count))
-        return id.range(of: "^session_[A-Za-z0-9]{1,64}$", options: .regularExpression) != nil ? id : nil
+        return id.range(of: "^session_[A-Za-z0-9]{1,64}\\z", options: .regularExpression) != nil ? id : nil
     }
 
     /// The cards for what the relay has reported, through the same ladder hook files use: a run
@@ -331,7 +331,7 @@ enum ClaudeCloudRelay {
 
     /// `cse_…` becomes `session_…`, the form claude.ai's session URLs use; anything else is nil.
     static func normalizedSessionID(_ raw: String) -> String? {
-        guard raw.range(of: "^(session|cse)_[A-Za-z0-9]{1,64}$", options: .regularExpression) != nil else { return nil }
+        guard raw.range(of: "^(session|cse)_[A-Za-z0-9]{1,64}\\z", options: .regularExpression) != nil else { return nil }
         return raw.hasPrefix("cse_") ? "session_" + raw.dropFirst(4) : raw
     }
 
@@ -340,7 +340,7 @@ enum ClaudeCloudRelay {
     }
 
     private static func data(hex: String) -> Data? {
-        guard hex.count % 2 == 0, hex.range(of: "^[0-9a-f]*$", options: .regularExpression) != nil else { return nil }
+        guard hex.count % 2 == 0, hex.range(of: "^[0-9a-f]*\\z", options: .regularExpression) != nil else { return nil }
         var bytes = [UInt8]()
         bytes.reserveCapacity(hex.count / 2)
         var index = hex.startIndex

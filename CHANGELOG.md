@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #72
+- **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
+- **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
+- **Changes:**
+  - `ClaudeCloudRelay.parse` checks the signature, then validates the session id and the
+    repository name with ICU regular expressions ending in `$`. ICU's `$` also matches before a
+    final newline, so a signed payload could carry one into the session id, the card and
+    conversation ids, the chat name and the project name. All six validators now end in `\z`: the
+    secret, the repository, the topic, the session id (both forms) and the hex decoder.
+  - The script's bash-only lines (the remote and secret guard, the python3/curl check, the
+    `--check` test) use `[[ ]]`, as SonarCloud asked. The shebang is bash and the hooks run it with
+    bash. Both copies are changed: `ClaudeCloudRelaySetup.scriptSource` and
+    `scripts/kannu-cloud-relay.sh`, which `testTheMirrorIsTheScriptKannuHandsOut` keeps identical.
+  - Test: `testATrailingNewlineIsRejected` covers a signed payload whose `session_` id, `cse_` id
+    or repository ends in a newline, and `normalizedSessionID` given one.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #131
 - **Developer label:** "rest of them needs to be reviewed and then merged"
 - **Agent label:** Claude Code (Opus 5.5) — the finding of CodeRabbit's review of the notes stack (#134) that belongs to #131, fixed before merging

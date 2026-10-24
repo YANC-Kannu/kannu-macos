@@ -135,12 +135,12 @@ enum ClaudeCloudRelaySetup {
 # secret, and only when the light changes colour or every 4 minutes while it stays the same.
 #
 #   bash .claude/hooks/kannu-cloud-relay.sh --check     # explain the setup, send a test message
-if [ "${1:-}" != "--check" ]; then
-  [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || exit 0
-  [ -n "${KANNU_RELAY_SECRET:-}" ] || exit 0
+if [[ "${1:-}" != "--check" ]]; then
+  [[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]] || exit 0
+  [[ -n "${KANNU_RELAY_SECRET:-}" ]] || exit 0
 fi
 if ! command -v python3 >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
-  [ "${1:-}" = "--check" ] && echo "Kannu cloud relay: python3 and curl are both required."
+  [[ "${1:-}" == "--check" ]] && echo "Kannu cloud relay: python3 and curl are both required."
   exit 0
 fi
 read -r -d '' KANNU_RELAY_PROGRAM <<'PY' || true
@@ -366,7 +366,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "--check":
 else:
     hook(sys.argv[1:])
 PY
-if [ "${1:-}" = "--check" ]; then
+if [[ "${1:-}" == "--check" ]]; then
   python3 -I -c "$KANNU_RELAY_PROGRAM" "$@"
   exit 0
 fi
