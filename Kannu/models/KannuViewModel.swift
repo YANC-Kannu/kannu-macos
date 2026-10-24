@@ -337,6 +337,9 @@ class KannuViewModel: NSObject, ObservableObject {
         // `ModalPresenter`, not inferred from `NSApp`: `attachedSheet` missed a picker shown with
         // `panel.begin` (Settings closed) and blocked the notch behind the Spotify sign-in sheet.
         guard NSApp.modalWindow == nil, !ModalPresenter.isPresenting else { return }
+        // Show / Hide Notch's eye owns the closed notch until it settles; a hide's windows are
+        // about to close under whatever opened.
+        guard !coordinator.notchEye.isAnimating else { return }
 
         let targetSize = calculateDynamicNotchSize()
 

@@ -4,6 +4,98 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #133
+- **Developer label:** CodeRabbit's review of #133: the Clipboard and Screen Assistant shortcuts open the notch and then act on it, even while the eye animation has refused the open
+- **Agent label:** Claude Code (Opus 5.5) — the three notch-backed shortcut paths do nothing while the eye plays, as the open-notch toggle already does; merges development (#127) into the branch
+- **Changes:**
+  - The Clipboard shortcut in popover and separate-tab mode, and the Screen Assistant shortcut in
+    popover mode, now return while Show / Hide Notch's eye is playing. `open()` refuses then, and
+    they went on to post the popover toggle 0.3 s later, or switch to the Notes tab, on a notch
+    that stayed closed. The press is dropped rather than queued, as `toggleNotch` drops it: the
+    eye lasts at most 1.25 s, and a popover opening by itself after it would be the surprise.
+  - `NotchEyeRulesTests` pins the gate on all three paths in `registerOptionalShortcutHandlers`.
+  - development is merged in (#127, typed-name tasks). Only CHANGELOG.md conflicted: both sides'
+    entries are kept, this branch's first.
+  - Found reviewing the merge: an open notch hidden with no eye to play (over a fullscreen app,
+    during the hello) closed and lost its window in the same turn, so the open tab's views could
+    go without `.onDisappear`. #127's typed-search key monitor removes itself there; left
+    installed, it matches every later notch window and swallows Tab and the arrow keys. Such a
+    hide now waits 50 ms, so the closed layout draws and the views leave first. The monitor not
+    being tied to its own window is #127's, and display-change rebuilds still reach it.
+
+### 2026-10-24 - The notch can hide itself, closing like an eye, and the eye's menu brings it back
+- **Developer label:** "we want a simple toggle for users to enable and disable the notch, where do we keep it, reenable is easy, you can just add a show notch button in the eye options" — then "we want this to be part of main notch itself" — then "can we add an animation for show notch where right now the notch expands to 2 sides and shows brightness, instead open and give a bright shimmer like opening and then make it black, its like a light opens and then the notch fills up that place, maybe keep eyes at both sides, 1 eye in 1 side, also while closing reverse this animation like an eye closes" — then "make closing a bit slower and smoother, opening a bit too"
+- **Agent label:** Claude Code (Opus 5.5) — a `showNotch` setting, hidden from the notch's own header button and right-click menu, shown again from the eye's Show Notch; showing opens an eye (light, shimmer, an eye each side, then the notch's fill) and hiding plays it back before the windows tear down; the eye cannot be turned off while the notch is hidden
+- **Changes:**
+  - Showing the notch opens an eye: a seam of light appears at the notch and spreads to both sides,
+    opens into a bright band with a shimmer across it, the notch's own fill (skin or colour) spreads
+    over the light from the notch outward, a white eye opens in each side on that fill, then the
+    eyes fade and the sides draw back to the resting notch, in 1.25 s. The eyes open on the fill,
+    not the light: white on white, the opening could not be seen. On a notched MacBook the light and
+    the shimmer run out from the notch's edges, the only part not behind the cutout. Hiding plays
+    the same frames backwards, like an eye closing, in 1.1 s, and only then tears the windows
+    down; an open notch closes first. Both runs ease in and out (a `timingCurve` that is exactly
+    smoothstep in time, so a reversal knows where it is), and each layer moves in one segment, with
+    no stop halfway. Reduce Motion makes it a 0.2 s fade. It plays only on
+    Show/Hide, never at launch or login.
+  - One value drives it: `NotchEyeState.progress` on `KannuViewCoordinator`, 0 for no notch, 1 for
+    the resting notch, written only by `AppDelegate.applyNotchVisibility` and animated by one
+    eased run. `NotchEyeTimeline` turns it into every layer's frame (pure, in the test target), and
+    `NotchEyeSpacer` / `NotchEyeView` draw it, with no clock of their own. A toggle mid-run reverses
+    on the same windows from the frame on screen; a hide re-checks the switch after its wait. A lock
+    settles the eye at once, finishing a hide. Phases move on AppDelegate's clock, never on a
+    view's completion, and the window's alpha and mouse handling are never touched.
+  - While the eye plays it owns the closed notch: live activities, HUDs and the battery surface give
+    way, `open()`, hover and the toggle shortcut do nothing, and the music control panel hides. A
+    display that hides its island until hover holds it out while the eye plays, or the eye would
+    play off-screen. Hiding closes every display's notch, not only the single-window one, and
+    pointer following is resynced on every show, a reversal of a hide included.
+  - The "expands to 2 sides and shows brightness" on Show was the keyboard-backlight HUD. Every
+    restart of the HUD observer (Show Notch, launch, a HUD-style or DDC change) started the
+    backlight controller, whose first read of the level was sent as a change. That read now only
+    seeds listeners (`.keyboardBacklightDidChange`); a HUD comes from a real change.
+  - New `Defaults[.showNotch]` (default on). It has no Settings row: the control lives in the notch.
+  - The open notch's header has a "Hide Notch" button (eye.slash), between the timer and Brain. The
+    notch's right-click menu gains "Hide Notch" under Brain, which reaches the closed notch and the
+    minimalistic UI, where the header has no buttons. Both only write the setting.
+  - The eye's menu opens with a "Show Notch" item, checked while the notch is visible. It toggles
+    both ways. While the notch is hidden, a plain click on the eye opens the menu too. The
+    "Menubar icon" description says so.
+  - Hiding tears every notch window down, so the views' monitors and the hover poll stop with them.
+    It does not just order the windows out. Showing rebuilds through `applyPlacementChange`, the same
+    path a placement change takes.
+  - Hiding also stops what lives beside the notch or only feeds it. The timer's control panel was
+    hidden only from its view's `.onDisappear`, and Stats sampled until a notch close reached it
+    through `.onChange`; with no window left, both outlived the notch. `applyNotchVisibility` now
+    hides the panel and stops Stats itself.
+  - Opening Kannu again (Finder, Spotlight) brings a hidden notch back. The eye is the usual way, but
+    a crowded menu bar can push it behind the physical notch.
+  - The lock screen's notch-shaped pill, and its flash at the notch on unlock, stay hidden with the
+    notch.
+  - The eye stays in the menu bar while the notch is hidden, whatever "Menubar icon" says. Kannu has
+    no Dock icon, so with both off nothing could bring it back. The stored choice returns with the
+    notch.
+  - Screen changes, placement changes, pointer following, the open-notch shortcut and the Clipboard
+    and Screen Assistant popover/tab shortcuts all check the switch. Launch still seeds `vm.screen`
+    before skipping the window, as entry 17's addendum requires.
+  - The notch HUD counts as off while the notch is hidden: `SystemHUDManager` reads
+    `enableSystemHUD && showNotch`. With no other HUD enabled, the volume and brightness keys get
+    macOS's own OSD back instead of nothing. The DDC restarts (integration, provider, external
+    volume, a helper starting or quitting) now start the HUD observer only while some HUD is on;
+    they used to start it, and so pause the native OSD, with none to show.
+  - `NotchToggleRulesTests` pins the eye's visibility and its Show Notch item, reopening as a way
+    back, the window-path checks, the launch order, the HUD read and DDC guards, the hide path's
+    timer and Stats release, the lock pill, the two in-notch controls only writing the setting, and
+    the backlight start showing no HUD. `HeaderOrderRulesTests` lists the Hide Notch button among
+    the fixed buttons, between the timer and Brain. `NotchEyeTimelineTests` checks the frames:
+    nothing at the start, the resting notch at the end, eyes only in sides fully out, sides drawing
+    in only behind the fill, Reduce Motion a pure fade, the ease matching smoothstep, no layer
+    stopping mid-move, and the reversal math. `NotchEyeRulesTests`
+    pins the single writer, the hide's re-check, Reduce Motion and every-display close, no alpha or
+    mouse changes, the lock settle, no play at launch, the open, hover and toggle gates, the island
+    held out while the eye plays, pointer tracking resynced last, the eye as the closed notch's first
+    branch, and a view with no clock. The timeline tests also check that the eyes open on the fill.
+
 ### 2026-10-24 - Brain's All tasks: New Task with everything the notch's form offers, titles and estimates typed in place, no drag
 - **Developer label:** "fix estimate and stuff inside the brain, the outside stuff in notch is perfect, but the stuff inside brain looks very lagging, even the design choice there and overall experience is not good enough. inside brain also estimate should be typeable, the placement of add a task section looks like a toddlers one, random placement, we need golden ration inside the tasks page, that is the all tasks sub page, no drag and order tasks or numbering, spacing everywheer seems messed up" … "1 st picture shows bad allignment, 2nd picture shows we cant add tags here, we want all capabilties that we give for tasks in notch, communicate in a very good way here, a add task button maybe giving popup or deep window, then yea, see if there is any good ux"
 - **Agent label:** Claude Code (Opus 5.5) — Brain › Tasks: one New Task button opening a sheet with the notch form's title, typed estimate, tags and reminder, a local task's title and its reminder's Notify on its page, the estimate typed on a task's page and checked live in Set Estimate, drag and Move Up/Down removed, one Tasks card and one folded Section, rows worked out once per render

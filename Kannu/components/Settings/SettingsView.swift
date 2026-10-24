@@ -1253,7 +1253,7 @@ struct GeneralSettings: View {
             }
 
             Section {
-                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Brain, updates, restart and quit.") {
+                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
                     Defaults.Toggle(key: .menubarIcon) {
                         Text("Menubar icon")
                     }
