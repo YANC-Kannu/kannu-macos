@@ -1821,7 +1821,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 ClipboardPanelManager.shared.toggleClipboardPanel(trigger: "shortcut")
             case .popover:
                 // The popover and the tab live in the notch; a hidden notch has no window to open.
-                guard Defaults[.showNotch] else { return }
+                // Nor while the eye plays: `open()` refuses, and the popover or tab would land on a
+                // notch still closed. The press is dropped, as `toggleNotch` drops it.
+                guard Defaults[.showNotch], !coordinator.notchEye.isAnimating else { return }
                 if vm.notchState == .closed {
                     vm.open()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -1831,7 +1833,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     NotificationCenter.default.post(name: NSNotification.Name("ToggleClipboardPopover"), object: nil)
                 }
             case .separateTab:
-                guard Defaults[.showNotch] else { return }
+                guard Defaults[.showNotch], !coordinator.notchEye.isAnimating else { return }
                 if vm.notchState == .closed {
                     vm.open()
                     coordinator.currentView = .notes
@@ -1853,7 +1855,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .panel:
                 ScreenAssistantPanelManager.shared.toggleScreenAssistantPanel()
             case .popover:
-                guard Defaults[.showNotch] else { return }
+                guard Defaults[.showNotch], !coordinator.notchEye.isAnimating else { return }
                 if vm.notchState == .closed {
                     vm.open()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -2064,6 +2066,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             full: runFadesOnly ? NotchEyeTimeline.fadeDuration : NotchEyeTimeline.hideDuration,
                             after: wasOpen ? NotchEyeTimeline.closeFirst : 0,
                             then: finishHide)
+            } else if wasOpen, animated {
+                // No eye to play (fullscreen, the hello, a zero-height notch), but the notch was open:
+                // let the closed layout draw before the window goes, so the open tab's views leave
+                // through `.onDisappear` and remove what they installed (the typed search's key
+                // monitor), rather than going down with the window mid-open.
+                notchEyeTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(50))
+                    guard !Task.isCancelled else { return }
+                    finishHide()
+                }
             } else {
                 finishHide()
             }

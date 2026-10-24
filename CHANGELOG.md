@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Act on CodeRabbit's review of #133
+- **Developer label:** CodeRabbit's review of #133: the Clipboard and Screen Assistant shortcuts open the notch and then act on it, even while the eye animation has refused the open
+- **Agent label:** Claude Code (Opus 5.5) — the three notch-backed shortcut paths do nothing while the eye plays, as the open-notch toggle already does; merges development (#127) into the branch
+- **Changes:**
+  - The Clipboard shortcut in popover and separate-tab mode, and the Screen Assistant shortcut in
+    popover mode, now return while Show / Hide Notch's eye is playing. `open()` refuses then, and
+    they went on to post the popover toggle 0.3 s later, or switch to the Notes tab, on a notch
+    that stayed closed. The press is dropped rather than queued, as `toggleNotch` drops it: the
+    eye lasts at most 1.25 s, and a popover opening by itself after it would be the surprise.
+  - `NotchEyeRulesTests` pins the gate on all three paths in `registerOptionalShortcutHandlers`.
+  - development is merged in (#127, typed-name tasks). Only CHANGELOG.md conflicted: both sides'
+    entries are kept, this branch's first.
+  - Found reviewing the merge: an open notch hidden with no eye to play (over a fullscreen app,
+    during the hello) closed and lost its window in the same turn, so the open tab's views could
+    go without `.onDisappear`. #127's typed-search key monitor removes itself there; left
+    installed, it matches every later notch window and swallows Tab and the arrow keys. Such a
+    hide now waits 50 ms, so the closed layout draws and the views leave first. The monitor not
+    being tied to its own window is #127's, and display-change rebuilds still reach it.
+
 ### 2026-10-24 - The notch can hide itself, closing like an eye, and the eye's menu brings it back
 - **Developer label:** "we want a simple toggle for users to enable and disable the notch, where do we keep it, reenable is easy, you can just add a show notch button in the eye options" — then "we want this to be part of main notch itself" — then "can we add an animation for show notch where right now the notch expands to 2 sides and shows brightness, instead open and give a bright shimmer like opening and then make it black, its like a light opens and then the notch fills up that place, maybe keep eyes at both sides, 1 eye in 1 side, also while closing reverse this animation like an eye closes" — then "make closing a bit slower and smoother, opening a bit too"
 - **Agent label:** Claude Code (Opus 5.5) — a `showNotch` setting, hidden from the notch's own header button and right-click menu, shown again from the eye's Show Notch; showing opens an eye (light, shimmer, an eye each side, then the notch's fill) and hiding plays it back before the windows tear down; the eye cannot be turned off while the notch is hidden

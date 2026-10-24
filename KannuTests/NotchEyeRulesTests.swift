@@ -66,6 +66,11 @@ final class NotchEyeRulesTests: XCTestCase {
                      "notchEyeTask?.cancel()", "syncStatusItem(visible: isStatusItemNeeded)"] {
             XCTAssertTrue(apply.contains(rule), "applyNotchVisibility lost \(rule)")
         }
+        // An open notch hidden with no eye still draws closed once before its window goes, so the
+        // open tab's views get their `.onDisappear` (the typed search's key monitor leaked otherwise).
+        let unanimatedOpen = try XCTUnwrap(apply.range(of: "} else if wasOpen, animated {"),
+                                           "an open notch hidden with no eye is torn down mid-open")
+        XCTAssertTrue(apply[unanimatedOpen.upperBound...].prefix(400).contains("Task.sleep"))
         let run = try Self.body("runNotchEye", in: app)
         XCTAssertTrue(run.contains("guard !Task.isCancelled"), "a cancelled run still finishes")
         for body in [apply, run] {
@@ -100,6 +105,11 @@ final class NotchEyeRulesTests: XCTestCase {
         for name in ["handleHover", "handleRegionHoverOpen", "shouldShowMusicControlWindow"] {
             XCTAssertTrue(try Self.body(name, in: content).contains(gate), "\(name) ignores the eye")
         }
+        // The Clipboard popover and tab and the Screen Assistant popover open the notch and then act
+        // on it; with the open refused they posted to a notch still closed (CodeRabbit, #133).
+        let shortcuts = try Self.body("registerOptionalShortcutHandlers", in: try Self.source("Kannu/KannuApp.swift"))
+        XCTAssertEqual(shortcuts.components(separatedBy: "guard Defaults[.showNotch], \(gate) else { return }").count - 1, 3,
+                       "a notch-backed shortcut acts while the eye plays")
     }
 
     /// Three things the eye must not leave behind: an island parked off-screen, where the eye
