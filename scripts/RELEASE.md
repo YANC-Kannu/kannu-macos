@@ -8,7 +8,7 @@ Triggered only by pushing a `v*` tag. The workflow archives with Developer ID, n
 
 ### One-time: GitHub secrets
 
-Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
+Add at **Settings → Secrets and variables → Actions** on `YANC-Kannu/kannu-macos`:
 
 | Secret | Description |
 |--------|-------------|
@@ -23,13 +23,13 @@ Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
 Example (run locally after exporting your `.p12`):
 
 ```bash
-gh secret set APPLE_CERTIFICATE --repo libinmv/kannu < <(base64 -i ~/path/to/cert.p12)
-gh secret set APPLE_CERTIFICATE_PASSWORD --repo libinmv/kannu
-gh secret set KEYCHAIN_PASSWORD --repo libinmv/kannu
-gh secret set APPLE_TEAM_ID --repo libinmv/kannu --body "S2WWHQQH2V"
-gh secret set APPLE_ID --repo libinmv/kannu
-gh secret set APPLE_NOTARIZATION_PASSWORD --repo libinmv/kannu
-gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo libinmv/kannu < ~/path/to/eddsa_private.key
+gh secret set APPLE_CERTIFICATE --repo YANC-Kannu/kannu-macos < <(base64 -i ~/path/to/cert.p12)
+gh secret set APPLE_CERTIFICATE_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set KEYCHAIN_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_TEAM_ID --repo YANC-Kannu/kannu-macos --body "S2WWHQQH2V"
+gh secret set APPLE_ID --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_NOTARIZATION_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo YANC-Kannu/kannu-macos < ~/path/to/eddsa_private.key
 ```
 
 ### Release day

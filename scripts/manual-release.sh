@@ -11,7 +11,7 @@ SPARKLE_KEY=""
 SPARKLE_BIN=""
 PUBLISH=false
 PUSH_APPCAST=false
-REPO="libinmv/kannu"
+REPO="YANC-Kannu/kannu-macos"
 
 usage() {
   cat <<EOF
