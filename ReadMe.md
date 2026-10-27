@@ -15,10 +15,11 @@ Kannu is a fork of [Atoll](https://github.com/Ebullioscopic/Atoll), which itself
 - **Agent usage and quota** — Claude rate limits in the notch, grouped as Session and Weekly with a per-model window, one reset countdown per group, and bar colour driven by the severity the server itself reports. Codex, Cursor, and Antigravity have their own cards.
 - **Keep the Mac awake** — smart caffeinate holds sleep off automatically while an agent runs and releases it when the agent stops, or drive it manually. One native power assertion; no `caffeinate` subprocess. Only system sleep is prevented — the display may still sleep, and closing the lid always sleeps the Mac.
 - **Jump to the session** — click a chat row to activate the app that owns it (terminal, IDE, or a resumable Claude session). Rows that cannot be located offer no affordance rather than a dead click.
-- **Custom notch skins** — upload a background image clipped to the notch shape, with optional dark scrim for readability.
+- **Custom notch skins** — upload a background image clipped to the notch shape, with optional dark scrim for readability, or pick the built-in Horns skin. **Copy AI prompt** gives ChatGPT or another image AI a prompt that asks what you want, then designs a skin sized for the notch ([docs/NOTCH-SKINS.md](docs/NOTCH-SKINS.md)).
 - **Mobile notifications (optional)** — push agent state changes to iPhone, Apple Watch, or Android via ntfy, Pushover, or a custom webhook.
+- **Tasks and time** — Brain › Tasks lists your own tasks beside those from Jira Cloud, GitLab, GitHub (including GitHub Enterprise Server), Linear, Todoist and Apple Reminders, with estimates, tags, reminders and an archive. The timer times a task, and the time it records can go back to Jira or GitLab, only when you say so; the other sources are read, never changed. Tokens stay in your Keychain.
 - Media controls, live activities, lock screen widgets, stats, timers, clipboard, and shelf.
-- **Keyboard shortcuts off by default** — enable globally in Settings → Shortcuts when you want hotkeys.
+- **Keyboard shortcuts off by default** — enable globally in Brain → Shortcuts when you want hotkeys.
 
 Calendar, terminal, and color picker features from the Atoll/Boring.Notch lineage are removed in this fork.
 
@@ -28,30 +29,43 @@ Calendar, terminal, and color picker features from the Atoll/Boring.Notch lineag
 - MacBook with a notch, or a non-notch Mac using floating Dynamic Island pill mode.
 - Apple silicon or Intel — the app builds universal.
 - Xcode 16+ to build from source (the source needs Swift 6.1).
-- Permissions as needed: Accessibility, Screen Recording, Music.
+- Permissions as needed: Accessibility, Screen Recording, Music, Reminders, Notifications.
 
 
 
 ## Runtime Permissions (by Feature)
 
-Kannu requests permissions only when you use the related feature. The app is not sandboxed, so most permissions are standard macOS privacy prompts (TCC) shown at runtime.
+The app is not sandboxed, so these are standard macOS privacy prompts (TCC). Kannu never raises one on its own at launch: on a fresh install, onboarding's **Permissions** step lists only what your choices use, says why, and asks for each one when you press **Allow**, one dialog at a time. The welcome music plays after you finish. Press **Not now** and that feature stays off until you allow it in **Brain › General › Permissions**; nothing asks for it later by surprise.
 
-- **Accessibility** — required for hardware key interception and custom HUD/OSD replacement.
-- **Screen Recording** — required for Screen Assistant screenshot capture. Screen-recording detection is separate and does not require this prompt.
-- **Music (MusicKit)** — required for Apple Music animated artwork features.
-- **Automation (Apple Events)** — required for Spotify/Apple Music controls and Apple Notes sync when those integrations are used.
-- **Full Disk Access** — required only for custom Focus metadata and optional global Shelf behavior.
-- **Files & Folders (Documents/Downloads)** — used by Shelf when Full Disk Access is not granted.
-- **Bluetooth** — used for Bluetooth audio battery indicators.
-- **Location (When In Use)** — used for lock screen weather.
-- **Audio Capture** — used for real-time waveform/audio-activity features.
-- **Developer Tools** — optional, used for advanced Focus detection mode.
+Asked on the Permissions step (when the feature is on):
 
-For detailed prompts and one-click setup actions, open **Settings** in Kannu. Contributor docs are in [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Accessibility** — media keys and the volume and brightness HUD.
+- **Bluetooth** — headphones and their battery when they connect.
+- **Files & Folders (Downloads)** — download progress in the notch.
+- **Location (When In Use)** — lock screen weather.
+- **Automation (Apple Events)** and **Music (MusicKit)** — when Spotify or Apple Music is your music source: playback controls, and Apple Music's animated artwork.
+- **Automation (Apple Events) for Notes** — when you choose to sync notes with Apple Notes on the Notes step.
+- **Data from other apps** — when Warp is installed: following agents running in Warp.
+- **Login item** — "Open Kannu at login", a switch on the same step.
+
+Asked only when you use the feature:
+
+- **Screen Recording** — Screen Assistant screenshot capture. Screen-recording detection is separate and does not need it.
+- **Microphone** — Screen Assistant's Record button, asked the first time you press it.
+- **Local Network** — sending files from the Shelf to nearby devices with LocalSend.
+- **Automation (Apple Events)** — Apple Notes sync when you turn it on later in Brain › Notes, and opening an agent's terminal tab or a browser tab.
+- **Full Disk Access** — custom Focus metadata and optional global Shelf behavior.
+- **Files & Folders (Documents/Downloads)** — Shelf, when Full Disk Access is not granted. Clipboard history keeps its files in Application Support, which needs no permission.
+- **Audio Capture** — real-time waveform and audio-activity features.
+- **Developer Tools** — optional, for the advanced Focus detection mode.
+- **Reminders** — when you connect Apple Reminders as a task source (Brain › Tasks › Add a source).
+- **Notifications** — the first time you schedule a task reminder.
+
+For detailed prompts and one-click setup actions, open **Brain** in Kannu. Contributor docs are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Install (Pre-built DMG)
 
-1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.2.0.dmg`) from the [Releases page](https://github.com/libinmv/kannu/releases).
+1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.3.4.dmg`) from the [Releases page](https://github.com/libinmv/kannu/releases).
 2. Open the DMG and drag **Kannu** into the **Applications** folder.
 3. Launch Kannu from Applications.
 
@@ -88,15 +102,15 @@ Application support data is stored under `~/Library/Application Support/Kannu/`.
 ## Quick Start
 
 1. Launch Kannu and complete onboarding.
-2. Open **Settings → Agents** and install editor hooks for Cursor (recommended).
+2. Open **Brain → Agents** and install editor hooks for Cursor (recommended).
 3. Run an AI agent in Cursor — the notch shows the traffic-light status when collapsed.
-4. Optionally upload a notch skin under **Settings → Appearance → Notch skin**.
+4. Optionally pick or upload a notch skin under **Brain → Appearance → Notch skin** (see [docs/NOTCH-SKINS.md](docs/NOTCH-SKINS.md)).
 
 
 
 ## Mobile Notifications Setup
 
-1. Open **Settings → Agents → Mobile Notifications**.
+1. Open **Brain → Agents → Mobile Notifications**.
 2. Enable mobile notifications and choose a provider:
   - **ntfy** — create a topic at [ntfy.sh](https://ntfy.sh) or self-host. Install the ntfy app on iPhone or Android and subscribe to your topic.
   - **Pushover** — use your user key and app token from [pushover.net](https://pushover.net).

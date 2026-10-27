@@ -179,6 +179,46 @@ final class ADRSnapshotTests: XCTestCase {
         XCTAssertNoThrow(try ADRSnapshot.decode(Data(v1_3.utf8)))
     }
 
+    /// Schema 1.2 (upstream ff3028b) adds asset fields Kannu does not read, and a policy-forbidden
+    /// asset (a3ab5f7) raises `forbidden_asset`, high. Shapes from upstream's `contracts/records.py`
+    /// and `judge/findings.py` at `ADRUpstream.commit`.
+    func testSchema12AndAForbiddenAssetDecodeAndReadAsAHighFinding() throws {
+        let json = """
+        {
+          "schema_version": "1.2",
+          "catalog_version": "2026.10.12",
+          "hostname": "mac.local", "username": "dev", "platform": "darwin",
+          "timestamp": "2026-10-16T09:00:00+00:00",
+          "assets": [{
+            "asset_id": "5f0e1d2c3b4a59687766554433221100",
+            "kind": "mcp_server", "name": "scratch-server",
+            "identity": "mcp_server:/Users/dev/.cursor/mcp.json:scratch-server",
+            "liveness": "declared_only", "flags": [], "sanction": "forbidden",
+            "install_path": "/Users/dev/.cursor/mcp.json",
+            "allowed_tools": [], "model": null, "skill_sha256": null, "provenance": null,
+            "plugin_asset_id": null, "archive": null, "content_hash": null, "package_id": null
+          }],
+          "findings": [{
+            "rule": "forbidden_asset", "severity": "high",
+            "asset_id": "5f0e1d2c3b4a59687766554433221100",
+            "summary": "scratch-server is forbidden by policy",
+            "evidence": [{"stage": "judge", "channel": "config", "path": "/Users/dev/.cursor/mcp.json",
+                          "proof": "matched a forbidden entry in the tenant policy", "confidence": 0.9, "rung": null}]
+          }]
+        }
+        """
+        let snapshot = try ADRSnapshot.decode(Data(json.utf8))
+        XCTAssertEqual(snapshot.schemaVersion, "1.2")
+        XCTAssertEqual(snapshot.assets.first?.sanction, "forbidden")
+        let finding = try XCTUnwrap(AgentSecurityFinding.findings(from: snapshot).first)
+        XCTAssertEqual(finding.rule, "forbidden_asset")
+        XCTAssertEqual(finding.severity, .high)
+        XCTAssertEqual(finding.title, "Forbidden by your ADR policy", "a real title, not the prettified rule name")
+        XCTAssertEqual(finding.summary, "scratch-server is forbidden by policy", "ADR's own words")
+        XCTAssertEqual(finding.assetPath, "/Users/dev/.cursor/mcp.json")
+        XCTAssertEqual(SecurityFindingGuide(rule: finding.rule).family, .forbiddenAsset)
+    }
+
     func testNotASnapshotIsRefused() {
         XCTAssertThrowsError(try ADRSnapshot.decode(Data("{\"hello\": 1}".utf8))) { error in
             XCTAssertEqual(error as? ADRSnapshot.DecodeError, .notASnapshot)

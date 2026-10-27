@@ -77,14 +77,16 @@ final class ClaudeTurnTokensTests: XCTestCase {
         XCTAssertNil(ClaudeUsageLine.parse(assistant("z", input: 0, cacheRead: 0, output: 0)), "zero usage is no record")
     }
 
-    func testCodexShapedLinesStillParse() throws {
-        // Codex puts usage at the top level and names the request `request_id`, with no fraction.
+    func testTopLevelUsageFallbackStillParses() throws {
+        // The reader's fallback: usage at the top level, the request named `request_id`, a timestamp
+        // with no fraction. This is not the Codex format, which this reader never matches; Codex
+        // rollouts are pinned by `CodexUsageLineTests`.
         let record = try XCTUnwrap(ClaudeUsageLine.parse(line([
-            "timestamp": "2026-09-11T10:00:00Z", "model": "gpt-5", "request_id": "r1",
+            "timestamp": "2026-09-11T10:00:00Z", "model": "claude-haiku-4-5", "request_id": "r1",
             "usage": ["input_tokens": 7, "output_tokens": 2],
         ]).dropLast()))
         XCTAssertEqual(record.inputTokens, 7)
-        XCTAssertEqual(record.model, "gpt-5")
+        XCTAssertEqual(record.model, "claude-haiku-4-5")
         XCTAssertEqual(record.dedupKey, "-r1")
     }
 

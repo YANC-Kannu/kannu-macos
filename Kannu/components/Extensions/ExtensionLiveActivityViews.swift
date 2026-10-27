@@ -134,6 +134,7 @@ struct ExtensionMusicWingView: View {
 }
 
 struct ExtensionLeadingContentView: View {
+    @Environment(\.notchForeground) private var notchForeground
     let content: AtollTrailingContent
     let badge: AtollIconDescriptor?
     let accent: Color
@@ -160,7 +161,7 @@ struct ExtensionLeadingContentView: View {
                     .frame(width: frameHeight, height: frameHeight)
                     .background(
                         RoundedRectangle(cornerRadius: frameHeight * 0.18, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
+                            .fill(notchForeground.opacity(0.08))
                     )
             default:
                 ExtensionCompositeIconView(
@@ -223,6 +224,7 @@ struct ExtensionNotchExperienceTabView: View {
                     .padding(.vertical, 14)
                     .padding(.horizontal, 16)
                 }
+                .ownsVerticalScroll()
             } else {
                 Text("Extension tab unavailable")
                     .font(.system(size: 13, weight: .medium))
@@ -268,7 +270,7 @@ struct ExtensionNotchExperienceTabView: View {
     private var tabBackground: some View {
         AnyView(
             LinearGradient(
-                colors: [Color.white.opacity(0.04), accentColor.opacity(0.08)],
+                colors: [notchForeground.opacity(0.04), accentColor.opacity(0.08)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -277,6 +279,7 @@ struct ExtensionNotchExperienceTabView: View {
 }
 
 struct ExtensionNotchSectionView: View {
+    @Environment(\.notchForeground) private var notchForeground
     let section: AtollNotchContentSection
     let accent: Color
     let allowWebInteraction: Bool
@@ -288,7 +291,7 @@ struct ExtensionNotchSectionView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white.opacity(0.04))
+        .background(notchForeground.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
@@ -392,6 +395,7 @@ struct ExtensionMinimalisticExperienceView: View {
                     .padding(.top, 10)
                     .padding(.bottom, hasWebContent ? 0 : 10)
                 }
+                .ownsVerticalScroll()
             } else {
                 MinimalisticMusicPlayerView(albumArtNamespace: albumArtNamespace)
             }

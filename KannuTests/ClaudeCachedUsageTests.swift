@@ -151,4 +151,46 @@ final class ClaudeCachedUsageTests: XCTestCase {
         json["cachedUsageUtilization"] = cache
         XCTAssertNil(ClaudeCachedUsage.parse(json: json))
     }
+
+    // MARK: - Account context for the desktop history
+
+    func testAccountContextCarriesOrganizationAndALapsedWeeklyReset() {
+        // The cache's percentages lapsed weeks ago; its weekly reset still fixes the anchor.
+        var json = config(fixed: ["seven_day": window(20, resets: "2026-09-09T00:00:00.230141+00:00")])
+        json["oauthAccount"] = ["accountUuid": "acct-1", "organizationUuid": "org-1"]
+        let context = ClaudeCachedUsage.accountContext(json: json)
+        XCTAssertEqual(context.organizationUUID, "org-1")
+        XCTAssertEqual(context.weeklyResetAnchor?.timeIntervalSince1970 ?? 0,
+                       ISO8601DateFormatter().date(from: "2026-09-09T00:00:00Z")!.timeIntervalSince1970 + 0.230141,
+                       accuracy: 0.001)
+    }
+
+    func testAnotherAccountsCacheSetsNoAnchor() {
+        var json = config(fixed: ["seven_day": window(20, resets: "2026-09-09T00:00:00+00:00")],
+                          accountUuid: "acct-1", oauthUuid: "acct-2")
+        json["oauthAccount"] = ["accountUuid": "acct-2", "organizationUuid": "org-2"]
+        let context = ClaudeCachedUsage.accountContext(json: json)
+        XCTAssertNil(context.weeklyResetAnchor)
+        XCTAssertEqual(context.organizationUUID, "org-2")
+    }
+
+    func testNoAccountNoContext() {
+        XCTAssertEqual(ClaudeCachedUsage.accountContext(json: [:]), .init())
+    }
+
+    func testTheOrganizationRecordedAtFetchBeatsTheFlippingConfig() {
+        XCTAssertEqual(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: "team", inConfigNow: "max"), "team")
+        XCTAssertEqual(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: "max"), "max")
+        XCTAssertNil(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: nil))
+    }
+
+    func testThePlanTypeIsCarriedAndNamed() {
+        var json = config(fixed: [:])
+        json["oauthAccount"] = ["accountUuid": "acct-1", "organizationUuid": "org-1", "organizationType": "claude_team"]
+        XCTAssertEqual(ClaudeCachedUsage.accountContext(json: json).organizationType, "claude_team")
+        XCTAssertEqual(ClaudeCachedUsage.planName(organizationType: "claude_max"), "Max")
+        XCTAssertEqual(ClaudeCachedUsage.planName(organizationType: "claude_team"), "Team")
+        XCTAssertNil(ClaudeCachedUsage.planName(organizationType: "something_new"))
+        XCTAssertNil(ClaudeCachedUsage.planName(organizationType: nil))
+    }
 }

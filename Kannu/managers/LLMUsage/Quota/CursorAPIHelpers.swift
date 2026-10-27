@@ -107,29 +107,6 @@ enum CursorAPIHelpers {
         return cents / 100
     }
 
-    static func parsePercent(from planUsage: [String: Any]) -> Double? {
-        if let percent = parseDouble(planUsage["totalPercentUsed"]), percent.isFinite {
-            return percent
-        }
-        if let limit = parseDouble(planUsage["limit"]), limit > 0 {
-            let included = parseDouble(planUsage["includedSpend"])
-                ?? parseDouble(planUsage["totalSpend"])
-                ?? parseDouble(planUsage["used"])
-            if let included {
-                return min((included / limit) * 100, 100)
-            }
-            if let remaining = parseDouble(planUsage["remaining"]) {
-                return min(((limit - remaining) / limit) * 100, 100)
-            }
-        }
-        if let used = parseDouble(planUsage["used"]),
-           let limit = parseDouble(planUsage["limit"]),
-           limit > 0 {
-            return min((used / limit) * 100, 100)
-        }
-        return nil
-    }
-
     static func parseJSONObject(_ data: Data) -> [String: Any]? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             return nil

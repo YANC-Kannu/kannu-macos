@@ -50,6 +50,7 @@ final class SecurityFindingGuideTests: XCTestCase {
         XCTAssertEqual(Guide.family(forRule: "plaintext_transport"), .plaintextTransport)
         XCTAssertEqual(Guide.family(forRule: "undeclared_mcp_server"), .undeclaredMCPServer)
         XCTAssertEqual(Guide.family(forRule: "third_party_destination"), .thirdPartyDestination)
+        XCTAssertEqual(Guide.family(forRule: "forbidden_asset"), .forbiddenAsset)
         XCTAssertEqual(Guide.family(forRule: "unattended_execution"), .unattendedExecution)
         XCTAssertEqual(Guide.family(forRule: ADRSessionAnalysis.rulePrefix + "permission_abuse"), .detection)
         XCTAssertEqual(Guide.family(forRule: "brand_new_rule"), .other)
@@ -57,7 +58,7 @@ final class SecurityFindingGuideTests: XCTestCase {
 
     func testEveryFamilyHasPlainNonEmptyTexts() {
         let sampleRules = ["unpinned_mcp_server", "plaintext_transport", "undeclared_mcp_server", "third_party_destination",
-                           "unattended_execution", "detection_x", "hidden_text_tags", "hidden_text_bidi", "secret_npm_token",
+                           "forbidden_asset", "unattended_execution", "detection_x", "hidden_text_tags", "hidden_text_bidi", "secret_npm_token",
                            "sensitive_file_env_file", "sensitive_file_autorun", MCPServerWatch.Addition.rule, "policy_command",
                            "brand_new_rule"]
         let guides = sampleRules.map(Guide.init(rule:))

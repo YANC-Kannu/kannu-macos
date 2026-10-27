@@ -243,7 +243,7 @@ struct AgentSecuritySettings: View {
                             }
                         }
                     } label: {
-                        SettingsRowLabel("ADR scan policy", description: "Your organisation's domains. ADR flags any MCP server that connects to a host outside them.")
+                        SettingsRowLabel("ADR scan policy", description: "Your organisation's domains and, optionally, what it forbids. ADR flags MCP servers that connect outside those domains and anything the policy names as forbidden.")
                     }
                     // Its own line, so Choose… and Clear do not crowd the caption.
                     SettingsActionRow {
@@ -297,7 +297,7 @@ struct AgentSecuritySettings: View {
             }
             .settingsHighlight(id: highlightID("Watch for agents touching sensitive files"))
 
-            SettingsRow("Notice new MCP servers", description: "Tells you when an MCP server is added to Claude Code, Claude Desktop, Cursor, VS Code, Codex, Gemini CLI, Qwen Code or opencode. The first look only learns what is already there. Project folders inside Desktop, Documents and Downloads are skipped, so macOS never asks for access.") {
+            SettingsRow("Notice new MCP servers", description: "Tells you when an MCP server is added to Claude Code, Claude Desktop, Cursor, VS Code (and Cline in VS Code), Codex, Gemini CLI, Qwen Code or opencode. The first look only learns what is already there. Project folders inside Desktop, Documents and Downloads are skipped, so macOS never asks for access.") {
                 Defaults.Toggle(key: .watchMCPServers) {
                     Text("Notice new MCP servers")
                 }
@@ -362,7 +362,7 @@ struct AgentSecuritySettings: View {
             if let importError = findingsStore.agentPolicyImportError {
                 SettingsErrorText(String(localized: "Not imported — \(importError)"))
             }
-            SettingsRow("Block matching tool calls", description: Text("Off: matches are only flagged.\nOn: Claude Code and Cursor refuse the call and tell the agent why.\nOther agents are only flagged either way.")) {
+            SettingsRow("Block matching tool calls", description: Text("Off: matches are only flagged.\nOn: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell the agent why.\nOther agents are only flagged either way.")) {
                 Defaults.Toggle(key: .enforceAgentPolicy) {
                     Text("Block matching tool calls")
                 }
@@ -782,7 +782,7 @@ struct AgentSecuritySettings: View {
                 : String(localized: "partial coverage (\(scan.coverageGaps) gaps)")
             SettingsNoteRow(
                 "Newest scan result",
-                description: String(localized: "\(scan.date.formatted(date: .abbreviated, time: .shortened)) · \(scan.assetCount) assets · \(scan.findingCount) findings · \(coverage) · catalog \(scan.catalogVersion)"),
+                description: String(localized: "\(scan.date.formatted(date: .abbreviated, time: .shortened)) · \(scan.assetCount) assets · \(scan.findingCount) findings · \(coverage) · catalog \(scan.catalogVersion) · schema \(scan.schemaVersion)"),
                 tint: scan.coverageComplete ? nil : .orange)
         } else {
             SettingsNoteRow("Newest scan result", description: String(localized: "No scans yet"))

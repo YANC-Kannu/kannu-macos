@@ -44,16 +44,29 @@ struct BoundedProcessResult: Equatable {
 /// - **Escalate.** SIGTERM at the deadline, SIGKILL after the grace period, `waitUntilExit()` only
 ///   once one of those has landed. A child that traps SIGTERM cannot hold the thread.
 ///
-/// Blocks the calling thread for up to `timeout + killGrace`; never call it on the main thread.
+/// - **Talk, then stop.** `input` is written to the child's stdin while it runs, a non-blocking
+///   write per poll, so input larger than a pipe cannot block the writer. Without `until`, stdin is
+///   closed once the input is written, so a filter sees EOF and finishes. With `until`, stdin stays
+///   open (a JSON-RPC server may shut down on EOF before it answers) until `until` accepts the
+///   stdout kept so far. Then stdin is closed and the child gets `killGrace` to exit on that EOF,
+///   the shutdown a stdio server is built for, with both pipes still drained; only a child still
+///   running after it is stopped the way a child past its deadline is (SIGTERM, then SIGKILL).
+///   Either way the result does not count as timed out.
+///
+/// Blocks the calling thread for up to `timeout + killGrace` (`timeout + 2 × killGrace` once
+/// `until` has held); never call it on the main thread.
 enum BoundedProcessRunner {
     /// - Parameters:
     ///   - process: configured with its executable, arguments, directory and environment; its
-    ///     standard output and error are replaced here.
+    ///     standard output and error are replaced here, and its standard input when `input` is set.
     ///   - stdoutCap: bytes of stdout kept (the rest is read and dropped so the child never blocks).
     ///   - stderrCap: the same for stderr.
     ///   - killGrace: how long SIGTERM gets before SIGKILL.
+    ///   - input: bytes for the child's stdin; nil leaves `process.standardInput` as configured.
+    ///   - until: checked against the stdout kept so far after every read; true ends the run.
     static func run(_ process: Process, timeout: TimeInterval, stdoutCap: Int = 1_000_000, stderrCap: Int = 64_000,
-                    killGrace: TimeInterval = 3, pollInterval: TimeInterval = 0.05) -> BoundedProcessResult {
+                    killGrace: TimeInterval = 3, pollInterval: TimeInterval = 0.05,
+                    input: Data? = nil, until: ((Data) -> Bool)? = nil) -> BoundedProcessResult {
         let stdoutPipe = Pipe(), stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
@@ -63,9 +76,14 @@ enum BoundedProcessRunner {
         for fd in [stdoutFD, stderrFD] {
             _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
         }
+        let stdin = input.map { PendingInput(data: $0) }
+        if let stdin {
+            process.standardInput = stdin.pipe
+        }
         defer {
             try? stdoutPipe.fileHandleForReading.close()
             try? stderrPipe.fileHandleForReading.close()
+            stdin?.close()
         }
 
         do {
@@ -75,14 +93,29 @@ enum BoundedProcessRunner {
         }
 
         let deadline = Date().addingTimeInterval(timeout)
+        var answered = false
         while process.isRunning && Date() < deadline {
+            if let stdin, stdin.writeMore(), until == nil { stdin.close() }
             stdout.drain(stdoutFD)
             stderr.drain(stderrFD)
+            if let until, until(stdout.data) {
+                answered = true
+                break
+            }
             Thread.sleep(forTimeInterval: pollInterval)
+        }
+        stdin?.close()
+        if answered {
+            let exitDeadline = Date().addingTimeInterval(killGrace)
+            while process.isRunning && Date() < exitDeadline {
+                stdout.drain(stdoutFD)
+                stderr.drain(stderrFD)
+                Thread.sleep(forTimeInterval: 0.05)
+            }
         }
         var timedOut = false
         if process.isRunning {
-            timedOut = true
+            timedOut = !answered
             process.terminate()
             let killDeadline = Date().addingTimeInterval(killGrace)
             while process.isRunning && Date() < killDeadline {
@@ -96,6 +129,49 @@ enum BoundedProcessRunner {
         stdout.drain(stdoutFD)
         stderr.drain(stderrFD)
         return BoundedProcessResult(status: process.terminationStatus, stdout: stdout.data, stderr: stderr.data, timedOut: timedOut)
+    }
+
+    /// The child's stdin: written without blocking, closed once.
+    private final class PendingInput {
+        let pipe = Pipe()
+        private let data: Data
+        private var offset = 0
+        private var closed = false
+
+        init(data: Data) {
+            self.data = data
+            let fd = pipe.fileHandleForWriting.fileDescriptor
+            _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+            // A child that exits before reading everything must not take Kannu down with SIGPIPE;
+            // the write fails with EPIPE instead.
+            _ = fcntl(fd, F_SETNOSIGPIPE, 1)
+        }
+
+        /// Writes what the pipe takes right now. True once everything has been written, or once
+        /// writing is no longer possible.
+        func writeMore() -> Bool {
+            guard !closed else { return true }
+            let fd = pipe.fileHandleForWriting.fileDescriptor
+            while offset < data.count {
+                let n = data.withUnsafeBytes { bytes in
+                    Darwin.write(fd, bytes.baseAddress! + offset, data.count - offset)
+                }
+                if n > 0 {
+                    offset += n
+                    continue
+                }
+                // -1 with EAGAIN is a full pipe: try again on the next poll. Anything else (EPIPE:
+                // the child closed its stdin) means the rest can never be delivered.
+                return n < 0 && errno != EAGAIN
+            }
+            return true
+        }
+
+        func close() {
+            guard !closed else { return }
+            closed = true
+            try? pipe.fileHandleForWriting.close()
+        }
     }
 
     /// Reads everything a non-blocking descriptor has right now and keeps the first `cap` bytes.

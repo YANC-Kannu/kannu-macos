@@ -6,22 +6,39 @@ struct CursorQuotaClient {
     let session: URLSession
     init(session: URLSession = URLSession(configuration: .ephemeral)) { self.session = session }
 
-    func fetchLimits() async -> QuotaFetchResult {
+    /// `interactive` is true only for a refresh the user asked for (see `CursorTokenStore`). The
+    /// background poll calls this directly, so it opens its own single-read scope; inside the
+    /// provider's refresh that scope is reused.
+    func fetchLimits(interactive: Bool = false) async -> QuotaFetchResult {
+        await CursorTokenStore.withSingleRead(interactive: interactive) { await limits() }
+    }
+
+    private func limits() async -> QuotaFetchResult {
         guard CursorTokenStore.accessToken() != nil else {
+            // Without this a cursor-agent user whose only sign-in is the keychain item had no way
+            // to approve the read: nothing else asks for an interactive Cursor refresh.
+            if CursorTokenStore.keychainNeedsApproval() {
+                Self.log.notice("cursor-access-token keychain item needs approval; not prompting outside a user-initiated refresh")
+                return QuotaFetchResult(
+                    errorMessage: String(localized: "Cursor keeps its sign-in in the keychain. Allow access to show usage limits."),
+                    action: .grantCursorKeychainAccess
+                )
+            }
             Self.log.notice("no Cursor access token in Keychain or state.vscdb")
             return QuotaFetchResult(errorMessage: "Cursor not signed in")
         }
 
         var result = QuotaFetchResult()
 
-        if let summary = await fetchUsageSummary() {
-            result.week = summary.week
+        let summary = await fetchUsageSummary()
+        if let summary {
+            summary.cycle.apply(to: &result)
             result.onDemandSpendUSD = summary.onDemandSpendUSD
             result.accountTier = summary.accountTier
         }
 
-        if result.week == nil, let connect = await fetchConnectLimits() {
-            result.week = connect.week
+        if result.week == nil, let connect = await fetchConnectLimits(membershipType: summary?.membershipType) {
+            connect.apply(to: &result)
         }
 
         if result.week == nil && result.onDemandSpendUSD == nil {
@@ -32,12 +49,40 @@ struct CursorQuotaClient {
     }
 
     private struct UsageSummaryData: Equatable {
-        var week: UsageLimit?
+        var cycle: CycleLimits
         var onDemandSpendUSD: Double?
         var accountTier: String?
+        /// Raw, for the single-pool check; `accountTier` is the display form.
+        var membershipType: String?
     }
 
-    private func fetchConnectLimits() async -> QuotaFetchResult? {
+    /// The billing-cycle bars `CursorPlanUsage` decided on, as usage limits. Both pools reset at
+    /// the cycle's end.
+    private struct CycleLimits: Equatable {
+        var main: CursorPlanUsage.Bar?
+        var extras: [CursorPlanUsage.Bar] = []
+        var resetsAt: Date?
+
+        init(_ usage: CursorPlanUsage?, resetsAt: Date?) {
+            main = usage?.mainBar
+            extras = usage?.extraBars ?? []
+            self.resetsAt = resetsAt
+        }
+
+        var hasMainBar: Bool { main != nil }
+
+        func apply(to result: inout QuotaFetchResult) {
+            guard let main else { return }
+            result.week = UsageLimit(used: main.percent, limit: 100, resetsAt: resetsAt)
+            result.weekKey = main.key
+            result.weekLabel = main.label
+            result.extraLimits = extras.map {
+                NamedLimit(key: $0.key, limit: UsageLimit(used: $0.percent, limit: 100, resetsAt: resetsAt), label: $0.label)
+            }
+        }
+    }
+
+    private func fetchConnectLimits(membershipType: String?) async -> CycleLimits? {
         do {
             let (data, http) = try await CursorAPIHelpers.connectRequest(
                 path: "/aiserver.v1.DashboardService/GetCurrentPeriodUsage",
@@ -52,12 +97,11 @@ struct CursorQuotaClient {
                 return nil
             }
             guard let planUsage = root["planUsage"] as? [String: Any],
-                  let percent = CursorAPIHelpers.parsePercent(from: planUsage) else {
+                  let usage = CursorPlanUsage.parse(planUsage, membershipType: membershipType) else {
                 Self.log.error("GetCurrentPeriodUsage missing usable planUsage")
                 return nil
             }
-            let resets = CursorAPIHelpers.parseTimestamp(root["billingCycleEnd"])
-            return QuotaFetchResult(week: UsageLimit(used: percent, limit: 100, resetsAt: resets))
+            return CycleLimits(usage, resetsAt: CursorAPIHelpers.parseTimestamp(root["billingCycleEnd"]))
         } catch {
             Self.log.error("GetCurrentPeriodUsage failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -81,28 +125,20 @@ struct CursorQuotaClient {
             let onDemandSpendUSD = CursorAPIHelpers.centsToUSD(
                 (individual?["onDemand"] as? [String: Any])?["used"]
             )
-            let resets = CursorAPIHelpers.parseTimestamp(root["billingCycleEnd"])
-            var week: UsageLimit?
+            let cycle = CycleLimits(
+                CursorPlanUsage.fromUsageSummary(root),
+                resetsAt: CursorAPIHelpers.parseTimestamp(root["billingCycleEnd"])
+            )
 
-            if let plan = individual?["plan"] as? [String: Any],
-               let percent = CursorAPIHelpers.parsePercent(from: plan) {
-                week = UsageLimit(used: percent, limit: 100, resetsAt: resets)
-            } else if let overall = individual?["overall"] as? [String: Any],
-                      let percent = CursorAPIHelpers.parsePercent(from: overall) {
-                week = UsageLimit(used: percent, limit: 100, resetsAt: resets)
-            } else if let team = root["teamUsage"] as? [String: Any],
-                      let pooled = team["pooled"] as? [String: Any],
-                      let percent = CursorAPIHelpers.parsePercent(from: pooled) {
-                week = UsageLimit(used: percent, limit: 100, resetsAt: resets)
-            }
-
-            guard week != nil || onDemandSpendUSD != nil else {
+            guard cycle.hasMainBar || onDemandSpendUSD != nil else {
                 Self.log.error("usage-summary missing usable quota fields")
                 return nil
             }
 
-            let tier = (root["membershipType"] as? String) ?? (root["subscriptionStatus"] as? String)
-            return UsageSummaryData(week: week, onDemandSpendUSD: onDemandSpendUSD, accountTier: tier?.capitalized)
+            let membershipType = root["membershipType"] as? String
+            let tier = membershipType ?? (root["subscriptionStatus"] as? String)
+            return UsageSummaryData(cycle: cycle, onDemandSpendUSD: onDemandSpendUSD, accountTier: tier?.capitalized,
+                                    membershipType: membershipType)
         } catch {
             Self.log.error("usage-summary failed: \(error.localizedDescription, privacy: .public)")
             return nil

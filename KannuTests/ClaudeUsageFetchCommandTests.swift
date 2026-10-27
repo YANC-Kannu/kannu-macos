@@ -5,6 +5,42 @@ import XCTest
 /// only a pinned test catches them. See docs/REGRESSIONS.md.
 final class ClaudeUsageFetchCommandTests: XCTestCase {
 
+    // MARK: - A cancelled refresh runs no further step
+
+    /// CodeRabbit on #96: app exit kills the probe, which then reads as failed, and on a press that
+    /// alone chose the interactive spawn — a child started after the exit cleanup had looked.
+    func testACancelledRefreshFinishesInsteadOfStartingAnotherStep() {
+        let afterKilledProbe = ClaudeUsageFetchCommand.step(afterProbe: .failed, manual: true)
+        XCTAssertEqual(afterKilledProbe, .interactiveFetch, "the path the guard has to stop")
+        XCTAssertEqual(ClaudeUsageFetchCommand.step(afterKilledProbe, cancelled: true, signedIn: false, fetched: false),
+                       .finish(.fetchFailed))
+        for next: ClaudeUsageFetchCommand.RefreshStep in [.probe, .interactiveFetch, .authStatus, .signIn] {
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: true, signedIn: true, fetched: false),
+                           .finish(.signInDidNotFinish), "after a sign-in, a cancel reads as one that did not finish")
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: true, signedIn: false, fetched: true),
+                           .finish(nil), "what was fetched before the cancel still counts")
+            XCTAssertEqual(ClaudeUsageFetchCommand.step(next, cancelled: false, signedIn: false, fetched: false), next,
+                           "not cancelled: the step runs")
+        }
+        XCTAssertEqual(ClaudeUsageFetchCommand.step(.finish(.noLimitsReturned), cancelled: true, signedIn: false, fetched: false),
+                       .finish(.noLimitsReturned), "a step already finishing keeps its status")
+    }
+
+    /// The worker applies that step before every step it runs, and a child that starts after a
+    /// cancel is stopped at once: app exit picks what to stop when it runs, before such a child
+    /// exists (REGRESSIONS entry 19). The worker is app-only, so its source is read.
+    func testTheRefreshWorkerHonoursACancelBeforeEveryStepAndChild() throws {
+        let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Kannu/managers/AgentStatus/ClaudeUsageRefresh.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("while true {\n            step = ClaudeUsageFetchCommand.step(step, cancelled: isCancelled, signedIn: signedIn, fetched: fetched)"),
+                      "run() no longer checks for a cancel before each step")
+        XCTAssertTrue(source.contains("guard !state.cancelled else { return false }"),
+                      "register(_:) accepts a child after the refresh was cancelled")
+        XCTAssertTrue(source.contains("if isCancelled { return false }"),
+                      "the interactive fetch starts its next attempt after a cancel")
+    }
+
     // MARK: - Regression 1: print-only flags kill the interactive session
 
     func testNoAttemptUsesAPrintOnlyFlag() {
@@ -33,11 +69,36 @@ final class ClaudeUsageFetchCommandTests: XCTestCase {
 
     // MARK: - Regression 2: the env var that silenced the fetch
 
-    func testEnvironmentIsPlainInheritance() {
+    func testEnvironmentIsPlainInheritanceForANormalLaunch() {
         // nil means "inherit", which is what the version that actually fetched did. Setting
         // CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC suppressed the /api/oauth/usage call itself.
-        XCTAssertNil(ClaudeUsageFetchCommand.environment(),
+        let launchd = ["HOME": "/Users/someone", "PATH": "/usr/bin:/bin", "TMPDIR": "/var/folders/x",
+                       "HTTPS_PROXY": "http://proxy:8080"]
+        XCTAssertNil(ClaudeUsageFetchCommand.environment(inheriting: launchd),
                      "The fetch must inherit the environment. Adding variables here broke it once.")
+    }
+
+    func testAUsersOwnLaunchdConfigurationIsKept() {
+        // An API key, a gateway or a cloud provider set with launchctl setenv is the user's own:
+        // Claude Code should use it, and the auth-status gate must see it to leave it alone.
+        let configured = ["HOME": "/Users/someone", "PATH": "/usr/bin:/bin",
+                          "ANTHROPIC_API_KEY": "sk-test", "CLAUDE_CODE_USE_BEDROCK": "1",
+                          "ANTHROPIC_BASE_URL": "https://gateway.example"]
+        XCTAssertNil(ClaudeUsageFetchCommand.environment(inheriting: configured))
+    }
+
+    func testAnAgentSessionsVariablesAreRemovedAndNothingIsAdded() {
+        // Measured 2026-10-18: inherited from an agent session, these made the probe fetch for the
+        // agent's account and rewrite oauthAccount in ~/.claude.json.
+        let agent = ["HOME": "/Users/someone", "PATH": "/usr/bin:/bin", "HTTPS_PROXY": "http://proxy:8080",
+                     "ANTHROPIC_BASE_URL": "http://127.0.0.1:1", "CLAUDE_CODE_ACCOUNT_UUID": "a",
+                     "CLAUDE_CODE_ORGANIZATION_UUID": "o", "CLAUDE_CODE_OAUTH_SCOPES": "user:inference",
+                     "CLAUDECODE": "1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"]
+        let child = ClaudeUsageFetchCommand.environment(inheriting: agent)
+        XCTAssertEqual(child, ["HOME": "/Users/someone", "PATH": "/usr/bin:/bin",
+                               "HTTPS_PROXY": "http://proxy:8080"])
+        XCTAssertTrue(Set((child ?? [:]).keys).isSubset(of: Set(agent.keys)), "Removing only, never adding.")
+        XCTAssertNil(child?["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"])
     }
 
     func testTheBreakingEnvironmentKeyIsRecordedAsForbidden() {
@@ -58,5 +119,318 @@ final class ClaudeUsageFetchCommandTests: XCTestCase {
         XCTAssertEqual(ClaudeUsageFetchCommand.attempts.count, 2)
         XCTAssertTrue(ClaudeUsageFetchCommand.attempts[0].contains("--settings"),
                       "The first attempt should try to suppress the device registration.")
+    }
+
+    // MARK: - The print probe
+
+    func testPrintProbeIsPinned() {
+        // Entry 8: every flag or variable added to a usage spawn needs a measured fetch to prove it.
+        // Both were measured to fetch on 2026-10-18; the hooks-off one left no status file behind.
+        XCTAssertEqual(ClaudeUsageFetchCommand.printProbeAttempts, [
+            ["--settings", #"{"disableAllHooks":true}"#, "-p", "/usage"],
+            ["-p", "/usage"]
+        ])
+        for probe in ClaudeUsageFetchCommand.printProbeAttempts {
+            XCTAssertFalse(ClaudeUsageFetchCommand.attempts.contains(probe),
+                           "The probe is its own command; the interactive attempts keep their guards.")
+        }
+    }
+
+    func testThePrintProbeNeedsAClaudeCodeThatHasIt() {
+        // Older, -p "/usage" could reach the model as a prompt: a billed turn per refresh.
+        XCTAssertTrue(ClaudeUsageFetchCommand.supportsPrintProbe(version: "2.1.263"))
+        XCTAssertTrue(ClaudeUsageFetchCommand.supportsPrintProbe(version: "2.1.295"))
+        XCTAssertTrue(ClaudeUsageFetchCommand.supportsPrintProbe(version: "2.2.0"))
+        XCTAssertFalse(ClaudeUsageFetchCommand.supportsPrintProbe(version: "2.1.262"))
+        XCTAssertFalse(ClaudeUsageFetchCommand.supportsPrintProbe(version: "2.0.99"))
+        XCTAssertFalse(ClaudeUsageFetchCommand.supportsPrintProbe(version: "0"))
+    }
+
+    func testSignInIsClaudeCodesOwnClaudeAISignIn() {
+        XCTAssertEqual(ClaudeUsageFetchCommand.signInArguments, ["auth", "login", "--claudeai"])
+        XCTAssertEqual(ClaudeUsageFetchCommand.authStatusArguments, ["auth", "status"])
+    }
+
+    private let signedInOutput = """
+    You are currently using your subscription to power your Claude Code usage
+    Current session: 78% used · resets 2:40am
+    Current week (all models): 41% used · resets Oct 21, 5:30am
+    Current week (Fable): 41% used · resets Oct 21, 5:30am
+    """
+
+    private let costOnlyOutput = """
+    Total cost:            $0.0000
+    Total duration (API):  0s
+    Total duration (wall): 4s
+    Usage:                 0 input, 0 output, 0 cache read, 0 cache write
+    """
+
+    func testPlanRowsAreRecognised() {
+        XCTAssertTrue(ClaudeUsageFetchCommand.outputHasPlanRows(signedInOutput))
+        XCTAssertFalse(ClaudeUsageFetchCommand.outputHasPlanRows(costOnlyOutput))
+        // Signed in with claude.ai but the fetch returned nothing: the scope case.
+        XCTAssertFalse(ClaudeUsageFetchCommand.outputHasPlanRows(
+            "You are currently using your subscription to power your Claude Code usage"))
+    }
+
+    func testAClaudeAISignInIsRecognisedWithOrWithoutLimits() {
+        XCTAssertTrue(ClaudeUsageFetchCommand.outputShowsClaudeAISignIn(signedInOutput))
+        XCTAssertTrue(ClaudeUsageFetchCommand.outputShowsClaudeAISignIn(
+            "You are currently using your overages to power your Claude Code usage."))
+        XCTAssertFalse(ClaudeUsageFetchCommand.outputShowsClaudeAISignIn(costOnlyOutput))
+    }
+
+    func testProbeClassification() {
+        typealias C = ClaudeUsageFetchCommand
+        // The stamp on disk is the proof, whatever was printed.
+        XCTAssertEqual(C.classifyProbe(exitStatus: 0, timedOut: false, fetchStampAdvanced: true, output: ""), .fetched)
+        // Rows without an advance: Claude Code's own write throttle kept a cache this recent.
+        XCTAssertEqual(C.classifyProbe(exitStatus: 0, timedOut: false, fetchStampAdvanced: false,
+                                       output: signedInOutput), .fetched)
+        // Measured 2026-10-18 from a clean environment: exit 0, only the cost summary.
+        XCTAssertEqual(C.classifyProbe(exitStatus: 0, timedOut: false, fetchStampAdvanced: false,
+                                       output: costOnlyOutput), .noPlanData(signedInToClaudeAI: false))
+        // Signed in, nothing came back: not a missing sign-in.
+        XCTAssertEqual(C.classifyProbe(exitStatus: 0, timedOut: false, fetchStampAdvanced: false,
+                                       output: "You are currently using your subscription to power your Claude Code usage"),
+                       .noPlanData(signedInToClaudeAI: true))
+        XCTAssertEqual(C.classifyProbe(exitStatus: 1, timedOut: false, fetchStampAdvanced: false,
+                                       output: costOnlyOutput), .failed)
+        XCTAssertEqual(C.classifyProbe(exitStatus: nil, timedOut: true, fetchStampAdvanced: false,
+                                       output: signedInOutput), .failed)
+        XCTAssertEqual(C.classifyProbe(exitStatus: nil, timedOut: false, fetchStampAdvanced: false, output: ""), .failed)
+    }
+
+    // MARK: - Whether Refresh may start a sign-in
+
+    func testAuthStatusParsesOnlyWhatItNeeds() {
+        let signedOut = """
+        {
+          "loggedIn": false,
+          "authMethod": "none",
+          "apiProvider": "firstParty",
+          "configDirectory": "/Users/someone/.claude"
+        }
+        """
+        XCTAssertEqual(ClaudeUsageFetchCommand.parseAuthStatus(signedOut),
+                       .init(loggedIn: false, authMethod: "none", apiProvider: "firstParty"))
+        // Terminal escape noise around the JSON is tolerated.
+        XCTAssertEqual(ClaudeUsageFetchCommand.parseAuthStatus("\u{1B}[?25l" + signedOut + "\n")?.authMethod, "none")
+        XCTAssertNil(ClaudeUsageFetchCommand.parseAuthStatus("Not logged in. Run claude auth login to authenticate."))
+        XCTAssertNil(ClaudeUsageFetchCommand.parseAuthStatus(#"{"loggedIn": "yes"}"#))
+    }
+
+    func testSignInStartsOnlyWhereItReplacesNothingTheUserChose() {
+        typealias C = ClaudeUsageFetchCommand
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: false, authMethod: "none", apiProvider: "firstParty")),
+                       .startSignIn)
+        // Signed in with claude.ai but without the scope the fetch needs: signing in again fixes it.
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: true, authMethod: "claude.ai", apiProvider: "firstParty")),
+                       .startSignIn)
+        // An API key, a key helper or a cloud provider must never be switched over by a Refresh.
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: true, authMethod: "api_key", apiProvider: "firstParty")),
+                       .otherSignInMethod)
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: true, authMethod: "api_key_helper", apiProvider: "firstParty")),
+                       .otherSignInMethod)
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: false, authMethod: "none", apiProvider: "gateway")),
+                       .otherSignInMethod)
+        XCTAssertEqual(C.signInDecision(for: .init(loggedIn: true, authMethod: "none", apiProvider: "bedrock")),
+                       .otherSignInMethod)
+        XCTAssertEqual(C.signInDecision(for: nil), .unknown)
+    }
+
+    // MARK: - The refresh, as steps
+
+    func testFirstStep() {
+        typealias C = ClaudeUsageFetchCommand
+        XCTAssertEqual(C.firstStep(binaryVersion: "2.1.295", manual: false), .probe)
+        XCTAssertEqual(C.firstStep(binaryVersion: "2.1.295", manual: true), .probe)
+        // Too old for the probe: the interactive spawn types blind, so never unattended.
+        XCTAssertEqual(C.firstStep(binaryVersion: "2.0.1", manual: true), .interactiveFetch)
+        XCTAssertEqual(C.firstStep(binaryVersion: "2.0.1", manual: false), .finish(nil))
+    }
+
+    func testAfterTheProbe() {
+        typealias C = ClaudeUsageFetchCommand
+        for manual in [true, false] {
+            XCTAssertEqual(C.step(afterProbe: .fetched, manual: manual), .finish(nil))
+            XCTAssertEqual(C.step(afterProbe: .noPlanData(signedInToClaudeAI: false), manual: manual), .authStatus)
+            // A working claude.ai sign-in is never signed in over: that can move Claude Code to
+            // another organization.
+            XCTAssertEqual(C.step(afterProbe: .noPlanData(signedInToClaudeAI: true), manual: manual),
+                           .finish(.noLimitsReturned))
+        }
+        XCTAssertEqual(C.step(afterProbe: .failed, manual: true), .interactiveFetch)
+        XCTAssertEqual(C.step(afterProbe: .failed, manual: false), .finish(.fetchFailed),
+                       "the automatic refresh never reaches the interactive spawn")
+    }
+
+    func testAfterASignInThereIsNoSecondOne() {
+        typealias C = ClaudeUsageFetchCommand
+        XCTAssertEqual(C.step(afterProbe: .fetched, manual: true, afterSignIn: true), .finish(nil))
+        XCTAssertEqual(C.step(afterProbe: .noPlanData(signedInToClaudeAI: false), manual: true, afterSignIn: true),
+                       .finish(.signInDidNotFinish))
+        XCTAssertEqual(C.step(afterProbe: .failed, manual: true, afterSignIn: true), .finish(.signInDidNotFinish))
+        XCTAssertEqual(C.step(afterSignIn: true), .probe)
+        XCTAssertEqual(C.step(afterSignIn: false), .finish(.signInDidNotFinish))
+    }
+
+    func testTheBrowserOpensOnlyOnAPress() {
+        typealias C = ClaudeUsageFetchCommand
+        XCTAssertEqual(C.step(afterAuth: .startSignIn, manual: true), .signIn)
+        XCTAssertEqual(C.step(afterAuth: .startSignIn, manual: false), .finish(.signInNeeded))
+        for manual in [true, false] {
+            XCTAssertEqual(C.step(afterAuth: .otherSignInMethod, manual: manual), .finish(.otherSignInMethod))
+            XCTAssertEqual(C.step(afterAuth: .unknown, manual: manual), .finish(.signInUnchecked))
+        }
+        XCTAssertEqual(C.step(afterInteractiveFetch: true), .finish(nil))
+        XCTAssertEqual(C.step(afterInteractiveFetch: false), .finish(.fetchFailed))
+    }
+
+    func testTheAutomaticRefreshOnlySurfacesAMissingSignIn() {
+        typealias C = ClaudeUsageFetchCommand
+        let all: [ClaudeRefreshStatus] = [.signingIn, .signInNeeded, .signInDidNotFinish, .noLimitsReturned,
+                                          .signInUnchecked, .otherSignInMethod, .notInstalled, .fetchFailed]
+        for status in all {
+            XCTAssertEqual(C.presentation(of: status, manual: true).shown, status)
+            XCTAssertEqual(C.presentation(of: status, manual: false).shown, status == .signInNeeded ? status : nil,
+                           "\(status) must not become a permanent line nobody asked for")
+            XCTAssertEqual(C.presentation(of: status, manual: true).holdsAutomaticRefresh, status.holdsAutomaticRefresh)
+        }
+        XCTAssertEqual(C.presentation(of: nil, manual: false).shown, nil)
+        XCTAssertFalse(C.presentation(of: nil, manual: false).holdsAutomaticRefresh)
+        // Worth retrying on the automatic cadence; the rest only find the same thing again.
+        XCTAssertFalse(ClaudeRefreshStatus.fetchFailed.holdsAutomaticRefresh)
+        XCTAssertFalse(ClaudeRefreshStatus.notInstalled.holdsAutomaticRefresh)
+        XCTAssertFalse(ClaudeRefreshStatus.noLimitsReturned.holdsAutomaticRefresh)
+        XCTAssertTrue(ClaudeRefreshStatus.signInNeeded.holdsAutomaticRefresh)
+        XCTAssertTrue(ClaudeRefreshStatus.otherSignInMethod.holdsAutomaticRefresh)
+    }
+
+    func testAFresherCacheSettlesASignInStatus() {
+        typealias C = ClaudeUsageFetchCommand
+        let set = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(C.freshCacheSettles(.signInNeeded, setAt: set, cacheObservedAt: set.addingTimeInterval(1)))
+        XCTAssertTrue(C.freshCacheSettles(.otherSignInMethod, setAt: set, cacheObservedAt: set.addingTimeInterval(1)))
+        XCTAssertFalse(C.freshCacheSettles(.signInNeeded, setAt: set, cacheObservedAt: set))
+        XCTAssertFalse(C.freshCacheSettles(.fetchFailed, setAt: set, cacheObservedAt: set.addingTimeInterval(1)))
+        XCTAssertFalse(C.freshCacheSettles(nil, setAt: set, cacheObservedAt: set.addingTimeInterval(1)))
+        XCTAssertFalse(C.freshCacheSettles(.signInNeeded, setAt: set, cacheObservedAt: nil))
+    }
+
+    func testTheProbesOwnHookFileIsRecognisedByItsTranscript() {
+        // Measured: run from /, the hook strips the trailing slash and writes no cwd at all.
+        XCTAssertTrue(ClaudeUsageFetchCommand.isProbeHookFile(json: [
+            "state": "idle", "hook_event": "SessionStart",
+            "transcript_path": "/Users/someone/.claude/projects/-/0b6c.jsonl"]))
+        XCTAssertFalse(ClaudeUsageFetchCommand.isProbeHookFile(json: [
+            "cwd": "/Users/someone/project",
+            "transcript_path": "/Users/someone/.claude/projects/-Users-someone-project/0b6c.jsonl"]))
+        XCTAssertFalse(ClaudeUsageFetchCommand.isProbeHookFile(json: ["cwd": "/"]))
+    }
+
+    func testTerminalScriptQuotesTheBinaryPath() {
+        let script = ClaudeUsageFetchCommand.terminalSignInScript(
+            binary: URL(fileURLWithPath: "/Users/o'brien/Library/Application Support/Claude/claude"))
+        XCTAssertTrue(script.hasPrefix("#!/bin/zsh\n"))
+        XCTAssertTrue(script.contains(#"'/Users/o'\''brien/Library/Application Support/Claude/claude' auth login --claudeai"#),
+                      script)
+    }
+}
+
+final class ClaudeCodeBinaryTests: XCTestCase {
+    private var home: URL!
+
+    override func setUpWithError() throws {
+        home = FileManager.default.temporaryDirectory.appendingPathComponent("kannu-binary-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: home)
+    }
+
+    @discardableResult
+    private func executable(_ relative: String, executable: Bool = true) throws -> URL {
+        let url = home.appendingPathComponent(relative)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("#!/bin/sh\n".utf8).write(to: url)
+        try FileManager.default.setAttributes([.posixPermissions: executable ? 0o755 : 0o644], ofItemAtPath: url.path)
+        return url
+    }
+
+    private func terminalInstall(_ version: String) throws {
+        let target = try executable(".local/share/claude/versions/\(version)")
+        let link = home.appendingPathComponent(".local/bin/claude")
+        try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+    }
+
+    private let desktop = "Library/Application Support/Claude/claude-code"
+    private let app = "claude.app/Contents/MacOS/claude"
+
+    func testTheCurrentDesktopLayoutIsFound() throws {
+        // Desktop moved to <version>/<build>/claude.app in October 2026; the old lookup expected
+        // <version>/claude.app, found nothing, and Refresh silently re-read disk instead.
+        try executable("\(desktop)/2.1.286/f2326db61802/\(app)")
+        let newest = try executable("\(desktop)/2.1.295/9d6405864fdc/\(app)")
+        XCTAssertEqual(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true })?.url.resolvingSymlinksInPath().path, newest.resolvingSymlinksInPath().path)
+        XCTAssertEqual(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true })?.version, "2.1.295")
+    }
+
+    func testTheLegacyFlatLayoutStillCounts() throws {
+        try executable("\(desktop)/2.1.295/9d6405864fdc/\(app)")
+        let legacy = try executable("\(desktop)/2.1.300/\(app)")
+        XCTAssertEqual(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true })?.url.resolvingSymlinksInPath().path, legacy.resolvingSymlinksInPath().path)
+    }
+
+    func testTheNewestVersionWinsWhereverItLives() throws {
+        try executable("\(desktop)/2.1.295/9d6405864fdc/\(app)")
+        // The terminal copy only updates when `claude` runs, so it is usually the older one.
+        try terminalInstall("2.1.263")
+        XCTAssertEqual(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true })?.version, "2.1.295")
+        try FileManager.default.removeItem(at: home.appendingPathComponent(".local"))
+        try terminalInstall("2.2.0")
+        XCTAssertEqual(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true })?.version, "2.2.0")
+    }
+
+    func testVersionsCompareNumerically() {
+        let older = ClaudeCodeBinary.Candidate(url: URL(fileURLWithPath: "/a"), version: "2.1.99")
+        let newer = ClaudeCodeBinary.Candidate(url: URL(fileURLWithPath: "/b"), version: "2.1.100")
+        XCTAssertEqual(ClaudeCodeBinary.newest([newer, older]), newer)
+        XCTAssertEqual(ClaudeCodeBinary.newest([older, newer]), newer)
+        // A tie keeps the earlier candidate: Desktop's copy is listed first.
+        let twin = ClaudeCodeBinary.Candidate(url: URL(fileURLWithPath: "/c"), version: "2.1.100")
+        XCTAssertEqual(ClaudeCodeBinary.newest([newer, twin]), newer)
+        XCTAssertNil(ClaudeCodeBinary.newest([]))
+    }
+
+    func testOnlyTrustedBinariesAreConsidered() throws {
+        // A higher version Kannu cannot verify as Anthropic's never wins: it would run with
+        // Kannu's privacy permissions.
+        let signed = try executable("\(desktop)/2.1.295/9d6405864fdc/\(app)")
+        try terminalInstall("2.9.0")
+        let resolved = ClaudeCodeBinary.resolve(home: home, linkedPaths: [],
+                                                isTrusted: { $0.resolvingSymlinksInPath().path == signed.resolvingSymlinksInPath().path })
+        XCTAssertEqual(resolved?.version, "2.1.295")
+        XCTAssertNil(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in false }))
+    }
+
+    func testALinkedCaskInstallIsACandidateWithItsVersion() throws {
+        // A Homebrew cask links /opt/homebrew/bin/claude into Caskroom/claude-code/<version>/.
+        let target = try executable("Caskroom/claude-code/2.1.300/claude")
+        let link = home.appendingPathComponent("bin/claude")
+        try FileManager.default.createDirectory(at: link.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+        let resolved = ClaudeCodeBinary.resolve(home: home, linkedPaths: [link.path], isTrusted: { _ in true })
+        XCTAssertEqual(resolved?.version, "2.1.300")
+        // A link Kannu cannot place gets the lowest version, which also keeps it off the probe.
+        XCTAssertEqual(ClaudeCodeBinary.linkedCandidate(try executable("bin/other"))?.version, "0")
+    }
+
+    func testNonVersionFoldersAndNonExecutablesAreIgnored() throws {
+        try executable("\(desktop)/tmp/abc/\(app)")
+        try executable("\(desktop)/2.1.400/abc/\(app)", executable: false)
+        XCTAssertNil(ClaudeCodeBinary.resolve(home: home, linkedPaths: [], isTrusted: { _ in true }))
     }
 }

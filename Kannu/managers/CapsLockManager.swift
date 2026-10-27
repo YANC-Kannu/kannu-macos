@@ -30,13 +30,25 @@ class CapsLockManager: ObservableObject {
     
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
+    private var timerObserver: AnyCancellable?
     private let coordinator = KannuViewCoordinator.shared
     private let capsLockAnimation = Animation.spring(response: 0.32, dampingFraction: 0.85)
-    
+
     private init() {
         // Get initial state
         isCapsLockActive = NSEvent.modifierFlags.contains(.capsLock)
-        
+
+        // A timer that starts while Caps Lock is on takes the closed notch back: the indicator
+        // that waits for Caps Lock to be released ends. Only the current value is read, so a
+        // replace that coalesces into "no change" changes nothing here.
+        timerObserver = TimerManager.shared.$isTimerActive
+            .removeDuplicates()
+            .filter { $0 }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.endHeldIndicatorForTimer()
+            }
+
         // Monitor flag changes when app is focused
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
             self?.handleFlagsChanged(event)
@@ -77,11 +89,12 @@ class CapsLockManager: ObservableObject {
         guard Defaults[.enableCapsLockIndicator] else { return }
         
         if newState {
-            // Show inline indicator
+            // Show inline indicator: until Caps Lock is released, or only for the usual HUD time
+            // while a running timer holds the closed notch.
             coordinator.toggleSneakPeek(
                 status: true,
                 type: .capsLock,
-                duration: .infinity, // Stay visible until deactivated
+                duration: timerHoldsClosedNotch ? Self.flashDuration : .infinity,
                 value: 1.0,
                 icon: ""
             )
@@ -95,5 +108,20 @@ class CapsLockManager: ObservableObject {
                 icon: ""
             )
         }
+    }
+
+    /// How long Caps Lock shows while a timer holds the notch: `toggleSneakPeek`'s HUD default.
+    static let flashDuration: TimeInterval = 1.5
+
+    /// A running timer holds the closed notch (`ContentView.timerOwnsClosedNotch`), so Caps Lock
+    /// flashes instead of hiding the timer until it is released.
+    private var timerHoldsClosedNotch: Bool {
+        TimerManager.shared.isTimerActive && coordinator.timerLiveActivityEnabled
+    }
+
+    private func endHeldIndicatorForTimer() {
+        guard isCapsLockActive, Defaults[.enableCapsLockIndicator], coordinator.timerLiveActivityEnabled,
+              coordinator.sneakPeek.show, coordinator.sneakPeek.type == .capsLock else { return }
+        coordinator.toggleSneakPeek(status: false, type: .capsLock, duration: 0, value: 0, icon: "")
     }
 }

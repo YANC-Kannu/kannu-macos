@@ -143,6 +143,76 @@ older hooks keep their category and wording, never re-graded after the fact. Gua
 `HookScriptTests.testAKeychainLookupIsNotAPasswordRead` (fails 4 times against v42),
 `SensitivePathSightingTests`.
 
+**v44 addendum — two new events, one new turn key.** `SubagentStart` and `SubagentStop` join the
+Claude table. They arrive through the version migration, which reinstalls any provider whose script
+is behind. `claudeCoreInstalledEvents` is unchanged, so an older install still reports installed
+and upgrades itself.
+
+The turn carries `turn_bg_agents` (entry 5, 2026-10-04 addendum). Two rules:
+- A new turn key goes into `TURN_KEYS`, or the write path never clears it and a stale value
+  outlives its turn.
+- Nothing from `background_tasks` but a count is written.
+
+**v45 addendum — other hosts read Kannu's Claude file.** Cursor runs `~/.claude/settings.json` as a
+"third-party config" (seen in Cursor's own hook log on 2026-09-10), and VS Code does too with
+`chat.useClaudeHooks` on. Cursor sent its chats through the Claude hook, which filed them as Claude
+sessions. VS Code ignores matchers, so it ran the `gated` group for every tool and turned each one
+yellow. Rules:
+- A payload with `cursor_version` is only ever filed by Kannu's Cursor hook. Any other provider writes
+  nothing, and still gives its usual answer, the policy deny included: Cursor maps a Claude
+  `permissionDecision` to its own `permission` (cursor.com/docs/reference/third-party-hooks), so the
+  skip goes after the policy check, never before it. The first v45 draft skipped first and allowed
+  what an enforced rule had refused under v44. So a Cursor chat is tracked, and its secret,
+  hidden-text and sensitive-file sightings recorded, only when Kannu's Cursor hook is installed.
+- A matcher key in the script holds only for the tools its group names.
+- A label is never written as a chat's name where a log title exists. The hook's name outranks
+  `ai-title` on the card (entry 5), so "Quota exceeded" is Antigravity's only.
+- One thing the user typed is one sighting. Claude fires `UserPromptSubmit` and then
+  `UserPromptExpansion` for a slash command, both with the typed `prompt`; the second look
+  (`SEC_RECHECK_EVENTS`) adds a sighting not yet on disk, never a count.
+
+Cursor's permission hooks answer the documented `{"permission":"allow"}`, with no `continue`; the
+deny shape is unchanged. The Cursor table gains `sessionEnd`, `subagentStart` and `subagentStop`.
+The installed check now reads a fixed `cursorCoreInstalledEvents`, as Claude's always has (entry 6).
+Both tables moved into `AgentHookLayout`, so the logic target pins them. Cursor fires its subagent
+events in the parent's conversation, so they go to a file of the subagent's own (`subagent_id`, with
+`parent_id`). A `subagentStop` without an id writes nothing: in the parent's file it would have
+shown a running chat as finished. Cursor's documented `subagentStop` carries no id, so today a Cursor
+subagent's file stays `thinking` until the stale cap. That leftover never outranks a chat that is
+working or waiting, the fold ignores it once the chat's turn ends, and only Claude files outlive the
+cap. Guards: the `HookScriptTests` v45
+group, run again under `/usr/bin/python3` 3.9, and the v45 cases in `AgentHookLayoutTests`.
+
+**v46 addendum — Antigravity's hooks, from its docs only.** Antigravity changed its hooks.json:
+the top level maps a hook's name to its configuration, only `PreToolUse` and `PostToolUse` take
+matcher groups, and `UserPromptSubmit` is not an event. Since 2.6.0 it rejects a configuration that
+can never run instead of ignoring it. Kannu's v45 file was Claude-shaped, so Antigravity read it as a
+hook named "hooks" with no runnable handler. Kannu now writes one `kannu-agent-status` entry to
+`~/.gemini/config/hooks.json`, the one global file the docs list. `AgentHookLayout` gives Antigravity's
+files the `.namedHooks` shape. The two files an older Kannu also wrote are `.stripOnly`: install and
+uninstall remove Kannu's entries from them, old shape and new, and never write there (entry 6).
+The script reads `toolCall.name`/`toolCall.args`, `transcriptPath` and `fullyIdle`. `PreToolUse` and
+`Stop` answer `{"decision":"allow"}`, because the docs mark `decision` required on both. `allow`
+defers to the next hook or the default policy. Every other event answers `{}`. Rules:
+- The Antigravity deny (`{"decision":"deny","reason":…}`) widens `POLICY_DENY_EVENTS` on the docs
+  alone. That breaks the v42 rule "only after a live check". The deny is the documented one, and the
+  host now requires a decision on every call anyway. Run a live check before widening it further.
+  A change to `POLICY_DENY_EVENTS` changes what the user opts into, so the **Block matching tool
+  calls** row, the `enforceAgentPolicy` doc comment and `docs/ADR.md` section 9 must name the same
+  hosts. The first v46 draft widened the table and left the row saying only Claude Code and Cursor
+  refuse (caught in review). Guard: `ADRDocsTests.testEveryHostThatCanRefuseIsNamedWhereTheUserOptsIn`
+  reads the mirror's table and the three texts from the source tree.
+- Antigravity has no prompt event, so a turn starts at the first model call of a run
+  (`PreInvocation` with `invocationNum` 0, never `false`). A `Stop` with `fullyIdle: false` and no
+  error keeps the light green and the turn open.
+- The installed check reads the fixed `antigravityCoreInstalledEvents`, as Claude's and Cursor's do.
+  A v45 file fails it and upgrades through the version migration, which is gated on the script.
+  `migrateAntigravityHookShapeIfNeeded` catches an old group left beside a current script.
+
+Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9, and the v46 cases
+in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
+changelog. None of it has run against a real Antigravity.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call
@@ -274,6 +344,58 @@ highest-value missing test in the repo** — five regressions, no coverage.
    newest title record beyond the 1 MiB window; the name fell back to an older title or the prompt.
    The last title a tail window found now sticks (`AgentSessionLogParserTests.testTheTitleSticksWhenALongTurnPushesItPastTheTailWindows`,
    verified to fail when the sticky title is removed).
+
+**2026-10-04 addendum — a finished turn is not a finished chat while its agents run.** The
+09-11 fold rule above ("nothing once it has ended") hid real work. A turn that ends with background
+agents or a workflow still running looks finished in Claude, yet Claude Code goes on working, and
+the user's tokens go on being spent, while Kannu showed the chat red. Claude Code says so itself,
+in two places:
+- **The Stop hook's `background_tasks`** lists the work still in flight.
+- **Its session record** (`~/.claude/sessions/<pid>.json`) says `busy` until the last agent or
+  workflow finishes, then `idle`. In the 2.1.281 binary, `busy` is `isLoading || delegatedActive`,
+  and the SDK schema calls `idle` the "authoritative turn-over signal".
+
+Hook v44 counts the agents and workflows at the Stop into the ended turn (`turn_bg_agents`). It
+writes the count only: a task's description and command are free text and never reach the file.
+The chat is background work (`isClaudeBackgroundWork`) while that count is above zero **and** the
+record says the work goes on. Then:
+- the chat stays lit;
+- its subagents' lights count again, so a background agent waiting on permission shows yellow;
+- its clock ticks from the user's prompt;
+- its file outlives the stale cap.
+
+Neither signal alone is enough: the count is a snapshot, and `busy` also covers the moment before
+Claude writes `idle`. A fresh `idle` counts for 3 s, so the chat does not flash finished between an
+agent ending and Claude waking to read its result, and the monitor rescans when that grace ends.
+
+v44 also hooks `SubagentStart`/`SubagentStop`. A finished agent's own file now says `stopped`
+instead of `thinking` until the stale cap, which was the leftover this entry's rule was written
+against.
+
+**The rule now:** a leftover subagent file never relights a finished chat; Claude's own word that
+agents are still running does.
+
+Guards: `BackgroundWorkTests` (the reconciler arm, the fold, the clock, the stale cap and the
+parse), and `HookScriptTests.testAStopCountsTheAgentsItLeavesRunningAndNothingElse` with its
+siblings.
+
+**2026-10-18 addendum: a source moved and nothing failed.** Cursor 3.x moved composer headers out
+of the `ItemTable` key `composer.composerHeaders` and into a `composerHeaders` table. On Cursor
+3.19.19 the key has 0 rows. `CursorComposerStore` read only the key, so the composer-metadata
+source went empty with no error. Names fell back to glass and transcript titles, and every id went
+to the workspace-database scan. The real name was on disk and never read. `CursorComposerStore`
+now reads the table by primary key and keeps the key as a fallback; `CursorComposerStoreTests`
+covers both layouts. When a provider updates, check the store's schema (read-only, schema and
+key names only) before assuming a name source still exists.
+
+The same change first re-broke the merge seam. A 3.19 header has no `status`, and its
+`lastUpdatedAt` can move with no agent activity (1 of the 25 newest chats on this Mac: 178 s
+ahead of its `composerData`). The merge kept whichever whole record was newer, so that header
+replaced `composerData` and the chat lost its status. Caught in review, before merge. Rule: a
+header is a name and a backing record, never a status or an activity time; `composerData` keeps
+its own and the header fills only what it lacks (`CursorComposerStore.combine`). Guard:
+`CursorComposerStoreTests.testANewerHeaderKeepsComposerDataStatusAndActivity`, checked to fail
+with the old merge.
 
 ---
 
@@ -418,6 +540,51 @@ environment whitelist as data, `ADRDetectionCommandTests` pins both, and the emb
 tested identical to `scripts/adr-analyze-session.py`. Permission and tool flags never pass
 through Kannu — the adapter alone decides how upstream runs its Claude session.
 
+**2026-10-18 addendum — a third silent failure, and the print probe.** From 2026-10-02 Refresh ran
+nothing at all: Claude Desktop moved its bundled CLI from `claude-code/<version>/claude.app` to
+`claude-code/<version>/<build>/claude.app`, `resolveClaudeBinary` found no binary, and the button
+quietly re-read disk. Same signature as the first two — no error, a spinner, an unmoved
+`fetchedAtMs` — and nothing logged that it had happened. `ClaudeCodeBinary` now reads both layouts,
+`~/.local/bin/claude` and a Homebrew cask's link, picks the highest version among binaries signed by
+Anthropic (Developer ID, team Q6L2SF6YDW, identifier `com.anthropic.claude-code` — a child inherits
+Kannu's privacy permissions, and these folders are writable by any process of the user's), and
+every refresh step is logged at `notice` (category `ClaudeUsage`: step, Claude Code version,
+outcome, seconds — never the output or a path), which `/usr/bin/log show` keeps.
+
+The refresh now runs `claude --settings '{"disableAllHooks":true}' -p "/usage"`
+(`ClaudeUsageFetchCommand.printProbeAttempts`), which needs no pty and no typed keystrokes; the bare
+`-p "/usage"` runs only if that fails outright. Measured on this Mac from a launchd-like clean
+environment (`env -i` with HOME, USER, PATH): both fetch (`fetchedAtMs` advanced, three plan rows),
+the hooks-off one in 2.8 s with no hook status file, the bare one leaving a SessionStart file that
+SessionEnd then deleted. Signed out, the probe exits 0 in 1 s with only the cost summary. The
+interactive pty spawn is reached only on a press — for a probe that fails outright or a Claude Code
+older than 2.1.263, the oldest read to carry the non-interactive `/usage` — because it types blind
+into a terminal session; its guards are unchanged.
+
+What the refresh does after the probe is `ClaudeUsageFetchCommand`'s steps, all pinned by tests: a
+probe that still shows a claude.ai sign-in ("You are currently using your subscription…") but no
+limits is never answered with a browser sign-in — that can move Claude Code to another
+organization; only a probe with no claude.ai sign-in leads to `claude auth status`, and only a
+press, never the automatic refresh, then starts `claude auth login --claudeai`. An API-key,
+key-helper, cloud-provider or gateway setup is never switched.
+
+**Inherited variables decide whose sign-in is used.** Run from inside a Claude Desktop agent
+session, the probe inherits that session's `ANTHROPIC_BASE_URL` (the desktop host's proxy) and its
+`CLAUDE_CODE_ACCOUNT_UUID` / `CLAUDE_CODE_ORGANIZATION_UUID`. Measured 2026-10-18 from such a
+process: with them the probe fetched; with them removed the same process found no sign-in of its
+own and fetched nothing. So the inherited proxy quietly substitutes the host session's credentials
+for Claude Code's. `ClaudeUsageFetchCommand.environment(inheriting:)` therefore drops the `CLAUDE*`
+and `ANTHROPIC*` namespaces **only when the inherited environment is an agent session's** (it
+carries `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT` or `CLAUDE_CODE_SESSION_ID`); every other launch,
+including a user's own `launchctl setenv` API key or gateway, is plain inheritance (nil), as before.
+It only ever removes; adding is still regression 2.
+
+Also measured, so nobody leans on them: `claude auth status` printed `loggedIn: false` in the same
+clean environment where `claude -p "/usage"` fetched plan rows; and `oauthAccount` in
+`~/.claude.json` flips between organizations — Claude Code's own run writes its token's, a
+desktop-hosted session's run the desktop's — so Kannu records Claude Code's organization itself,
+straight after its own fetch (`claudeCodeUsageOrganization`).
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -437,11 +604,33 @@ the type system or the build says so.
 
 **Guard — exists.** `.githooks/pre-commit` rejects any `.help(` in those directories, requires
 `HoverTooltip.swift` to keep a bare `.fixedSize()`, and rejects `fixedSize(horizontal:)` in that one
-file — not directory-wide; `AgentTrafficLightLiveActivity` uses it legitimately.
+file — not directory-wide; `AgentTrafficLightLiveActivity` uses it legitimately. No CI job runs the
+hook, so `TasksPopoverRulesTests.testNoNotchViewUsesHelp` runs the same `.help(` scan in CI.
 The layout rules that cannot be grepped — `edge` versus container clipping, one hover source per
 control — are written up in **docs/TOOLTIPS.md** with the reasoning and a checklist.
 
 **Gap:** none of this is unit-testable; a new tooltip still has to be hovered in a real build.
+
+**2026-10-09 addendum — both halves recurred, outside the scanned folders.** Asked to make every
+icon-only notch control show a tooltip (it started with the lyrics button), the inventory found
+the rule already broken twice more:
+
+- `TimerControlOverlay.ControlButton` used `.help(help)`. It lives in `Kannu/components/Timer/`,
+  which the hook's grep never scanned, so the `.help()` ban did not reach it. Its panel is fitted
+  to the button row, so no bubble can show there either: it now carries `accessibilityLabel:` only.
+- `TimerControlButton` (`NotchTimerView`) had the self-hovering `.hoverTooltip(_:edge:)` **and**
+  its own `.onHover` for the highlight — rule 3's two hover sources, written after rule 3 was.
+  It now drives the bubble from its one handler via `.hoverTooltip(_:edge:isHovering:)`.
+
+Most icon buttons had no tooltip at all, so VoiceOver read SF Symbol names. They all have one now,
+the text doubling as the accessibility label; shared buttons take `tooltip:`.
+
+**Guard — widened.** The hook's `.help(` grep covers eight folders (`Notch`, `AgentStatus`,
+`Music`, `Timer`, `Clipboard`, `Tabs`, `Shelf`, `Stats`). `KannuTests/NotchTooltipCoverageRulesTests`
+runs over the same eight with comments and strings stripped, and fails on a `.help(`, on a shared
+icon button called without `tooltip:`, and on an icon-only `Button` without `.hoverTooltip(` in its
+modifier chain (allowlist with reasons; planted offenders prove the scanner). Placement — `edge`,
+`alignment:`, clipping — is still only checkable by hovering a real build (docs/TOOLTIPS.md).
 
 ---
 
@@ -487,6 +676,29 @@ one consumer (`ContentView.noteAgentActivityPulse`, through the un-observed moni
 Views that render the session list observe the monitor directly, as leaves. Guard:
 `ClosedNotchObservationTests` pins the observer allowlist, the projection's single writer, and
 the single consume site.
+
+---
+
+**Addendum (2026-10-15) — the combined light is debounced, and activity alone no longer re-arms
+the reveal.** Two behaviours were tightened together, and both are deliberate:
+
+- `publishTrafficLight` now routes through `TrafficLightPersistenceGate`: a *calming* change
+  (leaving executing/thinking/awaitingInput, or `shouldShow` true → false) must persist 1 s
+  before it is published; everything that lights up still publishes at once (entry 12: yellow
+  follows evidence). A Stop immediately followed by a wake, or a short-lived helper session
+  whose red briefly outranks a working chat's green, therefore never reaches the projection. The
+  hold path re-evaluates by **rescanning at the deadline** — it must never publish a pair
+  captured when the hold was armed, because the state may have changed while it slept. `stop()`
+  cancels the hold and resets the gate.
+- `ContentView.noteAgentActivityPulse` re-arms the reveal windows only when the *published*
+  light pair changed. Re-arming on every non-heartbeat pulse meant every hook write of a green
+  chat (each moves `updatedAt`) held the island out for the whole run — the island never crawled
+  back during fullscreen video while a chat worked. The reveal is a glance at a change, not a
+  mirror of activity; the latch's heartbeat fast-path stays first and stays the single consumer.
+
+Guard: `TrafficLightPersistenceGateTests` (the pure rule), `TrafficLightGateRulesTests` (the
+wiring: gate consulted, hold rescans instead of publishing, stop resets, reveal re-arms only on
+a published change).
 
 ## 11. A passive source never does its I/O on the main actor
 
@@ -597,6 +809,34 @@ was reverted exactly as in the forced-refresh case above; the parameter doc's "n
 interleave" was true only for a caller that collects on main. It reads the counter on main first
 now, and the doc says `nil` is for main-thread callers only. Guards unchanged: the revert half by
 `BluetoothLiveBatteryWritesTests`, the spawn half by the manual `sample` check — still missing.
+
+**2026-10-04 addendum — the rescan itself is the I/O.** With three parallel agents, the user's
+Mac measured 4–13 full rescans a second on the main actor. Each one reads every hook file, session
+record and live transcript tail, and walks Claude Desktop's audit logs. Nothing in a rescan was on
+the main actor by mistake. There were simply too many rescans, and three causes produced them:
+- **Folder depth.** FSEvents on `~/.claude/projects` is recursive, so every subagent message,
+  tool-output spill and workflow script inside a session's folder cost a full rescan. Kannu reads
+  none of them.
+- **Double watching.** The hook status folder was watched twice: kqueue for a quick rescan, and
+  FSEvents for a full one, for the same write.
+- **The debounce.** It re-armed on every event, so a steady storm postponed the light rather than
+  bounding the work.
+
+The fix:
+- `AgentWatchEvents.worthARescan` drops files three or more levels under the Claude root, and
+  per-file writes in the status folder. Lost-event flags always count.
+- `AgentRescanPacing` keeps rescans at least 0.3 s (hook-only) or 0.5 s (full) apart, and a request
+  never postpones the pending one.
+- The Desktop audit-log listing is cached for 2 s and dropped when a log is added, removed or
+  renamed.
+
+Trap found on the way: a cached `URL` keeps the resource values it has read. Handing the same
+instances back made a grown log report its old size, and the parse cache never saw it change
+(`ClaudeDesktopAgentSessionStoreTests.testParsedLogsAreCachedButInvalidateWhenTheFileGrows`
+caught it). Return fresh `URL`s from any listing cache.
+
+Guards: `RescanStormTests`, including a simulated 20 ms write storm that must keep rescanning,
+boundedly. The memory half of the same report was the usage aggregator, fixed on its own branch.
 
 ---
 
@@ -858,6 +1098,12 @@ triggers, and that the repair re-adds rather than re-orders). End to end with th
 log must read "Put 1 notch window(s) back on N spaces after space change" and the window must be back
 on every space.
 
+**2026-10-22 — superseded for the notch by entry 20.** The notch no longer belongs on every space:
+it lives only in Kannu's notch space, and the repair decides from WindowServer's membership, not
+`isOnActiveSpace`. The rule above, its guard (`testOnlyAStrandedNotchIsPutBack`) and its manual check
+now describe the clipboard panel only. For the notch, read entry 20; its `--kannu-strand-notch`
+check replaces the one above.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -991,6 +1237,95 @@ frameworks only.
 
 ---
 
+## 20. The notch lives only in Kannu's space
+
+(Numbered 20 although the ledger already holds two entries numbered 19.)
+
+**Rule:** every notch window is a member of Kannu's notch space (`NotchSpaceManager`, absolute
+level Int32.max) and of **no other space**. Membership is read back from WindowServer
+(`CGSSpace.spaceIDs(of:)`, mask 0xF) and repaired by `ClosedNotchVisibility.notchSpaceRepair`,
+never inferred from `NSWindow.isOnActiveSpace`, which is false by design for a window that lives
+only in the notch space. A window is never taken off a space before the notch space is confirmed to
+hold it, and one the notch space is not showing goes back on every managed space: seen beats still.
+
+**Broken twice.**
+- `9539db5` (the squashed import, 2026-09-03) already gated the notch-space membership on "Never
+  hide", so on the default options the notch was on `.canJoinAllSpaces` alone and slid with every
+  Space switch: "detaches from the notch and re attaches in the next window". Fixed by `827396c`
+  (2026-10-22), which put every notch window in the notch space.
+- `1b3ad40` (2026-09-30) added the stranded-notch repair, deciding on `isOnActiveSpace`. For a
+  window in the notch space that is always false, so at the first space switch after every launch
+  the repair put the notch back on every desktop and fullscreen space (logged 20:29:53 and 20:40:33
+  on 2026-10-22, and for "Never hide" users since 2026-09-30). While it was a member of those
+  spaces, David saw the music wings close and come back in the next space and an empty notch inside
+  Mission Control's space previews; no media, now-playing or fullscreen state changed at those
+  switches (log correlation, 2026-10-22). macOS also added it to a newly created fullscreen space
+  on its own.
+
+**Why it keeps happening:** space membership is invisible from inside the app. The window is
+ordered in, opaque and correctly placed whichever spaces it is in, and AppKit's one signal,
+`isOnActiveSpace`, reads the healthy state as broken. Each fix was verified against window state
+that the next problem did not change. The only reliable reading is WindowServer's own
+(`CGSCopySpacesForWindows`); an external probe built on it (window number, layer, sharing state,
+spaces with masks 7 and 0xF) answered every question this entry raised.
+
+**Guard — partial.** `ClosedNotchVisibilityTests` pins the decision with the measured memberships
+(nine managed spaces plus 745, a tile sub-space, the healthy state, a window outside the notch
+space, an unseen notch, the state right after a fallback, the lock). `ClosedNotchVisibilityRulesTests`
+pins that the repair asks it, joins before it strips, checks the window is still on screen after
+each strip, keeps the managed-space fallback for an unseen notch and a refused join, and no longer uses `isOnActiveSpace` or empties the
+notch space. `NotchSpaceMembershipTests` pins the pin at creation and after a reposition. Checked by eye on the
+installed build by David on 2026-10-22: swiping between spaces keeps the notch and its music wings
+still, and Mission Control's previews show no notch. A probe at the same time read the notch window
+on screen in the notch space alone. On 2026-10-23 he also checked that right-click menus, a popover
+and an alert opened over the open notch all draw above it; the risk was that a space shown above
+every window level would cover them, which `ModalPresenter`'s level raise (entry 14) could not beat.
+Missing: what Mission Control and the swipe transition draw is checked by eye on the installed
+build, since nothing automated can see it, and so is the menu and alert order; and because the window keeps
+`.canJoinAllSpaces`, a space macOS creates gets a copy of the notch until the first repair after
+switching into it (dropping the flag is a separate, reviewed change). `--kannu-strand-notch` (DEBUG; launch with `open -n Kannu.app --args --kannu-strand-notch`)
+takes the notch out of the notch space and onto the current space; the NotchSpaces log must show
+one `Pinned notch window … joinNotchSpace` line and the probe must read the notch space alone.
+
+---
+
+## 21. A scroll inside a tab's content belongs to the content, not the close gesture
+
+**Rule:** a view of the open notch whose content scrolls vertically (a list, a note's text) is
+marked `.ownsVerticalScroll()` (`VerticalScrollOwnership`), and the notch's scroll monitor
+(`PanGesture.swift`) hands every event over one of those views back untouched, counting nothing.
+Ownership is read off the owner's live `NSView` frame when the event arrives. The `.onHover`
+suppression tokens (`vm.setScrollGestureSuppression`) stay as a second guard, never the only one.
+
+**Broken twice, both times by trusting hover to arrive before the scroll.**
+- `741ccf3` (2026-10-11): the timer tab's page swipe beat the ruler's sideways scroll, because it
+  only stood aside once a hover state had reached it through `@State` and a re-render. Fixed by
+  geometry (`ScrollWheelMonitor.sidewaysScrollOwners`), the idiom this entry reuses.
+- The Notes tab (fixed 2026-10-23): scrolling down through notes or a long note is the same trackpad
+  gesture as swipe-up-to-close, and it closed the notch. The editor never set a token at all; the
+  list's token never came on for a list that appeared under a pointer that had not moved (after
+  "< Notes" or Done), and `PanGesture` kept counting while the token was on, so a token that went
+  off mid-gesture closed the notch in one event. Every unguarded scroll also blurred and dimmed the
+  whole tab (`gestureProgress`), and the blur stuck when the guard came on mid-gesture, because the
+  close gesture handled `.ended` after its guard. An end that landed outside the notch's bounds
+  left the count set for the next gesture.
+
+**Why it keeps happening:** the close gesture is a global behaviour, and each scrollable view
+opted out on its own, through hover. Hover is late by construction, and nothing told the author
+of a new scrollable view that it had to opt out. `073a921` (2026-10-11) shows the same tokens
+failing a third way: a window rebuild left them set, and the notch could neither close nor scroll.
+
+**Guard — exists.** `NotchScrollOwnershipRulesTests` reads the sources: every file of open-notch
+tab content that holds a vertical `ScrollView`, `TextEditor` or `List` applies
+`.ownsVerticalScroll()` (a popover is a window of its own and is exempt); `handleScroll` ends a
+gesture under way before its bounds check, restarts on `.began`, and asks the owners before it
+counts a delta; `handleCloseScrollGesture` clears its blur before its guard; an owner's view
+registers and unregisters and takes no hits. Each scanner is checked against planted offenders.
+Missing: that a scroll over the notes really never closes the notch is checked by eye on the
+installed build, since nothing automated drives a trackpad.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -1000,13 +1335,16 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
-| `CursorAgentStatusMonitor.swift` (usage spawn) | — | The `/usage` fetch invocation. Two silent breakages in one day from added flags/env (entry 8). |
+| `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
+| `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
 | `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
 | `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
+| `PanGesture.swift`, `VerticalScrollOwnership.swift`, `NotchNotesView.swift` | — | The open notch's swipe-to-close against every scrollable view under it. Each scroller opted out through hover, which a scroll beats, so a list or a note's text closed and blurred the notch (entry 21). Mark a new scroller `.ownsVerticalScroll()`. |
+| `LaunchPermissionManager.swift`, `LaunchPermissions.swift`, `Kannu/components/Onboarding/` | — | Who may raise a macOS dialog, and when. A feature that asks on its own must check `mayTouch` and get a `LaunchPermission` row (AGENTS.md, "No permission dialog before onboarding's Permissions step"); Apple Notes sync ran AppleScript ungated until 2026-10-23. `FirstLaunchRulesTests` pins every gate and the onboarding order (`permissions`, `finished` last). |
 | `AgentSessionLogParser.swift` | 8 | `readTrailingLines` and the tail verdict. 4 of 8 commits touch the reader; **2 of those 4 fix the same failure mode** — the reader returning nil and silently sending callers down a wrong path (entry 4). |
 
 If you are changing a *constant* in `AgentTrafficLightState.swift`, assume it is load-bearing

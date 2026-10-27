@@ -42,9 +42,68 @@ enum ClaudeCachedUsage {
     }
 
     static func load(from url: URL = defaultURL) -> ClaudeUsageSnapshot? {
+        read(from: url).snapshot
+    }
+
+    /// What the desktop history needs from this file to be read honestly: the organization
+    /// Claude Code is signed in to, and where that organization's weekly window resets. The
+    /// cache's own weekly reset stays useful long after its percentages have lapsed — each
+    /// organization resets on its own fixed weekly anchor (measured 2026-10-18: a Max plan on
+    /// Wednesday 00:00Z, a Team plan of the same person on Monday 05:00Z), so a reset weeks old
+    /// still says which hour of which weekday that organization's week ends.
+    /// The organization Claude Code's own sign-in is on: what Kannu recorded straight after its
+    /// last successful fetch, else what the file says now. The file alone flips — measured
+    /// 2026-10-18, it read Max after a sign-in, Team after Claude Code's next `/usage`, and Max
+    /// again once a desktop-hosted session had run.
+    static func claudeCodeOrganization(recordedAtFetch: String?, inConfigNow: String?) -> String? {
+        recordedAtFetch ?? inConfigNow
+    }
+
+    struct AccountContext: Equatable {
+        var organizationUUID: String?
+        var weeklyResetAnchor: Date?
+        /// `oauthAccount.organizationType` alongside the organization, e.g. "claude_max".
+        var organizationType: String?
+    }
+
+    /// The plan an organization type names, for the card's one line about organizations. Only
+    /// the plan — never the organization's or the account's name.
+    static func planName(organizationType: String?) -> String? {
+        switch organizationType {
+        case "claude_max": return "Max"
+        case "claude_pro": return "Pro"
+        case "claude_team": return "Team"
+        case "claude_enterprise": return "Enterprise"
+        default: return nil
+        }
+    }
+
+    /// One read of `~/.claude.json` for both the cached usage and the account context — the file
+    /// is large, and the usage cadence must not parse it twice.
+    static func read(from url: URL = defaultURL) -> (snapshot: ClaudeUsageSnapshot?, context: AccountContext) {
         guard let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return parse(json: json)
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, AccountContext())
+        }
+        return (parse(json: json), accountContext(json: json))
+    }
+
+    static func accountContext(json: [String: Any]) -> AccountContext {
+        let account = json["oauthAccount"] as? [String: Any]
+        let organization = (account?["organizationUuid"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        var anchor: Date?
+        if let cache = json["cachedUsageUtilization"] as? [String: Any],
+           let utilization = cache["utilization"] as? [String: Any],
+           let weekly = utilization["seven_day"] as? [String: Any] {
+            // Only this account's cache may set the anchor, as for the percentages.
+            let cached = cache["accountUuid"] as? String
+            let current = account?["accountUuid"] as? String
+            if cached == nil || current == nil || cached == current {
+                anchor = isoDate(weekly["resets_at"])
+            }
+        }
+        let type = (account?["organizationType"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        return AccountContext(organizationUUID: organization, weeklyResetAnchor: anchor, organizationType: type)
     }
 
     static func parse(json: [String: Any]) -> ClaudeUsageSnapshot? {
@@ -98,6 +157,8 @@ enum ClaudeCachedUsage {
         return ClaudeUsageSnapshot(
             windows: windows,
             observedAt: Date(timeIntervalSince1970: fetchedAtMs / 1000)
+            // No organization: the cache records the account, and `oauthAccount` is rewritten by
+            // every Claude Code process (see `claudeCodeOrganization(recordedAtFetch:inConfigNow:)`).
         )
     }
 

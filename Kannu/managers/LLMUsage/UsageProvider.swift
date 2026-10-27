@@ -42,17 +42,38 @@ struct UsageLimit: Equatable {
     var resetsAt: Date? = nil
     /// Server-reported severity ("normal"/"warning"/"critical") when available; drives the accent.
     var severity: String? = nil
+    /// When the value was read, when the source says. A Claude window can come from a desktop
+    /// sample days old; the card shows that age rather than passing the number off as current.
+    var observedAt: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 
 /// A user-fixable reason a quota fetch failed, surfaced as a button in the usage card.
 enum QuotaAction: Equatable {
     case grantClaudeKeychainAccess
+    /// Codex's sign-in lives in the "Codex Auth" keychain item (no auth.json) and macOS wants the
+    /// user to approve Kannu reading it.
+    case grantCodexKeychainAccess
+    /// cursor-agent's "cursor-access-token" keychain item is the only Cursor sign-in found (no
+    /// state.vscdb token) and macOS wants the user to approve Kannu reading it.
+    case grantCursorKeychainAccess
+
+    /// The one provider whose refresh may prompt when the user taps the button. Every other
+    /// provider in that refresh stays silent, so approving Codex never raises Cursor's dialog.
+    var provider: ProviderID {
+        switch self {
+        case .grantClaudeKeychainAccess: return .claude
+        case .grantCodexKeychainAccess: return .codex
+        case .grantCursorKeychainAccess: return .cursor
+        }
+    }
+
     var buttonTitle: String {
         switch self {
         // Says what approving buys, not what it costs. Plan tier already shows without it;
         // the keychain read is only needed for live 5h/7d limits.
-        case .grantClaudeKeychainAccess: return "Show usage limits…"
+        case .grantClaudeKeychainAccess, .grantCodexKeychainAccess, .grantCursorKeychainAccess:
+            return "Show usage limits…"
         }
     }
 }
@@ -65,6 +86,9 @@ struct NamedLimit: Equatable {
     let limit: UsageLimit
     /// The provider's own name for this window, preferred over anything derived from the key.
     var label: String? = nil
+    /// A 5-hour window (Antigravity reports one per model pool), shown with the 5-hour bar instead
+    /// of under Weekly.
+    var isSessionWindow: Bool = false
 }
 
 extension NamedLimit {
@@ -77,9 +101,20 @@ struct UsageSnapshot: Equatable {
     var today: UsageTotals = .init()
     var week: UsageTotals = .init()
     var sessionLimit: UsageLimit? = nil // 5h window quota
-    var weekLimit: UsageLimit? = nil // 7d all-models window quota
+    var weekLimit: UsageLimit? = nil // 7d all-models window quota (Cursor: the billing cycle)
+    /// The provider's own name for the `weekLimit` bar (Cursor's "Auto" pool); nil keeps the
+    /// view's default.
+    var weekLimitLabel: String? = nil
+    /// The alert and forecast reading key of the `weekLimit` bar. Cursor's Auto pool reads as
+    /// "auto", so its forecast never continues a series of blended totals.
+    var weekLimitKey: String = "week"
+    /// What `sessionLimit` and `weekLimit` measure when it is not every model: Antigravity's quota
+    /// is per model pool, and these two are its first pool's. nil reads as all models.
+    var limitsLabel: String? = nil
     /// Additional rate-limit windows beyond the 5h/7d pair, in the order the provider reported them.
     var extraLimits: [NamedLimit] = []
+    /// When those limits were recorded, when that is earlier than `lastUpdated` (Codex's rollout).
+    var quotaObservedAt: Date? = nil
     var onDemandSpendUSD: Double? = nil // billing-cycle on-demand spend from usage-summary
     var models: [ModelUsage] = []
     var lastUpdated: Date = .distantPast
@@ -120,6 +155,13 @@ struct UsageSnapshot: Equatable {
 struct QuotaFetchResult: Equatable {
     var session: UsageLimit?
     var week: UsageLimit?
+    /// Becomes `UsageSnapshot.weekLimitLabel`.
+    var weekLabel: String? = nil
+    /// Becomes `UsageSnapshot.weekLimitKey`.
+    var weekKey: String = "week"
+    /// Windows beyond the session/week pair, as `UsageSnapshot.extraLimits` takes them: Cursor's
+    /// API pool, Codex's other limit families.
+    var extraLimits: [NamedLimit] = []
     var onDemandSpendUSD: Double? = nil
     var accountTier: String? = nil
     var errorMessage: String?
@@ -128,8 +170,11 @@ struct QuotaFetchResult: Equatable {
     /// False for transient errors (429, 500+, network hiccup) — those should NOT move the
     /// card from the Usage tab, since the provider IS configured.
     var isAuthFailure: Bool = false
+    /// When the limits were recorded, if not at the read: Codex's rollout holds the figures of
+    /// the last local request. nil means now.
+    var observedAt: Date? = nil
 
-    var hasLimits: Bool { session != nil || week != nil }
+    var hasLimits: Bool { session != nil || week != nil || !extraLimits.isEmpty }
 }
 
 enum UsageResult {

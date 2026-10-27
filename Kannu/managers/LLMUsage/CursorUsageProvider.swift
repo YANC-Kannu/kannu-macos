@@ -17,35 +17,40 @@ struct CursorUsageProvider: UsageProvider {
     }
 
     func fetchSnapshot(now: Date, interactive: Bool) async throws -> UsageSnapshot {
-        let quota = await quotaClient.fetchLimits()
+        // One token read for the whole refresh, shared by the quota, events and legacy requests.
+        try await CursorTokenStore.withSingleRead(interactive: interactive) {
+            try await snapshot(now: now, interactive: interactive)
+        }
+    }
+
+    private func snapshot(now: Date, interactive: Bool) async throws -> UsageSnapshot {
+        let quota = await quotaClient.fetchLimits(interactive: interactive)
 
         if var eventsSnapshot = await eventsClient.fetchSnapshot(now: now) {
             eventsSnapshot.sessionLimit = eventsSnapshot.sessionLimit ?? quota.session
             eventsSnapshot.weekLimit = eventsSnapshot.weekLimit ?? quota.week
+            eventsSnapshot.weekLimitLabel = quota.weekLabel
+            eventsSnapshot.weekLimitKey = quota.weekKey
+            eventsSnapshot.extraLimits = quota.extraLimits
             eventsSnapshot.onDemandSpendUSD = quota.onDemandSpendUSD
             eventsSnapshot.quotaError = quota.errorMessage
+            eventsSnapshot.quotaAction = quota.action
             eventsSnapshot.accountTier = quota.accountTier
             return eventsSnapshot
         }
 
-        if let cookie = CursorTokenStore.sessionCookie(),
-           let legacy = try? await fetchLegacyUsage(cookie: cookie, now: now),
-           legacy.week.totalTokens > 0 || !legacy.models.isEmpty {
-            var snapshot = legacy
-            snapshot.sessionLimit = quota.session
-            snapshot.weekLimit = quota.week
-            snapshot.onDemandSpendUSD = quota.onDemandSpendUSD
-            snapshot.quotaError = quota.errorMessage
-            snapshot.accountTier = quota.accountTier
-            return snapshot
-        }
-
-        if quota.hasLimits || quota.onDemandSpendUSD != nil {
+        // A fix-it button keeps the card, as Codex's does: throwing here would hide the only way
+        // to approve the keychain read.
+        if quota.hasLimits || quota.onDemandSpendUSD != nil || quota.action != nil {
             var snapshot = UsageSnapshot()
             snapshot.sessionLimit = quota.session
             snapshot.weekLimit = quota.week
+            snapshot.weekLimitLabel = quota.weekLabel
+            snapshot.weekLimitKey = quota.weekKey
+            snapshot.extraLimits = quota.extraLimits
             snapshot.onDemandSpendUSD = quota.onDemandSpendUSD
             snapshot.quotaError = quota.errorMessage
+            snapshot.quotaAction = quota.action
             snapshot.accountTier = quota.accountTier
             snapshot.logsUnavailable = true
             snapshot.lastUpdated = now
@@ -53,56 +58,5 @@ struct CursorUsageProvider: UsageProvider {
         }
 
         throw UsageError.notConfigured(quota.errorMessage ?? "Cursor not signed in")
-    }
-
-    private func fetchLegacyUsage(
-        cookie: (userId: String, cookieToken: String),
-        now: Date
-    ) async throws -> UsageSnapshot {
-        var components = URLComponents(string: "https://cursor.com/api/usage")!
-        components.queryItems = [URLQueryItem(name: "user", value: cookie.userId)]
-        var request = URLRequest(url: components.url!)
-        request.setValue("WorkosCursorSessionToken=\(cookie.cookieToken)", forHTTPHeaderField: "Cookie")
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            let code = (response as? HTTPURLResponse)?.statusCode ?? -1
-            throw UsageError.notConfigured("Cursor usage request failed (HTTP \(code))")
-        }
-        return try decodeLegacy(data, now: now)
-    }
-
-    private func decodeLegacy(_ data: Data, now: Date) throws -> UsageSnapshot {
-        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw UsageError.notConfigured("Cursor usage response malformed")
-        }
-        var snapshot = UsageSnapshot()
-        snapshot.lastUpdated = now
-        var week = UsageTotals()
-        var models: [ModelUsage] = []
-        for (model, value) in root {
-            guard model != "startOfMonth", let entry = value as? [String: Any] else { continue }
-            let tokens = Int(CursorAPIHelpers.parseDouble(entry["numTokens"]) ?? 0)
-            let requests = Int(CursorAPIHelpers.parseDouble(entry["numRequests"]) ?? 0)
-            guard tokens > 0 || requests > 0 else { continue }
-            let cost = ModelPricing.cost(model: model, inputTokens: tokens, outputTokens: 0)
-            var modelTotals = UsageTotals(inputTokens: tokens)
-            if let cost {
-                modelTotals.costUSD = cost
-            } else {
-                modelTotals.hasUnpricedModel = true
-            }
-            models.append(ModelUsage(model: model, totals: modelTotals))
-            week.inputTokens += tokens
-            if let cost {
-                week.costUSD += cost
-            } else {
-                week.hasUnpricedModel = true
-            }
-        }
-        snapshot.models = models.sorted { $0.model < $1.model }
-        snapshot.week = week
-        snapshot.today = week
-        snapshot.session = week
-        return snapshot
     }
 }

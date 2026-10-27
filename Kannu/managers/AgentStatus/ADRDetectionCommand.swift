@@ -28,7 +28,9 @@ import Foundation
 /// to OpenAI. Off by default; Kannu runs it on explicit request only.
 enum ADRDetectionCommand {
     static let adapterFileName = "adr-analyze-session.py"
-    static let adapterVersionMarker = "KANNU_ADR_ADAPTER_VERSION=5"
+    /// v6 drops `reasoning_agent.max_tokens`: upstream never read it (only `triage_llm.max_tokens`
+    /// is), and the reasoning run is bounded by `--max-turns` and `--timeout` instead.
+    static let adapterVersionMarker = "KANNU_ADR_ADAPTER_VERSION=6"
     /// Placeholder the adapter sets itself when triage is off; listed here so the environment
     /// builder never has to hand a real key to a run that will not use it.
     static let triageDisabledPlaceholder = "kannu-triage-disabled"
@@ -88,8 +90,17 @@ enum ADRDetectionCommand {
 
     /// A whitelist, never the inherited environment: the keys Kannu chose to hand over, plus
     /// what `uv` and the Claude CLI need to find themselves.
+    ///
+    /// `PYTHON_DOTENV_DISABLED` keeps it a whitelist. At `ADRUpstream.commit`, importing ADR's
+    /// `guardrail` package also imports its Jev detector (a6076aa), which calls python-dotenv's
+    /// `load_dotenv()` at import time: the first `.env` found walking up from the checkout (`~/.env`
+    /// included) would be loaded into the run, and the Claude CLI inherits it — an
+    /// `ANTHROPIC_BASE_URL` or `ANTHROPIC_API_KEY` there would decide where the transcript goes and
+    /// whose account pays. The locked python-dotenv (1.2.2) skips loading when this is set.
+    static let dotenvDisabledKey = "PYTHON_DOTENV_DISABLED"
+
     static func environment(openAIKey: String?, anthropicKey: String?, path: String, home: String) -> [String: String] {
-        var env: [String: String] = ["PATH": path, "HOME": home, "LANG": "en_US.UTF-8"]
+        var env: [String: String] = ["PATH": path, "HOME": home, "LANG": "en_US.UTF-8", dotenvDisabledKey: "1"]
         if let key = openAIKey?.trimmingCharacters(in: .whitespacesAndNewlines), !key.isEmpty {
             env["OPENAI_API_KEY"] = key
         }
@@ -112,7 +123,7 @@ enum ADRDetectionCommand {
     /// closing delimiter.
     static let adapterSource = #"""
 #!/usr/bin/env python3
-# KANNU_ADR_ADAPTER_VERSION=5
+# KANNU_ADR_ADAPTER_VERSION=6
 #
 # Kannu (കണ്ണ്) — Copyright (C) 2024-2026 Kannu Contributors — GPL-3.0-or-later.
 #
@@ -320,7 +331,6 @@ def main():
                 "model": args.reasoning_model,
                 "max_turns": args.max_turns,
                 "timeout": args.timeout,
-                "max_tokens": 10000,
                 "enable_threat_intelligence": "threat_intelligence" in context,
                 "enable_source_code": "source_code" in context,
                 "enable_policy": "policy" in context,

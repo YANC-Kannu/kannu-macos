@@ -131,6 +131,23 @@ final class MCPServerWatchTests: XCTestCase {
         XCTAssertNil(broken.reads[root + "/.mcp.json"], "unreadable: left out, not emptied")
     }
 
+    /// The macOS MCP files upstream Discovery added in a1b433c: Cline's settings beside VS Code's,
+    /// and Claude Code's managed file, which lives outside the home folder. Both use `mcpServers`.
+    func testClineAndTheManagedClaudeCodeFileAreWatched() throws {
+        let global = Watch.globalLocations(home: home)
+        let cline = try XCTUnwrap(global.first { $0.appName == "Cline" })
+        XCTAssertEqual(cline.path, home + "/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json")
+        let managed = try XCTUnwrap(global.first { $0.path.hasSuffix("/managed-mcp.json") })
+        XCTAssertEqual(managed.path, "/Library/Application Support/ClaudeCode/managed-mcp.json")
+        XCTAssertEqual(managed.appName, "Claude Code")
+        let body = Data(#"{"mcpServers":{"company":{"type":"http","url":"https://mcp.example.com/mcp"}}}"#.utf8)
+        for location in [cline, managed] {
+            XCTAssertEqual(location.format, .mcpServers)
+            XCTAssertEqual(Watch.servers(in: body, format: location.format, json5: location.json5)?.map(\.runs), ["https://mcp.example.com"])
+        }
+        XCTAssertEqual(Set(global.map(\.path)).count, global.count, "no file watched twice")
+    }
+
     func testTheInventoryIsTheGlobalFilesOnly() {
         let global = Watch.globalLocations(home: home)[3].path
         let reads: [String: [Watch.Server]] = [global: [.init(scope: nil, name: "a", runs: "")], "/src/app/.mcp.json": []]

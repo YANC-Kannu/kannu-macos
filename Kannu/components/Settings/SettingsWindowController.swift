@@ -25,6 +25,9 @@ import SwiftUI
 
 class SettingsWindowController: NSWindowController {
     static let shared = SettingsWindowController()
+    /// The Brain window's identifier: how a view tells it from a sheet over it, without building
+    /// `shared` where it does not exist yet (a DEBUG snapshot).
+    static let windowIdentifier = NSUserInterfaceItemIdentifier("KannuSettingsWindow")
 
     private init() {
         let window = NSWindow(
@@ -46,7 +49,7 @@ class SettingsWindowController: NSWindowController {
     private func setupWindow() {
         guard let window = window else { return }
         
-        window.title = "Kannu Settings"
+        window.title = String(localized: "Kannu Brain")
         window.titlebarAppearsTransparent = false
         window.titleVisibility = .visible
         window.toolbarStyle = .unified
@@ -62,7 +65,7 @@ class SettingsWindowController: NSWindowController {
         
         // Configure window to be a standard document-style window
         window.isRestorable = true
-        window.identifier = NSUserInterfaceItemIdentifier("KannuSettingsWindow")
+        window.identifier = Self.windowIdentifier
         
         // Create the SwiftUI content
         let settingsView = SettingsView()
@@ -72,7 +75,7 @@ class SettingsWindowController: NSWindowController {
         // Handle window closing
         window.delegate = self
         
-        ScreenCaptureVisibilityManager.shared.register(window, scope: .panelsOnly)
+        ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
     }
     
     func showWindow() {

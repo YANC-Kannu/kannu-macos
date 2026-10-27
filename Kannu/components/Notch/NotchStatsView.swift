@@ -236,6 +236,7 @@ struct NotchStatsView: View {
                         }
                     }
                 )
+                .notchDarkAppearance()
                 .onDisappear {
                     switch rankingType {
                     case .cpu:
@@ -324,7 +325,7 @@ struct NotchStatsView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text("Enable stats monitoring in Settings to view system performance data.")
+                    Text("Enable stats monitoring in Brain to view system performance data.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -343,7 +344,7 @@ struct NotchStatsView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text("Enable graph visibility in Settings → Stats to view performance data.")
+                    Text("Enable graph visibility in Brain → Stats to view performance data.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -423,6 +424,7 @@ struct NotchStatsView: View {
 
 // Unified Stats Card Component - handles both single and dual data types, matches boring.notch sizing
 struct UnifiedStatsCard: View {
+    @Environment(\.notchForeground) private var notchForeground
     let graphData: GraphData
     @State private var isHovered = false
     
@@ -437,7 +439,7 @@ struct UnifiedStatsCard: View {
                 Text(graphData.title)
                     .font(.caption) // Match boring.notch font size
                     .fontWeight(.medium)
-                    .foregroundStyle(Color.white.opacity(0.8))
+                    .foregroundStyle(notchForeground.opacity(0.8))
                 
                 Spacer()
                 
@@ -446,7 +448,7 @@ struct UnifiedStatsCard: View {
                     Text(singleData.value)
                         .font(.caption) // Match boring.notch font size
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(notchForeground)
                 }
             }
             
@@ -460,7 +462,7 @@ struct UnifiedStatsCard: View {
                     
                     Text("•")
                         .font(.caption2)
-                        .foregroundStyle(Color.white.opacity(0.45))
+                        .foregroundStyle(notchForeground.opacity(0.45))
                     
                     Text(dualData.negativeValue)
                         .font(.caption)
@@ -489,7 +491,7 @@ struct UnifiedStatsCard: View {
             if graphData.rankingType != nil {
                 Text("Click for details")
                     .font(.caption2)
-                    .foregroundStyle(Color.white.opacity(0.75))
+                    .foregroundStyle(notchForeground.opacity(0.75))
                     .opacity(isHovered ? 1.0 : 0.0)
                     .animation(.easeInOut(duration: 0.2), value: isHovered)
             }
@@ -497,10 +499,10 @@ struct UnifiedStatsCard: View {
         .padding(8) // Match boring.notch padding - reduced from 10
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.08))
+                .fill(notchForeground.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(isHovered ? 0.45 : 0.18), lineWidth: 1)
+                        .stroke(notchForeground.opacity(isHovered ? 0.45 : 0.18), lineWidth: 1)
                 )
         )
         .scaleEffect(isHovered ? 1.02 : 1.0)
