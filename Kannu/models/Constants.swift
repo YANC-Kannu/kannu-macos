@@ -1821,7 +1821,7 @@ enum ReleaseInfo {
 
     /// `owner/repo`, used to build the prefilled issue a user can send after a freeze or a crash.
     /// Kannu never posts anything itself — the link opens their browser with the fields filled in.
-    static let repository = "libinmv/kannu"
+    static let repository = "YANC-Kannu/kannu-macos"
 }
 
 /// `DisplayPlacement` lives in the logic test target, which does not link Defaults, so the storage

@@ -182,7 +182,7 @@ jobs:
           ./scripts/export-sparkle-update.sh \
             "build/${RELEASE_DMG}" \
             Updates \
-            "https://github.com/libinmv/kannu/releases/download/${TAG}/" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/" \
             "$SPARKLE_BIN_DIR"
 
       - name: Upload Release Artifact
