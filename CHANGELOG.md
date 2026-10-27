@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-24 - Ship 1.4.0 beta 3 "Horus"
+- **Developer label:** "merge all mrs except the home brew round and lets rollout a testing release and link like last time"
+- **Agent label:** Claude Code (Opus 5.5) — 1.4.0 beta 3 release mechanics on `release/1.4.0`
+- **Changes:**
+  - Every open PR but #82 (Homebrew) was already merged into `development`. It is merged in here.
+    Since beta 2 that carries:
+    - #119: Brain search ranking;
+    - #120: the first-launch Permissions step, with the music after Finish;
+    - #121–#125: the stapling retry, the loopback RPC server, launch Keychain reads off main, the
+      privacy usage descriptions;
+    - #126: the notch stays put across Spaces;
+    - #127 and #132: typed-name tasks and Brain's New Task;
+    - #128–#131: notes scrolling, clipboard drafts, Apple Notes folder sync, delete from inside;
+    - #133: hide the notch, closing like an eye;
+    - #72: the cloud relay protocol, not yet wired into the app.
+  - `CURRENT_PROJECT_VERSION` 10 -> **11** in both configurations; `MARKETING_VERSION` stays 1.4.0
+    and the codename Horus. Each beta has its own build: beta 1 is 9, beta 2 10, beta 3 11, and
+    1.4.0 itself becomes **12**, so Sparkle still moves beta testers to it.
+    `scripts/RELEASE.md` says so.
+  - Beta notes at `docs/release-notes/1.4.0-beta.3.md`: what is new since beta 2, what to try,
+    staying on the beta and reporting, then the 1.4.0 notes with a section on the first launch.
+  - Released by pushing the tag `v1.4.0-beta.3` on this branch: a notarized GitHub pre-release,
+    never marked Latest and never in the appcast.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
@@ -848,6 +872,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
       upgrade move.
     - `SettingsHighlightInventoryTests` counts +1 for the new row.
 
+### 2026-10-22 - Ship 1.4.0 beta 2 "Horus"
+- **Developer label:** "is debug dmg link ready" / "i meant beta link are all mr''s merged including color and  tokens"
+- **Agent label:** Claude Code (Opus 5.5) — 1.4.0 beta 2 release mechanics on `release/1.4.0`
+- **Changes:**
+  - `development` merged in, carrying #115 and #116 (the mach-services and library-validation
+    strips removed from the build scripts and workflows), #117 (the built-in Horns skin and Copy AI
+    prompt) and #118 (the notch's text, icons and washes follow its fill colour or skin). The token
+    usage work (#96, #99, #104, #74) was already in beta 1.
+  - `CURRENT_PROJECT_VERSION` 9 -> **10** in both configurations; `MARKETING_VERSION` stays 1.4.0
+    and the codename Horus. Each beta gets its own build, so a tester's report names the beta it
+    came from. 1.4.0 itself becomes build 11, still above every beta, so Sparkle moves beta testers
+    to it. The live feed's newest item is still build 8, and a beta never reaches it.
+    `scripts/RELEASE.md`'s "Beta (pre-release) tags" says so.
+  - Beta notes at `docs/release-notes/1.4.0-beta.2.md`: what is new since beta 1, what to try,
+    staying on the beta and reporting, then the 1.4.0 notes with a section for the notch's colours
+    and skins.
+  - Released by pushing the tag `v1.4.0-beta.2` on this branch: a notarized GitHub pre-release,
+    never marked Latest and never in the appcast.
+
 ### 2026-10-22 - Act on CodeRabbit's review of #118
 - **Developer label:** CodeRabbit's review of #118: the note editor's text colour was inverted, the timer glyph and the default hover-button icon ignored their background, and the new tests' headers were not the project block
 - **Agent label:** Claude Code (Opus 5.5) — four findings fixed; the transparent-skin one declined with a reason in its thread
@@ -997,6 +1040,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     build signs the same entitlements as before.
   - Test: `ReleaseWorkflowRulesTests.testNoBuildStripsTheMachServicesEntitlement` checks the four
     files for a `plutil -remove` or PlistBuddy `Delete` of the key, with planted copies of each.
+
+### 2026-10-21 - Ship 1.4.0 beta 1 "Horus"
+- **Developer label:** "wait before release we will go one round beta testing and do a release" / "get me beta dmg link, i will share with testers"
+- **Agent label:** Claude Code (Opus 5.5) — 1.4.0 beta 1 release mechanics on `release/1.4.0`
+- **Changes:**
+  - `MARKETING_VERSION` 1.3.4 -> **1.4.0** and `CURRENT_PROJECT_VERSION` 8 -> **9** in both
+    configurations. Last published is 1.3.4 (build 8), and the live feed's newest item is build 8.
+    The beta is build 9 and 1.4.0 itself will be build 10, so Sparkle moves every beta tester to the
+    release when it ships (`scripts/RELEASE.md`, "Beta (pre-release) tags").
+  - Codename **Horus** (`ReleaseInfo.codename`), the next watcher on `scripts/RELEASE.md`'s list:
+    the Eye of Horus watches, and its parts were the fractions Egypt measured with — a release about
+    tracking tasks and time.
+  - Carries everything merged into `development` for 1.4.0: Brain › Tasks and its six sources, the
+    timer tab as the task home, the running timer keeping the closed notch, the agent-light
+    debounce, fullscreen hiding, the usage memory fix, the Keychain recreate-items fix, Settings →
+    Brain, the agents batch (#96, #100, #101, #102, #105), Codex (#99, #104), release hardening
+    (#112) and pre-release tags (#114).
+  - Beta notes at `docs/release-notes/1.4.0-beta.1.md`: what testers should try, to stay on the
+    beta until 1.4.0 ships, and how to report; then the 1.4.0 notes.
+  - Released by pushing the tag `v1.4.0-beta.1` on this branch: a notarized GitHub pre-release that
+    is never marked Latest and never reaches the appcast. `CHANGELOG.md` is cut at 1.4.0 itself, not
+    at the beta.
 
 ### 2026-10-21 - A beta tag publishes a notarized pre-release and never reaches the appcast
 - **Developer label:** "wait before release we will go one round beta testing and do a release" / "cant we not push it to everyone but still get a notarized build"
