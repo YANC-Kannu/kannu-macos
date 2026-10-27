@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-27 - Kannu points at its new home, YANC-Kannu/kannu-macos
+- **Developer label:** "we have moved org to https://github.com/YANC-Kannu/kannu-macos/tree/development, please check and move the codebase setup"
+- **Agent label:** Claude Code (Opus 5.5) — every hard-coded `libinmv/kannu` in the app, the release workflow, the scripts and the docs now names `YANC-Kannu/kannu-macos`
+- **Changes:**
+  - **Updates:** `Kannu/Info.plist`'s Sparkle feed (`SUFeedURL`) reads
+    `raw.githubusercontent.com/YANC-Kannu/kannu-macos/main/Updates/appcast.xml`. Copies already
+    installed keep reading the old repository's feed, so a release must also reach that appcast
+    until they have updated.
+  - **Pricing:** `ModelPricingManager` reads `pricing.json` from the new repository's `main`.
+  - **Crash and freeze reports:** `ReleaseInfo.repository` names the new repository, so prefilled
+    issues open here.
+  - **Release workflow:** the Sparkle download URL is built from `${GITHUB_REPOSITORY}`, so a later
+    move needs no edit there. `scripts/manual-release.sh` and `scripts/RELEASE.md`'s secret commands
+    name the new repository.
+  - **Docs:** ReadMe's Releases link and the source link in `TERMS.md`. That is a link, not a term,
+    so the terms version stays 1.
+  - The crash and freeze report tests use the new name as their sample repository.
+  - Left as is:
+    - `.github/FUNDING.yml` (Libin's own sponsor account);
+    - the historical CHANGELOG entries;
+    - the old releases' download URLs in `Updates/appcast.xml`, which stay on the old repository.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
