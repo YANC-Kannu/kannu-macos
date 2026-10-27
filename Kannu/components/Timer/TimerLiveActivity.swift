@@ -27,7 +27,23 @@ import UIKit
 typealias PlatformFont = UIFont
 #endif
 
+/// The agent traffic light a running timer carries in its centre (`ContentView.timerOwnsClosedNotch`),
+/// placed the way the music pill places it: below a physical notch, the centre grows to the agent
+/// band's height and the light sits at its offset.
+struct TimerAgentLight: Equatable {
+    /// The agent band's height on a Mac with a physical notch; nil keeps the timer's own height.
+    var expandedHeight: CGFloat?
+    var verticalOffset: CGFloat
+}
+
 struct TimerLiveActivity: View {
+    /// The traffic light to draw in the centre, or nil when no agent is on screen.
+    let agentLight: TimerAgentLight?
+
+    init(agentLight: TimerAgentLight? = nil) {
+        self.agentLight = agentLight
+    }
+
     @EnvironmentObject var vm: KannuViewModel
     @Environment(\.notchForeground) private var notchForeground
     @ObservedObject var timerManager = TimerManager.shared
@@ -47,6 +63,7 @@ struct TimerLiveActivity: View {
     @Default(.timerProgressStyle) private var progressStyle
     @Default(.timerIconColorMode) private var colorMode
     @Default(.timerSolidColor) private var solidColor
+    /// Not read here: observed so an edited preset colour redraws `sessionAccent`.
     @Default(.timerPresets) private var timerPresets
     @Default(.timerControlWindowEnabled) private var controlWindowEnabled
     @Default(.enableMinimalisticUI) private var enableMinimalisticUI
@@ -151,7 +168,7 @@ struct TimerLiveActivity: View {
     private var glyphColor: Color {
         switch colorMode {
         case .adaptive:
-            return activePresetColor ?? timerManager.timerColor
+            return timerManager.sessionAccent ?? timerManager.timerColor
         case .solid:
             return solidColor
         }
@@ -171,11 +188,6 @@ struct TimerLiveActivity: View {
 
     private var showsInfoSection: Bool {
         shouldDisplayLabel || (showsBarProgress && !showsCountdown)
-    }
-
-    private var activePresetColor: Color? {
-        guard let presetId = timerManager.activePresetId else { return nil }
-        return timerPresets.first { $0.id == presetId }?.color
     }
 
     private var middleSectionWidth: CGFloat {
@@ -289,6 +301,8 @@ struct TimerLiveActivity: View {
                     isHovering = false
                 }
                 requestControlWindowSync()
+            } else {
+                hideFinishLabel()
             }
         }
         .onChange(of: timerManager.isOvertime) { _, overtime in
@@ -299,6 +313,8 @@ struct TimerLiveActivity: View {
                     isHovering = false
                 }
                 requestControlWindowSync()
+            } else {
+                hideFinishLabel()
             }
         }
         .onChange(of: timerManager.isPaused) { _, _ in
@@ -321,7 +337,10 @@ struct TimerLiveActivity: View {
             middleSectionView()
             rightWingView()
         }
-        .frame(height: adjustedNotchHeight, alignment: .center)
+        .frame(
+            height: agentLight?.expandedHeight ?? adjustedNotchHeight,
+            alignment: agentLight?.expandedHeight == nil ? .center : .top
+        )
         .contentShape(Rectangle())
     }
 
@@ -345,7 +364,16 @@ struct TimerLiveActivity: View {
     private func middleSectionView() -> some View {
         Rectangle()
             .fill(.clear)
-            .frame(width: middleSectionWidth, height: notchContentHeight)
+            .frame(width: middleSectionWidth, height: agentLight?.expandedHeight ?? notchContentHeight)
+            .overlay {
+                // The shield glyph rides in the light; the alert's text pill waits for the
+                // standalone light, as it does beside the music pill.
+                if let agentLight {
+                    AgentTrafficLightIndicator()
+                        .offset(y: agentLight.verticalOffset)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
     }
 
     @ViewBuilder
@@ -374,7 +402,7 @@ struct TimerLiveActivity: View {
         return ZStack {
             if ringWrapsIcon {
                 Circle()
-                    .stroke(Color.white.opacity(0.15), lineWidth: ringStrokeWidth)
+                    .stroke(notchForeground.opacity(0.15), lineWidth: ringStrokeWidth)
                     .frame(width: ringDiameter, height: ringDiameter)
 
                 Circle()
@@ -430,7 +458,7 @@ struct TimerLiveActivity: View {
 
                     if showsBarHere {
                         Capsule()
-                            .fill(Color.white.opacity(0.12))
+                            .fill(notchForeground.opacity(0.12))
                             .frame(width: barWidth, height: 3)
                             .overlay(alignment: .leading) {
                                 Capsule()
@@ -450,7 +478,7 @@ struct TimerLiveActivity: View {
         let diameter = max(min(notchContentHeight - 4, 26), 20)
         return ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.15), lineWidth: ringStrokeWidth)
+                .stroke(notchForeground.opacity(0.15), lineWidth: ringStrokeWidth)
             Circle()
                 .trim(from: 0, to: clampedProgress)
                 .stroke(glyphColor, style: StrokeStyle(lineWidth: ringStrokeWidth, lineCap: .round))
@@ -473,7 +501,7 @@ struct TimerLiveActivity: View {
             
             if showsBarProgress {
                 Capsule()
-                    .fill(Color.white.opacity(0.12))
+                    .fill(notchForeground.opacity(0.12))
                     .frame(width: barWidth, height: 3)
                     .overlay(alignment: .leading) {
                         Capsule()
@@ -635,9 +663,23 @@ struct TimerLiveActivity: View {
                 showTransientLabel = false
             }
             requestControlWindowSync(forceRefresh: true)
+            labelHideTask = nil
         }
         labelHideTask = task
         DispatchQueue.main.asyncAfter(deadline: .now() + transientLabelDuration, execute: task)
+    }
+
+    /// Back above zero in the same session (its estimate raised past the time run), or a session
+    /// that replaced a finished one: the label the finish pinned goes. Hidden directly, since
+    /// `triggerTransientLabel` returns early in some modes and would leave it pinned. A stop is the
+    /// isTimerActive observer's; a name flash already running hides itself.
+    private func hideFinishLabel() {
+        guard timerManager.isTimerActive, !timerManager.isFinished, !timerManager.isOvertime,
+              labelHideTask == nil else { return }
+        withAnimation(.smooth) {
+            showTransientLabel = false
+        }
+        requestControlWindowSync(forceRefresh: true)
     }
 
     private func cancelTransientLabel() {

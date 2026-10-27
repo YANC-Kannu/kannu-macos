@@ -117,14 +117,9 @@ jobs:
           fi
           echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
 
-          if ! plutil_out=$(plutil -remove com.apple.security.mach-services Kannu/Kannu.entitlements 2>&1); then
-            if printf '%s' "$plutil_out" | grep -q "No value to remove"; then
-              echo "mach-services entitlement already absent, continuing."
-            else
-              echo "::error::plutil failed to modify entitlements: $plutil_out"
-              exit 1
-            fi
-          fi
+          # No mach-services strip: a release signs Kannu/Kannu.entitlements as it is, as every
+          # release has. The plutil strip that stood here never removed the key (plutil reads its
+          # dots as a key path); ReleaseWorkflowRulesTests says why it is not coming back.
 
           xcodebuild archive \
             -project Kannu.xcodeproj \
@@ -156,6 +151,14 @@ jobs:
 
           echo "RELEASE_DMG=${DMG_NAME}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          # A tag with a hyphen (v1.4.0-beta.1) is a pre-release: built, signed and notarized
+          # exactly like a release, published as a GitHub pre-release, and kept out of the
+          # appcast, so Sparkle never offers it to anyone. Only testers who download it run it.
+          if [[ "${VERSION}" == *-* ]]; then
+            echo "RELEASE_PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
           CODENAME="$(grep -o 'static let codename = "[^"]*"' Kannu/models/Constants.swift | head -1 | cut -d'"' -f2)"
           echo "RELEASE_TITLE=Kannu ${VERSION}${CODENAME:+ — $CODENAME}" >> "$GITHUB_ENV"
 
@@ -169,6 +172,7 @@ jobs:
           ./scripts/notarize-dmg.sh "build/${RELEASE_DMG}"
 
       - name: Export Sparkle Update Assets
+        if: env.RELEASE_PRERELEASE != 'true'
         env:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: |
@@ -189,6 +193,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Sparkle Artifact
+        if: env.RELEASE_PRERELEASE != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: Kannu-sparkle
@@ -218,10 +223,13 @@ jobs:
             build/${{ env.RELEASE_DMG }}
           body_path: ${{ env.RELEASE_BODY_PATH }}
           generate_release_notes: ${{ env.RELEASE_BODY_PATH == '' }}
+          prerelease: ${{ env.RELEASE_PRERELEASE == 'true' }}
+          make_latest: ${{ env.RELEASE_PRERELEASE == 'true' && 'false' || 'true' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update appcast on main
+        if: env.RELEASE_PRERELEASE != 'true'
         run: |
           if [ ! -f Updates/appcast.xml ]; then
             echo "No generated Updates/appcast.xml found; skipping main branch update."
@@ -243,34 +251,3 @@ jobs:
             git commit -m "Update appcast for ${TAG}"
             git push origin main
           fi
-
-      - name: Update Homebrew cask
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-
-          chmod +x scripts/update-homebrew-cask.sh
-          ./scripts/update-homebrew-cask.sh \
-            --version "${RELEASE_VERSION}" \
-            --dmg "build/${RELEASE_DMG}"
-
-          git add homebrew/Casks/kannu.rb
-          if git diff --staged --quiet; then
-            echo "homebrew/Casks/kannu.rb unchanged."
-          else
-            git commit -m "Update Homebrew cask for v${RELEASE_VERSION}"
-            git push origin main
-          fi
-
-          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
-            echo "HOMEBREW_TAP_TOKEN unset; skipped push to libinmv/homebrew-kannu."
-            exit 0
-          fi
-          ./scripts/update-homebrew-cask.sh \
-            --version "${RELEASE_VERSION}" \
-            --dmg "build/${RELEASE_DMG}" \
-            --push-tap

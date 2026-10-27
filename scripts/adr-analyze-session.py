@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# KANNU_ADR_ADAPTER_VERSION=5
+# KANNU_ADR_ADAPTER_VERSION=6
 #
 # Kannu (കണ്ണ്) — Copyright (C) 2024-2026 Kannu Contributors — GPL-3.0-or-later.
 #
@@ -207,7 +207,6 @@ def main():
                 "model": args.reasoning_model,
                 "max_turns": args.max_turns,
                 "timeout": args.timeout,
-                "max_tokens": 10000,
                 "enable_threat_intelligence": "threat_intelligence" in context,
                 "enable_source_code": "source_code" in context,
                 "enable_policy": "policy" in context,

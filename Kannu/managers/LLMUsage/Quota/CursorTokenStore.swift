@@ -2,12 +2,43 @@ import Foundation
 import SQLite3
 
 enum CursorTokenStore {
-    static func accessToken() -> String? {
-        if let token = KeychainReader.genericPassword(service: "cursor-access-token") { return token }
-        return readTokenFromStateDB()
+    private static let keychainService = "cursor-access-token"
+
+    /// Runs `body` with the token read once, up front (`CredentialReadScope`). A refresh used to
+    /// read it once per request — the quota guard, usage-summary, the connect fallback, the events
+    /// check and every events page, up to a dozen reads — and each read could reach the keychain. A
+    /// nested scope reuses the outer read.
+    static func withSingleRead<T>(interactive: Bool, _ body: () async throws -> T) async rethrows -> T {
+        try await CredentialReadScope.withSingleRead(
+            service: keychainService,
+            read: { resolveToken(interactive: interactive) },
+            body
+        )
     }
 
-    // Cookie for cursor.com/api/usage: WorkosCursorSessionToken value is "<userId>::<jwt>", userId is the JWT sub.
+    static func accessToken() -> String? { resolution().value }
+
+    /// True when no token was found and the cursor-agent keychain item needs the user's approval.
+    static func keychainNeedsApproval() -> Bool { resolution() == .needsApproval }
+
+    private static func resolution() -> KeychainReadPolicy.Resolution {
+        CredentialReadScope.resolution(service: keychainService) { resolveToken(interactive: false) }
+    }
+
+    /// The keychain is read silently; Kannu is not on cursor-agent's access list for the item, so a
+    /// prompting read raised an unasked "allow access" dialog on every automatic refresh. A
+    /// user-initiated refresh may prompt, and only once state.vscdb has no token either, so the
+    /// dialog never appears for something the database answers silently. The keychain stays first
+    /// so a cursor-agent token keeps winning over an IDE token, as before; the silent read cannot
+    /// show a dialog (`KeychainReader.read`).
+    private static func resolveToken(interactive: Bool) -> KeychainReadPolicy.Resolution {
+        KeychainReadPolicy.resolve(interactive: interactive, fallback: readTokenFromStateDB) { allowInteraction in
+            let read = KeychainReader.read(service: keychainService, allowInteraction: allowInteraction)
+            return .init(value: read.value, needsApproval: KeychainReader.needsUserApproval(read.status))
+        }
+    }
+
+    // Cookie for the cursor.com dashboard APIs (usage-summary, usage events): WorkosCursorSessionToken value is "<userId>::<jwt>", userId is the JWT sub.
     static func sessionCookie() -> (userId: String, cookieToken: String)? {
         guard let jwt = accessToken(), let userId = userId(fromJWT: jwt) else { return nil }
         return (userId, "\(userId)::\(jwt)")

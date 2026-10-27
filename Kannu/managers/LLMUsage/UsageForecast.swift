@@ -56,7 +56,9 @@ struct UsageWindowReading: Equatable {
         return snapshot.displayWindows(now: now).map { window in
             UsageWindowReading(provider: "claude", key: window.key, label: claudeLabel(window),
                                percent: window.percent, resetsAt: window.resetsAt, severity: window.severity,
-                               observedAt: snapshot.observedAt)
+                               // The window's own reading time: a merged snapshot's `observedAt`
+                               // is its newest source's, which would date an old weekly sample now.
+                               observedAt: window.observedAt ?? snapshot.observedAt)
         }
     }
 
@@ -178,11 +180,32 @@ enum UsageForecast {
         }
     }
 
+    /// The same verdict in the few words a narrow column holds — "full by 3:40 PM" — under the
+    /// Usage tab's 5-hour bar; `caption` stays for the push and the weekly bars' tooltips. The
+    /// time alone, no weekday: a 5-hour window's moment is never more than five hours off.
+    static func shortCaption(_ outlook: Outlook, resetsAt: Date?, now: Date) -> (text: String, isWarning: Bool)? {
+        switch outlook {
+        case .hitsLimit(let at):
+            return (String(localized: "full by \(time(at))"), true)
+        case .atLimit:
+            if let resetsAt { return (String(localized: "full · resets \(time(resetsAt))"), true) }
+            return (String(localized: "full"), true)
+        case .lastsUntilReset(let projected) where projected >= 75:
+            return (String(localized: "~\(Int(projected.rounded()))% at reset"), false)
+        default:
+            return nil
+        }
+    }
+
     /// "3:40 PM" today, "Tue 3:40 PM" on another day.
     static func clock(_ date: Date, now: Date, calendar: Calendar = .current) -> String {
-        let time = date.formatted(date: .omitted, time: .shortened)
-        if calendar.isDate(date, inSameDayAs: now) { return time }
-        return date.formatted(.dateTime.weekday(.abbreviated)) + " " + time
+        if calendar.isDate(date, inSameDayAs: now) { return time(date) }
+        return date.formatted(.dateTime.weekday(.abbreviated)) + " " + time(date)
+    }
+
+    /// "3:40 PM".
+    static func time(_ date: Date) -> String {
+        date.formatted(date: .omitted, time: .shortened)
     }
 }
 
