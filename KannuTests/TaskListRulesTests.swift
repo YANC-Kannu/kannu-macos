@@ -1,0 +1,469 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import XCTest
+
+/// Brain › Tasks' lists, pinned in the source the way `LaunchGateRulesTests` pins the launch:
+///
+/// - Rows are not dragged or stepped (David, 2026-10-23: "no drag and order tasks or numbering"):
+///   no `draggable`, `dropDestination` or `onMove`, and no Move Up or Move Down, in the menu or as
+///   accessibility actions. Right-click › Move to Top stays, a named accessibility action too, so
+///   the user still picks what the notch's Up next shows first. This replaces 2026-10-06's "there
+///   should be drag and drop".
+/// - Task reminders ask macOS for notifications only from the user's first schedule, never at
+///   launch, and Kannu never starts a timer on its own.
+/// - All tasks' filters are its own and say so: while they or Find narrow, a "Filtered" row sits
+///   above the rows (after Find and Add a task) whose Show All resets the four filters; the
+///   overview counts every task.
+/// - The task menu's items act in place or open a small sheet, so none ends in "…".
+/// - Brain › Tasks is a tree (David: "inward pages and tree"): a path of pages, one level per
+///   back row, and search or a deep link returning to the overview.
+final class TaskListRulesTests: XCTestCase {
+    private static let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    /// The overview, the tree, the sheets.
+    private static let settingsPath = "Kannu/components/Settings/TasksSettings.swift"
+    /// The task rows every list shares.
+    private static let rowsPath = "Kannu/components/Settings/TaskRowList.swift"
+    private static let allTasksPath = "Kannu/components/Settings/AllTasksPage.swift"
+    private static let managerPath = "Kannu/managers/Tasks/TasksManager.swift"
+    private static let remindersPath = "Kannu/managers/Tasks/TaskReminders.swift"
+
+    // MARK: - No drag, no stepping; Move to Top stays
+
+    func testTheRowsAreNeitherDraggedNorSteppedAndMoveToTopStays() throws {
+        XCTAssertEqual(Self.orderProblems(in: try Self.read(Self.rowsPath)), [])
+    }
+
+    func testTheOrderScannerCatchesPlantedOffenders() {
+        let good = Self.code("""
+            .accessibilityActions {
+                if !row.isFirst {
+                    Button("Move to Top") { manager.moveToTop(task.id) }
+                }
+            }
+            private func moreItems(for task: TaskItem, isFirst: Bool, isTimed: Bool) -> some View {
+                Button("Move to Top") { manager.moveToTop(task.id) }
+                    .disabled(isFirst)
+            }
+            """)
+        XCTAssertEqual(Self.orderProblems(in: good), [])
+        XCTAssertEqual(Self.orderProblems(in: good + "row.draggable(dragPayload(for: task.id))\n"),
+                       ["the task rows are draggable again"])
+        XCTAssertEqual(Self.orderProblems(in: good + ".dropDestination(for: String.self) { _, _ in true }\n"),
+                       ["the task rows take drops again"])
+        XCTAssertEqual(Self.orderProblems(in: good + ".onMove { offsets, destination in }\n"),
+                       ["the task rows use onMove"])
+        XCTAssertEqual(Self.orderProblems(in: good + "Button(\"Move Up\") { manager.moveUp(task.id) }\n"),
+                       ["Move Up or Move Down is back"])
+        XCTAssertEqual(Self.orderProblems(in: good.replacingOccurrences(of: "    Button(\"Move to Top\") { manager.moveToTop(task.id) }\n        .disabled(isFirst)", with: "")),
+                       ["the menu lost Move to Top"])
+        XCTAssertEqual(Self.orderProblems(in: good.replacingOccurrences(of: ".accessibilityActions {", with: ".contextMenu {")),
+                       ["Move to Top is not an accessibility action"])
+        // Prose about dragging is not a drag.
+        XCTAssertEqual(Self.orderProblems(in: good + Self.code("// rows are never .draggable( or .onMove here\n")), [])
+    }
+
+    // MARK: - The view filter says so
+
+    func testANarrowedListSaysFilteredAndShowAllResetsEveryFilter() throws {
+        XCTAssertEqual(Self.filteredRowProblems(in: try Self.read(Self.allTasksPath), overview: try Self.read(Self.settingsPath)), [])
+    }
+
+    func testTheFilteredRowScannerCatchesPlantedOffenders() {
+        let good = Self.code("""
+            private func showAll() {
+                sourceFilter = .all
+                projectFilter = TaskFacets.anyProject
+                statusFilter = .toDoAndInProgress
+                tagFilter = TaskFacets.anyTag
+            }
+            private var tasksSection: some View {
+                if filter.isNarrowing {
+                    SettingsActionRow("Filtered", description: String(localized: "\\(rows.count) of \\(total) tasks")) {
+                        Button("Show All", action: showAll)
+                    }
+                }
+                TaskRowList(filter: filter, context: context)
+            }
+            """)
+        let overview = "let counts = TaskFacets.counts(manager.activeTasks)\n"
+        XCTAssertEqual(Self.filteredRowProblems(in: good, overview: overview), [])
+        XCTAssertEqual(Self.filteredRowProblems(in: good.replacingOccurrences(of: "tagFilter = TaskFacets.anyTag", with: ""), overview: overview),
+                       ["Show All leaves tagFilter = TaskFacets.anyTag out"])
+        XCTAssertEqual(Self.filteredRowProblems(in: good.replacingOccurrences(of: "if filter.isNarrowing {", with: "if true {"), overview: overview),
+                       ["the Filtered row does not show only while the filters narrow"])
+        XCTAssertEqual(Self.filteredRowProblems(in: good.replacingOccurrences(of: "Button(\"Show All\", action: showAll)", with: ""), overview: overview),
+                       ["the Filtered row has no Show All"])
+        let last = good.replacingOccurrences(of: "TaskRowList(filter: filter, context: context)", with: "")
+            .replacingOccurrences(of: "private var tasksSection: some View {", with: "private var tasksSection: some View {\nTaskRowList(filter: filter, context: context)")
+        XCTAssertEqual(Self.filteredRowProblems(in: last, overview: overview), ["the Filtered row is not above the rows"])
+        XCTAssertEqual(Self.filteredRowProblems(in: good, overview: "let counts = TaskFacets.counts(rows)\n"),
+                       ["the All tasks row does not count every task"])
+    }
+
+    func testTheTaskMenuItemsCarryNoEllipsis() throws {
+        let titles = Self.menuTitles(in: try Self.read(Self.rowsPath))
+        XCTAssertGreaterThan(titles.count, 8, "the scan found almost no menu items — check the marker, not the rule")
+        for title in ["Set Estimate", "Add Time", "Add Tags", "Schedule", "Delete"] {
+            XCTAssertTrue(titles.contains(title), "\(title) is not in the task ⋯ menu")
+        }
+        XCTAssertEqual(titles.filter { $0.contains("…") }, [])
+    }
+
+    /// David: the rows were "a mess" of ⋯ menus. A row's overflow is its right-click menu, opening
+    /// with Show Details; the › opens the task's page.
+    func testARowsMoreIsItsRightClickMenu() throws {
+        let rows = try Self.read(Self.rowsPath)
+        XCTAssertFalse(rows.contains("SettingsMoreMenu"), "a task row grew a ⋯ menu again")
+        let menu = try XCTUnwrap(Self.block(after: ".contextMenu", in: rows), "the rows have no right-click menu")
+        XCTAssertTrue(menu.hasPrefix("{\n            Button(\"Show Details\") { context.open(.task(task.id)) }"),
+                      "Show Details is not first: \(menu.prefix(120))")
+        XCTAssertTrue(menu.contains("moreItems(for: task"), "the right-click menu lost the task's items")
+        XCTAssertTrue(rows.contains("TaskRowCaption(task: task"), "the rows no longer use the one short caption")
+    }
+
+    /// The tree is a path of pages: opening appends, the back row removes one level and names its
+    /// parent, a page opens at its top and going back scrolls to the row it came from, and a task
+    /// deleted from its page leaves it.
+    func testBrainTasksIsAPathOfPages() throws {
+        let settings = try Self.read(Self.settingsPath)
+        XCTAssertTrue(settings.contains("open: { path.append($0) }"), "opening a page does not go one level in")
+        XCTAssertTrue(settings.contains("TasksBackRow(parent: parent) { returnTo = Self.scrollTarget(of: path.removeLast()) }"),
+                      "the back row does not go up one level, or forgets the row it came from")
+        XCTAssertTrue(settings.contains("let parent = path.dropLast().last.map(Self.title) ?? Self.overviewTitle"),
+                      "the back row does not name the page it goes back to")
+        XCTAssertTrue(settings.contains(".id(path)"), "a page no longer opens at its top")
+        XCTAssertTrue(settings.contains("proxy.scrollTo(target, anchor: .center)"), "going back loses the row it came from")
+        XCTAssertTrue(settings.contains("if path != wasOpen { returnTo = id }"), "a search from a page lands on a rebuilt page unscrolled")
+        XCTAssertTrue(settings.contains("path.removeAll { $0 == .task(task.id) }"), "a deleted task's page stays open")
+        XCTAssertTrue(settings.contains("row.settingsHighlight(id: SettingsDeepLink.tasksListOpenID)"),
+                      "All tasks' back row no longer carries its deep link")
+    }
+
+    func testTheMenuTitleScannerCatchesPlantedOffenders() {
+        let menu = Self.code("""
+            private func moreItems(for task: TaskItem, isTimed: Bool) -> some View {
+                Button("Add Tags") { sheet = .tags }
+                if task.source == .local {
+                    Button("Schedule…") { sheet = .schedule }
+                }
+                Button(link.title) { open() }
+                Button("Delete…", role: .destructive) { pendingDelete = task }
+            }
+            Button("Connect…") { sheet = .connectJira }
+            """)
+        XCTAssertEqual(Self.menuTitles(in: menu), ["Add Tags", "Schedule…", "Delete…"], "only the menu's own literal titles")
+        XCTAssertEqual(Self.menuTitles(in: "Button(\"x\")"), [], "no menu, no titles")
+    }
+
+    // MARK: - Reminders
+
+    func testNotificationPermissionIsAskedOnlyFromTheFirstSchedule() throws {
+        var sources: [String: String] = [:]
+        for path in try Self.swiftFiles(under: "Kannu") { sources[path] = try Self.read(path) }
+        XCTAssertGreaterThan(sources.count, 100, "the scan read almost nothing — check the path, not the rule")
+        XCTAssertEqual(Self.permissionProblems(in: sources), [])
+    }
+
+    func testThePermissionScannerCatchesPlantedOffenders() {
+        let reminders = Self.code("""
+            static func requestPermission() async -> Permission {
+                let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert])
+            }
+            """)
+        let manager = Self.code("""
+                func setSchedule(_ date: Date?, for taskID: UUID) {
+                    Task { _ = await TaskReminders.requestPermission() }
+                }
+
+                func checkReminderPermission() {
+                    Task { _ = await TaskReminders.permission() }
+                }
+            """)
+        let good = [Self.remindersPath: reminders, Self.managerPath: manager]
+        XCTAssertEqual(Self.permissionProblems(in: good), [])
+
+        var elsewhere = good
+        elsewhere["Kannu/KannuApp.swift"] = "center.requestAuthorization(options: [.alert, .sound]) { _, _ in }\n"
+        XCTAssertEqual(Self.permissionProblems(in: elsewhere), ["Kannu/KannuApp.swift asks for notification permission"])
+
+        var atAppear = good
+        atAppear[Self.managerPath] = manager.replacingOccurrences(of: "await TaskReminders.permission()",
+                                                                  with: "await TaskReminders.requestPermission()")
+        XCTAssertEqual(Self.permissionProblems(in: atAppear), ["requestPermission() is called outside setSchedule"])
+
+        var never = good
+        never[Self.managerPath] = manager.replacingOccurrences(of: "_ = await TaskReminders.requestPermission()", with: "")
+        XCTAssertEqual(Self.permissionProblems(in: never), ["setSchedule never asks: a reminder could never show"])
+    }
+
+    /// Start is the user's click on the reminder: the delegate starts the task only for the Start
+    /// action, and nothing in the reminders file starts a timer by itself.
+    func testOnlyTheStartActionStartsATask() throws {
+        let reminders = try Self.read(Self.remindersPath)
+        XCTAssertEqual(Self.occurrences(of: "startFromReminder(", in: reminders), 1)
+        let startCall = try XCTUnwrap(reminders.range(of: "TasksManager.shared.startFromReminder("))
+        let guardAction = try XCTUnwrap(reminders.range(of: "if response.action == TaskReminders.startActionID"))
+        XCTAssertLessThan(guardAction.lowerBound, startCall.lowerBound, "a task starts without the Start action")
+        XCTAssertFalse(reminders.contains("startTimer("), "the reminders file starts a timer itself")
+        XCTAssertFalse(reminders.contains(".start("), "the reminders file starts a task itself")
+    }
+
+    /// The wiring the reviewer's findings turned on, read from the real sources:
+    /// - a resend only adds, so scheduling one task never clears another's reminder on screen;
+    /// - after the file is read, Kannu checks with macOS instead of trusting the file, and turning
+    ///   tasks off takes every reminder back;
+    /// - "Show all in Brain" and a reminder's click open the Task list itself, and a Start that
+    ///   cannot start falls back to it.
+    /// The archive keeps its own time (CodeRabbit on #107): a new day, and Brain's Task list
+    /// appearing, archive what waited long enough — not only a launch or a Jira or GitLab sync, which
+    /// a local-only user never has.
+    func testTheArchiveRunsOnANewDayAndWhenTheListAppears() throws {
+        let manager = try Self.read(Self.managerPath)
+        let observer = try XCTUnwrap(manager.range(of: "forName: .NSCalendarDayChanged"), "no day-change observer")
+        XCTAssertTrue(manager[observer.upperBound...].prefix(200).contains("self?.refreshArchive()"),
+                      "the day-change observer does not run the archive")
+        let refresh = try XCTUnwrap(Self.functionBody("refreshArchive", in: manager), "refreshArchive is gone")
+        XCTAssertTrue(refresh.contains("applyArchive(now: now, protected: timed)") && refresh.contains("persist()"))
+        var settings = ""
+        for path in try Self.swiftFiles(under: "Kannu/components/Settings") { settings += try Self.read(path) }
+        XCTAssertTrue(settings.contains("manager.refreshArchive()"), "Brain's Task list no longer runs the archive when it appears")
+    }
+
+    func testRemindersAndTheTaskListLinkAreWired() throws {
+        let manager = try Self.read(Self.managerPath)
+        let reminders = try Self.read(Self.remindersPath)
+        let settings = try Self.read(Self.settingsPath)
+        let menu = try Self.read("Kannu/components/Notch/TaskSourceMenu.swift")
+        let resend = try XCTUnwrap(Self.functionBody("resendReminders", in: manager))
+        XCTAssertTrue(resend.contains("TaskReminderPlan.resend("), "a resend can take reminders back again")
+        XCTAssertFalse(resend.contains("TaskReminderPlan.changes(from: [:]"), "a resend can take reminders back again")
+        let check = try XCTUnwrap(Self.functionBody("checkReminderPermission", in: manager))
+        XCTAssertTrue(check.contains("TaskReminders.held()") && check.contains("TaskReminderPlan.reconcile("),
+                      "the permission check no longer compares with what macOS holds")
+        XCTAssertFalse(check.contains("wasBlocked"), "reminders are resent only after a blocked state again")
+        XCTAssertTrue(try XCTUnwrap(Self.functionBody("apply", in: manager)).contains("checkReminderPermission()"),
+                      "nothing checks with macOS after the file is read")
+        XCTAssertTrue(settings.contains("if !isOn { TaskReminders.withdrawAll() }"), "turning tasks off leaves reminders waiting")
+        XCTAssertTrue(menu.contains("case .taskList: return SettingsDeepLink.tasksListOpenID"),
+                      "Show all in Brain lands on the row, not the Task list")
+        XCTAssertTrue(settings.contains("path = id == SettingsDeepLink.tasksListOpenID ? [.allTasks] : []"),
+                      "All tasks' deep link does not open it, or another link does not return to the overview")
+        XCTAssertTrue(reminders.contains("otherwise: { TasksBrainDestination.taskList.open() },"),
+                      "a Start that cannot start is a silent no-op")
+        let failed = try XCTUnwrap(manager.range(of: "loadState = .failed(reason)"))
+        XCTAssertTrue(manager[failed.upperBound...].prefix(200).contains("pending.otherwise()"),
+                      "a Start clicked before a failed load is dropped")
+    }
+
+    /// The notification's completion runs after the click is answered (CodeRabbit on #86: it ran
+    /// first, so macOS took the response as handled while the start had not happened yet), and
+    /// Tasks off empties the reminder baseline along with macOS, so Tasks on sends every reminder
+    /// again instead of only the ones that changed since.
+    func testAReminderIsCompletedAfterItsAnswerAndTasksOffEmptiesTheBaseline() throws {
+        let manager = try Self.read(Self.managerPath)
+        let reminders = try Self.read(Self.remindersPath)
+        // The delegate completes another app's notification on arrival, and hands a reminder's on.
+        XCTAssertEqual(Self.occurrences(of: "completionHandler()", in: reminders), 1, "a reminder is completed on arrival")
+        XCTAssertTrue(reminders.contains("else {\n            completionHandler()\n            return\n        }"),
+                      "the one completion on arrival is not the other-notification branch")
+        XCTAssertTrue(reminders.contains("completion: completionHandler)"), "the completion never reaches the answer")
+        XCTAssertTrue(reminders.contains("completion: response.completion\n"), "Start's completion never reaches TasksManager")
+        XCTAssertTrue(reminders.contains("TasksBrainDestination.taskList.open()\n            response.completion()"),
+                      "a click on the banner is completed before the Task list opens")
+        // TasksManager completes after the start, the fallback or the load's failure, and completes
+        // a click it discards for a later one.
+        let start = try XCTUnwrap(Self.functionBody("startFromReminder", in: manager))
+        XCTAssertTrue(start.contains("pendingReminderStart?.completion()\n            pendingReminderStart = (taskID, otherwise, completion)"),
+                      "a replaced waiting click is never completed")
+        XCTAssertTrue(start.contains("otherwise()\n            completion()"), "a failed load's fallback is not followed by the completion")
+        XCTAssertTrue(start.contains("if !start(taskID) { otherwise() }\n            completion()"), "the completion runs before the start")
+        XCTAssertTrue(try XCTUnwrap(Self.functionBody("apply", in: manager))
+                        .contains("if !start(pending.taskID) { pending.otherwise() }\n            pending.completion()"),
+                      "a click that waited for the file is not completed after its start")
+        let failed = try XCTUnwrap(manager.range(of: "loadState = .failed(reason)"))
+        XCTAssertTrue(manager[failed.upperBound...].prefix(300).contains("pending.otherwise()\n                pending.completion()"),
+                      "a click that waited for a failed load is not completed after its fallback")
+        // Tasks off: the baseline follows macOS; Tasks on: the reminders are sent again.
+        let toggle = try XCTUnwrap(manager.range(of: "Defaults.publisher(.enableTasks, options: [])"),
+                                   "TasksManager no longer watches the Tasks switch")
+        let reaction = manager[toggle.upperBound...].prefix(600)
+        XCTAssertTrue(reaction.contains("reminderBaseline = [:]"),
+                      "Tasks off leaves the baseline full: after Tasks on, the next save sends only what changed")
+        let resent = try XCTUnwrap(reaction.range(of: "checkReminderPermission()"),
+                                   "Tasks on waits for the Task list to send the reminders again")
+        // Tasks on also restores the baseline, ahead of the resend: left empty, the next save counts
+        // every reminder as changed and takes a fired one off the screen (TaskReminderPlanTests).
+        let restored = try XCTUnwrap(reaction.range(of: "reminderBaseline = TaskReminderPlan.wanted(self.tasks)"),
+                                     "Tasks on leaves the baseline empty: the next save takes back a reminder that fired")
+        XCTAssertLessThan(restored.lowerBound, resent.lowerBound, "the baseline is restored after the resend, not before it")
+        // Off and on again within a moment: the removal, computed first, must land before the resend
+        // reads what macOS holds, so both run on the one chain and neither in a Task of its own.
+        let check = try XCTUnwrap(Self.functionBody("checkReminderPermission", in: manager))
+        XCTAssertTrue(check.contains("TaskReminders.serially { [weak self] in"), "the resend runs outside the reminder chain")
+        XCTAssertFalse(check.contains("Task {"), "the resend runs in a Task of its own, racing withdrawAll")
+        let withdraw = try XCTUnwrap(Self.functionBody("withdrawAll", in: reminders))
+        XCTAssertTrue(withdraw.contains("serially {"), "withdrawAll runs outside the reminder chain")
+        XCTAssertFalse(withdraw.contains("Task {"), "withdrawAll runs in a Task of its own, racing the resend")
+        // With the baseline empty and Tasks off, a save must not send the whole list back.
+        XCTAssertTrue(try XCTUnwrap(Self.functionBody("syncReminders", in: manager))
+                        .contains("Defaults[.enableTasks] ? TaskReminderPlan.wanted(tasks) : [:]"),
+                      "a save with Tasks off sends every reminder again")
+    }
+
+    // MARK: - Rules
+
+    /// No drag, drop or stepping on the task rows (comments are stripped by `code()`), and Move to
+    /// Top both in the right-click menu and as an accessibility action.
+    static func orderProblems(in source: String) -> [String] {
+        var problems: [String] = []
+        if source.contains(".draggable(") || source.contains(".onDrag(") {
+            problems.append("the task rows are draggable again")
+        }
+        if source.contains(".dropDestination(") || source.contains(".onDrop(") {
+            problems.append("the task rows take drops again")
+        }
+        if source.contains(".onMove") {
+            problems.append("the task rows use onMove")
+        }
+        if source.contains("\"Move Up\"") || source.contains("\"Move Down\"") {
+            problems.append("Move Up or Move Down is back")
+        }
+        if !(block(after: "func moreItems(for task: TaskItem", in: source)?.contains("Button(\"Move to Top\") { manager.moveToTop(task.id) }") ?? false) {
+            problems.append("the menu lost Move to Top")
+        }
+        if !(block(after: ".accessibilityActions", in: source)?.contains("Button(\"Move to Top\") { manager.moveToTop(task.id) }") ?? false) {
+            problems.append("Move to Top is not an accessibility action")
+        }
+        return problems
+    }
+
+    /// The Filtered row: inside `if filter.isNarrowing {`, above the rows, with a Show All whose
+    /// `showAll()` resets all four filters; and the overview's All tasks row counts every task.
+    static func filteredRowProblems(in source: String, overview: String) -> [String] {
+        var problems: [String] = []
+        let resets = ["sourceFilter = .all", "projectFilter = TaskFacets.anyProject",
+                      "statusFilter = .toDoAndInProgress", "tagFilter = TaskFacets.anyTag"]
+        let showAll = block(after: "func showAll()", in: source) ?? ""
+        for reset in resets where !showAll.contains(reset) {
+            problems.append("Show All leaves \(reset) out")
+        }
+        let marker = "SettingsActionRow(\"Filtered\""
+        if !(block(after: "if filter.isNarrowing {", in: source)?.contains(marker) ?? false) {
+            problems.append("the Filtered row does not show only while the filters narrow")
+        }
+        if !(block(after: marker, in: source)?.contains("Button(\"Show All\", action: showAll)") ?? false) {
+            problems.append("the Filtered row has no Show All")
+        }
+        if let row = source.range(of: marker), let rows = source.range(of: "TaskRowList(filter: filter"), row.lowerBound < rows.lowerBound {
+            // Above the rows.
+        } else {
+            problems.append("the Filtered row is not above the rows")
+        }
+        if !overview.contains("TaskFacets.counts(manager.activeTasks)") {
+            problems.append("the All tasks row does not count every task")
+        }
+        return problems
+    }
+
+    /// The literal titles of the task ⋯ menu's buttons (`moreItems(for:)`).
+    static func menuTitles(in source: String) -> [String] {
+        guard let menu = block(after: "func moreItems(for task: TaskItem", in: source),
+              let pattern = try? NSRegularExpression(pattern: #"Button\("([^"]*)""#) else { return [] }
+        return pattern.matches(in: menu, range: NSRange(menu.startIndex..., in: menu)).compactMap { match in
+            Range(match.range(at: 1), in: menu).map { String(menu[$0]) }
+        }
+    }
+
+    /// `requestAuthorization(options:` only in TaskReminders.swift; `requestPermission()` called
+    /// only inside `TasksManager.setSchedule`, which must call it.
+    static func permissionProblems(in sources: [String: String]) -> [String] {
+        var problems: [String] = []
+        for (path, source) in sources.sorted(by: { $0.key < $1.key })
+        where path != remindersPath && source.contains("requestAuthorization(options:") {
+            problems.append("\(path) asks for notification permission")
+        }
+        for (path, source) in sources.sorted(by: { $0.key < $1.key }) where path != remindersPath {
+            let calls = occurrences(of: "TaskReminders.requestPermission()", in: source)
+            guard calls > 0 else { continue }
+            let inSchedule = path == managerPath
+                ? occurrences(of: "TaskReminders.requestPermission()", in: functionBody("setSchedule", in: source) ?? "")
+                : 0
+            if calls > inSchedule {
+                problems.append("requestPermission() is called outside setSchedule")
+            }
+        }
+        if let manager = sources[managerPath],
+           !(functionBody("setSchedule", in: manager)?.contains("TaskReminders.requestPermission()") ?? false) {
+            problems.append("setSchedule never asks: a reminder could never show")
+        }
+        return problems
+    }
+
+    // MARK: - Helpers
+
+    private static func read(_ path: String) throws -> String {
+        code(try String(contentsOf: repoRoot.appendingPathComponent(path), encoding: .utf8))
+    }
+
+    private static func swiftFiles(under directory: String) throws -> [String] {
+        let root = repoRoot.appendingPathComponent(directory)
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
+        var paths: [String] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            paths.append(String(url.path.dropFirst(repoRoot.path.count + 1)))
+        }
+        return paths
+    }
+
+    /// A function's body: from its declaration to the next member declaration at the same indent.
+    private static func functionBody(_ name: String, in text: String) -> String? {
+        guard let start = text.range(of: "func \(name)(") else { return nil }
+        let rest = text[start.upperBound...]
+        let ends = ["\n    func ", "\n    private func ", "\n    static func ", "\n    @discardableResult"]
+            .compactMap { rest.range(of: $0)?.lowerBound }
+        return String(rest[..<(ends.min() ?? rest.endIndex)])
+    }
+
+    /// Source with comment lines dropped, so prose about a rule never trips it.
+    private static func code(_ text: String) -> String {
+        text.components(separatedBy: "\n").filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return !trimmed.hasPrefix("//") && !trimmed.hasPrefix("*") && !trimmed.hasPrefix("/*")
+        }.joined(separator: "\n") + "\n"
+    }
+
+    /// The balanced `{ … }` that the first `marker` opens (the first brace after it), or nil.
+    private static func block(after marker: String, in source: String) -> String? {
+        guard let start = source.range(of: marker),
+              let open = source[start.lowerBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var index = open
+        repeat {
+            if source[index] == "{" { depth += 1 } else if source[index] == "}" { depth -= 1 }
+            index = source.index(after: index)
+        } while index < source.endIndex && depth > 0
+        return String(source[open..<index])
+    }
+
+    private static func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
+}

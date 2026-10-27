@@ -53,7 +53,40 @@ struct DebugSnapshotRequest {
 enum DebugSnapshots {
     static func run(_ request: DebugSnapshotRequest, viewModel: KannuViewModel) async {
         try? FileManager.default.createDirectory(at: request.directory, withIntermediateDirectories: true)
+        // Fixture tasks before anything touches the task list: a snapshot never reads or writes
+        // the user's tasks.json.
+        TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
+        if request.tabs == nil || request.tabs?.contains("allTasks") == true {
+            boards.append(("allTasks", AnyView(Form {
+                Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
+                AllTasksPage(query: .constant(""), context: tasksBoardContext())
+            })))
+        }
+        if request.tabs == nil || request.tabs?.contains("newTaskSheet") == true {
+            // New Task half typed: "pl" offers #planning in its colour and "+ pl"; a reminder
+            // tomorrow at 10:00 with Notify on.
+            let typed = NewTaskDraft()
+            typed.draft.title = "Write the onboarding guide"
+            typed.draft.typeEstimate("1.5h")
+            typed.draft.tagsText = "docs, pl"
+            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+            typed.draft.reminder = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)
+            boards.append(("newTaskSheet", AnyView(NewTaskSheet(newTask: typed, listFilter: .all) { _ in })))
+        }
+        if request.tabs == nil || request.tabs?.contains("taskPage") == true {
+            boards.append(("taskPage", AnyView(Form {
+                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
+                TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID, context: tasksBoardContext())
+            })))
+        }
+        if request.tabs == nil || request.tabs?.contains("localTaskPage") == true {
+            // A local task: its title typed in place, a reminder with Notify off.
+            boards.append(("localTaskPage", AnyView(Form {
+                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
+                TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID, context: tasksBoardContext())
+            })))
+        }
         if request.tabs == nil || request.tabs?.contains("findings") == true {
             boards.append(("findings", AgentSecuritySettings.snapshotFindingRows(DebugSnapshotFixtures.findings)))
         }
@@ -81,6 +114,20 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
+        if request.tabs == nil || request.tabs?.contains("onboardingPermissions") == true {
+            // Every row, in the states this Mac's answers give them; nothing is requested.
+            boards.append(("onboardingPermissions", AnyView(
+                PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
+                                    onLaunchAtLoginChoice: { _ in }, onContinue: {})
+                    .frame(height: 1080)
+            )))
+        }
+        if request.tabs == nil || request.tabs?.contains("onboardingNotes") == true {
+            boards.append(("onboardingNotes", AnyView(
+                NotesSelectionView(onContinue: { _ in })
+                    .frame(width: 400, height: 600)
+            )))
+        }
         for (name, view) in boards {
             for dark in [false, true] {
                 let root = AnyView(view
@@ -93,6 +140,39 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("notch") == true {
             await render(AnyView(notchBoard), name: "notch-dots", dark: true, width: 360, into: request.directory, scale: 4)
         }
+        if request.tabs == nil || request.tabs?.contains("notchFills") == true {
+            // Notch content on fills that flip its text, set up the way ContentView does: a light
+            // scheme inside the always-dark notch window. Black is the before/after control.
+            let fills: [(name: String, color: Color)] = [
+                ("black", .black), ("white", .white), ("yellow", Color(nsColor: .systemYellow)),
+                ("blue", Color(nsColor: .systemBlue)),
+            ]
+            let sessions = DebugSnapshotFixtures.recentChats(now: Date())
+            ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: sessions))
+            let usage = DebugSnapshotFixtures.usageResults(now: Date())
+            let usageWidth = 640 - UsageCardMetrics.openNotchHorizontalPadding * 2 - UsageCardMetrics.openNotchSideInset * 2
+            for fill in fills {
+                let scheme: ColorScheme = fill.color.isPerceivedLight ? .light : .dark
+                let dots = notchDotsRow.padding(12).background(fill.color).notchAppearance(scheme, fill: fill.color)
+                await render(AnyView(dots), name: "fill-\(fill.name)-dots", dark: true, width: 360,
+                             into: request.directory, scale: 3)
+                let chats = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: false)
+                    .environmentObject(viewModel)
+                    .frame(height: 560)
+                    .background(fill.color)
+                    .notchAppearance(scheme, fill: fill.color)
+                await render(AnyView(chats), name: "fill-\(fill.name)-chats", dark: true, width: 612, into: request.directory)
+                let cards = NotchLLMUsageView(snapshotResults: usage([.claude, .cursor], false), snapshotRefreshStatus: nil,
+                                              snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: Date()),
+                                              snapshotNotchWidth: 640)
+                    .environmentObject(viewModel)
+                    .frame(height: UsageCardMetrics.smallestTabContentHeight, alignment: .top)
+                    .background(fill.color)
+                    .notchAppearance(scheme, fill: fill.color)
+                await render(AnyView(cards), name: "fill-\(fill.name)-usage", dark: true, width: usageWidth,
+                             into: request.directory)
+            }
+        }
         if request.tabs == nil || request.tabs?.contains("recentChats") == true {
             // The agent tab's width inside a 640 pt panel, a 420 pt minimalistic one and the 340 pt island.
             let sessions = DebugSnapshotFixtures.recentChats(now: Date())
@@ -104,6 +184,36 @@ enum DebugSnapshots {
                     .background(Color.black)
                     .environment(\.colorScheme, .dark)
                 await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("usage") == true {
+            // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
+            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read.
+            // Each sits in the 142 pt slot a notched MacBook leaves, with a red line at its floor,
+            // so a card running past it shows.
+            let now = Date()
+            let fixtures = DebugSnapshotFixtures.usageResults(now: now)
+            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool)] = [
+                ("usage-1", [.claude], nil, false),
+                ("usage-2", [.claude, .cursor], nil, false),
+                ("usage-3", [.claude, .cursor, .codex], nil, false),
+                ("usage-status", [.claude, .cursor], .signInNeeded, false),
+                ("usage-stale", [.claude, .cursor], nil, true),
+            ]
+            for notchWidth in [CGFloat(640), 690] {
+                for board in boards {
+                    let results = fixtures(board.providers, board.stale)
+                    let view = NotchLLMUsageView(snapshotResults: results, snapshotRefreshStatus: board.status,
+                                                 snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: now),
+                                                 snapshotNotchWidth: notchWidth)
+                        .environmentObject(viewModel)
+                        .frame(height: UsageCardMetrics.smallestTabContentHeight, alignment: .top)
+                        .overlay(alignment: .bottom) { Color.red.frame(height: 1) }
+                        .background(Color.black)
+                        .environment(\.colorScheme, .dark)
+                    let width = notchWidth - UsageCardMetrics.openNotchHorizontalPadding * 2 - UsageCardMetrics.openNotchSideInset * 2
+                    await render(AnyView(view), name: "\(board.name)-\(Int(notchWidth))", dark: true, width: width, into: request.directory)
+                }
             }
         }
     }
@@ -216,6 +326,13 @@ enum DebugSnapshots {
 
     /// The live and preview dots in every state, on black, for a pixel-level before/after.
     private static var notchBoard: some View {
+        notchDotsRow
+            .padding(12)
+            .background(Color.black)
+    }
+
+    /// The dots and the security shield in every state, on whatever the caller paints behind.
+    private static var notchDotsRow: some View {
         let states: [AgentTrafficLightState] = [.executing, .awaitingInput, .stopped, .inactive]
         return VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(states.enumerated()), id: \.offset) { _, state in
@@ -228,8 +345,12 @@ enum DebugSnapshots {
                 }
             }
         }
-        .padding(12)
-        .background(Color.black)
+    }
+
+    /// What the Tasks boards' pages need from the tab: sheets and navigation go nowhere.
+    private static func tasksBoardContext() -> TasksPageContext {
+        TasksPageContext(sheet: .constant(nil), pendingDelete: .constant(nil), confirmsDisconnect: .constant(nil),
+                         open: { _ in }, connect: { _ in })
     }
 
     private static func render(_ view: AnyView, name: String, dark: Bool, width: CGFloat, into directory: URL,
@@ -316,6 +437,102 @@ enum DebugSnapshots {
 /// Findings for the snapshot board only — never ingested into the store, whose ingest prunes the
 /// shared acknowledgements.
 enum DebugSnapshotFixtures {
+    /// The Jira task the `taskPage` board opens: a remote 2h estimate and no estimate of Kannu's.
+    static let jiraTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F01")!
+    /// The local task the `localTaskPage` board opens: a reminder in 20 hours, its notification off.
+    static let localTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F02")!
+
+    /// About a dozen tasks for the Tasks boards (`TasksManager.snapshotFile`): estimates, tags with
+    /// colours, an overdue reminder, one past its estimate, a Jira task with its own estimate, a
+    /// GitLab issue and merge request, one done and one archived. Never written anywhere.
+    static func tasksFile(now: Date) -> TasksFile {
+        func segment(_ minutes: Int, endingHoursAgo hours: Double = 2) -> WorkSegment {
+            let end = now.addingTimeInterval(-hours * 3600)
+            return WorkSegment(start: end.addingTimeInterval(-Double(minutes) * 60), end: end, origin: .timer)
+        }
+        func remote(_ key: String, estimate: Int? = nil, status: String, kind: GitLabKind? = nil, iid: Int? = nil,
+                    labels: [String]? = nil) -> RemoteTaskInfo {
+            RemoteTaskInfo(remoteID: key, key: key, hostScope: "https://example.test", status: status,
+                           isDoneRemotely: false, remoteEstimateSeconds: estimate, remoteSpentSeconds: nil,
+                           gitlabProjectID: iid == nil ? nil : 42, gitlabIID: iid, lastSeenAt: now, gitlabKind: kind,
+                           gitlabWebURL: nil, statusCategory: nil, labels: labels)
+        }
+        let tasks: [TaskItem] = [
+            TaskItem(id: localTaskID, title: "Write the release notes", localEstimateSeconds: 4 * 3600, segments: [segment(70)],
+                     tags: ["docs"], scheduledAt: now.addingTimeInterval(20 * 3600), reminderMuted: true),
+            TaskItem(title: "Prepare the sprint review", localEstimateSeconds: 3600,
+                     scheduledAt: now.addingTimeInterval(-26 * 3600)),
+            TaskItem(title: "Fix the flaky timer test", localEstimateSeconds: 30 * 60, segments: [segment(45)],
+                     tags: ["urgent"]),
+            TaskItem(title: "Reply to the design feedback"),
+            TaskItem(id: jiraTaskID, source: .jira, title: "Customer API: org-scoped file upload keys",
+                     remote: remote("ABC-412", estimate: 2 * 3600, status: "In Progress")),
+            TaskItem(source: .gitlab, title: "hc: convert EC2 checks to the new runner",
+                     remote: remote("discern/applications/ds-vendors#4264", status: "opened", kind: .issue, iid: 4264,
+                                    labels: ["backend"])),
+            TaskItem(title: "Plan the Q4 roadmap", localEstimateSeconds: 8 * 3600, segments: [segment(25, endingHoursAgo: 30)],
+                     tags: ["planning"]),
+            TaskItem(source: .gitlab, title: "Bump the notch window level",
+                     remote: remote("discern/applications/kannu!412", status: "opened", kind: .mergeRequest, iid: 412)),
+            TaskItem(title: "Review the onboarding copy", localEstimateSeconds: 15 * 60),
+            TaskItem(title: "Book flights for the offsite"),
+            TaskItem(title: "Ship 1.4.0", localEstimateSeconds: 2 * 3600, segments: [segment(130, endingHoursAgo: 28)],
+                     visibility: .done, closedAt: now.addingTimeInterval(-24 * 3600)),
+            TaskItem(title: "Old spike: notch physics", visibility: .archived,
+                     archivedAt: now.addingTimeInterval(-3 * 24 * 3600), archivedByUser: true),
+        ]
+        return TasksFile(tasks: tasks, drafts: [],
+                         tagColors: ["docs": .blue, "urgent": .red, "planning": .purple])
+    }
+
+    /// The Usage tab's cards as this Mac shows them: a Max plan at 13 % of its 5-hour window with a
+    /// pace that fills it, 83 % of the week, Fable at 41 %, two more per-model windows (so one
+    /// folds when a status row is up); Cursor Pro at 62 % of its billing cycle with token totals;
+    /// Codex at 20 / 55 %. `stale` dates every reading a day back.
+    static func usageResults(now: Date) -> ([ProviderID], Bool) -> [ProviderID: UsageResult] {
+        { providers, stale in
+            let observed: Date? = stale ? now.addingTimeInterval(-86_400) : now.addingTimeInterval(-120)
+            let fiveHourReset = now.addingTimeInterval(4 * 3600 + 15 * 60)
+            let weekReset = now.addingTimeInterval(86_400 + 8 * 3600 + 5 * 60)
+            func limit(_ used: Double, _ reset: Date?) -> UsageLimit {
+                UsageLimit(used: used, limit: 100, resetsAt: reset, severity: nil, observedAt: observed)
+            }
+            var claude = UsageSnapshot()
+            claude.accountTier = "Max"
+            claude.billedCostOnly = true
+            claude.sessionLimit = limit(13, fiveHourReset)
+            claude.weekLimit = limit(83, weekReset)
+            claude.extraLimits = [
+                NamedLimit(key: "model_scoped:Fable", limit: limit(41, weekReset), label: "Fable"),
+                NamedLimit(key: "model_scoped:Opus", limit: limit(12, weekReset), label: "Opus"),
+                NamedLimit(key: "model_scoped:Sonnet", limit: limit(5, weekReset), label: "Sonnet"),
+            ]
+            var cursor = UsageSnapshot()
+            cursor.accountTier = "Pro"
+            cursor.weekLimit = limit(62, now.addingTimeInterval(9 * 86_400))
+            cursor.today = UsageTotals(inputTokens: 1_100_000, outputTokens: 120_000, costUSD: 3.4)
+            cursor.week = UsageTotals(inputTokens: 7_400_000, outputTokens: 680_000, costUSD: 21.8)
+            cursor.onDemandSpendUSD = 3.4
+            var codex = UsageSnapshot()
+            codex.accountTier = "Plus"
+            codex.billedCostOnly = true
+            codex.sessionLimit = limit(20, now.addingTimeInterval(2 * 3600))
+            codex.weekLimit = limit(55, now.addingTimeInterval(3 * 86_400))
+            codex.today = UsageTotals(inputTokens: 300_000, outputTokens: 40_000)
+            codex.week = UsageTotals(inputTokens: 2_100_000, outputTokens: 260_000)
+            let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
+            return all.filter { providers.contains($0.key) }
+        }
+    }
+
+    /// A pace that fills the 5-hour window before it resets, and a week heading for 95 %.
+    static func usageOutlooks(now: Date) -> [String: UsageForecast.Outlook] {
+        [
+            NotchLLMUsageView.windowID(.claude, slot: "session"): .hitsLimit(at: now.addingTimeInterval(2 * 3600 + 40 * 60)),
+            NotchLLMUsageView.windowID(.claude, slot: "week"): .lastsUntilReset(projected: 95),
+        ]
+    }
+
     /// The user-shaped policy the View-rules board renders: commands with and without reasons,
     /// a multi-word phrase, and a tool rule.
     static let agentPolicy = AgentPolicy(rules: [

@@ -122,6 +122,7 @@ private struct DynamicIslandArtworkVideoView: NSViewRepresentable {
 }
 
 struct KannuArtworkSourceView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @ObservedObject private var musicManager = MusicManager.shared
     @Default(.showLiveCanvasInDynamicIsland) private var showLiveCanvasInDynamicIsland
 
@@ -137,11 +138,11 @@ struct KannuArtworkSourceView: View {
         Group {
             if !musicManager.hasActiveSession {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(notchForeground.opacity(0.08))
                     .overlay {
                         Image(systemName: "music.note")
                             .font(.system(size: 28, weight: .light))
-                            .foregroundStyle(.gray.opacity(0.55))
+                            .foregroundStyle(Color.secondary.opacity(0.55))
                     }
             } else if let liveCanvasURL {
                 DynamicIslandArtworkVideoView(url: liveCanvasURL, videoGravity: .resizeAspectFill)
@@ -158,6 +159,7 @@ struct KannuArtworkSourceView: View {
 // MARK: - Music Player Components
 
 struct MusicPlayerView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject private var musicManager = MusicManager.shared
     @Default(.enableLyrics) private var enableLyrics
@@ -182,8 +184,11 @@ struct MusicPlayerView: View {
     private var cornerLyricsButton: some View {
         HoverButton(
             icon: enableLyrics ? "quote.bubble.fill" : "quote.bubble",
-            iconColor: enableLyrics ? musicManager.brandAccentColor : .white,
-            scale: .medium
+            iconColor: enableLyrics ? musicManager.brandAccentColor : notchForeground,
+            scale: .medium,
+            // Top-right corner of the notch: the bubble must open downwards.
+            tooltip: MusicControlButton.lyrics.label,
+            tooltipEdge: .below
         ) {
             enableLyrics.toggle()
         }
@@ -305,6 +310,7 @@ struct AlbumArtView: View {
 }
 
 struct MusicControlsView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var musicManager = MusicManager.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
@@ -356,7 +362,7 @@ struct MusicControlsView: View {
                 isExplicit: musicManager.hasActiveSession && musicManager.isCurrentTrackExplicit,
                 font: .headline,
                 nsFont: .headline,
-                textColor: musicManager.hasActiveSession ? .white : .white.opacity(0.55),
+                textColor: musicManager.hasActiveSession ? notchForeground : notchForeground.opacity(0.55),
                 frameWidth: width,
                 badgeHeight: 14
             )
@@ -368,8 +374,8 @@ struct MusicControlsView: View {
                 nsFont: .headline,
                 textColor: musicManager.hasActiveSession
                     ? (Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor)
-                        .ensureMinimumBrightness(factor: 0.6) : .gray)
-                    : .gray.opacity(0.65),
+                        .ensureMinimumBrightness(factor: 0.6) : .secondary)
+                    : Color.secondary.opacity(0.65),
                 frameWidth: width
             )
             .fontWeight(.medium)
@@ -392,7 +398,7 @@ struct MusicControlsView: View {
                         lyricsBinding,
                         font: .system(size: 12, weight: .regular),
                         nsFont: .headline,
-                        textColor: .white.opacity(0.7),
+                        textColor: notchForeground.opacity(0.7),
                         minDuration: 0.35,
                         frameWidth: width
                     )
@@ -497,7 +503,7 @@ struct MusicControlsView: View {
                     }
                 ),
                 range: 0...1,
-                color: .white,
+                color: notchForeground,
                 dragging: $hudDragging,
                 lastDragged: $hudLastDragged,
                 onValueChange: { newValue in
@@ -577,7 +583,7 @@ struct MusicControlsView: View {
     private var repeatIconColor: Color {
         switch musicManager.repeatMode {
         case .off:
-            return .white
+            return notchForeground
         case .all, .one:
             return brandAccentColor
         }
@@ -612,13 +618,15 @@ struct MusicControlsView: View {
         case .playPause:
             HoverButton(
                 icon: musicManager.isPlaying ? (musicManager.isLiveStream ? "stop.fill" : "pause.fill") : "play.fill",
-                scale: .large
+                scale: .large,
+                tooltip: control.label
             ) {
                 MusicManager.shared.togglePlay()
             }
         case .trackBackward:
             playbackButton(
                 icon: "backward.fill",
+                tooltip: control.label,
                 press: .nudge(-skipMagnitude),
                 trigger: skipGestureTrigger(for: .trackBackward)
             ) {
@@ -627,6 +635,7 @@ struct MusicControlsView: View {
         case .trackForward:
             playbackButton(
                 icon: "forward.fill",
+                tooltip: control.label,
                 press: .nudge(skipMagnitude),
                 trigger: skipGestureTrigger(for: .trackForward)
             ) {
@@ -635,6 +644,7 @@ struct MusicControlsView: View {
         case .seekBackward:
             playbackButton(
                 icon: "gobackward.10",
+                tooltip: control.label,
                 press: .wiggle(.counterClockwise),
                 trigger: skipGestureTrigger(for: .seekBackward)
             ) {
@@ -643,6 +653,7 @@ struct MusicControlsView: View {
         case .seekForward:
             playbackButton(
                 icon: "goforward.10",
+                tooltip: control.label,
                 press: .wiggle(.clockwise),
                 trigger: skipGestureTrigger(for: .seekForward)
             ) {
@@ -651,8 +662,9 @@ struct MusicControlsView: View {
         case .shuffle:
             HoverButton(
                 icon: "shuffle",
-                iconColor: musicManager.isShuffled ? brandAccentColor : .white,
-                scale: .medium
+                iconColor: musicManager.isShuffled ? brandAccentColor : notchForeground,
+                scale: .medium,
+                tooltip: control.label
             ) {
                 MusicManager.shared.toggleShuffle()
             }
@@ -660,7 +672,8 @@ struct MusicControlsView: View {
             HoverButton(
                 icon: repeatIcon,
                 iconColor: repeatIconColor,
-                scale: .medium
+                scale: .medium,
+                tooltip: control.label
             ) {
                 MusicManager.shared.toggleRepeat()
             }
@@ -671,8 +684,9 @@ struct MusicControlsView: View {
         case .lyrics:
             HoverButton(
                 icon: enableLyrics ? "quote.bubble.fill" : "quote.bubble",
-                iconColor: enableLyrics ? brandAccentColor : .white,
-                scale: .medium
+                iconColor: enableLyrics ? brandAccentColor : notchForeground,
+                scale: .medium,
+                tooltip: control.label
             ) {
                 enableLyrics.toggle()
             }
@@ -686,6 +700,7 @@ struct MusicControlsView: View {
 
     private func playbackButton(
         icon: String,
+        tooltip: String,
         press: HoverButton.PressEffect?,
         trigger: SkipTrigger?,
         action: @escaping () -> Void
@@ -695,7 +710,8 @@ struct MusicControlsView: View {
             scale: .medium,
             pressEffect: press,
             externalTriggerToken: trigger?.token,
-            externalTriggerEffect: trigger?.pressEffect
+            externalTriggerEffect: trigger?.pressEffect,
+            tooltip: tooltip
         ) {
             action()
         }
@@ -730,7 +746,7 @@ struct NotchHomeView: View {
     
     var body: some View {
         Group {
-            if !coordinator.firstLaunch {
+            if !coordinator.helloPending {
                 mainContent
             }
         }
@@ -767,6 +783,7 @@ struct NotchHomeView: View {
 }
 
 struct MusicSliderView: View {
+    @Environment(\.notchForeground) private var notchForeground
     @Binding var sliderValue: Double
     @Binding var duration: Double
     @Binding var lastDragged: Date
@@ -915,14 +932,14 @@ struct MusicSliderView: View {
         case .accent:
             return .accentColor
         case .white:
-            return .white
+            return notchForeground
         }
     }
 
     private var timeLabelColor: Color {
         Defaults[.playerColorTinting]
             ? Color(nsColor: color).ensureMinimumBrightness(factor: 0.6)
-            : .gray
+            : .secondary
     }
 
     private var trailingTimeText: String {
@@ -998,7 +1015,7 @@ struct CustomSlider: View {
                     .offset(y: trackHeight * 0.2)
                 } else {
                     Rectangle()
-                        .fill(.gray.opacity(0.3))
+                        .fill(Color.secondary.opacity(0.3))
                         .frame(height: trackHeight)
                         .cornerRadius(trackHeight / 2)
                 }
@@ -1039,6 +1056,7 @@ struct CustomSlider: View {
 }
 
 private struct MediaOutputPickerButton: View {
+    @Environment(\.notchForeground) private var notchForeground
     @ObservedObject private var routeManager = AudioRouteManager.shared
     @StateObject private var volumeModel = MediaOutputVolumeViewModel()
     @State private var isPopoverPresented = false
@@ -1046,13 +1064,17 @@ private struct MediaOutputPickerButton: View {
     @EnvironmentObject private var vm: KannuViewModel
 
     var body: some View {
-        HoverButton(icon: buttonIcon, iconColor: .white, scale: .medium) {
+        HoverButton(
+            icon: buttonIcon,
+            iconColor: notchForeground,
+            scale: .medium,
+            tooltip: MusicControlButton.mediaOutput.label
+        ) {
             isPopoverPresented.toggle()
             if isPopoverPresented {
                 routeManager.refreshDevices()
             }
         }
-        .accessibilityLabel("Media output")
         .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
             MediaOutputSelectorPopover(
                 routeManager: routeManager,
@@ -1066,6 +1088,7 @@ private struct MediaOutputPickerButton: View {
                 isHoveringPopover = false
                 updatePopoverActivity()
             }
+            .notchDarkAppearance()
         }
         .onAppear {
             routeManager.refreshDevices()
@@ -1091,6 +1114,7 @@ private struct MediaOutputPickerButton: View {
 }
 
 private struct AirPlayPickerButton: View {
+    @Environment(\.notchForeground) private var notchForeground
     @ObservedObject private var musicManager = MusicManager.shared
     @ObservedObject private var airPlayManager = AppleMusicAirPlayManager.shared
     @State private var isPopoverPresented = false
@@ -1102,13 +1126,17 @@ private struct AirPlayPickerButton: View {
     }
 
     var body: some View {
-        HoverButton(icon: "airplayaudio", iconColor: .white, scale: .medium) {
+        HoverButton(
+            icon: "airplayaudio",
+            iconColor: notchForeground,
+            scale: .medium,
+            tooltip: MusicControlButton.airPlay.label
+        ) {
             isPopoverPresented.toggle()
             if isPopoverPresented {
                 Task { await airPlayManager.refreshDevices() }
             }
         }
-        .accessibilityLabel("AirPlay")
         .popover(isPresented: $isPopoverPresented, arrowEdge: .bottom) {
             AirPlaySelectorPopover(
                 airPlayManager: airPlayManager,
@@ -1121,6 +1149,7 @@ private struct AirPlayPickerButton: View {
                 isHoveringPopover = false
                 updatePopoverActivity()
             }
+            .notchDarkAppearance()
         }
         .onAppear {
             if isAppleMusicActive {
@@ -1185,6 +1214,10 @@ struct MediaOutputSelectorPopover: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
+                // Top-left of the popover: open below, and grow rightwards so the bubble stays
+                // inside the popover's window.
+                .hoverTooltip(muteTooltip, edge: .below, alignment: .leading)
+                .accessibilityLabel(muteTooltip)
 
                 Slider(
                     value: Binding(
@@ -1273,6 +1306,10 @@ struct MediaOutputSelectorPopover: View {
 
     private var volumePercentage: String {
         "\(Int(round(volumeModel.level * 100)))%"
+    }
+
+    private var muteTooltip: String {
+        volumeModel.isMuted ? String(localized: "Unmute") : String(localized: "Mute")
     }
 }
 

@@ -69,6 +69,10 @@ When asked to find, audit, or modify something: load the relevant skills first; 
 
 Preserve the existing product philosophy. Don't redesign unless explicitly asked, don't add unnecessary UI, don't add animations for flair. Respect reduced-motion preferences where relevant. Preserve notch positioning and window behavior. Avoid hard-coded assumptions that only hold on one Mac configuration; consider Retina scaling, display sizes, and light/dark appearance. If existing UI already implements the intended behavior, modify it rather than rebuilding it.
 
+Notch header: buttons that are always there keep fixed positions on the right; buttons and indicators that come and go appear to their left, so a fixed button never moves. The trailing row is right-aligned, so an item that appears pushes only what is to its left. `KannuTests/HeaderOrderRulesTests.swift` pins the order.
+
+Every icon-only notch control gets a hover tooltip that doubles as its accessibility label — `.hoverTooltip(...)`, never `.help(...)`, which never renders in the notch. Read `docs/TOOLTIPS.md` before adding one.
+
 ### Debugging
 
 Reproduce or trace the actual failure → identify the root cause → explain it briefly → make the smallest appropriate fix → check for regressions. Never paper over a problem with arbitrary delays, retries, or force unwraps. For timing/lifecycle bugs, investigate app/window lifecycle, main-actor isolation, Task cancellation, timers, notification observers, process termination, and state synchronization **before** adding sleeps or polling.
@@ -143,6 +147,12 @@ For coding tasks report: what changed, why, files affected, important architectu
 - **Debug builds put the real code in `Kannu.app/Contents/MacOS/Kannu.debug.dylib`** — the main binary is a tiny stub, so string-grepping it for new code gives false negatives.
 - A recreated build directory can leave a **stale xcodebuild build database** that reports `BUILD SUCCEEDED` with zero compile tasks. When verifying a build, confirm compile activity (or delete the derivedData path first).
 - **Nothing runs before the Terms of Use are accepted.** `applicationDidFinishLaunching` starts only the crash marker, the hang watchdog, the updater and the orphan reaper, then either continues the launch (`continueLaunch()`) or shows the terms gate. The `AppDelegate` singletons are `lazy var` for this reason — they used to be built eagerly at init, which spawned helpers and raised permission prompts before anyone had agreed to anything — and `continueLaunch()` touches each one in order. Keep them lazy, keep new launch work inside `continueLaunch()`, and do not give `KannuApp` an `init` that does work; `LaunchGateRulesTests` pins all three. Separately: a first touch of any TCC-protected resource (Bluetooth, ~/Downloads, …) blocks the main thread until the permission dialog is answered, and ad-hoc rebuilds change the code signature so the prompts recur — first touches of protected resources still belong on a background queue.
+- **No permission dialog before onboarding's Permissions step, and none after a Not now.** A fresh
+  install used to raise four macOS dialogs in the same second as the welcome music, which now plays
+  only at onboarding's Finish (`startHello()`). A feature whose first touch raises a dialog (TCC,
+  Automation, MusicKit, another app's container) checks `LaunchPermissionManager.mayTouch(_:)`
+  before it, starts on `.launchPermissionsChanged`, and gets a `LaunchPermission` case and a
+  Permissions row. `FirstLaunchRulesTests` pins every gate.
 - **`Defaults.publisher(...)` without `options: []` fires an initial event on subscription** — any sequencing built on "this only fires on change" silently breaks.
 - `AgentHookInstaller` embeds the hook script (authoritative, versioned via `KANNU_HOOK_SCRIPT_VERSION`); `scripts/kannu-agent-status.sh` is a generated mirror — never let them drift. This is now enforced by the pre-commit hook, because the prose version of this rule failed three times.
 - **CI runs on push and PR to both `main` and `development`** (`.github/workflows/ci.yml`) — but a PR whose *base* is a feature branch gets no Build job at all, only SonarCloud, so a stacked PR can look green having never been compiled. Check which jobs actually ran before trusting a tick.

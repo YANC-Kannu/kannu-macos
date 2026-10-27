@@ -118,6 +118,42 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
         )
     }
 
+    /// CodeRabbit on #109: two inputs to the verdict changed with nothing re-checking. Granting or
+    /// revoking Accessibility switches between `AXFullScreen` and the menu-bar fallback, and the
+    /// fallback's menu bar can still be sliding when the 500 ms settle reads it, so the fallback
+    /// takes one more pass after it.
+    func testTheVerdictIsReadAgainWhenItsInputsChange() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/observers/FullscreenMediaDetection.swift"])
+        let observers = try XCTUnwrap(Self.body(ofFunction: "setupNotificationObservers", in: text),
+                                      "setupNotificationObservers went away — this pin is now vacuous, update it")
+        XCTAssertTrue(observers.contains("AccessibilityPermissionStore.shared.$isAuthorized")
+                      && observers.contains("self?.handleChange()"),
+                      "a change to the Accessibility grant no longer re-reads fullscreen")
+        let change = try XCTUnwrap(Self.body(ofFunction: "handleChange", in: text), "handleChange went away")
+        let code = Self.strippingComments(change)
+        XCTAssertEqual(code.components(separatedBy: "self.updateFullScreenStatus()").count - 1, 2,
+                       "the fallback no longer looks again after the menu bar's slide")
+        XCTAssertTrue(code.contains("guard !AXIsProcessTrusted() else { return }"),
+                      "the second look is for the fallback only; AXFullScreen needs no wait")
+    }
+
+    /// `fullscreenStatus` is main-actor state, but the detector reads screens and windows off the
+    /// main thread (an Accessibility read of an unresponsive app can wait). The verdict reaches the
+    /// property through one `@MainActor` function, and nothing else assigns it.
+    func testTheVerdictIsPublishedOnTheMainActor() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/observers/FullscreenMediaDetection.swift"])
+        let publish = try XCTUnwrap(Self.body(ofFunction: "publish", in: text),
+                                    "publish went away — this pin is now vacuous, update it")
+        XCTAssertTrue(publish.contains("fullscreenStatus = newStatus"), "publish(_:) no longer assigns the verdict")
+        XCTAssertTrue(publish.contains("ticket == scanGeneration"),
+                      "a scan that finished late can overwrite a newer verdict (CodeRabbit on #112)")
+        XCTAssertTrue(text.contains("@MainActor\n    private func publish("), "publish(_:) must be @MainActor")
+        let assignments = Self.strippingComments(text).components(separatedBy: "fullscreenStatus = ").count - 1
+        XCTAssertEqual(assignments, 1, "fullscreenStatus is assigned somewhere other than publish(_:)")
+        XCTAssertFalse(Self.strippingComments(text).contains("Dictionary(uniqueKeysWithValues:"),
+                       "two displays can share a localizedName; uniqueKeysWithValues traps on it")
+    }
+
     /// The recovery path for a dropped `com.apple.screenIsUnlocked`: the lock manager's poll clears
     /// the state, and something must tell AppDelegate so the self-heal inside
     /// `adjustWindowPosition` is actually reached.
@@ -152,18 +188,50 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
         let restore = try XCTUnwrap(Self.body(ofFunction: "restoreWindowsAfterLock", in: text))
         XCTAssertTrue(restore.contains("rejoinNotchSpacesIfNeeded("),
                       "unlocking no longer checks whether the notch was stranded")
-        let repair = try XCTUnwrap(Self.body(ofFunction: "rejoinNotchSpacesIfNeeded", in: text))
-        XCTAssertTrue(repair.contains("ClosedNotchVisibility.shouldRejoinSpaces("),
-                      "the repair no longer asks the tested decision")
-        XCTAssertTrue(repair.contains("CGSSpace.rejoinAllManagedSpaces("),
-                      "the repair no longer re-adds the window to the spaces — ordering it front was measured not to work")
+        let repair = Self.strippingComments(try XCTUnwrap(Self.body(ofFunction: "rejoinNotchSpacesIfNeeded", in: text)))
+        XCTAssertTrue(repair.contains("reassertShown()") && repair.contains("pinNotchWindows(notchWindows, after: reason)"),
+                      "the repair no longer shows the notch space and pins the windows")
+        let pin = Self.strippingComments(try XCTUnwrap(Self.body(ofFunction: "pinNotchWindows", in: text),
+                                                       "pinNotchWindows went away — this pin is now vacuous, update it"))
+        XCTAssertTrue(pin.contains("ClosedNotchVisibility.notchSpaceRepair("),
+                      "the pin no longer asks the tested decision")
+        XCTAssertTrue(pin.contains("CGSSpace.rejoinAllManagedSpaces("),
+                      "the fallback no longer puts an unseen notch back on the managed spaces (2026-09-30)")
+        // Never strip a window before the notch space is confirmed to hold it.
+        let add = try XCTUnwrap(pin.range(of: "notchSpace.add("), "the pin no longer joins the notch space")
+        let readBack = try XCTUnwrap(pin.range(of: "CGSSpace.spaceIDs(of: window)", range: add.upperBound..<pin.endIndex),
+                                     "the join is no longer read back")
+        let strip = try XCTUnwrap(pin.range(of: "CGSSpace.remove(", range: add.upperBound..<pin.endIndex))
+        XCTAssertLessThan(readBack.lowerBound, strip.lowerBound, "the join must be confirmed before any space is left")
+        // A strip that leaves the window off screen is undone and remembered, or the fallback and
+        // the strip undo each other at every check.
+        XCTAssertEqual(pin.components(separatedBy: "keepVisibleAfterStrip(window, after: reason)").count - 1, 2,
+                       "both strips must check the window is still on screen")
+        XCTAssertTrue(pin.contains("notchSpaceUnseen: notchSpaceUnseenWindows.contains(window.windowNumber)"),
+                      "the decision no longer hears about an earlier fallback")
+        // A refused join must not leave the window in no space: the fallback and the refused join
+        // both put it back on the managed spaces.
+        XCTAssertEqual(pin.components(separatedBy: "CGSSpace.rejoinAllManagedSpaces([window])").count - 1, 2,
+                       "a refused join or an unseen notch no longer falls back to the managed spaces")
+    }
+
+    /// The repair that made the notch a member of every space at the first switch after each
+    /// launch (2026-10-22): `isOnActiveSpace` is false by design for a window that lives only in the
+    /// notch space, and emptying the space before re-adding left the window in no space for a moment.
+    func testTheNotchRepairDoesNotUseTheOldSignals() throws {
+        let text = Self.strippingComments(try XCTUnwrap(Self.appSources()["Kannu/KannuApp.swift"]))
+        XCTAssertFalse(text.contains("isOnActiveSpace: $0.isOnActiveSpace"),
+                       "the notch repair decides on isOnActiveSpace again")
+        XCTAssertFalse(text.contains("notchSpace.windows = []"),
+                       "the notch space is emptied to re-sync again")
     }
 
     private static func body(ofFunction name: String, in text: String) -> String? {
         guard let start = text.range(of: "func \(name)(") else { return nil }
         let rest = text[start.upperBound...]
         let candidates = ["\n    private func ", "\n    func ", "\n    @objc func ",
-                          "\n    @objc private func "]
+                          "\n    @objc private func ", "\n    @MainActor private func ",
+                          "\n    private static func ", "\n    @MainActor\n    private func "]
         let end = candidates.compactMap { rest.range(of: $0)?.lowerBound }.min()
         guard let end else { return String(rest) }
         return String(rest[..<end])

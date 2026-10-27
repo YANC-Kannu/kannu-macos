@@ -33,6 +33,7 @@ struct SecurityFindingGuide: Equatable {
         case plaintextTransport
         case undeclaredMCPServer
         case thirdPartyDestination
+        case forbiddenAsset
         case unattendedExecution
         case detection
         case hiddenText
@@ -60,6 +61,7 @@ struct SecurityFindingGuide: Equatable {
         case "plaintext_transport": return .plaintextTransport
         case "undeclared_mcp_server": return .undeclaredMCPServer
         case "third_party_destination": return .thirdPartyDestination
+        case "forbidden_asset": return .forbiddenAsset
         case "unattended_execution": return .unattendedExecution
         case MCPServerWatch.Addition.rule: return .mcpServerAdded
         case HiddenTextIncident.rulePrefix + HiddenTextIncident.Kind.bidi.rawValue: return .hiddenTextBidi
@@ -93,6 +95,9 @@ struct SecurityFindingGuide: Equatable {
         case .thirdPartyDestination:
             return (String(localized: "This MCP server talks to a domain outside the ones the policy file allows."),
                     String(localized: "Check whether that service is approved; if not, remove the server or point it at an approved address."))
+        case .forbiddenAsset:
+            return (String(localized: "The ADR scan policy forbids this tool, MCP server, skill or package, and ADR Discovery found it on this Mac."),
+                    String(localized: "Remove it and whatever installed it. If it should be allowed, take its entry out of the policy's forbidden lists."))
         case .unattendedExecution:
             return (String(localized: "An agent session runs with permission checks off, so it can run commands and change files without asking."),
                     String(localized: "If that wasn't intended, end the session, restart it with permission prompts on, and review what it changed."))
@@ -116,7 +121,7 @@ struct SecurityFindingGuide: Equatable {
                     String(localized: "Review the change and undo anything that wasn't requested."))
         case .policy:
             return (String(localized: "Your agent policy (~/.kannu/agent-policy.json) names this command or tool. With blocking on, Kannu refused the call and told the agent why; with it off, the call ran and this is the report."),
-                    String(localized: "If the agent needs it, edit the policy or turn blocking off in Settings › Agents › Agent policy. If not, check what the agent was trying to do and why."))
+                    String(localized: "If the agent needs it, edit the policy or turn blocking off in Brain › Agent Security › Agent policy. If not, check what the agent was trying to do and why."))
         case .mcpServerAdded:
             return (String(localized: "A new MCP server was added to an AI tool's settings; it runs with that tool's access."),
                     String(localized: "Confirm it was added on purpose and comes from a trusted source; if not, remove it from the settings file."))

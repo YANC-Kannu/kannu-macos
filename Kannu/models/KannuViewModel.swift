@@ -55,6 +55,8 @@ class KannuViewModel: NSObject, ObservableObject {
     @Published var isStatsPopoverActive: Bool = false
     @Published var isMediaOutputPopoverActive: Bool = false
     @Published var isTimerPopoverActive: Bool = false
+    /// The header's Tasks popover is open (`TasksHeaderButton`): the notch stays open under it.
+    @Published var isTasksPopoverActive: Bool = false
     @Published var shouldRecheckHover: Bool = false
     @Published var isScrollGestureActive: Bool = false
     private var scrollGestureSuppressionTokens: Set<UUID> = []
@@ -94,6 +96,27 @@ class KannuViewModel: NSObject, ObservableObject {
     private func resetAutoCloseSuppression() {
         autoCloseSuppressionTokens.removeAll()
         isAutoCloseSuppressed = false
+    }
+
+    /// Clears the interaction state only the hosted views ever release: the two suppression token
+    /// sets and every popover flag `ContentView.hasAnyActivePopovers()` reads.
+    ///
+    /// The window-rebuild path (display or resolution change) drops the views and reuses this view
+    /// model, and `.onDisappear` is unreliable for borderless panels (see `onViewTeardown`), so a
+    /// token held by a hovered view or a popover flag left `true` would otherwise survive into the
+    /// new window — a notch that never auto-closes and never scrolls. `close()` clears the tokens
+    /// too, but the rebuild only calls it while the notch is already closed.
+    /// `NotchTeardownRulesTests` pins the flag list against `hasAnyActivePopovers()`.
+    func resetTransientInteractionState() {
+        resetScrollGestureSuppression()
+        resetAutoCloseSuppression()
+        isBatteryPopoverActive = false
+        isClipboardPopoverActive = false
+        isColorPickerPopoverActive = false
+        isStatsPopoverActive = false
+        isMediaOutputPopoverActive = false
+        isTimerPopoverActive = false
+        isTasksPopoverActive = false
     }
 
     private func focusClipboardTabIfNeeded() {
@@ -314,6 +337,9 @@ class KannuViewModel: NSObject, ObservableObject {
         // `ModalPresenter`, not inferred from `NSApp`: `attachedSheet` missed a picker shown with
         // `panel.begin` (Settings closed) and blocked the notch behind the Spotify sign-in sheet.
         guard NSApp.modalWindow == nil, !ModalPresenter.isPresenting else { return }
+        // Show / Hide Notch's eye owns the closed notch until it settles; a hide's windows are
+        // about to close under whatever opened.
+        guard !coordinator.notchEye.isAnimating else { return }
 
         let targetSize = calculateDynamicNotchSize()
 
@@ -388,6 +414,7 @@ class KannuViewModel: NSObject, ObservableObject {
         helloCloseScheduled = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.5) { [weak self] in
             guard let self else { return }
+            self.coordinator.helloPending = false
             self.coordinator.firstLaunch = false
             withAnimation(self.animationLibrary.animation) {
                 self.close()

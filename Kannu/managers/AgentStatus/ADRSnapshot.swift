@@ -21,12 +21,18 @@ import Foundation
 /// A snapshot written by ADR Discovery (`adr-discovery --json`, github.com/uber/ADR).
 ///
 /// Discovery is a separate, user-installed program; Kannu only reads what it writes. The shape
-/// is the tool's schema 1.0 — one JSON object with `assets`, `findings`, `review_queue` and a
+/// is the tool's schema 1.x — one JSON object with `assets`, `findings`, `review_queue` and a
 /// `coverage` block that says what the scan could *not* see. That last part matters: upstream
 /// exits 2 for a partial scan on purpose, and the UI must never turn "could not tell" into
 /// "clean". Decoding is deliberately strict on the schema major and lenient on everything else
 /// (unknown keys are ignored), so a newer minor release keeps working and a new major fails
 /// with a message instead of a crash.
+///
+/// Schema 1.2 at `ADRUpstream.commit`; every field read here is unchanged since 1.0. 1.1 put the
+/// declaring file into a declaration's identity, so the `asset_id` of MCP servers, skills,
+/// instruction files and CI agents changed once (84ed18c); 1.2 added `allowed_tools`, `model`,
+/// `provenance`, `plugin_asset_id` and `archive` and redefined `skill_sha256` (ff3028b), none of
+/// which Kannu reads.
 struct ADRSnapshot: Codable, Equatable {
     struct Evidence: Codable, Equatable {
         let stage: String

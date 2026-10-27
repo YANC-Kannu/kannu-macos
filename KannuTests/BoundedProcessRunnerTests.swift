@@ -79,4 +79,64 @@ final class BoundedProcessRunnerTests: XCTestCase {
         XCTAssertEqual(String(decoding: result.stdout, as: UTF8.self), "out\n")
         XCTAssertEqual(String(decoding: result.stderr, as: UTF8.self), "err\n")
     }
+
+    // MARK: - Input and `until`
+
+    private func cat() -> Process {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/cat")
+        return process
+    }
+
+    func testInputWithoutUntilIsFollowedByEOF() {
+        // `cat` exits only at EOF: it finishing at all proves stdin was closed once written.
+        let result = BoundedProcessRunner.run(cat(), timeout: 10, input: Data("one\ntwo\n".utf8))
+        XCTAssertEqual(result.status, 0)
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(String(decoding: result.stdout, as: UTF8.self), "one\ntwo\n")
+    }
+
+    func testInputLargerThanThePipeIsWrittenWithoutBlocking() {
+        let input = Data(repeating: 0x78, count: 300_000)
+        let result = BoundedProcessRunner.run(cat(), timeout: 10, input: input)
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.stdout.count, 300_000)
+    }
+
+    func testUntilClosesStdinAndTheChildExitsOnThatEOF() {
+        // With `until`, stdin stays open until it holds, so `cat` runs until then. Exit status 0
+        // (not SIGTERM's 15) shows it was given the EOF to stop on, not signalled at once.
+        let started = Date()
+        let result = BoundedProcessRunner.run(cat(), timeout: 10, killGrace: 2, input: Data("ping\n".utf8),
+                                              until: { String(decoding: $0, as: UTF8.self).contains("ping\n") })
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.status, 0)
+        XCTAssertEqual(String(decoding: result.stdout, as: UTF8.self), "ping\n")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+    }
+
+    func testAChildThatIgnoresTheEOFAfterUntilIsStoppedWithoutCountingAsATimeout() {
+        let started = Date()
+        let result = BoundedProcessRunner.run(shell("read line; echo got; exec sleep 30"), timeout: 10, killGrace: 0.5,
+                                              input: Data("x\n".utf8),
+                                              until: { String(decoding: $0, as: UTF8.self).contains("got\n") })
+        XCTAssertFalse(result.timedOut)
+        XCTAssertEqual(result.status, SIGTERM, "the EOF grace ran out and SIGTERM ended it")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+    }
+
+    func testUntilThatNeverHoldsStillTimesOut() {
+        let result = BoundedProcessRunner.run(cat(), timeout: 0.5, killGrace: 0.5, input: Data("ping\n".utf8),
+                                              until: { _ in false })
+        XCTAssertTrue(result.timedOut)
+        XCTAssertEqual(String(decoding: result.stdout, as: UTF8.self), "ping\n")
+    }
+
+    func testInputToAChildThatExitsWithoutReadingDoesNotRaiseSIGPIPE() {
+        // A SIGPIPE here would kill the test runner, not fail a test.
+        let result = BoundedProcessRunner.run(shell("exec 0<&-; exit 0"), timeout: 5,
+                                              input: Data(repeating: 0x79, count: 200_000))
+        XCTAssertEqual(result.status, 0)
+        XCTAssertFalse(result.timedOut)
+    }
 }
