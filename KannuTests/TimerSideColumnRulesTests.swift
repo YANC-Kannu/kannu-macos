@@ -542,7 +542,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
     }
 
     func testTheMirrorScannerCatchesPlantedOffenders() {
-        let contentView = "    .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)\n    return activeCornerRadiusInsets.opened.bottom - 5"
+        let contentView = "    .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)\n    return cornerRadiusInsets.opened.bottom - 5"
         let sizes = "    return 640\nlet cornerRadiusInsets = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))"
         let notch = Self.metricsTheNotchUses.map { "x(\($0))" }.joined(separator: "\n")
         XCTAssertEqual(Self.mirrorProblems(contentView: contentView, sizes: sizes, notch: notch), [])
@@ -807,7 +807,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         if !contentView.contains(".padding([.horizontal, .bottom], vm.notchState == .open ? \(Int(M.openNotchBottomPadding)) : 0)") {
             problems.append("the open notch's bottom padding is not openNotchBottomPadding")
         }
-        if !(contentView.contains("activeCornerRadiusInsets.opened.bottom - 5")
+        if !(contentView.contains("cornerRadiusInsets.opened.bottom - 5")
              && sizes.contains("(opened: (top: 19, bottom: \(Int(M.openNotchSideInset + 5)))")) {
             problems.append("the open notch's side inset is not openNotchSideInset")
         }

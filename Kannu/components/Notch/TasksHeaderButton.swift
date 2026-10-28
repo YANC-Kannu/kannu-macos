@@ -23,16 +23,15 @@ import SwiftUI
 /// `TasksPopover`, and carries a yellow dot while a Time to log entry waits for an answer — yellow
 /// is Kannu's "needs your input".
 ///
-/// `KannuHeader` shows it only with the notch open and the minimalistic UI off, and then as
-/// `TasksHeaderVisibility` says: with tasks on, where the timer tab's task column cannot show — on
+/// `KannuHeader` shows it only with the notch open, and then as `TasksHeaderVisibility` says: with tasks on, where the timer tab's task column cannot show — on
 /// that tab while a timer runs, or on every tab when there is no timer tab. It is a view of its own
 /// so `TasksManager` is created only then: with tasks off,
 /// nothing here runs and the task file is never read.
 ///
 /// While the popover is open it sets `vm.isTasksPopoverActive`, which
 /// `ContentView.hasAnyActivePopovers()` reads, so the notch does not close under it. Leaving the
-/// view clears it too (the notch closing, a switch away from the timer tab, tasks or the
-/// minimalistic UI switched): a popover that vanishes with its button never reports closing, and a
+/// view clears it too (the notch closing, a switch away from the timer tab, tasks switched off): a
+/// popover that vanishes with its button never reports closing, and a
 /// flag left set would hold the notch open.
 ///
 /// Its tooltip is `.hoverTooltip`; `.help` never renders in the notch (docs/REGRESSIONS.md entry 9).

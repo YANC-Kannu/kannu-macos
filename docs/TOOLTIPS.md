@@ -90,8 +90,8 @@ Button(action: onCreate) { Image(systemName: "plus") }
     .accessibilityLabel(String(localized: "New Note"))
 ```
 
-**Shared icon buttons take `tooltip:`** — `HoverButton`, `MinimalisticSquircircleButton` (and
-`controlButton(...)`), `playbackButton(...)`, `TabButton`, `TimerControlButton`. Each one
+**Shared icon buttons take `tooltip:`** — `HoverButton`, `playbackButton(...)`, `TabButton`,
+`TimerControlButton`. Each one
 already has an `.onHover` for its highlight, so it drives the bubble from that same hover state
 (`.iconButtonTooltip(tooltip, edge:, isHovering:)`), which also applies the accessibility label.
 Pass `tooltipEdge:` when the button sits near the top of its container.

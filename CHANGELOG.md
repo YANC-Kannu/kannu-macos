@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-28 - The minimalistic UI mode is gone; every notch is the standard one
+- **Developer label:** "remove minimalistic ui mode"
+- **Agent label:** Claude Code (Opus 5.5) — `enableMinimalisticUI` and everything only it used are removed, the standard path kept at every branch
+- **Changes:**
+  - Settings' UI Mode section is gone, with its search entry and its two battery rows. The
+    minimalistic music player, battery view, extension override view, sizes, corner radii and
+    shadow are deleted, and every branch on the mode keeps its standard side: the header's tabs,
+    the open notch's size and shape, the timer tab, the agent rows' turn metrics, the inline HUDs,
+    the media controls and the tab list in Settings. The minimal traffic-light style is a different
+    thing and stays.
+  - The keys `enableMinimalisticUI`, `showMinimalisticBatteryIndicator`, `showBatteryPercentInside`
+    and `enableExtensionNotchMinimalisticOverrides` are deleted. A migration in `continueLaunch()`
+    (`Defaults.Keys.migrateRemovedMinimalisticUI`) turns "Show standard media controls" on for
+    anyone who had the mode on, since the mode showed closed-notch music without it, then removes
+    the four stored values.
+  - Onboarding's Light Use profile keeps its other settings and no longer switches the mode on;
+    its description says what it does now.
+  - An extension's minimalistic override is no longer shown; one carrying web content is still
+    refused while web views are off. Unused strings and three unreferenced images go.
+  - Tests: the header, popover-placement and hide-control scanners find the open block inside the
+    header's row, now that its condition matches the spacer above it; the tooltip floor and the
+    Settings search counts follow the removal.
+
 ### 2026-10-28 - `#tag` and `@time` in a task's name
 - **Developer label:** "we need typed tag also for local tasks , # would create a tag and @noon would mean reminder at 12:00 pm , take standard design practice for that"
 - **Agent label:** Claude Code (Opus 5.5) — quick-add words (`TaskQuickAdd`) read wherever a local task is named or renamed, shown as chips in the field

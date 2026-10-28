@@ -156,7 +156,7 @@ enum DebugSnapshots {
                 let dots = notchDotsRow.padding(12).background(fill.color).notchAppearance(scheme, fill: fill.color)
                 await render(AnyView(dots), name: "fill-\(fill.name)-dots", dark: true, width: 360,
                              into: request.directory, scale: 3)
-                let chats = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: false)
+                let chats = NotchAgentStatusView(snapshotSessions: sessions)
                     .environmentObject(viewModel)
                     .frame(height: 560)
                     .background(fill.color)
@@ -174,17 +174,16 @@ enum DebugSnapshots {
             }
         }
         if request.tabs == nil || request.tabs?.contains("recentChats") == true {
-            // The agent tab's width inside a 640 pt panel, a 420 pt minimalistic one and the 340 pt island.
+            // The agent tab's width inside a 640 pt panel.
             let sessions = DebugSnapshotFixtures.recentChats(now: Date())
             ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: sessions))
-            for (width, minimalistic) in [(CGFloat(612), false), (360, true), (280, true)] {
-                let view = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: minimalistic)
-                    .environmentObject(viewModel)
-                    .frame(height: 560)
-                    .background(Color.black)
-                    .environment(\.colorScheme, .dark)
-                await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
-            }
+            let width: CGFloat = 612
+            let view = NotchAgentStatusView(snapshotSessions: sessions)
+                .environmentObject(viewModel)
+                .frame(height: 560)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+            await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
         }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):

@@ -37,19 +37,14 @@ struct KannuHeader: View {
     @Default(.showColorPickerIcon) var showColorPickerIcon
     @Default(.clipboardDisplayMode) var clipboardDisplayMode
     @Default(.showBatteryIndicator) var showBatteryIndicator
-    @Default(.showBatteryPercentInside) var showBatteryPercentInside
-    @Default(.showMinimalisticBatteryIndicator) var showMinimalisticBatteryIndicator
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
     @Default(.enableTasks) var enableTasks
 
     var body: some View {
         HStack(spacing: 0) {
             HStack {
-                if !enableMinimalisticUI {
-                    let shouldShowTabs = coordinator.alwaysShowTabs || vm.notchState == .open || !shelfState.items.isEmpty
-                    if shouldShowTabs {
-                        TabSelectionView()
-                    }
+                let shouldShowTabs = coordinator.alwaysShowTabs || vm.notchState == .open || !shelfState.items.isEmpty
+                if shouldShowTabs {
+                    TabSelectionView()
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -73,7 +68,7 @@ struct KannuHeader: View {
             }
 
             HStack(spacing: 4) {
-                if vm.notchState == .open && !enableMinimalisticUI {
+                if vm.notchState == .open {
                     // Order: what comes and goes first, what is always there last. The row is
                     // trailing-aligned, so an item that appears pushes only what is to its left —
                     // the fixed buttons (clipboard, timer, Brain, battery) never move. Pinned by
@@ -250,35 +245,16 @@ struct KannuHeader: View {
                 }
 
                 if vm.notchState == .open && showBatteryIndicator {
-                    if enableMinimalisticUI {
-                        // In minimalistic notch mode, show the battery pill only when
-                        // showMinimalisticBatteryIndicator is enabled (and not DI mode).
-                        if !shouldUseDynamicIslandMode(for: vm.screen) && showMinimalisticBatteryIndicator {
-                            MinimalisticBatteryView(
-                                levelBattery: batteryModel.levelBattery,
-                                isPluggedIn: batteryModel.isPluggedIn,
-                                isCharging: batteryModel.isCharging,
-                                isInLowPowerMode: batteryModel.isInLowPowerMode,
-                                bodyWidth: 28,
-                                bodyHeight: 14,
-                                isForNotification: false,
-                                showPercentInside: showBatteryPercentInside
-                            )
-                            .padding(.trailing, 4)
-                            .transition(.opacity.combined(with: .scale(scale: 0.85)))
-                        }
-                    } else {
-                        KannuBatteryView(
-                            batteryWidth: 30,
-                            isCharging: batteryModel.isCharging,
-                            isInLowPowerMode: batteryModel.isInLowPowerMode,
-                            isPluggedIn: batteryModel.isPluggedIn,
-                            levelBattery: batteryModel.levelBattery,
-                            maxCapacity: batteryModel.maxCapacity,
-                            timeToFullCharge: batteryModel.timeToFullCharge,
-                            isForNotification: false
-                        )
-                    }
+                    KannuBatteryView(
+                        batteryWidth: 30,
+                        isCharging: batteryModel.isCharging,
+                        isInLowPowerMode: batteryModel.isInLowPowerMode,
+                        isPluggedIn: batteryModel.isPluggedIn,
+                        levelBattery: batteryModel.levelBattery,
+                        maxCapacity: batteryModel.maxCapacity,
+                        timeToFullCharge: batteryModel.timeToFullCharge,
+                        isForNotification: false
+                    )
                 }
             }
             .font(.system(.headline, design: .rounded))
