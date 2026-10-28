@@ -394,7 +394,14 @@ struct TasksPopover: View {
     private func upNextRow(_ task: TaskItem) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
         let caption = [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · ")
+        let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(spacing: 10) {
+            if TaskDoneTicks.canTick(task) {
+                TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady) {
+                    manager.toggleDone(task.id)
+                }
+                .padding(.leading, -6)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: task.title)
                     .font(.system(size: 13, weight: .medium))
@@ -404,6 +411,8 @@ struct TasksPopover: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            // Ticked done and waiting out the undo window.
+            .opacity(isTicked ? 0.45 : 1)
             Spacer(minLength: 0)
             Button {
                 manager.start(task.id)

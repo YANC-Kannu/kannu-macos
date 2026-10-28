@@ -647,7 +647,15 @@ private struct TimerTasksPage: View {
     /// clicking it expands the task into its card, in the column's own frame.
     private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
+        let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(spacing: 8) {
+            if TaskDoneTicks.canTick(task) {
+                TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady,
+                             tooltipEdge: tooltipEdge) {
+                    manager.toggleDone(task.id)
+                }
+                .padding(.leading, -6)
+            }
             Button {
                 expand(task)
             } label: {
@@ -665,6 +673,8 @@ private struct TimerTasksPage: View {
                     .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Ticked done and waiting out the undo window.
+                .opacity(isTicked ? 0.45 : 1)
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     if hovering {
@@ -1357,6 +1367,14 @@ private struct TimerTaskDetail: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
+                // Done, a local task's: it leaves the task order once the undo window runs out, and
+                // the card collapses on its own, as for Archive.
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                 isEnabled: manager.isReady, size: 12) {
+                        manager.toggleDone(task.id)
+                    }
+                }
                 // Into the archive at once, any task: a remote task's delete. It leaves the task
                 // order, so the card collapses on its own (`TimerTasksPage`'s onChange).
                 Button {
