@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-28 - A tick marks a local task done
+- **Developer label:** "we need a done button near tasks, like tick"
+- **Agent label:** Claude Code (Opus 5.5) — a done tick before every local task in the notch and in Brain, with a 1.5 s undo
+- **Changes:**
+  - A circle before each local task fills with a check when clicked: in the timer tab's task list,
+    on the task card beside Archive, in the Tasks popover's Up next, and in Brain's task lists. The
+    task stays, dimmed, for 1.5 s, and a second click takes the tick back; then it is marked done
+    (`TasksManager.markDone`, which stops a timed task) and moves to Recently closed. A Jira or
+    GitLab task has no tick: its status belongs to its source.
+  - The undo window is kept by `TasksManager` (`TaskDoneTicks`), so a tick lands even when its row
+    has gone; a tick still waiting when Kannu quits is marked done.
+  - Tests: `TaskDoneTicksTests`.
+
 ### 2026-10-28 - The notch stays open while the pointer is on it, and opens after 0.3 s
 - **Developer label:** "app crashes sometimes, we can remove that on hover conditions and persistance we added and reduce that time"; "the hold open doesnt work, it randomly closes even when mouse is in notch area, check that"
 - **Agent label:** Claude Code (Opus 5.5) — every auto-close of the open notch checks where the pointer is, not the latched hover; the timer tab's hold-open tokens go; hover-open waits 0.3 s

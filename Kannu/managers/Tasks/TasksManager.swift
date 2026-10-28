@@ -96,6 +96,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Whether macOS denies Kannu's notifications, whatever the list wants. The task form's bell
     /// turns orange on it: `remindersBlocked` is false while every scheduled task is muted.
     @Published private(set) var notificationsDenied = false
+    /// Local tasks ticked done that are still listed for the undo window (`TaskDoneTicks`).
+    @Published private(set) var doneTicks = TaskDoneTicks()
+    private var doneTickWork: [UUID: DispatchWorkItem] = [:]
 
     private struct Link {
         let session: UUID
@@ -846,6 +849,27 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             $0.visibility = .done
             $0.closedAt = Date()
         }
+    }
+
+    /// The done tick (`TaskDoneTick`): the task is marked done once `TaskDoneTicks.undoSeconds` have
+    /// passed, unless ticked again before then. Local tasks only (`TaskDoneTicks.canTick`).
+    func toggleDone(_ taskID: UUID) {
+        if doneTicks.isTicked(taskID) {
+            doneTickWork.removeValue(forKey: taskID)?.cancel()
+            _ = doneTicks.toggle(taskID)
+            return
+        }
+        guard isReady, let task = tasks.first(where: { $0.id == taskID }), TaskDoneTicks.canTick(task),
+              doneTicks.toggle(taskID) else { return }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.doneTickWork[taskID] = nil
+                if self.doneTicks.commit(taskID) { self.markDone(taskID) }
+            }
+        }
+        doneTickWork[taskID] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + TaskDoneTicks.undoSeconds, execute: work)
     }
 
     /// Into the archive at once, whatever the source: for a remote task this is its delete, since
@@ -1819,6 +1843,11 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// awaited save could run, so this one small write happens here, on the quit path.
     private func saveBeforeQuit() {
         guard isReady else { return }
+        // A tick still in its undo window stands: the task is done.
+        for taskID in doneTicks.commitAll() {
+            doneTickWork.removeValue(forKey: taskID)?.cancel()
+            markDone(taskID)
+        }
         var changed = false
         if let current = link {
             // Quitting ends the timing, paused or not: its time is offered for logging next launch.
