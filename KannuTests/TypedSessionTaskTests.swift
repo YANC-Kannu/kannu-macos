@@ -119,10 +119,14 @@ final class TypedSessionTaskTests: XCTestCase {
         XCTAssertEqual(draft.estimateSeconds, 7200)
     }
 
-    func testTheBarsTextIsTheTitleCutToFortyCharacters() {
+    /// The bar holds the title with its `#tag` and `@time` words, so it is cut at the typed length;
+    /// the name a session takes is still cut to forty (`TimerSessionName.cleaned`).
+    func testTheBarsTextIsTheTitleCutToTheTypedLength() {
         XCTAssertEqual(TaskFormDraft.barText("  Deep   work "), "Deep work")
         XCTAssertEqual(TaskFormDraft.barText("   "), "")
-        XCTAssertEqual(TaskFormDraft.barText(String(repeating: "a", count: 60)).count, TimerSessionName.maxLength)
+        XCTAssertEqual(TaskFormDraft.barText("Write release notes #kannu @tomorrow @5pm"), "Write release notes #kannu @tomorrow @5pm")
+        XCTAssertEqual(TaskFormDraft.barText(String(repeating: "a", count: 100)).count, TimerSessionName.maxTypedLength)
+        XCTAssertEqual(TimerSessionName.cleaned(String(repeating: "a", count: 60))?.count, TimerSessionName.maxLength)
     }
 
     /// The loss the review found: the form's title goes back to the bar however the form closes, so

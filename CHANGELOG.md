@@ -4,6 +4,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-28 - `#tag` and `@time` in a task's name
+- **Developer label:** "we need typed tag also for local tasks , # would create a tag and @noon would mean reminder at 12:00 pm , take standard design practice for that"
+- **Agent label:** Claude Code (Opus 5.5) — quick-add words (`TaskQuickAdd`) read wherever a local task is named or renamed, shown as chips in the field
+- **Changes:**
+  - Typed in a local task's name, `#word` tags the task and an `@` word sets its reminder: `@noon`,
+    `@morning` (9:00), `@evening` (18:00), `@tonight` (20:00), `@today` (the next whole hour),
+    `@tomorrow` (9:00), `@mon` to `@sun` (9:00), and clock times `@5pm`, `@5:30pm`, `@17:30`. A day
+    and a time combine (`@tomorrow @5pm`). A time with no day that has passed today rolls to
+    tomorrow; `@today` with a time stays today. The words come out of the title; anything else
+    (`#123`, `a@b.com`, `@5`) stays as typed.
+  - They work wherever a local task is named: the timer tab's bar, the notch's task form (new and
+    edit), the Tasks popover's Add a task, and Brain's New Task and title field. The form moves them
+    into its own fields before saving (`TaskFormDraft.foldingQuickAdd`): tags after the form's, a
+    typed time over the form's reminder. The reminder goes through `setSchedule`, which asks for
+    notification permission as before.
+  - Everything that reads the name reads it without the words: Add stays off for `#work @noon`
+    alone, the typed search and its New row use the name, and the bar and a kept New Task form match
+    by name. A task picked from the bar's search keeps the words typed before the pick and gets them
+    when it starts, never words of its own title. A typed name that reuses a task by title adds its
+    tags and reminder to it.
+  - With tasks off, or nothing but the words typed, no task is made and the text is the session's
+    name as typed.
+  - Chips at the end of the field show what the words will do, the tags and a bell with the time,
+    only when a task will take them.
+  - The bar holds up to 80 characters so the words fit; a session's name is still cut to 40.
+    Searching `#work` finds the tag.
+  - Tests: `TaskQuickAddTests` (each word, combinations, roll-over, what is not a word, the form's
+    fold, Add with only words, the New row, matching by name); the bar-text test follows the new
+    length.
+
 ### 2026-10-28 - A tick marks a local task done
 - **Developer label:** "we need a done button near tasks, like tick"
 - **Agent label:** Claude Code (Opus 5.5) — a done tick before every local task in the notch and in Brain, with a 1.5 s undo

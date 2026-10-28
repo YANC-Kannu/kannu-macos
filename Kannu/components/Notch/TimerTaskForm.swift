@@ -218,6 +218,9 @@ struct TimerTaskForm: View {
                             .onSubmit(submitTitle)
                             .onExitCommand(perform: exitTitle)
                             .accessibilityLabel(Text("Task title"))
+                        // `#tag` and `@time` words, for a new task and an edit alike
+                        // (`TaskFormDraft.foldingQuickAdd`).
+                        TaskQuickAddChips(text: draft.title)
                         if !draft.title.isEmpty {
                             clearButton(label: String(localized: "Clear Title")) {
                                 draft.title = ""
@@ -669,6 +672,8 @@ extension TimerTaskForm {
         let manager = TasksManager.shared
         switch route {
         case .pickedTask(let taskID):
+            // The bar keeps the `#tag` and `@time` words typed before the pick.
+            manager.applyQuickAdd(typed: typed, to: taskID)
             if !manager.startBlock(taskID, duration: duration, preset: preset) { otherwise() }
         case .typed(let reuse):
             manager.startTyped(typed, reuse: reuse, duration: duration, preset: preset, otherwise: otherwise)

@@ -371,12 +371,17 @@ struct TasksPopover: View {
             TextField(String(localized: "Add a task…"), text: $newTitle)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(addTask)
+                // `#tag` and `@time` (`TaskQuickAdd`), shown inside the field's end.
+                .overlay(alignment: .trailing) {
+                    TaskQuickAddChips(text: newTitle, trailingInset: 6)
+                        .allowsHitTesting(false)
+                }
             Button(action: addTask) {
                 Image(systemName: "plus")
                     .imageScale(.large)
             }
             .buttonStyle(.borderless)
-            .disabled(!manager.isReady || TaskItem.cleanedTitle(newTitle) == nil)
+            .disabled(!manager.isReady || TaskItem.cleanedTitle(TaskQuickAdd.title(of: newTitle)) == nil)
             .accessibilityLabel("Add task")
             .hoverTooltip(String(localized: "Add to the top"), edge: .above)
         }
