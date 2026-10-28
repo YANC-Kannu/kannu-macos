@@ -585,6 +585,51 @@ clean environment where `claude -p "/usage"` fetched plan rows; and `oauthAccoun
 desktop-hosted session's run the desktop's — so Kannu records Claude Code's organization itself,
 straight after its own fetch (`claudeCodeUsageOrganization`).
 
+**2026-10-29 addendum — the organization split, read wrong three ways.** Claude Code was signed in
+to a Team organization and Claude Desktop to Max (one person, two plans). The card follows
+Desktop's organization and drops Claude Code's sources when they differ, so the card lived on
+Desktop's `plan-usage-history.json` alone, whose newest sample (2026-10-27 22:26Z, Max, weekly
+100 %) predates Max's weekly reset (Wednesday 2026-10-28 00:00Z, 05:30 IST). Three faults, one
+after another:
+- **One organization's reset remembered at a time.** Max's weekly anchor came from Claude Code's
+  cache only while Claude Code was on Max. Kannu's 11:49 IST run moved it to Team, the anchor
+  went with it, and the Desktop parse fell back to a rollover seen on Oct 21 after a 22-hour gap:
+  the 100 % weekly bar showed from 11:49 to 23:01 IST, 17.5 hours past Max's real reset. Fix:
+  `Defaults[.claudeOrganizationResets]`, each organization's weekly and five-hour reset by
+  organization id, written after every run whose organization is known; the Desktop parse uses
+  its own organization's, whatever Claude Code is on. The rollover guess is the last resort.
+- **The organization read apart from the cache.** The run read `oauthAccount` in a separate read
+  from the fetch stamp. A desktop-hosted session wrote its Max profile (`profileFetchedAt` 06:20:47Z,
+  11:50:47 IST, 90 s after the run) back into `~/.claude.json` all day while the cache stayed
+  Team's (`fetchedAtMs` 13:59:20 IST, weekly reset 2026-11-03 05:00Z), and the passive "Claude
+  Code changed organization" check compared the recorded Team with that Max on nearly every visit
+  of the Usage tab, each time licensing another `/usage` run. Fix: one read for both
+  (`ClaudeUsageRefresh.runRead`); `oauthAccount` counts only when `profileFetchedAt` falls inside
+  the run (`ClaudeCachedUsage.attributeRun`, 2 s slack); else the cache's own weekly reset names
+  its organization when exactly one remembered anchor matches; else the last known organization,
+  unless the cache contradicts its anchor. The passive check counts only a profile fetched after
+  the run that last settled the organization (`claudeCodeUsageOrganizationCheckedAt`).
+- **A dishonest card.** With no live Desktop reading, the card showed no bars and fell back to
+  the local token totals under "these are Claude Desktop's (Max) readings". Now it shows Claude
+  Code's own bars, labelled with its plan, and says so; with none either, it says there is no
+  reading — never that readings are shown.
+
+The same audit found two expiry holes: a cache window with `resets_at: null` (the five-hour one
+was, at 0 %) never expired, and the card and the alerts checked only the reset, never the expiry
+bound, so a lapsed desktop value stayed "near the limit". Null resets now expire after their
+window's length from the fetch (`ClaudeCachedUsage.expiryWithoutReset`), and the bound travels
+into `UsageLimit` and `UsageWindowReading`.
+
+**Guard.** `ClaudeUsageOrganizationTests` replays the measured sequence (Max's reset known Oct 27,
+the move to Team at 11:49, Desktop's 100 % sample) and was verified red against the old
+"anchor only while Claude Code is on Desktop's organization" rule: the bar came back with
+`notAfter` 17:31:34Z, exactly the 23:01 IST seen. It also pins the in-run profile window, the
+weekly-reset check, the card's choice when the organizations differ, and the off-main read
+against real files. `ClaudeUsageSnapshotTests.testAnOldProfileWrittenBackIsNotAMove` pins the
+passive check. Not measured: whether `claude -p "/usage"` refetches the profile on every run. When
+it does not, the weekly-reset check and the last known organization decide; nothing here runs
+`claude` to find out.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -837,6 +882,19 @@ caught it). Return fresh `URL`s from any listing cache.
 
 Guards: `RescanStormTests`, including a simulated 20 ms write storm that must keep rescanning,
 boundedly. The memory half of the same report was the usage aggregator, fixed on its own branch.
+
+**2026-10-29 addendum — the Claude usage readers.** Every rescan ends in `refreshClaudeUsage`,
+which re-read `~/.claude.json` (85 KB, rewritten whole by every Claude Code process) and Claude
+Desktop's history on the main actor whenever the merged snapshot was nil — and "nothing to show"
+counted as "never read". With Claude Code and Claude Desktop on different organizations and no
+live Desktop reading (entry 8, 2026-10-29), that was every rescan. Now the rescan only decides:
+`ClaudeUsageSources.read` runs on the monitor's serial `claudeUsageReadQueue` and the result is
+applied on the main actor, in order, one read in flight at a time; a read that found nothing is
+retried once a minute (`ClaudeUsageSnapshot.emptyRetryInterval`). The one file call left on the
+main actor is the statusline file's modification date. Guard: `ClaudeUsageReadRulesTests` (source
+scan, the `TrafficLightGateRulesTests` idiom: no usage reader in the monitor, the one read inside
+the worker block before the hop back), verified red with a `ClaudeUsageSnapshot.load` put back
+into `refreshClaudeUsage`.
 
 ---
 
@@ -1336,6 +1394,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
 | `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
+| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have (entry 8, 2026-10-29 addendum). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |

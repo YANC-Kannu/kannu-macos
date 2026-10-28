@@ -184,6 +184,65 @@ final class ClaudeCachedUsageTests: XCTestCase {
         XCTAssertNil(ClaudeCachedUsage.claudeCodeOrganization(recordedAtFetch: nil, inConfigNow: nil))
     }
 
+    func testTheContextCarriesTheProfileTimeAndTheCachesOwnTimes() {
+        // Read together, from one read: which fetch `oauthAccount` is from, and the cache's own
+        // timestamp and resets — what a run is judged by.
+        var json = config(fixed: [
+            "five_hour": window(10, resets: "2026-10-28T09:00:00+00:00"),
+            "seven_day": window(0, resets: "2026-11-03T05:00:00+00:00")
+        ])
+        json["oauthAccount"] = ["accountUuid": "acct-1", "organizationUuid": "org-1",
+                                "profileFetchedAt": NSNumber(value: 1_793_168_447_270.0)]
+        let context = ClaudeCachedUsage.accountContext(json: json)
+        XCTAssertEqual(context.profileFetchedAt, Date(timeIntervalSince1970: 1_793_168_447.270))
+        XCTAssertEqual(context.cacheFetchedAt, Date(timeIntervalSince1970: fetchedAtMs / 1000))
+        XCTAssertEqual(context.fiveHourReset, ISO8601DateFormatter().date(from: "2026-10-28T09:00:00Z"))
+        XCTAssertEqual(context.weeklyResetAnchor, ISO8601DateFormatter().date(from: "2026-11-03T05:00:00Z"))
+        // Another login's cache says nothing about this account's.
+        var other = json
+        other["oauthAccount"] = ["accountUuid": "acct-2", "organizationUuid": "org-1"]
+        let otherContext = ClaudeCachedUsage.accountContext(json: other)
+        XCTAssertNil(otherContext.cacheFetchedAt)
+        XCTAssertNil(otherContext.fiveHourReset)
+    }
+
+    // MARK: - A window with no reset expires
+
+    func testANullResetExpiresAfterItsWindowsLength() throws {
+        // Measured 2026-10-28: `five_hour` cached at 0 % with `resets_at: null` — it stayed on the
+        // card forever. Now five hours from the fetch, a week for the weekly windows.
+        let fetched = Date(timeIntervalSince1970: fetchedAtMs / 1000)
+        var nullReset = window(0, resets: nil)
+        nullReset["resets_at"] = NSNull()
+        let snapshot = try XCTUnwrap(ClaudeCachedUsage.parse(json: config(
+            limits: [scoped("Fable", 12, resets: nil)],
+            fixed: ["five_hour": nullReset, "seven_day": window(3, resets: nil),
+                    "seven_day_opus": window(9, resets: "2026-11-03T05:00:00+00:00")])))
+        XCTAssertEqual(snapshot.window("five_hour")?.notAfter, fetched.addingTimeInterval(5 * 3600))
+        XCTAssertEqual(snapshot.window("seven_day")?.notAfter, fetched.addingTimeInterval(7 * 86_400))
+        XCTAssertEqual(snapshot.window("model_scoped:Fable")?.notAfter, fetched.addingTimeInterval(7 * 86_400))
+        XCTAssertNil(snapshot.window("seven_day_opus")?.notAfter, "a reported reset needs no other bound")
+        XCTAssertEqual(snapshot.fiveHourDisplayPercent(now: fetched.addingTimeInterval(5 * 3600 - 1)), 0)
+        XCTAssertNil(snapshot.fiveHourDisplayPercent(now: fetched.addingTimeInterval(5 * 3600)))
+    }
+
+    // MARK: - A read caught mid-write
+
+    func testAHalfWrittenFileIsUnreadableNotEmpty() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("claude-json-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent(".claude.json")
+        try Data(#"{"cachedUsageUtilization": {"fetchedAtMs": 17"#.utf8).write(to: url)
+        XCTAssertTrue(ClaudeCachedUsage.read(from: url).unreadable, "the caller keeps what it read last")
+        XCTAssertFalse(ClaudeCachedUsage.read(from: directory.appendingPathComponent("missing.json")).unreadable,
+                       "a missing file is nothing to keep")
+        try JSONSerialization.data(withJSONObject: config(limits: [scoped("Fable", 68)])).write(to: url)
+        let read = ClaudeCachedUsage.read(from: url)
+        XCTAssertFalse(read.unreadable)
+        XCTAssertEqual(read.snapshot?.window("model_scoped:Fable")?.percent, 68)
+    }
+
     func testThePlanTypeIsCarriedAndNamed() {
         var json = config(fixed: [:])
         json["oauthAccount"] = ["accountUuid": "acct-1", "organizationUuid": "org-1", "organizationType": "claude_team"]

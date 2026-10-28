@@ -117,7 +117,8 @@ final class UsageAlertManager: ObservableObject {
             out.append(UsageWindowReading(provider: provider, key: key,
                                           label: label ?? UsageWindowReading.label(provider: provider, key: key),
                                           percent: limit.fraction * 100, resetsAt: limit.resetsAt,
-                                          severity: limit.severity, observedAt: observedAt))
+                                          severity: limit.severity, observedAt: observedAt,
+                                          notAfter: limit.notAfter))
         }
         add("session", session)
         add(weekKey, week, label: weekLabel)
@@ -159,7 +160,8 @@ final class UsageAlertManager: ObservableObject {
         scheduleResetRecheck(now: now)
     }
 
-    /// Nothing republishes when a window resets, so the gauge and "resumes at" would outlive it.
+    /// Nothing republishes when a window resets or a value's expiry passes, so the gauge and
+    /// "resumes at" would outlive it.
     private func scheduleResetRecheck(now: Date) {
         resetTask?.cancel()
         resetTask = nil
