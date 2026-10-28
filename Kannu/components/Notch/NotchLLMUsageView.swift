@@ -116,7 +116,7 @@ struct NotchLLMUsageView: View {
         let result = result(for: provider)
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = context.date
-            let status = statusLine(for: provider, result: result)
+            let status = statusLine(for: provider, result: result, now: now)
             let stale = staleLabel(for: result, now: now)
             VStack(alignment: .leading, spacing: M.rowSpacing) {
                 header(for: provider, result: result, stale: stale)
@@ -482,8 +482,8 @@ struct NotchLLMUsageView: View {
 
     /// One status at a time, in this order: what the Claude refresh found (the user's own action
     /// is pending), then a quota failure with its one-tap fix, then a quota failure alone.
-    private func statusLine(for provider: ProviderID, result: UsageResult) -> StatusLine? {
-        if provider == .claude, let line = claudeStatus { return line }
+    private func statusLine(for provider: ProviderID, result: UsageResult, now: Date) -> StatusLine? {
+        if provider == .claude, let line = claudeStatus(result: result, now: now) { return line }
         guard case .success(let snap) = result else { return nil }
         if let action = snap.quotaAction {
             return StatusLine(text: snap.quotaError ?? String(localized: "Limits need your approval"),
@@ -499,7 +499,7 @@ struct NotchLLMUsageView: View {
 
     /// What the last Refresh needs the user to know, with the one action that resolves it.
     /// Silent while a fetch runs, except for the sign-in, which is the user's to finish.
-    private var claudeStatus: StatusLine? {
+    private func claudeStatus(result: UsageResult, now: Date) -> StatusLine? {
         let status = snapshotRefreshStatus ?? agentMonitor.claudeRefreshStatus
         let refreshing = snapshotRefreshStatus == nil && agentMonitor.isRefreshingClaudeUsage
         let terminal = (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() })
@@ -532,18 +532,43 @@ struct NotchLLMUsageView: View {
             switch agentMonitor.claudeUsageHint {
             case .signInNeeded:
                 return StatusLine(text: String(localized: "Exact limits need a Claude Code sign-in. Press this card's ↻ to fetch them."))
-            case .otherOrganization:
-                let plans = agentMonitor.claudeOrganizationPlanNames
-                if let code = plans.claudeCode, let desktop = plans.desktop, code != desktop {
-                    return StatusLine(text: String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop), then press this card's ↻ for exact limits."),
-                                      action: terminal)
-                }
-                return StatusLine(text: String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings. Sign it in to Claude Desktop's, then press this card's ↻."),
-                                  action: terminal)
+            case .otherOrganization, .otherOrganizationWithoutDesktopReading:
+                return StatusLine(text: otherOrganizationText(
+                    desktopBars: agentMonitor.claudeUsageHint == .otherOrganization,
+                    showsBars: Self.hasLiveBars(result, now: now)), action: terminal)
             case nil:
                 return nil
             }
         }
+    }
+
+    /// Claude Code and Claude Desktop are on different organizations. The line says whose bars
+    /// are on the card — Desktop's, or Claude Code's when Desktop has no live reading — and never
+    /// claims readings when no bar is drawn (the card fell back to token totals under "these are
+    /// Claude Desktop's readings" on 2026-10-28). Plans by name when Kannu has seen both.
+    private func otherOrganizationText(desktopBars: Bool, showsBars: Bool) -> String {
+        let plans = agentMonitor.claudeOrganizationPlanNames
+        if let code = plans.claudeCode, let desktop = plans.desktop, code != desktop {
+            if !showsBars {
+                return String(localized: "No recent Claude Desktop (\(desktop)) reading — Claude Code is signed in to \(code).")
+            }
+            return desktopBars
+                ? String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop), then press this card's ↻ for exact limits.")
+                : String(localized: "No recent Claude Desktop (\(desktop)) reading — these are Claude Code's (\(code)) limits.")
+        }
+        if !showsBars {
+            return String(localized: "No recent Claude Desktop reading — Claude Code is signed in to another organization.")
+        }
+        return desktopBars
+            ? String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings. Sign it in to Claude Desktop's, then press this card's ↻.")
+            : String(localized: "No recent Claude Desktop reading — these are Claude Code's limits, on another organization.")
+    }
+
+    /// Whether the card draws any limit bar at `now`, by the same rule the bars use.
+    private static func hasLiveBars(_ result: UsageResult, now: Date) -> Bool {
+        guard case .success(let snap) = result else { return false }
+        return ([snap.sessionLimit, snap.weekLimit].compactMap { $0 } + snap.extraLimits.map(\.limit))
+            .contains { isLive($0, now: now) }
     }
 
     /// The oldest reading on the card speaks for it: a value days old is said so in the header
@@ -700,10 +725,10 @@ struct NotchLLMUsageView: View {
         }
     }
 
-    /// A limit with no reset is treated as live (nothing to expire against); one whose reset has
-    /// passed is not shown, matching the fetch-time rule in `ClaudeUsageSnapshot.displayWindows`.
+    /// A limit whose reset has passed, or whose expiry bound has, is not shown — the rule
+    /// `ClaudeUsageSnapshot.displayWindows` applies at fetch time, and the alerts apply too.
     private static func isLive(_ limit: UsageLimit, now: Date) -> Bool {
-        limit.resetsAt.map { $0 > now } ?? true
+        UsageWindowReading.isLive(resetsAt: limit.resetsAt, notAfter: limit.notAfter, now: now)
     }
 
     private func resetsIn(_ date: Date?, now: Date) -> String? {

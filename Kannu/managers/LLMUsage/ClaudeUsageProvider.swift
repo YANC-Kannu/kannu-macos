@@ -62,18 +62,28 @@ struct ClaudeUsageProvider: UsageProvider {
     /// when nothing usable is cached.
     @MainActor
     private func applyRateLimitWindows(to snapshot: inout UsageSnapshot, now: Date) {
-        // The tier badge is Claude Code's plan. When Claude Code is on another organization than
-        // the one the bars follow, that badge would name the wrong plan beside them.
-        if CursorAgentStatusMonitor.shared.claudeUsageHint == .otherOrganization {
-            snapshot.accountTier = nil
+        // The tier badge is the plan `~/.claude.json` names, which flips between organizations.
+        // When Claude Code and Claude Desktop are on different ones, it names the plan whose bars
+        // are on the card instead — Desktop's, or Claude Code's when Desktop has no reading — so the
+        // bars are labelled with their plan; nil when Kannu has not seen that plan.
+        let monitor = CursorAgentStatusMonitor.shared
+        switch monitor.claudeUsageHint {
+        case .otherOrganization:
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.desktop
             snapshot.accountNote = nil
+        case .otherOrganizationWithoutDesktopReading:
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.claudeCode
+            snapshot.accountNote = nil
+        case .signInNeeded, nil:
+            break
         }
-        guard let usage = CursorAgentStatusMonitor.shared.claudeUsage else { return }
+        guard let usage = monitor.claudeUsage else { return }
 
         for window in usage.displayWindows(now: now) {
             let limit = UsageLimit(used: window.percent, limit: 100,
                                    resetsAt: window.resetsAt, severity: window.severity,
-                                   observedAt: window.observedAt ?? usage.observedAt)
+                                   observedAt: window.observedAt ?? usage.observedAt,
+                                   notAfter: window.notAfter)
             switch window.key {
             case ClaudeUsageSnapshot.fiveHourKey: snapshot.sessionLimit = limit
             case ClaudeUsageSnapshot.sevenDayKey: snapshot.weekLimit = limit
