@@ -185,10 +185,10 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
             "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
             "org": "org-uuid", "u": ["fh": NSNumber(value: 0), "sd": NSNumber(value: 43)]
         ]]]
-        let account = ClaudeCachedUsage.AccountContext(organizationUUID: "org-uuid",
-                                                       weeklyResetAnchor: utc("2026-09-09T00:00:00Z"))
+        let resets = ["org-uuid": ClaudeCachedUsage.OrganizationResets(weekly: utc("2026-09-09T00:00:00Z"),
+                                                                     reportedAt: utc("2026-09-02T12:00:00Z"))]
         let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(
-            json: sample, now: utc("2026-10-18T00:13:00Z"), account: account))
+            json: sample, now: utc("2026-10-18T00:13:00Z"), resets: resets))
         XCTAssertEqual(snapshot.window("seven_day")?.resetsAt, utc("2026-10-21T00:00:00Z"))
         XCTAssertEqual(snapshot.window("seven_day")?.percent, 43)
         XCTAssertEqual(snapshot.window("seven_day")?.resetIsInferred, true)
@@ -199,9 +199,11 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
             "t": NSNumber(value: utc("2026-10-13T20:00:00Z").timeIntervalSince1970 * 1000),
             "u": ["sd": NSNumber(value: 72)]
         ]]]
-        let account = ClaudeCachedUsage.AccountContext(weeklyResetAnchor: utc("2026-09-09T00:00:00Z"))
+        // An older file names no organization: Claude Code's is the only one, and its reset applies.
+        let resets = ["code": ClaudeCachedUsage.OrganizationResets(weekly: utc("2026-09-09T00:00:00Z"),
+                                                                 reportedAt: utc("2026-09-02T12:00:00Z"))]
         XCTAssertNil(ClaudeDesktopUsageHistory.parse(json: sample, now: utc("2026-10-14T01:00:00Z"),
-                                                     account: account))
+                                                     resets: resets, claudeCodeOrganization: "code"))
     }
 
     func testWeeklyResetStepsBothWaysAndIsStrictlyAfter() {
@@ -233,7 +235,7 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
         ]]
         XCTAssertEqual(ClaudeDesktopUsageHistory.parse(json: json, now: now)?.fiveHourPercent, 95)
         XCTAssertEqual(ClaudeDesktopUsageHistory.parse(
-            json: json, now: now, account: .init(organizationUUID: "team"))?.fiveHourPercent, 95)
+            json: json, now: now, claudeCodeOrganization: "team")?.fiveHourPercent, 95)
         XCTAssertEqual(ClaudeDesktopUsageHistory.parse(json: json, now: now)?.organizationUUID, "max")
         XCTAssertEqual(ClaudeDesktopUsageHistory.organization(json: json), "max")
     }
@@ -256,12 +258,52 @@ final class ClaudeDesktopUsageHistoryTests: XCTestCase {
             "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
             "org": "max", "u": ["sd": NSNumber(value: 43)]
         ]]]
-        let teamAnchor = ClaudeCachedUsage.AccountContext(organizationUUID: "team",
-                                                          weeklyResetAnchor: utc("2026-10-20T05:00:00Z"))
+        let teamOnly = ["team": ClaudeCachedUsage.OrganizationResets(weekly: utc("2026-10-20T05:00:00Z"),
+                                                                   reportedAt: utc("2026-10-17T12:00:00Z"))]
         let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(
-            json: sample, now: utc("2026-10-18T00:13:00Z"), account: teamAnchor))
+            json: sample, now: utc("2026-10-18T00:13:00Z"), resets: teamOnly, claudeCodeOrganization: "team"))
         XCTAssertNil(snapshot.window("seven_day")?.resetsAt, "no rollover seen, and the anchor is Team's")
         XCTAssertEqual(snapshot.window("seven_day")?.percent, 43)
+    }
+
+    func testTheDesktopsOwnRememberedResetAppliesWhateverClaudeCodeIsOn() throws {
+        // Claude Code on Team no longer costs the Max week its reset: Max's is remembered.
+        let sample: [String: Any] = ["samples": [[
+            "t": NSNumber(value: utc("2026-10-17T23:45:29Z").timeIntervalSince1970 * 1000),
+            "org": "max", "u": ["sd": NSNumber(value: 43)]
+        ]]]
+        let both = [
+            "team": ClaudeCachedUsage.OrganizationResets(weekly: utc("2026-10-20T05:00:00Z"),
+                                                        reportedAt: utc("2026-10-17T12:00:00Z")),
+            "max": ClaudeCachedUsage.OrganizationResets(weekly: utc("2026-09-09T00:00:00Z"),
+                                                       reportedAt: utc("2026-09-02T12:00:00Z"))
+        ]
+        let snapshot = try XCTUnwrap(ClaudeDesktopUsageHistory.parse(
+            json: sample, now: utc("2026-10-18T00:13:00Z"), resets: both, claudeCodeOrganization: "team"))
+        XCTAssertEqual(snapshot.window("seven_day")?.resetsAt, utc("2026-10-21T00:00:00Z"))
+    }
+
+    func testARememberedFiveHourResetCountsOnlyForTheWindowTheSampleIsIn() throws {
+        // The cache's five-hour reset ends exactly the window running when it was fetched; a
+        // sample inside those five hours expires with it, any other keeps its own five hours.
+        let sampleAt = utc("2026-10-18T10:00:00Z")
+        let sample: [String: Any] = ["samples": [[
+            "t": NSNumber(value: sampleAt.timeIntervalSince1970 * 1000),
+            "org": "max", "u": ["fh": NSNumber(value: 70)]
+        ]]]
+        func parse(fiveHourReset: Date) -> ClaudeUsageSnapshot? {
+            ClaudeDesktopUsageHistory.parse(
+                json: sample, now: sampleAt.addingTimeInterval(60),
+                resets: ["max": .init(fiveHour: fiveHourReset, reportedAt: sampleAt.addingTimeInterval(-3600))])
+        }
+        let inWindow = try XCTUnwrap(parse(fiveHourReset: utc("2026-10-18T12:00:00Z")))
+        XCTAssertEqual(inWindow.window("five_hour")?.resetsAt, utc("2026-10-18T12:00:00Z"))
+        XCTAssertEqual(inWindow.window("five_hour")?.notAfter, utc("2026-10-18T12:00:00Z"))
+        let earlierWindow = try XCTUnwrap(parse(fiveHourReset: utc("2026-10-18T09:00:00Z")))
+        XCTAssertNil(earlierWindow.window("five_hour")?.resetsAt)
+        XCTAssertEqual(earlierWindow.window("five_hour")?.notAfter, sampleAt.addingTimeInterval(5 * 3600))
+        let laterWindow = try XCTUnwrap(parse(fiveHourReset: utc("2026-10-18T15:30:00Z")))
+        XCTAssertNil(laterWindow.window("five_hour")?.resetsAt, "a reset more than five hours on is a later window's")
     }
 
     func testRejectsUnusableInput() {

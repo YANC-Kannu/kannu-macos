@@ -4,6 +4,47 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-29 - Claude's limit bars follow the right organization and expire on time
+- **Developer label:** "the token detection currently is wrong … claude in kannu"
+- **Agent label:** Claude Code (Opus 5.5) — per-organization resets, the organization read with the cache, an honest card when Claude Code and Claude Desktop differ, expiries that reach the card and the alerts, and the usage reads off the main actor
+- **Changes:**
+  - Each organization's weekly and five-hour resets are remembered in Defaults
+    (`claudeOrganizationResets`, by organization id) after every `/usage` run whose organization
+    is known. Claude Desktop's history is read with its own organization's reset, whatever Claude
+    Code is on; the rollover guess is the last resort. On 2026-10-28 Claude Code's move to Team
+    lost Max's reset and Desktop's 100 % weekly bar stayed up from 11:49 to 23:01 IST, 17.5 hours
+    past Max's reset.
+  - After a run, `~/.claude.json` is read once for the cache's timestamp, its resets and
+    `oauthAccount` together. `oauthAccount` counts only when its `profileFetchedAt` falls inside
+    the run; else the cache's own weekly reset names its organization when exactly one remembered
+    anchor matches; else the last known organization stands, unless the cache contradicts it.
+  - The "Claude Code changed organization" check counts only a profile fetched after the run that
+    last settled the organization (`claudeCodeUsageOrganizationCheckedAt`). A desktop-hosted
+    session's Max profile, written back all day, licensed a `/usage` run on nearly every visit of
+    the Usage tab.
+  - Between runs the cache goes on the card of the organization its own weekly reset names; a
+    cache that contradicts Claude Code's remembered reset goes on no card.
+  - When the organizations differ and Claude Desktop has no live reading, the card shows Claude
+    Code's own bars with its plan in the header chip ("Team") and says "No recent Claude Desktop
+    (Max) reading — these are Claude Code's (Team) limits."; with no bars at all it says "No
+    recent Claude Desktop (Max) reading — Claude Code is signed in to Team." It never claims
+    readings that are not drawn. "Sign in in Terminal" stays, and the automatic refresh runs for
+    Claude Code's bars as it does for one organization.
+  - A window cached with `resets_at: null` expires five hours after the fetch (the five-hour
+    window) or a week after (weekly ones), in Claude Code's cache and in the statusline file.
+  - The expiry bound reaches `UsageLimit` and `UsageWindowReading`: the card's bars, "near
+    limit", the forecast and "resumes at" drop a lapsed value at its expiry, and the alerts
+    re-evaluate then.
+  - The usage reads run on the monitor's own serial queue (`ClaudeUsageSources.read`) and are
+    applied on the main actor; a read that found nothing is retried once a minute, not at every
+    rescan. A `~/.claude.json` caught mid-write keeps the last read cache instead of dropping it
+    for ten minutes.
+  - Tests: `ClaudeUsageOrganizationTests` (the Oct 27–28 replay, the run window, the weekly-reset
+    check, the card's choice, the off-main read against real files), `ClaudeUsageReadRulesTests`
+    (source scan), and additions to the cache, desktop history, snapshot and forecast tests.
+  - `docs/REGRESSIONS.md`: entry 8 and entry 11 addenda, and a Danger zones row for the three
+    files that decide whose limits the card shows.
+
 ### 2026-10-29 - Claude's token counts leave out cache re-reads, and a turn shows its context
 - **Developer label:** "the token detection currently is wrong … claude in kannu"
 - **Agent label:** Claude Code (Opus 5.5) — split input, cache writes, cache reads and output everywhere; headline without cache reads; per-turn context; max-per-message dedupe; plan-anchored windows; hook v47 notification wake

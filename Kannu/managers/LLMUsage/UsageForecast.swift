@@ -34,8 +34,13 @@ struct UsageWindowReading: Equatable {
     let resetsAt: Date?
     let severity: String?
     let observedAt: Date
+    /// The latest moment the value can still describe a running window, for a value with no
+    /// reported reset (`ClaudeUsageSnapshot.Window.notAfter`). Past it the value is from an
+    /// earlier window, and it stops counting as near the limit or feeding a forecast.
+    let notAfter: Date?
 
-    init(provider: String, key: String, label: String, percent: Double, resetsAt: Date?, severity: String?, observedAt: Date) {
+    init(provider: String, key: String, label: String, percent: Double, resetsAt: Date?, severity: String?,
+         observedAt: Date, notAfter: Date? = nil) {
         self.id = Self.id(provider: provider, key: key)
         self.provider = provider
         self.key = key
@@ -44,11 +49,19 @@ struct UsageWindowReading: Equatable {
         self.resetsAt = resetsAt
         self.severity = severity
         self.observedAt = observedAt
+        self.notAfter = notAfter
     }
 
     static func id(provider: String, key: String) -> String { provider + ":" + key }
 
-    func isLive(now: Date) -> Bool { resetsAt.map { $0 > now } ?? true }
+    func isLive(now: Date) -> Bool { Self.isLive(resetsAt: resetsAt, notAfter: notAfter, now: now) }
+
+    /// A value is live until its reset, and until its expiry bound when it has one. One rule for
+    /// the alerts, the forecast and the Usage tab's bars, so a lapsed value leaves all three at once.
+    static func isLive(resetsAt: Date?, notAfter: Date?, now: Date) -> Bool {
+        if let notAfter, now >= notAfter { return false }
+        return resetsAt.map { $0 > now } ?? true
+    }
 
     /// Claude's live windows as readings, keyed as the Usage tab keys its bars.
     static func readings(fromClaude snapshot: ClaudeUsageSnapshot?, now: Date) -> [UsageWindowReading] {
@@ -58,7 +71,8 @@ struct UsageWindowReading: Equatable {
                                percent: window.percent, resetsAt: window.resetsAt, severity: window.severity,
                                // The window's own reading time: a merged snapshot's `observedAt`
                                // is its newest source's, which would date an old weekly sample now.
-                               observedAt: window.observedAt ?? snapshot.observedAt)
+                               observedAt: window.observedAt ?? snapshot.observedAt,
+                               notAfter: window.notAfter)
         }
     }
 
@@ -262,8 +276,9 @@ enum UsageAlertPolicy {
         return full.compactMap(\.resetsAt).max()
     }
 
-    /// The earliest future reset among these readings: the moment something must be re-evaluated.
+    /// The earliest future reset or expiry among these readings: the moment something must be
+    /// re-evaluated. Nothing republishes when a value's expiry passes either.
     static func nextReset(_ readings: [UsageWindowReading], now: Date) -> Date? {
-        readings.compactMap(\.resetsAt).filter { $0 > now }.min()
+        (readings.compactMap(\.resetsAt) + readings.compactMap(\.notAfter)).filter { $0 > now }.min()
     }
 }

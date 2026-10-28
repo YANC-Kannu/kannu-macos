@@ -191,6 +191,42 @@ final class UsageForecastTests: XCTestCase {
         XCTAssertEqual(readings.map(\.observedAt), [now, old])
     }
 
+    // MARK: - A value's expiry reaches the alerts and the forecast
+
+    func testALapsedValueLeavesNearLimitAndTheForecastAtItsExpiry() {
+        // A desktop sample's 100 % has no reset, only the latest moment it can still describe a
+        // running window. The alerts checked the reset alone, so it stayed "near the limit".
+        let expiry = now.addingTimeInterval(600)
+        let snapshot = ClaudeUsageSnapshot(windows: [
+            .init(key: "seven_day", percent: 100, resetsAt: nil, resetIsInferred: true, notAfter: expiry)
+        ], observedAt: now.addingTimeInterval(-3600))
+        let readings = UsageWindowReading.readings(fromClaude: snapshot, now: now)
+        XCTAssertEqual(readings.map(\.notAfter), [expiry], "the expiry travels with the reading")
+        XCTAssertEqual(P.nearLimit(readings, now: now).map(\.key), ["seven_day"])
+        XCTAssertEqual(P.nearLimit(readings, now: expiry).map(\.key), [], "lapsed: not near any limit")
+        XCTAssertFalse(readings[0].isLive(now: expiry), "and no longer a forecast's current reading")
+        XCTAssertNil(P.resumeDate(provider: "claude", runError: .apiError(status: 429), rawState: "stopped",
+                                  readings: readings, now: expiry))
+        // Nothing republishes at an expiry: it is when the alerts must look again.
+        XCTAssertEqual(P.nextReset(readings, now: now), expiry)
+        XCTAssertEqual(P.nextReset([reading(percent: 50, resetsIn: 3600)] + readings, now: now), expiry)
+    }
+
+    func testTheCardAndTheAlertsShareOneLivenessRule() {
+        XCTAssertTrue(UsageWindowReading.isLive(resetsAt: nil, notAfter: nil, now: now))
+        XCTAssertFalse(UsageWindowReading.isLive(resetsAt: now, notAfter: nil, now: now))
+        XCTAssertFalse(UsageWindowReading.isLive(resetsAt: now.addingTimeInterval(60), notAfter: now, now: now))
+        XCTAssertTrue(UsageWindowReading.isLive(resetsAt: nil, notAfter: now.addingTimeInterval(1), now: now))
+        // The snapshot's own rule says the same.
+        for (resetsAt, notAfter) in [(nil, now), (now.addingTimeInterval(9), now.addingTimeInterval(-1)),
+                                     (now.addingTimeInterval(9), nil)] as [(Date?, Date?)] {
+            let snapshot = ClaudeUsageSnapshot(windows: [.init(key: "k", percent: 1, resetsAt: resetsAt, notAfter: notAfter)],
+                                               observedAt: now)
+            XCTAssertEqual(!snapshot.displayWindows(now: now).isEmpty,
+                           UsageWindowReading.isLive(resetsAt: resetsAt, notAfter: notAfter, now: now))
+        }
+    }
+
     func testTheShortCaptionSaysTheSameInFewerWords() {
         // Across midnight on purpose: the short form never names the day.
         let at = now.addingTimeInterval(23 * 3600)
