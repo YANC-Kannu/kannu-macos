@@ -222,7 +222,8 @@ reads fd 3. Rules:
 - Never move the payload back into a file or the environment. A `trap` cannot catch SIGKILL.
 - Keep the heredoc line exactly `python3 <<'PY'`. The pre-commit hook finds the Python body by that
   line for its backslash check, and a changed line makes that check pass on an empty body.
-- Read past the cap to the end, or the host blocks writing the rest.
+- Read past the cap to the end, and drain fd 3 after a Python run that exits non-zero (v46 read
+  stdin before Python started). Otherwise the host blocks writing the rest, or gets a broken pipe.
 
 `continueLaunch()` sweeps leftovers older than 10 minutes (`HookInputLeftovers`). Guards: the
 `HookScriptTests` v47 group (normal run, the no-`python3` exit, two failing steps, three kinds of

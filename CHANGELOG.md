@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-29 - Act on CodeRabbit's review of #5
+- **Developer label:** CodeRabbit's review of #5: drain descriptor 3 after Python exits, and use the GPL header block in the new test file
+- **Agent label:** Claude Code (Opus 5.5) — the hook wrapper drains fd 3 after a failed Python run; `HookInputLeftoversTests` gets the block header
+- **Changes:**
+  - Hook script v47, both copies: when `python3` exits non-zero, the wrapper reads what is left on
+    fd 3 and drops it. One example is Apple's `/usr/bin/python3` shim on a Mac without the Command
+    Line Tools, which fails before reading anything. v46 read stdin before Python started, so this
+    path never left the host writing into a pipe nobody reads. Without the drain, a 4 MB payload
+    broke the writer's pipe. A successful run costs no extra process, because Python reads fd 3 to
+    the end before anything else and never exits non-zero on purpose.
+  - Test: in `testThePromptIsNeverWrittenToDiskWhenAStepFails`, the failing-`python3` payload is
+    now larger than the pipe buffer, so the test's own write returns only if the payload is drained.
+  - `HookInputLeftoversTests.swift` starts with the `/* Kannu (കണ്ണ്) … */` GPL header block,
+    the same one `HookInputLeftovers.swift` uses.
+
 ### 2026-10-29 - Hook payloads never touch the disk
 - **Developer label:** "The agent-status hook script leaves its stdin temp files behind … prompt contents persist on disk indefinitely — a privacy leak"
 - **Agent label:** Claude Code (Opus 5.5) — hook script v47 hands the payload to Python on file descriptor 3 instead of a temp file, and Kannu sweeps the old leftovers at launch

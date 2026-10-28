@@ -1992,4 +1992,8 @@ except Exception:
     pass
 emit(hidden_notes_out)
 PY
+# Python reads file descriptor 3 to the end before anything else and never exits non-zero on
+# purpose, so only a failed run (python3 dying before it reads) can leave the payload unread.
+# Drain it then, so the host is never left writing to a pipe nobody reads.
+[ $? -eq 0 ] || cat <&3 > /dev/null 2>&1
 exit 0

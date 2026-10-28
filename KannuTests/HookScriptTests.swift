@@ -574,14 +574,16 @@ final class HookScriptTests: XCTestCase {
         assertThePromptIsNowhereOnDisk("failed status write")
 
         // python3 itself fails before reading a byte, as the /usr/bin/python3 shim does on a Mac
-        // without the Command Line Tools.
+        // without the Command Line Tools. The wrapper drains the payload then: one larger than the
+        // pipe buffer means this test's own write returns only if something reads it.
         let bin = home.appendingPathComponent("failing-bin", isDirectory: true)
         try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         let python = bin.appendingPathComponent("python3")
         try Data("#!/bin/bash\nexit 1\n".utf8).write(to: python)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: python.path)
         let process = try launch(state: "thinking", event: "UserPromptSubmit", conversation: "p47d",
-                                 extra: ["prompt": Self.privatePrompt], path: bin.path + ":/bin")
+                                 extra: ["prompt": Self.privatePrompt + String(repeating: " ", count: 1024 * 1024)],
+                                 path: bin.path + ":/bin")
         process.waitUntilExit()
         XCTAssertEqual(process.terminationStatus, 0)
         assertThePromptIsNowhereOnDisk("python3 failed")
