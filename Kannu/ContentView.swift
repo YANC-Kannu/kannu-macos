@@ -130,7 +130,7 @@ struct ContentView: View {
     
     // Dynamic sizing based on view type and graph count with smooth transitions
     var dynamicNotchSize: CGSize {
-        let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: isDynamicIslandMode) : openNotchSize
+        let baseSize = openNotchSize
         
         // When inline sneak peek is active in closed notch, use the wider inline width
         // so the outer maxWidth frame doesn't clip the expanded content
@@ -151,8 +151,7 @@ struct ContentView: View {
             let inlineWidth: CGFloat = airPodsListeningModeSneakActive
                 ? InlineHUD.airPodsListeningModeWidth(
                     closedNotchWidth: vm.closedNotchSize.width,
-                    gestureProgress: gestureProgress,
-                    minimalistic: Defaults[.enableMinimalisticUI]
+                    gestureProgress: gestureProgress
                 ) + notchHorizontalPadding * 2
                 : 460
             return CGSize(width: max(baseSize.width, inlineWidth), height: baseSize.height)
@@ -206,12 +205,6 @@ struct ContentView: View {
                 return CGSize(width: baseSize.width, height: preferredHeight)
             }
             return baseSize
-        }
-
-        if enableMinimalisticUI,
-           coordinator.currentView == .home,
-           let preferredHeight = extensionMinimalisticPreferredHeight(baseSize: baseSize) {
-            return CGSize(width: baseSize.width, height: preferredHeight)
         }
         
         guard coordinator.currentView == .stats else {
@@ -276,7 +269,6 @@ struct ContentView: View {
     @Default(.musicControlWindowEnabled) var musicControlWindowEnabled
     @Default(.showNotHumanFace) var showNotHumanFace
     @Default(.useModernCloseAnimation) var useModernCloseAnimation
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
 
     private static let musicControlLogFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -329,14 +321,6 @@ struct ContentView: View {
         }
     }
     
-    private var standardMediaControlsActive: Bool {
-        showStandardMediaControls && !enableMinimalisticUI
-    }
-
-    private var closedMusicContentEnabled: Bool {
-        enableMinimalisticUI || showStandardMediaControls
-    }
-
     private var isMusicHUDDeferredAfterUnlock: Bool {
         lockScreenManager.shouldDelayPostUnlockMusicHUD
     }
@@ -351,12 +335,12 @@ struct ContentView: View {
 
     private var notchHorizontalPadding: CGFloat {
         guard vm.notchState == .open else {
-            return activeCornerRadiusInsets.closed.bottom
+            return cornerRadiusInsets.closed.bottom
         }
         if Defaults[.cornerRadiusScaling] {
-            return activeCornerRadiusInsets.opened.top - 5
+            return cornerRadiusInsets.opened.top - 5
         }
-        return activeCornerRadiusInsets.opened.bottom - 5
+        return cornerRadiusInsets.opened.bottom - 5
     }
 
     private var bodyHoverAreaPadding: CGFloat {
@@ -367,7 +351,7 @@ struct ContentView: View {
     }
 
     private var notchBottomPadding: CGFloat {
-        currentShadowPadding + bodyHoverAreaPadding
+        notchShadowPadding + bodyHoverAreaPadding
     }
 
     private var pillTopOffset: CGFloat {
@@ -378,7 +362,7 @@ struct ContentView: View {
         vm.notchState == .closed
             && hasActiveMusicSnapshot
             && coordinator.musicLiveActivityEnabled
-            && closedMusicContentEnabled
+            && showStandardMediaControls
             && !vm.hideOnClosed
             && !lockScreenManager.isLocked
             && !isMusicHUDDeferredAfterUnlock
@@ -410,26 +394,13 @@ struct ContentView: View {
         )
     }
     
-    // Use minimalistic corner radius ONLY when opened, keep normal when closed
-    private var activeCornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) {
-        if enableMinimalisticUI {
-            // Keep normal closed corner radius, use minimalistic when opened
-            return (opened: minimalisticCornerRadiusInsets.opened, closed: cornerRadiusInsets.closed)
-        }
-        return cornerRadiusInsets
-    }
-    
-    private var currentShadowPadding: CGFloat {
-        notchShadowPaddingValue(isMinimalistic: enableMinimalisticUI)
-    }
-
     private var currentNotchShape: NotchShape {
         let topRadius = (vm.notchState == .open && Defaults[.cornerRadiusScaling])
-            ? activeCornerRadiusInsets.opened.top
-            : activeCornerRadiusInsets.closed.top
+            ? cornerRadiusInsets.opened.top
+            : cornerRadiusInsets.closed.top
         let bottomRadius = (vm.notchState == .open && Defaults[.cornerRadiusScaling])
-            ? activeCornerRadiusInsets.opened.bottom
-            : activeCornerRadiusInsets.closed.bottom
+            ? cornerRadiusInsets.opened.bottom
+            : cornerRadiusInsets.closed.bottom
         return NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius)
     }
 
@@ -621,9 +592,9 @@ struct ContentView: View {
     
     private var closedNotchShimmerCornerRadius: CGFloat {
         if isDynamicIslandMode {
-            return max(vm.closedNotchSize.height / 2, dynamicIslandPillCornerRadiusInsets.closed.standard)
+            return max(vm.closedNotchSize.height / 2, dynamicIslandPillCornerRadiusInsets.closed)
         }
-        return activeCornerRadiusInsets.closed.top
+        return cornerRadiusInsets.closed.top
     }
 
     private var shouldShowFullNotchShimmer: Bool {
@@ -684,7 +655,7 @@ struct ContentView: View {
            !lockScreenManager.isLocked { return false }
         if (lockScreenManager.isLocked || !lockScreenManager.isLockIdle) && Defaults[.enableLockScreenLiveActivity] { return false }
         if privacyManager.hasAnyIndicator && (Defaults[.enableCameraDetection] || Defaults[.enableMicrophoneDetection]) { return false }
-        if !shelfState.isEmpty && !lockScreenManager.isLocked && !enableMinimalisticUI { return false }
+        if !shelfState.isEmpty && !lockScreenManager.isLocked { return false }
 
         if currentScreenExpansionType == .battery,
            isBatteryHUDVisibleOnCurrentScreen,
@@ -706,12 +677,10 @@ struct ContentView: View {
     private var currentPillShape: DynamicIslandPillShape {
         let radius: CGFloat
         if vm.notchState == .open {
-            radius = enableMinimalisticUI
-                ? minimalisticCornerRadiusInsets.opened.top
-                : dynamicIslandPillCornerRadiusInsets.opened
+            radius = dynamicIslandPillCornerRadiusInsets.opened
         } else {
             // Use half the closed height for a true capsule shape
-            radius = max(vm.closedNotchSize.height / 2, dynamicIslandPillCornerRadiusInsets.closed.standard)
+            radius = max(vm.closedNotchSize.height / 2, dynamicIslandPillCornerRadiusInsets.closed)
         }
         return DynamicIslandPillShape(cornerRadius: radius)
     }
@@ -757,11 +726,11 @@ struct ContentView: View {
             let radius = dynamicIslandPillCornerRadiusInsets.opened
             return AnyShape(DynamicIslandPillShape(cornerRadius: radius))
         } else {
-            let topRadius = activeCornerRadiusInsets.closed.top
+            let topRadius = cornerRadiusInsets.closed.top
             let bottomRadius: CGFloat = {
                 switch resolvedBatteryNotificationStyle(for: kind) {
                 case .compact:
-                    return activeCornerRadiusInsets.closed.bottom
+                    return cornerRadiusInsets.closed.bottom
                 case .standard:
                     return kind == .fullBattery ? 36 : 40
                 }
@@ -954,7 +923,7 @@ struct ContentView: View {
             // `shouldHideUntilHover` on purpose: `shouldUseHiddenEdgeHoverPolling` derives from
             // that property, and collapsing them would stop the hover poller mid-reveal.
             .offset(y: shouldHideUntilHover && !isHovering && !isRevealHoldActive
-                ? -(vm.closedNotchSize.height + pillTopOffset + currentShadowPadding + 10)
+                ? -(vm.closedNotchSize.height + pillTopOffset + notchShadowPadding + 10)
                 : 0
             )
             .onChange(of: coordinator.helloPending) { _, pending in
@@ -1044,7 +1013,7 @@ struct ContentView: View {
                     SettingsWindowController.shared.showWindow()
                 }
                 Divider()
-                // Reaches the closed notch and the minimalistic UI, where the header has no buttons.
+                // Reaches the closed notch, where the header has no buttons.
                 Button("Hide Notch") {
                     Defaults[.showNotch] = false
                 }
@@ -1064,7 +1033,7 @@ struct ContentView: View {
                 + (
                     isDynamicIslandMode
                         ? dynamicIslandTopOffset + dynamicIslandShadowInset * 2
-                        : currentShadowPadding
+                        : notchShadowPadding
                 )
             ).rounded(),
             alignment: .top
@@ -1232,9 +1201,6 @@ struct ContentView: View {
             .onChange(of: showStandardMediaControls) { _, _ in
                 handleStandardMediaControlsAvailabilityChange()
             }
-            .onChange(of: enableMinimalisticUI) { _, _ in
-                handleStandardMediaControlsAvailabilityChange()
-            }
             .onChange(of: gestureProgress) { _, _ in
                 if shouldShowMusicControlWindow() {
                     enqueueMusicControlWindowSync(forceRefresh: true, delay: 0.05)
@@ -1353,7 +1319,7 @@ struct ContentView: View {
                             closedNotchWidth: vm.closedNotchSize.width + (isHovering ? 8 : 0),
                             baseHeight: vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0),
                             isDynamicIslandMode: isDynamicIslandMode,
-                            topCornerRadius: activeCornerRadiusInsets.closed.top,
+                            topCornerRadius: cornerRadiusInsets.closed.top,
                             styleOverride: batteryModel.activeTemporaryHUDKind.map { resolvedBatteryNotificationStyle(for: $0) }
                         )
                         .id(batteryModel.activeTemporaryHUDToken)
@@ -1427,7 +1393,7 @@ struct ContentView: View {
                               layout: layout,
                               isHovering: isHovering
                           )
-                      } else if !coordinator.expandingView.show && vm.notchState == .closed && !shelfState.isEmpty && !vm.hideOnClosed && !lockScreenManager.isLocked && !enableMinimalisticUI {
+                      } else if !coordinator.expandingView.show && vm.notchState == .closed && !shelfState.isEmpty && !vm.hideOnClosed && !lockScreenManager.isLocked {
                           ShelfInlineLiveActivity()
                               .transition(.opacity.animation(.smooth(duration: 0.25)))
                       } else if !coordinator.expandingView.show,
@@ -1816,7 +1782,7 @@ struct ContentView: View {
         }
 
         // Shelf: show file count as lowest-priority secondary
-        if !shelfState.isEmpty && !lockScreenManager.isLocked && !enableMinimalisticUI {
+        if !shelfState.isEmpty && !lockScreenManager.isLocked {
             return .shelf(count: shelfState.items.count)
         }
 
@@ -2066,7 +2032,7 @@ struct ContentView: View {
             return nil
         }
 
-        guard closedMusicContentEnabled else {
+        guard showStandardMediaControls else {
             ExtensionRoutingDiagnostics.shared.logSuppression(
                 .music,
                 reason: "music content disabled",
@@ -2278,7 +2244,7 @@ struct ContentView: View {
     var dragDetector: some View {
         if lockScreenManager.isLocked {
             EmptyView()
-        } else if Defaults[.dynamicShelf] && !Defaults[.enableMinimalisticUI] {
+        } else if Defaults[.dynamicShelf] {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // Closed: only the notch/pill shape is a drop target and hit-testable, so clicks
@@ -2372,7 +2338,7 @@ struct ContentView: View {
     private var isClosedMusicGestureContext: Bool {
         vm.notchState == .closed
             && coordinator.musicLiveActivityEnabled
-            && closedMusicContentEnabled
+            && showStandardMediaControls
             && !vm.hideOnClosed
             && !lockScreenManager.isLocked
             && !isMusicHUDDeferredAfterUnlock
@@ -2785,7 +2751,7 @@ struct ContentView: View {
                 triggerHapticIfAllowed()
             }
 
-            let shouldFocusTimerTab = enableTimerFeature && timerDisplayMode == .tab && timerManager.isTimerActive && !enableMinimalisticUI
+            let shouldFocusTimerTab = enableTimerFeature && timerDisplayMode == .tab && timerManager.isTimerActive
 
             guard vm.notchState == .closed,
                 !isSneakPeekVisibleOnCurrentScreen,
@@ -2936,50 +2902,6 @@ struct ContentView: View {
         return min(max(preferred, minHeight), maxHeight)
     }
 
-    // Estimate the height required for minimalistic overrides (notably web content) and clamp it to the notch bounds.
-    private func extensionMinimalisticPreferredHeight(baseSize: CGSize) -> CGFloat? {
-        guard let configuration = extensionNotchExperienceManager.minimalisticReplacementPayload()?.descriptor.minimalistic else {
-            return nil
-        }
-
-        let minHeight = baseSize.height
-        let maxHeight = baseSize.height + statsAdditionalRowHeight
-
-        var contentHeight: CGFloat = 0
-        var blockCount = 0
-
-        if configuration.headline != nil {
-            contentHeight += 24
-            blockCount += 1
-        }
-
-        if configuration.subtitle != nil {
-            contentHeight += 20
-            blockCount += 1
-        }
-
-        if !configuration.sections.isEmpty {
-            let sectionEstimate: CGFloat = 98
-            contentHeight += CGFloat(configuration.sections.count) * sectionEstimate
-            blockCount += configuration.sections.count
-        }
-
-        if let webDescriptor = configuration.webContent {
-            contentHeight += webDescriptor.preferredHeight
-            blockCount += 1
-        }
-
-        guard blockCount > 0 else { return nil }
-
-        let spacingAllowance = CGFloat(max(blockCount - 1, 0)) * 16
-        let topPadding: CGFloat = 10
-        let bottomPadding: CGFloat = configuration.webContent == nil ? 10 : 0
-        let estimatedHeight = contentHeight + spacingAllowance + topPadding + bottomPadding
-
-        let clampedHeight = min(max(estimatedHeight, minHeight), maxHeight)
-        return clampedHeight > minHeight ? clampedHeight : nil
-    }
-    
     // MARK: - Gesture Handling
     
     private func handleDownGesture(translation: CGFloat, phase: NSEvent.Phase) {
@@ -3125,7 +3047,7 @@ struct ContentView: View {
             return
         }
 
-        if standardMediaControlsActive {
+        if showStandardMediaControls {
             if musicManager.isPlaying || !musicManager.isPlayerIdle {
                 clearMusicControlVisibilityDeadline()
             }
@@ -3255,7 +3177,7 @@ struct ContentView: View {
     private func shouldShowMusicControlWindow() -> Bool {
         guard musicControlWindowEnabled,
               coordinator.musicLiveActivityEnabled,
-              standardMediaControlsActive,
+              showStandardMediaControls,
               vm.notchState == .closed,
               !vm.hideOnClosed,
               !lockScreenManager.isLocked,
@@ -3326,7 +3248,7 @@ struct ContentView: View {
             notchHeight: max(vm.closedNotchSize.height, vm.effectiveClosedNotchHeight),
             notchWidth: vm.closedNotchSize.width + (isHovering ? 8 : 0),
             rightWingWidth: max(0, vm.effectiveClosedNotchHeight - (isHovering ? 0 : 12) + gestureProgress / 2),
-            cornerRadius: activeCornerRadiusInsets.closed.bottom,
+            cornerRadius: cornerRadiusInsets.closed.bottom,
             spacing: 36
         )
     }

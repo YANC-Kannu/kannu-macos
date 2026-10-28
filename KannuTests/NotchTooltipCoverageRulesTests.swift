@@ -57,7 +57,6 @@ final class NotchTooltipCoverageRulesTests: XCTestCase {
     /// hover handler, so the control keeps one hover source.
     static let tooltipButtons = [
         "HoverButton",
-        "MinimalisticSquircircleButton",
         "controlButton",
         "playbackButton",
         "TabButton",
@@ -98,7 +97,8 @@ final class NotchTooltipCoverageRulesTests: XCTestCase {
             offenders += result.offenders
             calls += result.calls
         }
-        XCTAssertGreaterThanOrEqual(calls, 25, "Found almost no shared-button calls — check the scanner, not the tree.")
+        // 22 since the minimalistic music player and its shared buttons went (2026-10-28).
+        XCTAssertGreaterThanOrEqual(calls, 22, "Found almost no shared-button calls — check the scanner, not the tree.")
         XCTAssertEqual(
             offenders.sorted(), [],
             """

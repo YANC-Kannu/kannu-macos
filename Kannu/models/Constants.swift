@@ -1153,8 +1153,6 @@ extension Defaults.Keys {
     static let showPowerStatusNotifications = Key<Bool>("showPowerStatusNotifications", default: true)
     static let showBatteryIndicator = Key<Bool>("showBatteryIndicator", default: BatteryActivityManager.shared.hasBattery())
     static let showBatteryPercentage = Key<Bool>("showBatteryPercentage", default: true)
-    static let showBatteryPercentInside = Key<Bool>("showBatteryPercentInside", default: true)
-    static let showMinimalisticBatteryIndicator = Key<Bool>("showMinimalisticBatteryIndicator", default: true)
     static let showPowerStatusIcons = Key<Bool>("showPowerStatusIcons", default: true)
     static let playLowBatteryAlertSound = Key<Bool>("playLowBatteryAlertSound", default: true)
     static let showChargingBatteryHUD = Key<Bool>("showChargingBatteryHUD", default: true)
@@ -1448,7 +1446,6 @@ extension Defaults.Keys {
     static let enableExtensionLockScreenWidgets = Key<Bool>("enableExtensionLockScreenWidgets", default: true)
     static let enableExtensionNotchExperiences = Key<Bool>("enableExtensionNotchExperiences", default: true)
     static let enableExtensionNotchTabs = Key<Bool>("enableExtensionNotchTabs", default: true)
-    static let enableExtensionNotchMinimalisticOverrides = Key<Bool>("enableExtensionNotchMinimalisticOverrides", default: true)
     static let enableExtensionNotchInteractiveWebViews = Key<Bool>("enableExtensionNotchInteractiveWebViews", default: true)
     static let extensionAuthorizationEntries = Key<[ExtensionAuthorizationEntry]>("extensionAuthorizationEntries", default: [])
     static let extensionRateLimitRecords = Key<[ExtensionRateLimitRecord]>("extensionRateLimitRecords", default: [])
@@ -1557,9 +1554,6 @@ extension Defaults.Keys {
     
     // MARK: ImageService
     static let didClearLegacyURLCacheV1 = Key<Bool>("didClearLegacyURLCacheV1", default: false)
-    
-    // MARK: Minimalistic UI Mode
-    static let enableMinimalisticUI = Key<Bool>("enableMinimalisticUI", default: false)
     
     // MARK: Lyrics Feature
     static let enableLyrics = Key<Bool>("enableLyrics", default: false)
@@ -1721,6 +1715,26 @@ extension Defaults.Keys {
             Defaults[.screenCaptureVisibility] = legacy ? .hideEverything : .showEverything
         }
         Defaults[.didMigrateScreenCaptureVisibility] = true
+    }
+
+    /// The minimalistic UI mode is gone. In that mode the closed notch showed music even with "Show
+    /// standard media controls" off, so a former user turns that toggle on to keep their music. Then
+    /// the mode's four stored keys are removed. Their `Defaults` keys no longer exist, so they are
+    /// read and removed raw, like `migrateScreenCaptureVisibility` reads its legacy key. Idempotent
+    /// without a flag: once the keys are gone there is nothing left to read or remove.
+    static func migrateRemovedMinimalisticUI() {
+        let store = UserDefaults.standard
+        if store.object(forKey: "enableMinimalisticUI") as? Bool == true {
+            Defaults[.showStandardMediaControls] = true
+        }
+        for key in [
+            "enableMinimalisticUI",
+            "showMinimalisticBatteryIndicator",
+            "showBatteryPercentInside",
+            "enableExtensionNotchMinimalisticOverrides",
+        ] {
+            store.removeObject(forKey: key)
+        }
     }
 
     /// Everyone gets the new default, including people who had chosen otherwise.

@@ -92,9 +92,12 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // "Notes to sync" row. The same day All tasks lost its Task order row (David: "no drag and
         // order tasks or numbering"): the "Task order" entry is gone and its other words moved onto
         // "All tasks", one entry fewer with registrations and ids unchanged.
-        XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
+        // 2026-10-28: the minimalistic UI mode is gone (David: "remove minimalistic ui mode"), and
+        // with it the UI Mode section: its "Enable Minimalistic UI" entry and three rows (the switch
+        // and its two battery rows), one entry, three registrations and three ids fewer.
+        XCTAssertEqual(inventory.entries.count, 243, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 272, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 266, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {

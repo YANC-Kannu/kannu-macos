@@ -361,7 +361,6 @@ struct SettingsView: View {
     @State private var selectedTab: SettingsTab = .agentStatus
     @State private var searchText: String = ""
     @StateObject private var highlightCoordinator = SettingsHighlightCoordinator.shared
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
 
     var body: some View {
         NavigationSplitView {
@@ -582,7 +581,7 @@ struct SettingsView: View {
             .about
         ]
 
-        return ordered.filter { isTabVisible($0) }
+        return ordered
     }
 
     /// Groups the filtered tabs into sidebar sections, preserving both
@@ -795,7 +794,6 @@ struct SettingsView: View {
     private var settingsSearchIndex: [SettingsSearchEntry] {
         [
             // General
-            SettingsSearchEntry(tab: .general, title: "Enable Minimalistic UI", keywords: ["minimalistic", "ui mode", "general"], highlightID: SettingsTab.general.highlightID(for: "Enable Minimalistic UI")),
             SettingsSearchEntry(tab: .general, title: "Menubar icon", keywords: ["menu bar", "status bar", "icon"], highlightID: SettingsTab.general.highlightID(for: "Menubar icon")),
             SettingsSearchEntry(tab: .general, title: "Launch at login", keywords: ["autostart", "startup"], highlightID: SettingsTab.general.highlightID(for: "Launch at login")),
             SettingsSearchEntry(tab: .general, title: "Quit Kannu", keywords: ["quit", "exit", "close", "stop", "shut down", "terminate"], highlightID: SettingsTab.general.highlightID(for: "Quit Kannu")),
@@ -1082,15 +1080,6 @@ struct SettingsView: View {
         ]
     }
 
-    private func isTabVisible(_ tab: SettingsTab) -> Bool {
-        switch tab {
-        case .timer, .stats, .clipboard, .screenAssistant, .shelf, .notes:
-            return !enableMinimalisticUI
-        default:
-            return true
-        }
-    }
-
     @ViewBuilder
     private func detailView(for tab: SettingsTab) -> some View {
         switch tab {
@@ -1204,8 +1193,6 @@ struct GeneralSettings: View {
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
-    @Default(.showMinimalisticBatteryIndicator) var showMinimalisticBatteryIndicator
     @Default(.enableHorizontalMusicGestures) var enableHorizontalMusicGestures
     @Default(.musicGestureBehavior) var musicGestureBehavior
     @Default(.reverseSwipeGestures) var reverseSwipeGestures
@@ -1227,35 +1214,6 @@ struct GeneralSettings: View {
 
     var body: some View {
         Form {
-            Section {
-                Defaults.Toggle(key: .enableMinimalisticUI) {
-                    Text("Enable Minimalistic UI")
-                }
-                .onChange(of: enableMinimalisticUI) { _, newValue in
-                    if newValue {
-                        // Auto-enable simpler animation mode
-                        Defaults[.useModernCloseAnimation] = true
-                    }
-                }
-                .settingsHighlight(id: highlightID("Enable Minimalistic UI"))
-
-                Defaults.Toggle(key: .showMinimalisticBatteryIndicator) {
-                    Text("Show battery indicator")
-                }
-                .disabled(!enableMinimalisticUI)
-                .settingsHighlight(id: highlightID("Show battery indicator in Minimalistic UI"))
-
-                Defaults.Toggle(key: .showBatteryPercentInside) {
-                    Text("Show battery percentage inside icon")
-                }
-                .disabled(!enableMinimalisticUI || !Defaults[.showMinimalisticBatteryIndicator])
-                .settingsHighlight(id: highlightID("Show battery percentage inside icon"))
-            } header: {
-                SettingsSectionHeader("UI Mode")
-            } footer: {
-                SettingsFooter("Minimalistic mode focuses on media controls and system HUDs, hiding all extra features for a clean, focused experience. Automatically enables simpler animations.")
-            }
-
             Section {
                 SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
                     Defaults.Toggle(key: .menubarIcon) {
@@ -2953,7 +2911,6 @@ struct Media: View {
     @Default(.hideNotchOption) var hideNotchOption
     @Default(.enableSneakPeek) private var enableSneakPeek
     @Default(.sneakPeekStyles) var sneakPeekStyles
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
     @Default(.showShuffleAndRepeat) private var showShuffleAndRepeat
     @Default(.musicSkipBehavior) private var musicSkipBehavior
     @Default(.musicControlWindowEnabled) private var musicControlWindowEnabled
@@ -2983,7 +2940,7 @@ struct Media: View {
     }
 
     private var standardControlsSuppressed: Bool {
-        !showStandardMediaControls && !enableMinimalisticUI
+        !showStandardMediaControls
     }
 
     var body: some View {
@@ -3025,20 +2982,17 @@ struct Media: View {
                 Defaults.Toggle(key: .showStandardMediaControls) {
                     Text("Show media controls in Dynamic Island")
                 }
-                .disabled(enableMinimalisticUI)
                 .settingsHighlight(id: highlightID("Show media controls in Dynamic Island"))
 
                 Defaults.Toggle(key: .autoHideInactiveNotchMediaPlayer) {
                     Text("Auto-hide inactive notch media player")
                 }
-                .disabled(enableMinimalisticUI || !showStandardMediaControls)
+                .disabled(!showStandardMediaControls)
                 .settingsHighlight(id: highlightID("Auto-hide inactive notch media player"))
             } header: {
                 SettingsSectionHeader("Dynamic Island Visibility")
             } footer: {
-                if enableMinimalisticUI {
-                    SettingsFooter("Disable Minimalistic UI to configure the standard notch media controls.")
-                } else if standardControlsSuppressed {
+                if standardControlsSuppressed {
                     SettingsFooter("Standard notch media controls are hidden. Re-enable the toggle above to restore them.")
                 } else if !autoHideInactiveNotchMediaPlayer {
                     SettingsFooter("When off, the notch player stays visible with placeholder info while nothing plays.")
@@ -3965,7 +3919,6 @@ struct Appearance: View {
     @Default(.openNotchWidth) var openNotchWidth
     @Default(.closedNotchWidth) var closedNotchWidth
     @Default(.customizePhysicalNotchWidth) var customizePhysicalNotchWidth
-    @Default(.enableMinimalisticUI) var enableMinimalisticUI
     @Default(.lockScreenGlassCustomizationMode) private var lockScreenGlassCustomizationMode
     @Default(.lockScreenGlassStyle) private var lockScreenGlassStyle
     @Default(.lockScreenMusicLiquidGlassVariant) private var lockScreenMusicLiquidGlassVariant
@@ -4585,7 +4538,7 @@ struct Appearance: View {
 
             SettingsSliderRow("Expanded notch width", value: widthBinding, in: dynamicRange, step: 10,
                               valueText: Text("\(Int(openNotchWidth)) px"))
-            .disabled(enableMinimalisticUI || !customizePhysicalNotchWidth)
+            .disabled(!customizePhysicalNotchWidth)
             .opacity(customizePhysicalNotchWidth ? 1 : 0.5)
             .settingsHighlight(id: highlightID("Expanded notch width"))
 
@@ -4607,9 +4560,7 @@ struct Appearance: View {
                 customBadge(text: "Beta")
             }
         } footer: {
-            SettingsFooter(enableMinimalisticUI
-                ? String(localized: "Expanded width adjustments apply only to the standard notch layout. Disable Minimalistic UI to edit this value.")
-                : String(localized: "Recommended minimum width adjusts automatically based on the number of enabled tabs."))
+            SettingsFooter(String(localized: "Recommended minimum width adjusts automatically based on the number of enabled tabs."))
         }
     }
 

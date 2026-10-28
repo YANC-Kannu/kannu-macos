@@ -28,7 +28,6 @@ struct NotchTimerView: View {
     @ObservedObject var timerManager = TimerManager.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
     @Default(.enableTimerFeature) var enableTimerFeature
-    @Default(.enableMinimalisticUI) private var enableMinimalisticUI
     @Default(.timerPresets) private var timerPresets
     @Default(.timerIconColorMode) private var colorMode
     @Default(.timerSolidColor) private var solidColor
@@ -259,9 +258,7 @@ struct NotchTimerView: View {
             activePresetID: timerManager.activePresetId,
             startPreset: { preset in
                 startSession(duration: preset.duration, preset: preset, fallback: preset.name)
-                if !enableMinimalisticUI {
-                    coordinator.currentView = .timer
-                }
+                coordinator.currentView = .timer
             },
             taskStarted: taskStarted,
             editTask: { openTaskForm(.edit($0)) }
@@ -278,9 +275,7 @@ struct NotchTimerView: View {
         sessionPick = nil
         focusedNameField = nil
         taskForm = nil
-        if !enableMinimalisticUI {
-            coordinator.currentView = .timer
-        }
+        coordinator.currentView = .timer
     }
 
     /// The form in the composer's place; the page switch's animation and reduced-motion rule.
@@ -904,9 +899,7 @@ struct NotchTimerView: View {
     private func startCustomTimer() {
         withAnimation(.smooth) {
             startSession(duration: customDurationInSeconds, fallback: String(localized: "Custom Timer"))
-            if !enableMinimalisticUI {
-                coordinator.currentView = .timer
-            }
+            coordinator.currentView = .timer
         }
     }
 
