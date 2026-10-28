@@ -22,13 +22,7 @@ enum ProviderID: String, CaseIterable, Identifiable {
     }
 }
 
-struct UsageTotals: Equatable {
-    var inputTokens: Int = 0
-    var outputTokens: Int = 0
-    var costUSD: Double = 0
-    var hasUnpricedModel: Bool = false
-    var totalTokens: Int { inputTokens + outputTokens }
-}
+// `UsageTotals` lives beside `UsageRecord` in ClaudeUsageLine.swift, which the logic test target compiles.
 
 struct ModelUsage: Equatable, Identifiable {
     let model: String
@@ -100,6 +94,9 @@ struct UsageSnapshot: Equatable {
     var session: UsageTotals = .init()
     var today: UsageTotals = .init()
     var week: UsageTotals = .init()
+    /// True when `week` is the plan's own weekly window (Claude's weekly reset less seven days);
+    /// false when it is the last 7 × 24 hours, which the card labels as such.
+    var weekFollowsPlan: Bool = false
     var sessionLimit: UsageLimit? = nil // 5h window quota
     var weekLimit: UsageLimit? = nil // 7d all-models window quota (Cursor: the billing cycle)
     /// The provider's own name for the `weekLimit` bar (Cursor's "Auto" pool); nil keeps the

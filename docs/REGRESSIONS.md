@@ -213,6 +213,17 @@ Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9,
 in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
 changelog. None of it has run against a real Antigravity.
 
+**v47 addendum — the v40 rule again, after the Stop.** v40 made a prompt that arrives while the
+request runs join it, because Claude Code submits a background task's result as a
+`UserPromptSubmit`. It still does after the Stop: when an agent that Stop left running finishes,
+the result arrives as a prompt whose text starts with `<task-notification>` (checked against a real
+captured payload, 2026-10-15), and v44–v46 read it as a new request. The card's run time, tool
+calls and tokens restarted every time an agent finished (194 times in one chat). Such a prompt now
+resumes the ended turn, keeping its start and transcript offset, but only for Claude, only while
+the ended turn recorded `turn_bg_agents`, and only when the tag leads the prompt. A prompt the user
+types after the Stop is still a new request, and so is a notification after a Stop that left no
+agent running. Guards: the `HookScriptTests` v47 group, run again under `/usr/bin/python3` 3.9.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call

@@ -14,6 +14,7 @@ struct ClaudeUsageProvider: UsageProvider {
         var snapshot = UsageSnapshot()
         snapshot.lastUpdated = now
 
+        var records: [UsageRecord]?
         if FileManager.default.fileExists(atPath: root.path) {
             let files = jsonlFiles(under: root)
             if !files.isEmpty {
@@ -21,11 +22,7 @@ struct ClaudeUsageProvider: UsageProvider {
                 // actually read would tell somebody who has not run Claude for eight days that their
                 // logs are unavailable, with a fix-it button for a problem they do not have, instead
                 // of an honest zero.
-                snapshot = await JSONLUsageParser.aggregate(
-                    files: UsageWindows.recentlyModified(files, now: now),
-                    now: now,
-                    cache: usageCache
-                )
+                records = await usageCache.records(files: UsageWindows.recentlyModified(files, now: now), now: now)
             } else {
                 snapshot.logsUnavailable = true
             }
@@ -44,6 +41,11 @@ struct ClaudeUsageProvider: UsageProvider {
         // API call — the OAuth/keychain path this used to take could not read the credential
         // format reliably and produced a permanent "credentials unparseable" error.
         await applyRateLimitWindows(to: &snapshot, now: now)
+        // After the limits: the week and the 5-hour block follow the plan's own windows when those
+        // limits carry their resets.
+        if let records {
+            JSONLUsageParser.addTotals(counting: records, to: &snapshot, now: now)
+        }
         // Claude usage is covered by a subscription, so per-token pricing estimates are
         // meaningless here — show token counts, never dollars.
         snapshot.billedCostOnly = true

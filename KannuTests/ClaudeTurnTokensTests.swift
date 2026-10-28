@@ -46,12 +46,13 @@ final class ClaudeTurnTokensTests: XCTestCase {
 
     /// One assistant record as Claude writes it (compact JSON, one line, newline-terminated).
     private func assistant(_ id: String, request: String = "req", at offset: TimeInterval = 5,
-                           input: Int = 10, cacheRead: Int = 1000, output: Int = 20, extra: [String: Any] = [:]) -> Data {
+                           input: Int = 10, cacheWrite: Int = 0, cacheRead: Int = 1000, output: Int = 20,
+                           stopReason: Any = "end_turn", extra: [String: Any] = [:]) -> Data {
         var object: [String: Any] = [
             "parentUuid": "x", "isSidechain": false, "requestId": "\(request)-\(id)", "type": "assistant",
             "timestamp": Self.iso.string(from: start.addingTimeInterval(offset)),
-            "message": ["id": "msg_\(id)", "model": "claude-opus-5", "role": "assistant",
-                        "usage": ["input_tokens": input, "cache_creation_input_tokens": 0,
+            "message": ["id": "msg_\(id)", "model": "claude-opus-5", "role": "assistant", "stop_reason": stopReason,
+                        "usage": ["input_tokens": input, "cache_creation_input_tokens": cacheWrite,
                                   "cache_read_input_tokens": cacheRead, "output_tokens": output]] as [String: Any],
         ]
         object.merge(extra) { _, new in new }
@@ -68,13 +69,60 @@ final class ClaudeTurnTokensTests: XCTestCase {
 
     // MARK: - Usage line
 
-    func testInputCountsCachedContextAndTheKeyIsMessagePlusRequest() throws {
-        let record = try XCTUnwrap(ClaudeUsageLine.parse(assistant("a", input: 3, cacheRead: 5000, output: 40,
-                                                                   extra: [:]).dropLast()))
-        XCTAssertEqual(record.inputTokens, 3 + 5000)
+    /// Input, cache writes, cache reads and output are kept apart (they used to be one "input" that
+    /// counted the re-read context), and the key is message plus request.
+    func testTheLineSplitsInputCacheWritesCacheReadsAndOutput() throws {
+        let record = try XCTUnwrap(ClaudeUsageLine.parse(assistant("a", input: 3, cacheWrite: 700, cacheRead: 5000,
+                                                                   output: 40).dropLast()))
+        XCTAssertEqual(record.uncachedInputTokens, 3)
+        XCTAssertEqual(record.cacheWriteTokens, 700)
+        XCTAssertEqual(record.cacheReadTokens, 5000)
         XCTAssertEqual(record.outputTokens, 40)
+        XCTAssertEqual(record.promptTokens, 3 + 700 + 5000, "everything the model read")
+        XCTAssertEqual(record.headlineTokens, 3 + 700 + 40, "the headline leaves the cache reads out")
         XCTAssertEqual(record.dedupKey, "msg_a-req-a")
         XCTAssertNil(ClaudeUsageLine.parse(assistant("z", input: 0, cacheRead: 0, output: 0)), "zero usage is no record")
+        XCTAssertNotNil(ClaudeUsageLine.parse(assistant("r", input: 0, cacheRead: 9, output: 0)), "a cache read alone is usage")
+    }
+
+    /// `cache_creation` breaks the writes down by lifetime: it stands in for a missing flat count and is
+    /// never added to one.
+    func testTheCacheWriteBreakdownIsATotalNeverAnAddition() throws {
+        func parse(_ usage: [String: Any]) throws -> UsageRecord {
+            try XCTUnwrap(ClaudeUsageLine.parse(line([
+                "type": "assistant", "timestamp": Self.iso.string(from: start), "requestId": "r",
+                "message": ["id": "m", "model": "claude-opus-5", "usage": usage] as [String: Any],
+            ]).dropLast()))
+        }
+        let both = try parse(["input_tokens": 1, "cache_creation_input_tokens": 300, "output_tokens": 2,
+                              "cache_creation": ["ephemeral_5m_input_tokens": 100, "ephemeral_1h_input_tokens": 200]])
+        XCTAssertEqual(both.cacheWriteTokens, 300)
+        let breakdownOnly = try parse(["input_tokens": 1, "output_tokens": 2,
+                                       "cache_creation": ["ephemeral_5m_input_tokens": 40, "ephemeral_1h_input_tokens": 60]])
+        XCTAssertEqual(breakdownOnly.cacheWriteTokens, 100)
+    }
+
+    /// The headline of a window adds what each record adds to it, cache reads apart.
+    func testTotalsKeepTheSplitAndTheHeadlineExcludesCacheReads() throws {
+        var totals = UsageTotals()
+        totals.addTokens(of: try XCTUnwrap(ClaudeUsageLine.parse(assistant("a", input: 3, cacheWrite: 70, cacheRead: 5000,
+                                                                           output: 40).dropLast())))
+        totals.addTokens(of: try XCTUnwrap(ClaudeUsageLine.parse(assistant("b", input: 2, cacheRead: 5100,
+                                                                           output: 10).dropLast())))
+        XCTAssertEqual(totals, UsageTotals(uncachedInputTokens: 5, cacheWriteTokens: 70, cacheReadTokens: 10_100,
+                                           outputTokens: 50))
+        XCTAssertEqual(totals.totalTokens, 125, "the 10,100 re-read tokens are not in the headline")
+    }
+
+    /// Two lines of one message: each count the larger, whichever line carries it.
+    func testMergingKeepsTheFirstLinesPlaceAndTheLargestCounts() throws {
+        let snapshot = try XCTUnwrap(ClaudeUsageLine.parse(assistant("a", at: 5, output: 3, stopReason: NSNull()).dropLast()))
+        let final = try XCTUnwrap(ClaudeUsageLine.parse(assistant("a", at: 6, output: 500).dropLast()))
+        let merged = snapshot.merging(final)
+        XCTAssertEqual(merged.outputTokens, 500)
+        XCTAssertEqual(merged.timestamp, snapshot.timestamp)
+        XCTAssertEqual(final.merging(snapshot).outputTokens, 500, "order does not matter for the counts")
+        XCTAssertEqual(final.merging(final), final)
     }
 
     func testTopLevelUsageFallbackStillParses() throws {
@@ -85,7 +133,7 @@ final class ClaudeTurnTokensTests: XCTestCase {
             "timestamp": "2026-09-11T10:00:00Z", "model": "claude-haiku-4-5", "request_id": "r1",
             "usage": ["input_tokens": 7, "output_tokens": 2],
         ]).dropLast()))
-        XCTAssertEqual(record.inputTokens, 7)
+        XCTAssertEqual(record.uncachedInputTokens, 7)
         XCTAssertEqual(record.model, "claude-haiku-4-5")
         XCTAssertEqual(record.dedupKey, "-r1")
     }
@@ -95,8 +143,40 @@ final class ClaudeTurnTokensTests: XCTestCase {
     func testASplitMessageCountsOnce() {
         var acc = accumulator()
         acc.consume(assistant("a") + assistant("a") + assistant("b"))
-        XCTAssertEqual(acc.input, 2 * 1010)
+        XCTAssertEqual(acc.newInput, 2 * 10)
+        XCTAssertEqual(acc.cacheRead, 2 * 1000)
         XCTAssertEqual(acc.output, 40)
+    }
+
+    /// Claude Code 2.1.219–2.1.304 wrote a subagent message's first line mid-stream (`stop_reason`
+    /// null, a few output tokens) and the real counts on a later line. The later line adds what it
+    /// reports beyond the first, in this pass or a later one, and nothing when it reports less.
+    func testAStreamingSnapshotFirstAddsTheLaterLinesOutput() {
+        var acc = accumulator()
+        acc.consume(assistant("a", output: 3, stopReason: NSNull()))
+        XCTAssertEqual(acc.output, 3)
+        acc.consume(assistant("a", cacheWrite: 50, output: 480))
+        XCTAssertEqual(acc.output, 480)
+        XCTAssertEqual(acc.newInput, 10 + 50, "the input counted once, the later cache write added")
+        XCTAssertEqual(acc.cacheRead, 1000)
+        acc.consume(assistant("a", output: 7, stopReason: NSNull()))
+        XCTAssertEqual(acc.output, 480, "a smaller repeat takes nothing back and adds nothing")
+        acc.consume(assistant("b", output: 20))
+        XCTAssertEqual(acc.output, 500)
+    }
+
+    /// The context is the latest call's whole prompt, replaced call by call and never summed; a
+    /// sidechain record (a subagent's call in the chat's own file) is not the chat's context.
+    func testTheContextIsTheLatestCallsPromptNotASum() {
+        var acc = accumulator()
+        XCTAssertNil(acc.context)
+        acc.consume(assistant("a", input: 5, cacheWrite: 1000, cacheRead: 400_000))
+        XCTAssertEqual(acc.context, 401_005)
+        acc.consume(assistant("b", input: 2, cacheWrite: 300, cacheRead: 401_000))
+        XCTAssertEqual(acc.context, 401_302)
+        acc.consume(assistant("s", input: 9, cacheRead: 30_000, extra: ["isSidechain": true]))
+        XCTAssertEqual(acc.context, 401_302, "a sidechain's call")
+        XCTAssertEqual(acc.cacheRead, 831_000, "its tokens still count")
     }
 
     func testAPartialLineWaitsForItsNewline() {
@@ -117,7 +197,8 @@ final class ClaudeTurnTokensTests: XCTestCase {
         acc.consume(line(["type": "user", "timestamp": Self.iso.string(from: start.addingTimeInterval(1)),
                           "message": ["usage": ["input_tokens": 99, "output_tokens": 99]]]))
         acc.consume(line(["type": "system", "subtype": "api_error"]))
-        XCTAssertEqual(acc.input, 0)
+        XCTAssertEqual(acc.newInput, 0)
+        XCTAssertNil(acc.context)
         acc.consume(assistant("a"))
         XCTAssertEqual(acc.output, 20)
     }
@@ -219,6 +300,30 @@ final class ClaudeTurnTokensTests: XCTestCase {
         XCTAssertEqual(pass.tokens["sess"]?.startOffset, Int64(before.count))
         try append(assistant("m3"), to: main)
         XCTAssertEqual(reader.pass([request], now: start).tokens["sess"]?.output, 1160, "an append is read next pass")
+    }
+
+    /// "83k in · 40k out · 458k context": the new input and output add up across the chat and its
+    /// subagents; the context is the chat's own latest call, never a subagent's, even a later one.
+    func testTheContextComesFromTheChatsLatestCallNeverASubagent() throws {
+        let main = try write("p/ctx.jsonl", assistant("m1", input: 4, cacheWrite: 900, cacheRead: 400_000, output: 30)
+                                            + assistant("m2", at: 8, input: 2, cacheWrite: 100, cacheRead: 401_000, output: 50))
+        _ = try write("p/ctx/subagents/agent-a1.jsonl",
+                      assistant("s1", at: 20, input: 7, cacheWrite: 5000, cacheRead: 90_000, output: 700))
+        let request = ClaudeTurnTokenRequest(conversationID: "ctx", mainPath: main, startOffset: 0, startedAt: start)
+        let reader = ClaudeTurnTokenReader(projectsRoot: root.path)
+        let tokens = try XCTUnwrap(reader.pass([request], now: start).tokens["ctx"])
+        XCTAssertEqual(tokens.context, 2 + 100 + 401_000, "the chat's latest call, not the later subagent's")
+        XCTAssertEqual(tokens.newInput, 4 + 900 + 2 + 100 + 7 + 5000)
+        XCTAssertEqual(tokens.cacheRead, 400_000 + 401_000 + 90_000)
+        XCTAssertEqual(tokens.output, 780)
+        try append(assistant("m3", at: 30, input: 1, cacheWrite: 0, cacheRead: 401_100, output: 5), to: main)
+        XCTAssertEqual(reader.pass([request], now: start).tokens["ctx"]?.context, 401_101, "replaced, never added")
+
+        let quiet = try write("p/quiet.jsonl", Data())
+        _ = try write("p/quiet/subagents/agent-q.jsonl", assistant("q", cacheRead: 50_000))
+        let noCall = ClaudeTurnTokenRequest(conversationID: "quiet", mainPath: quiet, startOffset: 0, startedAt: start)
+        let subagentOnly = try XCTUnwrap(reader.pass([noCall], now: start).tokens["quiet"])
+        XCTAssertNil(subagentOnly.context, "no call of the chat's own yet: no context rather than a subagent's")
     }
 
     func testAChatIsReportedOnlyOnceCaughtUp() throws {

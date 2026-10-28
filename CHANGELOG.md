@@ -4,6 +4,52 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-29 - Claude's token counts leave out cache re-reads, and a turn shows its context
+- **Developer label:** "the token detection currently is wrong … claude in kannu"
+- **Agent label:** Claude Code (Opus 5.5) — split input, cache writes, cache reads and output everywhere; headline without cache reads; per-turn context; max-per-message dedupe; plan-anchored windows; hook v47 notification wake
+- **Changes:**
+  - `UsageRecord` and `UsageTotals` (moved beside it into the logic target) keep uncached input, cache
+    writes (`cache_creation_input_tokens`, or the `cache_creation` 5m + 1h breakdown when the flat
+    count is missing, never both added), cache reads and output apart. The card's headline is input +
+    cache writes + output; cache reads follow on the row, smaller and quieter ("· 2.2B cached").
+    Measured on this Mac, rolling 7 days: 2.29 B shown before, 55.9 M now, with 2.23 B cached apart
+    (input + output alone: 5.1 M).
+  - Codex and Cursor fill the same fields. Codex's `cached_input_tokens` and
+    `cache_write_input_tokens` are parts of its `input_tokens` and are split out of it (clamped);
+    Cursor's `cacheReadTokens` and `cacheWriteTokens` map across, its `inputTokens` is the uncached
+    part. Their headline now leaves cache reads out too, so all three cards mean the same thing.
+    Pricing estimates still apply the one prompt rate to everything read, as before.
+  - One record per message (message id + request id), with each count the largest any of its lines
+    reports, in `JSONLUsageCache` and in the per-turn reader (which adds only the positive difference
+    when a later line reports more). Claude Code 2.1.219–2.1.304 wrote a subagent message's first line
+    mid-stream (`stop_reason` null, output 2–16): first-line-wins lost 1.09 M of 5.11 M output tokens
+    over 7 days.
+  - A turn's tokens read "83k in · 40k out · 458k context": in is uncached input + cache writes summed
+    over the request and its subagents, context is the chat's own latest call's whole prompt
+    (replaced, never summed, never a subagent's or a sidechain's). This reverses the 2026-09-12 choice
+    "in includes cached context": every call re-reads the whole context, so that sum counted it once
+    per call and grew with the number of calls, not with the work ("24M in" for 83k new tokens and a
+    458k context). Measured on a live chat's latest turn: 3.6 M "in" before; 8.9k in, 4.8k out, 519k
+    context now. The column falls back widest first: with tools, without them, then without the
+    context.
+  - The week follows Claude's weekly limit when its reset is known (the card's limit bar):
+    `[reset − 7 d, now)`, else the rolling 7 × 24 h, labelled "Last 7 days" (Codex and Cursor stay
+    rolling). The 5-hour block is `[reset − 5 h, reset)` when the 5-hour reset is known, else the
+    hour-floored reconstruction, labelled "Session (local, approx.)". The resets are read from the
+    snapshot's limits, not fetched anew. Measured: 38 h into this week, 336 M before against 7.5 M now.
+  - Hook v47: in Claude, a `UserPromptSubmit` whose prompt starts with `<task-notification>`, after a
+    Stop that left agents running (`turn_bg_agents`), resumes that turn (start and transcript offset
+    kept) instead of starting one. It wiped the run time, tool calls and tokens each time an agent
+    finished. The prefix was checked against a real captured payload. Mirror regenerated;
+    REGRESSIONS entry 1 v47 addendum.
+  - Not changed: an Esc-interrupted turn still merges with the next prompt, compaction calls still
+    write no usage record (so they count nothing), and Claude's cost stays hidden.
+  - Tests: split fields and the cache-write breakdown, the headline without cache reads, merging,
+    the max-per-message dedupe with a mid-stream first line (cache and accumulator), the context from
+    the chat's latest call and never a subagent's, the formats and fallbacks, the plan-anchored week
+    and 5-hour block with their fallbacks, the Codex and Cursor mapping, and the hook's notification
+    wake (also under `/usr/bin/python3` 3.9).
+
 ### 2026-10-28 - The minimalistic UI mode is gone; every notch is the standard one
 - **Developer label:** "remove minimalistic ui mode"
 - **Agent label:** Claude Code (Opus 5.5) — `enableMinimalisticUI` and everything only it used are removed, the standard path kept at every branch
