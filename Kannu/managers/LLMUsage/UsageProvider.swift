@@ -39,6 +39,9 @@ struct UsageLimit: Equatable {
     /// When the value was read, when the source says. A Claude window can come from a desktop
     /// sample days old; the card shows that age rather than passing the number off as current.
     var observedAt: Date? = nil
+    /// The latest moment the value can still describe a running window, when it has no reset
+    /// (`ClaudeUsageSnapshot.Window.notAfter`); the card drops it then, as it does at a reset.
+    var notAfter: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 

@@ -84,15 +84,17 @@ enum ClaudeUsageRefresh {
         /// What the refresh found; nil when new numbers landed. `ClaudeUsageFetchCommand.presentation`
         /// decides whether the card shows it.
         var status: ClaudeRefreshStatus?
-        /// After a fetch: the organization Claude Code fetched for, as its own profile fetch left
-        /// it in `~/.claude.json` the moment the run ended.
-        var fetchedOrganization: String? = nil
+        /// After a fetch: one read of `~/.claude.json` the moment the run ended — the cache's
+        /// timestamp and resets with `oauthAccount`, from the same bytes — and the run's window.
+        /// `ClaudeCachedUsage.attributeRun` decides from it whose usage was fetched.
+        var fetchRead: ClaudeCachedUsage.RunRead? = nil
     }
 
     /// One refresh, start to finish, on a worker thread. `manual` is a press of the card's
     /// Refresh. Logs each step's outcome and duration at `notice`, so it is kept on disk — never
     /// its output, which carries plan and spend figures and the account's name, nor a path.
     static func run(manual: Bool, signInStarted: () -> Void) -> Outcome {
+        let started = Date()
         running.withLock { $0 = Running() }
         guard let binary = trustedBinary() else {
             log.notice("Usage refresh: no Claude Code binary signed by Anthropic was found")
@@ -130,7 +132,7 @@ enum ClaudeUsageRefresh {
                         since: started)
                 step = ClaudeUsageFetchCommand.step(afterSignIn: signIn.status == 0 && !signIn.timedOut && !isCancelled)
             case .finish(let status):
-                return Outcome(status: status, fetchedOrganization: fetched ? claudeCodeOrganization() : nil)
+                return Outcome(status: status, fetchRead: fetched ? runRead(started: started) : nil)
             }
         }
     }
@@ -145,14 +147,20 @@ enum ClaudeUsageRefresh {
         ClaudeCodeBinary.resolve(isTrusted: isSignedByAnthropic)
     }
 
-    /// Read straight after Claude Code's own run, which rewrites `oauthAccount` from its token's
-    /// profile — later, a desktop-hosted session may rewrite it with the desktop's organization.
-    private static func claudeCodeOrganization() -> String? {
-        guard let data = try? Data(contentsOf: ClaudeCachedUsage.defaultURL),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let account = json["oauthAccount"] as? [String: Any],
-              let organization = account["organizationUuid"] as? String, !organization.isEmpty else { return nil }
-        return organization
+    /// One read straight after the run, for the organization and the cache's timestamp together.
+    /// `oauthAccount` alone cannot say whose usage was fetched: a desktop-hosted session rewrites
+    /// it at any moment with the desktop's organization (measured 2026-10-28: it named Max,
+    /// fetched 90 s after the run that recorded Team, while the cache stayed Team's), so its
+    /// `profileFetchedAt` and the cache's own reset are read with it. A read caught mid-write is
+    /// tried once more; nil when the file stays unreadable.
+    private static func runRead(started: Date) -> ClaudeCachedUsage.RunRead? {
+        var read = ClaudeCachedUsage.read()
+        if read.unreadable {
+            Thread.sleep(forTimeInterval: 0.25)
+            read = ClaudeCachedUsage.read()
+        }
+        guard !read.unreadable else { return nil }
+        return ClaudeCachedUsage.RunRead(context: read.context, started: started, readAt: Date())
     }
 
     /// `claude -p "/usage"`, classified, in `printProbeAttempts` order: the bare probe runs only

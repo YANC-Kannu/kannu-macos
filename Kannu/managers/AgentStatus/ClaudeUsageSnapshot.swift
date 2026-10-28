@@ -66,19 +66,27 @@ struct ClaudeUsageSnapshot: Equatable {
     /// monitor's rescan runs every second, which is why the gate exists.
     static let refreshInterval: TimeInterval = 600
 
+    /// How often a read that found nothing to show is retried. The monitor rescans several times a
+    /// second under a busy agent, and "never read" used to mean "nothing found" too, so with
+    /// nothing to show it re-parsed `~/.claude.json` (85 KB) and the desktop history at every
+    /// rescan (REGRESSIONS entry 11).
+    static let emptyRetryInterval: TimeInterval = 60
+
     /// Whether the caller should re-read its usage sources now.
     ///
     /// One read happens with no agent running, so the usage card is populated when opened cold;
-    /// after that, refreshing is tied to an agent being on screen, because nothing else can move
-    /// the numbers. `.stopped` still counts as on screen: the read just after a run ends is the
-    /// one that matters most.
+    /// a read that found nothing is retried every `emptyRetryInterval`, never every rescan; after
+    /// that, refreshing is tied to an agent being on screen, because nothing else can move the
+    /// numbers. `.stopped` still counts as on screen: the read just after a run ends is the one
+    /// that matters most.
     static func shouldRefresh(
         now: Date,
         lastRead: Date?,
         state: AgentTrafficLightState,
         hasSnapshot: Bool
     ) -> Bool {
-        guard let lastRead, hasSnapshot else { return true }
+        guard let lastRead else { return true }
+        guard hasSnapshot else { return now.timeIntervalSince(lastRead) >= emptyRetryInterval }
         guard state != .inactive else { return false }
         return now.timeIntervalSince(lastRead) >= refreshInterval
     }
@@ -105,11 +113,17 @@ struct ClaudeUsageSnapshot: Equatable {
     /// refresh stands down: what it would fetch is not on the card. The recorded organization wins
     /// over `~/.claude.json`, which desktop-hosted sessions keep rewriting — so after the card's
     /// "Sign in in Terminal" nothing would ever record the new one. When the file names a different
-    /// organization than the recorded one, a paced fetch may run: Claude Code's own profile fetch
-    /// leaves its true organization in the file, and that is what gets recorded.
-    static func otherOrganizationAllowsAutoFetch(recorded: String?, inConfigNow: String?) -> Bool {
-        guard let recorded, let inConfigNow else { return false }
-        return inConfigNow != recorded
+    /// organization than the recorded one *from a profile fetched after Kannu last settled it*
+    /// (`recordedAt`, the end of that run), a paced fetch may run, and records where Claude Code
+    /// went. A profile from before that is a desktop-hosted session's copy being written back:
+    /// counting it ran `/usage` on nearly every visit of the Usage tab (2026-10-28). Never
+    /// settled by this rule (`recordedAt` nil, an upgrade): one fetch settles it.
+    static func otherOrganizationAllowsAutoFetch(recorded: String?, inConfigNow: String?,
+                                                 profileFetchedAt: Date?, recordedAt: Date?) -> Bool {
+        guard let recorded, let inConfigNow, inConfigNow != recorded else { return false }
+        guard let recordedAt else { return true }
+        guard let profileFetchedAt else { return false }
+        return profileFetchedAt > recordedAt
     }
 
     static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?,
@@ -256,6 +270,29 @@ struct ClaudeUsageSnapshot: Equatable {
         return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
     }
 
+    /// Whose usage Claude Code's cache holds, as far as a read can tell.
+    /// `ClaudeCachedUsage.cacheOwner(weeklyReset:claudeCode:resets:)` decides it.
+    enum CacheOwner: Equatable {
+        /// Claude Code's own organization — what the cache almost always is.
+        case claudeCode
+        /// Another organization, named by the cache's own weekly reset: a desktop-hosted
+        /// session's `/usage` writes the cache with the desktop's numbers.
+        case organization(String)
+        /// Its weekly reset contradicts Claude Code's remembered anchor and matches no other.
+        case unknown
+    }
+
+    /// Which sources one card combines, and what the card has to say about it.
+    struct CardSources: Equatable {
+        var sources: [ClaudeUsageSnapshot?]
+        /// Claude Code is signed in to another organization than Claude Desktop's.
+        var claudeCodeOnAnotherOrganization = false
+        var claudeCodeOrganizationUnverified = false
+        /// The card shows Claude Code's own organization: Claude Desktop is on another one and has
+        /// no live reading of it.
+        var showsClaudeCodeOrganization = false
+    }
+
     /// Which sources one card may combine.
     ///
     /// The card follows the organization Claude Desktop records usage for — its history's newest
@@ -264,6 +301,13 @@ struct ClaudeUsageSnapshot: Equatable {
     /// sign-in is bound to. When that is a different one they are left out whole, never merged
     /// per key, so a card never shows one organization's five-hour bar beside another's week.
     /// With no desktop history at all, Claude Code's organization is the only one there is.
+    ///
+    /// When Claude Desktop has no live reading of its own organization, the card shows Claude
+    /// Code's instead (`showsClaudeCodeOrganization`) and says whose they are. It used to show
+    /// nothing under a line calling the token totals Claude Desktop's readings (2026-10-28).
+    ///
+    /// The cache goes where its `cacheOwner` puts it: with Claude Code's sources, with the
+    /// desktop's when its own week names the desktop's organization, nowhere when unknown.
     ///
     /// `claudeCodeOrganizationRecorded` is false until Kannu's own fetch has recorded which
     /// organization Claude Code's sign-in is on. Until then the organization is a guess — the file
@@ -277,14 +321,35 @@ struct ClaudeUsageSnapshot: Equatable {
         desktop: ClaudeUsageSnapshot?,
         desktopOrganization: String?,
         claudeCodeOrganization: String?,
-        claudeCodeOrganizationRecorded: Bool = true
-    ) -> (sources: [ClaudeUsageSnapshot?], claudeCodeOnAnotherOrganization: Bool, claudeCodeOrganizationUnverified: Bool) {
-        guard let desktopOrganization else { return ([statusline, cache, desktop], false, false) }
-        guard claudeCodeOrganizationRecorded else { return ([desktop], false, true) }
-        guard let claudeCodeOrganization, desktopOrganization != claudeCodeOrganization else {
-            return ([statusline, cache, desktop], false, false)
+        claudeCodeOrganizationRecorded: Bool = true,
+        cacheOwner: CacheOwner = .claudeCode,
+        now: Date
+    ) -> CardSources {
+        let cacheOrganization: String?
+        switch cacheOwner {
+        case .claudeCode: cacheOrganization = claudeCodeOrganization
+        case .organization(let id): cacheOrganization = id
+        case .unknown: cacheOrganization = nil
         }
-        return ([desktop], true, false)
+        let claudeCodeCache = cacheOwner == .claudeCode || (cacheOrganization != nil && cacheOrganization == claudeCodeOrganization)
+            ? cache : nil
+        guard let desktopOrganization else { return CardSources(sources: [statusline, claudeCodeCache, desktop]) }
+        let desktopCache = cacheOrganization == desktopOrganization ? cache : nil
+        guard claudeCodeOrganizationRecorded else {
+            // Only a cache whose own week names the desktop's organization is safe to show.
+            let named = cacheOwner == .organization(desktopOrganization) ? cache : nil
+            return CardSources(sources: [named, desktop], claudeCodeOrganizationUnverified: true)
+        }
+        guard let claudeCodeOrganization, desktopOrganization != claudeCodeOrganization else {
+            // One organization (or Claude Code's unknown, as before): Claude Code's cache is it.
+            return CardSources(sources: [statusline, cacheOwner == .claudeCode ? cache : desktopCache, desktop])
+        }
+        let desktopSide = [desktopCache, desktop]
+        if desktopSide.contains(where: { $0.map { !$0.isEmpty(now: now) } ?? false }) {
+            return CardSources(sources: desktopSide, claudeCodeOnAnotherOrganization: true)
+        }
+        return CardSources(sources: [statusline, claudeCodeCache], claudeCodeOnAnotherOrganization: true,
+                           showsClaudeCodeOrganization: true)
     }
 
     /// Why the card may be showing less than it should.
@@ -302,6 +367,9 @@ struct ClaudeUsageSnapshot: Equatable {
         /// come from the desktop history alone. Signing Claude Code in to the same organization
         /// brings the exact numbers back.
         case otherOrganization
+        /// As `otherOrganization`, but Claude Desktop has no live reading of its organization, so
+        /// the bars, when there are any, are Claude Code's own organization's.
+        case otherOrganizationWithoutDesktopReading
     }
 
     /// Desktop-only users (no Claude hooks) are never nagged: the desktop history is the source
@@ -311,9 +379,12 @@ struct ClaudeUsageSnapshot: Equatable {
         statusline: ClaudeUsageSnapshot?,
         cache: ClaudeUsageSnapshot?,
         claudeCodeOnAnotherOrganization: Bool = false,
+        showsClaudeCodeOrganization: Bool = false,
         now: Date
     ) -> Hint? {
-        if claudeCodeOnAnotherOrganization { return .otherOrganization }
+        if claudeCodeOnAnotherOrganization {
+            return showsClaudeCodeOrganization ? .otherOrganizationWithoutDesktopReading : .otherOrganization
+        }
         guard hooksInstalled else { return nil }
         let serverBacked = [statusline, cache].compactMap { $0 }.contains { !$0.isEmpty(now: now) }
         return serverBacked ? nil : .signInNeeded
@@ -322,17 +393,22 @@ struct ClaudeUsageSnapshot: Equatable {
     /// Parses both file shapes: the `windows` array written by the current hook, and the flat
     /// `five_hour_pct` / `seven_day_pct` form written by hooks predating open-ended windows.
     /// Older files stay readable so the gauges do not blank out between the app upgrading and
-    /// the next statusline write.
+    /// the next statusline write. A window reported without a reset expires as the cache's do
+    /// (`ClaudeCachedUsage.expiryWithoutReset`).
     static func parse(json: [String: Any]) -> ClaudeUsageSnapshot? {
         guard let tsMs = (json["ts"] as? NSNumber)?.int64Value, tsMs > 0 else { return nil }
+        let observedAt = Date(timeIntervalSince1970: TimeInterval(tsMs) / 1000)
 
-        let windows = parseWindowList(json["windows"]) ?? parseLegacyWindows(json)
+        let windows = (parseWindowList(json["windows"]) ?? parseLegacyWindows(json)).map { window in
+            var window = window
+            if window.resetsAt == nil {
+                window.notAfter = ClaudeCachedUsage.expiryWithoutReset(key: window.key, observedAt: observedAt)
+            }
+            return window
+        }
         guard !windows.isEmpty else { return nil }
 
-        return ClaudeUsageSnapshot(
-            windows: windows,
-            observedAt: Date(timeIntervalSince1970: TimeInterval(tsMs) / 1000)
-        )
+        return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
     }
 
     static func load(from url: URL) -> ClaudeUsageSnapshot? {
@@ -364,5 +440,85 @@ struct ClaudeUsageSnapshot: Equatable {
     private static func epochDate(_ value: Any?) -> Date? {
         guard let epoch = (value as? NSNumber)?.doubleValue, epoch > 0 else { return nil }
         return Date(timeIntervalSince1970: epoch)
+    }
+}
+
+/// The Claude usage sources, read in one go off the main actor (REGRESSIONS entry 11): the
+/// statusline file, `~/.claude.json` (85 KB, rewritten whole by every Claude Code process) and
+/// Claude Desktop's history. `CursorAgentStatusMonitor` runs `read` on its serial usage queue and
+/// applies the result on the main actor. Nothing here touches the main actor or `Defaults`; what
+/// it needs from them comes in the request.
+enum ClaudeUsageSources {
+    struct Request {
+        var statuslineURL: URL
+        var configURL = ClaudeCachedUsage.defaultURL
+        var desktopURL = ClaudeDesktopUsageHistory.defaultURL
+        /// Only the statusline file, which a busy session rewrites on every API call: between full
+        /// reads, the other sources stay as last read.
+        var statuslineOnly = false
+        var now: Date
+        /// Claude Code's organization as Kannu last settled it (`claudeCodeUsageOrganization`).
+        var recordedOrganization: String?
+        /// Each organization's remembered resets (`claudeOrganizationResets`).
+        var resets: [String: ClaudeCachedUsage.OrganizationResets] = [:]
+    }
+
+    struct Full: Equatable {
+        var config: ClaudeCachedUsage.ConfigRead
+        /// Claude Code's organization for this read: the recorded one, else the file's.
+        var claudeCodeOrganization: String?
+        var cacheOwner: ClaudeUsageSnapshot.CacheOwner
+        var desktop: ClaudeUsageSnapshot?
+        var desktopOrganization: String?
+    }
+
+    struct Result: Equatable {
+        var statusline: ClaudeUsageSnapshot?
+        /// Nil for a statusline-only read.
+        var full: Full? = nil
+    }
+
+    /// Blocking file reads: call only from a worker.
+    static func read(_ request: Request) -> Result {
+        let statusline = ClaudeUsageSnapshot.load(from: request.statuslineURL)
+        guard !request.statuslineOnly else { return Result(statusline: statusline) }
+        let config = ClaudeCachedUsage.read(from: request.configURL)
+        let context = config.context
+        let claudeCode = ClaudeCachedUsage.claudeCodeOrganization(
+            recordedAtFetch: request.recordedOrganization, inConfigNow: context.organizationUUID)
+        let owner = ClaudeCachedUsage.cacheOwner(weeklyReset: context.weeklyResetAnchor, claudeCode: claudeCode,
+                                                 resets: request.resets)
+        let desktop = ClaudeDesktopUsageHistory.read(
+            from: request.desktopURL, now: request.now,
+            resets: resetsWithCache(request.resets, context: context, owner: owner,
+                                    recordedOrganization: request.recordedOrganization),
+            claudeCodeOrganization: claudeCode)
+        return Result(statusline: statusline,
+                      full: Full(config: config, claudeCodeOrganization: claudeCode, cacheOwner: owner,
+                                 desktop: desktop.snapshot, desktopOrganization: desktop.organizationUUID))
+    }
+
+    /// The remembered resets, with the cache's own laid over its owner's when it is newer — the
+    /// cache Claude Code holds now is the freshest word on that organization's week. Only Kannu's
+    /// own runs write the remembered ones; this lends the desktop history what a read can see.
+    /// An unrecorded Claude Code organization is a guess, so its cache lends nothing unless its
+    /// own week named the organization.
+    static func resetsWithCache(_ saved: [String: ClaudeCachedUsage.OrganizationResets],
+                                context: ClaudeCachedUsage.AccountContext,
+                                owner: ClaudeUsageSnapshot.CacheOwner,
+                                recordedOrganization: String?) -> [String: ClaudeCachedUsage.OrganizationResets] {
+        let organization: String?
+        switch owner {
+        case .organization(let id): organization = id
+        case .claudeCode: organization = recordedOrganization
+        case .unknown: organization = nil
+        }
+        guard let organization, let fetchedAt = context.cacheFetchedAt,
+              saved[organization].map({ $0.reportedAt < fetchedAt }) ?? true else { return saved }
+        var resets = saved
+        resets[organization] = ClaudeCachedUsage.OrganizationResets(
+            weekly: context.weeklyResetAnchor ?? saved[organization]?.weekly,
+            fiveHour: context.fiveHourReset, reportedAt: fetchedAt)
+        return resets
     }
 }
