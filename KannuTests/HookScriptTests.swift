@@ -442,7 +442,7 @@ final class HookScriptTests: XCTestCase {
 
     func testAPayloadPastArgMaxStillWritesTheStatusAndPrintsTheAllowLine() throws {
         // Exported as an environment variable, a payload this size made execve fail before the
-        // heredoc ran: no status file, no allow line, exit 0. It goes through a file now.
+        // heredoc ran: no status file, no allow line, exit 0. It reaches Python on fd 3 now.
         let big = String(repeating: "x", count: 1_500_000)
         let object: [String: Any] = ["session_id": "big1", "tool_name": "Write", "hook_event_name": "PreToolUse",
                                      "tool_input": ["file_path": "/tmp/a", "content": big]]
@@ -451,7 +451,7 @@ final class HookScriptTests: XCTestCase {
         XCTAssertEqual(out, #"{"permission":"allow","continue":true}"#)
         XCTAssertEqual(try readState("big1"), "executing")
         let leftovers = try FileManager.default.contentsOfDirectory(atPath: statusDir.path).filter { $0.hasPrefix(".kannu-input.") }
-        XCTAssertEqual(leftovers, [], "the payload file is unlinked after the read")
+        XCTAssertEqual(leftovers, [], "the payload is never written to the status directory")
     }
 
     func testAFailedStatusWriteStillPrintsTheAllowLine() throws {
@@ -460,6 +460,161 @@ final class HookScriptTests: XCTestCase {
         try FileManager.default.createDirectory(at: statusFile("dir1"), withIntermediateDirectories: true)
         let out = try run(state: "executing", event: "PreToolUse", conversation: "dir1")
         XCTAssertEqual(out, #"{"permission":"allow","continue":true}"#)
+    }
+
+    // MARK: - v47: the payload never touches the disk
+
+    // v41 to v46 copied each payload to `.kannu-input.XXXXXX` in the status directory and deleted it
+    // after Python read it. A hook killed in between kept the user's prompt on disk for good: 33
+    // files on one Mac, up to six weeks old. v47 hands the payload to Python on file descriptor 3.
+
+    private static let privatePrompt = "kannu-v47-private-prompt-7f3a"
+
+    private func assertThePromptIsNowhereOnDisk(_ context: String, file: StaticString = #filePath, line: UInt = #line) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: statusDir.path)) ?? []
+        XCTAssertEqual(names.filter { $0.hasPrefix(".kannu-input.") }, [], "\(context): a payload file was left behind",
+                       file: file, line: line)
+        let marker = Data(Self.privatePrompt.utf8)
+        let files = FileManager.default.enumerator(at: home, includingPropertiesForKeys: [.isRegularFileKey])
+        while let url = files?.nextObject() as? URL {
+            guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
+                  let data = try? Data(contentsOf: url) else { continue }
+            XCTAssertNil(data.range(of: marker), "\(context): the prompt is on disk in \(url.lastPathComponent)",
+                         file: file, line: line)
+        }
+    }
+
+    private static func pids(_ arguments: [String]) throws -> [pid_t] {
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = arguments
+        let out = Pipe()
+        pgrep.standardOutput = out
+        try pgrep.run()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        pgrep.waitUntilExit()
+        return text.split(whereSeparator: { $0.isNewline }).compactMap { pid_t($0) }
+    }
+
+    /// Starts a hook, sends the whole payload but never closes stdin, so the hook is mid-read, then
+    /// kills it the way a host does: `signal` to the hook alone, or SIGKILL to it and its children.
+    private func killAHookMidRead(_ conversation: String, signal: Int32, wholeTree: Bool, path: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [Self.scriptURL.path, "thinking", "claude", "UserPromptSubmit"]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = home.path
+        env["PATH"] = path
+        process.environment = env
+        let stdin = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "session_id": conversation, "hook_event_name": "UserPromptSubmit", "prompt": Self.privatePrompt])
+        stdin.fileHandleForWriting.write(payload)
+
+        // The reader is up: v46's `cat` behind its payload file, or v47's Python.
+        let bash = process.processIdentifier
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let v46Reading = ((try? FileManager.default.contentsOfDirectory(atPath: statusDir.path)) ?? [])
+                .contains { $0.hasPrefix(".kannu-input.") }
+            let pythonReading = !(try Self.pids(["-f", "-P", "\(bash)", "ython"])).isEmpty
+            if v46Reading || pythonReading { break }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        Thread.sleep(forTimeInterval: 0.3)
+
+        let children = try Self.pids(["-P", "\(bash)"])
+        kill(bash, signal)
+        if wholeTree { children.forEach { kill($0, SIGKILL) } }
+        try stdin.fileHandleForWriting.close()
+        process.waitUntilExit()
+        // A child that outlived the hook finishes on its own; wait for it before looking.
+        let gone = Date().addingTimeInterval(10)
+        while Date() < gone, children.contains(where: { kill($0, 0) == 0 }) {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+    }
+
+    private func assertAKilledHookLeavesNoPayload(path: String) throws {
+        let kills: [(name: String, signal: Int32, wholeTree: Bool)] = [
+            ("SIGTERM to the hook", SIGTERM, false),
+            ("SIGKILL to the hook", SIGKILL, false),
+            ("SIGKILL to the hook and its children", SIGKILL, true),
+        ]
+        for (index, way) in kills.enumerated() {
+            try killAHookMidRead("p47k\(index)", signal: way.signal, wholeTree: way.wholeTree, path: path)
+            assertThePromptIsNowhereOnDisk(way.name)
+        }
+    }
+
+    func testThePromptIsNeverWrittenToDiskOnANormalRun() throws {
+        let out = try run(state: "thinking", event: "UserPromptSubmit", conversation: "p47a",
+                          extra: ["prompt": Self.privatePrompt])
+        XCTAssertEqual(out, Self.allowJSON)
+        XCTAssertEqual(try readState("p47a"), "thinking", "the event still reached Python")
+        assertThePromptIsNowhereOnDisk("normal run")
+    }
+
+    func testThePromptIsNeverWrittenToDiskOnTheEarlyExitWithoutPython() throws {
+        let out = try run(state: "thinking", event: "UserPromptSubmit", conversation: "p47b",
+                          extra: ["prompt": Self.privatePrompt], path: "/bin")
+        XCTAssertEqual(out, Self.allowJSON)
+        assertThePromptIsNowhereOnDisk("no python3")
+    }
+
+    func testThePromptIsNeverWrittenToDiskWhenAStepFails() throws {
+        // The status write fails: a directory where the file goes.
+        try FileManager.default.createDirectory(at: statusFile("p47c"), withIntermediateDirectories: true)
+        XCTAssertEqual(try run(state: "thinking", event: "UserPromptSubmit", conversation: "p47c",
+                               extra: ["prompt": Self.privatePrompt]), Self.allowJSON)
+        assertThePromptIsNowhereOnDisk("failed status write")
+
+        // python3 itself fails before reading a byte, as the /usr/bin/python3 shim does on a Mac
+        // without the Command Line Tools.
+        let bin = home.appendingPathComponent("failing-bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let python = bin.appendingPathComponent("python3")
+        try Data("#!/bin/bash\nexit 1\n".utf8).write(to: python)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: python.path)
+        let process = try launch(state: "thinking", event: "UserPromptSubmit", conversation: "p47d",
+                                 extra: ["prompt": Self.privatePrompt], path: bin.path + ":/bin")
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+        assertThePromptIsNowhereOnDisk("python3 failed")
+    }
+
+    func testThePromptIsNeverWrittenToDiskWhenTheHostKillsTheHook() throws {
+        // A hook past its timeout, an interrupt, the host quitting. SIGKILL cannot be trapped, so
+        // only never writing the payload holds for every one of them.
+        try assertAKilledHookLeavesNoPayload(path: Self.defaultPath)
+    }
+
+    func testAPayloadPastTheCapIsReadToTheEndAndStillMovesTheLight() throws {
+        // Past 16 MiB the payload is dropped, but read to the end: stopping at the cap would leave
+        // the host blocked writing the rest (here, this test's own write would never return).
+        let big = String(repeating: "x", count: 17 * 1024 * 1024)
+        let object: [String: Any] = ["session_id": "cap1", "tool_name": "Write", "hook_event_name": "PreToolUse",
+                                     "tool_input": ["content": big]]
+        let out = try run(state: "executing", event: "PreToolUse", conversation: "cap1",
+                          rawPayload: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(out, Self.allowJSON)
+        XCTAssertEqual(try readState("default"), "executing", "an unread payload has no session id")
+    }
+
+    /// `/usr/bin/python3` is 3.9 on macOS, reached through Apple's shim; the descriptor has to
+    /// survive that exec too.
+    func testThePromptStaysOffDiskUnderTheSystemPython() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/python3"), "no system python3")
+        let out = try run(state: "thinking", event: "UserPromptSubmit", conversation: "p47s",
+                          extra: ["prompt": Self.privatePrompt], path: "/usr/bin:/bin")
+        XCTAssertEqual(out, Self.allowJSON)
+        XCTAssertEqual(try readState("p47s"), "thinking", "the event still reached Python")
+        assertThePromptIsNowhereOnDisk("system python, normal run")
+        try assertAKilledHookLeavesNoPayload(path: "/usr/bin:/bin")
     }
 
     func testToolErrorsCountPerTurnAndIgnoreInterrupts() throws {

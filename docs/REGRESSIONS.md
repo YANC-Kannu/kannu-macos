@@ -213,6 +213,21 @@ Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9,
 in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
 changelog. None of it has run against a real Antigravity.
 
+**v47 addendum (2026-10-29): the payload never touches the disk.** This replaces the file from the
+v41 addendum. Python unlinked that file and a trailing `rm` covered a normal exit, but nothing
+covered a kill. A hook killed between `mktemp` and the unlink (the 10-second host timeout, an
+interrupt, the host quitting) kept the whole payload in `~/.kannu/agent-status/` for good. One Mac
+had 33 such files over six weeks, prompts included. The wrapper now runs `exec 3<&0` and Python
+reads fd 3. Rules:
+- Never move the payload back into a file or the environment. A `trap` cannot catch SIGKILL.
+- Keep the heredoc line exactly `python3 <<'PY'`. The pre-commit hook finds the Python body by that
+  line for its backslash check, and a changed line makes that check pass on an empty body.
+- Read past the cap to the end, or the host blocks writing the rest.
+
+`continueLaunch()` sweeps leftovers older than 10 minutes (`HookInputLeftovers`). Guards: the
+`HookScriptTests` v47 group (normal run, the no-`python3` exit, two failing steps, three kinds of
+kill; again under `/usr/bin/python3` 3.9) and `HookInputLeftoversTests`.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call
