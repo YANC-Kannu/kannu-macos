@@ -87,17 +87,19 @@ struct TaskFormDraft: Equatable {
 
     // MARK: - The timer tab's bar and a new task's title: one text
 
-    /// What the timer tab's session bar shows for `title` (`TimerSessionName`, at most 40
-    /// characters); "" when nothing is left.
+    /// What the timer tab's session bar shows for `title` (`TimerSessionName`, at most
+    /// `maxTypedLength` characters, so a title's `#tag` and `@time` words fit); "" when nothing is
+    /// left.
     static func barText(_ title: String) -> String {
-        TimerSessionName.cleaned(title) ?? ""
+        TimerSessionName.cleaned(title, limit: TimerSessionName.maxTypedLength) ?? ""
     }
 
     /// Whether `bar`, the session bar's text, is this draft's title: the same `TaskItem.nameKey`, so
     /// case, accents and a title cut to the bar's 40 characters still match. Never for an empty bar.
     func isTitled(_ bar: String) -> Bool {
-        guard let key = TaskItem.nameKey(bar) else { return false }
-        return TaskItem.nameKey(title) == key
+        // By the name alone: `#tag` and `@time` words are not part of it (`TaskQuickAdd`).
+        guard let key = TaskItem.nameKey(TaskQuickAdd.title(of: bar)) else { return false }
+        return TaskItem.nameKey(TaskQuickAdd.title(of: title)) == key
     }
 
     /// The draft New Task opens on, `kept` being the kept new-task draft. An empty bar opens `kept`
@@ -117,9 +119,27 @@ struct TaskFormDraft: Equatable {
     var tags: [String] { TaskItem.parsedTags(tagsText) }
 
     /// A new task or a local one needs a title; a remote one keeps its server's. An estimate that
-    /// cannot be read is fixed first, never dropped without a word.
+    /// cannot be read is fixed first, never dropped without a word. The title is what is left once
+    /// its `#tag` and `@time` words are taken out: "#work @noon" alone names nothing.
     var canSave: Bool {
-        (!canEditTitle || TaskItem.cleanedTitle(title) != nil) && estimateReading != .unreadable
+        (!canEditTitle || TaskItem.cleanedTitle(TaskQuickAdd.title(of: title)) != nil) && estimateReading != .unreadable
+    }
+
+    /// The `#tag` and `@time` words typed in the title (`TaskQuickAdd`), moved into the form's own
+    /// fields: the title without them, their tags after the form's, and their reminder over the
+    /// form's, being the later word. What saving reads, for a new task and an edit alike; a draft
+    /// with no such word comes back as it is.
+    func foldingQuickAdd(now: Date, calendar: Calendar) -> TaskFormDraft {
+        guard canEditTitle else { return self }
+        let typed = TaskQuickAdd.parse(title, now: now, calendar: calendar)
+        guard typed.hasTokens else { return self }
+        var folded = self
+        folded.title = typed.title
+        if !typed.tags.isEmpty {
+            folded.tagsText = TaskItem.cleanedTags(tags + typed.tags).joined(separator: ", ")
+        }
+        if canSchedule, let reminder = typed.reminder { folded.reminder = reminder }
+        return folded
     }
 
     /// What saving changes on `task`, in the order the manager applies it: only what differs.

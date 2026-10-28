@@ -378,14 +378,19 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     private func startTypedNow(_ typed: String, reuse: Bool, duration: TimeInterval, preset: TimerPreset?) -> Bool {
-        guard isReady, Defaults[.enableTimerFeature], duration > 0, TaskItem.cleanedTitle(typed) != nil else { return false }
+        // "Deep work #kannu @noon" names "Deep work"; the tokens tag it and set its reminder.
+        let quick = Self.quickAdd(typed)
+        guard isReady, Defaults[.enableTimerFeature], duration > 0, TaskItem.cleanedTitle(quick.title) != nil else { return false }
         let taskID: UUID?
-        if reuse, let reused = TaskItem.reusable(titled: typed, in: tasks) {
+        if reuse, let reused = TaskItem.reusable(titled: quick.title, in: tasks) {
+            applyQuickAdd(quick, to: reused.id)
             taskID = reused.id
         } else if let kept = keptFormDraft(editing: nil), kept.isTitled(typed), kept.canSave {
             // The bar and the New Task title are one text: the form's estimate, tags and reminder
-            // come with it, and the draft is used up, so no second task is made from it later.
+            // come with it, and the draft is used up, so no second task is made from it later. The
+            // same name with other `#tag` or `@time` words in the bar: the bar's are applied too.
             taskID = addTask(from: kept)
+            if let taskID { applyQuickAdd(quick, to: taskID) }
         } else if let added = addTask(title: typed, estimateSeconds: nil) {
             showLocalTasks()
             taskID = added
@@ -536,14 +541,42 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     // MARK: - Editing
 
     /// A local task at the top of the order; its id, so a caller can tag, schedule or start it.
-    /// Nil when there is no title or the task list cannot change.
+    /// `#tag` and `@time` typed in the title tag it and set its reminder (`TaskQuickAdd`). Nil when
+    /// there is no title or the task list cannot change.
     @discardableResult
     func addTask(title: String, estimateSeconds: Int?) -> UUID? {
+        let typed = Self.quickAdd(title)
+        guard let id = insertLocal(title: typed.title, estimateSeconds: estimateSeconds) else { return nil }
+        applyQuickAdd(typed, to: id)
+        return id
+    }
+
+    private func insertLocal(title: String, estimateSeconds: Int?) -> UUID? {
         guard isReady, let title = TaskItem.cleanedTitle(title) else { return nil }
         let task = TaskItem(title: title, localEstimateSeconds: estimateSeconds.flatMap { $0 > 0 ? $0 : nil })
         tasks = TaskOrdering.inserting(task, into: tasks)
         persist()
         return task.id
+    }
+
+    /// The tokens in a typed title, read against now.
+    private static func quickAdd(_ title: String) -> TaskQuickAdd.Parsed {
+        TaskQuickAdd.parse(title, now: Date(), calendar: .current)
+    }
+
+    /// The `#tag` and `@time` words in `typed` applied to a task picked by name from the timer
+    /// bar's typed search, which keeps them after the picked task's title.
+    func applyQuickAdd(typed: String, to id: UUID) {
+        applyQuickAdd(Self.quickAdd(typed), to: id)
+    }
+
+    /// What a typed title's tokens ask of a task: its tags joined by theirs, and their reminder.
+    /// Through `setTags` and `setSchedule`, so a reminder asks for permission where every other does.
+    private func applyQuickAdd(_ typed: TaskQuickAdd.Parsed, to id: UUID) {
+        if !typed.tags.isEmpty, let task = tasks.first(where: { $0.id == id }) {
+            setTags(task.tags + typed.tags, for: id)
+        }
+        if let reminder = typed.reminder { setSchedule(reminder, for: id) }
     }
 
     /// The notch's task form's new task (`insertTask`); then the draft is used up, and a list
@@ -562,9 +595,12 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// before the schedule so a muted reminder is never sent first. Brain's New Task adds through
     /// this alone, so a task half-typed in the notch stays kept and the notch's Show local stays as
     /// the user left it. Nil when it cannot be saved.
+    /// `#tag` and `@time` typed in the title join the form's own fields first
+    /// (`TaskFormDraft.foldingQuickAdd`).
     @discardableResult
     func insertTask(from draft: TaskFormDraft) -> UUID? {
-        guard draft.isNew, draft.canSave, let id = addTask(title: draft.title, estimateSeconds: draft.estimateSeconds) else {
+        let draft = draft.foldingQuickAdd(now: Date(), calendar: .current)
+        guard draft.isNew, draft.canSave, let id = insertLocal(title: draft.title, estimateSeconds: draft.estimateSeconds) else {
             return nil
         }
         let tags = draft.tags
@@ -579,6 +615,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// the task is gone; an edit that changes nothing saves as nothing.
     @discardableResult
     func applyEdits(_ draft: TaskFormDraft, to id: UUID) -> Bool {
+        // `#tag` and `@time` typed in an edited title work as in a new one.
+        let draft = draft.foldingQuickAdd(now: Date(), calendar: .current)
         guard draft.editing == id, draft.canSave, let task = activeTasks.first(where: { $0.id == id }) else { return false }
         for edit in draft.edits(to: task) {
             switch edit {
@@ -604,12 +642,15 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// reminder again under the new title (`syncReminders`).
     @discardableResult
     func renameTask(_ taskID: UUID, to title: String) -> Bool {
-        guard let title = TaskItem.cleanedTitle(title),
+        // Brain's title field: `#tag` and `@time` work as in a new task's name.
+        let typed = Self.quickAdd(title)
+        guard let title = TaskItem.cleanedTitle(typed.title),
               let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return false }
         if title != task.title {
             update(taskID) { $0.title = title }
             refreshTimedName(taskID)
         }
+        applyQuickAdd(typed, to: taskID)
         return true
     }
 

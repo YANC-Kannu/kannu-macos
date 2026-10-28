@@ -29,7 +29,10 @@ import Foundation
 /// Pure, in the logic target.
 enum TaskSearch {
     static func matches(_ task: TaskItem, query: String) -> Bool {
+        // "#work" finds the tag "work": tags are kept without their `#` (`TaskItem.cleanedTags`).
         let words = query.split(whereSeparator: \.isWhitespace)
+            .map { $0.drop(while: { $0 == "#" }) }
+            .filter { !$0.isEmpty }
         guard !words.isEmpty else { return true }
         let fields = searchable(task)
         return words.allSatisfy { word in
@@ -67,9 +70,11 @@ extension TaskSearch {
 
     /// The tasks offered for `typed`, best first: the same title (`TaskItem.nameKey`), then titles
     /// that start with it, then any other match (a word of the title, a key, a tag, a label). Each
-    /// group keeps the order given, the user's own. Nothing under the minimum length.
+    /// group keeps the order given, the user's own. Nothing under the minimum length. Searched by
+    /// the name alone: the `#tag` and `@time` words a new task's name carries (`TaskQuickAdd`) are
+    /// not part of any title, and would empty the list.
     static func suggestions(_ tasks: [TaskItem], typed: String, limit: Int = suggestionLimit) -> [TaskItem] {
-        guard let query = TaskItem.cleanedTitle(typed), query.count >= suggestionMinimumLength else { return [] }
+        guard let query = TaskItem.cleanedTitle(TaskQuickAdd.title(of: typed)), query.count >= suggestionMinimumLength else { return [] }
         let key = TaskItem.nameKey(query)
         let start = folded(query)
         var same: [TaskItem] = [], starting: [TaskItem] = [], other: [TaskItem] = []
@@ -115,9 +120,10 @@ struct TaskSuggestionState: Equatable {
     }
 
     /// The rows for the tasks found for `typed`: none without a task, so a name that matches
-    /// nothing leaves the composer alone; else the tasks, then the New row.
+    /// nothing leaves the composer alone; else the tasks, then the New row, named as the task will
+    /// be: without its `#tag` and `@time` words (`TaskQuickAdd`).
     static func rows(for tasks: [TaskItem], typed: String) -> [Row] {
-        guard !tasks.isEmpty, let name = TaskItem.cleanedTitle(typed) else { return [] }
+        guard !tasks.isEmpty, let name = TaskItem.cleanedTitle(TaskQuickAdd.title(of: typed)) else { return [] }
         return tasks.map { Row.task(id: $0.id, title: $0.title) } + [.newTask(name)]
     }
 

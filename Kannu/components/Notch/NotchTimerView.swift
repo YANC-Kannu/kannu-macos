@@ -180,8 +180,10 @@ struct NotchTimerView: View {
             if form == nil { pendingSessionName = timerManager.typedSessionName }
         }
         .onChange(of: pendingSessionName) { _, newValue in
-            if newValue.count > TimerSessionName.maxLength {
-                pendingSessionName = String(newValue.prefix(TimerSessionName.maxLength))
+            // Room for `#tag` and `@time` past the name (`TaskQuickAdd`); the name is cut to
+            // `maxLength` when it starts.
+            if newValue.count > TimerSessionName.maxTypedLength {
+                pendingSessionName = String(newValue.prefix(TimerSessionName.maxTypedLength))
             }
             // The pick lasts while the bar still says its name: editing or clearing the text drops it.
             sessionPick = sessionPick?.kept(typed: pendingSessionName)
@@ -609,9 +611,13 @@ struct NotchTimerView: View {
         let pick: TimerSessionPick
         switch row {
         case .task(let id, let title):
-            pick = TimerSessionPick(taskID: id, name: TimerSessionName.cleaned(title) ?? typed, typed: typed)
+            // The `#tag` and `@time` words typed stay after the task's title, and go to it.
+            let tokens = TaskQuickAdd.parse(typed, now: Date(), calendar: .current).tokenText
+            let name = [TimerSessionName.cleaned(title) ?? typed, tokens].filter { !$0.isEmpty }.joined(separator: " ")
+            pick = TimerSessionPick(taskID: id, name: name, typed: typed, tokens: tokens)
         case .newTask:
-            pick = TimerSessionPick(taskID: nil, name: TimerSessionName.cleaned(typed) ?? typed, typed: typed)
+            pick = TimerSessionPick(taskID: nil, name: TimerSessionName.cleaned(typed, limit: TimerSessionName.maxTypedLength) ?? typed,
+                                    typed: typed)
         }
         suggestions.close(on: pick.name)
         sessionPick = pick
@@ -963,6 +969,12 @@ struct NotchTimerView: View {
                 .onExitCommand(perform: exitName)
                 .accessibilityLabel(Text("Session name"))
                 .accessibilityHint(Text(verbatim: pickHint))
+            // What a typed `#tag` and `@time` will do to the task this starts: a picked one takes
+            // only the words typed before the pick, never words of its own title.
+            if isTasksPageAvailable {
+                let picked = sessionPick?.taskID != nil
+                TaskQuickAddChips(text: picked ? (sessionPick?.tokens ?? "") : pendingSessionName, requiresName: !picked)
+            }
             if isTasksPageAvailable, let taskID = sessionPick?.taskID {
                 TimerTaskPickInfo(taskID: taskID, lost: pickLost)
             }
@@ -1030,9 +1042,14 @@ struct NotchTimerView: View {
         }
         let route = TimerTypedStart.route(tasksAvailable: isTasksPageAvailable, typed: typed, pick: sessionPick)
         if route == .plain {
-            plain()
+            // No task is made (tasks off, or nothing but `#tag` and `@time` typed): the words do
+            // nothing, so the name is the text as typed.
+            plain(typed)
         } else {
-            TimerTaskForm.startNamed(route, typed: typed, duration: duration, preset: preset, otherwise: plain)
+            // A picked task takes only the words typed before the pick (`TimerSessionPick.tokens`).
+            let startText = sessionPick?.taskID != nil ? (sessionPick?.tokens ?? "") : typed
+            TimerTaskForm.startNamed(route, typed: startText, duration: duration, preset: preset,
+                                     otherwise: { plain(TaskQuickAdd.title(of: typed)) })
         }
         // Written directly as well: "" again would never reach the observer (REGRESSIONS entry 10).
         pendingSessionName = ""
