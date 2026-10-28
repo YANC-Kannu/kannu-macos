@@ -141,7 +141,9 @@ private final class ExtensionLockScreenWidgetWindowPool {
     }
 
     func sync(with payloads: [ExtensionLockScreenWidgetPayload]) {
-        payloadsByID = Dictionary(uniqueKeysWithValues: payloads.map { ($0.id, $0) })
+        // Ids are unique per extension, not across them: two extensions may send the same one, and
+        // `uniqueKeysWithValues` trapped on that. The first one wins.
+        payloadsByID = Dictionary(payloads.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let activeIDs = Set(payloadsByID.keys)
         let staleIDs = Set(windows.keys).subtracting(activeIDs)
         staleIDs.forEach { hideWindow(withID: $0) }

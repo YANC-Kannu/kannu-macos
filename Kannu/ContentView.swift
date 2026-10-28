@@ -33,9 +33,27 @@ import AppKit
 #elseif canImport(UIKit)
 import UIKit
 #endif
+import os
+
+/// What the open notch's close paths read: where the notch body is in its window, and whether a
+/// menu is tracking. A class, held in `@State` and never observed, so the frame written on every
+/// layout and the menu flag never redraw `ContentView`.
+@MainActor
+final class NotchCloseWatch {
+    var bodyInWindow: CGRect = .zero
+    /// Menus open inside one another (a submenu), each with its own begin and end.
+    var trackingMenus = 0
+}
+
+/// Why the open notch closed. Public in the log, never anything the user typed.
+enum NotchCloseReason: String {
+    case pointerLeft, popoverClosed, sharingFinished, outsideClick
+}
 
 @MainActor
 struct ContentView: View {
+    private static let closeLog = os.Logger(subsystem: "com.kannu.app", category: "NotchClose")
+
     @EnvironmentObject var vm: KannuViewModel
 
     @ObservedObject var coordinator = KannuViewCoordinator.shared
@@ -213,6 +231,8 @@ struct ContentView: View {
 
     @State private var hoverTask: Task<Void, Never>?
     @State private var isHovering: Bool = false
+    /// Read only by the close paths (`closeWhenPointerLeaves`), so writing it never redraws this view.
+    @State private var closeWatch = NotchCloseWatch()
     @State private var lastHapticTime: Date = Date()
     @State private var hoverClickLocalMonitor: Any?
     /// While the panel is open on a notched screen: a click in another app closes it.
@@ -862,6 +882,12 @@ struct ContentView: View {
 
     private var configuredMainLayout: some View {
         mainLayoutBase
+            // Where the body is, for the close paths' pointer check; a frame, so no hover is late.
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                closeWatch.bodyInWindow = frame
+            }
             .conditionalModifier(!useModernCloseAnimation) { view in
                 let hoverAnimation = Animation.bouncy.speed(1.2)
                 let notchStateAnimation = Animation.spring.speed(1.2)
@@ -969,34 +995,28 @@ struct ContentView: View {
                 }
                 #endif
             }
-            .onChange(of: vm.isBatteryPopoverActive) { _, newPopoverState in
-                runAfter(0.1) {
-                    if !newPopoverState && !isHovering && vm.notchState == .open && !shouldPreventAutoClose() {
-                        vm.close()
-                    }
-                }
+            // A popover, a share or a header popover ended. Hover went false while its window had
+            // the pointer and comes back only when the pointer moves, so whether to close is
+            // decided by where the pointer is (`closeWhenPointerLeaves`), not by `isHovering`.
+            .onChange(of: vm.isBatteryPopoverActive) { _, isActive in
+                if !isActive { closeWhenPointerLeaves(.popoverClosed) }
             }
-            .onChange(of: vm.isStatsPopoverActive) { _, newPopoverState in
-                runAfter(0.1) {
-                    if !newPopoverState && !isHovering && vm.notchState == .open && !shouldPreventAutoClose() {
-                        vm.close()
-                    }
-                }
+            .onChange(of: vm.isStatsPopoverActive) { _, isActive in
+                if !isActive { closeWhenPointerLeaves(.popoverClosed) }
             }
             .onChange(of: vm.shouldRecheckHover) { _, _ in
-                // Recheck hover state when popovers are closed
-                runAfter(0.1) {
-                    if vm.notchState == .open && !shouldPreventAutoClose() && !isHovering {
-                        vm.close()
-                    }
-                }
+                closeWhenPointerLeaves(.popoverClosed)
             }
             .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
-                runAfter(0.1) {
-                    if vm.notchState == .open && !isHovering && !shouldPreventAutoClose() {
-                        vm.close()
-                    }
-                }
+                closeWhenPointerLeaves(.sharingFinished)
+            }
+            // A menu (a Picker's, a ⋯, the filter) is a window of its own, often reaching below the
+            // notch: the close paths wait while one tracks.
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
+                closeWatch.trackingMenus += 1
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
+                closeWatch.trackingMenus = max(0, closeWatch.trackingMenus - 1)
             }
             .onChange(of: coordinator.sneakPeek.show) { _, sneakPeekShowing in
                 syncHiddenEdgeHoverPolling()
@@ -2678,9 +2698,14 @@ struct ContentView: View {
     private func startOutsideClickMonitor() {
         guard isPhysicalNotchScreen, outsideClickMonitor == nil else { return }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak vm, weak lockScreenManager] _ in
+            // Where the button came up, read now: the job below runs later.
+            let location = NSEvent.mouseLocation
             Task { @MainActor in
                 guard let vm, let lockScreenManager else { return }
                 guard !lockScreenManager.isLocked, vm.notchState == .open, !self.shouldPreventAutoClose() else { return }
+                // A click that fell through a transparent part of Kannu's window, on the notch.
+                guard !self.isPointerOnOpenNotch(location) else { return }
+                Self.closeLog.info("Closed: \(NotchCloseReason.outsideClick.rawValue, privacy: .public)")
                 vm.close()
             }
         }
@@ -2806,18 +2831,46 @@ struct ContentView: View {
                 armRevealCountdown()
             }
 
-            hoverTask = Task {
-                try? await Task.sleep(for: .milliseconds(100))
-                guard !Task.isCancelled else { return }
+            closeWhenPointerLeaves(.pointerLeft)
+        }
+    }
 
-                await MainActor.run {
-                    guard !self.isHovering else { return }
-                    if self.vm.notchState == .open && !self.shouldPreventAutoClose() {
-                        self.vm.close()
-                    }
-                }
+    /// Closes the open notch once the pointer is off it, checking every 100 ms. Every auto-close
+    /// goes through here: hover-exit, a popover or a share ending.
+    ///
+    /// The decision is geometry, never the latched `isHovering`. Hover goes false, and stays
+    /// false, while another window has the pointer (a popover, a menu, an alert), and when that
+    /// window goes it comes back only once the pointer moves; a close read off it shut the notch
+    /// under a still pointer (docs/REGRESSIONS.md entry 22). It waits while something holds the
+    /// notch (`shouldPreventAutoClose`) or a menu tracks, and closes when that ends with the pointer
+    /// gone. It runs only while the notch is open and hover says outside: a hover-enter cancels it
+    /// (`handleHover` cancels `hoverTask`), and so does the notch closing any other way.
+    private func closeWhenPointerLeaves(_ reason: NotchCloseReason) {
+        guard vm.notchState == .open, !isHovering else { return }
+        hoverTask?.cancel()
+        hoverTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(100))
+                guard !Task.isCancelled, vm.notchState == .open, !isHovering else { return }
+                if shouldPreventAutoClose() || closeWatch.trackingMenus > 0 { continue }
+                if isPointerOnOpenNotch(NSEvent.mouseLocation) { continue }
+                Self.closeLog.info("Closed: \(reason.rawValue, privacy: .public)")
+                vm.close()
+                return
             }
         }
+    }
+
+    /// Whether `point` (screen coordinates) is on this window's open notch, with
+    /// `NotchInteractionGeometry.openNotchMargin` to spare. False before the body has laid out, or
+    /// when the screen has gone.
+    private func isPointerOnOpenNotch(_ point: CGPoint) -> Bool {
+        guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }),
+              let notch = NotchInteractionGeometry.openNotchRect(screenFrame: screen.frame,
+                                                                 bodyInWindow: closeWatch.bodyInWindow) else {
+            return false
+        }
+        return NotchInteractionGeometry.isOnOpenNotch(point, notch: notch)
     }
 
     // Helper function to check if any popovers are active

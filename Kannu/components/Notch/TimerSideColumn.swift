@@ -291,15 +291,8 @@ private struct TimerTasksPage: View {
     /// Whether the search field shows at the top of the page.
     @State private var isSearching = false
     @FocusState private var searchFocused: Bool
-    /// `@State`, so the release names the token that was set.
-    @State private var searchEditingToken = UUID()
     /// Whether the Time to log cards have replaced the list.
     @State private var showsLogTime = false
-    /// The entries whose card has a focused field; each holds the notch open under its own id.
-    @State private var focusedDrafts: Set<UUID> = []
-    /// A menu opened here (the filter, a Time to log card's ⋯) is a window of its own: the pointer
-    /// leaves the notch to use it, so the notch stays open while a menu tracks.
-    @State private var menuTrackingToken = UUID()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let maxLogCards = 3
@@ -332,32 +325,17 @@ private struct TimerTasksPage: View {
         .onChange(of: asking.isEmpty) { _, isEmpty in
             if isEmpty { showsLogTime = false }
         }
-        .onChange(of: searchFocused) { _, isFocused in
-            vm.setAutoCloseSuppression(isFocused, token: searchEditingToken)
-        }
-        // A click into another app leaves a field focused in a window that is no longer key: drop
-        // it, which lets the notch auto-close again.
+        // A click into another app leaves a field focused in a window that is no longer key: drop it.
+        // The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`), never
+        // on a field's focus, and a menu opened here is waited for there.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             searchFocused = false
-            releaseDraftFocus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(true, token: menuTrackingToken)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
         }
         // The latest order, as the Tasks popover does it: a source syncs only when its last sync is
         // over 5 minutes old and no rate limit runs, and never with the Keychain dialog.
         .onAppear {
             manager.syncAllIfStale()
-        }
-        // Closing the notch or switching tabs removes this view without a focus change.
-        .onDisappear {
-            vm.setAutoCloseSuppression(false, token: searchEditingToken)
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
-            releaseDraftFocus()
         }
     }
 
@@ -398,7 +376,6 @@ private struct TimerTasksPage: View {
                 .transition(.opacity)
             } else if showsLog {
                 TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, width: width, height: height, close: closeLogTime)
-                    .environment(\.worklogFieldFocus, draftFocusChanged)
                     .transition(.opacity)
             }
         }
@@ -467,25 +444,7 @@ private struct TimerTasksPage: View {
     }
 
     private func closeLogTime() {
-        releaseDraftFocus()
         animate { showsLogTime = false }
-    }
-
-    /// A Time to log card's field gained or lost focus (`worklogFieldFocus`).
-    private func draftFocusChanged(_ draftID: UUID, _ isFocused: Bool) {
-        if isFocused {
-            focusedDrafts.insert(draftID)
-        } else {
-            focusedDrafts.remove(draftID)
-        }
-        vm.setAutoCloseSuppression(isFocused, token: draftID)
-    }
-
-    private func releaseDraftFocus() {
-        for draftID in focusedDrafts {
-            vm.setAutoCloseSuppression(false, token: draftID)
-        }
-        focusedDrafts.removeAll()
     }
 
     // MARK: - Rail
