@@ -71,9 +71,9 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T09:16:30.012Z", total: Self.secondTotal, last: Self.secondLast),
         ]))
         XCTAssertEqual(records.count, 2)
-        XCTAssertEqual(records.map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(records.map(\.promptTokens), [12000, 13000])
         XCTAssertEqual(records.map(\.outputTokens), [600, 400])
-        XCTAssertEqual(records.map(\.inputTokens).reduce(0, +), 25000, "the requests add up to the final running total")
+        XCTAssertEqual(records.map(\.promptTokens).reduce(0, +), 25000, "the requests add up to the final running total")
         XCTAssertEqual(records.map(\.model), ["gpt-5.1-codex", "gpt-5.1-codex"])
         let expected = try XCTUnwrap(ClaudeUsageLine.parseDate("2026-10-17T09:15:09.789Z"))
         XCTAssertEqual(records[0].timestamp, expected)
@@ -84,7 +84,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.turnContext("gpt-5.1-codex"),
             Self.tokenCount(at: "2026-10-17T09:15:09.789Z", total: Self.first, last: Self.first),
         ])).first)
-        XCTAssertEqual(record.inputTokens, 12000, "cached_input_tokens is part of input_tokens")
+        XCTAssertEqual(record.promptTokens, 12000, "cached_input_tokens is part of input_tokens")
         XCTAssertEqual(record.outputTokens, 600, "reasoning_output_tokens is part of output_tokens")
     }
 
@@ -96,8 +96,30 @@ final class CodexUsageLineTests: XCTestCase {
             Self.turnContext("gpt-5.6-terra"),
             Self.tokenCount(at: "2026-10-17T09:15:09.789Z", total: request, last: request),
         ])).first)
-        XCTAssertEqual(record.inputTokens, 935040)
+        XCTAssertEqual(record.promptTokens, 935040)
         XCTAssertEqual(record.outputTokens, 11150)
+    }
+
+    /// The card's split: the cached part of `input_tokens` is a cache read and stays out of the
+    /// headline, the cache-write part is new input, the rest uncached.
+    func testTheCachedInputIsACacheReadAndTheHeadlineLeavesItOut() throws {
+        let request = Self.usage(input: 935040, cached: 875306, output: 11150, reasoning: 1141, cacheWrite: 57610)
+        let record = try XCTUnwrap(CodexUsageLine.records(in: Self.file([
+            Self.turnContext("gpt-5.6-terra"),
+            Self.tokenCount(at: "2026-10-17T09:15:09.789Z", total: request, last: request),
+        ])).first)
+        XCTAssertEqual(record.cacheReadTokens, 875306)
+        XCTAssertEqual(record.cacheWriteTokens, 57610)
+        XCTAssertEqual(record.uncachedInputTokens, 935040 - 875306 - 57610)
+        XCTAssertEqual(record.headlineTokens, 935040 - 875306 + 11150)
+
+        // Parts that claim more than the whole are clamped, never negative.
+        let odd = Self.usage(input: 100, cached: 90, output: 5, reasoning: 0, cacheWrite: 50)
+        let clamped = try XCTUnwrap(CodexUsageLine.records(in: Self.file([
+            Self.tokenCount(at: "2026-10-17T09:15:09.789Z", total: odd, last: odd),
+        ])).first)
+        XCTAssertEqual([clamped.uncachedInputTokens, clamped.cacheWriteTokens, clamped.cacheReadTokens], [0, 10, 90])
+        XCTAssertEqual(clamped.promptTokens, 100)
     }
 
     func testInfoNullIsNoRequestAndLeavesTheCountIntact() {
@@ -107,7 +129,7 @@ final class CodexUsageLineTests: XCTestCase {
         // A rate-limit update between requests also arrives with info null.
         XCTAssertNil(reader.consume(Self.tokenCountWithoutInfo(at: "2026-10-17T09:15:20.000Z")))
         let next = reader.consume(Self.tokenCount(at: "2026-10-17T09:16:30.012Z", total: Self.secondTotal, last: Self.secondLast))
-        XCTAssertEqual(next?.inputTokens, 13000)
+        XCTAssertEqual(next?.promptTokens, 13000)
     }
 
     func testARepeatedEventWithAnUnchangedTotalIsTheSameRequest() {
@@ -117,7 +139,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T09:15:09.902Z", total: Self.first, last: Self.first),
         ]))
         XCTAssertEqual(records.count, 1)
-        XCTAssertEqual(records.first?.inputTokens, 12000)
+        XCTAssertEqual(records.first?.promptTokens, 12000)
     }
 
     func testWithoutLastTokenUsageTheRequestIsWhatTheTotalGrewBy() {
@@ -126,7 +148,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T09:15:09.789Z", total: Self.first, last: nil),
             Self.tokenCount(at: "2026-10-17T09:16:30.012Z", total: Self.secondTotal, last: nil),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(records.map(\.promptTokens), [12000, 13000])
         XCTAssertEqual(records.map(\.outputTokens), [600, 400])
     }
 
@@ -170,7 +192,7 @@ final class CodexUsageLineTests: XCTestCase {
                             last: Self.first),
         ]))
         XCTAssertEqual(records.count, 1)
-        XCTAssertEqual(records.first?.inputTokens, 12000)
+        XCTAssertEqual(records.first?.promptTokens, 12000)
         XCTAssertEqual(records.first?.model, "gpt-5.1-codex")
         XCTAssertTrue(CodexUsageLine.records(in: "").isEmpty)
     }
@@ -227,7 +249,7 @@ final class CodexUsageLineTests: XCTestCase {
                             total: Self.usage(input: 4500, cached: 2000, output: 280, reasoning: 60),
                             last: Self.usage(input: 1500, cached: 1000, output: 80, reasoning: 10)),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [3000, 1500])
+        XCTAssertEqual(records.map(\.promptTokens), [3000, 1500])
         XCTAssertEqual(records.map(\.outputTokens), [200, 80])
         XCTAssertEqual(records.map(\.model), ["gpt-5.1-codex-mini", "gpt-5.1-codex-mini"])
     }
@@ -241,7 +263,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T10:00:00.120Z", total: Self.first, last: Self.first),
             Self.tokenCount(at: "2026-10-17T10:02:00.000Z", total: Self.secondTotal, last: Self.secondLast),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [13000],
+        XCTAssertEqual(records.map(\.promptTokens), [13000],
                        "the child's request counts even though it equals the parent's next one")
     }
 
@@ -254,7 +276,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T10:00:01.009Z", total: Self.usage(input: 1000, cached: 0, output: 100, reasoning: 0), last: nil),
             Self.tokenCount(at: "2026-10-17T10:00:08.000Z", total: Self.usage(input: 1500, cached: 0, output: 150, reasoning: 0), last: nil),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [500], "the replayed totals still set the baseline")
+        XCTAssertEqual(records.map(\.promptTokens), [500], "the replayed totals still set the baseline")
         XCTAssertEqual(records.map(\.outputTokens), [50])
     }
 
@@ -271,7 +293,7 @@ final class CodexUsageLineTests: XCTestCase {
                             total: Self.usage(input: 25300, cached: 19000, output: 1030, reasoning: 300),
                             last: Self.usage(input: 200, cached: 0, output: 20, reasoning: 0)),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [100, 200])
+        XCTAssertEqual(records.map(\.promptTokens), [100, 200])
     }
 
     func testOnlyAForkOrSubagentHasItsOpeningBurstSkipped() {
@@ -280,16 +302,16 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T09:15:02.800Z", total: Self.secondTotal, last: Self.secondLast),
         ]
         // A session of its own, however quickly its requests follow session_meta.
-        XCTAssertEqual(CodexUsageLine.records(in: Self.file([Self.sessionMeta] + own)).map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(CodexUsageLine.records(in: Self.file([Self.sessionMeta] + own)).map(\.promptTokens), [12000, 13000])
         // A session that names itself as its parent is its own too.
         let selfParent = Self.childMeta(at: "2026-10-17T09:15:02.101Z", parent: #""forked_from_id":"0199f2a4-self""#,
                                         id: "0199f2a4-self")
-        XCTAssertEqual(CodexUsageLine.records(in: Self.file([selfParent] + own)).map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(CodexUsageLine.records(in: Self.file([selfParent] + own)).map(\.promptTokens), [12000, 13000])
         // An empty parent id is no parent.
         let blankParent = Self.childMeta(at: "2026-10-17T09:15:02.101Z", parent: #""forked_from_id":"""#)
-        XCTAssertEqual(CodexUsageLine.records(in: Self.file([blankParent] + own)).map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(CodexUsageLine.records(in: Self.file([blankParent] + own)).map(\.promptTokens), [12000, 13000])
         // Usage before any session_meta: nothing says the file is a fork.
-        XCTAssertEqual(CodexUsageLine.records(in: Self.file(own)).map(\.inputTokens), [12000, 13000])
+        XCTAssertEqual(CodexUsageLine.records(in: Self.file(own)).map(\.promptTokens), [12000, 13000])
     }
 
     func testAForkWhoseFirstRequestComesLaterReplayedNothing() {
@@ -298,7 +320,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.childMeta(at: "2026-10-17T10:00:00.120Z", parent: #""parent_thread_id":"0199f2a4-6c1e-7d30-9a51-3f0e1c2b4d5e""#),
             Self.tokenCount(at: "2026-10-17T10:00:05.000Z", total: Self.first, last: Self.first),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [12000])
+        XCTAssertEqual(records.map(\.promptTokens), [12000])
     }
 
     func testAnEpochSecondsSessionMetaTimestampAnchorsTheReplay() {
@@ -308,7 +330,7 @@ final class CodexUsageLineTests: XCTestCase {
             Self.tokenCount(at: "2026-10-17T10:00:00.000Z", total: Self.first, last: Self.first),
             Self.tokenCount(at: "2026-10-17T10:04:00.000Z", total: Self.secondTotal, last: Self.secondLast),
         ]))
-        XCTAssertEqual(records.map(\.inputTokens), [13000])
+        XCTAssertEqual(records.map(\.promptTokens), [13000])
     }
 
     // MARK: - Rollout files
@@ -361,7 +383,7 @@ final class CodexUsageLineTests: XCTestCase {
         XCTAssertTrue(listing.hasLogs)
         for file in listing.plain {
             let records = CodexUsageLine.records(in: try String(contentsOf: file, encoding: .utf8))
-            XCTAssertEqual(records.map(\.inputTokens), [12000])
+            XCTAssertEqual(records.map(\.promptTokens), [12000])
         }
     }
 
@@ -428,7 +450,7 @@ final class CodexUsageLineTests: XCTestCase {
         let recent = UsageWindows.recentlyModified(listing.plain, now: now)
         XCTAssertEqual(recent.count, 4, "the old file is skipped")
         let records = JSONLUsageCache(label: "codex", format: .codex).refresh(files: recent, now: now).records
-        XCTAssertEqual(records.map(\.inputTokens).sorted(), [700, 12000, 13000],
+        XCTAssertEqual(records.map(\.promptTokens).sorted(), [700, 12000, 13000],
                        "the rollout's two requests once (the archived copy shares its keys) and the fork's own request")
     }
 }

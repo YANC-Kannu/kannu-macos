@@ -38,6 +38,32 @@ enum UsageWindows {
     /// guard, so the block history cannot reach further back than this either.
     static let week: TimeInterval = 7 * 86400
 
+    /// How much later than "a full window from now" a reported reset may be and still be believed: the
+    /// server's clock and this Mac's need not agree to the second.
+    static let resetSlack: TimeInterval = 3600
+
+    /// The span the card's week total covers.
+    struct Week: Equatable {
+        let start: Date
+        /// True when `start` is the plan's own weekly window's start; false for the last 7 × 24 h.
+        let followsPlan: Bool
+    }
+
+    /// The plan's own week when its reset is known: `[weeklyResetsAt − 7 d, now)`. Claude's weekly
+    /// limit resets at a fixed time, so a rolling 7 × 24 h total is not what the plan counts: measured
+    /// on the development machine, 2.27 B tokens rolling against 205 M since the reset. Without a
+    /// reset, or with one that cannot describe the current window (already past, or more than a week
+    /// away), the last 7 × 24 h, labelled as such. The start is never after `now`.
+    ///
+    /// The plan's week always lies inside the rolling one, so the records `JSONLUsageCache` keeps
+    /// (the rolling week) are enough to fill it.
+    static func weekWindow(now: Date, weeklyResetsAt: Date?) -> Week {
+        if let reset = weeklyResetsAt, reset > now, reset <= now.addingTimeInterval(week + resetSlack) {
+            return Week(start: min(reset.addingTimeInterval(-week), now), followsPlan: true)
+        }
+        return Week(start: now.addingTimeInterval(-week), followsPlan: false)
+    }
+
     /// How far back a file's modification time may be before it is skipped.
     ///
     /// A day wider than `week` on purpose: mtimes come from the filesystem and are compared against a

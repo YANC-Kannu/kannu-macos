@@ -199,12 +199,11 @@ struct NotchLLMUsageView: View {
                     note(String(localized: "No local usage logs yet"))
                 } else {
                     fact(String(localized: "Today"), snap.today, showCost: showCost)
-                    fact(String(localized: "Week"), snap.week, showCost: showCost)
+                    fact(Self.weekLabel(snap), snap.week, showCost: showCost)
                     fact(String(localized: "Session"), snap.session, showCost: showCost)
                 }
                 if let block = snap.localSessionBlock {
-                    note(String(localized: "Session (local) \(Self.compactTokens(block.totalTokens))")
-                         + (resetsIn(block.resetsAt, now: now).map { " · " + $0 } ?? ""))
+                    note(Self.blockText(block) + (resetsIn(block.resetsAt, now: now).map { " · " + $0 } ?? ""))
                 }
             }
         } else if !sessions.isEmpty, let columns = M.columns(innerWidth: innerWidth) {
@@ -287,7 +286,7 @@ struct NotchLLMUsageView: View {
                 } else {
                     fact(String(localized: "Today"), snap.today, showCost: false)
                     Spacer().frame(height: M.noteRowSpacing)
-                    fact(String(localized: "Week"), snap.week, showCost: showCost, onDemand: snap.onDemandSpendUSD)
+                    fact(Self.weekLabel(snap), snap.week, showCost: showCost, onDemand: snap.onDemandSpendUSD)
                 }
             }
         }
@@ -395,9 +394,46 @@ struct NotchLLMUsageView: View {
             .frame(height: M.noteRowHeight * CGFloat(lines), alignment: .leading)
     }
 
-    /// "Today 1.2M · $3.40": a token window's total, and its cost when the provider prices it.
+    /// "Today 1.2M · $3.40 · 48M cached": a token window's total, its cost when the provider prices
+    /// it, then its cache reads, quieter and a size smaller. Those are context re-read on every
+    /// request, 97–98 % of a Claude week, so they never join the headline.
+    @ViewBuilder
     private func fact(_ label: String, _ totals: UsageTotals, showCost: Bool, onDemand: Double? = nil) -> some View {
-        note(Self.factText(label, totals, showCost: showCost, onDemand: onDemand))
+        let text = Self.factText(label, totals, showCost: showCost, onDemand: onDemand)
+        if let cached = Self.cachedText(totals) {
+            (Text(text)
+                + Text(" · " + cached)
+                .font(Self.font(M.glyphFontSize, .medium))
+                .foregroundStyle(.tertiary))
+                .font(Self.font(M.textFontSize, .medium))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(height: M.noteRowHeight, alignment: .leading)
+        } else {
+            note(text)
+        }
+    }
+
+    /// "Week" for the plan's own week (Claude's weekly reset less seven days), "Last 7 days" for the
+    /// rolling 7 × 24 h every other case falls back to.
+    static func weekLabel(_ snap: UsageSnapshot) -> String {
+        snap.weekFollowsPlan ? String(localized: "Week") : String(localized: "Last 7 days")
+    }
+
+    /// "48M cached", or nil when the window read nothing from a cache.
+    static func cachedText(_ totals: UsageTotals) -> String? {
+        guard totals.cacheReadTokens > 0 else { return nil }
+        return String(localized: "\(tokens(totals.cacheReadTokens)) cached")
+    }
+
+    /// "Session (local) 1.2M tok" for the plan's own 5-hour window; "Session (local, approx.)" for the
+    /// hour-floored reconstruction used when Claude has not reported the window's reset.
+    static func blockText(_ block: ClaudeSessionBlocks.CurrentBlock) -> String {
+        block.isApproximate
+            ? String(localized: "Session (local, approx.) \(compactTokens(block.totalTokens))")
+            : String(localized: "Session (local) \(compactTokens(block.totalTokens))")
     }
 
     static func factText(_ label: String, _ totals: UsageTotals, showCost: Bool, onDemand: Double?) -> String {

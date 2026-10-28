@@ -91,7 +91,7 @@ final class JSONLUsageCacheCodexTests: XCTestCase {
     }
 
     private func describe(_ record: UsageRecord) -> String {
-        "\(record.timestamp.timeIntervalSince1970)|\(record.model)|\(record.inputTokens)|\(record.outputTokens)|\(record.dedupKey ?? "-")"
+        "\(record.timestamp.timeIntervalSince1970)|\(record.model)|\(record.promptTokens)|\(record.outputTokens)|\(record.dedupKey ?? "-")"
     }
 
     private func oneShot(_ lines: [String]) -> [String] {
@@ -199,7 +199,7 @@ final class JSONLUsageCacheCodexTests: XCTestCase {
             Self.count(at: "2026-10-17T09:00:05.000Z", total: (25000, 1000), last: nil),
         ])
         let records = JSONLUsageCache(label: "test", format: .codex).refresh(files: [url], now: now).records
-        XCTAssertEqual(records.map(\.inputTokens), [13000], "the old request is outside the week")
+        XCTAssertEqual(records.map(\.promptTokens), [13000], "the old request is outside the week")
         XCTAssertEqual(records.map(\.model), ["gpt-5.1-codex"])
     }
 
@@ -260,6 +260,6 @@ final class JSONLUsageCacheCodexTests: XCTestCase {
         XCTAssertEqual(cache.keptRecordCount(for: url), 0)
         // The reader's state is kept: a request appended now is still measured against the old total.
         try append(url, Self.count(at: "2026-10-24T13:00:00.000Z", total: (26000, 1100), last: nil) + "\n")
-        XCTAssertEqual(cache.refresh(files: [url], now: later).records.map(\.inputTokens), [300])
+        XCTAssertEqual(cache.refresh(files: [url], now: later).records.map(\.promptTokens), [300])
     }
 }

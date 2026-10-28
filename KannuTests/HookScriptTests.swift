@@ -1605,6 +1605,88 @@ extension HookScriptTests {
     }
 }
 
+// MARK: - v47: a background agent's result is the same request going on
+
+extension HookScriptTests {
+    /// What Claude Code submits as the prompt when an agent the Stop left running finishes. The
+    /// prefix is from a real `UserPromptSubmit` payload (Claude Code, 2026-10-15); the rest is made up.
+    private static let taskNotification = "<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n</task-notification>"
+
+    func testAFinishedAgentsNotificationResumesTheTurnItWasLeftRunningBy() throws {
+        let path = try transcript("tn1", bytes: 100)
+        try turnEvent("UserPromptSubmit", "tn1", extra: ["transcript_path": path, "prompt": "go"])
+        let start = try XCTUnwrap(int(try turn("tn1")["turn_started_ms"]))
+        try turnEvent("PostToolUse", "tn1", extra: ["tool_use_id": "c1"])
+        tick()
+        try append(500, to: path)
+        try turnEvent("Stop", "tn1", state: "stopped",
+                      extra: ["transcript_path": path, "background_tasks": [backgroundTask("subagent")]])
+        tick()
+        let resumed = try turnEvent("UserPromptSubmit", "tn1",
+                                    extra: ["transcript_path": path, "prompt": Self.taskNotification])
+        XCTAssertEqual(int(resumed["turn_started_ms"]), start, "the same request: its run time still counts from the prompt")
+        XCTAssertEqual(int(resumed["turn_transcript_offset"]), 100, "its tokens still count from the prompt's offset")
+        XCTAssertEqual(int(resumed["turn_tool_calls"]), 1, "its tool calls are kept")
+        XCTAssertNil(resumed["turn_ended_ms"], "working again")
+        XCTAssertNil(resumed["turn_bg_agents"], "the Stop's snapshot is over; the next Stop restates it")
+        tick()
+        // The next Stop leaves nothing running: what the user types after it is a new request.
+        try turnEvent("Stop", "tn1", state: "stopped", extra: ["background_tasks": [] as [Any]])
+        tick()
+        let typed = try turnEvent("UserPromptSubmit", "tn1", extra: ["prompt": "next"])
+        XCTAssertGreaterThan(try XCTUnwrap(int(typed["turn_started_ms"])), start)
+        XCTAssertEqual(int(typed["turn_tool_calls"]), 0)
+    }
+
+    func testOnlyANotificationAfterAStopThatLeftAgentsRunningResumes() throws {
+        // Agents left running, but the user types: a new request.
+        try turnEvent("UserPromptSubmit", "tn2", extra: ["prompt": "go"])
+        let first = try XCTUnwrap(int(try turn("tn2")["turn_started_ms"]))
+        tick()
+        try turnEvent("Stop", "tn2", state: "stopped", extra: ["background_tasks": [backgroundTask("workflow")]])
+        tick()
+        let typed = try turnEvent("UserPromptSubmit", "tn2", extra: ["prompt": "and now this <task-notification>"])
+        XCTAssertGreaterThan(try XCTUnwrap(int(typed["turn_started_ms"])), first, "the tag must lead the prompt")
+
+        // No agent left running (a background shell's result, say): a new request, as before v47.
+        try turnEvent("UserPromptSubmit", "tn3", extra: ["prompt": "go"])
+        let third = try XCTUnwrap(int(try turn("tn3")["turn_started_ms"]))
+        tick()
+        try turnEvent("Stop", "tn3", state: "stopped", extra: ["background_tasks": [backgroundTask("shell")]])
+        tick()
+        let shell = try turnEvent("UserPromptSubmit", "tn3", extra: ["prompt": Self.taskNotification])
+        XCTAssertGreaterThan(try XCTUnwrap(int(shell["turn_started_ms"])), third)
+
+        // Another host's prompt with the same text never resumes: only Claude Code sends it.
+        try turnEvent("UserPromptSubmit", "tn4", provider: "codex", extra: ["prompt": "go"])
+        let codex = try XCTUnwrap(int(try turn("tn4", provider: "codex")["turn_started_ms"]))
+        tick()
+        try turnEvent("Stop", "tn4", state: "stopped", provider: "codex",
+                      extra: ["background_tasks": [backgroundTask("subagent")]])
+        tick()
+        let other = try turnEvent("UserPromptSubmit", "tn4", provider: "codex", extra: ["prompt": Self.taskNotification])
+        XCTAssertGreaterThan(try XCTUnwrap(int(other["turn_started_ms"])), codex)
+    }
+
+    func testANotificationWhileTheTurnRunsStillJoinsIt() throws {
+        try turnEvent("UserPromptSubmit", "tn5", extra: ["prompt": "go"])
+        let start = int(try turn("tn5")["turn_started_ms"])
+        tick()
+        let joined = try turnEvent("UserPromptSubmit", "tn5", extra: ["prompt": Self.taskNotification])
+        XCTAssertEqual(int(joined["turn_started_ms"]), start)
+        XCTAssertNil(joined["turn_ended_ms"])
+    }
+
+    /// `/usr/bin/python3` is 3.9 on macOS; the default PATH finds a newer one first.
+    func testTheV47RulesHoldUnderTheSystemPython() throws {
+        try XCTSkipUnless(FileManager.default.isExecutableFile(atPath: "/usr/bin/python3"), "no system python3")
+        turnPath = "/usr/bin:/bin"
+        try testAFinishedAgentsNotificationResumesTheTurnItWasLeftRunningBy()
+        try testOnlyANotificationAfterAStopThatLeftAgentsRunningResumes()
+        try testANotificationWhileTheTurnRunsStillJoinsIt()
+    }
+}
+
 // MARK: - v45: hook contracts as the hosts document them
 
 extension HookScriptTests {

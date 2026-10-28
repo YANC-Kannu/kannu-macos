@@ -509,16 +509,16 @@ enum DebugSnapshotFixtures {
             var cursor = UsageSnapshot()
             cursor.accountTier = "Pro"
             cursor.weekLimit = limit(62, now.addingTimeInterval(9 * 86_400))
-            cursor.today = UsageTotals(inputTokens: 1_100_000, outputTokens: 120_000, costUSD: 3.4)
-            cursor.week = UsageTotals(inputTokens: 7_400_000, outputTokens: 680_000, costUSD: 21.8)
+            cursor.today = UsageTotals(uncachedInputTokens: 1_100_000, cacheReadTokens: 9_800_000, outputTokens: 120_000, costUSD: 3.4)
+            cursor.week = UsageTotals(uncachedInputTokens: 7_400_000, cacheReadTokens: 64_000_000, outputTokens: 680_000, costUSD: 21.8)
             cursor.onDemandSpendUSD = 3.4
             var codex = UsageSnapshot()
             codex.accountTier = "Plus"
             codex.billedCostOnly = true
             codex.sessionLimit = limit(20, now.addingTimeInterval(2 * 3600))
             codex.weekLimit = limit(55, now.addingTimeInterval(3 * 86_400))
-            codex.today = UsageTotals(inputTokens: 300_000, outputTokens: 40_000)
-            codex.week = UsageTotals(inputTokens: 2_100_000, outputTokens: 260_000)
+            codex.today = UsageTotals(uncachedInputTokens: 300_000, cacheReadTokens: 2_700_000, outputTokens: 40_000)
+            codex.week = UsageTotals(uncachedInputTokens: 2_100_000, cacheReadTokens: 19_000_000, outputTokens: 260_000)
             let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
             return all.filter { providers.contains($0.key) }
         }
@@ -584,11 +584,13 @@ enum DebugSnapshotFixtures {
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
-        let totals: [String: (input: Int, output: Int)] = ["live": (1_400_000, 45_000), "ended": (820_000, 22_300)]
+        let totals: [String: (newInput: Int, output: Int, context: Int)] = ["live": (83_000, 40_000, 458_000),
+                                                                            "ended": (21_400, 22_300, 96_000)]
         var out: [String: TurnTokens] = [:]
         for session in sessions {
             guard let total = totals[session.conversationID], let turn = session.turn, let offset = turn.transcriptOffset else { continue }
-            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, input: total.input, output: total.output)
+            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, newInput: total.newInput,
+                                                     output: total.output, context: total.context)
         }
         return out
     }
