@@ -917,10 +917,12 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     }()
     
     var color: Color {
-        if colorIndex >= 0 && colorIndex < NoteItem.colors.count {
-            return NoteItem.colors[colorIndex]
-        }
-        return .yellow
+        NoteItem.color(at: colorIndex)
+    }
+
+    /// The palette colour at `index`, or yellow for an index the palette does not have.
+    static func color(at index: Int) -> Color {
+        colors.indices.contains(index) ? colors[index] : .yellow
     }
     
     // Helper to get image data from file
@@ -971,9 +973,11 @@ extension Defaults.Keys {
     
         // MARK: Behavior
     /// Seconds the pointer must rest before hover-to-open fires — and, on displays where Kannu
-    /// hides until hovered, before the island slides in at all. 1 s so a pointer crossing the
-    /// top edge on its way to a browser tab does not summon it.
-    static let minimumHoverDuration = Key<TimeInterval>("minimumHoverDuration", default: 1.0)
+    /// hides until hovered, before the island slides in at all. 0.3 s (was 1 s, David 2026-10-28):
+    /// the dwell needs continuous presence on the hardware notch, or on the hidden island's edge,
+    /// so a pointer crossing the top edge on its way to a browser tab still does not summon it.
+    /// Anyone who moved the slider keeps their value.
+    static let minimumHoverDuration = Key<TimeInterval>("minimumHoverDuration", default: 0.3)
     static let enableHaptics = Key<Bool>("enableHaptics", default: true)
     static let openNotchOnHover = Key<Bool>("openNotchOnHover", default: true)
 	static let extendHoverArea = Key<Bool>("extendHoverArea", default: false)

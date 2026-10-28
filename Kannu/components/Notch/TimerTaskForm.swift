@@ -61,9 +61,6 @@ struct TimerTaskForm: View {
 
     @State private var draft: TaskFormDraft
     @FocusState private var focused: Field?
-    /// `@State`, so the release names the token that was set.
-    @State private var editingToken = UUID()
-    @State private var menuTrackingToken = UUID()
     /// The pointer is on the tag chips: they stay while a click lands, even if the field lets go of
     /// focus on the way.
     @State private var chipsHovered = false
@@ -162,7 +159,6 @@ struct TimerTaskForm: View {
             DispatchQueue.main.async { focused = first }
         }
         .onChange(of: focused) { previous, field in
-            vm.setAutoCloseSuppression(field != nil, token: editingToken)
             // Leaving the estimate: "90m" reads back as "1h 30m".
             if previous == .estimate, field != .estimate { draft.settleEstimateText() }
             // Into another field: the title's list goes (a click on it keeps it while hovered).
@@ -198,21 +194,11 @@ struct TimerTaskForm: View {
             }
         }
         // A click into another app leaves a field focused in a window that is no longer key: drop
-        // it, which lets the notch auto-close again.
+        // it. The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`),
+        // never on a field's focus, and waits there while the estimate menu tracks.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             focused = nil
-        }
-        // The estimate menu is a window of its own: the pointer leaves the notch to use it.
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(true, token: menuTrackingToken)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
-        }
-        .onDisappear {
-            vm.setAutoCloseSuppression(false, token: editingToken)
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
         }
     }
 

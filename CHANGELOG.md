@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-28 - The notch stays open while the pointer is on it, and opens after 0.3 s
+- **Developer label:** "app crashes sometimes, we can remove that on hover conditions and persistance we added and reduce that time"; "the hold open doesnt work, it randomly closes even when mouse is in notch area, check that"
+- **Agent label:** Claude Code (Opus 5.5) — every auto-close of the open notch checks where the pointer is, not the latched hover; the timer tab's hold-open tokens go; hover-open waits 0.3 s
+- **Changes:**
+  - The open notch closed under a still pointer. SwiftUI's hover goes false while a popover, a menu
+    or an alert has the pointer, and comes back only when the pointer moves; the popover, recheck
+    and share paths closed the notch on that stale value 0.1 s later. Every auto-close now goes
+    through `ContentView.closeWhenPointerLeaves`, which checks the pointer against the open body's
+    frame every 100 ms (`NotchInteractionGeometry.openNotchRect`, with a 4 pt margin), waits while a
+    popover, share or alert holds the notch or any menu tracks, and closes once the pointer is off
+    it. A click that falls through a transparent part of the window onto the notch no longer closes
+    it.
+  - The hold-open rules added for the timer tab are gone: its search field, Time to log fields, task
+    form fields and session name field no longer keep the notch open while focused, and its menus
+    are waited for in one place. The alert holds (the Notes delete confirms, Clear clipboard, Delete
+    All) and the share button's stay: they keep a dialog alive.
+  - Hover-open waits 0.3 s by default (was 1 s). A value set on the slider is kept.
+  - Each close logs its reason under the `NotchClose` category, never anything typed.
+  - The crash on disk (2026-10-27, an Oct 24 build) was Apple Notes sync's duplicate-id trap,
+    already fixed on development. The extension lock-screen widgets had the same
+    `uniqueKeysWithValues` trap for two extensions sharing a widget id, and now keep the first. The
+    note editor's Done button reads its colour through the guarded `NoteItem.color(at:)`.
+  - docs/REGRESSIONS.md entry 22 and a Danger zones row. Tests: the open rect and its margin, a
+    source scan of every close path with planted offenders, and the timer tab's no-hold rule.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies

@@ -1326,6 +1326,49 @@ installed build, since nothing automated drives a trackpad.
 
 ---
 
+## 22. The open notch closes on where the pointer is, never on a latched hover
+
+**Rule:** every auto-close of the open notch goes through `ContentView.closeWhenPointerLeaves`.
+It checks `NSEvent.mouseLocation` against the open body's frame
+(`NotchInteractionGeometry.openNotchRect`, with `openNotchMargin`) every 100 ms. It waits while
+`shouldPreventAutoClose()` holds or a menu tracks, and closes only when the pointer is off the
+notch. Never close because `isHovering` is false. A view never holds the notch open for its own
+field's focus or its own menu.
+
+**Broken five times, each patched in the one view that showed it.** The hashes are libinmv/kannu's,
+from before the move to YANC-Kannu/kannu-macos.
+- `59be960` (2026-10-04): the Tasks popover asked for a recheck when it closed, and the recheck
+  closed the notch under a pointer that was still inside it.
+- `e0f5d0e` (2026-10-04): the session-name field held the notch with a suppression token.
+- `5e650c1` (2026-10-18): the same for the timer column's search field, its Time to log fields,
+  and any menu it opened.
+- `4ea3942` (2026-10-18): the same for the task form's fields and estimate menu.
+- `7a1621b` / `4201d83` (2026-10-24): the same for the notes delete alerts.
+- David, 2026-10-28: "it randomly closes even when the mouse is in the notch area".
+
+**Why it keeps happening:** hover is late by construction, as entry 21 found for scrolls.
+- SwiftUI's `.onHover` goes false when another window takes the pointer: a popover, an `NSMenu`
+  or an alert. When that window goes away, `.onHover` comes back only once the pointer moves.
+- The recheck and popover paths then closed the notch on `!isHovering` 0.1 s later.
+- Each new view that met this added a token for itself. A hold that ended with the pointer
+  already outside never closed the notch at all.
+
+**Guard — exists.**
+- `NotchInteractionTests` checks the open rect and its margin.
+- Its source scan fails on a `vm.close()` that reads `!isHovering` in the lines before it, on a
+  `closeWhenPointerLeaves` that does not check the pointer or the menus, and on an outside-click
+  close without the pointer check. Each of these is checked against planted offenders.
+- `TimerSideColumnRulesTests.testTheTimerTabsFieldsAndMenusHoldNothingOpen` keeps focus and
+  menu holds out of the timer tab.
+
+The dialog holds stay (the alerts in `NotchNotesView`, the share button): they keep an alert or
+a share picker alive, and are not about hover.
+
+**Missing:** that the notch really stays open over a popover, a menu or an alert is checked by eye
+on the installed build, with `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" && category == "NotchClose"'`.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -1343,6 +1386,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
 | `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
+| `ContentView.swift` (`handleHover`, `closeWhenPointerLeaves`, the popover and recheck closes) | — | When the open notch closes. Five views patched one stale-hover close each with their own hold-open token, and the notch still shut under a still pointer once a popover or menu had taken the hover (entry 22). Close through `closeWhenPointerLeaves`; never on `!isHovering`. |
 | `PanGesture.swift`, `VerticalScrollOwnership.swift`, `NotchNotesView.swift` | — | The open notch's swipe-to-close against every scrollable view under it. Each scroller opted out through hover, which a scroll beats, so a list or a note's text closed and blurred the notch (entry 21). Mark a new scroller `.ownsVerticalScroll()`. |
 | `LaunchPermissionManager.swift`, `LaunchPermissions.swift`, `Kannu/components/Onboarding/` | — | Who may raise a macOS dialog, and when. A feature that asks on its own must check `mayTouch` and get a `LaunchPermission` row (AGENTS.md, "No permission dialog before onboarding's Permissions step"); Apple Notes sync ran AppleScript ungated until 2026-10-23. `FirstLaunchRulesTests` pins every gate and the onboarding order (`permissions`, `finished` last). |
 | `AgentSessionLogParser.swift` | 8 | `readTrailingLines` and the tail verdict. 4 of 8 commits touch the reader; **2 of those 4 fix the same failure mode** — the reader returning nil and silently sending callers down a wrong path (entry 4). |

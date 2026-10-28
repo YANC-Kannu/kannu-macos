@@ -52,8 +52,6 @@ struct NotchTimerView: View {
     @State private var renameDraft = ""
     /// The session the rename began in (`TimerManager.sessionID`).
     @State private var renamingSessionID: UUID?
-    /// Keeps the notch open while a name is being typed (`KannuViewModel.setAutoCloseSuppression`).
-    @State private var nameEditingToken = UUID()
     @FocusState private var focusedNameField: NameField?
     /// The side column's page once one is picked (`TimerSideColumn`). Nil until then, so the tab
     /// opens on `TimerSideColumn.initialPage` from its first frame; cleared each time the tab
@@ -156,7 +154,6 @@ struct NotchTimerView: View {
             }
         }
         .onChange(of: focusedNameField) { previous, current in
-            vm.setAutoCloseSuppression(current != nil, token: nameEditingToken)
             if previous == .rename, current != .rename {
                 commitRename()
             }
@@ -199,10 +196,9 @@ struct NotchTimerView: View {
         // Closing the notch or switching tabs removes this view without a focus change.
         .onDisappear {
             commitRename()
-            vm.setAutoCloseSuppression(false, token: nameEditingToken)
         }
         // A click into another app leaves the field focused in a window that is no longer key: save
-        // the rename and drop the focus, which lets the notch auto-close again. A half-typed
+        // the rename and drop the focus. A half-typed
         // next-session name is kept on `TimerManager.typedSessionName` while the notch is closed.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
@@ -1024,10 +1020,10 @@ struct NotchTimerView: View {
         // With a form open, a new task's title is the bar's text: read what the form left, not
         // this view's copy, which the form's closing has not refreshed yet.
         let typed = form == nil ? pendingSessionName : timerManager.typedSessionName
-        let plain = {
+        let plain = { (name: String) in
             TimerManager.shared.startTimer(
                 duration: duration,
-                name: TimerSessionName.resolved(typed: typed, fallback: fallback),
+                name: TimerSessionName.resolved(typed: name, fallback: fallback),
                 preset: preset,
                 fallbackName: fallback
             )
