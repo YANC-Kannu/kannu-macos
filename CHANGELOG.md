@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-29 - Mark Done sits beside a task's play button
+- **Developer label:** "keep the mark as done ticket near the play button it self but sufficiently spaced"
+- **Agent label:** Claude Code (Opus 5.5) — Brain's task page moves Mark Done from its Finish row to a ✓ beside ▶ on the title row
+- **Changes:**
+  - A local task's page shows a ✓ (Mark Done) right after ▶ or ■ on its title row, the two
+    `SettingsMetrics.rowContent` apart, the gap between a row's trailing buttons. Both are
+    borderless icon buttons, so their hit areas stay apart. The ✓ keeps "Mark Done" as its
+    accessibility label and adds it as the tooltip. A remote task has no ✓, as before: it is done
+    in its source.
+  - The Finish row keeps Archive and Delete, and its description now reads "Archive keeps its
+    time; Delete removes it."
+  - The task list's rows are unchanged (▶ or ■, then ›), and Mark Done stays on their right-click
+    menu.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
