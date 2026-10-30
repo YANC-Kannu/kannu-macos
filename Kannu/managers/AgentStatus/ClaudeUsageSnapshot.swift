@@ -50,6 +50,13 @@ struct ClaudeUsageSnapshot: Equatable {
     /// The organization the numbers belong to, when the source says. One person can belong to
     /// several (a Max plan and a Team plan), each with its own limits and its own weekly reset.
     var organizationUUID: String? = nil
+    /// Claude Code's organization id, on a card's snapshot whose bars are Claude Code's while
+    /// Claude Desktop is on another organization: the forecast and the alerts keep its series apart
+    /// from Claude Desktop's under the same window keys. Nil otherwise.
+    var readingScope: String? = nil
+    /// The plan of `readingScope`'s organization, when Kannu has seen it: the second card's chip,
+    /// and what a push calls those windows.
+    var planName: String? = nil
 
     static let fiveHourKey = "five_hour"
     static let sevenDayKey = "seven_day"
@@ -109,23 +116,6 @@ struct ClaudeUsageSnapshot: Equatable {
 
     /// `organizationUnverified` (see `cardSources`) asks for the first fetch of a launch at once,
     /// whatever the cache's age: until it runs, Claude Code's numbers cannot go on the card.
-    /// While Claude Code is recorded on another organization than the card's, the automatic
-    /// refresh stands down: what it would fetch is not on the card. The recorded organization wins
-    /// over `~/.claude.json`, which desktop-hosted sessions keep rewriting — so after the card's
-    /// "Sign in in Terminal" nothing would ever record the new one. When the file names a different
-    /// organization than the recorded one *from a profile fetched after Kannu last settled it*
-    /// (`recordedAt`, the end of that run), a paced fetch may run, and records where Claude Code
-    /// went. A profile from before that is a desktop-hosted session's copy being written back:
-    /// counting it ran `/usage` on nearly every visit of the Usage tab (2026-10-28). Never
-    /// settled by this rule (`recordedAt` nil, an upgrade): one fetch settles it.
-    static func otherOrganizationAllowsAutoFetch(recorded: String?, inConfigNow: String?,
-                                                 profileFetchedAt: Date?, recordedAt: Date?) -> Bool {
-        guard let recorded, let inConfigNow, inConfigNow != recorded else { return false }
-        guard let recordedAt else { return true }
-        guard let profileFetchedAt else { return false }
-        return profileFetchedAt > recordedAt
-    }
-
     static func shouldAutoFetch(now: Date, cacheObservedAt: Date?, lastFetch: Date?,
                                 organizationUnverified: Bool = false) -> Bool {
         if organizationUnverified, lastFetch == nil { return true }
@@ -282,9 +272,12 @@ struct ClaudeUsageSnapshot: Equatable {
         case unknown
     }
 
-    /// Which sources one card combines, and what the card has to say about it.
+    /// Which sources the Claude cards combine, and whose bars the first one shows.
     struct CardSources: Equatable {
         var sources: [ClaudeUsageSnapshot?]
+        /// A second card's sources: Claude Code's own, when it is on another organization than
+        /// Claude Desktop's and both have a live reading.
+        var secondCardSources: [ClaudeUsageSnapshot?]? = nil
         /// Claude Code is signed in to another organization than Claude Desktop's.
         var claudeCodeOnAnotherOrganization = false
         var claudeCodeOrganizationUnverified = false
@@ -293,18 +286,21 @@ struct ClaudeUsageSnapshot: Equatable {
         var showsClaudeCodeOrganization = false
     }
 
-    /// Which sources one card may combine.
+    /// Which sources each card may combine.
     ///
-    /// The card follows the organization Claude Desktop records usage for — its history's newest
-    /// sample — because that is what desktop-hosted agents spend (the user's call, 2026-10-18).
-    /// Claude Code's own sources, its statusline and its cache, describe the organization its
-    /// sign-in is bound to. When that is a different one they are left out whole, never merged
-    /// per key, so a card never shows one organization's five-hour bar beside another's week.
-    /// With no desktop history at all, Claude Code's organization is the only one there is.
+    /// The first card follows the organization Claude Desktop records usage for — its history's
+    /// newest sample — because that is what desktop-hosted agents spend (the user's call,
+    /// 2026-10-18). Claude Code's own sources, its statusline and its cache, describe the
+    /// organization its sign-in is bound to. When that is a different one they are never merged
+    /// into that card, not even per key, so a card never shows one organization's five-hour bar
+    /// beside another's week. With no desktop history at all, Claude Code's organization is the
+    /// only one there is.
     ///
-    /// When Claude Desktop has no live reading of its own organization, the card shows Claude
-    /// Code's instead (`showsClaudeCodeOrganization`) and says whose they are. It used to show
-    /// nothing under a line calling the token totals Claude Desktop's readings (2026-10-28).
+    /// A person with both plans sees both (David, 2026-10-30: "if a user has both show multiple
+    /// ones"): with a live reading on each side Claude Code's get a card of their own
+    /// (`secondCardSources`). An organization with no live reading gets no card, so when only Claude
+    /// Code's is live the first card is Claude Code's (`showsClaudeCodeOrganization`). The plan chip
+    /// says whose bars each card shows.
     ///
     /// The cache goes where its `cacheOwner` puts it: with Claude Code's sources, with the
     /// desktop's when its own week names the desktop's organization, nowhere when unknown.
@@ -345,10 +341,15 @@ struct ClaudeUsageSnapshot: Equatable {
             return CardSources(sources: [statusline, cacheOwner == .claudeCode ? cache : desktopCache, desktop])
         }
         let desktopSide = [desktopCache, desktop]
-        if desktopSide.contains(where: { $0.map { !$0.isEmpty(now: now) } ?? false }) {
-            return CardSources(sources: desktopSide, claudeCodeOnAnotherOrganization: true)
+        let claudeCodeSide = [statusline, claudeCodeCache]
+        func isLive(_ side: [ClaudeUsageSnapshot?]) -> Bool {
+            side.contains { $0.map { !$0.isEmpty(now: now) } ?? false }
         }
-        return CardSources(sources: [statusline, claudeCodeCache], claudeCodeOnAnotherOrganization: true,
+        if isLive(desktopSide) {
+            return CardSources(sources: desktopSide, secondCardSources: isLive(claudeCodeSide) ? claudeCodeSide : nil,
+                               claudeCodeOnAnotherOrganization: true)
+        }
+        return CardSources(sources: claudeCodeSide, claudeCodeOnAnotherOrganization: true,
                            showsClaudeCodeOrganization: true)
     }
 
@@ -363,9 +364,7 @@ struct ClaudeUsageSnapshot: Equatable {
         /// those sessions alone never fill the cache.
         case signInNeeded
         /// Claude Code is signed in to a different organization than the one Claude Desktop
-        /// records usage for, so its exact numbers belong to someone else's limits and the bars
-        /// come from the desktop history alone. Signing Claude Code in to the same organization
-        /// brings the exact numbers back.
+        /// records usage for, and the first card's bars are Claude Desktop's. Its plan chip says so.
         case otherOrganization
         /// As `otherOrganization`, but Claude Desktop has no live reading of its organization, so
         /// the bars, when there are any, are Claude Code's own organization's.

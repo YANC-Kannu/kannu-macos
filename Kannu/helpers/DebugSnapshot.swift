@@ -188,21 +188,28 @@ enum DebugSnapshots {
         }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
-            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read.
+            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read, and
+            // Claude's two organizations on their own and beside the others.
             // Each sits in the 142 pt slot a notched MacBook leaves, with a red line at its floor,
             // so a card running past it shows.
             let now = Date()
             let fixtures = DebugSnapshotFixtures.usageResults(now: now)
-            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool)] = [
-                ("usage-1", [.claude], nil, false),
-                ("usage-2", [.claude, .cursor], nil, false),
-                ("usage-3", [.claude, .cursor, .codex], nil, false),
-                ("usage-status", [.claude, .cursor], .signInNeeded, false),
-                ("usage-stale", [.claude, .cursor], nil, true),
+            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool, twoOrganizations: Bool)] = [
+                ("usage-1", [.claude], nil, false, false),
+                ("usage-2", [.claude, .cursor], nil, false, false),
+                ("usage-3", [.claude, .cursor, .codex], nil, false, false),
+                ("usage-status", [.claude, .cursor], .signInNeeded, false, false),
+                ("usage-stale", [.claude, .cursor], nil, true, false),
+                ("usage-orgs-2", [.claude], nil, false, true),
+                ("usage-orgs-3", [.claude, .cursor], nil, false, true),
+                ("usage-orgs-4", [.claude, .cursor, .codex], nil, false, true),
             ]
             for notchWidth in [CGFloat(640), 690] {
                 for board in boards {
-                    let results = fixtures(board.providers, board.stale)
+                    var results = fixtures(board.providers, board.stale)
+                    if board.twoOrganizations {
+                        results = DebugSnapshotFixtures.withSecondOrganization(results, now: now)
+                    }
                     let view = NotchLLMUsageView(snapshotResults: results, snapshotRefreshStatus: board.status,
                                                  snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: now),
                                                  snapshotNotchWidth: notchWidth)
@@ -523,6 +530,26 @@ enum DebugSnapshotFixtures {
             let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
             return all.filter { providers.contains($0.key) }
         }
+    }
+
+    /// Claude Code on Team beside Claude Desktop's Max: Claude's second card, as
+    /// `ClaudeUsageProvider` builds it.
+    static func withSecondOrganization(_ results: [ProviderID: UsageResult], now: Date) -> [ProviderID: UsageResult] {
+        guard case .success(var claude)? = results[.claude] else { return results }
+        let observed = now.addingTimeInterval(-120)
+        var team = UsageSnapshot()
+        team.accountTier = "Team"
+        team.readingScope = "team"
+        team.billedCostOnly = true
+        team.limitsOnly = true
+        team.sessionLimit = UsageLimit(used: 31, limit: 100, resetsAt: now.addingTimeInterval(2 * 3600), severity: nil,
+                                       observedAt: observed)
+        team.weekLimit = UsageLimit(used: 64, limit: 100, resetsAt: now.addingTimeInterval(4 * 86_400), severity: nil,
+                                    observedAt: observed)
+        claude.extraCards = [team]
+        var results = results
+        results[.claude] = .success(claude)
+        return results
     }
 
     /// A pace that fills the 5-hour window before it resets, and a week heading for 95 %.
