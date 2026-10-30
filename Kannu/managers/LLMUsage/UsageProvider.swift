@@ -45,6 +45,9 @@ struct UsageLimit: Equatable {
     /// When the value was read, when the source says. A Claude window can come from a desktop
     /// sample days old; the card shows that age rather than passing the number off as current.
     var observedAt: Date? = nil
+    /// The latest moment the value can still describe a running window, when it has no reset
+    /// (`ClaudeUsageSnapshot.Window.notAfter`); the card drops it then, as it does at a reset.
+    var notAfter: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 
@@ -133,6 +136,13 @@ struct UsageSnapshot: Equatable {
     /// expired token) rather than a transient error (429, 500+).
     /// Used by `isFatallyUnconfigured` to drop the card from the Usage tab.
     var isAuthFailure: Bool = false
+    /// Keeps this card's forecast series apart from another organization's under the same window
+    /// keys (`ClaudeUsageSnapshot.readingScope`).
+    var readingScope: String? = nil
+    /// Further cards of this provider: Claude's second organization.
+    var extraCards: [UsageSnapshot] = []
+    /// Limits and nothing else: token totals, the status row and Refresh stay on the first card.
+    var limitsOnly: Bool = false
 
     /// True when the provider has nothing useful to show AND the reason is a definitive
     /// auth failure (not signed-in / expired token / 401 / 403) — NOT a transient error
