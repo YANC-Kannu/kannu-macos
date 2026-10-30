@@ -396,44 +396,6 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
 
     // MARK: - Automatic fetch
 
-    /// CodeRabbit on #96: after "Sign in in Terminal" to the card's organization, nothing recorded
-    /// the new one — the recorded organization wins over `~/.claude.json`, and the automatic refresh
-    /// stood down while the hint said "another organization". It may run once the file names a
-    /// different organization than the recorded one.
-    func testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves() {
-        let settled = now.addingTimeInterval(-3_600)
-        func allows(_ recorded: String?, _ inConfig: String?, profileAt: Date?) -> Bool {
-            ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: recorded, inConfigNow: inConfig,
-                                                                 profileFetchedAt: profileAt, recordedAt: settled)
-        }
-        XCTAssertFalse(allows("team", "team", profileAt: now),
-                       "still on the recorded organization: nothing to fetch for the card")
-        XCTAssertTrue(allows("team", "max", profileAt: now),
-                      "a profile fetched since Kannu settled it names another: one paced fetch records where it went")
-        XCTAssertFalse(allows("team", nil, profileAt: now))
-        XCTAssertFalse(allows(nil, "max", profileAt: now), "nothing recorded is not 'another organization'")
-    }
-
-    /// 2026-10-28: a desktop-hosted session fetched its Max profile at 11:50:47 IST and kept
-    /// writing that copy back, while Claude Code stayed on Team. Counting the file's organization
-    /// alone ran `/usage` on nearly every visit of the Usage tab.
-    func testAnOldProfileWrittenBackIsNotAMove() {
-        let profile = Date(timeIntervalSince1970: 1_793_168_447.270)       // 2026-10-28 06:20:47Z
-        let runBefore = profile.addingTimeInterval(-90)                      // the 11:49 IST run
-        let runAfter = profile.addingTimeInterval(21)                        // the 11:51 IST run
-        XCTAssertTrue(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
-            recorded: "team", inConfigNow: "max", profileFetchedAt: profile, recordedAt: runBefore),
-                      "fetched after the last settled run: once")
-        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
-            recorded: "team", inConfigNow: "max", profileFetchedAt: profile, recordedAt: runAfter),
-                       "then never again for the same copy")
-        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
-            recorded: "team", inConfigNow: "max", profileFetchedAt: nil, recordedAt: runAfter))
-        XCTAssertTrue(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
-            recorded: "team", inConfigNow: "max", profileFetchedAt: profile, recordedAt: nil),
-                      "never settled by this rule (an upgrade): one fetch settles it")
-    }
-
     func testAutoFetchRunsWhenTheCacheIsOldOrMissing() {
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: nil, lastFetch: nil))
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
@@ -465,6 +427,9 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         XCTAssertEqual(split.sources.compactMap { $0 }, [desktop])
         // A fresher Team reading must not displace the Max one: that was the measured card.
         XCTAssertEqual(ClaudeUsageSnapshot.merged(split.sources, now: now)?.sevenDayPercent, 43)
+        // It goes on a card of its own.
+        XCTAssertEqual(split.secondCardSources?.compactMap { $0 }, [statusline, cache])
+        XCTAssertEqual(ClaudeUsageSnapshot.merged(split.secondCardSources ?? [], now: now)?.sevenDayPercent, 0)
     }
 
     func testOneOrganizationOrAnUnknownOneMergesAsBefore() {

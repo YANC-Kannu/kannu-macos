@@ -657,6 +657,32 @@ passive check. Not measured: whether `claude -p "/usage"` refetches the profile 
 it does not, the weekly-reset check and the last known organization decide; nothing here runs
 `claude` to find out.
 
+**2026-10-30 addendum — both organizations, a card each.** The single card still had to pick, and
+David read the pick as broken: "still showing team which is also valid, maybe if a user has both
+show multiple ones". `cardSources` now gives Claude Code's sources a card of their own when the
+organizations differ and both have a live reading (`secondCardSources`); an organization with no
+live reading gets no card. The plan chip says whose bars each card shows, so the "these are Claude
+Desktop's readings" lines are gone. Three things follow, and each would be easy to undo by accident:
+- **The automatic refresh no longer stands down for another organization.** "What it would fetch is
+  not on the card" stopped being true, and holding it would let the second card lapse until someone
+  pressed Refresh. It is paced like any other (`shouldAutoFetch`, 15 minutes, only while the Usage
+  tab is on screen). `otherOrganizationAllowsAutoFetch`, `claudeCodeUsageOrganizationCheckedAt` and
+  `testAnOldProfileWrittenBackIsNotAMove` went with the hold: a profile written back all day can no
+  longer license a run, because no profile decides whether one runs.
+- **A reading's id follows its organization, not its card.** Bars of Claude Code's organization
+  while it differs from Claude Desktop's are `claude@<organization>:<key>`, on the first card or the
+  second (`ClaudeUsageSnapshot.readingScope`). Everything else stays `claude:<key>`, the series already
+  on disk. Before this, Team's bars on the fallback card fed Max's forecast.
+- **`apply` publishes in an order that never holds one organization's reading on both cards**, or
+  the alerts would count it twice in the tick it moves from one card to the other.
+
+**Guard.** `ClaudeUsageOrganizationTests.testEachOrganizationWithALiveReadingGetsACard` and
+`testOneOrganizationOrAnUnverifiedOneHasOneCard`,
+`UsageForecastTests.testAScopedSnapshotKeepsItsOwnSeriesAndNamesItsPlan`,
+`ClaudeUsageReadRulesTests.testTheAutomaticRefreshDoesNotStandDownForAnotherOrganization`. Not
+guarded: `UsageAlertPolicy.resumeDate` cannot tell which organization a rate-limited session is on,
+so with both full it answers with the later reset.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -1480,7 +1506,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
 | `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
-| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have (entry 8, 2026-10-29 addendum). |
+| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have (entry 8, 2026-10-29 and 2026-10-30 addenda). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |

@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-30 - Claude's usage shows a card for each organization
+- **Developer label:** "the usage table of claude is messed up and seem like not fixed, i think its still showing team which is also valid, maybe if a user has both show multiple ones"
+- **Agent label:** Claude Code (Opus 5.5) — a second Claude card when Claude Code and Claude Desktop are on different organizations, each with its plan chip, its forecast series and its alerts
+- **Changes:**
+  - When Claude Code and Claude Desktop are on different organizations and both have a live reading,
+    the Usage tab shows two Claude cards, Claude Desktop's first ("Claude Max", "Claude Team"). An
+    organization with no live reading gets no card, so one card still shows when only one has bars.
+    One organization, or one not yet recorded, shows one card as before.
+  - The second card holds limits only. Token totals, the status row and ↻ stay on the first.
+  - Each card's plan chip says whose bars it shows, so the status lines explaining the difference
+    ("these are Claude Desktop's readings", "No recent Claude Desktop reading") are gone.
+  - The automatic `/usage` refresh no longer stands down while Claude Code is on another
+    organization: those bars now have a card, which would lapse without it. It stays paced at 15
+    minutes, and only while the Usage tab is on screen. `otherOrganizationAllowsAutoFetch` and
+    `claudeCodeUsageOrganizationCheckedAt` went with the hold.
+  - Bars of Claude Code's organization, while it differs from Claude Desktop's, read as
+    `claude@<organization>:<key>`, so its forecast and alerts stay apart from Claude Desktop's, and a
+    push names the plan ("Team 5-hour"). Everything else keeps `claude:<key>`.
+  - `DebugSnapshot` gains the `usage-orgs-2`, `-3` and `-4` boards.
+  - `docs/REGRESSIONS.md` entry 8 gains the 2026-10-30 addendum.
+
 ### 2026-11-01 - The notch stays open over the reminder's calendar
 - **Developer label:** "the hover on calendar out of notch area of kannu closes notch"
 - **Agent label:** Claude Code (Opus 5.5) — the close check counts windows attached to the notch window as the notch
