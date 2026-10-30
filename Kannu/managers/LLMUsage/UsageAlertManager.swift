@@ -56,9 +56,12 @@ final class UsageAlertManager: ObservableObject {
 
     func start() {
         cancellables.removeAll()
-        CursorAgentStatusMonitor.shared.$claudeUsage
-            .sink { [weak self] snapshot in
-                self?.claudeReadings = UsageWindowReading.readings(fromClaude: snapshot, now: Date())
+        let monitor = CursorAgentStatusMonitor.shared
+        monitor.$claudeUsage.combineLatest(monitor.$claudeSecondOrganizationUsage)
+            .sink { [weak self] first, second in
+                let now = Date()
+                self?.claudeReadings = UsageWindowReading.readings(fromClaude: first, now: now)
+                    + UsageWindowReading.readings(fromClaude: second, now: now)
                 self?.evaluate()
             }
             .store(in: &cancellables)

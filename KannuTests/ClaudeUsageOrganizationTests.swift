@@ -261,32 +261,69 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
                             observedAt: now.addingTimeInterval(-observedAgo))
     }
 
-    func testTheCardShowsDesktopsBarsWhileItHasAReadingAndClaudeCodesOtherwise() {
+    /// David, 2026-10-30: "if a user has both show multiple ones". One card per organization with a
+    /// live reading, Claude Desktop's first; never one organization's bar on another's card.
+    func testEachOrganizationWithALiveReadingGetsACard() {
         let statusline = snapshot("five_hour", 12, resetsIn: 3_000)
         let cache = snapshot("seven_day", 30, resetsIn: 86_400)
+        let lapsedCache = snapshot("seven_day", 30, resetsIn: -60)
         let desktopLive = snapshot("seven_day", 80, resetsIn: nil, observedAgo: 3_600)
         let desktopLapsed = snapshot("seven_day", 100, resetsIn: -60, observedAgo: 3_600)
-        func card(_ desktop: ClaudeUsageSnapshot?, owner: ClaudeUsageSnapshot.CacheOwner = .claudeCode)
+        func card(_ desktop: ClaudeUsageSnapshot?, statusline: ClaudeUsageSnapshot? = nil,
+                  cache: ClaudeUsageSnapshot?, owner: ClaudeUsageSnapshot.CacheOwner = .claudeCode)
             -> ClaudeUsageSnapshot.CardSources {
             ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
                                             desktopOrganization: "max", claudeCodeOrganization: "team",
                                             cacheOwner: owner, now: now)
         }
-        let desktops = card(desktopLive)
-        XCTAssertEqual(desktops.sources.compactMap { $0 }, [desktopLive])
-        XCTAssertFalse(desktops.showsClaudeCodeOrganization)
+        // Both live: two cards.
+        let both = card(desktopLive, statusline: statusline, cache: cache)
+        XCTAssertEqual(both.sources.compactMap { $0 }, [desktopLive])
+        XCTAssertEqual(both.secondCardSources?.compactMap { $0 }, [statusline, cache], "Claude Code's own, never mixed")
+        XCTAssertFalse(both.showsClaudeCodeOrganization)
+        XCTAssertEqual(ClaudeUsageSnapshot.hint(hooksInstalled: true, statusline: statusline, cache: cache,
+                                                claudeCodeOnAnotherOrganization: both.claudeCodeOnAnotherOrganization,
+                                                showsClaudeCodeOrganization: both.showsClaudeCodeOrganization, now: now),
+                       .otherOrganization, "the first card's chip names Claude Desktop's plan")
+        // Only Claude Desktop live: its card alone.
+        let desktopOnly = card(desktopLive, cache: lapsedCache)
+        XCTAssertEqual(desktopOnly.sources.compactMap { $0 }, [desktopLive])
+        XCTAssertNil(desktopOnly.secondCardSources, "an organization with no live reading gets no card")
+        // Only Claude Code live: its card alone, first.
         for desktop in [desktopLapsed, nil] {
-            let codes = card(desktop)
+            let codes = card(desktop, statusline: statusline, cache: cache)
             XCTAssertTrue(codes.claudeCodeOnAnotherOrganization)
             XCTAssertTrue(codes.showsClaudeCodeOrganization)
             XCTAssertEqual(codes.sources.compactMap { $0 }, [statusline, cache], "Claude Code's own, never mixed")
+            XCTAssertNil(codes.secondCardSources, "never the same bars on two cards")
         }
-        // The cache whose own week is Max's is Desktop's organization's: exact numbers for its card.
-        let maxCache = card(desktopLapsed, owner: .organization("max"))
+        // The cache whose own week is Max's is Desktop's organization's: exact numbers for its card,
+        // and Claude Code's statusline alone is left for the second.
+        let maxCache = card(desktopLapsed, statusline: statusline, cache: cache, owner: .organization("max"))
         XCTAssertEqual(maxCache.sources.compactMap { $0 }, [cache, desktopLapsed])
         XCTAssertFalse(maxCache.showsClaudeCodeOrganization)
+        XCTAssertEqual(maxCache.secondCardSources?.compactMap { $0 }, [statusline])
         // An unknown cache goes nowhere.
-        XCTAssertEqual(card(nil, owner: .unknown).sources.compactMap { $0 }, [statusline])
+        XCTAssertEqual(card(nil, statusline: statusline, cache: cache, owner: .unknown).sources.compactMap { $0 }, [statusline])
+    }
+
+    func testOneOrganizationOrAnUnverifiedOneHasOneCard() {
+        let statusline = snapshot("five_hour", 12, resetsIn: 3_000)
+        let cache = snapshot("seven_day", 30, resetsIn: 86_400)
+        let desktop = snapshot("seven_day", 80, resetsIn: nil, observedAgo: 3_600)
+        let same = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                   desktopOrganization: "max", claudeCodeOrganization: "max", now: now)
+        XCTAssertNil(same.secondCardSources)
+        let unknown = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                      desktopOrganization: "max", claudeCodeOrganization: nil, now: now)
+        XCTAssertNil(unknown.secondCardSources)
+        // Until Kannu's own fetch has recorded it, Claude Code's organization is a guess: its numbers
+        // must not go on a card with a plan's name on it.
+        let unverified = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                         desktopOrganization: "max", claudeCodeOrganization: "team",
+                                                         claudeCodeOrganizationRecorded: false, now: now)
+        XCTAssertTrue(unverified.claudeCodeOrganizationUnverified)
+        XCTAssertNil(unverified.secondCardSources)
     }
 
     func testNothingLiveOnEitherSideStillSaysWhoseItWouldBe() {

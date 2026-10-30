@@ -95,6 +95,15 @@ final class ClaudeUsageReadRulesTests: XCTestCase {
         XCTAssertTrue(refresh.contains("claudeUsageReadsInFlight == 0"))
     }
 
+    /// Claude Code's organization has a card of its own when Claude Desktop is on another, so
+    /// standing down on that hint would let the card lapse until someone pressed Refresh.
+    func testTheAutomaticRefreshDoesNotStandDownForAnotherOrganization() throws {
+        let monitor = try Self.source("Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift")
+        let refresh = try Self.body(of: "func refreshClaudeUsageIfStale(", in: monitor)
+        XCTAssertTrue(refresh.contains("ClaudeUsageSnapshot.shouldAutoFetch("), "still paced")
+        XCTAssertFalse(refresh.contains("otherOrganization"))
+    }
+
     func testTheCardReadsTheMonitorNotTheFiles() throws {
         let provider = try Self.source("Kannu/managers/LLMUsage/ClaudeUsageProvider.swift")
         let apply = try Self.body(of: "private func applyRateLimitWindows(", in: provider)

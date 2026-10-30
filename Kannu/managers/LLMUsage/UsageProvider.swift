@@ -136,6 +136,13 @@ struct UsageSnapshot: Equatable {
     /// expired token) rather than a transient error (429, 500+).
     /// Used by `isFatallyUnconfigured` to drop the card from the Usage tab.
     var isAuthFailure: Bool = false
+    /// Keeps this card's forecast series apart from another organization's under the same window
+    /// keys (`ClaudeUsageSnapshot.readingScope`).
+    var readingScope: String? = nil
+    /// Further cards of this provider: Claude's second organization.
+    var extraCards: [UsageSnapshot] = []
+    /// Limits and nothing else: token totals, the status row and Refresh stay on the first card.
+    var limitsOnly: Bool = false
 
     /// True when the provider has nothing useful to show AND the reason is a definitive
     /// auth failure (not signed-in / expired token / 401 / 403) — NOT a transient error
