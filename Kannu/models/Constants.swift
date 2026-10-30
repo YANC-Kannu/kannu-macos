@@ -1299,10 +1299,6 @@ extension Defaults.Keys {
     /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
     /// and Claude Code's own sign-in with its token's, so it flips between them.
     static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
-    /// When `claudeCodeUsageOrganization` was last settled: the end of Kannu's last `/usage` run
-    /// that fetched. Only a profile in `~/.claude.json` fetched after it says Claude Code moved;
-    /// an older one is a desktop-hosted session's copy being written back.
-    static let claudeCodeUsageOrganizationCheckedAt = Key<Date?>("claudeCodeUsageOrganizationCheckedAt", default: nil)
     /// Organization id to where its windows reset, from Claude Code's cache at Kannu's last run on
     /// that organization (`ClaudeCachedUsage.OrganizationResets`). Claude Desktop's history has no
     /// resets of its own, and Claude Code may be on another organization by the time it is read.

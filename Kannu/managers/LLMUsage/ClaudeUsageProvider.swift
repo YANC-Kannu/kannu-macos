@@ -80,7 +80,22 @@ struct ClaudeUsageProvider: UsageProvider {
             break
         }
         guard let usage = monitor.claudeUsage else { return }
+        snapshot.readingScope = usage.readingScope
+        Self.addLimits(of: usage, to: &snapshot, now: now)
+        // Claude Code's own organization, when Claude Desktop is on another and both have a live
+        // reading: a card of its own, labelled with its plan.
+        if let second = monitor.claudeSecondOrganizationUsage {
+            var card = UsageSnapshot()
+            card.accountTier = second.planName
+            card.readingScope = second.readingScope
+            card.billedCostOnly = true
+            card.limitsOnly = true
+            Self.addLimits(of: second, to: &card, now: now)
+            snapshot.extraCards = [card]
+        }
+    }
 
+    private static func addLimits(of usage: ClaudeUsageSnapshot, to snapshot: inout UsageSnapshot, now: Date) {
         for window in usage.displayWindows(now: now) {
             let limit = UsageLimit(used: window.percent, limit: 100,
                                    resetsAt: window.resetsAt, severity: window.severity,

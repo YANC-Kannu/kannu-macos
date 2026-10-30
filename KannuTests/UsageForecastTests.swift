@@ -179,6 +179,22 @@ final class UsageForecastTests: XCTestCase {
         XCTAssertEqual(UsageWindowReading.label(provider: "cursor", key: "week"), "billing-cycle")
     }
 
+    func testAScopedSnapshotKeepsItsOwnSeriesAndNamesItsPlan() {
+        var team = ClaudeUsageSnapshot(windows: [
+            .init(key: "five_hour", percent: 42, resetsAt: now.addingTimeInterval(3600)),
+            .init(key: "model_scoped:fable", percent: 30, resetsAt: now.addingTimeInterval(86_400), label: "Fable")
+        ], observedAt: now)
+        team.readingScope = "team-id"
+        team.planName = "Team"
+        let readings = UsageWindowReading.readings(fromClaude: team, now: now)
+        XCTAssertEqual(readings.map(\.id), ["claude@team-id:five_hour", "claude@team-id:model_scoped:fable"],
+                       "another organization's window never continues this one's forecast")
+        XCTAssertEqual(readings.map(\.label), ["Team 5-hour", "Team Fable weekly"])
+        XCTAssertEqual(readings.map(\.provider), ["claude", "claude"], "still Claude's for the alerts' switch")
+        XCTAssertEqual(UsageWindowReading.id(provider: "claude", key: "five_hour"), "claude:five_hour",
+                       "the unscoped id is the series already on disk")
+    }
+
     func testClaudeReadingsCarryEachWindowsOwnTime() {
         // A merged snapshot's observedAt is its newest source's; a days-old weekly sample must not
         // be dated now in the forecast.
