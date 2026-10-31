@@ -1326,12 +1326,48 @@ installed build, since nothing automated drives a trackpad.
 
 ---
 
+## 22. A repeating animation in Brain must end by itself
+
+**Rule:** nothing under `Kannu/components/Settings/` uses `.repeatForever`. Closing Brain only orders
+its window out (`SettingsWindowController.close`), so its SwiftUI stays alive, and measured on
+2026-10-30, an animation in an ordered-out window goes on ticking at the display's rate (127 frames
+a second) with nothing on screen. Nothing else will stop it: no `onDisappear` runs either.
+
+**Broken once, for at least a week, and misread as a crash.** Kannu sat at 40-60 % CPU with only the
+notch on screen, after a relaunch at 0.3 %. macOS logged it on 2026-10-22 and 2026-10-29
+(`Kannu_*.cpu_resource.diag`), the main thread in `NSHostingView.layout` every frame with no Kannu
+frame near. A relaunch cleared it until the next Settings highlight (a search result, a deep link).
+
+The cause is the shape of `SettingsHighlightModifier`. Its pulse keyed on `animatePulse` while the
+stroke's colour also read `isActive`. At the 2 s clear `isActive` moves first, so the colour changes
+with no animation; then `onChange` moves `animatePulse` under `.default`, but the colour is already
+0 and does not change again. Nothing replaces its repeating animator, which adds its delta forever.
+The shadow's radius does change, so its animator ends: exactly one is left.
+
+**How it was found, since the stack names no view.** `heap <pid>` showed one
+`AnimatorState<KeyedAnimatableArray<_ShapeStyle_Pack.Key…>>` and one
+`InternalAnimationBox<…BezierAnimation, RepeatAnimation>`, and `leaks <pid> --traceTree=<box>` named
+its owner, `ShapeStyleResolver<Color>`. A one-file `swiftc` harness with the modifier copied in
+reproduced the same two objects at 12.4 % CPU, against 0.0 % for a control that never highlighted
+and 0.0 % for `.repeatCount(3)`. A frame counter in the harness first said "0 frames" and cleared
+the modifier wrongly: it counted its own animated value, not the stroke's. Measure CPU and read
+the heap. Both tools run with no prompt and no window; a debugger attach raises a dialog.
+
+**Guard.** `SettingsAnimationRulesTests`, checked against planted offenders. Not guarded: a
+repeating animation in a view that lives elsewhere but is shown under Settings
+(`SpinningCircleDownloadView` in the download style picker) or a `TimelineView(.animation)` there
+(`NotchShimmerView` in the idle animation previews), which would run on while Brain stays closed on
+that page. Not measured on the installed build through a real highlight.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
+| `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain only orders its window out, so whatever animates here runs on with nothing on screen (entry 22). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

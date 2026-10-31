@@ -312,8 +312,12 @@ private struct SettingsHighlightModifier: ViewModifier {
             )
             .padding(-4)
             .shadow(color: Color.accentColor.opacity(isActive ? 0.25 : 0), radius: animatePulse ? 8 : 2)
+            // Bounded, never `.repeatForever` (docs/REGRESSIONS.md, entry 22). At the clear `isActive`
+            // moves the stroke's colour with no animation, then `animatePulse` moves nothing the
+            // colour reads, so nothing ever replaced its repeating animator. It ran on behind the
+            // closed window, which is only ordered out, at 40-60 % CPU until Kannu quit.
             .animation(
-                isActive ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
+                isActive ? .easeInOut(duration: 0.8).repeatCount(3, autoreverses: true) : .default,
                 value: animatePulse
             )
     }
