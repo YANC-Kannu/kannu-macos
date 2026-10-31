@@ -1452,6 +1452,22 @@ a share picker alive, and are not about hover.
 **Missing:** that the notch really stays open over a popover, a menu or an alert is checked by eye
 on the installed build, with `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" && category == "NotchClose"'`.
 
+**2026-10-29 addendum: "on the notch" includes the windows hanging off it.** David: "the hover on
+calendar out of notch area of kannu closes notch". The task form's reminder is a `.field` date
+picker, and its calendar opens in AppKit's `_NSDatePickerOverlayPanel`. That is a **child window**
+of the notch panel, placed below the body's edge; a probe with the same picker in a borderless panel
+showed `parent === panel` and the panel's `childWindows` listing it. Hover left the body for it, and
+`closeWhenPointerLeaves` found the pointer off `openNotchRect` and logged `Closed: pointerLeft`.
+
+The pointer check now also counts every visible child window of this screen's `KannuWindow` that
+takes the mouse (`attachedWindowFrames`, at any depth). This covers any picker or popover AppKit
+attaches the same way, so no view needs a hold-open token for it.
+
+Guards: `NotchInteractionTests.testAWindowHangingOffTheNotchCountsAsTheNotch` checks the geometry,
+and `testThePointerCheckReadsTheWindowsHangingOffTheNotch` checks that the pointer check reads those
+windows. **Missing:** the AppKit side, that the calendar really is a child window, is only the probe
+above; check by eye on the installed build.
+
 ---
 
 ## Danger zones

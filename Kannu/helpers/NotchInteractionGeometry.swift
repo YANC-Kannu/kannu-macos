@@ -61,8 +61,14 @@ enum NotchInteractionGeometry {
                       width: body.width, height: body.height)
     }
 
-    /// Whether a pointer location is on the open notch, `margin` included on every side.
-    static func isOnOpenNotch(_ point: CGPoint, notch: CGRect, margin: CGFloat = openNotchMargin) -> Bool {
-        notch.insetBy(dx: -margin, dy: -margin).contains(point)
+    /// Whether a pointer location is on the open notch, `margin` included on every side, or on one
+    /// of the `attached` windows hanging off it. Those lie past the body's edge but are the notch
+    /// all the same: the calendar a reminder's date field drops (AppKit's
+    /// `_NSDatePickerOverlayPanel`, a child window of the panel it opens from), a popover. David,
+    /// 2026-10-29: "the hover on calendar out of notch area of kannu closes notch". No margin
+    /// around them: they have their own edges.
+    static func isOnOpenNotch(_ point: CGPoint, notch: CGRect, attached: [CGRect] = [],
+                              margin: CGFloat = openNotchMargin) -> Bool {
+        notch.insetBy(dx: -margin, dy: -margin).contains(point) || attached.contains { $0.contains(point) }
     }
 }

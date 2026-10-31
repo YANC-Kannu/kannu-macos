@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - The notch stays open over the reminder's calendar
+- **Developer label:** "the hover on calendar out of notch area of kannu closes notch"
+- **Agent label:** Claude Code (Opus 5.5) — the close check counts windows attached to the notch window as the notch
+- **Changes:**
+  - With the pointer on the calendar a reminder's date field opens, the notch stays open. That calendar
+    is AppKit's `_NSDatePickerOverlayPanel`, a child window of the notch panel placed past the body's
+    edge, so the pointer check read it as having left.
+  - `isPointerOnOpenNotch` now also counts every visible child window of this screen's `KannuWindow`
+    that takes the mouse, at any depth (`attachedWindowFrames`). A tooltip ignores the mouse and is
+    left out.
+  - docs/REGRESSIONS.md: a dated addendum to entry 22. Tests: `NotchInteractionTests`.
+
 ### 2026-11-01 - The typed search goes once a # or @ word starts
 - **Developer label:** "once user starts with # or @ the search has to go so that he can see ui"
 - **Agent label:** Claude Code (Opus 5.5) — `TaskSuggestionState.quickAddStarted` keeps the typed search away once such a word starts

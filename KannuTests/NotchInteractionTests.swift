@@ -110,6 +110,27 @@ final class NotchInteractionTests: XCTestCase {
         XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.midX, y: rect.minY - margin - 1), notch: rect))
     }
 
+    /// The reminder field's calendar hangs below the body in a window of its own; the pointer on it
+    /// is on the notch (David, 2026-10-29: "the hover on calendar out of notch area of kannu closes
+    /// notch").
+    func testAWindowHangingOffTheNotchCountsAsTheNotch() {
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: body)!
+        let calendar = CGRect(x: rect.midX - 80, y: rect.minY - 170, width: 163, height: 174)
+        let onCalendar = CGPoint(x: calendar.midX, y: calendar.minY + 10)
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(onCalendar, notch: rect), "past the body's edge")
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(onCalendar, notch: rect, attached: [calendar]))
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: calendar.maxX + 2, y: calendar.midY), notch: rect,
+                                                              attached: [calendar]),
+                       "no margin around it: off its edge is off the notch")
+    }
+
+    func testThePointerCheckReadsTheWindowsHangingOffTheNotch() throws {
+        let code = try Self.contentViewCode()
+        let start = try XCTUnwrap(code.range(of: "func isPointerOnOpenNotch("))
+        XCTAssertTrue(code[start.upperBound...].prefix(700).contains("attached: attachedWindowFrames()"),
+                      "a calendar or popover past the body's edge would close the notch under the pointer")
+    }
+
     func testTheOpenRectFollowsASecondScreen() {
         let external = CGRect(x: 1512, y: 200, width: 1920, height: 1080)
         let rect = NotchInteractionGeometry.openNotchRect(screenFrame: external, bodyInWindow: body)!

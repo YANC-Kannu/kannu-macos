@@ -2828,15 +2828,30 @@ struct ContentView: View {
     }
 
     /// Whether `point` (screen coordinates) is on this window's open notch, with
-    /// `NotchInteractionGeometry.openNotchMargin` to spare. False before the body has laid out, or
-    /// when the screen has gone.
+    /// `NotchInteractionGeometry.openNotchMargin` to spare, or on a window hanging off it
+    /// (`attachedWindowFrames`). False before the body has laid out, or when the screen has gone.
     private func isPointerOnOpenNotch(_ point: CGPoint) -> Bool {
         guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }),
               let notch = NotchInteractionGeometry.openNotchRect(screenFrame: screen.frame,
                                                                  bodyInWindow: closeWatch.bodyInWindow) else {
             return false
         }
-        return NotchInteractionGeometry.isOnOpenNotch(point, notch: notch)
+        return NotchInteractionGeometry.isOnOpenNotch(point, notch: notch, attached: attachedWindowFrames())
+    }
+
+    /// The frames of the visible windows hanging off this screen's notch window, at any depth, that
+    /// take the pointer: the reminder field's calendar, which AppKit adds as a child of the panel it
+    /// opens from and places past the body's edge. A tooltip ignores the mouse and is left out. Read
+    /// only while a close waits on the pointer, every 100 ms, over a handful of windows.
+    private func attachedWindowFrames() -> [CGRect] {
+        func descendants(of window: NSWindow) -> [NSWindow] {
+            (window.childWindows ?? []).flatMap { [$0] + descendants(of: $0) }
+        }
+        return NSApp.windows
+            .filter { $0 is KannuWindow && $0.screen?.localizedName == currentScreenName }
+            .flatMap(descendants(of:))
+            .filter { $0.isVisible && !$0.ignoresMouseEvents }
+            .map(\.frame)
     }
 
     // Helper function to check if any popovers are active
