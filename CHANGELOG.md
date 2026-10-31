@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - A task's tags and reminder fill in as its name is typed
+- **Developer label:** "is the search dynamically populating tags and reminder of task as we type that and enter space"
+- **Agent label:** Claude Code (Opus 5.5) — `TaskFormDraft.foldingFinishedQuickAdd` moves finished `#tag` and `@time` words into the form's fields while the title is typed
+- **Changes:**
+  - In the notch's task form, new or edit, and in Brain's New Task, once the title ends in a space its
+    `#tag` and `@time` words leave it for Tags and the reminder. They used to move only at Add or Save.
+  - A word not yet ended by a space stays in the title under its chip. One typed mid-title moves with
+    the next space typed at the end, or at Add or Save.
+  - A day and a time typed apart still combine: `@tomorrow`, then `@5pm`, is tomorrow at 17:00
+    (`TaskFormDraft.quickAddTimes`, in memory like the draft). Clearing the reminder forgets those words.
+  - The session bar, the Tasks popover's Add a task and Brain's title field have no such fields, and
+    keep their chips.
+  - Tests: `TaskQuickAddTests`.
+
 ### 2026-11-01 - The done tick moves beside the play button
 - **Developer label:** "keep the mark as done ticket near the play button it self but sufficiently spaced"
 - **Agent label:** Claude Code (Opus 5.5) — moves `TaskDoneTick` from the start of each row to just left of the play button, and onto the task page

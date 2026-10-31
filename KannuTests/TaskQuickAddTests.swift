@@ -219,6 +219,82 @@ final class TaskQuickAddTests: XCTestCase {
         XCTAssertEqual(draft.foldingQuickAdd(now: wednesday(8), calendar: calendar), draft, "its server's title, untouched")
     }
 
+    // MARK: - As the title is typed (David, 2026-10-29: "as we type that and enter space")
+
+    /// Types `text` at the end of the title, then folds as the form's change handler does.
+    private func typing(_ text: String, into draft: inout TaskFormDraft, at now: Date) {
+        draft.title += text
+        draft = draft.foldingFinishedQuickAdd(now: now, calendar: calendar)
+    }
+
+    func testAWordMovesIntoTheFormOnceASpaceEndsIt() {
+        var draft = TaskFormDraft()
+        let now = wednesday(10, 30)
+        typing("Fix login #work", into: &draft, at: now)
+        XCTAssertEqual(draft.title, "Fix login #work", "not ended yet: it stays, under its chip")
+        XCTAssertEqual(draft.tags, [])
+        typing(" ", into: &draft, at: now)
+        XCTAssertEqual(draft.title, "Fix login ", "a space left to type on")
+        XCTAssertEqual(draft.tags, ["work"])
+        typing("@noon ", into: &draft, at: now)
+        XCTAssertEqual(draft.title, "Fix login ")
+        XCTAssertEqual(draft.reminder, wednesday(12))
+        typing("page", into: &draft, at: now)
+        XCTAssertEqual(draft.title, "Fix login page")
+    }
+
+    func testTagsTypedOneByOneAddUp() {
+        var draft = TaskFormDraft()
+        draft.tagsText = "docs"
+        typing("Plan #a ", into: &draft, at: wednesday(8))
+        typing("#b ", into: &draft, at: wednesday(8))
+        XCTAssertEqual(draft.tags, ["docs", "a", "b"])
+        XCTAssertEqual(draft.title, "Plan ")
+    }
+
+    func testADayAndATimeTypedApartStillCombine() {
+        let now = wednesday(10, 30)
+        var draft = TaskFormDraft()
+        typing("Ship it @tomorrow ", into: &draft, at: now)
+        XCTAssertEqual(draft.reminder, date(day: 29, 9))
+        typing("@5pm ", into: &draft, at: now)
+        XCTAssertEqual(draft.reminder, date(day: 29, 17), "as `@tomorrow @5pm` typed at once")
+        // A time not yet ended by a space combines when the form saves.
+        var saving = TaskFormDraft()
+        typing("Ship it @fri ", into: &saving, at: now)
+        saving.title += "@noon"
+        XCTAssertEqual(saving.foldingQuickAdd(now: now, calendar: calendar).reminder, date(day: 30, 12))
+    }
+
+    func testAClearedReminderForgetsItsWords() {
+        let now = wednesday(10, 30)
+        var draft = TaskFormDraft()
+        typing("Ship it @tomorrow ", into: &draft, at: now)
+        draft.reminder = nil
+        typing("@5pm ", into: &draft, at: now)
+        XCTAssertEqual(draft.reminder, wednesday(17), "today's 17:00, not tomorrow's")
+    }
+
+    func testOnlyASpaceAtTheEndMovesWords() {
+        var draft = TaskFormDraft()
+        draft.title = "Fix #work login"
+        XCTAssertEqual(draft.foldingFinishedQuickAdd(now: wednesday(8), calendar: calendar), draft,
+                       "typed mid-title: moved when the form saves")
+        draft.title = "Fix login "
+        XCTAssertEqual(draft.foldingFinishedQuickAdd(now: wednesday(8), calendar: calendar), draft,
+                       "no word to move: the same draft, so the change handler settles")
+        draft.title = "#work "
+        let folded = draft.foldingFinishedQuickAdd(now: wednesday(8), calendar: calendar)
+        XCTAssertEqual(folded.title, "", "nothing but the word: no space left behind")
+        XCTAssertEqual(folded.tags, ["work"])
+    }
+
+    func testARemoteTasksTitleIsNeverReadAsItIsTyped() {
+        var draft = TaskFormDraft(editing: TaskItem(source: .gitlab, title: "Ticket"))
+        draft.title = "Ticket #work "
+        XCTAssertEqual(draft.foldingFinishedQuickAdd(now: wednesday(8), calendar: calendar), draft)
+    }
+
     // MARK: - Search
 
     func testSearchingAHashTagFindsTheTag() {

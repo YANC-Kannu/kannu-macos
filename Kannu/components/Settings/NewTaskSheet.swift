@@ -82,6 +82,12 @@ struct NewTaskSheet: View {
                     TaskQuickAddChips(text: draft.title, fontSize: 11, trailingInset: 6)
                         .allowsHitTesting(false)
                 }
+                // Once a space ends them, they move into Tags and the reminder below
+                // (`TaskFormDraft.foldingFinishedQuickAdd`), as the notch's form does.
+                .onChange(of: newTask.draft.title) { _, _ in
+                    let folded = newTask.draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
+                    if folded != newTask.draft { newTask.draft = folded }
+                }
             if let existing = TaskItem.reusable(titled: TaskQuickAdd.title(of: draft.title), in: manager.tasks) {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     Text(verbatim: String(localized: "“\(existing.title)” is already in your list."))
