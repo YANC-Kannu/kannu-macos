@@ -57,6 +57,11 @@ struct TaskFormDraft: Equatable {
     var reminder: Date?
     /// Whether the reminder raises a notification; the bell beside it. On for a new task.
     var notifies: Bool
+    /// The `@time` words already moved out of the title while it was typed
+    /// (`foldingFinishedQuickAdd`), so a later one combines with them: `@tomorrow`, then `@5pm`, is
+    /// tomorrow at 17:00. Read only while the reminder they set is still there. In memory, as the
+    /// draft is.
+    var quickAddTimes = ""
 
     /// A new local task.
     init() {
@@ -138,7 +143,29 @@ struct TaskFormDraft: Equatable {
         if !typed.tags.isEmpty {
             folded.tagsText = TaskItem.cleanedTags(tags + typed.tags).joined(separator: ", ")
         }
-        if canSchedule, let reminder = typed.reminder { folded.reminder = reminder }
+        if canSchedule, typed.reminder != nil {
+            // Read again with the `@time` words moved out before, so a day and a time typed apart
+            // still combine; once that reminder is cleared they are forgotten.
+            let earlier = reminder == nil ? [] : quickAddTimes.split(separator: " ")
+            let times = (earlier + typed.tokenText.split(separator: " ").filter { $0.hasPrefix("@") })
+                .joined(separator: " ")
+            folded.reminder = TaskQuickAdd.parse(times, now: now, calendar: calendar).reminder ?? typed.reminder
+            folded.quickAddTimes = times
+        }
+        return folded
+    }
+
+    /// `foldingQuickAdd` while the title is typed (David, 2026-10-29: "populating tags and reminder
+    /// … as we type that and enter space"): once the title ends in a space, the `#tag` and `@time`
+    /// words typed so far leave it for Tags and the reminder at once. A word not yet ended by a space
+    /// stays in the title under its chip, and so does one typed mid-title until the form saves. The
+    /// title keeps a trailing space so typing goes on; a draft with nothing to move comes back as it
+    /// is, so a change handler that calls this settles at once.
+    func foldingFinishedQuickAdd(now: Date, calendar: Calendar) -> TaskFormDraft {
+        guard let last = title.last, last.isWhitespace else { return self }
+        var folded = foldingQuickAdd(now: now, calendar: calendar)
+        guard folded != self else { return self }
+        if !folded.title.isEmpty { folded.title += " " }
         return folded
     }
 

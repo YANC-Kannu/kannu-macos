@@ -170,6 +170,13 @@ struct TimerTaskForm: View {
         // A new task's title goes back to the session bar as it is typed: however the form closes,
         // the bar holds it.
         .onChange(of: draft.title) { _, title in
+            // `#tag` and `@time` words leave the title for Tags and the reminder once a space ends
+            // them (`TaskFormDraft.foldingFinishedQuickAdd`); the title that leaves comes back here.
+            let folded = draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
+            if folded != draft {
+                draft = folded
+                return
+            }
             titleSuggestions.textChanged(to: title)
             if draft.isNew { TimerManager.shared.typedSessionName = TaskFormDraft.barText(title) }
         }
