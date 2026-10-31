@@ -1359,6 +1359,65 @@ repeating animation in a view that lives elsewhere but is shown under Settings
 (`NotchShimmerView` in the idle animation previews), which would run on while Brain stays closed on
 that page. Not measured on the installed build through a real highlight.
 
+**2026-11-01 addendum: closing now takes the content out of the window, and that covers any page.**
+Both views named above were real exposures, and so was a third nobody had listed, the looping
+`AVPlayer` in `SettingsLoopingVideoIcon`. Measured in a `swiftc` harness that compiles the real
+`SettingsWindowController.swift`, `SpinningCircleDownloadView.swift`, `NotchShimmerView.swift` and
+`SettingsLoopingVideoIcon` with stubs around them, closed through `performClose`, off screen, 10 s of
+idle `getrusage`, every run with the same floor of 0.16 % for a static page:
+
+| Page holds | Closed, before | Closed, after | Reopened, after |
+|---|---|---|---|
+| `SpinningCircleDownloadView` | 7.0 % | 0.17 % | 8.6 % |
+| `NotchShimmerView` | 5.8 % | 0.18 % | 7.2 % |
+| the pulse as it was before this entry | 8.1 % | 0.17 % | 10.4 % |
+| `SettingsLoopingVideoIcon` | 5.0 % | 0.16 % | 4.7 % |
+| all four | 13.9 % | 0.16 % | 15.5 % |
+
+`SettingsWindowController.removeContentFromClosedWindow` swaps the hosting view for an empty `NSView`
+a turn after `windowWillClose`; `showWindow` puts it back before ordering in. `hostingView.isHidden`
+does not stop the ticks. A reopened page keeps its animator: the spinner's `AnimatorState` stays in the
+heap, parked, and it spins again without a new `withAnimation`.
+
+**What this does to everything else, so nobody has to rediscover it:**
+
+- **`onDisappear` and `.task` cancellation now run on close, and `onAppear` and `.task` again on
+  every reopening.** The first paragraph of this entry is no longer true of them. Every hook under
+  Settings was read against this. The one that lost work was `SpotifyAuthSettingsSection`, which
+  read the stored cookie over one typed and not yet validated, so it now reads once per visit. An
+  `onAppear` that loads an edit field must do the same.
+- **Published changes wait.** A change published while closed re-evaluates `body`, but its `onChange`
+  runs on reopening. Do not rely on a Settings view to react to anything while Brain is closed. It
+  could never have been relied on: it only held for the page left open.
+- **`TaskDetailPage` still saves on `NSWindow.willCloseNotification`.** The removal is a turn later
+  so that this comes first, and `onDisappear` finds the save already done.
+- **A player does not stop by itself.** `AVPlayer` costs the same out of the window, and said so only
+  once the harness played a real file. Stop it from `viewDidMoveToWindow` or `onDisappear`.
+- **Lottie's Core Animation engine ends the loop for good** when its view leaves the window, at
+  `progress` 1.0, not playing, including after reopening. `LottiePreviewThumbnail` gives the preview a
+  new identity on `onDisappear`. The main-thread engine pauses and resumes by itself (2.3 % to 0.01 %).
+- **Focus scrolls.** With the window as first responder after the swap, a text field on the page takes
+  focus when the window is ordered in and scrolls itself into view, 1500 down to 345 in the harness.
+  `makeFirstResponder(nil)` before the swap, `makeFirstResponder(hostingView)` after it and
+  `.defaultFocus` on the search field did not stop it. The clip views' origins are saved at removal
+  and put back right after the second `makeKeyAndOrderFront` in `showWindow`, the first moment the
+  jump has landed. A deep link scrolls later and still wins. Focus itself is not put back: the first
+  field on the page takes it, with its text selected.
+
+**Two false readings on the way, both from a player or animation that was not running.** The `.mov`
+files here are Git LFS pointers of 131 bytes, in the worktree and in the installed app, since `git lfs`
+is not installed on this Mac: `AVQueuePlayer` reports rate 1 with no item, and the harness read 0.00 %
+in every state until it played a real clip, with its `rate` and `currentTime` printed. Likewise a
+Core Animation Lottie costs nothing on the main thread open or closed, so CPU says nothing about it:
+print `isAnimationPlaying`. Trust a zero only with evidence that the thing was moving.
+
+**Guard.** `SettingsAnimationRulesTests` pins the close, the reopening and its ordering, checked by
+breaking the real controller eight ways; a player under Settings must pause from one of the two hooks;
+a page Lottie must take a new identity; the two saves and the cookie read. `.repeatForever` stays
+banned, since a stuck animator now only waits for the next reopening. Not guarded, and not measured:
+a minimized or fully covered Brain, and the real app itself. The harness compiles the real controller
+and views, not `SettingsView`, so no number here comes from Kannu running with a real page.
+
 ---
 
 ## Danger zones
@@ -1367,7 +1426,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain only orders its window out, so whatever animates here runs on with nothing on screen (entry 22). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

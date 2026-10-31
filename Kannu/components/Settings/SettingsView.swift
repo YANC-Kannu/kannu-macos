@@ -3512,7 +3512,7 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
     let size: CGSize
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: NSRect(origin: .zero, size: size))
+        let view = WindowFollowingView(frame: NSRect(origin: .zero, size: size))
         view.wantsLayer = true
 
         let layer = AVPlayerLayer()
@@ -3520,6 +3520,8 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
         layer.frame = view.bounds
         view.layer?.addSublayer(layer)
         context.coordinator.attach(layer: layer, url: url)
+        let coordinator = context.coordinator
+        view.onWindowChange = { inWindow in coordinator.setPlaying(inWindow) }
         return view
     }
 
@@ -3533,6 +3535,25 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
         func attach(layer: AVPlayerLayer, url: URL) {
             controller = SettingsLoopingPlayerController(url: url, autoPlay: true)
             layer.player = controller?.player
+        }
+
+        func setPlaying(_ playing: Bool) {
+            if playing {
+                controller?.play()
+            } else {
+                controller?.pause()
+            }
+        }
+    }
+
+    /// A player runs on at full cost with its view out of the window, unlike SwiftUI's own
+    /// animations, so it has to be stopped by hand when Brain closes (docs/REGRESSIONS.md, entry 22).
+    private final class WindowFollowingView: NSView {
+        var onWindowChange: ((Bool) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window != nil)
         }
     }
 }
