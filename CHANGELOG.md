@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - A closed Brain costs no CPU, whatever its page animates
+- **Developer label:** "Make a closed Brain window stop costing CPU, whatever its pages animate."
+- **Agent label:** Claude Code (Opus 5.5) — closing Brain takes its SwiftUI out of the window a turn after the close and reopening puts it back, measured at 13.9 % before and 0.16 % after with every animating view on one page
+- **Changes:**
+  - `SettingsWindowController` swaps the hosting view for an empty `NSView` a turn after
+    `windowWillClose`, and `showWindow` puts it back before ordering in. An ordered-out window goes
+    on animating at the display's rate; a view out of the window does not, and keeps its state.
+  - The clip views' origins are saved at removal and restored after `showWindow`'s second
+    `makeKeyAndOrderFront`: a text field takes focus on reopening and scrolls itself into view.
+  - `SettingsLoopingVideoIcon` pauses when its view leaves the window and plays when it returns. It
+    cost 5.0 % behind a closed Brain, and leaving the window alone does not stop an `AVPlayer`.
+  - `LottiePreviewThumbnail` gives a page's Lottie a new identity after each `onDisappear`: its Core
+    Animation engine ends the loop when the view leaves the window and never starts it again.
+  - `SpotifyAuthSettingsSection` reads the stored cookie once per visit, because `onAppear` now runs
+    on every reopening and would overwrite one typed and not yet validated.
+  - The Copy for agent button clears "Copied" when it disappears: its `onDisappear` also cancels the
+    task that would have.
+  - Test: `SettingsAnimationRulesTests` pins all of this, checked against planted offenders and by
+    breaking the real controller eight ways.
+  - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
+
 ### 2026-10-30 - The Settings highlight stops pulsing once it clears
 - **Developer label:** "Check CPU report"
 - **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings

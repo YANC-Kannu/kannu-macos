@@ -409,25 +409,36 @@ struct AnimationPreview: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
 
         case .lottieFile(let url):
-            LottieView(state: LUStateData(
-                type: .loadedFrom(url),
-                speed: animation.speed,
-                loopMode: .loop
-            ))
-            .frame(width: 60, height: 40)
+            LottiePreviewThumbnail(url: url, speed: animation.speed)
+                .frame(width: 60, height: 40)
             
         case .lottieURL(let url):
-            LottieView(state: LUStateData(
-                type: .loadedFrom(url),
-                speed: animation.speed,
-                loopMode: .loop
-            ))
-            .frame(width: 60, height: 40)
+            LottiePreviewThumbnail(url: url, speed: animation.speed)
+                .frame(width: 60, height: 40)
 
         case .videoFile(let url):
             VideoPreviewThumbnail(url: url)
                 .frame(width: 60, height: 40)
         }
+    }
+}
+
+/// Lottie's Core Animation engine ends a loop when its view leaves the window and never starts it
+/// again, so closing Brain would leave the preview stopped (docs/REGRESSIONS.md, entry 22). A new
+/// view each time this one comes back.
+private struct LottiePreviewThumbnail: View {
+    let url: URL
+    let speed: CGFloat
+    @State private var visit = 0
+
+    var body: some View {
+        LottieView(state: LUStateData(
+            type: .loadedFrom(url),
+            speed: speed,
+            loopMode: .loop
+        ))
+        .id(visit)
+        .onDisappear { visit += 1 }
     }
 }
 
