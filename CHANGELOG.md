@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-31 - SonarCloud CI, Dependabot for GitHub Actions (#8)
+- **Developer label:** Setup SonarCloud, Snyk, and CodeRabbit (#8)
+- **Agent label:** SonarCloud macOS workflow, dependabot.yml, sonar-project.properties
+- **Changes:**
+  - Added `.github/workflows/sonarcloud.yml` (macOS runner, `SonarSource/sonarqube-scan-action@v7`,
+    `SONAR_TOKEN` + PR decoration via `GITHUB_TOKEN`; skips fork PRs without secrets).
+  - Added root `sonar-project.properties` for org `yanc-kannu`, project `YANC-Kannu_kannu-macos`,
+    sources `Kannu` + `scripts`, tests `KannuTests`, exclusions for assets and the mirrored
+    `Kannu/Kannu` tree.
+  - Added `.github/dependabot.yml` for weekly grouped bumps to GitHub Actions pins in workflows.
+  - Pinned SonarCloud workflow actions to full commit SHAs; dropped the unused Xcode setup step
+    (the scanner job does not compile the app).
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
