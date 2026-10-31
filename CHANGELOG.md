@@ -4,6 +4,47 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-29 - Act on CodeRabbit's review of #5
+- **Developer label:** CodeRabbit's review of #5: drain descriptor 3 after Python exits, and use the GPL header block in the new test file
+- **Agent label:** Claude Code (Opus 5.5) — the hook wrapper drains fd 3 after a failed Python run; `HookInputLeftoversTests` gets the block header
+- **Changes:**
+  - Hook script v47, both copies: when `python3` exits non-zero, the wrapper reads what is left on
+    fd 3 and drops it. One example is Apple's `/usr/bin/python3` shim on a Mac without the Command
+    Line Tools, which fails before reading anything. v46 read stdin before Python started, so this
+    path never left the host writing into a pipe nobody reads. Without the drain, a 4 MB payload
+    broke the writer's pipe. A successful run costs no extra process, because Python reads fd 3 to
+    the end before anything else and never exits non-zero on purpose.
+  - Test: in `testThePromptIsNeverWrittenToDiskWhenAStepFails`, the failing-`python3` payload is
+    now larger than the pipe buffer, so the test's own write returns only if the payload is drained.
+  - `HookInputLeftoversTests.swift` starts with the `/* Kannu (കണ്ണ്) … */` GPL header block,
+    the same one `HookInputLeftovers.swift` uses.
+
+### 2026-10-29 - Hook payloads never touch the disk
+- **Developer label:** "The agent-status hook script leaves its stdin temp files behind … prompt contents persist on disk indefinitely — a privacy leak"
+- **Agent label:** Claude Code (Opus 5.5) — hook script v47 hands the payload to Python on file descriptor 3 instead of a temp file, and Kannu sweeps the old leftovers at launch
+- **Changes:**
+  - Hook script v47 (`AgentHookInstaller` and its mirror `scripts/kannu-agent-status.sh`): the
+    wrapper duplicates its stdin onto file descriptor 3 (`exec 3<&0`; a closed stdin becomes
+    `/dev/null`) and Python reads the payload from there, so it is never written to disk. v41 to
+    v46 copied it to `.kannu-input.XXXXXX` in `~/.kannu/agent-status/` and relied on Python's
+    `unlink` and a trailing `rm`. Any hook killed between the copy and the delete (the host's
+    timeout, an interrupt, the host quitting; there was no trap, and SIGKILL cannot be trapped)
+    left the whole payload behind. One Mac had 33 such files from 2026-09-17 on, one of them a full
+    `UserPromptSubmit` payload with the prompt text.
+  - Python still caps the payload at 16 MiB, now counted in bytes. Past the cap it reads the rest
+    and drops it, so the host never blocks writing to a pipe nobody reads. The no-`python3` early
+    exit drains stdin the same way.
+  - At launch, `continueLaunch()` removes `.kannu-input.*` files older than 10 minutes from the
+    status directory, on a utility queue, whether or not agent status is on
+    (`HookInputLeftovers`). It reads only names and modification dates, never contents, removes
+    only regular files, and logs only a count.
+  - Tests: a `HookScriptTests` "v47" group checks that the prompt text is in no file anywhere
+    under `HOME` after a normal run, after the no-`python3` early exit, after a failed status
+    write, after `python3` itself fails, and after the hook is killed mid-read (SIGTERM to the
+    hook, SIGKILL to the hook, SIGKILL to the hook and its children). The group also covers a
+    payload past the cap, and runs again under `/usr/bin/python3` 3.9.
+    `HookInputLeftoversTests` covers the sweep's age filter and name filter.
+
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
 - **Agent label:** Claude Code (Opus 5.5) — the six validators in `ClaudeCloudRelay` anchor with `\z`; the relay script's bash-only tests use `[[ ]]` in both copies
