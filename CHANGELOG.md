@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-30 - The Settings highlight stops pulsing once it clears
+- **Developer label:** "Check CPU report"
+- **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings
+- **Changes:**
+  - `SettingsHighlightModifier` pulses with `.repeatCount(3, autoreverses: true)`, not
+    `.repeatForever`. At the 2 s clear, the stroke's colour kept a repeating animator that nothing
+    replaced. Closing Brain only orders its window out, so it ran on at 40-60 % CPU with only the
+    notch on screen until Kannu quit, from the first search result or deep link that highlighted a
+    row. macOS logged it as `cpu_resource` reports on 2026-10-22 and 2026-10-29.
+  - Test: `SettingsAnimationRulesTests` fails on `.repeatForever` under `Kannu/components/Settings/`,
+    and is checked against planted offenders.
+  - `docs/REGRESSIONS.md` gains entry 23 and a Danger zones row.
+
 ### 2026-10-30 - Claude's usage shows a card for each organization
 - **Developer label:** "the usage table of claude is messed up and seem like not fixed, i think its still showing team which is also valid, maybe if a user has both show multiple ones"
 - **Agent label:** Claude Code (Opus 5.5) — a second Claude card when Claude Code and Claude Desktop are on different organizations, each with its plan chip, its forecast series and its alerts
