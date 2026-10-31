@@ -14,6 +14,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     sources `Kannu` + `scripts`, tests `KannuTests`, exclusions for assets and the mirrored
     `Kannu/Kannu` tree.
   - Added `.github/dependabot.yml` for weekly grouped bumps to GitHub Actions pins in workflows.
+  - Pinned SonarCloud workflow actions to full commit SHAs; dropped the unused Xcode setup step
+    (the scanner job does not compile the app).
 
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
