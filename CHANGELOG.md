@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - The typed search goes once a # or @ word starts
+- **Developer label:** "once user starts with # or @ the search has to go so that he can see ui"
+- **Agent label:** Claude Code (Opus 5.5) — `TaskSuggestionState.quickAddStarted` keeps the typed search away once such a word starts
+- **Changes:**
+  - Under the timer tab's bar and a new task's title, the typed search goes as soon as a word starts
+    with `#` or `@`, even a lone `#` or `#12`, so the chips, Tags and the reminder stay in sight.
+  - It stays away after the form moves the word out of the title, until the text is emptied. A form
+    opened on such a word starts with it away. An `@` inside a word (`a@b.com`) does not count.
+  - Tests: `TaskSuggestionTests`.
+
 ### 2026-11-01 - A task's tags and reminder fill in as its name is typed
 - **Developer label:** "is the search dynamically populating tags and reminder of task as we type that and enter space"
 - **Agent label:** Claude Code (Opus 5.5) — `TaskFormDraft.foldingFinishedQuickAdd` moves finished `#tag` and `@time` words into the form's fields while the title is typed
