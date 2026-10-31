@@ -1,0 +1,14 @@
+# Dependabot version updates for pinned GitHub Actions in .github/workflows/.
+# Dependabot security alerts are enabled in repository Settings (Code security).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
