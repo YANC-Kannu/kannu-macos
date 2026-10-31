@@ -23,12 +23,13 @@ import SwiftUI
 /// One task's page (‹ the list it was opened from), in the words of `TaskDetailSummary`, as the
 /// notch's card is, so a task reads the same everywhere:
 ///
-/// - its title, with the short key and where it stands, and ▶ or ■; its source's labels; its tags
-///   as chips that remove themselves, with Add Tags; its time against the estimate, any overtime,
-///   with its estimate typed in place (`TaskEstimateField`) and Add Time;
+/// - its title, with the short key and where it stands, and ▶ or ■ with a local task's done tick
+///   (`TaskDoneTick`) beside it; its source's labels; its tags as chips that remove themselves, with
+///   Add Tags; its time against the estimate, any overtime, with its estimate typed in place
+///   (`TaskEstimateField`) and Add Time;
 /// - its facts, most important first; a local task's reminder; Open in Jira or GitLab, and whether
 ///   its time is offered in Time to log;
-/// - what ends it: Mark Done, Archive or Delete, or, once closed or archived, Reopen and Restore.
+/// - what ends it: the tick, Archive or Delete, or, once closed or archived, Reopen and Restore.
 ///
 /// Its rows carry no highlight ids (docs/SETTINGS.md). A task deleted while its page is open
 /// leaves the page (`TasksSettings`); one gone some other way says so.
@@ -79,9 +80,19 @@ struct TaskDetailPage: View {
         return Section {
             LabeledContent {
                 if task.visibility == .active {
-                    TaskTimingButton(isTimed: isTimed,
-                                     canStart: enableTimerFeature && manager.isReady,
-                                     start: { manager.start(task.id) }, stop: { manager.stopTiming() })
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        // Done by ▶ itself (David, 2026-10-29), not down in Finish. A remote task
+                        // is done in its source.
+                        if TaskDoneTicks.canTick(task) {
+                            TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                         isEnabled: manager.isReady, size: 14) {
+                                manager.toggleDone(task.id)
+                            }
+                        }
+                        TaskTimingButton(isTimed: isTimed,
+                                         canStart: enableTimerFeature && manager.isReady,
+                                         start: { manager.start(task.id) }, stop: { manager.stopTiming() })
+                    }
                 }
             } label: {
                 if task.source == .local {
@@ -295,8 +306,8 @@ struct TaskDetailPage: View {
 
     // MARK: - Done, archived, deleted
 
-    /// A local task is finished here: Mark Done, Archive, or Delete. A remote one is finished in its
-    /// source and archived here — a deleted one would only come back on the next sync.
+    /// A local task is finished here: Archive or Delete (done is the tick by ▶). A remote one is
+    /// finished in its source and archived here — a deleted one would only come back on the next sync.
     @ViewBuilder
     private func endSection(_ task: TaskItem) -> some View {
         let isTimed = manager.timing?.taskID == task.id
@@ -304,8 +315,7 @@ struct TaskDetailPage: View {
             switch task.visibility {
             case .active:
                 if task.source == .local {
-                    SettingsActionRow("Finish", description: "Done keeps its time; Delete removes it.") {
-                        Button("Mark Done") { manager.markDone(task.id) }
+                    SettingsActionRow("Finish", description: "Archive keeps its time; Delete removes it.") {
                         Button("Archive") { manager.archive(task.id) }
                         Button("Delete", role: .destructive) { context.pendingDelete.wrappedValue = task }
                             .disabled(isTimed)

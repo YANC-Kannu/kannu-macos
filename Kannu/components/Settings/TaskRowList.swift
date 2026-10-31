@@ -21,8 +21,8 @@ import Defaults
 import SwiftUI
 
 /// The task rows of a list — a project, a source with one project or none, Local tasks, All tasks —
-/// in the task order, narrowed by `filter`. A row is a local task's done tick (`TaskDoneTick`), the
-/// task's colour dot, its title (two lines at most) and one caption (`TaskRowCaption`), then ▶ or ■
+/// in the task order, narrowed by `filter`. A row is the task's colour dot, its title (two lines at
+/// most) and one caption (`TaskRowCaption`), then a local task's done tick (`TaskDoneTick`), ▶ or ■
 /// and a › to the task's page. Everything else a task can do is on its page and on the row's
 /// right-click menu.
 ///
@@ -71,6 +71,13 @@ struct TaskRowList: View {
         let isTimed = row.timing != nil
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
+                // The tick by ▶ itself (David, 2026-10-29), left of it so ▶ keeps its place.
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                 isEnabled: manager.isReady, size: 14) {
+                        manager.toggleDone(task.id)
+                    }
+                }
                 TaskTimingButton(isTimed: isTimed, canStart: canStart,
                                  start: { manager.start(task.id) }, stop: { manager.stopTiming() })
                 Button {
@@ -163,11 +170,6 @@ struct TaskRowList: View {
                                      now: now, onProjectPage: onProjectPage)
         let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
-            if TaskDoneTicks.canTick(task) {
-                TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady, size: 14) {
-                    manager.toggleDone(task.id)
-                }
-            }
             if showsColorDot {
                 TaskColorDot(color: row.color)
             }

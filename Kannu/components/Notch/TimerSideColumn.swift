@@ -643,19 +643,13 @@ private struct TimerTasksPage: View {
         .frame(height: rowsHeight)
     }
 
-    /// Key and title on one line, "42m of 2h" under it, then ▶. The text is a button of its own:
-    /// clicking it expands the task into its card, in the column's own frame.
+    /// Key and title on one line, "42m of 2h" under it, then a local task's done tick and ▶. The
+    /// text is a button of its own: clicking it expands the task into its card, in the column's own
+    /// frame.
     private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
         let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(spacing: 8) {
-            if TaskDoneTicks.canTick(task) {
-                TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady,
-                             tooltipEdge: tooltipEdge) {
-                    manager.toggleDone(task.id)
-                }
-                .padding(.leading, -6)
-            }
             Button {
                 expand(task)
             } label: {
@@ -686,18 +680,28 @@ private struct TimerTasksPage: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(Text(verbatim: String(localized: "Shows the task's details")))
-            Button {
-                start(task)
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .padding(6)
-                    .contentShape(Circle())
+            // The tick by ▶ itself (David, 2026-10-29), left of it so ▶ keeps its place in every
+            // row; apart enough that neither is clicked for the other.
+            HStack(spacing: 6) {
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady,
+                                 tooltipEdge: tooltipEdge) {
+                        manager.toggleDone(task.id)
+                    }
+                }
+                Button {
+                    start(task)
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(6)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!manager.isReady)
+                .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
+                .hoverTooltip(String(localized: "Start timing"), edge: tooltipEdge)
             }
-            .buttonStyle(.plain)
-            .disabled(!manager.isReady)
-            .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
-            .hoverTooltip(String(localized: "Start timing"), edge: tooltipEdge)
         }
         .padding(.horizontal, 10)
         .frame(height: M.sideTaskRowHeight)
@@ -1360,6 +1364,15 @@ private struct TimerTaskDetail: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!manager.isReady)
+                // Done, a local task's, by Start itself (David, 2026-10-29): it leaves the task
+                // order once the undo window runs out, and the card collapses on its own, as for
+                // Archive.
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                 isEnabled: manager.isReady, size: 12) {
+                        manager.toggleDone(task.id)
+                    }
+                }
                 // Only once there is something to say: "No estimate" beside every untimed
                 // GitLab issue was noise.
                 if summary.showsTime {
@@ -1367,14 +1380,6 @@ private struct TimerTaskDetail: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
-                // Done, a local task's: it leaves the task order once the undo window runs out, and
-                // the card collapses on its own, as for Archive.
-                if TaskDoneTicks.canTick(task) {
-                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
-                                 isEnabled: manager.isReady, size: 12) {
-                        manager.toggleDone(task.id)
-                    }
-                }
                 // Into the archive at once, any task: a remote task's delete. It leaves the task
                 // order, so the card collapses on its own (`TimerTasksPage`'s onChange).
                 Button {

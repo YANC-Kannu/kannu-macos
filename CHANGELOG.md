@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - The done tick moves beside the play button
+- **Developer label:** "keep the mark as done ticket near the play button it self but sufficiently spaced"
+- **Agent label:** Claude Code (Opus 5.5) — moves `TaskDoneTick` from the start of each row to just left of the play button, and onto the task page
+- **Changes:**
+  - In the timer tab's task list and the Tasks popover's Up next, a local task's tick sits just left
+    of ▶, 6 pt from it, so neither is clicked for the other and ▶ keeps its place in every row.
+  - In Brain's task lists it sits just left of ▶ or ■, at the row's usual spacing.
+  - On the notch's task card it sits right after Start, no longer beside Archive.
+  - Brain's task page gains the tick beside ▶ or ■. Mark Done leaves its Finish row, which now reads
+    "Archive keeps its time; Delete removes it."
+
 ### 2026-10-29 - Hook v48: the payload fix and the background-agent turn together
 - **Developer label:** "also install a local build with all these changes"
 - **Agent label:** Claude Code (Opus 5.5) — merges the hook payload fix into the notch-tasks work; both called their hook v47
