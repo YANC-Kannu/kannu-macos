@@ -28,7 +28,6 @@ struct NotchTimerView: View {
     @ObservedObject var timerManager = TimerManager.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
     @Default(.enableTimerFeature) var enableTimerFeature
-    @Default(.enableMinimalisticUI) private var enableMinimalisticUI
     @Default(.timerPresets) private var timerPresets
     @Default(.timerIconColorMode) private var colorMode
     @Default(.timerSolidColor) private var solidColor
@@ -52,8 +51,6 @@ struct NotchTimerView: View {
     @State private var renameDraft = ""
     /// The session the rename began in (`TimerManager.sessionID`).
     @State private var renamingSessionID: UUID?
-    /// Keeps the notch open while a name is being typed (`KannuViewModel.setAutoCloseSuppression`).
-    @State private var nameEditingToken = UUID()
     @FocusState private var focusedNameField: NameField?
     /// The side column's page once one is picked (`TimerSideColumn`). Nil until then, so the tab
     /// opens on `TimerSideColumn.initialPage` from its first frame; cleared each time the tab
@@ -156,7 +153,6 @@ struct NotchTimerView: View {
             }
         }
         .onChange(of: focusedNameField) { previous, current in
-            vm.setAutoCloseSuppression(current != nil, token: nameEditingToken)
             if previous == .rename, current != .rename {
                 commitRename()
             }
@@ -183,8 +179,10 @@ struct NotchTimerView: View {
             if form == nil { pendingSessionName = timerManager.typedSessionName }
         }
         .onChange(of: pendingSessionName) { _, newValue in
-            if newValue.count > TimerSessionName.maxLength {
-                pendingSessionName = String(newValue.prefix(TimerSessionName.maxLength))
+            // Room for `#tag` and `@time` past the name (`TaskQuickAdd`); the name is cut to
+            // `maxLength` when it starts.
+            if newValue.count > TimerSessionName.maxTypedLength {
+                pendingSessionName = String(newValue.prefix(TimerSessionName.maxTypedLength))
             }
             // The pick lasts while the bar still says its name: editing or clearing the text drops it.
             sessionPick = sessionPick?.kept(typed: pendingSessionName)
@@ -199,10 +197,9 @@ struct NotchTimerView: View {
         // Closing the notch or switching tabs removes this view without a focus change.
         .onDisappear {
             commitRename()
-            vm.setAutoCloseSuppression(false, token: nameEditingToken)
         }
         // A click into another app leaves the field focused in a window that is no longer key: save
-        // the rename and drop the focus, which lets the notch auto-close again. A half-typed
+        // the rename and drop the focus. A half-typed
         // next-session name is kept on `TimerManager.typedSessionName` while the notch is closed.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
@@ -261,9 +258,7 @@ struct NotchTimerView: View {
             activePresetID: timerManager.activePresetId,
             startPreset: { preset in
                 startSession(duration: preset.duration, preset: preset, fallback: preset.name)
-                if !enableMinimalisticUI {
-                    coordinator.currentView = .timer
-                }
+                coordinator.currentView = .timer
             },
             taskStarted: taskStarted,
             editTask: { openTaskForm(.edit($0)) }
@@ -280,9 +275,7 @@ struct NotchTimerView: View {
         sessionPick = nil
         focusedNameField = nil
         taskForm = nil
-        if !enableMinimalisticUI {
-            coordinator.currentView = .timer
-        }
+        coordinator.currentView = .timer
     }
 
     /// The form in the composer's place; the page switch's animation and reduced-motion rule.
@@ -613,9 +606,13 @@ struct NotchTimerView: View {
         let pick: TimerSessionPick
         switch row {
         case .task(let id, let title):
-            pick = TimerSessionPick(taskID: id, name: TimerSessionName.cleaned(title) ?? typed, typed: typed)
+            // The `#tag` and `@time` words typed stay after the task's title, and go to it.
+            let tokens = TaskQuickAdd.parse(typed, now: Date(), calendar: .current).tokenText
+            let name = [TimerSessionName.cleaned(title) ?? typed, tokens].filter { !$0.isEmpty }.joined(separator: " ")
+            pick = TimerSessionPick(taskID: id, name: name, typed: typed, tokens: tokens)
         case .newTask:
-            pick = TimerSessionPick(taskID: nil, name: TimerSessionName.cleaned(typed) ?? typed, typed: typed)
+            pick = TimerSessionPick(taskID: nil, name: TimerSessionName.cleaned(typed, limit: TimerSessionName.maxTypedLength) ?? typed,
+                                    typed: typed)
         }
         suggestions.close(on: pick.name)
         sessionPick = pick
@@ -902,9 +899,7 @@ struct NotchTimerView: View {
     private func startCustomTimer() {
         withAnimation(.smooth) {
             startSession(duration: customDurationInSeconds, fallback: String(localized: "Custom Timer"))
-            if !enableMinimalisticUI {
-                coordinator.currentView = .timer
-            }
+            coordinator.currentView = .timer
         }
     }
 
@@ -967,6 +962,12 @@ struct NotchTimerView: View {
                 .onExitCommand(perform: exitName)
                 .accessibilityLabel(Text("Session name"))
                 .accessibilityHint(Text(verbatim: pickHint))
+            // What a typed `#tag` and `@time` will do to the task this starts: a picked one takes
+            // only the words typed before the pick, never words of its own title.
+            if isTasksPageAvailable {
+                let picked = sessionPick?.taskID != nil
+                TaskQuickAddChips(text: picked ? (sessionPick?.tokens ?? "") : pendingSessionName, requiresName: !picked)
+            }
             if isTasksPageAvailable, let taskID = sessionPick?.taskID {
                 TimerTaskPickInfo(taskID: taskID, lost: pickLost)
             }
@@ -1024,19 +1025,24 @@ struct NotchTimerView: View {
         // With a form open, a new task's title is the bar's text: read what the form left, not
         // this view's copy, which the form's closing has not refreshed yet.
         let typed = form == nil ? pendingSessionName : timerManager.typedSessionName
-        let plain = {
+        let plain = { (name: String) in
             TimerManager.shared.startTimer(
                 duration: duration,
-                name: TimerSessionName.resolved(typed: typed, fallback: fallback),
+                name: TimerSessionName.resolved(typed: name, fallback: fallback),
                 preset: preset,
                 fallbackName: fallback
             )
         }
         let route = TimerTypedStart.route(tasksAvailable: isTasksPageAvailable, typed: typed, pick: sessionPick)
         if route == .plain {
-            plain()
+            // No task is made (tasks off, or nothing but `#tag` and `@time` typed): the words do
+            // nothing, so the name is the text as typed.
+            plain(typed)
         } else {
-            TimerTaskForm.startNamed(route, typed: typed, duration: duration, preset: preset, otherwise: plain)
+            // A picked task takes only the words typed before the pick (`TimerSessionPick.tokens`).
+            let startText = sessionPick?.taskID != nil ? (sessionPick?.tokens ?? "") : typed
+            TimerTaskForm.startNamed(route, typed: startText, duration: duration, preset: preset,
+                                     otherwise: { plain(TaskQuickAdd.title(of: typed)) })
         }
         // Written directly as well: "" again would never reach the observer (REGRESSIONS entry 10).
         pendingSessionName = ""

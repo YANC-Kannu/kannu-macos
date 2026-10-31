@@ -14,6 +14,7 @@ struct ClaudeUsageProvider: UsageProvider {
         var snapshot = UsageSnapshot()
         snapshot.lastUpdated = now
 
+        var records: [UsageRecord]?
         if FileManager.default.fileExists(atPath: root.path) {
             let files = jsonlFiles(under: root)
             if !files.isEmpty {
@@ -21,11 +22,7 @@ struct ClaudeUsageProvider: UsageProvider {
                 // actually read would tell somebody who has not run Claude for eight days that their
                 // logs are unavailable, with a fix-it button for a problem they do not have, instead
                 // of an honest zero.
-                snapshot = await JSONLUsageParser.aggregate(
-                    files: UsageWindows.recentlyModified(files, now: now),
-                    now: now,
-                    cache: usageCache
-                )
+                records = await usageCache.records(files: UsageWindows.recentlyModified(files, now: now), now: now)
             } else {
                 snapshot.logsUnavailable = true
             }
@@ -44,6 +41,11 @@ struct ClaudeUsageProvider: UsageProvider {
         // API call — the OAuth/keychain path this used to take could not read the credential
         // format reliably and produced a permanent "credentials unparseable" error.
         await applyRateLimitWindows(to: &snapshot, now: now)
+        // After the limits: the week and the 5-hour block follow the plan's own windows when those
+        // limits carry their resets.
+        if let records {
+            JSONLUsageParser.addTotals(counting: records, to: &snapshot, now: now)
+        }
         // Claude usage is covered by a subscription, so per-token pricing estimates are
         // meaningless here — show token counts, never dollars.
         snapshot.billedCostOnly = true
@@ -62,18 +64,43 @@ struct ClaudeUsageProvider: UsageProvider {
     /// when nothing usable is cached.
     @MainActor
     private func applyRateLimitWindows(to snapshot: inout UsageSnapshot, now: Date) {
-        // The tier badge is Claude Code's plan. When Claude Code is on another organization than
-        // the one the bars follow, that badge would name the wrong plan beside them.
-        if CursorAgentStatusMonitor.shared.claudeUsageHint == .otherOrganization {
-            snapshot.accountTier = nil
+        // The tier badge is the plan `~/.claude.json` names, which flips between organizations.
+        // When Claude Code and Claude Desktop are on different ones, it names the plan whose bars
+        // are on the card instead — Desktop's, or Claude Code's when Desktop has no reading — so the
+        // bars are labelled with their plan; nil when Kannu has not seen that plan.
+        let monitor = CursorAgentStatusMonitor.shared
+        switch monitor.claudeUsageHint {
+        case .otherOrganization:
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.desktop
             snapshot.accountNote = nil
+        case .otherOrganizationWithoutDesktopReading:
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.claudeCode
+            snapshot.accountNote = nil
+        case .signInNeeded, nil:
+            break
         }
-        guard let usage = CursorAgentStatusMonitor.shared.claudeUsage else { return }
+        guard let usage = monitor.claudeUsage else { return }
+        snapshot.readingScope = usage.readingScope
+        Self.addLimits(of: usage, to: &snapshot, now: now)
+        // Claude Code's own organization, when Claude Desktop is on another and both have a live
+        // reading: a card of its own, labelled with its plan.
+        if let second = monitor.claudeSecondOrganizationUsage {
+            var card = UsageSnapshot()
+            card.accountTier = second.planName
+            card.readingScope = second.readingScope
+            card.billedCostOnly = true
+            card.limitsOnly = true
+            Self.addLimits(of: second, to: &card, now: now)
+            snapshot.extraCards = [card]
+        }
+    }
 
+    private static func addLimits(of usage: ClaudeUsageSnapshot, to snapshot: inout UsageSnapshot, now: Date) {
         for window in usage.displayWindows(now: now) {
             let limit = UsageLimit(used: window.percent, limit: 100,
                                    resetsAt: window.resetsAt, severity: window.severity,
-                                   observedAt: window.observedAt ?? usage.observedAt)
+                                   observedAt: window.observedAt ?? usage.observedAt,
+                                   notAfter: window.notAfter)
             switch window.key {
             case ClaudeUsageSnapshot.fiveHourKey: snapshot.sessionLimit = limit
             case ClaudeUsageSnapshot.sevenDayKey: snapshot.weekLimit = limit

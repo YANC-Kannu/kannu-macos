@@ -35,6 +35,16 @@ enum CursorUsageEventDecoder {
         /// Prompt-side total the way Cursor's dashboard counts it.
         var totalInput: Int { input + cacheWrite + cacheRead }
         var isEmpty: Bool { totalInput + output == 0 }
+
+        /// Adds these counts to `totals` in the split every provider's card uses: Cursor's
+        /// `inputTokens` holds no cache tokens, so it is the uncached input, and its cache reads stay
+        /// out of the headline, as Claude's and Codex's do.
+        func add(to totals: inout UsageTotals) {
+            totals.uncachedInputTokens += input
+            totals.cacheWriteTokens += cacheWrite
+            totals.cacheReadTokens += cacheRead
+            totals.outputTokens += output
+        }
     }
 
     static func tokenUsageDict(in event: [String: Any]) -> [String: Any]? {

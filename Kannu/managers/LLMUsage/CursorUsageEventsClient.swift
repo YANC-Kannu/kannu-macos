@@ -99,8 +99,7 @@ struct CursorUsageEventsClient {
                 let costUSD = eventCostUSD(event: event, model: model, counts: counts)
 
                 func addTokens(_ totals: inout UsageTotals) {
-                    totals.inputTokens += counts.totalInput
-                    totals.outputTokens += counts.output
+                    counts.add(to: &totals)
                 }
 
                 func addCost(_ totals: inout UsageTotals) {

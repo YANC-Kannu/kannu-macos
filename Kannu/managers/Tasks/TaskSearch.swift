@@ -29,7 +29,10 @@ import Foundation
 /// Pure, in the logic target.
 enum TaskSearch {
     static func matches(_ task: TaskItem, query: String) -> Bool {
+        // "#work" finds the tag "work": tags are kept without their `#` (`TaskItem.cleanedTags`).
         let words = query.split(whereSeparator: \.isWhitespace)
+            .map { $0.drop(while: { $0 == "#" }) }
+            .filter { !$0.isEmpty }
         guard !words.isEmpty else { return true }
         let fields = searchable(task)
         return words.allSatisfy { word in
@@ -67,9 +70,11 @@ extension TaskSearch {
 
     /// The tasks offered for `typed`, best first: the same title (`TaskItem.nameKey`), then titles
     /// that start with it, then any other match (a word of the title, a key, a tag, a label). Each
-    /// group keeps the order given, the user's own. Nothing under the minimum length.
+    /// group keeps the order given, the user's own. Nothing under the minimum length. Searched by
+    /// the name alone: the `#tag` and `@time` words a new task's name carries (`TaskQuickAdd`) are
+    /// not part of any title, and would empty the list.
     static func suggestions(_ tasks: [TaskItem], typed: String, limit: Int = suggestionLimit) -> [TaskItem] {
-        guard let query = TaskItem.cleanedTitle(typed), query.count >= suggestionMinimumLength else { return [] }
+        guard let query = TaskItem.cleanedTitle(TaskQuickAdd.title(of: typed)), query.count >= suggestionMinimumLength else { return [] }
         let key = TaskItem.nameKey(query)
         let start = folded(query)
         var same: [TaskItem] = [], starting: [TaskItem] = [], other: [TaskItem] = []
@@ -109,15 +114,28 @@ struct TaskSuggestionState: Equatable {
     var isHovered = false
     /// The text Esc, Return, Tab or a pick closed the list on; it shows again once the text differs.
     private(set) var closedOn: String?
+    /// A `#tag` or `@time` word was started in this text (David, 2026-10-29: "once user starts with
+    /// # or @ the search has to go so that he can see ui"): the list stays away, so the chips, Tags
+    /// and the reminder those words fill in are in sight, also once the form has moved the words out
+    /// of the title. Back once the text is emptied.
+    private(set) var quickAddStarted = false
 
     init(closedOn: String? = nil) {
         self.closedOn = closedOn
+        quickAddStarted = closedOn.map(Self.startsQuickAdd) ?? false
+    }
+
+    /// Whether `typed` has a word starting with `#` or `@`, even one not yet a tag or a time ("#",
+    /// "#12"). An `@` inside a word ("a@b.com") is not one.
+    static func startsQuickAdd(_ typed: String) -> Bool {
+        typed.split(whereSeparator: \.isWhitespace).contains { $0.hasPrefix("#") || $0.hasPrefix("@") }
     }
 
     /// The rows for the tasks found for `typed`: none without a task, so a name that matches
-    /// nothing leaves the composer alone; else the tasks, then the New row.
+    /// nothing leaves the composer alone; else the tasks, then the New row, named as the task will
+    /// be: without its `#tag` and `@time` words (`TaskQuickAdd`).
     static func rows(for tasks: [TaskItem], typed: String) -> [Row] {
-        guard !tasks.isEmpty, let name = TaskItem.cleanedTitle(typed) else { return [] }
+        guard !tasks.isEmpty, let name = TaskItem.cleanedTitle(TaskQuickAdd.title(of: typed)) else { return [] }
         return tasks.map { Row.task(id: $0.id, title: $0.title) } + [.newTask(name)]
     }
 
@@ -127,7 +145,8 @@ struct TaskSuggestionState: Equatable {
 
     /// Whether the list shows for its field: `enabled` (the bar with tasks on and nothing picked; a
     /// new task's title), text typed, the field focused or the pointer on the list while no other
-    /// field has focus, and not closed on this text. With no rows there is nothing to show.
+    /// field has focus, not closed on this text, and no `#tag` or `@time` word started
+    /// (`quickAddStarted`). With no rows there is nothing to show.
     func shows(enabled: Bool, typed: String, fieldFocused: Bool, otherFieldFocused: Bool = false) -> Bool {
         wantsToShow(enabled: enabled, typed: typed, fieldFocused: fieldFocused, otherFieldFocused: otherFieldFocused)
             && !rows.isEmpty
@@ -136,6 +155,7 @@ struct TaskSuggestionState: Equatable {
     /// `shows`, before the rows are known: the list is in place, to find them.
     func wantsToShow(enabled: Bool, typed: String, fieldFocused: Bool, otherFieldFocused: Bool = false) -> Bool {
         enabled && !typed.isEmpty && (fieldFocused || (isHovered && !otherFieldFocused)) && !isClosed(for: typed)
+            && !quickAddStarted
     }
 
     /// What a key does while the field has the list.
@@ -173,10 +193,16 @@ struct TaskSuggestionState: Equatable {
         rows = new
     }
 
-    /// The text changed: no highlight, and a list closed on other text may show again.
+    /// The text changed: no highlight, and a list closed on other text may show again. A `#` or `@`
+    /// word sends it away until the text is emptied.
     mutating func textChanged(to typed: String) {
         highlighted = nil
         if closedOn != typed { closedOn = nil }
+        if typed.allSatisfy(\.isWhitespace) {
+            quickAddStarted = false
+        } else if Self.startsQuickAdd(typed) {
+            quickAddStarted = true
+        }
     }
 
     mutating func close(on typed: String) {

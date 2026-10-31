@@ -127,20 +127,23 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(page.contains("TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)"))
     }
 
-    /// The search field holds the notch open only while it has focus, under a `@State` token, and
-    /// lets go when the page goes or the notch's window stops being key; so do the Time to log
-    /// cards' fields, each under its entry's id.
-    func testTheTextFieldsHoldTheNotchOnlyWhileFocused() throws {
+    /// The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`), which also
+    /// waits while any menu tracks. The timer tab's fields and menus hold nothing open of their own
+    /// (David, 2026-10-28: the hold-open rules go); a click into another app still drops a field's
+    /// focus.
+    func testTheTimerTabsFieldsAndMenusHoldNothingOpen() throws {
+        for path in [Self.sideColumnPath, Self.notchTimerPath, "Kannu/components/Notch/TimerTaskForm.swift",
+                     "Kannu/components/Settings/TimeToLogSection.swift"] {
+            let code = Self.code(try Self.raw(path))
+            XCTAssertFalse(code.contains("setAutoCloseSuppression("), "\(path) holds the notch open again")
+            XCTAssertFalse(code.contains("NSMenu.didBeginTrackingNotification"),
+                           "\(path) watches menus itself: ContentView's close waits for every menu")
+        }
         let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
-        XCTAssertTrue(page.contains("@State private var searchEditingToken = UUID()"))
-        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(isFocused, token: searchEditingToken)"))
-        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(false, token: searchEditingToken)"), "the page going never releases it")
         XCTAssertTrue(page.contains("NSWindow.didResignKeyNotification") && page.contains("note.object is KannuWindow"))
-        XCTAssertTrue(page.contains(".environment(\\.worklogFieldFocus, draftFocusChanged)"), "the Log page's fields hold the notch")
-        XCTAssertTrue(page.contains("releaseDraftFocus()"))
-        XCTAssertTrue(page.contains("NSMenu.didBeginTrackingNotification") && page.contains("NSMenu.didEndTrackingNotification"),
-                      "the filter menu is a window of its own: the notch must stay open while it tracks")
-        XCTAssertTrue(page.contains("vm.setAutoCloseSuppression(false, token: menuTrackingToken)"))
+        let content = Self.code(try Self.raw("Kannu/ContentView.swift"))
+        XCTAssertTrue(content.contains("NSMenu.didBeginTrackingNotification") && content.contains("NSMenu.didEndTrackingNotification"),
+                      "a menu is a window of its own, often below the notch: the close must wait while one tracks")
     }
 
     /// Refresh follows the popover's one rule (`TaskSyncSummary`) and tells when each source last
@@ -203,15 +206,12 @@ final class TimerSideColumnRulesTests: XCTestCase {
 
     /// The task form is a view of its own that reads `TasksManager.shared`, so `NotchTimerView`
     /// never touches it; Add & Start starts through the manager and does nothing more when nothing
-    /// starts; its fields and menu hold the notch open only while in use; Escape and the × leave.
+    /// starts; a click into another app drops its focus; Escape and the × leave.
     func testTheTaskFormOwnsTheManagerAndLetsTheNotchGo() throws {
         let form = Self.code(try Self.raw("Kannu/components/Notch/TimerTaskForm.swift"))
         XCTAssertTrue(form.contains("@ObservedObject private var manager = TasksManager.shared"))
         XCTAssertTrue(form.contains("guard andStart, manager.start(id) else {"), "a failed start must not report one")
-        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(field != nil, token: editingToken)"))
-        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(false, token: editingToken)"), "the form going never releases it")
         XCTAssertTrue(form.contains("NSWindow.didResignKeyNotification") && form.contains("note.object is KannuWindow"))
-        XCTAssertTrue(form.contains("NSMenu.didBeginTrackingNotification") && form.contains("NSMenu.didEndTrackingNotification"))
         // Escape and the × leave through `dismiss()`: an edit's unsaved draft is dropped, a new task's
         // typed text is kept for when the form opens again (David, 2026-10-23).
         XCTAssertTrue(form.contains(".onExitCommand(perform: dismiss)"))
@@ -542,7 +542,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
     }
 
     func testTheMirrorScannerCatchesPlantedOffenders() {
-        let contentView = "    .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)\n    return activeCornerRadiusInsets.opened.bottom - 5"
+        let contentView = "    .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)\n    return cornerRadiusInsets.opened.bottom - 5"
         let sizes = "    return 640\nlet cornerRadiusInsets = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))"
         let notch = Self.metricsTheNotchUses.map { "x(\($0))" }.joined(separator: "\n")
         XCTAssertEqual(Self.mirrorProblems(contentView: contentView, sizes: sizes, notch: notch), [])
@@ -807,7 +807,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         if !contentView.contains(".padding([.horizontal, .bottom], vm.notchState == .open ? \(Int(M.openNotchBottomPadding)) : 0)") {
             problems.append("the open notch's bottom padding is not openNotchBottomPadding")
         }
-        if !(contentView.contains("activeCornerRadiusInsets.opened.bottom - 5")
+        if !(contentView.contains("cornerRadiusInsets.opened.bottom - 5")
              && sizes.contains("(opened: (top: 19, bottom: \(Int(M.openNotchSideInset + 5)))")) {
             problems.append("the open notch's side inset is not openNotchSideInset")
         }

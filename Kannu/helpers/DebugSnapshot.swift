@@ -156,7 +156,7 @@ enum DebugSnapshots {
                 let dots = notchDotsRow.padding(12).background(fill.color).notchAppearance(scheme, fill: fill.color)
                 await render(AnyView(dots), name: "fill-\(fill.name)-dots", dark: true, width: 360,
                              into: request.directory, scale: 3)
-                let chats = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: false)
+                let chats = NotchAgentStatusView(snapshotSessions: sessions)
                     .environmentObject(viewModel)
                     .frame(height: 560)
                     .background(fill.color)
@@ -174,35 +174,41 @@ enum DebugSnapshots {
             }
         }
         if request.tabs == nil || request.tabs?.contains("recentChats") == true {
-            // The agent tab's width inside a 640 pt panel, a 420 pt minimalistic one and the 340 pt island.
+            // The agent tab's width inside a 640 pt panel.
             let sessions = DebugSnapshotFixtures.recentChats(now: Date())
             ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: sessions))
-            for (width, minimalistic) in [(CGFloat(612), false), (360, true), (280, true)] {
-                let view = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: minimalistic)
-                    .environmentObject(viewModel)
-                    .frame(height: 560)
-                    .background(Color.black)
-                    .environment(\.colorScheme, .dark)
-                await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
-            }
+            let width: CGFloat = 612
+            let view = NotchAgentStatusView(snapshotSessions: sessions)
+                .environmentObject(viewModel)
+                .frame(height: 560)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+            await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
         }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
-            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read.
+            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read, and
+            // Claude's two organizations on their own and beside the others.
             // Each sits in the 142 pt slot a notched MacBook leaves, with a red line at its floor,
             // so a card running past it shows.
             let now = Date()
             let fixtures = DebugSnapshotFixtures.usageResults(now: now)
-            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool)] = [
-                ("usage-1", [.claude], nil, false),
-                ("usage-2", [.claude, .cursor], nil, false),
-                ("usage-3", [.claude, .cursor, .codex], nil, false),
-                ("usage-status", [.claude, .cursor], .signInNeeded, false),
-                ("usage-stale", [.claude, .cursor], nil, true),
+            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool, twoOrganizations: Bool)] = [
+                ("usage-1", [.claude], nil, false, false),
+                ("usage-2", [.claude, .cursor], nil, false, false),
+                ("usage-3", [.claude, .cursor, .codex], nil, false, false),
+                ("usage-status", [.claude, .cursor], .signInNeeded, false, false),
+                ("usage-stale", [.claude, .cursor], nil, true, false),
+                ("usage-orgs-2", [.claude], nil, false, true),
+                ("usage-orgs-3", [.claude, .cursor], nil, false, true),
+                ("usage-orgs-4", [.claude, .cursor, .codex], nil, false, true),
             ]
             for notchWidth in [CGFloat(640), 690] {
                 for board in boards {
-                    let results = fixtures(board.providers, board.stale)
+                    var results = fixtures(board.providers, board.stale)
+                    if board.twoOrganizations {
+                        results = DebugSnapshotFixtures.withSecondOrganization(results, now: now)
+                    }
                     let view = NotchLLMUsageView(snapshotResults: results, snapshotRefreshStatus: board.status,
                                                  snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: now),
                                                  snapshotNotchWidth: notchWidth)
@@ -510,19 +516,39 @@ enum DebugSnapshotFixtures {
             var cursor = UsageSnapshot()
             cursor.accountTier = "Pro"
             cursor.weekLimit = limit(62, now.addingTimeInterval(9 * 86_400))
-            cursor.today = UsageTotals(inputTokens: 1_100_000, outputTokens: 120_000, costUSD: 3.4)
-            cursor.week = UsageTotals(inputTokens: 7_400_000, outputTokens: 680_000, costUSD: 21.8)
+            cursor.today = UsageTotals(uncachedInputTokens: 1_100_000, cacheReadTokens: 9_800_000, outputTokens: 120_000, costUSD: 3.4)
+            cursor.week = UsageTotals(uncachedInputTokens: 7_400_000, cacheReadTokens: 64_000_000, outputTokens: 680_000, costUSD: 21.8)
             cursor.onDemandSpendUSD = 3.4
             var codex = UsageSnapshot()
             codex.accountTier = "Plus"
             codex.billedCostOnly = true
             codex.sessionLimit = limit(20, now.addingTimeInterval(2 * 3600))
             codex.weekLimit = limit(55, now.addingTimeInterval(3 * 86_400))
-            codex.today = UsageTotals(inputTokens: 300_000, outputTokens: 40_000)
-            codex.week = UsageTotals(inputTokens: 2_100_000, outputTokens: 260_000)
+            codex.today = UsageTotals(uncachedInputTokens: 300_000, cacheReadTokens: 2_700_000, outputTokens: 40_000)
+            codex.week = UsageTotals(uncachedInputTokens: 2_100_000, cacheReadTokens: 19_000_000, outputTokens: 260_000)
             let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
             return all.filter { providers.contains($0.key) }
         }
+    }
+
+    /// Claude Code on Team beside Claude Desktop's Max: Claude's second card, as
+    /// `ClaudeUsageProvider` builds it.
+    static func withSecondOrganization(_ results: [ProviderID: UsageResult], now: Date) -> [ProviderID: UsageResult] {
+        guard case .success(var claude)? = results[.claude] else { return results }
+        let observed = now.addingTimeInterval(-120)
+        var team = UsageSnapshot()
+        team.accountTier = "Team"
+        team.readingScope = "team"
+        team.billedCostOnly = true
+        team.limitsOnly = true
+        team.sessionLimit = UsageLimit(used: 31, limit: 100, resetsAt: now.addingTimeInterval(2 * 3600), severity: nil,
+                                       observedAt: observed)
+        team.weekLimit = UsageLimit(used: 64, limit: 100, resetsAt: now.addingTimeInterval(4 * 86_400), severity: nil,
+                                    observedAt: observed)
+        claude.extraCards = [team]
+        var results = results
+        results[.claude] = .success(claude)
+        return results
     }
 
     /// A pace that fills the 5-hour window before it resets, and a week heading for 95 %.
@@ -585,11 +611,13 @@ enum DebugSnapshotFixtures {
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
-        let totals: [String: (input: Int, output: Int)] = ["live": (1_400_000, 45_000), "ended": (820_000, 22_300)]
+        let totals: [String: (newInput: Int, output: Int, context: Int)] = ["live": (83_000, 40_000, 458_000),
+                                                                            "ended": (21_400, 22_300, 96_000)]
         var out: [String: TurnTokens] = [:]
         for session in sessions {
             guard let total = totals[session.conversationID], let turn = session.turn, let offset = turn.transcriptOffset else { continue }
-            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, input: total.input, output: total.output)
+            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, newInput: total.newInput,
+                                                     output: total.output, context: total.context)
         }
         return out
     }

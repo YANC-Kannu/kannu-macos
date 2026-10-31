@@ -57,6 +57,11 @@ struct TaskFormDraft: Equatable {
     var reminder: Date?
     /// Whether the reminder raises a notification; the bell beside it. On for a new task.
     var notifies: Bool
+    /// The `@time` words already moved out of the title while it was typed
+    /// (`foldingFinishedQuickAdd`), so a later one combines with them: `@tomorrow`, then `@5pm`, is
+    /// tomorrow at 17:00. Read only while the reminder they set is still there. In memory, as the
+    /// draft is.
+    var quickAddTimes = ""
 
     /// A new local task.
     init() {
@@ -87,17 +92,19 @@ struct TaskFormDraft: Equatable {
 
     // MARK: - The timer tab's bar and a new task's title: one text
 
-    /// What the timer tab's session bar shows for `title` (`TimerSessionName`, at most 40
-    /// characters); "" when nothing is left.
+    /// What the timer tab's session bar shows for `title` (`TimerSessionName`, at most
+    /// `maxTypedLength` characters, so a title's `#tag` and `@time` words fit); "" when nothing is
+    /// left.
     static func barText(_ title: String) -> String {
-        TimerSessionName.cleaned(title) ?? ""
+        TimerSessionName.cleaned(title, limit: TimerSessionName.maxTypedLength) ?? ""
     }
 
     /// Whether `bar`, the session bar's text, is this draft's title: the same `TaskItem.nameKey`, so
     /// case, accents and a title cut to the bar's 40 characters still match. Never for an empty bar.
     func isTitled(_ bar: String) -> Bool {
-        guard let key = TaskItem.nameKey(bar) else { return false }
-        return TaskItem.nameKey(title) == key
+        // By the name alone: `#tag` and `@time` words are not part of it (`TaskQuickAdd`).
+        guard let key = TaskItem.nameKey(TaskQuickAdd.title(of: bar)) else { return false }
+        return TaskItem.nameKey(TaskQuickAdd.title(of: title)) == key
     }
 
     /// The draft New Task opens on, `kept` being the kept new-task draft. An empty bar opens `kept`
@@ -117,9 +124,49 @@ struct TaskFormDraft: Equatable {
     var tags: [String] { TaskItem.parsedTags(tagsText) }
 
     /// A new task or a local one needs a title; a remote one keeps its server's. An estimate that
-    /// cannot be read is fixed first, never dropped without a word.
+    /// cannot be read is fixed first, never dropped without a word. The title is what is left once
+    /// its `#tag` and `@time` words are taken out: "#work @noon" alone names nothing.
     var canSave: Bool {
-        (!canEditTitle || TaskItem.cleanedTitle(title) != nil) && estimateReading != .unreadable
+        (!canEditTitle || TaskItem.cleanedTitle(TaskQuickAdd.title(of: title)) != nil) && estimateReading != .unreadable
+    }
+
+    /// The `#tag` and `@time` words typed in the title (`TaskQuickAdd`), moved into the form's own
+    /// fields: the title without them, their tags after the form's, and their reminder over the
+    /// form's, being the later word. What saving reads, for a new task and an edit alike; a draft
+    /// with no such word comes back as it is.
+    func foldingQuickAdd(now: Date, calendar: Calendar) -> TaskFormDraft {
+        guard canEditTitle else { return self }
+        let typed = TaskQuickAdd.parse(title, now: now, calendar: calendar)
+        guard typed.hasTokens else { return self }
+        var folded = self
+        folded.title = typed.title
+        if !typed.tags.isEmpty {
+            folded.tagsText = TaskItem.cleanedTags(tags + typed.tags).joined(separator: ", ")
+        }
+        if canSchedule, typed.reminder != nil {
+            // Read again with the `@time` words moved out before, so a day and a time typed apart
+            // still combine; once that reminder is cleared they are forgotten.
+            let earlier = reminder == nil ? [] : quickAddTimes.split(separator: " ")
+            let times = (earlier + typed.tokenText.split(separator: " ").filter { $0.hasPrefix("@") })
+                .joined(separator: " ")
+            folded.reminder = TaskQuickAdd.parse(times, now: now, calendar: calendar).reminder ?? typed.reminder
+            folded.quickAddTimes = times
+        }
+        return folded
+    }
+
+    /// `foldingQuickAdd` while the title is typed (David, 2026-10-29: "populating tags and reminder
+    /// … as we type that and enter space"): once the title ends in a space, the `#tag` and `@time`
+    /// words typed so far leave it for Tags and the reminder at once. A word not yet ended by a space
+    /// stays in the title under its chip, and so does one typed mid-title until the form saves. The
+    /// title keeps a trailing space so typing goes on; a draft with nothing to move comes back as it
+    /// is, so a change handler that calls this settles at once.
+    func foldingFinishedQuickAdd(now: Date, calendar: Calendar) -> TaskFormDraft {
+        guard let last = title.last, last.isWhitespace else { return self }
+        var folded = foldingQuickAdd(now: now, calendar: calendar)
+        guard folded != self else { return self }
+        if !folded.title.isEmpty { folded.title += " " }
+        return folded
     }
 
     /// What saving changes on `task`, in the order the manager applies it: only what differs.

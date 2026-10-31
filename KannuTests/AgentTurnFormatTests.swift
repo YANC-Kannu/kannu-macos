@@ -20,8 +20,8 @@
 
 import XCTest
 
-/// What a Recent chats row shows beside the light: "1h 53m 54s" / "212 tools · 1.4M in · 45k out",
-/// and "Ran …" once the request ended.
+/// What a Recent chats row shows beside the light: "1h 53m 54s" /
+/// "212 tools · 83k in · 40k out · 458k context", and "Ran …" once the request ended.
 final class AgentTurnFormatTests: XCTestCase {
     typealias F = AgentTurnFormat
     private let t0 = Date(timeIntervalSince1970: 1_789_000_000)
@@ -57,22 +57,26 @@ final class AgentTurnFormatTests: XCTestCase {
     }
 
     func testTheSecondLineFallsBackWidestFirst() {
-        let tokens = TurnTokens(startedAt: t0, startOffset: 0, input: 1_400_000, output: 45_000)
-        XCTAssertEqual(F.tokens(tokens), "1.4M in · 45k out")
-        let both = F.metricsLines(toolCalls: 212, tokens: tokens)
-        XCTAssertEqual(both.full, "212 tools · 1.4M in · 45k out")
-        XCTAssertEqual(both.tokensOnly, "1.4M in · 45k out")
-        XCTAssertEqual(both.toolsOnly, "212 tools")
-        let tokensAlone = F.metricsLines(toolCalls: 0, tokens: tokens)
-        XCTAssertEqual(tokensAlone.full, "1.4M in · 45k out")
-        XCTAssertNil(tokensAlone.tokensOnly, "never the same line twice")
-        XCTAssertNil(tokensAlone.toolsOnly)
-        let toolsAlone = F.metricsLines(toolCalls: 3, tokens: nil)
-        XCTAssertEqual(toolsAlone.full, "3 tools")
-        XCTAssertNil(toolsAlone.tokensOnly)
-        XCTAssertNil(toolsAlone.toolsOnly)
-        let nothing = F.metricsLines(toolCalls: 0, tokens: nil)
-        XCTAssertNil(nothing.full, "no empty line")
+        let tokens = TurnTokens(startedAt: t0, startOffset: 0, newInput: 83_000, cacheRead: 24_000_000,
+                                output: 40_000, context: 458_000)
+        XCTAssertEqual(F.tokens(tokens), "83k in · 40k out · 458k context", "the summed cache reads are never shown")
+        XCTAssertEqual(F.tokens(tokens, withContext: false), "83k in · 40k out")
+        XCTAssertEqual(F.metricsLines(toolCalls: 212, tokens: tokens), [
+            "212 tools · 83k in · 40k out · 458k context",
+            "83k in · 40k out · 458k context",
+            "212 tools · 83k in · 40k out",
+            "83k in · 40k out",
+            "212 tools",
+        ])
+        XCTAssertEqual(F.metricsLines(toolCalls: 0, tokens: tokens),
+                       ["83k in · 40k out · 458k context", "83k in · 40k out"], "never the same line twice")
+        var noContext = tokens
+        noContext.context = nil
+        XCTAssertEqual(F.metricsLines(toolCalls: 212, tokens: noContext),
+                       ["212 tools · 83k in · 40k out", "83k in · 40k out", "212 tools"],
+                       "no call of the chat's own yet: no context, and no line twice")
+        XCTAssertEqual(F.metricsLines(toolCalls: 3, tokens: nil), ["3 tools"])
+        XCTAssertEqual(F.metricsLines(toolCalls: 0, tokens: nil), [], "no empty line")
     }
 
     func testTheSpokenFormSpellsTheUnits() {
@@ -80,11 +84,11 @@ final class AgentTurnFormatTests: XCTestCase {
         XCTAssertEqual(F.spokenCount(45_000), "45 thousand")
         XCTAssertEqual(F.spokenCount(1_400_000), "1.4 million")
         XCTAssertEqual(F.spokenCount(2_000_000_000), "2 billion")
-        let tokens = TurnTokens(startedAt: t0, startOffset: 0, input: 1_400_000, output: 45_000)
+        let tokens = TurnTokens(startedAt: t0, startOffset: 0, newInput: 1_400_000, output: 45_000, context: 458_000)
         let spoken = F.accessibilityText(.ended(7392), now: t0, toolCalls: 212, tokens: tokens)
         XCTAssertTrue(spoken.hasPrefix("Ran for "), spoken)
         XCTAssertTrue(spoken.contains("212 tool calls"), spoken)
-        XCTAssertTrue(spoken.hasSuffix("1.4 million tokens in, 45 thousand out"), spoken)
+        XCTAssertTrue(spoken.hasSuffix("1.4 million tokens in, 45 thousand out, 458 thousand tokens of context"), spoken)
         XCTAssertTrue(F.accessibilityText(.live(since: t0), now: t0.addingTimeInterval(65), toolCalls: 1, tokens: nil)
             .contains("1 tool call"))
     }

@@ -20,12 +20,25 @@ import Foundation
 
 /// A Claude request's tokens, added up from its transcripts (the chat's own from the size the hook
 /// recorded at the turn's start, and every subagent transcript the turn wrote).
+///
+/// Every model call of a turn reads the chat's whole context again, from the prompt cache, so summing
+/// what each call read counts that context once per call: a turn with 83 k new input tokens and a
+/// 458 k context showed "24M in". The sums here are of what is new; the context is a size, not a sum.
 struct TurnTokens: Equatable {
     /// Which turn these belong to: a card shows them only when both match its own turn.
     let startedAt: Date
     let startOffset: Int64
-    var input: Int
+    /// Input the model had not seen: uncached input plus cache writes, summed over every call.
+    var newInput: Int
+    /// Context read back from the cache, summed over every call. Kept, not shown: mostly the same
+    /// tokens again and again.
+    var cacheRead: Int = 0
+    /// Output, summed over every call.
     var output: Int
+    /// The chat's context at its latest call: that one call's uncached input, cache writes and cache
+    /// reads. Taken from the main transcript only, never a subagent's, and replaced by each call,
+    /// never summed. nil until the turn's first call is written.
+    var context: Int? = nil
 }
 
 /// What to follow for one chat card.
@@ -77,12 +90,18 @@ struct ClaudeTranscriptTokenAccumulator {
     let windowStart: Date
     private(set) var readOffset: Int64
     private(set) var fileID: UInt64?
-    private(set) var input = 0
+    /// Uncached input plus cache writes.
+    private(set) var newInput = 0
+    private(set) var cacheRead = 0
     private(set) var output = 0
+    /// The latest call's whole prompt (`UsageRecord.promptTokens`), from a record that is not a
+    /// sidechain's. Only the main transcript's is shown; the reader ignores a subagent file's.
+    private(set) var context: Int?
     private var partial = Data()
     private var skippingToNewline = false
     private var seenOrder: [String] = []
-    private var seen = Set<String>()
+    /// What has been counted for each message, so a later line of it adds only what it reports beyond.
+    private var seen: [String: UsageRecord] = [:]
 
     init(startOffset: Int64, windowStart: Date) {
         readOffset = max(0, startOffset)
@@ -138,21 +157,50 @@ struct ClaudeTranscriptTokenAccumulator {
               object["type"] as? String == "assistant",
               let record = ClaudeUsageLine.parse(object),
               record.timestamp >= windowStart else { return }
+        var counted = record
         if let key = record.dedupKey {
-            guard seen.insert(key).inserted else { return }
-            seenOrder.append(key)
-            if seenOrder.count > Self.seenLimit {
-                seen.remove(seenOrder.removeFirst())
+            if let earlier = seen[key] {
+                // Another line of a message already counted. Usually the same usage again; in Claude
+                // Code 2.1.219–2.1.304 subagent files the first line was a mid-stream snapshot and a
+                // later one carries the real output, so add whatever this one reports beyond it.
+                counted = earlier.merging(record)
+                seen[key] = counted
+                add(uncached: counted.uncachedInputTokens - earlier.uncachedInputTokens,
+                    cacheWrite: counted.cacheWriteTokens - earlier.cacheWriteTokens,
+                    cacheRead: counted.cacheReadTokens - earlier.cacheReadTokens,
+                    output: counted.outputTokens - earlier.outputTokens)
+            } else {
+                seen[key] = record
+                seenOrder.append(key)
+                if seenOrder.count > Self.seenLimit {
+                    seen[seenOrder.removeFirst()] = nil
+                }
+                add(uncached: record.uncachedInputTokens, cacheWrite: record.cacheWriteTokens,
+                    cacheRead: record.cacheReadTokens, output: record.outputTokens)
             }
+        } else {
+            add(uncached: record.uncachedInputTokens, cacheWrite: record.cacheWriteTokens,
+                cacheRead: record.cacheReadTokens, output: record.outputTokens)
         }
-        input += record.inputTokens
-        output += record.outputTokens
+        // A sidechain record is a subagent's call written into the chat's own file (older Claude
+        // Code): its context is not the chat's.
+        if object["isSidechain"] as? Bool != true {
+            context = counted.promptTokens
+        }
+    }
+
+    private mutating func add(uncached: Int, cacheWrite: Int, cacheRead: Int, output: Int) {
+        newInput += uncached + cacheWrite
+        self.cacheRead += cacheRead
+        self.output += output
     }
 
     private mutating func restart() {
         readOffset = 0
-        input = 0
+        newInput = 0
+        cacheRead = 0
         output = 0
+        context = nil
         partial.removeAll(keepingCapacity: false)
         skippingToNewline = false
         seenOrder.removeAll()
@@ -194,7 +242,7 @@ final class ClaudeTurnTokenReader: @unchecked Sendable {
         for request in requests {
             let subagents = Self.subagentTranscripts(under: request.subagentDirectory, modifiedSince: request.windowStart)
             guard !subagents.truncated else { continue }   // hide rather than undercount
-            var total = TurnTokens(startedAt: request.startedAt, startOffset: request.startOffset, input: 0, output: 0)
+            var total = TurnTokens(startedAt: request.startedAt, startOffset: request.startOffset, newInput: 0, output: 0)
             var complete = true
             var available = true
             for (path, startOffset) in [(request.mainPath, request.startOffset)] + subagents.paths.map({ ($0, Int64(0)) }) {
@@ -207,8 +255,13 @@ final class ClaudeTurnTokenReader: @unchecked Sendable {
                 case .unavailable: available = false
                 }
                 entries[key] = (accumulator, now)
-                total.input += accumulator.input
+                total.newInput += accumulator.newInput
+                total.cacheRead += accumulator.cacheRead
                 total.output += accumulator.output
+                if path == request.mainPath {
+                    // The chat's context is its own latest call's; a subagent has a context of its own.
+                    total.context = accumulator.context
+                }
             }
             if !complete { result.behind = true }
             if complete && available { result.tokens[request.conversationID] = total }

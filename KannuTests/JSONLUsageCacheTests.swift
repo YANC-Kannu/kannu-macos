@@ -19,10 +19,12 @@
 import XCTest
 
 /// The usage aggregator reads each transcript once and then only what was appended, and still counts
-/// exactly what the old whole-file, every-line parse counted.
+/// exactly what a whole-file, every-line parse counts.
 ///
-/// `everyLineParse` below is the old algorithm, kept verbatim as the oracle: read the file whole, split
-/// on newlines, parse every line, week guard, then first-of-each-dedup-key across files.
+/// `everyLineParse` below is that parse, the oracle: read the file whole, split on newlines, parse
+/// every line, week guard, then one record per dedup key across files, at its first line's place and
+/// with each count the largest of its lines (it kept the first line whole until a mid-stream first
+/// line was found to lose output).
 final class JSONLUsageCacheTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_789_000_000)
     private var root: URL!
@@ -57,12 +59,13 @@ final class JSONLUsageCacheTests: XCTestCase {
 
     /// Claude's shape: usage under `message`, key = message id + request id.
     private func claude(_ id: String, request: String = "req", hoursAgo: Double = 1, input: Int = 10,
-                        cacheRead: Int = 0, output: Int = 5, model: String = "claude-opus-4") -> Data {
+                        cacheWrite: Int = 0, cacheRead: Int = 0, output: Int = 5, model: String = "claude-opus-4",
+                        stopReason: Any = "end_turn") -> Data {
         line(["type": "assistant", "timestamp": stamp(hoursAgo), "requestId": request,
-              "message": ["id": id, "model": model, "role": "assistant",
+              "message": ["id": id, "model": model, "role": "assistant", "stop_reason": stopReason,
                           "content": [["type": "text", "text": "done"]],
                           "usage": ["input_tokens": input, "cache_read_input_tokens": cacheRead,
-                                    "cache_creation_input_tokens": 0, "output_tokens": output]]])
+                                    "cache_creation_input_tokens": cacheWrite, "output_tokens": output]]])
     }
 
     /// `ClaudeUsageLine`'s top-level fallback: usage, model and request id at the top level. No
@@ -97,27 +100,37 @@ final class JSONLUsageCacheTests: XCTestCase {
     }
 
     private func describe(_ r: UsageRecord) -> String {
-        "\(r.timestamp.timeIntervalSince1970)|\(r.model)|\(r.inputTokens)|\(r.outputTokens)|\(r.dedupKey ?? "-")"
+        "\(r.timestamp.timeIntervalSince1970)|\(r.model)|\(r.uncachedInputTokens)|\(r.cacheWriteTokens)|"
+            + "\(r.cacheReadTokens)|\(r.outputTokens)|\(r.dedupKey ?? "-")"
     }
 
-    /// The pre-change algorithm, the oracle every incremental result must equal.
+    /// The whole-file algorithm, the oracle every incremental result must equal.
     private func everyLineParse(_ files: [URL], now: Date) -> [String] {
         let weekStart = now.addingTimeInterval(-UsageWindows.week)
-        var seen = Set<String>()
-        var out: [String] = []
+        var position: [String: Int] = [:]
+        var out: [UsageRecord] = []
         for file in files {
             guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
             for line in content.split(separator: "\n") {
                 guard let rec = ClaudeUsageLine.parse(Data(String(line).utf8)) else { continue }
                 guard rec.timestamp >= weekStart else { continue }
                 if let key = rec.dedupKey {
-                    if seen.contains(key) { continue }
-                    seen.insert(key)
+                    if let index = position[key] {
+                        let kept = out[index]
+                        out[index] = UsageRecord(
+                            timestamp: kept.timestamp, model: kept.model,
+                            uncachedInputTokens: max(kept.uncachedInputTokens, rec.uncachedInputTokens),
+                            cacheWriteTokens: max(kept.cacheWriteTokens, rec.cacheWriteTokens),
+                            cacheReadTokens: max(kept.cacheReadTokens, rec.cacheReadTokens),
+                            outputTokens: max(kept.outputTokens, rec.outputTokens), dedupKey: key)
+                        continue
+                    }
+                    position[key] = out.count
                 }
-                out.append(describe(rec))
+                out.append(rec)
             }
         }
-        return out
+        return out.map(describe)
     }
 
     private func refresh(_ cache: JSONLUsageCache, _ files: [URL], at date: Date? = nil) -> (records: [String], stats: JSONLUsageScanStats) {
@@ -315,7 +328,7 @@ final class JSONLUsageCacheTests: XCTestCase {
 
     // MARK: - De-duplication
 
-    func testDeduplicationAcrossFilesKeepsTheFirstInListingOrder() throws {
+    func testDeduplicationAcrossFilesKeepsTheFirstPlaceInListingOrder() throws {
         let a = try file("a.jsonl", [claude("m1", request: "r1", hoursAgo: 1, input: 11)])
         let b = try file("b.jsonl", [claude("m1", request: "r1", hoursAgo: 2, input: 11), claude("m2", request: "r2")])
         let cache = JSONLUsageCache(label: "test")
@@ -323,12 +336,37 @@ final class JSONLUsageCacheTests: XCTestCase {
         let ab = refresh(cache, [a, b]).records
         XCTAssertEqual(ab, everyLineParse([a, b], now: now))
         XCTAssertEqual(ab.count, 2)
-        XCTAssertTrue(ab[0].hasPrefix("\(now.addingTimeInterval(-3600).timeIntervalSince1970)|"), "a's copy wins")
+        XCTAssertTrue(ab[0].hasPrefix("\(now.addingTimeInterval(-3600).timeIntervalSince1970)|"), "a's copy's time")
 
         let ba = refresh(cache, [b, a]).records
         XCTAssertEqual(ba, everyLineParse([b, a], now: now))
         XCTAssertEqual(ba.count, 2)
-        XCTAssertEqual(refresh(cache, [b, a]).stats.bytesRead, 0, "order changes the winner, not the reads")
+        XCTAssertEqual(refresh(cache, [b, a]).stats.bytesRead, 0, "order changes the time kept, not the reads")
+    }
+
+    /// Claude Code 2.1.219–2.1.304 wrote a subagent message's first line mid-stream (`stop_reason`
+    /// null, output 2–16) and its real output on a later line; 2.1.308 writes identical lines. One
+    /// record per message, with the larger counts, whichever line, file or refresh carries them.
+    func testAMidStreamFirstLineDoesNotHideTheMessagesRealOutput() throws {
+        let streaming = claude("m1", request: "r1", output: 3, stopReason: NSNull())
+        let final = claude("m1", request: "r1", cacheWrite: 40, output: 912)
+        let a = try file("agent-a.jsonl", [streaming, toolResult("x"), final, claude("m2", request: "r2", output: 7)])
+        let cache = JSONLUsageCache(label: "test")
+        let first = refresh(cache, [a]).records
+        XCTAssertEqual(first, everyLineParse([a], now: now))
+        XCTAssertEqual(first.count, 2)
+        XCTAssertTrue(first[0].hasSuffix("|10|40|0|912|m1-r1"), first[0])
+
+        // The later line arriving in a later refresh, and in another file, still raises the count.
+        let b = try file("agent-b.jsonl", [claude("m3", request: "r3", output: 2, stopReason: NSNull())])
+        XCTAssertTrue(refresh(cache, [a, b]).records[2].hasSuffix("|10|0|0|2|m3-r3"))
+        try append(claude("m3", request: "r3", output: 600), to: b)
+        let c = try file("agent-c.jsonl", [claude("m1", request: "r1", output: 950)])
+        let later = refresh(cache, [a, b, c]).records
+        XCTAssertEqual(later, everyLineParse([a, b, c], now: now))
+        XCTAssertTrue(later[0].hasSuffix("|10|40|0|950|m1-r1"), later[0])
+        XCTAssertTrue(later[2].hasSuffix("|10|0|0|600|m3-r3"), later[2])
+        XCTAssertEqual(later.count, 3)
     }
 
     func testARecordOutsideTheWeekNeverClaimsAKey() throws {

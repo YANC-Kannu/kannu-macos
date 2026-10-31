@@ -66,12 +66,151 @@ final class NotchInteractionTests: XCTestCase {
     /// A global monitor cannot consume a click: one on leftMouseDown in the notch view let a click
     /// meant for a menu item or tab beside the notch land there *and* open the panel over it.
     func testNoGlobalMouseDownMonitorInTheNotchView() throws {
-        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(contentsOf: root.appendingPathComponent("Kannu/ContentView.swift"), encoding: .utf8)
-        let code = source.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+        let code = try Self.contentViewCode()
         XCTAssertFalse(code.contains("addGlobalMonitorForEvents(matching: [.leftMouseDown]"),
                        "a click in another app must never open the notch (docs/REGRESSIONS.md entry 18)")
         XCTAssertTrue(code.contains("addGlobalMonitorForEvents(matching: [.leftMouseUp]"),
                       "the open panel's click-elsewhere close should still be here")
+    }
+
+    // MARK: - The open notch (docs/REGRESSIONS.md entry 22)
+
+    /// The open body as SwiftUI lays it out in its window: 640 × 230, flush with the window's top.
+    private let body = CGRect(x: 120, y: 0, width: 640, height: 230)
+
+    func testTheOpenRectIsTheBodyPinnedToTheTopAndCentred() {
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: body)!
+        XCTAssertEqual(rect.size, body.size)
+        XCTAssertEqual(rect.maxY, screen.maxY, "flush with the top edge, as the window is")
+        XCTAssertEqual(rect.midX, screen.midX, "centred, as the window is; the body's x in it does not matter")
+    }
+
+    func testABodyBelowTheWindowTopKeepsItsDistance() {
+        // An island: the pill sits a few points below the top of its window.
+        let island = CGRect(x: 20, y: 6, width: 400, height: 180)
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: island)!
+        XCTAssertEqual(rect.maxY, screen.maxY - 6)
+        XCTAssertEqual(rect.minY, screen.maxY - 186)
+    }
+
+    func testABodyNotLaidOutYetHasNoRect() {
+        XCTAssertNil(NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: .zero))
+    }
+
+    func testTheOpenNotchCountsItsMarginAndNothingPastIt() {
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: body)!
+        let margin = NotchInteractionGeometry.openNotchMargin
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.midX, y: rect.midY), notch: rect))
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.midX, y: screen.maxY), notch: rect),
+                      "pinned against the top edge")
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.maxX + margin - 1, y: rect.midY), notch: rect),
+                      "resting on the edge never flaps it shut")
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.midX, y: rect.minY - margin + 1), notch: rect))
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.maxX + margin + 1, y: rect.midY), notch: rect))
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: rect.midX, y: rect.minY - margin - 1), notch: rect))
+    }
+
+    /// The reminder field's calendar hangs below the body in a window of its own; the pointer on it
+    /// is on the notch (David, 2026-10-29: "the hover on calendar out of notch area of kannu closes
+    /// notch").
+    func testAWindowHangingOffTheNotchCountsAsTheNotch() {
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: screen, bodyInWindow: body)!
+        let calendar = CGRect(x: rect.midX - 80, y: rect.minY - 170, width: 163, height: 174)
+        let onCalendar = CGPoint(x: calendar.midX, y: calendar.minY + 10)
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(onCalendar, notch: rect), "past the body's edge")
+        XCTAssertTrue(NotchInteractionGeometry.isOnOpenNotch(onCalendar, notch: rect, attached: [calendar]))
+        XCTAssertFalse(NotchInteractionGeometry.isOnOpenNotch(CGPoint(x: calendar.maxX + 2, y: calendar.midY), notch: rect,
+                                                              attached: [calendar]),
+                       "no margin around it: off its edge is off the notch")
+    }
+
+    func testThePointerCheckReadsTheWindowsHangingOffTheNotch() throws {
+        let code = try Self.contentViewCode()
+        let start = try XCTUnwrap(code.range(of: "func isPointerOnOpenNotch("))
+        XCTAssertTrue(code[start.upperBound...].prefix(700).contains("attached: attachedWindowFrames()"),
+                      "a calendar or popover past the body's edge would close the notch under the pointer")
+    }
+
+    func testTheOpenRectFollowsASecondScreen() {
+        let external = CGRect(x: 1512, y: 200, width: 1920, height: 1080)
+        let rect = NotchInteractionGeometry.openNotchRect(screenFrame: external, bodyInWindow: body)!
+        XCTAssertEqual(rect.midX, external.midX)
+        XCTAssertEqual(rect.maxY, external.maxY)
+    }
+
+    /// Every auto-close of the open notch decides on where the pointer is. A close read off the
+    /// latched `isHovering` shut the notch under a still pointer once a popover, a menu or an
+    /// alert had taken the hover away (David, 2026-10-28: "it randomly closes even when the
+    /// mouse is in the notch area").
+    func testEveryAutoCloseGoesThroughThePointerCheck() throws {
+        XCTAssertEqual(Self.closeProblems(in: try Self.contentViewCode()), [])
+    }
+
+    func testTheCloseScannerCatchesPlantedOffenders() {
+        let fixed = """
+            .onChange(of: vm.shouldRecheckHover) { _, _ in
+                closeWhenPointerLeaves(.popoverClosed)
+            }
+            private func closeWhenPointerLeaves(_ reason: NotchCloseReason) {
+                hoverTask = Task { @MainActor in
+                    if shouldPreventAutoClose() || closeWatch.trackingMenus > 0 { continue }
+                    if isPointerOnOpenNotch(NSEvent.mouseLocation) { continue }
+                    vm.close()
+                }
+            }
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseUp]) { [weak vm] _ in
+                guard !self.isPointerOnOpenNotch(location) else { return }
+                vm.close()
+            }
+            """
+        XCTAssertEqual(Self.closeProblems(in: fixed), [])
+        let stale = fixed.replacingOccurrences(of: "closeWhenPointerLeaves(.popoverClosed)",
+                                               with: "runAfter(0.1) { if vm.notchState == .open && !isHovering { vm.close() } }")
+        XCTAssertEqual(Self.closeProblems(in: stale), ["a close is decided by the latched isHovering"])
+        XCTAssertEqual(Self.closeProblems(in: fixed.replacingOccurrences(of: "if isPointerOnOpenNotch(NSEvent.mouseLocation) { continue }", with: "")),
+                       ["closeWhenPointerLeaves does not check where the pointer is"])
+        XCTAssertEqual(Self.closeProblems(in: fixed.replacingOccurrences(of: " || closeWatch.trackingMenus > 0", with: "")),
+                       ["closeWhenPointerLeaves closes while a menu tracks"])
+        XCTAssertEqual(Self.closeProblems(in: fixed.replacingOccurrences(of: "guard !self.isPointerOnOpenNotch(location) else { return }", with: "")),
+                       ["a click that falls through onto the notch closes it"])
+    }
+
+    // MARK: - Scanning
+
+    private static func contentViewCode() throws -> String {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Kannu/ContentView.swift"), encoding: .utf8)
+        return source.split(separator: "\n").filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+    }
+
+    private static func closeProblems(in code: String) -> [String] {
+        var problems: [String] = []
+        // Every `vm.close()` that reads `isHovering` in the few lines before it.
+        let lines = code.components(separatedBy: "\n")
+        for (index, line) in lines.enumerated() where line.contains("vm.close()") {
+            let window = lines[max(0, index - 3)...index].joined(separator: "\n")
+            if window.contains("!isHovering") || window.contains("!self.isHovering") {
+                problems.append("a close is decided by the latched isHovering")
+            }
+        }
+        if let start = code.range(of: "func closeWhenPointerLeaves(") {
+            let body = String(code[start.upperBound...].prefix(1200))
+            // Where the pointer is now; the outside-click monitor's own check reads the click's place.
+            if !body.contains("isPointerOnOpenNotch(NSEvent.mouseLocation)") {
+                problems.append("closeWhenPointerLeaves does not check where the pointer is")
+            }
+            if !body.contains("closeWatch.trackingMenus > 0") {
+                problems.append("closeWhenPointerLeaves closes while a menu tracks")
+            }
+        } else {
+            problems.append("closeWhenPointerLeaves( not found")
+        }
+        if let monitor = code.range(of: "addGlobalMonitorForEvents(matching: [.leftMouseUp]") {
+            let body = String(code[monitor.upperBound...].prefix(900))
+            if !body.contains("isPointerOnOpenNotch(") {
+                problems.append("a click that falls through onto the notch closes it")
+            }
+        }
+        return problems
     }
 }

@@ -94,20 +94,6 @@ struct WorklogDraftCard: View {
     }
 }
 
-/// The notch's hook into a Time to log card's fields: called with the entry and whether one of its
-/// fields has focus, so the notch can stay open while the user types (`vm.setAutoCloseSuppression`
-/// under the entry's id). Nil in Brain, whose window stays open on its own.
-private struct WorklogFieldFocusKey: EnvironmentKey {
-    static let defaultValue: ((UUID, Bool) -> Void)? = nil
-}
-
-extension EnvironmentValues {
-    var worklogFieldFocus: ((UUID, Bool) -> Void)? {
-        get { self[WorklogFieldFocusKey.self] }
-        set { self[WorklogFieldFocusKey.self] = newValue }
-    }
-}
-
 /// One entry's card: a row whose label says what would be logged where, and whose trailing column
 /// holds the fields and the answers.
 private struct WorklogDraftRow: View {
@@ -125,7 +111,6 @@ private struct WorklogDraftRow: View {
     @State private var durationText: String
     @State private var comment: String
     @FocusState private var focusedField: Field?
-    @Environment(\.worklogFieldFocus) private var reportFieldFocus
 
     init(draft: WorklogDraft, task: TaskItem?, availability: WorklogDrafts.Availability, openLink: Link?) {
         self.draft = draft
@@ -155,13 +140,6 @@ private struct WorklogDraftRow: View {
             } else {
                 card
             }
-        }
-        .onChange(of: focusedField) { _, field in
-            reportFieldFocus?(draft.id, field != nil)
-        }
-        // A sent entry, or one whose length changed, is drawn again from scratch (`.id`).
-        .onDisappear {
-            reportFieldFocus?(draft.id, false)
         }
     }
 

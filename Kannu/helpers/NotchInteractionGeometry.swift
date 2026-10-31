@@ -44,4 +44,31 @@ enum NotchInteractionGeometry {
     static func isOnPhysicalNotch(_ point: CGPoint, notch: CGRect) -> Bool {
         point.x >= notch.minX && point.x <= notch.maxX && point.y >= notch.minY && point.y <= notch.maxY
     }
+
+    /// How far past the open notch's edge the pointer still counts as on it, so a pointer resting
+    /// on the edge never flaps the notch shut.
+    static let openNotchMargin: CGFloat = 4
+
+    /// The open notch's body in screen coordinates, from its frame in its window (SwiftUI's
+    /// `.global` space: origin top-left, y down), or nil before it has been laid out.
+    ///
+    /// The window is pinned to the top of its screen and centred on it (`positionWindow` and
+    /// `resizeWindow` in `KannuApp.swift`), and the body is centred in the window, so only the
+    /// body's size and its distance from the top are needed; the window's own width is not.
+    static func openNotchRect(screenFrame: CGRect, bodyInWindow body: CGRect) -> CGRect? {
+        guard body.width > 0, body.height > 0 else { return nil }
+        return CGRect(x: screenFrame.midX - body.width / 2, y: screenFrame.maxY - body.maxY,
+                      width: body.width, height: body.height)
+    }
+
+    /// Whether a pointer location is on the open notch, `margin` included on every side, or on one
+    /// of the `attached` windows hanging off it. Those lie past the body's edge but are the notch
+    /// all the same: the calendar a reminder's date field drops (AppKit's
+    /// `_NSDatePickerOverlayPanel`, a child window of the panel it opens from), a popover. David,
+    /// 2026-10-29: "the hover on calendar out of notch area of kannu closes notch". No margin
+    /// around them: they have their own edges.
+    static func isOnOpenNotch(_ point: CGPoint, notch: CGRect, attached: [CGRect] = [],
+                              margin: CGFloat = openNotchMargin) -> Bool {
+        notch.insetBy(dx: -margin, dy: -margin).contains(point) || attached.contains { $0.contains(point) }
+    }
 }

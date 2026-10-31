@@ -741,7 +741,6 @@ struct NotchHomeView: View {
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
-    @ObservedObject private var extensionNotchExperienceManager = ExtensionNotchExperienceManager.shared
     let albumArtNamespace: Namespace.ID
     
     var body: some View {
@@ -755,30 +754,15 @@ struct NotchHomeView: View {
 
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 20) {
-            if Defaults[.enableMinimalisticUI] {
-                if let overridePayload = minimalisticOverridePayload {
-                    ExtensionMinimalisticExperienceView(
-                        payload: overridePayload,
-                        albumArtNamespace: albumArtNamespace
-                    )
-                } else {
-                    MinimalisticMusicPlayerView(albumArtNamespace: albumArtNamespace)
-                }
-            } else {
-                // Home tab: Now Playing (inactive placeholder until media starts)
-                MusicPlayerView(albumArtNamespace: albumArtNamespace)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // Home tab: Now Playing (inactive placeholder until media starts)
+            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .transition(.opacity.animation(.smooth.speed(0.9))
             .combined(with: .blurReplace.animation(.smooth.speed(0.9)))
             .combined(with: .move(edge: .top)))
         .blur(radius: vm.notchState == .closed ? 30 : 0)
-        .padding(Defaults[.enableMinimalisticUI] ? 0 : 8) //Putting the main padding for home view here for consistency
-    }
-
-    private var minimalisticOverridePayload: ExtensionNotchExperiencePayload? {
-        extensionNotchExperienceManager.minimalisticReplacementPayload()
+        .padding(8) //Putting the main padding for home view here for consistency
     }
 }
 

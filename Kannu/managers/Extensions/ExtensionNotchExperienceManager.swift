@@ -98,10 +98,6 @@ final class ExtensionNotchExperienceManager: ObservableObject {
             Logger.log("Notch experience tab ready (title: \(tabConfig.title))", category: .extensions)
         }
 
-        if descriptor.minimalistic != nil && Defaults[.enableExtensionNotchMinimalisticOverrides] {
-            Logger.log("Notch experience minimalistic override available", category: .extensions)
-        }
-
         if !isUpdate {
             logDiagnostics("Stored notch experience \(descriptor.id) for \(bundleIdentifier); priority \(descriptor.priority.rawValue)")
         }
@@ -168,15 +164,6 @@ final class ExtensionNotchExperienceManager: ObservableObject {
             return nil
         }
         return activeExperiences.first(where: { $0.descriptor.tab != nil })
-    }
-
-    func minimalisticReplacementPayload() -> ExtensionNotchExperiencePayload? {
-        guard Defaults[.enableThirdPartyExtensions],
-              Defaults[.enableExtensionNotchExperiences],
-              Defaults[.enableExtensionNotchMinimalisticOverrides] else {
-            return nil
-        }
-        return activeExperiences.first(where: { $0.descriptor.minimalistic != nil })
     }
 
     func payload(bundleIdentifier: String, experienceID: String) -> ExtensionNotchExperiencePayload? {

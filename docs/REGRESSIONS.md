@@ -213,7 +213,18 @@ Guards: the `HookScriptTests` v46 group, run again under `/usr/bin/python3` 3.9,
 in `AgentHookLayoutTests`. **Missing:** everything above is from antigravity.google/docs/hooks and the
 changelog. None of it has run against a real Antigravity.
 
-**v47 addendum (2026-10-29): the payload never touches the disk.** This replaces the file from the
+**v47 addendum — the v40 rule again, after the Stop.** v40 made a prompt that arrives while the
+request runs join it, because Claude Code submits a background task's result as a
+`UserPromptSubmit`. It still does after the Stop: when an agent that Stop left running finishes,
+the result arrives as a prompt whose text starts with `<task-notification>` (checked against a real
+captured payload, 2026-10-15), and v44–v46 read it as a new request. The card's run time, tool
+calls and tokens restarted every time an agent finished (194 times in one chat). Such a prompt now
+resumes the ended turn, keeping its start and transcript offset, but only for Claude, only while
+the ended turn recorded `turn_bg_agents`, and only when the tag leads the prompt. A prompt the user
+types after the Stop is still a new request, and so is a notification after a Stop that left no
+agent running. Guards: the `HookScriptTests` v47 group, run again under `/usr/bin/python3` 3.9.
+
+**v48 addendum (2026-10-29): the payload never touches the disk.** This replaces the file from the
 v41 addendum. Python unlinked that file and a trailing `rm` covered a normal exit, but nothing
 covered a kill. A hook killed between `mktemp` and the unlink (the 10-second host timeout, an
 interrupt, the host quitting) kept the whole payload in `~/.kannu/agent-status/` for good. One Mac
@@ -226,7 +237,7 @@ reads fd 3. Rules:
   stdin before Python started). Otherwise the host blocks writing the rest, or gets a broken pipe.
 
 `continueLaunch()` sweeps leftovers older than 10 minutes (`HookInputLeftovers`). Guards: the
-`HookScriptTests` v47 group (normal run, the no-`python3` exit, two failing steps, three kinds of
+`HookScriptTests` v48 group (normal run, the no-`python3` exit, two failing steps, three kinds of
 kill; again under `/usr/bin/python3` 3.9) and `HookInputLeftoversTests`.
 
 ---
@@ -601,6 +612,77 @@ clean environment where `claude -p "/usage"` fetched plan rows; and `oauthAccoun
 desktop-hosted session's run the desktop's — so Kannu records Claude Code's organization itself,
 straight after its own fetch (`claudeCodeUsageOrganization`).
 
+**2026-10-29 addendum — the organization split, read wrong three ways.** Claude Code was signed in
+to a Team organization and Claude Desktop to Max (one person, two plans). The card follows
+Desktop's organization and drops Claude Code's sources when they differ, so the card lived on
+Desktop's `plan-usage-history.json` alone, whose newest sample (2026-10-27 22:26Z, Max, weekly
+100 %) predates Max's weekly reset (Wednesday 2026-10-28 00:00Z, 05:30 IST). Three faults, one
+after another:
+- **One organization's reset remembered at a time.** Max's weekly anchor came from Claude Code's
+  cache only while Claude Code was on Max. Kannu's 11:49 IST run moved it to Team, the anchor
+  went with it, and the Desktop parse fell back to a rollover seen on Oct 21 after a 22-hour gap:
+  the 100 % weekly bar showed from 11:49 to 23:01 IST, 17.5 hours past Max's real reset. Fix:
+  `Defaults[.claudeOrganizationResets]`, each organization's weekly and five-hour reset by
+  organization id, written after every run whose organization is known; the Desktop parse uses
+  its own organization's, whatever Claude Code is on. The rollover guess is the last resort.
+- **The organization read apart from the cache.** The run read `oauthAccount` in a separate read
+  from the fetch stamp. A desktop-hosted session wrote its Max profile (`profileFetchedAt` 06:20:47Z,
+  11:50:47 IST, 90 s after the run) back into `~/.claude.json` all day while the cache stayed
+  Team's (`fetchedAtMs` 13:59:20 IST, weekly reset 2026-11-03 05:00Z), and the passive "Claude
+  Code changed organization" check compared the recorded Team with that Max on nearly every visit
+  of the Usage tab, each time licensing another `/usage` run. Fix: one read for both
+  (`ClaudeUsageRefresh.runRead`); `oauthAccount` counts only when `profileFetchedAt` falls inside
+  the run (`ClaudeCachedUsage.attributeRun`, 2 s slack); else the cache's own weekly reset names
+  its organization when exactly one remembered anchor matches; else the last known organization,
+  unless the cache contradicts its anchor. The passive check counts only a profile fetched after
+  the run that last settled the organization (`claudeCodeUsageOrganizationCheckedAt`).
+- **A dishonest card.** With no live Desktop reading, the card showed no bars and fell back to
+  the local token totals under "these are Claude Desktop's (Max) readings". Now it shows Claude
+  Code's own bars, labelled with its plan, and says so; with none either, it says there is no
+  reading — never that readings are shown.
+
+The same audit found two expiry holes: a cache window with `resets_at: null` (the five-hour one
+was, at 0 %) never expired, and the card and the alerts checked only the reset, never the expiry
+bound, so a lapsed desktop value stayed "near the limit". Null resets now expire after their
+window's length from the fetch (`ClaudeCachedUsage.expiryWithoutReset`), and the bound travels
+into `UsageLimit` and `UsageWindowReading`.
+
+**Guard.** `ClaudeUsageOrganizationTests` replays the measured sequence (Max's reset known Oct 27,
+the move to Team at 11:49, Desktop's 100 % sample) and was verified red against the old
+"anchor only while Claude Code is on Desktop's organization" rule: the bar came back with
+`notAfter` 17:31:34Z, exactly the 23:01 IST seen. It also pins the in-run profile window, the
+weekly-reset check, the card's choice when the organizations differ, and the off-main read
+against real files. `ClaudeUsageSnapshotTests.testAnOldProfileWrittenBackIsNotAMove` pins the
+passive check. Not measured: whether `claude -p "/usage"` refetches the profile on every run. When
+it does not, the weekly-reset check and the last known organization decide; nothing here runs
+`claude` to find out.
+
+**2026-10-30 addendum — both organizations, a card each.** The single card still had to pick, and
+David read the pick as broken: "still showing team which is also valid, maybe if a user has both
+show multiple ones". `cardSources` now gives Claude Code's sources a card of their own when the
+organizations differ and both have a live reading (`secondCardSources`); an organization with no
+live reading gets no card. The plan chip says whose bars each card shows, so the "these are Claude
+Desktop's readings" lines are gone. Three things follow, and each would be easy to undo by accident:
+- **The automatic refresh no longer stands down for another organization.** "What it would fetch is
+  not on the card" stopped being true, and holding it would let the second card lapse until someone
+  pressed Refresh. It is paced like any other (`shouldAutoFetch`, 15 minutes, only while the Usage
+  tab is on screen). `otherOrganizationAllowsAutoFetch`, `claudeCodeUsageOrganizationCheckedAt` and
+  `testAnOldProfileWrittenBackIsNotAMove` went with the hold: a profile written back all day can no
+  longer license a run, because no profile decides whether one runs.
+- **A reading's id follows its organization, not its card.** Bars of Claude Code's organization
+  while it differs from Claude Desktop's are `claude@<organization>:<key>`, on the first card or the
+  second (`ClaudeUsageSnapshot.readingScope`). Everything else stays `claude:<key>`, the series already
+  on disk. Before this, Team's bars on the fallback card fed Max's forecast.
+- **`apply` publishes in an order that never holds one organization's reading on both cards**, or
+  the alerts would count it twice in the tick it moves from one card to the other.
+
+**Guard.** `ClaudeUsageOrganizationTests.testEachOrganizationWithALiveReadingGetsACard` and
+`testOneOrganizationOrAnUnverifiedOneHasOneCard`,
+`UsageForecastTests.testAScopedSnapshotKeepsItsOwnSeriesAndNamesItsPlan`,
+`ClaudeUsageReadRulesTests.testTheAutomaticRefreshDoesNotStandDownForAnotherOrganization`. Not
+guarded: `UsageAlertPolicy.resumeDate` cannot tell which organization a rate-limited session is on,
+so with both full it answers with the later reset.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -853,6 +935,19 @@ caught it). Return fresh `URL`s from any listing cache.
 
 Guards: `RescanStormTests`, including a simulated 20 ms write storm that must keep rescanning,
 boundedly. The memory half of the same report was the usage aggregator, fixed on its own branch.
+
+**2026-10-29 addendum — the Claude usage readers.** Every rescan ends in `refreshClaudeUsage`,
+which re-read `~/.claude.json` (85 KB, rewritten whole by every Claude Code process) and Claude
+Desktop's history on the main actor whenever the merged snapshot was nil — and "nothing to show"
+counted as "never read". With Claude Code and Claude Desktop on different organizations and no
+live Desktop reading (entry 8, 2026-10-29), that was every rescan. Now the rescan only decides:
+`ClaudeUsageSources.read` runs on the monitor's serial `claudeUsageReadQueue` and the result is
+applied on the main actor, in order, one read in flight at a time; a read that found nothing is
+retried once a minute (`ClaudeUsageSnapshot.emptyRetryInterval`). The one file call left on the
+main actor is the statusline file's modification date. Guard: `ClaudeUsageReadRulesTests` (source
+scan, the `TrafficLightGateRulesTests` idiom: no usage reader in the monitor, the one read inside
+the worker block before the hop back), verified red with a `ClaudeUsageSnapshot.load` put back
+into `refreshClaudeUsage`.
 
 ---
 
@@ -1342,16 +1437,112 @@ installed build, since nothing automated drives a trackpad.
 
 ---
 
+## 22. The open notch closes on where the pointer is, never on a latched hover
+
+**Rule:** every auto-close of the open notch goes through `ContentView.closeWhenPointerLeaves`.
+It checks `NSEvent.mouseLocation` against the open body's frame
+(`NotchInteractionGeometry.openNotchRect`, with `openNotchMargin`) every 100 ms. It waits while
+`shouldPreventAutoClose()` holds or a menu tracks, and closes only when the pointer is off the
+notch. Never close because `isHovering` is false. A view never holds the notch open for its own
+field's focus or its own menu.
+
+**Broken five times, each patched in the one view that showed it.** The hashes are libinmv/kannu's,
+from before the move to YANC-Kannu/kannu-macos.
+- `59be960` (2026-10-04): the Tasks popover asked for a recheck when it closed, and the recheck
+  closed the notch under a pointer that was still inside it.
+- `e0f5d0e` (2026-10-04): the session-name field held the notch with a suppression token.
+- `5e650c1` (2026-10-18): the same for the timer column's search field, its Time to log fields,
+  and any menu it opened.
+- `4ea3942` (2026-10-18): the same for the task form's fields and estimate menu.
+- `7a1621b` / `4201d83` (2026-10-24): the same for the notes delete alerts.
+- David, 2026-10-28: "it randomly closes even when the mouse is in the notch area".
+
+**Why it keeps happening:** hover is late by construction, as entry 21 found for scrolls.
+- SwiftUI's `.onHover` goes false when another window takes the pointer: a popover, an `NSMenu`
+  or an alert. When that window goes away, `.onHover` comes back only once the pointer moves.
+- The recheck and popover paths then closed the notch on `!isHovering` 0.1 s later.
+- Each new view that met this added a token for itself. A hold that ended with the pointer
+  already outside never closed the notch at all.
+
+**Guard — exists.**
+- `NotchInteractionTests` checks the open rect and its margin.
+- Its source scan fails on a `vm.close()` that reads `!isHovering` in the lines before it, on a
+  `closeWhenPointerLeaves` that does not check the pointer or the menus, and on an outside-click
+  close without the pointer check. Each of these is checked against planted offenders.
+- `TimerSideColumnRulesTests.testTheTimerTabsFieldsAndMenusHoldNothingOpen` keeps focus and
+  menu holds out of the timer tab.
+
+The dialog holds stay (the alerts in `NotchNotesView`, the share button): they keep an alert or
+a share picker alive, and are not about hover.
+
+**Missing:** that the notch really stays open over a popover, a menu or an alert is checked by eye
+on the installed build, with `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" && category == "NotchClose"'`.
+
+**2026-10-29 addendum: "on the notch" includes the windows hanging off it.** David: "the hover on
+calendar out of notch area of kannu closes notch". The task form's reminder is a `.field` date
+picker, and its calendar opens in AppKit's `_NSDatePickerOverlayPanel`. That is a **child window**
+of the notch panel, placed below the body's edge; a probe with the same picker in a borderless panel
+showed `parent === panel` and the panel's `childWindows` listing it. Hover left the body for it, and
+`closeWhenPointerLeaves` found the pointer off `openNotchRect` and logged `Closed: pointerLeft`.
+
+The pointer check now also counts every visible child window of this screen's `KannuWindow` that
+takes the mouse (`attachedWindowFrames`, at any depth). This covers any picker or popover AppKit
+attaches the same way, so no view needs a hold-open token for it.
+
+Guards: `NotchInteractionTests.testAWindowHangingOffTheNotchCountsAsTheNotch` checks the geometry,
+and `testThePointerCheckReadsTheWindowsHangingOffTheNotch` checks that the pointer check reads those
+windows. **Missing:** the AppKit side, that the calendar really is a child window, is only the probe
+above; check by eye on the installed build.
+
+---
+
+## 23. A repeating animation in Brain must end by itself
+
+**Rule:** nothing under `Kannu/components/Settings/` uses `.repeatForever`. Closing Brain only orders
+its window out (`SettingsWindowController.close`), so its SwiftUI stays alive, and measured on
+2026-10-30, an animation in an ordered-out window goes on ticking at the display's rate (127 frames
+a second) with nothing on screen. Nothing else will stop it: no `onDisappear` runs either.
+
+**Broken once, for at least a week, and misread as a crash.** Kannu sat at 40-60 % CPU with only the
+notch on screen, after a relaunch at 0.3 %. macOS logged it on 2026-10-22 and 2026-10-29
+(`Kannu_*.cpu_resource.diag`), the main thread in `NSHostingView.layout` every frame with no Kannu
+frame near. A relaunch cleared it until the next Settings highlight (a search result, a deep link).
+
+The cause is the shape of `SettingsHighlightModifier`. Its pulse keyed on `animatePulse` while the
+stroke's colour also read `isActive`. At the 2 s clear `isActive` moves first, so the colour changes
+with no animation; then `onChange` moves `animatePulse` under `.default`, but the colour is already
+0 and does not change again. Nothing replaces its repeating animator, which adds its delta forever.
+The shadow's radius does change, so its animator ends: exactly one is left.
+
+**How it was found, since the stack names no view.** `heap <pid>` showed one
+`AnimatorState<KeyedAnimatableArray<_ShapeStyle_Pack.Key…>>` and one
+`InternalAnimationBox<…BezierAnimation, RepeatAnimation>`, and `leaks <pid> --traceTree=<box>` named
+its owner, `ShapeStyleResolver<Color>`. A one-file `swiftc` harness with the modifier copied in
+reproduced the same two objects at 12.4 % CPU, against 0.0 % for a control that never highlighted
+and 0.0 % for `.repeatCount(3)`. A frame counter in the harness first said "0 frames" and cleared
+the modifier wrongly: it counted its own animated value, not the stroke's. Measure CPU and read
+the heap. Both tools run with no prompt and no window; a debugger attach raises a dialog.
+
+**Guard.** `SettingsAnimationRulesTests`, checked against planted offenders. Not guarded: a
+repeating animation in a view that lives elsewhere but is shown under Settings
+(`SpinningCircleDownloadView` in the download style picker) or a `TimelineView(.animation)` there
+(`NotchShimmerView` in the idle animation previews), which would run on while Brain stays closed on
+that page. Not measured on the installed build through a real highlight.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
+| `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain only orders its window out, so whatever animates here runs on with nothing on screen (entry 23). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
 | `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
+| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have (entry 8, 2026-10-29 and 2026-10-30 addenda). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
@@ -1359,6 +1550,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
 | `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
+| `ContentView.swift` (`handleHover`, `closeWhenPointerLeaves`, the popover and recheck closes) | — | When the open notch closes. Five views patched one stale-hover close each with their own hold-open token, and the notch still shut under a still pointer once a popover or menu had taken the hover (entry 22). Close through `closeWhenPointerLeaves`; never on `!isHovering`. |
 | `PanGesture.swift`, `VerticalScrollOwnership.swift`, `NotchNotesView.swift` | — | The open notch's swipe-to-close against every scrollable view under it. Each scroller opted out through hover, which a scroll beats, so a list or a note's text closed and blurred the notch (entry 21). Mark a new scroller `.ownsVerticalScroll()`. |
 | `LaunchPermissionManager.swift`, `LaunchPermissions.swift`, `Kannu/components/Onboarding/` | — | Who may raise a macOS dialog, and when. A feature that asks on its own must check `mayTouch` and get a `LaunchPermission` row (AGENTS.md, "No permission dialog before onboarding's Permissions step"); Apple Notes sync ran AppleScript ungated until 2026-10-23. `FirstLaunchRulesTests` pins every gate and the onboarding order (`permissions`, `finished` last). |
 | `AgentSessionLogParser.swift` | 8 | `readTrailingLines` and the tail verdict. 4 of 8 commits touch the reader; **2 of those 4 fix the same failure mode** — the reader returning nil and silently sending callers down a wrong path (entry 4). |

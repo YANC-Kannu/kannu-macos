@@ -4,6 +4,96 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-10-30 - The Settings highlight stops pulsing once it clears
+- **Developer label:** "Check CPU report"
+- **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings
+- **Changes:**
+  - `SettingsHighlightModifier` pulses with `.repeatCount(3, autoreverses: true)`, not
+    `.repeatForever`. At the 2 s clear, the stroke's colour kept a repeating animator that nothing
+    replaced. Closing Brain only orders its window out, so it ran on at 40-60 % CPU with only the
+    notch on screen until Kannu quit, from the first search result or deep link that highlighted a
+    row. macOS logged it as `cpu_resource` reports on 2026-10-22 and 2026-10-29.
+  - Test: `SettingsAnimationRulesTests` fails on `.repeatForever` under `Kannu/components/Settings/`,
+    and is checked against planted offenders.
+  - `docs/REGRESSIONS.md` gains entry 23 and a Danger zones row.
+
+### 2026-10-30 - Claude's usage shows a card for each organization
+- **Developer label:** "the usage table of claude is messed up and seem like not fixed, i think its still showing team which is also valid, maybe if a user has both show multiple ones"
+- **Agent label:** Claude Code (Opus 5.5) — a second Claude card when Claude Code and Claude Desktop are on different organizations, each with its plan chip, its forecast series and its alerts
+- **Changes:**
+  - When Claude Code and Claude Desktop are on different organizations and both have a live reading,
+    the Usage tab shows two Claude cards, Claude Desktop's first ("Claude Max", "Claude Team"). An
+    organization with no live reading gets no card, so one card still shows when only one has bars.
+    One organization, or one not yet recorded, shows one card as before.
+  - The second card holds limits only. Token totals, the status row and ↻ stay on the first.
+  - Each card's plan chip says whose bars it shows, so the status lines explaining the difference
+    ("these are Claude Desktop's readings", "No recent Claude Desktop reading") are gone.
+  - The automatic `/usage` refresh no longer stands down while Claude Code is on another
+    organization: those bars now have a card, which would lapse without it. It stays paced at 15
+    minutes, and only while the Usage tab is on screen. `otherOrganizationAllowsAutoFetch` and
+    `claudeCodeUsageOrganizationCheckedAt` went with the hold.
+  - Bars of Claude Code's organization, while it differs from Claude Desktop's, read as
+    `claude@<organization>:<key>`, so its forecast and alerts stay apart from Claude Desktop's, and a
+    push names the plan ("Team 5-hour"). Everything else keeps `claude:<key>`.
+  - `DebugSnapshot` gains the `usage-orgs-2`, `-3` and `-4` boards.
+  - `docs/REGRESSIONS.md` entry 8 gains the 2026-10-30 addendum.
+
+### 2026-11-01 - The notch stays open over the reminder's calendar
+- **Developer label:** "the hover on calendar out of notch area of kannu closes notch"
+- **Agent label:** Claude Code (Opus 5.5) — the close check counts windows attached to the notch window as the notch
+- **Changes:**
+  - With the pointer on the calendar a reminder's date field opens, the notch stays open. That calendar
+    is AppKit's `_NSDatePickerOverlayPanel`, a child window of the notch panel placed past the body's
+    edge, so the pointer check read it as having left.
+  - `isPointerOnOpenNotch` now also counts every visible child window of this screen's `KannuWindow`
+    that takes the mouse, at any depth (`attachedWindowFrames`). A tooltip ignores the mouse and is
+    left out.
+  - docs/REGRESSIONS.md: a dated addendum to entry 22. Tests: `NotchInteractionTests`.
+
+### 2026-11-01 - The typed search goes once a # or @ word starts
+- **Developer label:** "once user starts with # or @ the search has to go so that he can see ui"
+- **Agent label:** Claude Code (Opus 5.5) — `TaskSuggestionState.quickAddStarted` keeps the typed search away once such a word starts
+- **Changes:**
+  - Under the timer tab's bar and a new task's title, the typed search goes as soon as a word starts
+    with `#` or `@`, even a lone `#` or `#12`, so the chips, Tags and the reminder stay in sight.
+  - It stays away after the form moves the word out of the title, until the text is emptied. A form
+    opened on such a word starts with it away. An `@` inside a word (`a@b.com`) does not count.
+  - Tests: `TaskSuggestionTests`.
+
+### 2026-11-01 - A task's tags and reminder fill in as its name is typed
+- **Developer label:** "is the search dynamically populating tags and reminder of task as we type that and enter space"
+- **Agent label:** Claude Code (Opus 5.5) — `TaskFormDraft.foldingFinishedQuickAdd` moves finished `#tag` and `@time` words into the form's fields while the title is typed
+- **Changes:**
+  - In the notch's task form, new or edit, and in Brain's New Task, once the title ends in a space its
+    `#tag` and `@time` words leave it for Tags and the reminder. They used to move only at Add or Save.
+  - A word not yet ended by a space stays in the title under its chip. One typed mid-title moves with
+    the next space typed at the end, or at Add or Save.
+  - A day and a time typed apart still combine: `@tomorrow`, then `@5pm`, is tomorrow at 17:00
+    (`TaskFormDraft.quickAddTimes`, in memory like the draft). Clearing the reminder forgets those words.
+  - The session bar, the Tasks popover's Add a task and Brain's title field have no such fields, and
+    keep their chips.
+  - Tests: `TaskQuickAddTests`.
+
+### 2026-11-01 - The done tick moves beside the play button
+- **Developer label:** "keep the mark as done ticket near the play button it self but sufficiently spaced"
+- **Agent label:** Claude Code (Opus 5.5) — moves `TaskDoneTick` from the start of each row to just left of the play button, and onto the task page
+- **Changes:**
+  - In the timer tab's task list and the Tasks popover's Up next, a local task's tick sits just left
+    of ▶, 6 pt from it, so neither is clicked for the other and ▶ keeps its place in every row.
+  - In Brain's task lists it sits just left of ▶ or ■, at the row's usual spacing.
+  - On the notch's task card it sits right after Start, no longer beside Archive.
+  - Brain's task page gains the tick beside ▶ or ■. Mark Done leaves its Finish row, which now reads
+    "Archive keeps its time; Delete removes it."
+
+### 2026-10-29 - Hook v48: the payload fix and the background-agent turn together
+- **Developer label:** "also install a local build with all these changes"
+- **Agent label:** Claude Code (Opus 5.5) — merges the hook payload fix into the notch-tasks work; both called their hook v47
+- **Changes:**
+  - Hook script v48 carries both v47 changes: the payload read from file descriptor 3 (never a
+    file) and a background agent's result resuming the ended turn. The embedded copy and the mirror
+    match.
+  - docs/REGRESSIONS.md: the payload addendum is now the v48 one.
+
 ### 2026-10-29 - Act on CodeRabbit's review of #5
 - **Developer label:** CodeRabbit's review of #5: drain descriptor 3 after Python exits, and use the GPL header block in the new test file
 - **Agent label:** Claude Code (Opus 5.5) — the hook wrapper drains fd 3 after a failed Python run; `HookInputLeftoversTests` gets the block header
@@ -44,6 +134,184 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     hook, SIGKILL to the hook, SIGKILL to the hook and its children). The group also covers a
     payload past the cap, and runs again under `/usr/bin/python3` 3.9.
     `HookInputLeftoversTests` covers the sweep's age filter and name filter.
+
+### 2026-10-29 - Claude's limit bars follow the right organization and expire on time
+- **Developer label:** "the token detection currently is wrong … claude in kannu"
+- **Agent label:** Claude Code (Opus 5.5) — per-organization resets, the organization read with the cache, an honest card when Claude Code and Claude Desktop differ, expiries that reach the card and the alerts, and the usage reads off the main actor
+- **Changes:**
+  - Each organization's weekly and five-hour resets are remembered in Defaults
+    (`claudeOrganizationResets`, by organization id) after every `/usage` run whose organization
+    is known. Claude Desktop's history is read with its own organization's reset, whatever Claude
+    Code is on; the rollover guess is the last resort. On 2026-10-28 Claude Code's move to Team
+    lost Max's reset and Desktop's 100 % weekly bar stayed up from 11:49 to 23:01 IST, 17.5 hours
+    past Max's reset.
+  - After a run, `~/.claude.json` is read once for the cache's timestamp, its resets and
+    `oauthAccount` together. `oauthAccount` counts only when its `profileFetchedAt` falls inside
+    the run; else the cache's own weekly reset names its organization when exactly one remembered
+    anchor matches; else the last known organization stands, unless the cache contradicts it.
+  - The "Claude Code changed organization" check counts only a profile fetched after the run that
+    last settled the organization (`claudeCodeUsageOrganizationCheckedAt`). A desktop-hosted
+    session's Max profile, written back all day, licensed a `/usage` run on nearly every visit of
+    the Usage tab.
+  - Between runs the cache goes on the card of the organization its own weekly reset names; a
+    cache that contradicts Claude Code's remembered reset goes on no card.
+  - When the organizations differ and Claude Desktop has no live reading, the card shows Claude
+    Code's own bars with its plan in the header chip ("Team") and says "No recent Claude Desktop
+    (Max) reading — these are Claude Code's (Team) limits."; with no bars at all it says "No
+    recent Claude Desktop (Max) reading — Claude Code is signed in to Team." It never claims
+    readings that are not drawn. "Sign in in Terminal" stays, and the automatic refresh runs for
+    Claude Code's bars as it does for one organization.
+  - A window cached with `resets_at: null` expires five hours after the fetch (the five-hour
+    window) or a week after (weekly ones), in Claude Code's cache and in the statusline file.
+  - The expiry bound reaches `UsageLimit` and `UsageWindowReading`: the card's bars, "near
+    limit", the forecast and "resumes at" drop a lapsed value at its expiry, and the alerts
+    re-evaluate then.
+  - The usage reads run on the monitor's own serial queue (`ClaudeUsageSources.read`) and are
+    applied on the main actor; a read that found nothing is retried once a minute, not at every
+    rescan. A `~/.claude.json` caught mid-write keeps the last read cache instead of dropping it
+    for ten minutes.
+  - Tests: `ClaudeUsageOrganizationTests` (the Oct 27–28 replay, the run window, the weekly-reset
+    check, the card's choice, the off-main read against real files), `ClaudeUsageReadRulesTests`
+    (source scan), and additions to the cache, desktop history, snapshot and forecast tests.
+  - `docs/REGRESSIONS.md`: entry 8 and entry 11 addenda, and a Danger zones row for the three
+    files that decide whose limits the card shows.
+
+### 2026-10-29 - Claude's token counts leave out cache re-reads, and a turn shows its context
+- **Developer label:** "the token detection currently is wrong … claude in kannu"
+- **Agent label:** Claude Code (Opus 5.5) — split input, cache writes, cache reads and output everywhere; headline without cache reads; per-turn context; max-per-message dedupe; plan-anchored windows; hook v47 notification wake
+- **Changes:**
+  - `UsageRecord` and `UsageTotals` (moved beside it into the logic target) keep uncached input, cache
+    writes (`cache_creation_input_tokens`, or the `cache_creation` 5m + 1h breakdown when the flat
+    count is missing, never both added), cache reads and output apart. The card's headline is input +
+    cache writes + output; cache reads follow on the row, smaller and quieter ("· 2.2B cached").
+    Measured on this Mac, rolling 7 days: 2.29 B shown before, 55.9 M now, with 2.23 B cached apart
+    (input + output alone: 5.1 M).
+  - Codex and Cursor fill the same fields. Codex's `cached_input_tokens` and
+    `cache_write_input_tokens` are parts of its `input_tokens` and are split out of it (clamped);
+    Cursor's `cacheReadTokens` and `cacheWriteTokens` map across, its `inputTokens` is the uncached
+    part. Their headline now leaves cache reads out too, so all three cards mean the same thing.
+    Pricing estimates still apply the one prompt rate to everything read, as before.
+  - One record per message (message id + request id), with each count the largest any of its lines
+    reports, in `JSONLUsageCache` and in the per-turn reader (which adds only the positive difference
+    when a later line reports more). Claude Code 2.1.219–2.1.304 wrote a subagent message's first line
+    mid-stream (`stop_reason` null, output 2–16): first-line-wins lost 1.09 M of 5.11 M output tokens
+    over 7 days.
+  - A turn's tokens read "83k in · 40k out · 458k context": in is uncached input + cache writes summed
+    over the request and its subagents, context is the chat's own latest call's whole prompt
+    (replaced, never summed, never a subagent's or a sidechain's). This reverses the 2026-09-12 choice
+    "in includes cached context": every call re-reads the whole context, so that sum counted it once
+    per call and grew with the number of calls, not with the work ("24M in" for 83k new tokens and a
+    458k context). Measured on a live chat's latest turn: 3.6 M "in" before; 8.9k in, 4.8k out, 519k
+    context now. The column falls back widest first: with tools, without them, then without the
+    context.
+  - The week follows Claude's weekly limit when its reset is known (the card's limit bar):
+    `[reset − 7 d, now)`, else the rolling 7 × 24 h, labelled "Last 7 days" (Codex and Cursor stay
+    rolling). The 5-hour block is `[reset − 5 h, reset)` when the 5-hour reset is known, else the
+    hour-floored reconstruction, labelled "Session (local, approx.)". The resets are read from the
+    snapshot's limits, not fetched anew. Measured: 38 h into this week, 336 M before against 7.5 M now.
+  - Hook v47: in Claude, a `UserPromptSubmit` whose prompt starts with `<task-notification>`, after a
+    Stop that left agents running (`turn_bg_agents`), resumes that turn (start and transcript offset
+    kept) instead of starting one. It wiped the run time, tool calls and tokens each time an agent
+    finished. The prefix was checked against a real captured payload. Mirror regenerated;
+    REGRESSIONS entry 1 v47 addendum.
+  - Not changed: an Esc-interrupted turn still merges with the next prompt, compaction calls still
+    write no usage record (so they count nothing), and Claude's cost stays hidden.
+  - Tests: split fields and the cache-write breakdown, the headline without cache reads, merging,
+    the max-per-message dedupe with a mid-stream first line (cache and accumulator), the context from
+    the chat's latest call and never a subagent's, the formats and fallbacks, the plan-anchored week
+    and 5-hour block with their fallbacks, the Codex and Cursor mapping, and the hook's notification
+    wake (also under `/usr/bin/python3` 3.9).
+
+### 2026-10-28 - The minimalistic UI mode is gone; every notch is the standard one
+- **Developer label:** "remove minimalistic ui mode"
+- **Agent label:** Claude Code (Opus 5.5) — `enableMinimalisticUI` and everything only it used are removed, the standard path kept at every branch
+- **Changes:**
+  - Settings' UI Mode section is gone, with its search entry and its two battery rows. The
+    minimalistic music player, battery view, extension override view, sizes, corner radii and
+    shadow are deleted, and every branch on the mode keeps its standard side: the header's tabs,
+    the open notch's size and shape, the timer tab, the agent rows' turn metrics, the inline HUDs,
+    the media controls and the tab list in Settings. The minimal traffic-light style is a different
+    thing and stays.
+  - The keys `enableMinimalisticUI`, `showMinimalisticBatteryIndicator`, `showBatteryPercentInside`
+    and `enableExtensionNotchMinimalisticOverrides` are deleted. A migration in `continueLaunch()`
+    (`Defaults.Keys.migrateRemovedMinimalisticUI`) turns "Show standard media controls" on for
+    anyone who had the mode on, since the mode showed closed-notch music without it, then removes
+    the four stored values.
+  - Onboarding's Light Use profile keeps its other settings and no longer switches the mode on;
+    its description says what it does now.
+  - An extension's minimalistic override is no longer shown; one carrying web content is still
+    refused while web views are off. Unused strings and three unreferenced images go.
+  - Tests: the header, popover-placement and hide-control scanners find the open block inside the
+    header's row, now that its condition matches the spacer above it; the tooltip floor and the
+    Settings search counts follow the removal.
+
+### 2026-10-28 - `#tag` and `@time` in a task's name
+- **Developer label:** "we need typed tag also for local tasks , # would create a tag and @noon would mean reminder at 12:00 pm , take standard design practice for that"
+- **Agent label:** Claude Code (Opus 5.5) — quick-add words (`TaskQuickAdd`) read wherever a local task is named or renamed, shown as chips in the field
+- **Changes:**
+  - Typed in a local task's name, `#word` tags the task and an `@` word sets its reminder: `@noon`,
+    `@morning` (9:00), `@evening` (18:00), `@tonight` (20:00), `@today` (the next whole hour),
+    `@tomorrow` (9:00), `@mon` to `@sun` (9:00), and clock times `@5pm`, `@5:30pm`, `@17:30`. A day
+    and a time combine (`@tomorrow @5pm`). A time with no day that has passed today rolls to
+    tomorrow; `@today` with a time stays today. The words come out of the title; anything else
+    (`#123`, `a@b.com`, `@5`) stays as typed.
+  - They work wherever a local task is named: the timer tab's bar, the notch's task form (new and
+    edit), the Tasks popover's Add a task, and Brain's New Task and title field. The form moves them
+    into its own fields before saving (`TaskFormDraft.foldingQuickAdd`): tags after the form's, a
+    typed time over the form's reminder. The reminder goes through `setSchedule`, which asks for
+    notification permission as before.
+  - Everything that reads the name reads it without the words: Add stays off for `#work @noon`
+    alone, the typed search and its New row use the name, and the bar and a kept New Task form match
+    by name. A task picked from the bar's search keeps the words typed before the pick and gets them
+    when it starts, never words of its own title. A typed name that reuses a task by title adds its
+    tags and reminder to it.
+  - With tasks off, or nothing but the words typed, no task is made and the text is the session's
+    name as typed.
+  - Chips at the end of the field show what the words will do, the tags and a bell with the time,
+    only when a task will take them.
+  - The bar holds up to 80 characters so the words fit; a session's name is still cut to 40.
+    Searching `#work` finds the tag.
+  - Tests: `TaskQuickAddTests` (each word, combinations, roll-over, what is not a word, the form's
+    fold, Add with only words, the New row, matching by name); the bar-text test follows the new
+    length.
+
+### 2026-10-28 - A tick marks a local task done
+- **Developer label:** "we need a done button near tasks, like tick"
+- **Agent label:** Claude Code (Opus 5.5) — a done tick before every local task in the notch and in Brain, with a 1.5 s undo
+- **Changes:**
+  - A circle before each local task fills with a check when clicked: in the timer tab's task list,
+    on the task card beside Archive, in the Tasks popover's Up next, and in Brain's task lists. The
+    task stays, dimmed, for 1.5 s, and a second click takes the tick back; then it is marked done
+    (`TasksManager.markDone`, which stops a timed task) and moves to Recently closed. A Jira or
+    GitLab task has no tick: its status belongs to its source.
+  - The undo window is kept by `TasksManager` (`TaskDoneTicks`), so a tick lands even when its row
+    has gone; a tick still waiting when Kannu quits is marked done.
+  - Tests: `TaskDoneTicksTests`.
+
+### 2026-10-28 - The notch stays open while the pointer is on it, and opens after 0.3 s
+- **Developer label:** "app crashes sometimes, we can remove that on hover conditions and persistance we added and reduce that time"; "the hold open doesnt work, it randomly closes even when mouse is in notch area, check that"
+- **Agent label:** Claude Code (Opus 5.5) — every auto-close of the open notch checks where the pointer is, not the latched hover; the timer tab's hold-open tokens go; hover-open waits 0.3 s
+- **Changes:**
+  - The open notch closed under a still pointer. SwiftUI's hover goes false while a popover, a menu
+    or an alert has the pointer, and comes back only when the pointer moves; the popover, recheck
+    and share paths closed the notch on that stale value 0.1 s later. Every auto-close now goes
+    through `ContentView.closeWhenPointerLeaves`, which checks the pointer against the open body's
+    frame every 100 ms (`NotchInteractionGeometry.openNotchRect`, with a 4 pt margin), waits while a
+    popover, share or alert holds the notch or any menu tracks, and closes once the pointer is off
+    it. A click that falls through a transparent part of the window onto the notch no longer closes
+    it.
+  - The hold-open rules added for the timer tab are gone: its search field, Time to log fields, task
+    form fields and session name field no longer keep the notch open while focused, and its menus
+    are waited for in one place. The alert holds (the Notes delete confirms, Clear clipboard, Delete
+    All) and the share button's stay: they keep a dialog alive.
+  - Hover-open waits 0.3 s by default (was 1 s). A value set on the slider is kept.
+  - Each close logs its reason under the `NotchClose` category, never anything typed.
+  - The crash on disk (2026-10-27, an Oct 24 build) was Apple Notes sync's duplicate-id trap,
+    already fixed on development. The extension lock-screen widgets had the same
+    `uniqueKeysWithValues` trap for two extensions sharing a widget id, and now keep the first. The
+    note editor's Done button reads its colour through the guarded `NoteItem.color(at:)`.
+  - docs/REGRESSIONS.md entry 22 and a Danger zones row. Tests: the open rect and its margin, a
+    source scan of every close path with planted offenders, and the timer tab's no-hold rule.
 
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`
