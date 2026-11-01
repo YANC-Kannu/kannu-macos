@@ -1,6 +1,0 @@
-*.gif filter=lfs diff=lfs merge=lfs -text
-*.mov filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-# The app bundles these clips, so they must be real files in every checkout, with or without git-lfs
-# installed. An exemption has to come after the rule it overrides. BundledVideoTests pins this.
-Kannu/BluetoothHUDAnimations/*.mov !filter !diff !merge -text
