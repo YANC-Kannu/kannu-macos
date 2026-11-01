@@ -48,6 +48,7 @@ struct Appearance: View {
     @Default(.enableLockScreenMediaWidget) private var enableLockScreenMediaWidget
     @Default(.enableLockScreenTimerWidget) private var enableLockScreenTimerWidget
     @Default(.externalDisplayStyle) private var externalDisplayStyle
+    @Default(.brainAppearance) private var brainAppearance
 
     @State private var isIconImporterPresented = false
     @State private var isIconDropTarget = false
@@ -109,6 +110,17 @@ struct Appearance: View {
     var body: some View {
         Form {
             Section {
+                // The moon only picks the opposite of what is on screen, so this is the one way back
+                // to Match macOS.
+                SettingsRow("Brain appearance", description: brainAppearance.description) {
+                    Picker("Brain appearance", selection: $brainAppearance) {
+                        ForEach(BrainAppearance.allCases) { choice in
+                            Text(choice.localizedName)
+                                .tag(choice)
+                        }
+                    }
+                }
+                .settingsHighlight(id: highlightID("Brain appearance"))
                 Toggle("Always show tabs", isOn: $coordinator.alwaysShowTabs)
                 Defaults.Toggle(key: .settingsIconInNotch) {
                     Text("Brain icon in notch")

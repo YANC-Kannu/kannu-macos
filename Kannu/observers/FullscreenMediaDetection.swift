@@ -154,8 +154,11 @@ class FullscreenMediaDetector: ObservableObject {
         var newStatus: [String: Bool] = [:]
         for name in names {
             newStatus[name] = apps.contains { app in
+                // Brain in full screen must not hide its own app's notch. By pid, since Debug and
+                // Release have different bundle ids.
                 guard app.screen.localizedName == name,
-                      app.bundleIdentifier != "com.apple.finder" else { return false }
+                      app.bundleIdentifier != "com.apple.finder",
+                      app.processId != ProcessInfo.processInfo.processIdentifier else { return false }
 
                 // The notch window stays on display in every fullscreen space (it sits in the
                 // max-level notch space on every hide option). Hiding is the views' job: this
