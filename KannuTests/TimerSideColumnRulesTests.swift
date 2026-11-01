@@ -151,7 +151,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
     /// The one field that holds the notch: a task being edited must survive the pointer leaving the
     /// notch (David, 2026-11-01). The hold follows the form's focus alone, under a `@State` token so
     /// the release names the token that was set, and ends with the form or with the window's key
-    /// status, so the pointer check closes the notch afterwards (docs/REGRESSIONS.md entry 22).
+    /// status, so the pointer check closes the notch afterwards (docs/REGRESSIONS.md entry 23).
     func testTheTaskFormHoldsTheNotchOnlyWhileAFieldHasFocus() throws {
         let form = Self.code(try Self.raw(Self.taskFormPath))
         XCTAssertTrue(form.contains("@State private var editingToken = UUID()"), "a plain let is minted again on each re-render")

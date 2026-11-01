@@ -46,7 +46,7 @@ enum TimerTaskFormMode: Hashable {
 /// this form's statics (`startFromForm`, `startNamed`, `prepareForTypedStart`), so it never names it.
 /// While a field has focus it holds the notch open under a token of its own, so an edit survives the
 /// pointer leaving the notch; the hold ends when the focus goes, the form goes, or the notch's window
-/// stops being key (docs/REGRESSIONS.md entry 22). Menus hold nothing here:
+/// stops being key (docs/REGRESSIONS.md entry 23). Menus hold nothing here:
 /// `ContentView.closeWhenPointerLeaves` waits for every menu.
 struct TimerTaskForm: View {
     @Environment(\.notchForeground) private var notchForeground
