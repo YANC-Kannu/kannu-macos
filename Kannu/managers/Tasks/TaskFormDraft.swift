@@ -54,12 +54,15 @@ struct TaskFormDraft: Equatable {
     var estimateText: String
     /// Tags as typed, comma separated: "writing, #urgent".
     var tagsText: String
-    var reminder: Date?
+    var reminder: Date? {
+        // A reminder set any other way leaves the words of the last one behind (`quickAddTimes`).
+        didSet { quickAddTimes = "" }
+    }
     /// Whether the reminder raises a notification; the bell beside it. On for a new task.
     var notifies: Bool
     /// The `@time` words already moved out of the title while it was typed
     /// (`foldingFinishedQuickAdd`), so a later one combines with them: `@tomorrow`, then `@5pm`, is
-    /// tomorrow at 17:00. Read only while the reminder they set is still there. In memory, as the
+    /// tomorrow at 17:00. Forgotten as soon as anything else sets the reminder. In memory, as the
     /// draft is.
     var quickAddTimes = ""
 
@@ -114,7 +117,17 @@ struct TaskFormDraft: Equatable {
     static func newTask(bar: String, kept: TaskFormDraft?) -> TaskFormDraft {
         guard let title = TaskItem.cleanedTitle(bar) else { return kept ?? TaskFormDraft() }
         var draft = kept ?? TaskFormDraft()
-        if !draft.isTitled(bar) { draft.title = title }
+        if draft.isTitled(bar) {
+            // The same name: the bar's own `#tag` and `@time` words join the title, and fold on saving
+            // as the form's do.
+            let present = TaskQuickAdd.tokens(of: draft.title)
+            let added = TaskQuickAdd.tokens(of: bar).filter { !present.contains($0) }
+            if !added.isEmpty {
+                draft.title += (draft.title.last?.isWhitespace == true ? "" : " ") + added.joined(separator: " ")
+            }
+        } else {
+            draft.title = title
+        }
         return draft
     }
 
@@ -145,8 +158,8 @@ struct TaskFormDraft: Equatable {
         }
         if canSchedule, typed.reminder != nil {
             // Read again with the `@time` words moved out before, so a day and a time typed apart
-            // still combine; once that reminder is cleared they are forgotten.
-            let earlier = reminder == nil ? [] : quickAddTimes.split(separator: " ")
+            // still combine.
+            let earlier = quickAddTimes.split(separator: " ")
             let times = (earlier + typed.tokenText.split(separator: " ").filter { $0.hasPrefix("@") })
                 .joined(separator: " ")
             folded.reminder = TaskQuickAdd.parse(times, now: now, calendar: calendar).reminder ?? typed.reminder

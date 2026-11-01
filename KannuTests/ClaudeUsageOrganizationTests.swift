@@ -146,6 +146,25 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
         XCTAssertEqual(organization(profileAt: "2026-10-28T06:20:47Z"), "team", "hours old: a copy written back")
     }
 
+    func testAContradictedProfileWithNoMatchingWeekYieldsToTheLastKnownOrganization() {
+        // Team's week was never remembered, and the cache contradicts Max's. A desktop-hosted write
+        // named Max inside the run, and Team's reset must not be kept as Max's.
+        let resets = ["max": Resets(weekly: utc("2026-10-28T00:00:00Z"), reportedAt: utc("2026-10-27T10:00:04Z"))]
+        func attribution(lastKnown: String?) -> ClaudeCachedUsage.RunAttribution {
+            ClaudeCachedUsage.attributeRun(
+                run(started: "2026-10-28T08:29:18Z", organization: "max", profileAt: "2026-10-28T08:29:19Z",
+                    cacheAt: "2026-10-28T08:29:20Z", weekly: "2026-11-03T05:00:00Z"),
+                lastKnown: lastKnown, resets: resets)
+        }
+        XCTAssertEqual(attribution(lastKnown: "team").organization, "team")
+        XCTAssertEqual(attribution(lastKnown: "team").evidence, .lastKnown)
+        XCTAssertEqual(attribution(lastKnown: "team").resets?.weekly, utc("2026-11-03T05:00:00Z"))
+        // Max again: its week moved, and the run learns the new one rather than leaving it unknown.
+        XCTAssertEqual(attribution(lastKnown: "max").organization, "max")
+        XCTAssertEqual(attribution(lastKnown: "max").resets?.weekly, utc("2026-11-03T05:00:00Z"))
+        XCTAssertEqual(attribution(lastKnown: nil).organization, "max", "the profile is all there is")
+    }
+
     func testAProfileTheCachesOwnWeekContradictsYieldsToTheWeek() {
         // The profile landed inside the run but Max's own anchor says the cache is not Max's,
         // and Team's says it is Team's: the profile was another process's.

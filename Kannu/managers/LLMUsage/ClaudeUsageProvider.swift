@@ -67,14 +67,15 @@ struct ClaudeUsageProvider: UsageProvider {
         // The tier badge is the plan `~/.claude.json` names, which flips between organizations.
         // When Claude Code and Claude Desktop are on different ones, it names the plan whose bars
         // are on the card instead — Desktop's, or Claude Code's when Desktop has no reading — so the
-        // bars are labelled with their plan; nil when Kannu has not seen that plan.
+        // bars are labelled with their plan; by where they come from when Kannu has not seen that
+        // plan, so two cards never read the same.
         let monitor = CursorAgentStatusMonitor.shared
         switch monitor.claudeUsageHint {
         case .otherOrganization:
-            snapshot.accountTier = monitor.claudeOrganizationPlanNames.desktop
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.desktop ?? String(localized: "Desktop")
             snapshot.accountNote = nil
         case .otherOrganizationWithoutDesktopReading:
-            snapshot.accountTier = monitor.claudeOrganizationPlanNames.claudeCode
+            snapshot.accountTier = monitor.claudeOrganizationPlanNames.claudeCode ?? String(localized: "Code")
             snapshot.accountNote = nil
         case .signInNeeded, nil:
             break
@@ -86,7 +87,7 @@ struct ClaudeUsageProvider: UsageProvider {
         // reading: a card of its own, labelled with its plan.
         if let second = monitor.claudeSecondOrganizationUsage {
             var card = UsageSnapshot()
-            card.accountTier = second.planName
+            card.accountTier = second.planName ?? String(localized: "Code")
             card.readingScope = second.readingScope
             card.billedCostOnly = true
             card.limitsOnly = true

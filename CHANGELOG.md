@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Act on CodeRabbit's review of #11
+- **Developer label:** CodeRabbit's review of #11, the notch tasks work, including #7's and #10's changes
+- **Agent label:** Claude Code (Opus 5.5) — 14 of its 19 findings fixed; the other 5 answered in their threads and on the PR, with why they stay
+- **Changes:**
+  - A drag that ends with no drop no longer closes the notch while the pointer is on it. A test pins the three closes that may skip the pointer check.
+  - A ticked task that is archived, reopened or deleted inside the undo window stays where it went, instead of being marked done there when the window ends.
+  - Quick add: picking a reminder in the form forgets the `@time` words behind the last one. New Task opened from a bar with the same name keeps the bar's own `#tag` and `@time` words. The chips on a field take at most 140 pt, so they never cover all of its title.
+  - Claude usage: a run's in-window profile that the cache contradicts yields to a different last known organization the cache does not contradict, so one organization's reset is never kept as another's. A card names its source ("Desktop", "Code") when Kannu has not seen its plan. A later line of an older call no longer overwrites a turn's context. A value with no reset forecasts nothing past its expiry.
+  - Extensions: a lock screen widget renders the payload its geometry comes from when two extensions send one id. A notch experience with no tab is refused and dropped from saved state, since nothing renders it.
+  - The Cursor diagnostic counts accepted events, so a cache-read-only event no longer logs "0 usable".
+  - The renamed Light Use description has its Korean, Dutch, Russian, Thai, Turkish and Simplified Chinese translations back, in the new wording.
+
 ### 2026-10-30 - The Settings highlight stops pulsing once it clears
 - **Developer label:** "Check CPU report"
 - **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings

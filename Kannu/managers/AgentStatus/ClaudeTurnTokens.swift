@@ -183,8 +183,9 @@ struct ClaudeTranscriptTokenAccumulator {
                 cacheRead: record.cacheReadTokens, output: record.outputTokens)
         }
         // A sidechain record is a subagent's call written into the chat's own file (older Claude
-        // Code): its context is not the chat's.
-        if object["isSidechain"] as? Bool != true {
+        // Code): its context is not the chat's. A later line of an older call changes nothing either:
+        // the context is the latest call's.
+        if object["isSidechain"] as? Bool != true, record.dedupKey == nil || record.dedupKey == seenOrder.last {
             context = counted.promptTokens
         }
     }

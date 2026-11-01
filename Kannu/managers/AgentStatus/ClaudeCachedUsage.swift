@@ -190,7 +190,9 @@ enum ClaudeCachedUsage {
     /// way the cache the run wrote is checked against the remembered weekly anchors: its own week
     /// names its organization when exactly one anchor matches, and a profile whose own
     /// organization's anchor the cache contradicts, while another's matches, was another
-    /// process's.
+    /// process's. With no anchor matching, such a profile yields to a different last known
+    /// organization the cache does not contradict. The last known one itself contradicted stands:
+    /// that is an organization whose week moved, and the run learns the new one.
     static func attributeRun(_ run: RunRead, lastKnown: String?,
                              resets: [String: OrganizationResets]) -> RunAttribution {
         let window = run.started.addingTimeInterval(-runWindowSlack)...run.readAt.addingTimeInterval(runWindowSlack)
@@ -208,6 +210,8 @@ enum ClaudeCachedUsage {
         if let profiled {
             if let matched, matched != profiled, contradicts(profiled) {
                 attribution = RunAttribution(organization: matched, evidence: .weeklyReset)
+            } else if contradicts(profiled), let lastKnown, lastKnown != profiled, !contradicts(lastKnown) {
+                attribution = RunAttribution(organization: lastKnown, evidence: .lastKnown)
             } else {
                 attribution = RunAttribution(organization: profiled, evidence: .profile)
             }

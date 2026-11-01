@@ -275,6 +275,26 @@ final class TaskQuickAddTests: XCTestCase {
         XCTAssertEqual(draft.reminder, wednesday(17), "today's 17:00, not tomorrow's")
     }
 
+    func testAReminderPickedInTheFormForgetsTheWordsToo() {
+        let now = wednesday(10, 30)
+        var draft = TaskFormDraft()
+        typing("Ship it @tomorrow ", into: &draft, at: now)
+        draft.reminder = date(day: 30, 12)
+        typing("@5pm ", into: &draft, at: now)
+        XCTAssertEqual(draft.reminder, wednesday(17), "not the stale @tomorrow read again")
+    }
+
+    func testNewTaskFromATitledBarKeepsTheBarsOwnWords() {
+        var kept = TaskFormDraft()
+        kept.title = "Deep work #kept"
+        let opened = TaskFormDraft.newTask(bar: "deep work #new @noon", kept: kept)
+        XCTAssertEqual(TaskQuickAdd.tokens(of: opened.title), ["#kept", "#new", "@noon"])
+        XCTAssertEqual(TaskQuickAdd.title(of: opened.title), "Deep work", "the kept name")
+        XCTAssertEqual(TaskFormDraft.newTask(bar: "Deep work #kept", kept: kept).title, "Deep work #kept",
+                       "one text: nothing doubled")
+        XCTAssertEqual(TaskFormDraft.newTask(bar: "Deep work", kept: kept).title, "Deep work #kept")
+    }
+
     func testOnlyASpaceAtTheEndMovesWords() {
         var draft = TaskFormDraft()
         draft.title = "Fix #work login"

@@ -35,7 +35,8 @@ final class ExtensionNotchExperienceManager: ObservableObject {
     private let currentProcessID = ProcessInfo.processInfo.processIdentifier
 
     private init() {
-        activeExperiences = eventBridge.loadPersistedNotchExperiences()
+        // One saved with no tab has nothing to render, and would hold a place against the capacity.
+        activeExperiences = eventBridge.loadPersistedNotchExperiences().filter(\.hasTabConfiguration)
         sortExperiences()
         observerToken = eventBridge.observeNotchExperienceSnapshots { [weak self] payloads, sourcePID in
             self?.applySnapshot(payloads, sourcePID: sourcePID)

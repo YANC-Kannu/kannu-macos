@@ -87,6 +87,12 @@ enum TaskQuickAdd {
         parse(text, now: Date(timeIntervalSinceReferenceDate: 0), calendar: Calendar(identifier: .gregorian)).title
     }
 
+    /// The `#tag` and `@time` words alone, as typed.
+    static func tokens(of text: String) -> [String] {
+        parse(text, now: Date(timeIntervalSinceReferenceDate: 0), calendar: Calendar(identifier: .gregorian))
+            .tokenText.split(separator: " ").map(String.init)
+    }
+
     // MARK: - Words
 
     private enum Day: Equatable {

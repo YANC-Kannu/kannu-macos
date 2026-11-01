@@ -28,6 +28,9 @@ struct TaskQuickAddChips: View {
     var fontSize: CGFloat = 10
     /// Room kept clear at the end, for a field whose border the chips sit inside.
     var trailingInset: CGFloat = 0
+    /// The most the chips take of a field they overlay, so they never cover all of its title and
+    /// its insertion point. Past it the first ones slide out of view: the latest stay.
+    var maxWidth: CGFloat = 140
     /// False for words that go to a task named elsewhere (a task picked in the timer bar).
     var requiresName = true
 
@@ -45,6 +48,8 @@ struct TaskQuickAddChips: View {
             }
             .lineLimit(1)
             .fixedSize()
+            .frame(maxWidth: maxWidth, alignment: .trailing)
+            .clipped()
             .padding(.trailing, trailingInset)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(verbatim: Self.spoken(parsed, now: now)))

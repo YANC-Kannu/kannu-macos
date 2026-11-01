@@ -683,6 +683,13 @@ Desktop's readings" lines are gone. Three things follow, and each would be easy 
 guarded: `UsageAlertPolicy.resumeDate` cannot tell which organization a rate-limited session is on,
 so with both full it answers with the later reset.
 
+**2026-11-01 addendum — a contradicted profile with no matching week.** `attributeRun` took an in-run
+profile even when the cache contradicted that organization's anchor and no anchor matched, so a
+desktop-hosted write could store Team's reset as Max's. It now yields to a different last known
+organization the cache does not contradict. The same organization contradicted still stands: its
+week moved, and only that run can learn the new one. Guard:
+`testAContradictedProfileWithNoMatchingWeekYieldsToTheLastKnownOrganization`.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there

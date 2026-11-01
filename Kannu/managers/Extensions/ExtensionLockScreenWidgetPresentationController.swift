@@ -147,7 +147,7 @@ private final class ExtensionLockScreenWidgetWindowPool {
         let activeIDs = Set(payloadsByID.keys)
         let staleIDs = Set(windows.keys).subtracting(activeIDs)
         staleIDs.forEach { hideWindow(withID: $0) }
-        payloads.forEach { renderWindow(for: $0) }
+        payloadsByID.values.forEach { renderWindow(for: $0) }
     }
 
     func hideAll() {
