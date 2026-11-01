@@ -21,8 +21,9 @@ import XCTest
 /// Every release through 1.4.0-beta.3 bundled 131-byte Git LFS pointers in place of the Bluetooth HUD
 /// clips. Nothing failed: `xcodebuild` copies a pointer like any other file, and `InlineHUD` and
 /// `SettingsLoopingVideoIcon` only check that the bundle URL exists, so `AVPlayer` got a file it
-/// cannot open and the icon slot stayed empty. These pin the tree, the attribute that keeps it that
-/// way for a contributor who has git-lfs installed, and the check that stops a DMG being made anyway.
+/// cannot open and the icon slot stayed empty. These pin the tree, the absence of an LFS rule that
+/// would undo it for a contributor who has git-lfs installed, and the check that stops a DMG being
+/// made anyway.
 final class BundledVideoTests: XCTestCase {
 
     private static let repoRoot = URL(fileURLWithPath: #filePath)
@@ -96,15 +97,12 @@ final class BundledVideoTests: XCTestCase {
         }
     }
 
-    /// With git-lfs installed, `git add` turns a tracked file back into a pointer, so the real files
-    /// alone would not last. Later lines win, so the exemption must follow the rule it overrides.
-    func testBundledClipsAreExemptFromTheLFSRule() throws {
-        let lines = try read(".gitattributes").components(separatedBy: .newlines)
-        let rule = try XCTUnwrap(lines.firstIndex(of: "*.mov filter=lfs diff=lfs merge=lfs -text"))
-        let exemption = try XCTUnwrap(
-            lines.firstIndex(of: "Kannu/BluetoothHUDAnimations/*.mov !filter !diff !merge -text")
-        )
-        XCTAssertGreaterThan(exemption, rule)
+    /// With git-lfs installed, `git add` turns a file an LFS rule matches back into a pointer, so the
+    /// real files alone would not last. The repo has no such rule, and needs no `.gitattributes` at all.
+    func testNoAttributeSendsAFileToLFS() throws {
+        let attributes = Self.repoRoot.appendingPathComponent(".gitattributes")
+        guard FileManager.default.fileExists(atPath: attributes.path) else { return }
+        XCTAssertFalse(try read(".gitattributes").contains("filter=lfs"), ".gitattributes sends files to Git LFS")
     }
 
     func testTheCheckRefusesABundleHoldingAPointer() throws {
