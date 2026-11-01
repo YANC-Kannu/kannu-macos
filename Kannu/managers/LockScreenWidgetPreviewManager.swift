@@ -237,6 +237,11 @@ final class LockScreenWidgetPreviewManager: ObservableObject {
         previewWindowDelegate = delegate
         window.delegate = delegate
 
+        // Opened from Brain's Lock screen page, which can be full screen: it joins that Space rather
+        // than pulling the user out of it, and never becomes one of Brain's tabs.
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.tabbingMode = .disallowed
+
         previewWindow = window
         window.makeKeyAndOrderFront(nil)
     }

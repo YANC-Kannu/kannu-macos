@@ -1561,8 +1561,15 @@ remembers the close; `windowDidExitFullScreen` closes a turn later, and `windowW
 the usual work above, content take-out included. The toggle runs only when no transition is running, and
 never inside AppKit's callback: a close during the entry waits for `windowDidEnterFullScreen`, then
 exits a turn later. A toggle AppKit ignored would lose the close, and a later exit would close Brain by
-surprise. `showWindow` clears the pending close, so opening Brain during the exit keeps it open. A failed
+surprise. `showWindow` clears the pending close, so opening Brain during the exit keeps it open, and the
+flag stays set until the turn the close runs in, so an opening queued in that gap still cancels it. A failed
 transition closes anyway, in full screen if the exit is what failed; nothing here can provoke one.
+
+A sheet that arrives during a transition calls the close off, and Brain stays open under it. `NSWindow.close()`
+does not look at `attachedSheet`, and this is Brain's first programmatic close. `ModalPresenter` counts a sheet
+until its completion runs, so a sheet closed away with Brain could leave `isPresenting` true, and
+`KannuViewModel.open()` refusing every notch open with no dialog on screen: entry 14's freeze. That AppKit runs
+the completion only at `endSheet` is from memory and has not been run.
 
 A full-screen Brain parked in another Space keeps `isVisible` true, so its content is never taken out,
 and a page's animation goes on ticking there. **Not measured**, like the covered Brain above: it needs a
@@ -1570,8 +1577,12 @@ real full-screen window, which no harness here may open. Taking content out on o
 fix if it costs what an open page costs. The window's change adds no `onAppear`, no `.task` and no
 repeating animator, so the rest of this entry holds.
 
-**Guard.** `SettingsAnimationRulesTests.closingViolations` pins all of this, and
-`testTheCloseDetectorCatchesEachWayToBreakIt` now breaks the real controller 34 ways. They prove the
+**Guard.** `SettingsAnimationRulesTests.closingViolations` pins the wiring above, its order included, and
+`testTheCloseDetectorCatchesEachWayToBreakIt` now breaks the real controller 49 ways. The first version of
+this rule claimed the same with 34 and missed real breaks: deleting the guard in `finishPendingClose`, moving
+`relinquishFocus` ahead of the wait, or moving `showWindow`'s reset past its early return all passed.
+`WindowFullscreenRulesTests.testTheWindowKeepsItsStatedRules` holds what the window's comments state:
+`isRestorable`, `isMovableByWindowBackground`, placing it before it is ordered in, and the clamp. These prove the
 wiring. They cannot prove AppKit's timing, and nothing has entered full screen under them.
 
 ---

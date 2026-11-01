@@ -112,9 +112,9 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 - **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
   opposite of what is on screen.
 
-`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellSearch,shellSearchList`
-draws the whole window: both lists, a deep link's scroll and ring, and a search with its suggestions and
-without. An animated scroll does not move in their off-screen window, so the boards scroll at
+`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
+draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
+with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
 arrow keys and hover take a real window.
 
@@ -129,7 +129,8 @@ arrow keys and hover take a real window.
   title row lies under the bar, level with the traffic lights, and the bar's top centre stays empty, because
   a closed notch can sit over it in full screen. The window moves by its title row, not by its background.
 - **Full screen.** The green button enters it. A close from there leaves full screen first, then closes,
-  so Brain always reopens windowed, and nothing restores it at launch. The rule is in entry 22.
+  so Brain reopens windowed unless the exit itself failed (entry 22). Nothing restores it at launch:
+  `isRestorable` is false, and `WindowFullscreenRulesTests` holds that.
 - **The notch ignores it.** `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide
   the closed notch under Hide set to Always.
 - **`brainAppearance` is this window's alone.** Match macOS, Light or Dark. `SettingsWindowController` applies it to

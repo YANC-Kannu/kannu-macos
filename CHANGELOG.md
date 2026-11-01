@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's window takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the window commits
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the AppKit and guards reviews, and the rules they found missing
+- **Changes:**
+  - A close that was waiting for full screen to end is called off by a sheet that arrived meanwhile. `NSWindow.close()`
+    ignores a sheet, and a sheet closed away with Brain could leave `ModalPresenter`'s count up and the notch refusing
+    to open. The exit after an entry does not toggle under a sheet either, and clears the flag, so no later exit
+    closes Brain by surprise.
+  - The pending flag now stays set until the turn the close runs in, so `showWindow` queued in that gap still cancels,
+    and `windowWillClose` clears it, so a second Command-W in that turn cannot close twice.
+  - Lock Screen Preview joins a full-screen Brain's Space and never becomes one of its tabs. Finishing onboarding with
+    Brain open no longer turns the app `.accessory` under it.
+  - `closingViolations` now proves order, not presence: the exit runs before `.accessory`, `close()` and
+    `windowShouldClose` obey the answer, and `showWindow`'s reset sits above its early return. The real controller is
+    broken 49 ways, up from 34. Deleting the guard in `finishPendingClose` used to pass, and now does not.
+  - `WindowFullscreenRulesTests` holds `isRestorable`, `isMovableByWindowBackground`, placing before ordering in and
+    the clamp, reads the assignments with comments blanked, and bans any height or maximum at the root, not only a
+    width. The appearance rule catches `.init`, `nil` and a direct write to the key, and its window check and the
+    notch's dark line each get a plant. The search boards' smallest-window size is pinned.
+  - `docs/SETTINGS.md`'s board command now includes `shellWide`. It and the previous entry said Brain always reopens
+    windowed; a failed exit closes in full screen, so it now says so.
+  - The full-screen Command-W beep is left to David's ear: nothing here can hear it, and the fix is a window subclass.
+
 ### 2026-11-01 - Brain's moon sets its appearance, on its own window only
 - **Developer label:** Brain redesign: "Follows macOS by default, with a moon toggle"
 - **Agent label:** Claude Code (Opus 5.5) — `brainAppearance` applied by the controller, so it works while Brain is closed

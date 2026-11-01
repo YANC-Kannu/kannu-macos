@@ -2305,7 +2305,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onFinish: { [weak self] in
                     self?.completeOnboarding()
                     window.orderOut(nil)
-                    NSApp.setActivationPolicy(.accessory)
+                    // Command-comma reaches Brain before onboarding ends, and it can be full screen:
+                    // `.accessory` is what a close from there waits to set (docs/REGRESSIONS.md, entry 22).
+                    let brainIsOpen = NSApp.windows.contains { $0.identifier == SettingsWindowController.windowIdentifier && $0.isVisible }
+                    if !brainIsOpen { NSApp.setActivationPolicy(.accessory) }
                     window.close()
                     NSApp.deactivate()
                     self?.startHello()
