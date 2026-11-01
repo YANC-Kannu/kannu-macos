@@ -22,7 +22,7 @@ import XCTest
 
 /// Text that sends the user to "Brain › <tab> › …" names a tab the sidebar has. CodeRabbit (#87)
 /// found "Brain › Security findings", which is a section, not a tab; the security messages also
-/// said "Brain › Agents ›" for rows that live in the Agent Security tab. The settings tabs now sit
+/// said "Brain › Agents ›" for rows that live in the Security tab. The settings tabs now sit
 /// behind the sidebar's Settings row, so a path to one says "Brain › Settings › <tab>".
 final class BrainPathRulesTests: XCTestCase {
     private static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -42,9 +42,9 @@ final class BrainPathRulesTests: XCTestCase {
     }
 
     /// What a path may start with: the sidebar's product list, its foot, and the Settings row.
-    private static let allowedHeads = ["Agents", "Agent Security", "Usage", "Tasks", "Timer", "Notes", "Clipboard", "About", "Settings"]
+    private static let allowedHeads = ["Agents", "Security", "Usage", "Tasks", "Timer", "Notes", "Clipboard", "About", "Settings"]
     /// What may follow "Brain › Settings ›": the settings list, as `title` spells it.
-    private static let fourteenTitles = ["General", "Appearance", "Live Activities", "Lock Screen", "Media", "Devices", "Controls",
+    private static let fourteenTitles = ["General", "Appearance", "Live activities", "Lock screen", "Media", "Devices", "HUD and OSD",
                                          "Battery", "Stats", "Shelf", "Downloads", "Screen Assistant", "Shortcuts", "Extensions"]
 
     /// Every "Brain › a › b" in the text's string-bearing lines, as its segments. Comment lines are
@@ -109,7 +109,7 @@ final class BrainPathRulesTests: XCTestCase {
 
     func testEveryBrainPathLeadsToARowTheSidebarHas() throws {
         let titles = try Self.titles()
-        XCTAssertTrue(titles.contains("Agent Security") && titles.contains("Tasks"), "the titles were not read")
+        XCTAssertTrue(titles.contains("Security") && titles.contains("Tasks"), "the titles were not read")
         XCTAssertTrue(Set(Self.allowedHeads + Self.fourteenTitles).isSubset(of: titles), "a list here names a title SettingsView no longer has")
         let scan = try Self.problemsInTheApp(titles: titles)
         XCTAssertGreaterThan(scan.paths, 0, "no Brain path found: the scan is vacuous")
@@ -132,7 +132,7 @@ final class BrainPathRulesTests: XCTestCase {
         XCTAssertEqual(Self.paths(in: #"let a = "Brain › Settings › General › Permissions, or System Settings › Privacy""#),
                        [["Settings", "General", "Permissions"]])
         XCTAssertEqual(problems(#"let a = "Brain › Settings › General › Permissions, or System Settings › Privacy""#), [])
-        XCTAssertEqual(problems(#"let a = "(Brain › Agent Security › Analyze chats)""#), [])
+        XCTAssertEqual(problems(#"let a = "(Brain › Security › Analyze chats)""#), [])
         XCTAssertEqual(problems(#"let a = "Brain › Settings""#), [])
 
         // A comment line is prose, whatever it names.
@@ -140,12 +140,12 @@ final class BrainPathRulesTests: XCTestCase {
         XCTAssertEqual(Self.paths(in: #"* says "Brain › General""#), [])
     }
 
-    func testTheSecurityMessagesNameTheAgentSecurityTab() throws {
+    func testTheSecurityMessagesNameTheSecurityTab() throws {
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/SecurityFindingsStore.swift")
-            .contains("Session analysis is off (Brain › Agent Security › Analyze chats with ADR Detection)."))
+            .contains("Session analysis is off (Brain › Security › Analyze chats with ADR Detection)."))
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/AgentSecurityFinding.swift")
-            .contains("Details are in Brain › Agent Security › Security findings."))
+            .contains("Details are in Brain › Security › Security findings."))
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/SecurityFindingGuide.swift")
-            .contains("turn blocking off in Brain › Agent Security › Agent policy."))
+            .contains("turn blocking off in Brain › Security › Agent policy."))
     }
 }

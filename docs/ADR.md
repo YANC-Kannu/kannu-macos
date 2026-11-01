@@ -28,7 +28,7 @@ the version number cannot tell an old install from a new one. To move an existin
 pinned commit, run the line above again with `--reinstall` after `uv tool install` (pipx:
 `pipx install --force …`).
 
-Then open Kannu → Brain → Agent Security → **ADR Discovery** and press **Check again**. Kannu looks
+Then open Kannu → Brain → Security → **ADR Discovery** and press **Check again**. Kannu looks
 in `~/.local/bin`, uv's tool directory, `/opt/homebrew/bin` and `/usr/local/bin`; a different
 location can be set in the **ADR tools folder** row (choose the folder that holds `adr-discovery`,
 `adr-sensor` or `uv`; leave it empty for the standard places). Avoid a folder inside Documents,
@@ -59,7 +59,7 @@ and no access at all under personal folders such as `~/.ssh`, `Documents`, `Mail
 
 ## 3. Let Kannu run it (default once connected)
 
-With Discovery connected, Brain → Agent Security → ADR Discovery → **Let Kannu run scans** makes
+With Discovery connected, Brain → Security → ADR Discovery → **Let Kannu run scans** makes
 Kannu invoke `adr-discovery --json --output-dir <snapshot folder>` itself. Kannu checks once a
 minute whether a scan is due, and runs one:
 
@@ -192,7 +192,7 @@ the Discovery README's "Policy file"):
 A Discovery installed from `main` before 2026-10-12 ignores both indicator lists and never raises
 *forbidden asset*.
 
-Point Kannu at the file with Brain → Agent Security → ADR scans → Advanced → **ADR scan policy**;
+Point Kannu at the file with Brain → Security → ADR scans → Advanced → **ADR scan policy**;
 Kannu passes it to every scan it runs, and never parses it itself. **Copy a prompt that drafts a
 policy** on the same row has your agent read your MCP configs, ask which domains are yours, and
 write `~/.kannu/adr/policy.json`; it describes the forbidden lists but leaves them out unless you
@@ -226,7 +226,7 @@ Claude Code 2.1's JSON output (upstream fix `1c8ecd6`), so every analysis would 
 so on the **Detection checkout** row and gives the update line — in the `Detection` folder,
 `git fetch && git checkout 6b33dffecd719708c435f772c9e93f1210944e31 && uv sync`.
 
-Then Brain → Agent Security → Session analysis → **Analyze chats with ADR Detection** (a consent
+Then Brain → Security → Session analysis → **Analyze chats with ADR Detection** (a consent
 alert names what leaves the Mac), choose the `Detection` folder, and optionally store keys:
 an OpenAI key if you turn **Triage with OpenAI first** on (off = Claude only), an Anthropic API
 key if you would rather spend API credits than your subscription's 5-hour/weekly quota.
@@ -288,7 +288,7 @@ A JSON file you write, `~/.kannu/agent-policy.json`, naming commands and tools a
 - `reason` is optional and is what the agent is told.
 - Caps: 64 KB, 200 rules, 200 characters per string. Anything else — missing, not JSON, over a cap,
   `version` not 1, a rule with neither key — means **no policy**; the hook never fails closed on
-  its own configuration, and Brain → Agent Security → **Agent policy** says why.
+  its own configuration, and Brain → Security → **Agent policy** says why.
 
 Kannu writes this file in two places, both at your click and both only after checking the bytes
 with the same rules as above, so neither can replace a working policy with a bad one. **Import…**
@@ -319,7 +319,7 @@ reads nor writes.
 
 ## What Kannu does with findings
 
-- Lists them in Brain → Agent Security → Security findings, highest severity first. Each row is
+- Lists them in Brain → Security → Security findings, highest severity first. Each row is
   compact — title, severity and a two-line summary — with its actions on the bottom row: **Details**
   on the left, and on the right a "…" menu, **Acknowledge** and **Copy for agent**. Details opens
   the evidence and, in plain words, what the finding means and what to do, as one block of text
