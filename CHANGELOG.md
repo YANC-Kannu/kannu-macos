@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Ship the Bluetooth HUD clips, not Git LFS pointers
+- **Developer label:** "Find out whether users get real videos or LFS pointers, then fix what is wrong"
+- **Agent label:** Claude Code (Opus 5.5) — the eight HUD clips become ordinary git blobs, and a test and a DMG-time check refuse a pointer
+- **Changes:**
+  - Every published release checked (1.0.0, 1.3.4, 1.4.0-beta.3) bundled 131-byte pointers for all
+    eight clips. `useBluetoothHUD3DIcon` defaults to on, and the views only check that the bundle
+    URL exists, so the inline HUD and the Settings 3D card drew an empty frame instead of the SF
+    Symbol.
+  - `Kannu/BluetoothHUDAnimations/*.mov` are now real files, 3.1 MB in all, each matching the
+    SHA-256 its pointer named. They came from Atoll's LFS store, the only one holding them:
+    `YANC-Kannu/kannu-macos`, `libinmv/kannu` and the fork all answer 404, so `lfs: true` alone
+    would have failed the checkout rather than fixed it.
+  - `.gitattributes` exempts that directory from the LFS rule, so a contributor with git-lfs
+    installed does not commit a pointer back. Nobody needs git-lfs to build.
+  - New `scripts/check-no-lfs-pointers.sh`, run by `create-dmg.sh` before anything is packaged. The
+    release workflow, `manual-release.sh` and `build-dmg.sh` all go through that script.
+  - New `BundledVideoTests`: every movie under `Kannu/` is real, the exemption follows the rule it
+    overrides, the check refuses a pointer, passes real files and fails on a missing path, and
+    `create-dmg.sh` runs it first.
+  - `CONTRIBUTING.md` and `AGENTS.md` state the rule, and why `lfs: true` is not the fix.
+  - No runtime fallback. The tree and the check now rule out the pointer, so the code would have no
+    reachable path.
+  - Real clips cost CPU where pointers cost none: about 5 % of a core while one plays (HEVC with
+    alpha, 168x168, 60 fps, measured off screen). The HUD holds one for its 2.5 seconds. A closed
+    Brain keeps `SettingsLoopingVideoIcon` playing until #12 lands.
 ### 2026-11-01 - Act on CodeRabbit's review of #12
 - **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore
