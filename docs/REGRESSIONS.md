@@ -1412,13 +1412,18 @@ heap, parked, and it spins again without a new `withAnimation`.
 - **Lottie's Core Animation engine ends the loop for good** when its view leaves the window, at
   `progress` 1.0, not playing, including after reopening. `LottiePreviewThumbnail` gives the preview a
   new identity on `onDisappear`. The main-thread engine pauses and resumes by itself (2.3 % to 0.01 %).
-- **Focus scrolls.** With the window as first responder after the swap, a text field on the page takes
-  focus when the window is ordered in and scrolls itself into view, 1500 down to 345 in the harness.
-  `makeFirstResponder(nil)` before the swap, `makeFirstResponder(hostingView)` after it and
-  `.defaultFocus` on the search field did not stop it. The clip views' origins are saved at removal
-  and put back right after the second `makeKeyAndOrderFront` in `showWindow`, the first moment the
-  jump has landed. A deep link scrolls later and still wins. Focus itself is not put back: the first
-  field on the page takes it, with its text selected.
+- **Focus moves, and it scrolls.** With the window as first responder after the swap, the page's first
+  text field takes focus when the window is ordered in, with its text selected, so the next key typed
+  replaces it. On a write-through field, such as a Pushover key, that overwrites what is stored. The
+  field also scrolls itself into view, 1500 down to 345 in the harness. `makeFirstResponder(nil)`
+  before the swap, `makeFirstResponder(hostingView)` after it and `.defaultFocus` on the search field
+  did not stop it. So `LeftState` records what had focus, a field's caret and the clip views' origins,
+  taking the field from its field editor, which does not survive the swap. `restoreLeftState` puts them
+  back right after the second `makeKeyAndOrderFront`, the first moment the jump has landed: focus
+  first, since focusing a field also scrolls. Against the unfixed controller the probe reads the same
+  field and caret, and a key lands in the same place. If what had focus has left the window, nothing
+  gets it, not the first field. A deep link scrolls later and still wins. This first went up as a known
+  limit, and CodeRabbit's review of #12 was right to refuse it.
 
 **Two false readings on the way, both from a player or animation that was not running.** The `.mov`
 files here are Git LFS pointers of 131 bytes, in the worktree and in the installed app, since `git lfs`
@@ -1428,7 +1433,7 @@ Core Animation Lottie costs nothing on the main thread open or closed, so CPU sa
 print `isAnimationPlaying`. Trust a zero only with evidence that the thing was moving.
 
 **Guard.** `SettingsAnimationRulesTests` pins the close, the reopening and its ordering, checked by
-breaking the real controller eight ways; a player under Settings must pause from one of the two hooks;
+breaking the real controller fourteen ways; a player under Settings must pause from one of the two hooks;
 a page Lottie must take a new identity; the two saves and the cookie read. `.repeatForever` stays
 banned, since a stuck animator now only waits for the next reopening. Not guarded, and not measured:
 a minimized or fully covered Brain, and the real app itself. The harness compiles the real controller
