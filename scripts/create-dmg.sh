@@ -14,6 +14,10 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
+# release.yml, manual-release.sh and build-dmg.sh all come through here. Run through bash so a lost
+# executable bit cannot skip it.
+bash "$(dirname "${BASH_SOURCE[0]}")/check-no-lfs-pointers.sh" "$APP_PATH"
+
 STAGING_DIR="$(mktemp -d)"
 cleanup() {
   rm -rf "$STAGING_DIR"

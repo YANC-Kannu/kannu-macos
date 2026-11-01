@@ -101,6 +101,10 @@ section describes it, it does not define it.
   (the "Policy rules" "…" bug). Such controls go in a raw `LabeledContent` with a
   `SettingsRowLabel` (the `analysisRow` shape) or a `SettingsActionRow`.
 
+- `onAppear` runs again every time Brain reopens, not only on arriving at a page: closing takes the
+  content out of the window (docs/REGRESSIONS.md, entry 22). One that loads a field must not read
+  over what was typed and not yet saved.
+
 - One concern per `Section`; separate concerns get separate Sections, never a `Divider` inside one.
 - A Section earns its gap: a one-row Section spends a whole section gap on one row, so a row that
   serves a Section joins it. A row that only narrows a list (a Find field) is that list's first

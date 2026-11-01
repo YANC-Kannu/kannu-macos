@@ -2806,7 +2806,7 @@ struct ContentView: View {
     /// The decision is geometry, never the latched `isHovering`. Hover goes false, and stays
     /// false, while another window has the pointer (a popover, a menu, an alert), and when that
     /// window goes it comes back only once the pointer moves; a close read off it shut the notch
-    /// under a still pointer (docs/REGRESSIONS.md entry 22). It waits while something holds the
+    /// under a still pointer (docs/REGRESSIONS.md entry 23). It waits while something holds the
     /// notch (`shouldPreventAutoClose`) or a menu tracks, and closes when that ends with the pointer
     /// gone. It runs only while the notch is open and hover says outside: a hover-enter cancels it
     /// (`handleHover` cancels `hoverTask`), and so does the notch closing any other way.
