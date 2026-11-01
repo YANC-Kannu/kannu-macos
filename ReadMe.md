@@ -35,7 +35,7 @@ Calendar, terminal, and color picker features from the Atoll/Boring.Notch lineag
 
 ## Runtime Permissions (by Feature)
 
-The app is not sandboxed, so these are standard macOS privacy prompts (TCC). Kannu never raises one on its own at launch: on a fresh install, onboarding's **Permissions** step lists only what your choices use, says why, and asks for each one when you press **Allow**, one dialog at a time. The welcome music plays after you finish. Press **Not now** and that feature stays off until you allow it in **Brain › General › Permissions**; nothing asks for it later by surprise.
+The app is not sandboxed, so these are standard macOS privacy prompts (TCC). Kannu never raises one on its own at launch: on a fresh install, onboarding's **Permissions** step lists only what your choices use, says why, and asks for each one when you press **Allow**, one dialog at a time. The welcome music plays after you finish. Press **Not now** and that feature stays off until you allow it in **Brain › Settings › General › Permissions**; nothing asks for it later by surprise.
 
 Asked on the Permissions step (when the feature is on):
 

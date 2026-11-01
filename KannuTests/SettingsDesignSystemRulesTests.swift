@@ -91,10 +91,11 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
             if text.contains("formStyle(.grouped)") { findings.append("\(name) sets the form style itself") }
         }
         if root.components(separatedBy: "formStyle(.grouped)").count != 2 { findings.append("the root lost its form style") }
-        // The sidebar stays native until it is replaced, so the root reaches the detail column alone.
-        if matches(of: #"detailView\(for: resolvedSelection\)\s*\.settingsDesignSystem\(\)"#, in: view).count != 1
+        // The whole shell has it, sidebar and pages alike, from exactly one place on the shell's own chain.
+        if openers(of: "BrainShell", in: view).count != 1
+            || !calls(of: "BrainShell", in: view, whereChain: { !$0.contains(".settingsDesignSystem()") }).isEmpty
             || view.components(separatedBy: ".settingsDesignSystem()").count != 2 {
-            findings.append("the view applies the root to more than its detail column")
+            findings.append("the view applies the root to something other than its shell")
         }
         return findings
     }
@@ -114,15 +115,17 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                                          root: Self.code(try XCTUnwrap(sources["SettingsDesignSystem.swift"]))), [])
 
         let good = ".settingsDesignSystem()"
-        let detail = "detailView(for: resolvedSelection)\n    .settingsDesignSystem()\n"
-        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good, root: "formStyle(.grouped)"), [])
-        XCTAssertEqual(Self.rootFindings(view: detail + ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        let shell = "BrainShell {\n    sidebar\n} headerAccessory: {\n    moon\n} detail: {\n    page\n}\n.environmentObject(a)\n.settingsDesignSystem()\n"
+        XCTAssertEqual(Self.rootFindings(view: shell, snapshots: good, root: "formStyle(.grouped)"), [])
+        XCTAssertEqual(Self.rootFindings(view: shell + ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 1)
         XCTAssertEqual(Self.rootFindings(view: ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 3)
-        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good + ".formStyle(.grouped)", root: "formStyle(.grouped)").count, 1)
-        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good, root: "font(body)").count, 1)
-        // On the whole split view, or on the split view as well.
+        XCTAssertEqual(Self.rootFindings(view: shell, snapshots: good + ".formStyle(.grouped)", root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: shell, snapshots: good, root: "font(body)").count, 1)
+        // On something else, on the shell as well, on a page inside the shell, or on the next view.
         XCTAssertEqual(Self.rootFindings(view: "NavigationSplitView {}\n.settingsDesignSystem()", snapshots: good, root: "formStyle(.grouped)").count, 1)
-        XCTAssertEqual(Self.rootFindings(view: detail + "}\n.settingsDesignSystem()", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: shell + "}\n.settingsDesignSystem()", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: "BrainShell {\n} detail: {\n    page.settingsDesignSystem()\n}\n", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: "BrainShell {\n} detail: {\n}\nText(\"a\")\n.settingsDesignSystem()\n", snapshots: good, root: "formStyle(.grouped)").count, 1)
     }
 
     func testOnlyTheRootSetsTheFormStyle() throws {
@@ -297,9 +300,6 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
     // MARK: - Every token has a reader
 
-    /// Child 2 gives each of these a reader and deletes this set.
-    private static let notReadYet: Set<String> = ["paper", "panel", "hover", "inkSecondary", "pageTitle", "caption", "micro"]
-
     private static func unreadTokens(theme: String, others: [String]) -> Set<String> {
         let tokens = groups(of: #"static let (\w+)"#, in: theme).map { $0[1] }
         return Set(tokens.filter { token in
@@ -314,11 +314,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     func testEveryThemeTokenIsRead() throws {
         let theme = try Self.theme()
         let others = try Self.sources().filter { $0.key != "SettingsTheme.swift" }.values.map(Self.code)
-        XCTAssertEqual(Self.unreadTokens(theme: theme, others: others), Self.notReadYet,
-                       "a token nothing reads is a stale value; a token in notReadYet that has a reader must leave the set")
+        XCTAssertEqual(Self.unreadTokens(theme: theme, others: others), [], "a token nothing reads is a stale value")
 
-        XCTAssertEqual(Self.unreadTokens(theme: theme + "\nstatic let planted = color(light: 0x000000, dark: 0x000000)\n", others: others),
-                       Self.notReadYet.union(["planted"]))
+        XCTAssertEqual(Self.unreadTokens(theme: theme + "\nstatic let planted = color(light: 0x000000, dark: 0x000000)\n", others: others), ["planted"])
         // A longer name is not a reader, and a comment is not a reader.
         let plantedPair = "static let ink = 1\nstatic let inkSecondary = 2\nstatic let body = 3\nstatic let bodyStrong = 4\n"
         XCTAssertEqual(Self.unreadTokens(theme: plantedPair, others: ["SettingsTheme.inkSecondary", "SettingsTheme.bodyStrong"]), ["ink", "body"])
@@ -644,6 +642,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                 index += 6
             } else if String(characters[index...].prefix(14)) == "primaryAction:" {
                 index += 14
+            } else if String(characters[index...].prefix(16)) == "headerAccessory:" {
+                index += 16
+            } else if String(characters[index...].prefix(7)) == "detail:" {
+                index += 7
             } else {
                 break
             }
@@ -739,7 +741,7 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
     /// The source with every comment blanked and every line kept, so line numbers still mean what they
     /// do in the file. Strings are respected: a URL's `//` is not a comment.
-    private static func code(_ source: String) -> String {
+    static func code(_ source: String) -> String {
         let characters = Array(source)
         var out = ""
         var index = 0
@@ -792,7 +794,7 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     }
 
     /// Each edit must change `source`, and `problems` must report the result.
-    private static func assertCaught(_ edits: [(from: String, to: String)], in source: String, by problems: (String) -> [String],
+    static func assertCaught(_ edits: [(from: String, to: String)], in source: String, by problems: (String) -> [String],
                                      file: StaticString = #filePath, line: UInt = #line) {
         for edit in edits {
             let edited = source.replacingOccurrences(of: edit.from, with: edit.to)
@@ -801,7 +803,7 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         }
     }
 
-    private static func matches(of pattern: String, in text: String) -> [String] {
+    static func matches(of pattern: String, in text: String) -> [String] {
         groups(of: pattern, in: text).map { $0[0] }
     }
 

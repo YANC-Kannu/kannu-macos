@@ -20,9 +20,8 @@ import Defaults
 import SwiftUI
 
 /// Settings pane for the notch's Usage tab: the LLM usage monitor and its providers.
-/// Lives beside the Agents pane in the "AI Agents" sidebar group, mirroring how the notch
-/// presents Agent Status and Usage as sibling tabs. (These sections previously hid inside
-/// the Stats pane under Developer.)
+/// Lives beside the Agents pane in the sidebar's product list, mirroring how the notch presents
+/// Agent Status and Usage as sibling tabs. (These sections previously hid inside the Stats pane.)
 struct UsageSettings: View {
     @Default(.enableLLMUsageFeature) var enableLLMUsageFeature
 
