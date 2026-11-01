@@ -4,6 +4,54 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Act on CodeRabbit's review of #12
+- **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore
+- **Changes:**
+  - `SettingsWindowController` records what had focus and a field's caret when the content leaves the
+    window, and puts them back after the second `makeKeyAndOrderFront`, focus before scroll. One key
+    typed after reopening would otherwise have replaced the first field's text, and on a
+    write-through field that overwrites what is stored. If what had focus has left the window,
+    nothing gets it.
+  - Test: `SettingsAnimationRulesTests` pins the focus and caret restore and their order, and rejects
+    a `return` or `guard` between the last `makeKeyAndOrderFront` and `restoreLeftState()`. The
+    planted breakages of the real controller go from eight to fourteen.
+  - `docs/REGRESSIONS.md` entry 22's addendum says what focus does now.
+
+### 2026-11-01 - A closed Brain costs no CPU, whatever its page animates
+- **Developer label:** "Make a closed Brain window stop costing CPU, whatever its pages animate."
+- **Agent label:** Claude Code (Opus 5.5) — closing Brain takes its SwiftUI out of the window a turn after the close and reopening puts it back, measured at 13.9 % before and 0.16 % after with every animating view on one page
+- **Changes:**
+  - `SettingsWindowController` swaps the hosting view for an empty `NSView` a turn after
+    `windowWillClose`, and `showWindow` puts it back before ordering in. An ordered-out window goes
+    on animating at the display's rate; a view out of the window does not, and keeps its state.
+  - The clip views' origins are saved at removal and restored after `showWindow`'s second
+    `makeKeyAndOrderFront`: a text field takes focus on reopening and scrolls itself into view.
+  - `SettingsLoopingVideoIcon` pauses when its view leaves the window and plays when it returns. It
+    cost 5.0 % behind a closed Brain, and leaving the window alone does not stop an `AVPlayer`.
+  - `LottiePreviewThumbnail` gives a page's Lottie a new identity after each `onDisappear`: its Core
+    Animation engine ends the loop when the view leaves the window and never starts it again.
+  - `SpotifyAuthSettingsSection` reads the stored cookie once per visit, because `onAppear` now runs
+    on every reopening and would overwrite one typed and not yet validated.
+  - The Copy for agent button clears "Copied" when it disappears: its `onDisappear` also cancels the
+    task that would have.
+  - Test: `SettingsAnimationRulesTests` pins all of this, checked against planted offenders and by
+    breaking the real controller eight ways.
+  - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
+
+### 2026-10-30 - The Settings highlight stops pulsing once it clears
+- **Developer label:** "Check CPU report"
+- **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings
+- **Changes:**
+  - `SettingsHighlightModifier` pulses with `.repeatCount(3, autoreverses: true)`, not
+    `.repeatForever`. At the 2 s clear, the stroke's colour kept a repeating animator that nothing
+    replaced. Closing Brain only orders its window out, so it ran on at 40-60 % CPU with only the
+    notch on screen until Kannu quit, from the first search result or deep link that highlighted a
+    row. macOS logged it as `cpu_resource` reports on 2026-10-22 and 2026-10-29.
+  - Test: `SettingsAnimationRulesTests` fails on `.repeatForever` under `Kannu/components/Settings/`,
+    and is checked against planted offenders.
+  - `docs/REGRESSIONS.md` gains entry 22 and a Danger zones row.
+
 ### 2026-10-29 - Act on CodeRabbit's review of #5
 - **Developer label:** CodeRabbit's review of #5: drain descriptor 3 after Python exits, and use the GPL header block in the new test file
 - **Agent label:** Claude Code (Opus 5.5) — the hook wrapper drains fd 3 after a failed Python run; `HookInputLeftoversTests` gets the block header

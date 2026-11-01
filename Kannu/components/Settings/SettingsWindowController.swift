@@ -28,6 +28,19 @@ class SettingsWindowController: NSWindowController {
     /// The Brain window's identifier: how a view tells it from a sheet over it, without building
     /// `shared` where it does not exist yet (a DEBUG snapshot).
     static let windowIdentifier = NSUserInterfaceItemIdentifier("KannuSettingsWindow")
+    /// Brain's SwiftUI. It sits in the window only while the window is open, and outlives every
+    /// close, so its page, scroll position and typing are still there on reopening.
+    private var settingsContent: NSHostingView<SettingsView>?
+    /// How the page was left when the content came out of the window. Nil while it is in the window.
+    private var leftState: LeftState?
+
+    private struct LeftState {
+        /// Nil when nothing on the page had focus.
+        var focus: NSView?
+        /// A text field's caret, since focusing the field again selects all its text.
+        var selection: NSRange?
+        var scrollPositions: [(clipView: NSClipView, origin: NSPoint)]
+    }
 
     private init() {
         let window = NSWindow(
@@ -69,8 +82,8 @@ class SettingsWindowController: NSWindowController {
         
         // Create the SwiftUI content
         let settingsView = SettingsView()
-        let hostingView = NSHostingView(rootView: settingsView)
-        window.contentView = hostingView
+        settingsContent = NSHostingView(rootView: settingsView)
+        restoreContent()
         
         // Handle window closing
         window.delegate = self
@@ -81,6 +94,7 @@ class SettingsWindowController: NSWindowController {
     func showWindow() {
         // Ensure window exists
         _ = window
+        restoreContent()
 
         // Utility windows (like NSColorPanel) are unreliable while accessory policy is active.
         NSApp.setActivationPolicy(.regular)
@@ -114,6 +128,7 @@ class SettingsWindowController: NSWindowController {
         DispatchQueue.main.async { [weak self] in
             guard !NSColorPanel.shared.isVisible else { return }
             self?.window?.makeKeyAndOrderFront(nil)
+            self?.restoreLeftState()
         }
     }
     
@@ -124,6 +139,50 @@ class SettingsWindowController: NSWindowController {
     func showWindow(navigatingToAgentStatusHighlight highlightID: String) {
         showWindow()
         SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(highlightID: highlightID)
+    }
+
+    private func restoreContent() {
+        guard let window, let settingsContent, window.contentView !== settingsContent else { return }
+        window.contentView = settingsContent
+    }
+
+    /// Closing only orders the window out, and SwiftUI in an ordered-out window goes on animating at
+    /// the display's rate with nothing on screen (docs/REGRESSIONS.md, entry 22). Out of the window
+    /// it stops, whatever the page animates. Its state stays; its `onDisappear`s and `.task`
+    /// cancellations run now, and its `onAppear`s and `.task`s again on reopening.
+    private func removeContentFromClosedWindow() {
+        guard let window, !window.isVisible, let settingsContent, window.contentView === settingsContent else { return }
+        let editor = (window.firstResponder as? NSTextView).flatMap { $0.isFieldEditor ? $0 : nil }
+        leftState = LeftState(
+            focus: editor?.delegate as? NSView ?? window.firstResponder as? NSView,
+            selection: editor?.selectedRange(),
+            scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
+        )
+        window.contentView = NSView()
+    }
+
+    /// Ordering the content back in gives the page's first text field focus with its text selected,
+    /// so the next key typed would replace it, and scrolls the page to that field. Whatever had focus
+    /// gets it back, or nothing does; the scroll goes back last, since focusing a field also moves it.
+    private func restoreLeftState() {
+        guard let window, let leftState else { return }
+        self.leftState = nil
+        let focus = leftState.focus?.window === window ? leftState.focus : nil
+        window.makeFirstResponder(focus)
+        if let selection = leftState.selection, let field = focus as? NSTextField {
+            field.currentEditor()?.selectedRange = selection
+        }
+        for (clipView, origin) in leftState.scrollPositions where clipView.bounds.origin != origin {
+            clipView.setBoundsOrigin(origin)
+            (clipView.superview as? NSScrollView)?.reflectScrolledClipView(clipView)
+        }
+    }
+
+    private static func scrollers(in view: NSView) -> [NSScrollView] {
+        view.subviews.flatMap { subview -> [NSScrollView] in
+            let inside = scrollers(in: subview)
+            return (subview as? NSScrollView).map { [$0] + inside } ?? inside
+        }
     }
 
     private func centerWindowOnActiveScreen() {
@@ -173,6 +232,11 @@ extension SettingsWindowController: NSWindowDelegate {
         NSColorPanel.shared.setTarget(nil)
         NSColorPanel.shared.setAction(nil)
         relinquishFocus()
+        // A turn later: `TaskDetailPage` saves on this same notification, and this is the only hook
+        // the close button and Command-W share with `close()`.
+        DispatchQueue.main.async { [weak self] in
+            self?.removeContentFromClosedWindow()
+        }
     }
     
     func windowShouldClose(_ sender: NSWindow) -> Bool {
