@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Delete the last Git LFS pointers and the LFS rules
+- **Developer label:** "Clear the 12 Git LFS pointers whose objects are missing from this repo's LFS store, so the repo no longer depends on LFS"
+- **Agent label:** Claude Code (Opus 5.5) — the 12 unreferenced pointers and `.gitattributes` go; `BundledVideoTests` and the contributor docs stop assuming LFS rules exist
+- **Changes:**
+  - Deleted 11 pointers under `.github/assets/` and `DynamicIslandSamples/dynamicislandscreenrecord.gif`.
+    All were demo clips from Atoll's old README. Nothing in the tree referenced them, and this repo's
+    LFS store answered 404 for all 12, so a checkout with git-lfs installed was expected to fail. David
+    chose to keep none, including `kannu-demo.gif`, which holds the same object as
+    `dynamicislandscreenrecord.gif`: Atoll's "DynamicIsland Demo" recording, not a demo of Kannu.
+  - Deleted `.gitattributes`. It held only the three LFS rules and the exemption for
+    `Kannu/BluetoothHUDAnimations/`, so nothing is left for it to do.
+  - `BundledVideoTests`: `testNoAttributeSendsAFileToLFS` replaces the exemption test and fails if an
+    LFS rule comes back. The movie check and the tests of `scripts/check-no-lfs-pointers.sh` stay, and
+    `create-dmg.sh` still runs that script.
+  - `AGENTS.md` and `CONTRIBUTING.md` state that the repo does not use LFS. `lfs: true` and
+    `GIT_LFS_SKIP_SMUDGE=1` now apply only to older refs, `main` and `release/1.4.0` included until
+    this reaches them.
+  - `docs/REGRESSIONS.md` entry 22: the pointer reading is in the past tense, since the clips became
+    real files in #13.
+  - Put back the blank line between the two entries below, lost resolving #13's `CHANGELOG.md` conflict.
+
 ### 2026-11-01 - Ship the Bluetooth HUD clips, not Git LFS pointers
 - **Developer label:** "Find out whether users get real videos or LFS pointers, then fix what is wrong"
 - **Agent label:** Claude Code (Opus 5.5) — the eight HUD clips become ordinary git blobs, and a test and a DMG-time check refuse a pointer
@@ -29,6 +50,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Real clips cost CPU where pointers cost none: about 5 % of a core while one plays (HEVC with
     alpha, 168x168, 60 fps, measured off screen). The HUD holds one for its 2.5 seconds. A closed
     Brain keeps `SettingsLoopingVideoIcon` playing until #12 lands.
+
 ### 2026-11-01 - Act on CodeRabbit's review of #12
 - **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore

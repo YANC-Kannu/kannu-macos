@@ -46,7 +46,7 @@ We are committed to fostering a welcoming and inclusive environment. Please read
 	cd kannu
 	open Kannu.xcodeproj
 	```
-- **Git LFS is not needed to build.** The clips the app bundles, in `Kannu/BluetoothHUDAnimations/`, are ordinary git blobs. Anything else the app bundles must be one too: `.gitattributes` sends `*.gif`, `*.mov` and `*.mp4` to LFS by default, so a new location under `Kannu/` needs an exemption line beside the existing one. Otherwise a contributor with git-lfs installed commits a pointer, `xcodebuild` copies it into the app without complaint, and the user gets an empty icon. `BundledVideoTests` and `scripts/check-no-lfs-pointers.sh` catch that. Do not set `lfs: true` on a checkout: the LFS-tracked files left in this repo (`.github/assets/`, `DynamicIslandSamples/`) have no objects on its LFS store, so the checkout would fail. For the same reason, if you do have git-lfs installed, clone with `GIT_LFS_SKIP_SMUDGE=1`.
+- **This repo does not use Git LFS.** Everything the app bundles must be an ordinary git blob, so do not add an LFS rule: `xcodebuild` copies a pointer into the app without complaint, and the user gets an empty icon. `BundledVideoTests` and `scripts/check-no-lfs-pointers.sh` catch that. Older refs still hold pointers, `main` and `release/1.4.0` included until this change reaches them, and their objects are not on this repo's LFS store. So do not set `lfs: true` on a checkout of one, and if you have git-lfs installed, clone or check one out with `GIT_LFS_SKIP_SMUDGE=1`. A plain `git clone` lands on `main`.
 - **Build & Run:**
 	- Select your Mac as the run destination in Xcode.
 	- Choose the **Kannu** scheme.

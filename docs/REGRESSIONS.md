@@ -1426,8 +1426,8 @@ heap, parked, and it spins again without a new `withAnimation`.
   limit, and CodeRabbit's review of #12 was right to refuse it.
 
 **Two false readings on the way, both from a player or animation that was not running.** The `.mov`
-files here are Git LFS pointers of 131 bytes, in the worktree and in the installed app, since `git lfs`
-is not installed on this Mac: `AVQueuePlayer` reports rate 1 with no item, and the harness read 0.00 %
+files were still Git LFS pointers of 131 bytes then, in the worktree and in the installed app, until
+#13 made them real: `AVQueuePlayer` reports rate 1 with no item, and the harness read 0.00 %
 in every state until it played a real clip, with its `rate` and `currentTime` printed. Likewise a
 Core Animation Lottie costs nothing on the main thread open or closed, so CPU says nothing about it:
 print `isAnimationPlaying`. Trust a zero only with evidence that the thing was moving.
