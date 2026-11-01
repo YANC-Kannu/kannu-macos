@@ -222,7 +222,7 @@ struct TimerSettings: View {
         } header: {
             SettingsSectionHeader("Lock Screen Integration")
         } footer: {
-            SettingsFooter("Mirrors the toggle found under Lock Screen settings so timer-specific workflows can enable or disable the widget without switching tabs.")
+            SettingsFooter("Mirrors the toggle found under Lock screen settings so timer-specific workflows can enable or disable the widget without switching tabs.")
         }
     }
 

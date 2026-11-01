@@ -95,21 +95,27 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 - **Two lists, and no mode flag.** The product list ends at Settings and About; the settings list starts
   with Back. Which one shows is read from the selected tab (`SettingsTab.group`), and `selectedTab` is
   the only navigation state. So a search or a deep link moves the sidebar through the writers it already
-  had, with no path of its own. `tabOnOtherList` remembers the tab left when the list last changed, which
-  is where Back and the Settings row return to, and only that change writes it.
+  had, with no path of its own. `lastProductTab` and `lastSettingsTab` remember the tab last left on each
+  list, which is where Back and the Settings row return to. A search's jumps write neither: the tab a query
+  started from is remembered, and the tabs it passes through while being typed are not.
 - **A query shows one flat list** of the matching tabs, with no Back row and no Settings row. Clearing it
-  returns to the list the selected tab is on. The suggestions render inside the sidebar's column.
+  returns to the list the selected tab is on. A deep link to a tab that list leaves out clears the query, so
+  the sidebar still shows the tab. The suggestions render inside the sidebar's column.
 - **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
   sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
   sits outside the page's `Form`, so it stays put while the page scrolls.
 - **The sidebar is a custom list, not `List(selection:)`**, which draws its own selection on macOS. So it
   takes arrow keys itself and follows its own selection, and a row, Back and the Settings row each hand it
-  the keyboard.
+  the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
+  and right is the Settings row. The focus stop is a background, so each row keeps its own ring under Full
+  Keyboard Access.
 - **The moon writes `brainAppearance`.** Nothing applies that to the window yet.
 
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellSearch,shellSearchList`
-draws the whole window at today's size: both lists, a deep link's ring, and a search with its suggestions
-and without. The window's own title bar is not in them, and arrow keys and hover take a real window.
+draws the whole window at today's size: both lists, a deep link's scroll and ring, and a search with its
+suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
+once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
+arrow keys and hover take a real window.
 
 ## The content standard
 

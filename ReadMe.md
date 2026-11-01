@@ -19,7 +19,7 @@ Kannu is a fork of [Atoll](https://github.com/Ebullioscopic/Atoll), which itself
 - **Mobile notifications (optional)** — push agent state changes to iPhone, Apple Watch, or Android via ntfy, Pushover, or a custom webhook.
 - **Tasks and time** — Brain › Tasks lists your own tasks beside those from Jira Cloud, GitLab, GitHub (including GitHub Enterprise Server), Linear, Todoist and Apple Reminders, with estimates, tags, reminders and an archive. The timer times a task, and the time it records can go back to Jira or GitLab, only when you say so; the other sources are read, never changed. Tokens stay in your Keychain.
 - Media controls, live activities, lock screen widgets, stats, timers, clipboard, and shelf.
-- **Keyboard shortcuts off by default** — enable globally in Brain → Shortcuts when you want hotkeys.
+- **Keyboard shortcuts off by default** — enable globally in Brain → Settings → Shortcuts when you want hotkeys.
 
 Calendar, terminal, and color picker features from the Atoll/Boring.Notch lineage are removed in this fork.
 
@@ -104,7 +104,7 @@ Application support data is stored under `~/Library/Application Support/Kannu/`.
 1. Launch Kannu and complete onboarding.
 2. Open **Brain → Agents** and install editor hooks for Cursor (recommended).
 3. Run an AI agent in Cursor — the notch shows the traffic-light status when collapsed.
-4. Optionally pick or upload a notch skin under **Brain → Appearance → Notch skin** (see [docs/NOTCH-SKINS.md](docs/NOTCH-SKINS.md)).
+4. Optionally pick or upload a notch skin under **Brain → Settings → Appearance → Notch skin** (see [docs/NOTCH-SKINS.md](docs/NOTCH-SKINS.md)).
 
 
 
