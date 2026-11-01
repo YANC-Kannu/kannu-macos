@@ -44,8 +44,10 @@ enum TimerTaskFormMode: Hashable {
 ///
 /// A view of its own, built only while shown; `NotchTimerView` reaches the task list only through
 /// this form's statics (`startFromForm`, `startNamed`, `prepareForTypedStart`), so it never names it.
-/// While a field has focus, or one of its menus tracks, it holds the notch open under tokens of its
-/// own, released when the focus goes, the form goes, or the notch's window stops being key.
+/// While a field has focus it holds the notch open under a token of its own, so an edit survives the
+/// pointer leaving the notch; the hold ends when the focus goes, the form goes, or the notch's window
+/// stops being key (docs/REGRESSIONS.md entry 22). Menus hold nothing here:
+/// `ContentView.closeWhenPointerLeaves` waits for every menu.
 struct TimerTaskForm: View {
     @Environment(\.notchForeground) private var notchForeground
     private typealias M = TimerComposerMetrics
@@ -61,6 +63,8 @@ struct TimerTaskForm: View {
 
     @State private var draft: TaskFormDraft
     @FocusState private var focused: Field?
+    /// `@State`, so the release names the token that was set.
+    @State private var editingToken = UUID()
     /// The pointer is on the tag chips: they stay while a click lands, even if the field lets go of
     /// focus on the way.
     @State private var chipsHovered = false
@@ -159,6 +163,7 @@ struct TimerTaskForm: View {
             DispatchQueue.main.async { focused = first }
         }
         .onChange(of: focused) { previous, field in
+            vm.setAutoCloseSuppression(field != nil, token: editingToken)
             // Leaving the estimate: "90m" reads back as "1h 30m".
             if previous == .estimate, field != .estimate { draft.settleEstimateText() }
             // Into another field: the title's list goes (a click on it keeps it while hovered).
@@ -201,11 +206,14 @@ struct TimerTaskForm: View {
             }
         }
         // A click into another app leaves a field focused in a window that is no longer key: drop
-        // it. The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`),
-        // never on a field's focus, and waits there while the estimate menu tracks.
+        // it, which ends the hold. The notch then closes on where the pointer is
+        // (`ContentView.closeWhenPointerLeaves`), which also waits while the estimate menu tracks.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             focused = nil
+        }
+        .onDisappear {
+            vm.setAutoCloseSuppression(false, token: editingToken)
         }
     }
 
