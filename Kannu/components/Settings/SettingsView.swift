@@ -324,6 +324,10 @@ private struct SettingsForm<Content: View>: View {
                         highlightCoordinator.consumeScrollRequest(request)
                     }
             }
+            // Capped, then centred in the panel. The `Form`'s scrollbar sits at the page's edge, not
+            // the panel's, until Stage 4.
+            .frame(maxWidth: SettingsTheme.pageMaxWidth)
+            .frame(maxWidth: .infinity)
         }
         .onPreferenceChange(SettingsPageTitleKey.self) { pageTitle = $0 }
     }
@@ -361,7 +365,9 @@ struct SettingsView: View {
             if !filteredTabs.contains(request.tab) { searchText = "" }
         }
         .settingsDesignSystem()
-        .frame(width: 700)
+        // Unbounded above: the window can go full screen, and SwiftUI's size bridge clamps the window
+        // to this (docs/REGRESSIONS.md, entry 17).
+        .frame(minWidth: SettingsTheme.windowMinWidth, maxWidth: .infinity, minHeight: SettingsTheme.windowMinHeight, maxHeight: .infinity)
         .onChange(of: searchText) { old, newValue in
             // Where the query started is where the user was. The jumps below are not.
             if old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { remember(resolvedSelection) }

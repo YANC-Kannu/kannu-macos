@@ -302,17 +302,68 @@ final class BrainShellRulesTests: XCTestCase {
         Self.assertCaught([("settingsPageTitle(enableTasks", "navigationTitle(enableTasks")], in: tasks) { Self.titleProblems(form: form, tasks: $0) }
     }
 
+    // MARK: - The window's width and title bar
+
+    /// In `SettingsForm`, which every page goes through, so no page can miss it. Capped first, then
+    /// centred: the other way round the cap would hold the page to the panel's left edge.
+    private static func pageCapProblems(in view: String) -> [String] {
+        guard let start = view.range(of: "private struct SettingsForm<Content: View>: View {"),
+              let end = view.range(of: "struct SettingsView: View {", range: start.upperBound..<view.endIndex) else {
+            return ["SettingsForm cannot be found"]
+        }
+        let capped = SettingsDesignSystemRulesTests.matches(of: #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth\)\s*\.frame\(maxWidth: \.infinity\)"#,
+                                                            in: String(view[start.upperBound..<end.lowerBound]))
+        return capped.count == 1 ? [] : ["a page is not capped and centred"]
+    }
+
+    func testAPageIsCappedAndCentred() throws {
+        let view = try Self.view()
+        XCTAssertEqual(Self.pageCapProblems(in: view), [])
+        Self.assertCaught([(".frame(maxWidth: SettingsTheme.pageMaxWidth)", ""),
+                           (".frame(maxWidth: SettingsTheme.pageMaxWidth)\n            .frame(maxWidth: .infinity)",
+                            ".frame(maxWidth: .infinity)\n            .frame(maxWidth: SettingsTheme.pageMaxWidth)")],
+                          in: view, by: Self.pageCapProblems)
+        // On the root instead: the panel's scrollbar would move, and a page outside the root would miss it.
+        XCTAssertFalse(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n}\nstruct SettingsView: View {\n.frame(maxWidth: SettingsTheme.pageMaxWidth)\n.frame(maxWidth: .infinity)\n}").isEmpty)
+    }
+
+    /// A transparent title bar with the row still below the safe area would leave a blank strip above
+    /// it, and the moon a row below the traffic lights.
+    private static func titleRowProblems(shell: String, controller: String) -> [String] {
+        var problems = [".ignoresSafeArea(.container, edges: .top)"].filter { !shell.contains($0) }
+        problems += ["window.titlebarAppearsTransparent = true", "window.titleVisibility = .hidden", "window.titlebarSeparatorStyle = .none"]
+            .filter { !controller.contains($0) }
+        return problems
+    }
+
+    func testTheTitleRowLiesUnderTheTitleBar() throws {
+        let shell = try Self.code("DesignSystem/BrainShell.swift")
+        let controller = try Self.code("SettingsWindowController.swift")
+        XCTAssertEqual(Self.titleRowProblems(shell: shell, controller: controller), [])
+        Self.assertCaught([(".ignoresSafeArea(.container, edges: .top)", "")], in: shell) { Self.titleRowProblems(shell: $0, controller: controller) }
+        Self.assertCaught([("titlebarAppearsTransparent = true", "titlebarAppearsTransparent = false"),
+                           ("titleVisibility = .hidden", "titleVisibility = .visible"),
+                           ("titlebarSeparatorStyle = .none", "titlebarSeparatorStyle = .line")],
+                          in: controller) { Self.titleRowProblems(shell: shell, controller: $0) }
+    }
+
     // MARK: - The boards
 
     /// Each board is the only headless view of its state. `allTasks` goes through `SettingsForm`, or it
     /// has no title to show or to clip by. The deep link's row is below the fold, or a dead `scrollTo`
     /// draws the same picture, and the run scrolls at once, or an animated scroll never moves.
     private static func boardProblems(in snapshots: String) -> [String] {
-        ["\"shell\"", "\"shellSettings\"", "\"shellDeepLink\"", "\"shellSearch\"", "\"shellSearchList\"",
+        ["(\"shell\", AnyView(", "(\"shellSettings\", AnyView(", "(\"shellWide\", AnyView(", "(\"shellDeepLink\", AnyView(",
+         "(\"shellSearch\", AnyView(", "(\"shellSearchList\", AnyView(",
          "SettingsView.snapshotPageTitle(Form {",
          "SettingsTab.general.highlightID(for: \"Always show on non-notch displays\")",
          "SettingsHighlightCoordinator.snapshotScrollsAtOnce = true",
-         "width: 700, into: request.directory, fixedHeight: 600",
+         "width: size.width, into: request.directory, fixedHeight: size.height",
+         "return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)",
+         "return NSSize(width: 1440, height: 900)",
+         // A page at the narrowest panel the window can have, or a clipped row goes unseen.
+         "SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset",
+         ": narrowestPanel",
          "document.frame.height + hosting.bounds.height - scroll.frame.height"].filter { !snapshots.contains($0) }
     }
 

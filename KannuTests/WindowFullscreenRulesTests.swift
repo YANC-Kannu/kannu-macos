@@ -111,6 +111,69 @@ final class WindowFullscreenRulesTests: XCTestCase {
                        "activating from a fullscreen space is how the panel vanished; the panel takes key without it")
     }
 
+    // MARK: - Brain goes full screen
+
+    private static func settingsSource(_ name: String) throws -> String {
+        try String(contentsOf: root.appendingPathComponent("components/Settings/\(name)"), encoding: .utf8)
+    }
+
+    /// `showWindow` reassigns the list every time, so one that lost the flag takes full screen away
+    /// at the first open.
+    private static func fullScreenBehaviorProblems(in controller: String) -> [String] {
+        let lists = behaviorAssignments(in: controller)
+        var problems = lists.filter { !$0.contains("fullScreenPrimary") }.map { "no .fullScreenPrimary in [\($0)]" }
+        if lists.count != 2 { problems.append("\(lists.count) assignments, and this rule reads two") }
+        return problems
+    }
+
+    func testBrainGoesFullScreenInBothAssignments() throws {
+        let controller = try Self.settingsSource("SettingsWindowController.swift")
+        XCTAssertEqual(Self.fullScreenBehaviorProblems(in: controller), [])
+
+        let both = "window.collectionBehavior = [.managed, .fullScreenPrimary]\nwindow?.collectionBehavior = [.managed, .fullScreenPrimary]"
+        XCTAssertEqual(Self.fullScreenBehaviorProblems(in: both), [])
+        XCTAssertEqual(Self.fullScreenBehaviorProblems(in: "window.collectionBehavior = [.managed, .fullScreenPrimary]\nwindow?.collectionBehavior = [.managed]").count, 1)
+        XCTAssertEqual(Self.fullScreenBehaviorProblems(in: "window.collectionBehavior = [.managed, .fullScreenPrimary]").count, 1)
+    }
+
+    private static let unboundedRoot = ".frame(minWidth: SettingsTheme.windowMinWidth, maxWidth: .infinity, minHeight: SettingsTheme.windowMinHeight, maxHeight: .infinity)"
+
+    /// SwiftUI's size bridge clamps the window to its root (docs/REGRESSIONS.md, entry 17), so a fixed
+    /// width fights full screen's frame. Only the root's own body: the search bar's fixed frame is legal,
+    /// and `SettingsForm`'s `maxWidth: .infinity` would satisfy a scan of the whole file.
+    private static func rootFrameProblems(in view: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(view)
+        guard let start = code.range(of: "struct SettingsView: View {"),
+              let body = code.range(of: "var body: some View {", range: start.upperBound..<code.endIndex),
+              let end = code.range(of: "private var isSearching", range: body.upperBound..<code.endIndex) else {
+            return ["SettingsView's body cannot be found"]
+        }
+        let root = String(code[body.lowerBound..<end.lowerBound])
+        var problems: [String] = []
+        if !root.contains(unboundedRoot) { problems.append("the root's frame is not the unbounded one") }
+        problems += SettingsDesignSystemRulesTests.matches(of: #"\.frame\(\s*width:"#, in: root).map { "a fixed width at the root: \($0)" }
+        return problems
+    }
+
+    func testBrainsRootHasNoFixedWidth() throws {
+        let view = try Self.settingsSource("SettingsView.swift")
+        XCTAssertEqual(Self.rootFrameProblems(in: view), [])
+        XCTAssertTrue(view.contains(".frame(width: 28, height: 28)"), "the legal frame this rule must leave alone moved, so the plant below proves less")
+
+        let frame = Self.unboundedRoot
+        SettingsDesignSystemRulesTests.assertCaught(
+            [(frame, ""),
+             (frame, ".frame(width: 1100)"),
+             (frame, frame + "\n.frame(width: SettingsTheme.windowMinWidth)"),
+             (frame, ".frame(minWidth: SettingsTheme.windowMinWidth, maxWidth: 1100)")],
+            in: view, by: Self.rootFrameProblems)
+
+        let controller = SettingsDesignSystemRulesTests.code(try Self.settingsSource("SettingsWindowController.swift"))
+        for token in ["SettingsTheme.windowMinWidth", "SettingsTheme.windowMinHeight", "SettingsTheme.windowDefaultWidth", "SettingsTheme.windowDefaultHeight"] {
+            XCTAssertTrue(controller.contains(token), "the window no longer reads \(token), so it and the root can disagree")
+        }
+    }
+
     // MARK: - The scanner's own failure modes, so a regex that rots fails loudly
 
     func testTheScannerCatchesAMissingFlag() {

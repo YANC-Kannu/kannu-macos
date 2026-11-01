@@ -139,8 +139,9 @@ enum DebugSnapshots {
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
                     .settingsDesignSystem())
-                // The rules sheet sets its own width, which a page's 490 would crop on both sides.
-                let width: CGFloat = name == "policyRules" ? 560 : 490
+                // A page at the narrowest panel the window can have. The rules sheet sets its own width,
+                // which 490 would crop on both sides.
+                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490) : narrowestPanel
                 // A page's `Form` has no background of its own now, so it needs the panel behind it.
                 // Sheets and onboarding do not sit on the panel.
                 let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
@@ -148,11 +149,12 @@ enum DebugSnapshots {
                              background: background)
             }
         }
-        // The whole window at today's size: the sidebar's two lists, a search and a deep link.
+        // The whole window: the sidebar's two lists, a search and a deep link.
         for (name, view) in shellBoards where request.tabs == nil || request.tabs?.contains(name) == true {
+            let size = shellBoardSize(name)
             for dark in [false, true] {
                 await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
-                             width: 700, into: request.directory, fixedHeight: 600)
+                             width: size.width, into: request.directory, fixedHeight: size.height)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -244,11 +246,28 @@ enum DebugSnapshots {
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes"]
 
+    /// The smallest window, less the sidebar and the panel's one inset.
+    private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
+
+    /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
+    /// enter it, and the search boards, at the smallest window, where the sidebar has the least room.
+    private static func shellBoardSize(_ name: String) -> NSSize {
+        switch name {
+        case "shellWide":
+            return NSSize(width: 1440, height: 900)
+        case "shellSearch", "shellSearchList":
+            return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)
+        default:
+            return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        }
+    }
+
     /// `SettingsView` applies its own root, so these do not go through the loop that adds it.
     private static var shellBoards: [(String, AnyView)] {
         [
             ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
             ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
+            ("shellWide", AnyView(SettingsView(snapshotTab: .general))),
             // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
             // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
             // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment

@@ -1222,6 +1222,13 @@ it lives only in Kannu's notch space, and the repair decides from WindowServer's
 now describe the clipboard panel only. For the notch, read entry 20; its `--kannu-strand-notch`
 check replaces the one above.
 
+**2026-11-01 addendum: Brain's root frame stays unbounded.** Brain is a titled window, so its hosting
+view stays the content view and the size bridge above clamps the window to the root's minimum and
+maximum. The window is full-screen capable now, so a fixed width at the root would fight full screen's
+frame, and this entry's throw or a 700-wide window in a full-screen Space are the likely results. The
+exact outcome was never run. So `.fullScreenPrimary` and the removal of `.frame(width: 700)` landed in one
+commit, and `WindowFullscreenRulesTests.testBrainsRootHasNoFixedWidth` holds the frame.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -1547,6 +1554,26 @@ animator.** Their animations are bounded eases, and `SettingsAnimationRulesTests
 **2026-11-01 addendum: Brain's shell adds no `onAppear`, no `.task` and no repeating animator.** Its new
 `@State`s survive a close because the hosting view does (`SettingsWindowController.settingsContent`).
 
+**2026-11-01 addendum: a close in full screen waits for the exit.** Brain can go full screen now, and
+closing there would order the window out, and turn the app `.accessory`, inside a full-screen Space.
+So `windowShouldClose` and `close()` both call `deferCloseUntilWindowed`, which starts the exit and
+remembers the close; `windowDidExitFullScreen` closes a turn later, and `windowWillClose` then does all
+the usual work above, content take-out included. The toggle runs only when no transition is running, and
+never inside AppKit's callback: a close during the entry waits for `windowDidEnterFullScreen`, then
+exits a turn later. A toggle AppKit ignored would lose the close, and a later exit would close Brain by
+surprise. `showWindow` clears the pending close, so opening Brain during the exit keeps it open. A failed
+transition closes anyway, in full screen if the exit is what failed; nothing here can provoke one.
+
+A full-screen Brain parked in another Space keeps `isVisible` true, so its content is never taken out,
+and a page's animation goes on ticking there. **Not measured**, like the covered Brain above: it needs a
+real full-screen window, which no harness here may open. Taking content out on occlusion is the likely
+fix if it costs what an open page costs. The window's change adds no `onAppear`, no `.task` and no
+repeating animator, so the rest of this entry holds.
+
+**Guard.** `SettingsAnimationRulesTests.closingViolations` pins all of this, and
+`testTheCloseDetectorCatchesEachWayToBreakIt` now breaks the real controller 34 ways. They prove the
+wiring. They cannot prove AppKit's timing, and nothing has entered full screen under them.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
@@ -1633,7 +1660,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
