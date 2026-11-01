@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Large work ships as stacked super PRs, and CI builds them
+- **Developer label:** "stack super prs so that we can conviniently review branches that have changes in limit of coderabbit, and dont request review for the child pr's"
+- **Agent label:** Claude Code (Opus 5.5) — CI on `super/**` and the stacked-PR rules, for the Brain redesign
+- **Changes:**
+  - `.github/workflows/ci.yml` builds and tests PRs into `super/**`, so a child PR or an upper super is
+    never green without being compiled.
+  - `AGENTS.md` gains the stacked super PR rules, and its CI trap says which stacked PRs still get no
+    Build job. `CONTRIBUTING.md` points to them.
+
 ### 2026-11-01 - The task form's hold cites the right regressions entry
 - **Developer label:** the notch-close rule is entry 23 after #11's renumbering
 - **Agent label:** Claude Code (Opus 5.5) — comment and changelog references only, no behaviour change
