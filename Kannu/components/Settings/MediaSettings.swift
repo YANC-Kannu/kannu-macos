@@ -309,7 +309,7 @@ struct Media: View {
             } header: {
                 SettingsSectionHeader("Lock Screen Integration")
             } footer: {
-                SettingsFooter("These controls mirror the Lock Screen tab.")
+                SettingsFooter("These controls mirror the Lock screen tab.")
             }
             .disabled(!showStandardMediaControls)
 

@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's shell takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the shell commit
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each
+- **Changes:**
+  - Back and the Settings row return to where the user was. `tabOnOtherList` becomes `lastProductTab` and
+    `lastSettingsTab`, and a search's jumps write neither: typing "audio" from General crossed lists twice
+    and left Back on a page never chosen.
+  - The sidebar's focus stop moves to a background, because an outer `focusEffectDisabled` also took the
+    rows' own rings under Full Keyboard Access.
+  - Arrow keys no longer strand the user: from About, or a tab a query has dropped, they enter the list at
+    its near end. Left is Back and right is the Settings row. About stays out of the arrow order.
+  - A deep link to a tab the typed query's flat list leaves out clears the query. The sidebar scrolls to the
+    selected row when a query changes the list under it.
+  - The suggestions and the deep-link scroll respect Reduce Motion.
+  - The stats hint, `ReadMe.md`'s Shortcuts and Notch skin lines say "Settings" in their path, and
+    `BrainPathRulesTests` reads a path written with `→` too. It checks a path's first two levels, which the
+    entry below used to overstate as every level.
+  - Three strings name the Lock screen tab as the tab now spells it, and the catalog takes "Live activities"
+    and "Lock screen" with their translations. "HUD and OSD" and "Security" stay English: nothing translated
+    says the same thing.
+  - The `allTasks` board goes through `SettingsForm`, so it shows a sub-page's large title, and
+    `shellDeepLink` links to a row below the fold, so a dead `scrollTo` cannot draw the same picture. An animated
+    scroll does not move in a board's off-screen window, so the boards scroll at once through a DEBUG-only flag.
+  - New rules, with plants: what each sidebar list shows, the old tab names in search, the root's hidden
+    `Form` background, Reduce Motion, and the boards. The one-navigation-state rule reads the whole struct
+    and every state wrapper, and the chrome rule reads `BrainShell`.
+
 ### 2026-11-01 - Brain's tabs take the names in the redesign plan
 - **Developer label:** Brain redesign plan: "Agents, Security, Usage…", "Live activities, Lock screen… HUD and OSD"
 - **Agent label:** Claude Code (Opus 5.5) — titles only, ids unchanged
@@ -31,8 +58,8 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     is `onPrimary` on `ink`. The tab tints are gone, and the search field and suggestions read the theme.
   - The moon and `brainAppearance` land here. The moon writes the key and nothing applies it yet.
   - The root moves from the detail column to the shell, and hides a `Form`'s background so the panel shows.
-  - Paths to the settings tabs say "Brain › Settings › General". `BrainPathRulesTests` now reads every level of
-    a path, so "Brain › General" fails though General is a real title. `BrainNamingRulesTests` allows the one
+  - Paths to the settings tabs say "Brain › Settings › General". `BrainPathRulesTests` now checks a path's first
+    two levels, so "Brain › General" fails though General is a real title. `BrainNamingRulesTests` allows the one
     "Settings" that means the row inside Brain.
   - `SettingsSidebarOrderTests` is rewritten for the two lists, and new `BrainShellRulesTests` holds the shell,
     with plants. Every theme token has a reader, so the not-read-yet set is gone. Boards: `shell`,

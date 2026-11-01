@@ -57,9 +57,10 @@ enum DebugSnapshots {
         // Fixture tasks before anything touches the task list: a snapshot never reads or writes
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
+        SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", AnyView(Form {
+            boards.append(("allTasks", SettingsView.snapshotPageTitle(Form {
                 Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
                 AllTasksPage(query: .constant(""), context: tasksBoardContext())
             })))
@@ -248,10 +249,16 @@ enum DebugSnapshots {
         [
             ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
             ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
-            // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses.
+            // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
+            // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
+            // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment
+            // because in the app the window's content has been laid out before a link arrives, and sent
+            // during this window's first layout, a row this far down does not scroll.
             ("shellDeepLink", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
-                SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
-                    highlightID: SettingsTab.general.highlightID(for: "Quit Kannu"))
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
+                        highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays"))
+                }
             })),
             // A query with more suggestions than fit, the field focused. A snapshot's window cannot
             // take focus, so the board asks for the list.

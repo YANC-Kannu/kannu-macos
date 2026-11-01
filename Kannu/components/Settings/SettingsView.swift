@@ -179,6 +179,12 @@ final class SettingsHighlightCoordinator: ObservableObject {
     /// row — e.g. a notch control's "click to change in Settings" action.
     static let shared = SettingsHighlightCoordinator()
 
+    #if DEBUG
+    /// DEBUG snapshot boards only (`DebugSnapshots`): an animated scroll does not move in their
+    /// off-screen window, and one with no animation does.
+    static var snapshotScrollsAtOnce = false
+    #endif
+
     struct ScrollRequest: Identifiable, Equatable {
         let id: String
         fileprivate let tab: SettingsTab
@@ -292,8 +298,16 @@ private struct SettingsForm<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A sub-page's own title (Brain › Tasks' All tasks). Nil is the tab's.
     @State private var pageTitle: String?
+
+    private var scrollAnimation: Animation? {
+        #if DEBUG
+        if SettingsHighlightCoordinator.snapshotScrollsAtOnce { return nil }
+        #endif
+        return reduceMotion ? nil : .easeInOut(duration: 0.45)
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -304,7 +318,7 @@ private struct SettingsForm<Content: View>: View {
                         guard let request, request.tab == tab else { return nil }
                         return request
                     }) { request in
-                        withAnimation(.easeInOut(duration: 0.45)) {
+                        withAnimation(scrollAnimation) {
                             proxy.scrollTo(request.id, anchor: .center)
                         }
                         highlightCoordinator.consumeScrollRequest(request)
@@ -319,8 +333,10 @@ struct SettingsView: View {
     // Land on the product's core pane, not a generic one — "Watch Your Agents".
     @State private var selectedTab: SettingsTab = .agentStatus
     @State private var searchText: String = ""
-    /// The tab left when the sidebar last changed lists: where Back and the Settings row return to.
-    @State private var tabOnOtherList: SettingsTab?
+    /// The tab last left on each list: where Back and the Settings row return to. Two slots, because a
+    /// search jumps between lists keystroke by keystroke and one slot would end up holding a jump.
+    @State private var lastProductTab: SettingsTab?
+    @State private var lastSettingsTab: SettingsTab?
     @FocusState private var sidebarHasFocus: Bool
     @StateObject private var highlightCoordinator = SettingsHighlightCoordinator.shared
     /// A snapshot's window can never take focus, so its board asks for the suggestions outright.
@@ -341,23 +357,31 @@ struct SettingsView: View {
         // exists; this only makes sure that tab is frontmost. The sidebar follows the tab.
         .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in
             selectedTab = request.tab
+            // A query left typed would keep the flat list, which has no row for this tab.
+            if !filteredTabs.contains(request.tab) { searchText = "" }
         }
         .settingsDesignSystem()
         .frame(width: 700)
-        .onChange(of: searchText) { _, newValue in
+        .onChange(of: searchText) { old, newValue in
+            // Where the query started is where the user was. The jumps below are not.
+            if old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { remember(resolvedSelection) }
             let matches = tabsMatchingSearch(newValue)
             guard let firstMatch = matches.first else { return }
             if !matches.contains(resolvedSelection) {
                 selectedTab = firstMatch
             }
         }
-        .onChange(of: selectedTab) { old, new in
-            if (old.group == .settings) != (new.group == .settings) { tabOnOtherList = old }
+        .onChange(of: selectedTab) { old, _ in
+            if !isSearching { remember(old) }
         }
     }
 
     private var resolvedSelection: SettingsTab {
         availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .general)
+    }
+
+    private func remember(_ tab: SettingsTab) {
+        if tab.group == .settings { lastSettingsTab = tab } else { lastProductTab = tab }
     }
 
     private var filteredTabs: [SettingsTab] {
@@ -391,33 +415,51 @@ struct SettingsView: View {
             ScrollView {
                 VStack(spacing: SettingsTheme.sidebarRowGap) {
                     if showsSettingsList && !isSearching {
-                        SettingsSidebarRow(String(localized: "Back"), systemImage: "chevron.left") {
-                            selectedTab = tabOnOtherList ?? .agentStatus
-                            sidebarHasFocus = true
-                        }
+                        SettingsSidebarRow(String(localized: "Back"), systemImage: "chevron.left") { showProductList() }
                     }
                     ForEach(listedTabs) { tabRow($0).id($0) }
                 }
-                .focusable()
-                .focused($sidebarHasFocus)
-                .focusEffectDisabled()
+                // On a background, not the stack: an outer `focusEffectDisabled` beats anything inside
+                // it, so the rows would lose their ring under Full Keyboard Access.
+                .background {
+                    Color.clear
+                        .focusable()
+                        .focused($sidebarHasFocus)
+                        .focusEffectDisabled()
+                        .accessibilityHidden(true)
+                }
                 .onKeyPress(keys: [.upArrow, .downArrow]) { press in
                     moveSelection(by: press.key == .upArrow ? -1 : 1)
+                    return .handled
+                }
+                // Back and the Settings row by key: they are the only way across, and not in the arrow order.
+                .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+                    guard !isSearching, showsSettingsList == (press.key == .leftArrow) else { return .ignored }
+                    if showsSettingsList { showProductList() } else { showSettingsList() }
                     return .handled
                 }
             }
             // Arrow keys can reach a row off screen, and a custom list does not follow its selection.
             .onChange(of: resolvedSelection) { _, tab in proxy.scrollTo(tab) }
+            // A query changes the list under the selected row, so it can scroll away with no change of tab.
+            .onChange(of: listedTabs, initial: true) { _, _ in proxy.scrollTo(resolvedSelection) }
         }
         if !showsSettingsList && !isSearching {
             VStack(spacing: SettingsTheme.sidebarRowGap) {
-                SettingsSidebarRow(SettingsTabGroup.settings.title ?? "", systemImage: "gearshape") {
-                    selectedTab = tabOnOtherList ?? .general
-                    sidebarHasFocus = true
-                }
+                SettingsSidebarRow(SettingsTabGroup.settings.title ?? "", systemImage: "gearshape") { showSettingsList() }
                 tabRow(.about)
             }
         }
+    }
+
+    private func showProductList() {
+        selectedTab = lastProductTab ?? .agentStatus
+        sidebarHasFocus = true
+    }
+
+    private func showSettingsList() {
+        selectedTab = lastSettingsTab ?? .general
+        sidebarHasFocus = true
     }
 
     private func tabRow(_ tab: SettingsTab) -> some View {
@@ -428,9 +470,15 @@ struct SettingsView: View {
         }
     }
 
+    /// About is a foot row, as Settings is, so it is not in this order. From a tab outside it (About, or
+    /// one a query has dropped) the arrows enter the list at its near end rather than doing nothing.
     private func moveSelection(by offset: Int) {
         let tabs = listedTabs
-        guard let index = tabs.firstIndex(of: resolvedSelection), tabs.indices.contains(index + offset) else { return }
+        guard let index = tabs.firstIndex(of: resolvedSelection) else {
+            selectedTab = (offset < 0 ? tabs.last : tabs.first) ?? selectedTab
+            return
+        }
+        guard tabs.indices.contains(index + offset) else { return }
         selectedTab = tabs[index + offset]
     }
 
@@ -498,6 +546,7 @@ struct SettingsView: View {
         var showsSuggestionsUnfocused = false
         let onSuggestionSelected: (SettingsSearchEntry) -> Void
 
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
         @FocusState private var isFocused: Bool
         @State private var hoveredSuggestionID: SettingsSearchEntry.ID?
 
@@ -508,7 +557,7 @@ struct SettingsView: View {
                     suggestionList
                 }
             }
-            .animation(.easeInOut(duration: 0.15), value: showSuggestions)
+            .animation(reduceMotion ? nil : .easeInOut(duration: SettingsTheme.quickAnimation), value: showSuggestions)
         }
 
         private var showSuggestions: Bool {
@@ -573,7 +622,7 @@ struct SettingsView: View {
                     .stroke(SettingsTheme.line)
             )
             .clipShape(RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous))
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .move(edge: .top)))
         }
 
         private var suggestionRows: some View {
@@ -1062,6 +1111,12 @@ extension SettingsView {
 }
 
 extension SettingsView {
+    /// DEBUG snapshot harness: Brain › Tasks' All tasks under its large title, as the window builds it.
+    /// `SettingsForm` is private to this file.
+    static func snapshotPageTitle(_ page: some View) -> AnyView {
+        AnyView(SettingsForm(tab: .tasks) { page.settingsPageTitle(TasksSettings.title(of: .allTasks)) })
+    }
+
     /// DEBUG snapshot harness: the shortcut recorder rows, shown only once global shortcuts are on.
     static func snapshotShortcutRows() -> AnyView {
         AnyView(Form { Shortcuts().shortcutsSection })

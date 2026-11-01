@@ -35,11 +35,14 @@ final class BrainShellRulesTests: XCTestCase {
 
     private static func view() throws -> String { try code("SettingsView.swift") }
 
-    /// `struct SettingsView` without the search bar nested in it, whose own state is its own.
+    /// All of `struct SettingsView` but the search bar nested in it, whose own state is its own. The
+    /// struct goes on past the bar, so stopping there would leave its last 400 lines unread.
     private static func navigation(in view: String) throws -> String {
         let start = try XCTUnwrap(view.range(of: "struct SettingsView: View {"))
-        let end = try XCTUnwrap(view.range(of: "private struct SettingsSidebarSearchBar", range: start.upperBound..<view.endIndex))
-        return String(view[start.lowerBound..<end.lowerBound])
+        let bar = try XCTUnwrap(view.range(of: "private struct SettingsSidebarSearchBar", range: start.upperBound..<view.endIndex))
+        let resume = try XCTUnwrap(view.range(of: "private func searchEntries(matching", range: bar.upperBound..<view.endIndex))
+        let end = try XCTUnwrap(view.range(of: "#if DEBUG", range: resume.upperBound..<view.endIndex))
+        return String(view[start.lowerBound..<bar.lowerBound]) + String(view[resume.lowerBound..<end.lowerBound])
     }
 
     private static func assertCaught(_ edits: [(from: String, to: String)], in source: String, by problems: (String) -> [String],
@@ -71,7 +74,9 @@ final class BrainShellRulesTests: XCTestCase {
     }
 
     func testTheSplitViewAndItsGlassAreGone() throws {
-        XCTAssertEqual(Self.replacedChrome(in: try Self.view()), [])
+        for name in ["SettingsView.swift", "DesignSystem/BrainShell.swift"] {
+            XCTAssertEqual(Self.replacedChrome(in: try Self.code(name)), [], name)
+        }
 
         XCTAssertEqual(Self.replacedChrome(in: "NavigationSplitView {}\n.toolbar(removing: .sidebarToggle)"), ["NavigationSplitView", ".toolbar"])
         XCTAssertEqual(Self.replacedChrome(in: ".glassEffect(.clear)\n.fill(.ultraThinMaterial)"), ["glassEffect", ".ultraThinMaterial"])
@@ -79,26 +84,33 @@ final class BrainShellRulesTests: XCTestCase {
 
     // MARK: - One piece of navigation state
 
-    private static let stateNames = #"@State private var (\w+)"#
+    private static let stateNames = #"@(?:State|AppStorage|SceneStorage|Default)\b[^\n]*?\bvar \w+"#
 
     private static func stateProblems(in navigation: String) -> [String] {
         var problems: [String] = []
         let tabs = SettingsDesignSystemRulesTests.matches(of: #"@State private var \w+: SettingsTab ="#, in: navigation)
         if tabs != ["@State private var selectedTab: SettingsTab ="] { problems.append("selectedTab is not the only tab that is set: \(tabs)") }
         // A mode flag of any type would be a second answer to "which list is on screen".
-        let names = SettingsDesignSystemRulesTests.matches(of: stateNames, in: navigation).map { $0.replacingOccurrences(of: "@State private var ", with: "") }
-        if names != ["selectedTab", "searchText", "tabOnOtherList"] { problems.append("new state beside the selected tab: \(names)") }
+        let names = SettingsDesignSystemRulesTests.matches(of: stateNames, in: navigation).compactMap { $0.components(separatedBy: " var ").last }
+        if names != ["selectedTab", "searchText", "lastProductTab", "lastSettingsTab"] { problems.append("new state beside the selected tab: \(names)") }
         if !navigation.contains("private var showsSettingsList: Bool { resolvedSelection.group == .settings }") {
             problems.append("the list on screen no longer follows the selected tab")
         }
         return problems
     }
 
-    /// Every write of the return tab. Back and the Settings row read it; only a change of list writes it.
+    /// Every write of the return tabs. Back and the Settings row read them; only `remember` writes them,
+    /// and a search's jumps never reach it: one of them is not where the user was.
     private static func returnTabProblems(in navigation: String) -> [String] {
-        let writes = navigation.components(separatedBy: "tabOnOtherList =").count - 1
-        let inTheChange = navigation.contains(".onChange(of: selectedTab) { old, new in\n            if (old.group == .settings) != (new.group == .settings) { tabOnOtherList = old }")
-        return writes == 1 && inTheChange ? [] : ["tabOnOtherList is written \(writes) times, in the change of list: \(inTheChange)"]
+        var problems = ["if tab.group == .settings { lastSettingsTab = tab } else { lastProductTab = tab }",
+                        ".onChange(of: selectedTab) { old, _ in\n            if !isSearching { remember(old) }",
+                        "if old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { remember(resolvedSelection) }"]
+            .filter { !navigation.contains($0) }
+        for slot in ["lastProductTab =", "lastSettingsTab ="] {
+            let writes = navigation.components(separatedBy: slot).count - 1
+            if writes != 1 { problems.append("\(slot) appears \(writes) times") }
+        }
+        return problems
     }
 
     func testTheSelectedTabIsTheOnlyNavigationState() throws {
@@ -108,30 +120,38 @@ final class BrainShellRulesTests: XCTestCase {
 
         Self.assertCaught([("@State private var selectedTab: SettingsTab = .agentStatus", "@State private var selectedTab: SettingsTab = .agentStatus\n@State private var mode: SettingsTab = .general"),
                            ("@State private var searchText: String = \"\"", "@State private var searchText: String = \"\"\n@State private var showsSettings = false"),
-                           ("resolvedSelection.group == .settings }", "isShowingSettings }")],
+                           ("resolvedSelection.group == .settings }", "isShowingSettings }"),
+                           // Below the search bar, which is as far as this rule used to read.
+                           ("private func detailView(for tab: SettingsTab)", "@State private var showsSettings = false\nprivate func detailView(for tab: SettingsTab)"),
+                           // A wrapper or a spelling other than `@State private var`.
+                           ("@State private var searchText: String = \"\"", "@State private var searchText: String = \"\"\n@AppStorage(\"m\") var showsSettings = false"),
+                           ("@State private var searchText: String = \"\"", "@State var mode = 0\n@State private var searchText: String = \"\"")],
                           in: navigation, by: Self.stateProblems)
-        Self.assertCaught([("{ tabOnOtherList = old }", "{ }"),
-                           ("selectedTab = tabOnOtherList ?? .agentStatus", "selectedTab = tabOnOtherList ?? .agentStatus\ntabOnOtherList = nil"),
-                           ("(old.group == .settings) != (new.group == .settings)", "old != new")],
+        Self.assertCaught([("{ lastSettingsTab = tab } else { lastProductTab = tab }", "{ } else { }"),
+                           // The bug this replaced: every keystroke that changes list overwrites the return tab.
+                           ("if !isSearching { remember(old) }", "remember(old)"),
+                           ("if old.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { remember(resolvedSelection) }", ""),
+                           ("selectedTab = lastProductTab ?? .agentStatus", "selectedTab = lastProductTab ?? .agentStatus\nlastProductTab = nil"),
+                           ("private func detailView(for tab: SettingsTab)", "lastSettingsTab = .general\nprivate func detailView(for tab: SettingsTab)")],
                           in: navigation, by: Self.returnTabProblems)
     }
 
     private static func returnProblems(in navigation: String) -> [String] {
-        ["selectedTab = tabOnOtherList ?? .agentStatus", "selectedTab = tabOnOtherList ?? .general"].filter { !navigation.contains($0) }
+        ["selectedTab = lastProductTab ?? .agentStatus", "selectedTab = lastSettingsTab ?? .general"].filter { !navigation.contains($0) }
     }
 
     func testBackAndTheSettingsRowReturnToWhereTheUserWas() throws {
         let navigation = try Self.navigation(in: try Self.view())
         XCTAssertEqual(Self.returnProblems(in: navigation), [])
-        Self.assertCaught([("selectedTab = tabOnOtherList ?? .agentStatus", "selectedTab = .agentStatus"),
-                           ("selectedTab = tabOnOtherList ?? .general", "selectedTab = .general")],
+        Self.assertCaught([("selectedTab = lastProductTab ?? .agentStatus", "selectedTab = .agentStatus"),
+                           ("selectedTab = lastSettingsTab ?? .general", "selectedTab = .general")],
                           in: navigation, by: Self.returnProblems)
     }
 
     /// Search picks and deep links share one switch point, so the sidebar follows them with no path of
-    /// its own.
+    /// its own. A query left typed gives way when its flat list has no row for the tab.
     private static func hasTheSwitchPoint(in code: String) -> Bool {
-        !SettingsDesignSystemRulesTests.matches(of: #"\.onReceive\(highlightCoordinator\.\$pendingScrollRequest\.compactMap \{ \$0 \}\) \{ request in\s*selectedTab = request\.tab\s*\}"#, in: code).isEmpty
+        !SettingsDesignSystemRulesTests.matches(of: #"\.onReceive\(highlightCoordinator\.\$pendingScrollRequest\.compactMap \{ \$0 \}\) \{ request in\s*selectedTab = request\.tab\s*if !filteredTabs\.contains\(request\.tab\) \{ searchText = "" \}\s*\}"#, in: code).isEmpty
     }
 
     func testADeepLinkOrASearchMovesTheTabInOnePlace() throws {
@@ -139,12 +159,37 @@ final class BrainShellRulesTests: XCTestCase {
         XCTAssertTrue(Self.hasTheSwitchPoint(in: navigation))
         XCTAssertEqual(navigation.components(separatedBy: "selectedTab = request.tab").count - 1, 1)
 
-        XCTAssertTrue(Self.hasTheSwitchPoint(in: ".onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in\n    selectedTab = request.tab\n}"))
+        let switchPoint = ".onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in\n    selectedTab = request.tab\n    if !filteredTabs.contains(request.tab) { searchText = \"\" }\n}"
+        XCTAssertTrue(Self.hasTheSwitchPoint(in: switchPoint))
+        XCTAssertFalse(Self.hasTheSwitchPoint(in: ".onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in\n    selectedTab = request.tab\n}"))
         XCTAssertFalse(Self.hasTheSwitchPoint(in: ".onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in\n    log(request)\n}"))
         XCTAssertFalse(Self.hasTheSwitchPoint(in: "selectedTab = request.tab"))
     }
 
     // MARK: - Every tab stays reachable
+
+    /// A query shows one flat list and neither Back nor the Settings row; with no query the sidebar shows
+    /// the selected tab's list. `tabRow(.about)` is the only way to About but a search.
+    private static func listProblems(in navigation: String) -> [String] {
+        ["if isSearching { return filteredTabs }",
+         "availableTabs.filter { $0.group == (showsSettingsList ? .settings : .product) }",
+         "if showsSettingsList && !isSearching {",
+         "if !showsSettingsList && !isSearching {",
+         "tabRow(.about)",
+         "ForEach(listedTabs)"].filter { !navigation.contains($0) }
+    }
+
+    func testEachListShowsWhatTheDocSays() throws {
+        let navigation = try Self.navigation(in: try Self.view())
+        XCTAssertEqual(Self.listProblems(in: navigation), [])
+        Self.assertCaught([("if isSearching { return filteredTabs }", ""),
+                           ("tabRow(.about)", ""),
+                           ("if showsSettingsList && !isSearching {", "if showsSettingsList {"),
+                           ("if !showsSettingsList && !isSearching {", "if !showsSettingsList {"),
+                           ("(showsSettingsList ? .settings : .product)", "(.product)"),
+                           ("ForEach(listedTabs)", "ForEach(availableTabs)")],
+                          in: navigation, by: Self.listProblems)
+    }
 
     private static func formsIn(detailOf view: String) -> [String] {
         guard let start = view.range(of: "private func detailView(for tab: SettingsTab)"),
@@ -176,8 +221,13 @@ final class BrainShellRulesTests: XCTestCase {
     }
 
     private static func keyboardProblems(in navigation: String) -> [String] {
-        var problems = [".focusable()", ".focused($sidebarHasFocus)", ".focusEffectDisabled()", ".onKeyPress(keys: [.upArrow, .downArrow])"]
+        // The newline, or `listedTabs + [.about]` would pass: About is a foot row, not in the arrow order.
+        var problems = [".onKeyPress(keys: [.upArrow, .downArrow])", ".onKeyPress(keys: [.leftArrow, .rightArrow])", "let tabs = listedTabs\n",
+                        "selectedTab = (offset < 0 ? tabs.last : tabs.first) ?? selectedTab"]
             .filter { !navigation.contains($0) }
+        // On a background: an outer `focusEffectDisabled` beats the rows' own, and takes their ring.
+        let focusStop = #"\.background \{\s*Color\.clear\s*\.focusable\(\)\s*\.focused\(\$sidebarHasFocus\)\s*\.focusEffectDisabled\(\)"#
+        if SettingsDesignSystemRulesTests.matches(of: focusStop, in: navigation).isEmpty { problems.append("the focus stop is not a background of its own") }
         // A row, Back and the Settings row each hand the keyboard to the list. Arrow keys stay dead after any that does not.
         let focusing = navigation.components(separatedBy: "sidebarHasFocus = true").count - 1
         if focusing != 3 { problems.append("\(focusing) rows hand the keyboard to the list") }
@@ -187,23 +237,48 @@ final class BrainShellRulesTests: XCTestCase {
     func testTheSidebarTakesArrowKeys() throws {
         let navigation = try Self.navigation(in: try Self.view())
         XCTAssertEqual(Self.keyboardProblems(in: navigation), [])
-        Self.assertCaught([(".onKeyPress(keys: [.upArrow, .downArrow])", ".onKeyPress(keys: [.upArrow])"), (".focusable()", ""),
-                           (".focused($sidebarHasFocus)", ""), (".focusEffectDisabled()", ""),
-                           ("selectedTab = tabOnOtherList ?? .agentStatus\n                            sidebarHasFocus = true",
-                            "selectedTab = tabOnOtherList ?? .agentStatus")],
+        Self.assertCaught([(".onKeyPress(keys: [.upArrow, .downArrow])", ".onKeyPress(keys: [.upArrow])"),
+                           (".onKeyPress(keys: [.leftArrow, .rightArrow])", ".onKeyPress(keys: [.leftArrow])"),
+                           ("let tabs = listedTabs\n", "let tabs = listedTabs + [.about]\n"),
+                           ("selectedTab = (offset < 0 ? tabs.last : tabs.first) ?? selectedTab", ""),
+                           ("Color.clear", "Group"), (".focusable()", ""), (".focused($sidebarHasFocus)", ""), (".focusEffectDisabled()", ""),
+                           ("selectedTab = lastProductTab ?? .agentStatus\n        sidebarHasFocus = true",
+                            "selectedTab = lastProductTab ?? .agentStatus")],
                           in: navigation, by: Self.keyboardProblems)
     }
 
     /// Spelled out in full: `SettingsForm` has its own `proxy.scrollTo`, so finding the bare call in
-    /// this file would prove nothing.
+    /// this file would prove nothing. A query moves the list under the selected row with no change of tab.
     private static func followsItsSelection(in navigation: String) -> Bool {
         navigation.contains(".onChange(of: resolvedSelection) { _, tab in proxy.scrollTo(tab) }")
+            && navigation.contains(".onChange(of: listedTabs, initial: true) { _, _ in proxy.scrollTo(resolvedSelection) }")
     }
 
     func testTheSidebarFollowsItsSelection() throws {
-        let view = try Self.view()
-        XCTAssertTrue(Self.followsItsSelection(in: try Self.navigation(in: view)))
+        let navigation = try Self.navigation(in: try Self.view())
+        XCTAssertTrue(Self.followsItsSelection(in: navigation))
         XCTAssertFalse(Self.followsItsSelection(in: "withAnimation { proxy.scrollTo(request.id, anchor: .center) }"))
+        XCTAssertFalse(Self.followsItsSelection(in: navigation.replacingOccurrences(of: ".onChange(of: listedTabs, initial: true)", with: ".onAppear")))
+    }
+
+    // MARK: - Reduce Motion
+
+    private static func motionProblems(in view: String) -> [String] {
+        ["withAnimation(scrollAnimation)",
+         "return reduceMotion ? nil : .easeInOut(duration: 0.45)",
+         ".animation(reduceMotion ? nil : .easeInOut(duration: SettingsTheme.quickAnimation), value: showSuggestions)",
+         ".transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .move(edge: .top)))"]
+            .filter { !view.contains($0) }
+    }
+
+    func testTheSidebarAndTheDeepLinkScrollRespectReduceMotion() throws {
+        let view = try Self.view()
+        XCTAssertEqual(Self.motionProblems(in: view), [])
+        Self.assertCaught([("reduceMotion ? nil : .easeInOut(duration: 0.45)", ".easeInOut(duration: 0.45)"),
+                           ("withAnimation(scrollAnimation)", "withAnimation(.easeInOut(duration: 0.45))"),
+                           ("reduceMotion ? nil : .easeInOut(duration: SettingsTheme.quickAnimation)", ".easeInOut(duration: SettingsTheme.quickAnimation)"),
+                           ("reduceMotion ? AnyTransition.opacity : ", "")],
+                          in: view, by: Self.motionProblems)
     }
 
     // MARK: - The large title
@@ -229,14 +304,22 @@ final class BrainShellRulesTests: XCTestCase {
 
     // MARK: - The boards
 
+    /// Each board is the only headless view of its state. `allTasks` goes through `SettingsForm`, or it
+    /// has no title to show or to clip by. The deep link's row is below the fold, or a dead `scrollTo`
+    /// draws the same picture, and the run scrolls at once, or an animated scroll never moves.
+    private static func boardProblems(in snapshots: String) -> [String] {
+        ["\"shell\"", "\"shellSettings\"", "\"shellDeepLink\"", "\"shellSearch\"", "\"shellSearchList\"",
+         "SettingsView.snapshotPageTitle(Form {",
+         "SettingsTab.general.highlightID(for: \"Always show on non-notch displays\")",
+         "SettingsHighlightCoordinator.snapshotScrollsAtOnce = true",
+         "width: 700, into: request.directory, fixedHeight: 600",
+         "document.frame.height + hosting.bounds.height - scroll.frame.height"].filter { !snapshots.contains($0) }
+    }
+
     func testTheBoardsDrawTheWholeWindow() throws {
         let root = Self.settingsDirectory.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("helpers/DebugSnapshot.swift")
         let snapshots = SettingsDesignSystemRulesTests.code(try String(contentsOf: root, encoding: .utf8))
-        for board in ["\"shell\"", "\"shellSettings\"", "\"shellDeepLink\"", "\"shellSearch\"", "\"shellSearchList\""] {
-            XCTAssertTrue(snapshots.contains(board), "\(board) is the only headless view of that state")
-        }
-        XCTAssertTrue(snapshots.contains("width: 700, into: request.directory, fixedHeight: 600"), "the whole window at today's size")
-        XCTAssertTrue(snapshots.contains("document.frame.height + hosting.bounds.height - scroll.frame.height"),
-                      "a page's header would clip its last rows")
+        XCTAssertEqual(Self.boardProblems(in: snapshots), [])
+        Self.assertCaught(Self.boardProblems(in: "").map { (from: $0, to: "") }, in: snapshots, by: Self.boardProblems)
     }
 }

@@ -47,12 +47,14 @@ final class BrainPathRulesTests: XCTestCase {
     private static let fourteenTitles = ["General", "Appearance", "Live activities", "Lock screen", "Media", "Devices", "HUD and OSD",
                                          "Battery", "Stats", "Shelf", "Downloads", "Screen Assistant", "Shortcuts", "Extensions"]
 
-    /// Every "Brain › a › b" in the text's string-bearing lines, as its segments. Comment lines are
-    /// skipped. A segment ends at `›`, `.`, `,`, `)`, `"` or `\`, and only `›` lets the path go on.
+    /// Every "Brain › a › b" in the text's string-bearing lines, as its segments, with `→` read as `›`
+    /// because a string written that way goes stale the same way. Comment lines are skipped. A segment
+    /// ends at `›`, `.`, `,`, `)`, `"` or `\`, and only `›` lets the path go on.
     private static func paths(in text: String) -> [[String]] {
         let enders: Set<Character> = ["›", ".", ",", ")", "\"", "\\"]
         var found: [[String]] = []
-        for line in text.split(separator: "\n") where line.contains("\"") && line.contains("Brain › ") {
+        let normalized = text.replacingOccurrences(of: "→", with: "›")
+        for line in normalized.split(separator: "\n") where line.contains("\"") && line.contains("Brain › ") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
             let string = String(line)
@@ -116,7 +118,7 @@ final class BrainPathRulesTests: XCTestCase {
         XCTAssertEqual(scan.problems, [])
     }
 
-    func testTheScanReadsEveryLevelOfAPlantedPath() throws {
+    func testTheScanChecksThePlantedPathsFirstTwoLevels() throws {
         let titles = try Self.titles()
         func problems(_ line: String) -> [String] { Self.problems(paths: Self.paths(in: line), titles: titles) }
 
@@ -125,6 +127,10 @@ final class BrainPathRulesTests: XCTestCase {
         XCTAssertEqual(problems(#"let a = "Brain › Settings › Agents""#).count, 1)
         XCTAssertEqual(problems(#"let a = "Brain › Nowhere › Permissions""#).count, 1)
         XCTAssertEqual(problems(#"let a = "see Brain › General, then Brain › Media.""#).count, 2)
+
+        // The same path written with arrows. A segment runs to the period, so "Stats to view…" would fail too.
+        XCTAssertEqual(problems(#"let a = "in Brain → Stats.""#).count, 1)
+        XCTAssertEqual(problems(#"let a = "in Brain → Settings → Stats.""#), [])
 
         // NotesSettings' shape, with its period, and PermissionsStepView's, with what follows.
         XCTAssertEqual(Self.paths(in: #"let a = "row in Brain › Settings › General.""#), [["Settings", "General"]])

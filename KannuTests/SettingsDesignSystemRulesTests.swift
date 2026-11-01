@@ -128,6 +128,15 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.rootFindings(view: "BrainShell {\n} detail: {\n}\nText(\"a\")\n.settingsDesignSystem()\n", snapshots: good, root: "formStyle(.grouped)").count, 1)
     }
 
+    /// Kept out of `rootFindings`, whose plants count on a root that says only the form style.
+    func testTheRootHidesAFormsBackground() throws {
+        let sources = try Self.sources()
+        XCTAssertTrue(Self.code(try XCTUnwrap(sources["SettingsDesignSystem.swift"])).contains(".scrollContentBackground(.hidden)"),
+                      "a Form paints its own background over the panel")
+        XCTAssertEqual(Self.filesUsing(".scrollContentBackground(", in: sources), ["SettingsDesignSystem.swift"])
+        XCTAssertEqual(Self.filesUsing(".scrollContentBackground(", in: ["Page.swift": "Form {}\n    .scrollContentBackground(.visible)\n"]), ["Page.swift"])
+    }
+
     func testOnlyTheRootSetsTheFormStyle() throws {
         XCTAssertEqual(Self.filesSettingTheFormStyle(in: try Self.sources()), [])
 
