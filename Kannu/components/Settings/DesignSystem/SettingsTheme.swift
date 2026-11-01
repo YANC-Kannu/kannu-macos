@@ -40,7 +40,7 @@ enum SettingsTheme {
     static let controlOff = color(light: 0x8A877F, dark: 0x6F7076)
     static let knob = color(light: 0xFFFFFF, dark: 0xFFFFFF)
     static let onPrimary = color(light: 0xF4F1EA, dark: 0x101114)
-    static let destructive = color(light: 0xC4362B, dark: 0xFF6B5E)
+    static let destructive = color(light: 0xBC3226, dark: 0xFF6B5E)
 
     // MARK: - Fonts: Geist when bundled, the system font at the same size and weight when not
 
@@ -69,6 +69,7 @@ enum SettingsTheme {
     static let toggleHeight: CGFloat = 18
     static let toggleKnobInset: CGFloat = 2
     static let disabledOpacity = 0.45
+    static let pressedOpacity = 0.7
     /// Every bounded control animation. Never `.repeatForever` (docs/REGRESSIONS.md, entry 22).
     static let quickAnimation = 0.15
 

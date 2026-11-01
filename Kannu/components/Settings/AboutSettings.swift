@@ -101,7 +101,7 @@ struct About: View {
                     "Watch for freezes",
                     description: "If Kannu's interface stops responding for five seconds, it writes down what it was doing to ~/Library/Logs/Kannu and offers you the note next time it starts. Nothing is shown while it is stuck, and nothing is sent anywhere. On by default for the Developer profile."
                 ) {
-                    Toggle("", isOn: $hangWatchdogEnabled)
+                    Toggle("Watch for freezes", isOn: $hangWatchdogEnabled)
                 }
                 .settingsHighlight(id: highlightID("Watch for freezes"))
                 SettingsActionRow {

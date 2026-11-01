@@ -484,6 +484,9 @@ struct SettingsActionRow<Buttons: View>: View {
             } label: {
                 label
             }
+            // Wide buttons wrap under the title here. The root's one-line row would squeeze the
+            // description instead, to about 100 pt beside "Copy a prompt that drafts a policy".
+            .labeledContentStyle(.automatic)
         } else {
             HStack(spacing: SettingsMetrics.rowContent) {
                 Spacer(minLength: 0)

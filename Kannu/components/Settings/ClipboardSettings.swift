@@ -157,7 +157,6 @@ struct ClipboardSettings: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("Clipboard")
         .onAppear {
             if enableClipboardManager && !clipboardManager.isMonitoring {

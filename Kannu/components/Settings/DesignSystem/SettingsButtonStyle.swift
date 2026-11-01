@@ -65,7 +65,8 @@ struct SettingsButtonStyle: ButtonStyle {
                     if prominence == .standard { shape.strokeBorder(SettingsTheme.line) }
                 }
                 .contentShape(shape)
-                .opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)
+                // A mouse hovers before it presses, so the hover fill alone would show no press.
+                .opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)
                 .onHover { isHovering = $0 }
         }
     }

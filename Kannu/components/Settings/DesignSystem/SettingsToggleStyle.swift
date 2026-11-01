@@ -30,11 +30,20 @@ struct SettingsToggleStyle: ToggleStyle {
         Control(configuration: configuration, showsLabel: showsLabel)
     }
 
+    /// Not `.plain`: what that does to a disabled fill is the system's to change, and it would dim
+    /// the track a second time here. This one only shows a press.
+    private struct TrackButtonStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label.opacity(configuration.isPressed ? SettingsTheme.pressedOpacity : 1)
+        }
+    }
+
     // Not `Body`: a type of that name inside a style collides with the protocol's associated type.
     private struct Control: View {
         let configuration: ToggleStyleConfiguration
         let showsLabel: Bool
         @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.isEnabled) private var isEnabled
 
         var body: some View {
             HStack(spacing: SettingsMetrics.rowContent) {
@@ -43,7 +52,7 @@ struct SettingsToggleStyle: ToggleStyle {
                     Spacer(minLength: SettingsMetrics.rowContent)
                 }
                 Button { configuration.isOn.toggle() } label: { track }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TrackButtonStyle())
             }
             .accessibilityRepresentation {
                 // The root's labelled-row style would otherwise reach this switch too.
@@ -60,7 +69,7 @@ struct SettingsToggleStyle: ToggleStyle {
                     Circle().fill(SettingsTheme.knob).padding(SettingsTheme.toggleKnobInset)
                 }
                 .frame(width: SettingsTheme.toggleWidth, height: SettingsTheme.toggleHeight)
-                // No opacity for disabled: the `.plain` button dims this already, and twice loses the knob.
+                .opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)
                 .animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation),
                            value: configuration.isOn)
                 .contentShape(Capsule())

@@ -415,7 +415,7 @@ private struct ExtensionEntryRow: View {
                 }
                 .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
-
+                
                 Button("Deny") {
                     authManager.deny(bundleIdentifier: entry.bundleIdentifier, reason: "Denied by user")
                 }

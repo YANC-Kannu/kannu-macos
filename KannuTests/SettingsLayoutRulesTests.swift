@@ -132,7 +132,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     func testRowTextUsesTheFormsTypeOrTheSharedStyle() {
         assertPinnedCounts(Self.pinnedAdHocFontCounts, scanner: Self.adHocFontLines,
                            rule: "a caption-sized or pixel-sized font",
-                           cure: "row text uses the Form's own type, and every secondary line goes through settingsDescriptionStyle()")
+                           cure: "row text uses the root's body type, and every secondary line goes through settingsDescriptionStyle()")
     }
 
     /// Lines building a `Slider` by hand. `SettingsSliderRow` is the only shape a Settings *row*

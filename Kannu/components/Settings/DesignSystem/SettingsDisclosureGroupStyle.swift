@@ -31,23 +31,31 @@ struct SettingsDisclosureGroupStyle: DisclosureGroupStyle {
 
         var body: some View {
             VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-                Button {
-                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
-                        configuration.isExpanded.toggle()
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    // First call on the width: the button holds a `Spacer`, so an equal share would
+                    // wrap a description at half the row.
+                    configuration.label
+                        .layoutPriority(1)
+                    // The button starts after the title, never around it: a row's description is
+                    // selectable (docs/SETTINGS.md), and selectable text inside a button fights for the click.
+                    Button {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
+                            configuration.isExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 0) {
+                            Spacer(minLength: SettingsMetrics.rowContent)
+                            Image(systemName: "chevron.right")
+                                .font(SettingsTheme.description)
+                                .foregroundStyle(SettingsTheme.ink)
+                                .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
+                                .accessibilityHidden(true)
+                        }
+                        .contentShape(Rectangle())
                     }
-                } label: {
-                    HStack(spacing: SettingsMetrics.rowContent) {
-                        configuration.label
-                        Spacer(minLength: SettingsMetrics.rowContent)
-                        Image(systemName: "chevron.right")
-                            .font(SettingsTheme.description)
-                            .foregroundStyle(SettingsTheme.ink)
-                            .rotationEffect(.degrees(configuration.isExpanded ? 90 : 0))
-                            .accessibilityHidden(true)
-                    }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
                 .accessibilityValue(configuration.isExpanded ? String(localized: "Expanded") : String(localized: "Collapsed"))
 
                 if configuration.isExpanded {

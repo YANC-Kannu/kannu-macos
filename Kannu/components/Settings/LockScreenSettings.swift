@@ -233,7 +233,6 @@ struct LockScreenSettings: View {
                 }
             }
             .disabled(!showStandardMediaControls)
-            .opacity(showStandardMediaControls ? 1 : 0.5)
 
             Section {
                 Defaults.Toggle(key: .enableLockScreenTimerWidget) {

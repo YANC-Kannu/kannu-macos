@@ -50,15 +50,19 @@ component already does.
 - **`DesignSystem/` holds one type per file**, each starting with the GPL block:
   `SettingsTheme` (colours, fonts and control measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, and `settingsDesignSystem()`.
-- **There is one root.** `settingsDesignSystem()` is what every page inherits. The window and the
-  snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside it.
-  It has no `.foregroundStyle`: that would recolour the labels of native prominent buttons and menus.
+- **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's detail
+  column and the snapshot boards both apply it, so they cannot drift, and nothing else sets the form
+  style beside it. The sidebar stays outside it, with its native links. The root has no
+  `.foregroundStyle`: that would recolour the labels of native prominent buttons and menus.
 - **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
   `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
 - **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
 - **The accent has two strengths.** `accent` is the logo's eye blue, for fills such as a switch that is
   on. `accentStrong` is for what must be read, and it is the root's tint, because a root tint also
   colours Markdown links. Native controls that honour `.tint` show it.
+- **A disclosure's button starts after its title.** A row's description is selectable, and selectable
+  text inside a button fights for the click, so the chevron and the empty space beside the title toggle
+  it, as a native disclosure's chevron does.
 
 A call-site style beats the root, so these stay on purpose until Stage 3:
 
@@ -68,7 +72,9 @@ A call-site style beats the root, so these stay on purpose until Stage 3:
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.buttonStyle(.bordered)` on `Menu("Connect…")` | A root button style takes a default-style `Menu`'s chevron away; `.menuStyle(.borderlessButton)` is the other cure |
-| `.labeledContentStyle(.automatic)` on a checkbox, a radio group or a segmented picker | The root's labelled-row style pushes the label and the control to opposite edges |
+| `.labeledContentStyle(.automatic)` on a checkbox, a radio group or the segmented picker in `AnimationEditorView`, which sits outside a `Form` | The root's labelled-row style pushes the label and the control to opposite edges |
+| `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
+| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
 | `.bordered`, `.borderless`, `.plain` and `AccessoryBarButtonStyle` | Not moved yet |
@@ -77,7 +83,8 @@ A call-site style beats the root, so these stay on purpose until Stage 3:
 something reading it in the same change. `testEveryThemeTokenIsRead` rejects a token with no reader, and
 a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A new file goes in
 `DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
-`--kannu-snapshot-tabs designSystem` renders every state and every token by name.
+`--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
+font token by name. Hover and press take a pointer, so no board shows them.
 
 ## The content standard
 
@@ -87,7 +94,7 @@ section describes it, it does not define it.
 
 | Dimension | The rule | Token |
 |---|---|---|
-| A row's title | The Form's own body type. Never restyled. | — |
+| A row's title | The root's `SettingsTheme.body`. Never restyled. | — |
 | Every secondary line | `settingsDescriptionStyle()` — `SettingsTheme.description`, secondary, selectable. Pass `tint:` only when the colour means something (red for a failure, orange for a partial result). | — |
 | Title to description | 2 | `labelStack` |
 | Inside a row's trailing content | 8 | `rowContent` |
