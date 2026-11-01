@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - The task form's hold cites the right regressions entry
+- **Developer label:** the notch-close rule is entry 23 after #11's renumbering
+- **Agent label:** Claude Code (Opus 5.5) — comment and changelog references only, no behaviour change
+- **Changes:**
+  - `TimerTaskForm`, `TimerSideColumnRulesTests` and the task-form entry below cite
+    `docs/REGRESSIONS.md` entry 23, the notch-close rule, not entry 22.
+
+### 2026-11-01 - The notch stays open while a task is being edited
+- **Developer label:** "opoen notch close soon in task tab in edit task"
+- **Agent label:** Claude Code (Opus 5.5) — the task form's focus holds the notch again, under the pointer-based close
+- **Changes:**
+  - `TimerTaskForm` holds the notch while one of its fields has focus, so an edit survives the pointer
+    leaving the notch. `9352cf35` had removed this hold along with the timer tab's others.
+  - The hold ends when the focus goes, the form goes or the notch's window stops being key, and
+    `ContentView.closeWhenPointerLeaves` then closes the notch if the pointer is gone. Menus still
+    hold nothing in the form, and the other timer-tab fields stay without a hold.
+  - `TimerSideColumnRulesTests` pins the one exception, and `docs/REGRESSIONS.md` entry 23 gains the
+    dated addendum and the `--level info` the close-reason stream needs to show anything.
+
 ### 2026-11-01 - Act on CodeRabbit's review of #11
 - **Developer label:** CodeRabbit's review of #11, the notch tasks work, including #7's and #10's changes
 - **Agent label:** Claude Code (Opus 5.5) — 14 of its 19 findings fixed; the other 5 answered in their threads and on the PR, with why they stay

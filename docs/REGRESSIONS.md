@@ -1550,7 +1550,7 @@ It checks `NSEvent.mouseLocation` against the open body's frame
 (`NotchInteractionGeometry.openNotchRect`, with `openNotchMargin`) every 100 ms. It waits while
 `shouldPreventAutoClose()` holds or a menu tracks, and closes only when the pointer is off the
 notch. Never close because `isHovering` is false. A view never holds the notch open for its own
-field's focus or its own menu.
+menu, or for its own field's focus, with one exception: the task form (addendum below).
 
 **Broken five times, each patched in the one view that showed it.** The hashes are libinmv/kannu's,
 from before the move to YANC-Kannu/kannu-macos.
@@ -1576,13 +1576,15 @@ from before the move to YANC-Kannu/kannu-macos.
   `closeWhenPointerLeaves` that does not check the pointer or the menus, and on an outside-click
   close without the pointer check. Each of these is checked against planted offenders.
 - `TimerSideColumnRulesTests.testTheTimerTabsFieldsAndMenusHoldNothingOpen` keeps focus and
-  menu holds out of the timer tab.
+  menu holds out of the timer tab, the task form's focus excepted.
 
 The dialog holds stay (the alerts in `NotchNotesView`, the share button): they keep an alert or
 a share picker alive, and are not about hover.
 
 **Missing:** that the notch really stays open over a popover, a menu or an alert is checked by eye
-on the installed build, with `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" && category == "NotchClose"'`.
+on the installed build, with `/usr/bin/log stream --level info --predicate 'subsystem == "com.kannu.app" && category == "NotchClose"'`.
+The `--level info` matters: the close reason logs at info, and without it the stream stays empty,
+which reads as "nothing closed".
 
 **2026-10-29 addendum: "on the notch" includes the windows hanging off it.** David: "the hover on
 calendar out of notch area of kannu closes notch". The task form's reminder is a `.field` date
@@ -1599,6 +1601,23 @@ Guards: `NotchInteractionTests.testAWindowHangingOffTheNotchCountsAsTheNotch` ch
 and `testThePointerCheckReadsTheWindowsHangingOffTheNotch` checks that the pointer check reads those
 windows. **Missing:** the AppKit side, that the calendar really is a child window, is only the probe
 above; check by eye on the installed build.
+
+**2026-11-01 addendum: a task being edited holds the notch.** David: "open notch close soon in task
+tab in edit task". This rule went too far when it took away the form's focus hold: with the cursor
+in a field, the pointer leaving the body closed the notch within 100 ms, mid-edit. Typing needs the
+keyboard, not the pointer, so where the pointer rests says nothing about whether the edit is done.
+
+`TimerTaskForm` holds the notch while one of its fields has focus. That does not bring back what
+this entry fixed, because the hold is only something `closeWhenPointerLeaves` waits on: when the
+focus goes (a click into another app, the form closing, Save, Esc) it closes the notch if the pointer
+is gone. Menus still hold nothing here. The other timer-tab fields, the session name among them,
+stay without a hold.
+
+Because the form focuses a field when it opens, the notch stays open after a click on the pencil
+until a click elsewhere, ×, Esc or Save.
+
+Guard: `TimerSideColumnRulesTests.testTheTaskFormHoldsTheNotchOnlyWhileAFieldHasFocus`. **Missing:**
+the behaviour itself is checked by eye on the installed build.
 
 ---
 
