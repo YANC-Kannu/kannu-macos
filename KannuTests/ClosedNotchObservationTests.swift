@@ -32,7 +32,7 @@ final class ClosedNotchObservationTests: XCTestCase {
         "Kannu/components/AgentStatus/AgentTrafficLightLiveActivity.swift",  // AgentTrafficLightIndicator, the leaf
         "Kannu/components/AgentStatus/NotchAgentStatusView.swift",           // the open panel's list
         "Kannu/components/Notch/NotchLLMUsageView.swift",                    // usage tab
-        "Kannu/components/Settings/SettingsView.swift",                      // style preview (6d6a826 pattern)
+        "Kannu/components/Settings/AgentStatusSettings.swift",               // style preview (6d6a826 pattern)
     ]
 
     func testOnlyLeafViewsObserveTheWholeMonitor() {

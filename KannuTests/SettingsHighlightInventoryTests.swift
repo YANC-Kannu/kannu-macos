@@ -116,7 +116,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         for word in ["\"quit\"", "\"exit\""] {
             XCTAssertTrue(entry.contains(word), "searching \(word) must find Quit Kannu")
         }
-        XCTAssertTrue(settingsView.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
+        let general = try XCTUnwrap(try Self.sources()["GeneralSettings.swift"])
+        XCTAssertTrue(general.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
     }
 
     // MARK: - Pairing
