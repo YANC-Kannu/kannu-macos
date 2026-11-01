@@ -52,6 +52,7 @@ final class TimerSideColumnRulesTests: XCTestCase {
         .deletingLastPathComponent()   // repo root
     static let notchTimerPath = "Kannu/components/Notch/NotchTimerView.swift"
     static let sideColumnPath = "Kannu/components/Notch/TimerSideColumn.swift"
+    static let taskFormPath = "Kannu/components/Notch/TimerTaskForm.swift"
     static let swipeMonitorPath = "Kannu/components/Notch/HorizontalSwipeMonitor.swift"
     static let rulerPath = "Kannu/components/Timer/RulerTimerPicker.swift"
     static let headerPath = "Kannu/components/Notch/KannuHeader.swift"
@@ -129,21 +130,39 @@ final class TimerSideColumnRulesTests: XCTestCase {
 
     /// The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`), which also
     /// waits while any menu tracks. The timer tab's fields and menus hold nothing open of their own
-    /// (David, 2026-10-28: the hold-open rules go); a click into another app still drops a field's
-    /// focus.
+    /// (David, 2026-10-28: the hold-open rules go), the task form's focus excepted (next test); a
+    /// click into another app still drops a field's focus.
     func testTheTimerTabsFieldsAndMenusHoldNothingOpen() throws {
-        for path in [Self.sideColumnPath, Self.notchTimerPath, "Kannu/components/Notch/TimerTaskForm.swift",
-                     "Kannu/components/Settings/TimeToLogSection.swift"] {
+        for path in [Self.sideColumnPath, Self.notchTimerPath, "Kannu/components/Settings/TimeToLogSection.swift"] {
             let code = Self.code(try Self.raw(path))
             XCTAssertFalse(code.contains("setAutoCloseSuppression("), "\(path) holds the notch open again")
             XCTAssertFalse(code.contains("NSMenu.didBeginTrackingNotification"),
                            "\(path) watches menus itself: ContentView's close waits for every menu")
         }
+        XCTAssertFalse(Self.code(try Self.raw(Self.taskFormPath)).contains("NSMenu.didBeginTrackingNotification"),
+                       "the task form watches menus itself: ContentView's close waits for every menu")
         let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
         XCTAssertTrue(page.contains("NSWindow.didResignKeyNotification") && page.contains("note.object is KannuWindow"))
         let content = Self.code(try Self.raw("Kannu/ContentView.swift"))
         XCTAssertTrue(content.contains("NSMenu.didBeginTrackingNotification") && content.contains("NSMenu.didEndTrackingNotification"),
                       "a menu is a window of its own, often below the notch: the close must wait while one tracks")
+    }
+
+    /// The one field that holds the notch: a task being edited must survive the pointer leaving the
+    /// notch (David, 2026-11-01). The hold follows the form's focus alone, under a `@State` token so
+    /// the release names the token that was set, and ends with the form or with the window's key
+    /// status, so the pointer check closes the notch afterwards (docs/REGRESSIONS.md entry 22).
+    func testTheTaskFormHoldsTheNotchOnlyWhileAFieldHasFocus() throws {
+        let form = Self.code(try Self.raw(Self.taskFormPath))
+        XCTAssertTrue(form.contains("@State private var editingToken = UUID()"), "a plain let is minted again on each re-render")
+        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(field != nil, token: editingToken)"),
+                      "the hold must follow the form's focus")
+        XCTAssertTrue(form.contains("vm.setAutoCloseSuppression(false, token: editingToken)"),
+                      "the form going must end the hold")
+        XCTAssertEqual(form.components(separatedBy: "setAutoCloseSuppression(").count - 1, 2,
+                       "the task form holds the notch for its focus and for nothing else")
+        XCTAssertTrue(form.contains("NSWindow.didResignKeyNotification") && form.contains("focused = nil"),
+                      "a click into another app must drop the focus, or the hold never ends")
     }
 
     /// Refresh follows the popover's one rule (`TaskSyncSummary`) and tells when each source last
