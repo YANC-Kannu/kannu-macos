@@ -361,6 +361,7 @@ final class BrainShellRulesTests: XCTestCase {
          "width: size.width, into: request.directory, fixedHeight: size.height",
          "return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)",
          "return NSSize(width: 1440, height: 900)",
+         "return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)",
          // A page at the narrowest panel the window can have, or a clipped row goes unseen.
          "SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset",
          ": narrowestPanel",

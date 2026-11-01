@@ -57,8 +57,11 @@ final class BrainAppearanceRulesTests: XCTestCase {
         let writers = files(in: sources, matching: #"\.appearance\s*=(?!=)"#)
         if writers != [controller, snapshots] { problems.append("these set a window's appearance: \(writers.sorted())") }
         // A window that sets its own, with no receiver. The notch's is the only one.
-        let ownWriters = files(in: sources, matching: #"(?<![\w.])appearance\s*=\s*NSAppearance\("#)
+        let ownWriters = files(in: sources, matching: #"(?<![\w.])appearance\s*=\s*(?:NSAppearance\b|\.init\b|nil\b)"#)
         if ownWriters != [notchWindow] { problems.append("these set their own appearance: \(ownWriters.sorted())") }
+        // Only the moon and the row write the key, each through its `@Default`.
+        let keyWriters = files(in: sources, matching: #"Defaults\[\.brainAppearance\]\s*=(?!=)"#)
+        if !keyWriters.isEmpty { problems.append("these write the key directly: \(keyWriters.sorted())") }
         let global = files(in: sources, matching: #"\bNSApp(?:lication\.shared)?\??\.appearance\b"#)
         if !global.isEmpty { problems.append("these touch every window through the app: \(global.sorted())") }
         let forced = files(in: sources, matching: #"\bpreferredColorScheme\b"#)
@@ -103,6 +106,9 @@ final class BrainAppearanceRulesTests: XCTestCase {
                       "panel.appearance = NSAppearance(named: .aqua)",
                       "window?.appearance = nil",
                       "appearance = NSAppearance(named: .aqua)",
+                      "appearance = .init(named: .aqua)",
+                      "appearance = NSAppearance.init(named: .aqua)",
+                      "appearance = nil",
                       "self.appearance=NSAppearance(named: .aqua)",
                       ".preferredColorScheme(.dark)",
                       "let choice = Defaults[.brainAppearance]",
@@ -112,6 +118,11 @@ final class BrainAppearanceRulesTests: XCTestCase {
             planted["components/Notch/Planted.swift"] = plant
             XCTAssertFalse(Self.problems(in: planted).isEmpty, "the rule misses: \(plant)")
         }
+
+        // In a file already allowed to name the key, so only the writers' pattern can catch it.
+        var directWrite = real
+        directWrite[Self.controller, default: ""] += "\nDefaults[.brainAppearance] = .system"
+        XCTAssertFalse(Self.problems(in: directWrite).isEmpty, "the rule misses a direct write to the key")
 
         // What it must leave alone.
         for harmless in ["if window.appearance == other { }",
@@ -147,14 +158,24 @@ final class BrainAppearanceRulesTests: XCTestCase {
              // The observer first: the window opens in the wrong appearance until the publisher speaks.
              ("applyBrainAppearance(Defaults[.brainAppearance])\n        brainAppearanceObserver = Defaults.publisher(.brainAppearance, options: [])",
               "brainAppearanceObserver = Defaults.publisher(.brainAppearance, options: [])\n        applyBrainAppearance(Defaults[.brainAppearance])\n        _ = brainAppearanceObserver"),
-             ("observeBrainAppearance()\n", "\n")],
+             ("observeBrainAppearance()\n", "\n"),
+             // Every pinned line stays, so only the check on what it assigns can catch this.
+             ("case .system: window?.appearance = nil", "case .system: window?.appearance = nil; NSColorPanel.shared.appearance = nil")],
             in: code, by: Self.controllerProblems)
+    }
+
+    private static func notchProblems(in code: String) -> [String] {
+        code.contains("appearance = NSAppearance(named: .darkAqua)") ? [] : ["the notch no longer forces dark, so its text can vanish in light mode"]
     }
 
     /// The notch's own line, which the patterns above treat as the one exception: it stays dark.
     func testTheNotchStaysDark() throws {
         let code = try XCTUnwrap(try Self.sources()[Self.notchWindow])
-        XCTAssertTrue(code.contains("appearance = NSAppearance(named: .darkAqua)"), "the notch no longer forces dark, so its text can vanish in light mode")
+        XCTAssertEqual(Self.notchProblems(in: code), [])
+        SettingsDesignSystemRulesTests.assertCaught(
+            [("named: .darkAqua", "named: .aqua"),
+             ("appearance = NSAppearance(named: .darkAqua)", "")],
+            in: code, by: Self.notchProblems)
     }
 
     /// The moon only picks the opposite of what is on screen, so this is the one way back to Match macOS.

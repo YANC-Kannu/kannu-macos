@@ -87,8 +87,8 @@ class SettingsWindowController: NSWindowController {
         window.hidesOnDeactivate = false
         window.isExcludedFromWindowsMenu = false
 
-        // Nothing restores it. A window that could come back full screen ahead of the terms gate is
-        // a question this removes, and it always reopens windowed.
+        // Nothing restores it at launch. A window that could come back full screen ahead of the terms
+        // gate is a question this removes.
         window.isRestorable = false
         window.identifier = Self.windowIdentifier
         
@@ -263,10 +263,17 @@ class SettingsWindowController: NSWindowController {
 
     private func finishPendingClose() {
         guard closeAfterFullScreen else { return }
-        closeAfterFullScreen = false
         // A turn later: this runs inside AppKit's transition callback. `NSWindow.close()` does not
         // ask `windowShouldClose` again, and `windowWillClose` then does all the usual work.
-        DispatchQueue.main.async { [weak self] in self?.window?.close() }
+        DispatchQueue.main.async { [weak self] in
+            // The flag stays set until here, so `showWindow` can still cancel.
+            guard let self, self.closeAfterFullScreen else { return }
+            self.closeAfterFullScreen = false
+            // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it
+            // ends. A sheet that arrived during the transition keeps Brain open.
+            guard self.window?.attachedSheet == nil else { return }
+            self.window?.close()
+        }
     }
 
     private func relinquishFocus() {
@@ -285,6 +292,8 @@ class SettingsWindowController: NSWindowController {
 
 extension SettingsWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        // A second Command-W can beat the turn `finishPendingClose` waits for.
+        closeAfterFullScreen = false
         NSColorPanel.shared.orderOut(nil)
         NSColorPanel.shared.setTarget(nil)
         NSColorPanel.shared.setAction(nil)
@@ -310,6 +319,9 @@ extension SettingsWindowController: NSWindowDelegate {
         // A turn later, as in `finishPendingClose`. `showWindow` may clear the flag first.
         DispatchQueue.main.async { [weak self] in
             guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
+            // A sheet arrived during the entry. AppKit could ignore a toggle under it, and a flag
+            // left set would close Brain at some later exit.
+            guard self.window?.attachedSheet == nil else { self.closeAfterFullScreen = false; return }
             self.window?.toggleFullScreen(nil)
         }
     }
