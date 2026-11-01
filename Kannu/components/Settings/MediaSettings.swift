@@ -312,7 +312,6 @@ struct Media: View {
                 SettingsFooter("These controls mirror the Lock Screen tab.")
             }
             .disabled(!showStandardMediaControls)
-            .opacity(showStandardMediaControls ? 1 : 0.5)
 
             // A radio group: the options are too long for a menu at this width.
             Section {

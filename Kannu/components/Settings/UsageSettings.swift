@@ -84,7 +84,6 @@ struct UsageSettings: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("Usage")
     }
 }

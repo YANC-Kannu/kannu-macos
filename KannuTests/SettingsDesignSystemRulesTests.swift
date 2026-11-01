@@ -91,21 +91,47 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
             if text.contains("formStyle(.grouped)") { findings.append("\(name) sets the form style itself") }
         }
         if root.components(separatedBy: "formStyle(.grouped)").count != 2 { findings.append("the root lost its form style") }
+        // The sidebar stays native until it is replaced, so the root reaches the detail column alone.
+        if matches(of: #"detailView\(for: resolvedSelection\)\s*\.settingsDesignSystem\(\)"#, in: view).count != 1
+            || view.components(separatedBy: ".settingsDesignSystem()").count != 2 {
+            findings.append("the view applies the root to more than its detail column")
+        }
         return findings
+    }
+
+    private static func snapshotSource() throws -> String {
+        code(try String(contentsOf: repoRoot.appendingPathComponent("Kannu/helpers/DebugSnapshot.swift"), encoding: .utf8))
+    }
+
+    private static func filesSettingTheFormStyle(in sources: [String: String]) -> [String] {
+        sources.filter { $0.key != "SettingsDesignSystem.swift" && code($0.value).contains("formStyle(") }.keys.sorted()
     }
 
     func testTheRootIsOneModifierSharedWithTheSnapshots() throws {
         let sources = try Self.sources()
-        let snapshots = try String(contentsOf: Self.repoRoot.appendingPathComponent("Kannu/helpers/DebugSnapshot.swift"), encoding: .utf8)
         XCTAssertEqual(Self.rootFindings(view: Self.code(try XCTUnwrap(sources["SettingsView.swift"])),
-                                         snapshots: Self.code(snapshots),
+                                         snapshots: try Self.snapshotSource(),
                                          root: Self.code(try XCTUnwrap(sources["SettingsDesignSystem.swift"]))), [])
 
         let good = ".settingsDesignSystem()"
-        XCTAssertEqual(Self.rootFindings(view: good, snapshots: good, root: "formStyle(.grouped)"), [])
-        XCTAssertEqual(Self.rootFindings(view: ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 2)
-        XCTAssertEqual(Self.rootFindings(view: good, snapshots: good + ".formStyle(.grouped)", root: "formStyle(.grouped)").count, 1)
-        XCTAssertEqual(Self.rootFindings(view: good, snapshots: good, root: "font(body)").count, 1)
+        let detail = "detailView(for: resolvedSelection)\n    .settingsDesignSystem()\n"
+        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good, root: "formStyle(.grouped)"), [])
+        XCTAssertEqual(Self.rootFindings(view: detail + ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: ".formStyle(.grouped)", snapshots: good, root: "formStyle(.grouped)").count, 3)
+        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good + ".formStyle(.grouped)", root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: detail, snapshots: good, root: "font(body)").count, 1)
+        // On the whole split view, or on the split view as well.
+        XCTAssertEqual(Self.rootFindings(view: "NavigationSplitView {}\n.settingsDesignSystem()", snapshots: good, root: "formStyle(.grouped)").count, 1)
+        XCTAssertEqual(Self.rootFindings(view: detail + "}\n.settingsDesignSystem()", snapshots: good, root: "formStyle(.grouped)").count, 1)
+    }
+
+    func testOnlyTheRootSetsTheFormStyle() throws {
+        XCTAssertEqual(Self.filesSettingTheFormStyle(in: try Self.sources()), [])
+
+        XCTAssertEqual(Self.filesSettingTheFormStyle(in: ["Page.swift": "Form {}\n    .formStyle(.grouped)\n"]), ["Page.swift"])
+        XCTAssertEqual(Self.filesSettingTheFormStyle(in: ["Page.swift": "Form {}\n    .formStyle(.columns)\n"]), ["Page.swift"])
+        XCTAssertEqual(Self.filesSettingTheFormStyle(in: ["Page.swift": "// .formStyle(.grouped) comes from the root\n"]), [])
+        XCTAssertEqual(Self.filesSettingTheFormStyle(in: ["SettingsDesignSystem.swift": "formStyle(.grouped)"]), [])
     }
 
     // MARK: - Values come from the theme
@@ -120,6 +146,11 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         #"\.padding\((?:[^()]*,\s*)?-?\d"#,
         #"\.(?:foregroundStyle|foregroundColor|fill|stroke|strokeBorder|background|tint)\(\s*\.[a-z]"#,
         #"\b(?:spacing|width|height):\s*(?!0(?:\.0+)?(?![.\d]))-?\d"#,
+        // The shapes this folder really writes: either arm of a ternary, and the other size labels.
+        #"\.opacity\([^()\n]*\b\d*\.\d"#,
+        #"\.padding\([^()\n]*[?:]\s*-?\d"#,
+        #"\.(?:font|foregroundStyle|foregroundColor|fill|stroke|strokeBorder|background|tint)\([^()\n]*[?:]\s*\.[a-z]"#,
+        #"\b(?:minWidth|idealWidth|maxWidth|minHeight|idealHeight|maxHeight|minLength|lineWidth|radius|duration):\s*(?!0(?:\.0+)?(?![.\d]))-?\d"#,
     ]
 
     private static func hardCodedValues(in code: String) -> [String] {
@@ -135,12 +166,18 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
         for plant in [".foregroundStyle(.white)", ".fill(.blue)", ".background( .red)", ".tint(.orange)", ".padding(.horizontal, 6)",
                       ".padding(12)", ".padding(-4)", ".font(Font.system(size: 9))", ".font(.caption)", "Color.red", "Color(red: 0, green: 0, blue: 0)",
-                      "RoundedRectangle(cornerRadius: 7)", ".opacity(0.5)", "VStack(spacing: 4)", "VStack(spacing: 0.5)", ".frame(width: 32)", ".frame(height: 18)"] {
+                      "RoundedRectangle(cornerRadius: 7)", ".opacity(0.5)", "VStack(spacing: 4)", "VStack(spacing: 0.5)", ".frame(width: 32)", ".frame(height: 18)",
+                      ".opacity(isEnabled ? 1 : 0.45)", ".fill(configuration.isOn ? .blue : .gray)", ".font(isSmall ? .caption : .body)", ".padding(isSmall ? 3 : 8)",
+                      ".foregroundStyle(on ? .white : .black)", ".frame(minWidth: 44)", ".frame(maxHeight: 18)", "Spacer(minLength: 8)", ".easeOut(duration: 0.15)",
+                      ".strokeBorder(line, lineWidth: 2)", ".shadow(radius: 8)"] {
             XCTAssertFalse(Self.hardCodedValues(in: plant).isEmpty, "the rule misses \(plant)")
         }
         for clean in [".foregroundStyle(SettingsTheme.ink)", ".padding(SettingsTheme.buttonInset)", ".font(SettingsTheme.body)",
                       "VStack(spacing: 0)", "HStack(spacing: SettingsMetrics.rowContent)", ".frame(width: SettingsTheme.toggleWidth)",
-                      "private var labelColor: NSColor", ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"] {
+                      "private var labelColor: NSColor", ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)",
+                      ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
+                      ".font(isSmall ? SettingsTheme.description : SettingsTheme.bodyStrong)", "Spacer(minLength: SettingsMetrics.rowContent)",
+                      ".easeOut(duration: SettingsTheme.quickAnimation)", ".frame(maxWidth: .infinity)"] {
             XCTAssertEqual(Self.hardCodedValues(in: clean), [], clean)
         }
     }
@@ -148,20 +185,34 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     // MARK: - Fonts
 
     private static func filesNamingAFont(in sources: [String: String]) -> [String] {
-        sources.filter { $0.key != "SettingsTheme.swift" && code($0.value).contains(".custom(") }.keys.sorted()
+        sources.filter { source in
+            let text = code(source.value)
+            return source.key != "SettingsTheme.swift" && (text.contains(".custom(") || text.contains("NSFont(name:"))
+        }.keys.sorted()
     }
 
     func testOnlyTheThemeNamesAFont() throws {
         XCTAssertEqual(Self.filesNamingAFont(in: try Self.sources()), [])
 
         XCTAssertEqual(Self.filesNamingAFont(in: ["Page.swift": ".font(.custom(\"Geist-Regular\", size: 13))"]), ["Page.swift"])
+        XCTAssertEqual(Self.filesNamingAFont(in: ["Page.swift": ".font(Font(NSFont(name: \"Geist-Regular\", size: 13)!))"]), ["Page.swift"])
         XCTAssertEqual(Self.filesNamingAFont(in: ["Page.swift": "// .custom( belongs in the theme"]), [])
         XCTAssertEqual(Self.filesNamingAFont(in: ["SettingsTheme.swift": ".custom(name, size: size)"]), [])
     }
 
+    private static func fallbackProblems(in theme: String) -> [String] {
+        ["geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)",
+         "mono: Font = geistMonoIsAvailable",
+         ".system(size: 13, weight: .regular, design: .monospaced)"].filter { !theme.contains($0) }
+    }
+
     func testTheThemeFallsBackToTheSystemFont() throws {
-        XCTAssertTrue(try Self.theme().contains("geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)"),
-                      "with no font bundled the theme must keep the system font at the same size")
+        let theme = try Self.theme()
+        XCTAssertEqual(Self.fallbackProblems(in: theme), [], "with no font bundled the theme must keep the system font at the same size")
+        Self.assertCaught([("geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)", ".custom(name, size: size)"),
+                           ("mono: Font = geistMonoIsAvailable", "mono: Font = true"),
+                           (".system(size: 13, weight: .regular, design: .monospaced)", ".custom(\"GeistMono-Regular\", size: 13)")],
+                          in: theme, by: Self.fallbackProblems)
     }
 
     // MARK: - Contrast
@@ -206,9 +257,11 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("inkSecondary", on: ["paper", "panel", "card"], atLeast: 4.5)
         require("accentStrong", on: ["paper", "panel", "card"], atLeast: 4.5)
         require("controlOff", on: ["panel", "card"], atLeast: 3)
-        // The two labels the button style really draws.
+        // The labels the button style really draws, on the fills it really draws them on: `card`
+        // at rest and `selection` under the pointer.
         require("onPrimary", on: ["ink"], atLeast: 7)
-        require("destructive", on: ["panel", "card"], atLeast: 4.5)
+        require("ink", on: ["selection"], atLeast: 7)
+        require("destructive", on: ["card", "selection"], atLeast: 4.5)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -236,6 +289,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let otherPaper = theme.replacingOccurrences(of: "static let paper = Color(nsColor: windowPaper)", with: "static let paper = Color.white")
         XCTAssertNotEqual(otherPaper, theme, "the plant must change the theme")
         XCTAssertTrue(Self.readabilityFailures(in: otherPaper).contains("paper is no longer windowPaper"))
+
+        let faintOnHover = theme.replacingOccurrences(of: "destructive = color(light: 0xBC3226", with: "destructive = color(light: 0xC4362B")
+        XCTAssertNotEqual(faintOnHover, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: faintOnHover), ["destructive on selection, light"])
     }
 
     // MARK: - Every token has a reader
@@ -270,10 +327,30 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.unreadTokens(theme: "static let paper = color(windowPaper)\nstatic let windowPaper = 1\n", others: []), ["paper"])
     }
 
+    /// The colours and fonts the board must name. Its lists are written by hand, so a new token could
+    /// otherwise miss the one render that shows it. Measures have nothing to show by name.
+    private static func tokensMissingFromTheBoard(theme: String, snapshots: String) -> [String] {
+        groups(of: #"static let (\w+)(?:: Font\b| = (?:color|sans|Color)\()"#, in: theme).map { $0[1] }.filter { token in
+            matches(of: "\\bSettingsTheme\\.\(token)\\b", in: snapshots).isEmpty
+        }
+    }
+
+    func testTheBoardNamesEveryColourAndFont() throws {
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: try Self.theme(), snapshots: try Self.snapshotSource()), [])
+
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let planted = color(light: 0x000000, dark: 0x000000)\n", snapshots: ""), ["planted"])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let planted = sans(13, .regular, \"Geist-Regular\")\n", snapshots: ""), ["planted"])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let planted: Font = geistMonoIsAvailable\n", snapshots: ""), ["planted"])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let paper = Color(nsColor: windowPaper)\n", snapshots: ""), ["paper"])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let ink = color(light: 0, dark: 0)\n", snapshots: "SettingsTheme.inkSecondary"), ["ink"])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let ink = color(light: 0, dark: 0)\n", snapshots: "SettingsTheme.ink"), [])
+        XCTAssertEqual(Self.tokensMissingFromTheBoard(theme: "static let controlRadius: CGFloat = 7\nstatic let windowPaper = nsColor(light: 0, dark: 0)\n", snapshots: ""), [])
+    }
+
     // MARK: - One type per file
 
     private static func topLevelTypes(in code: String) -> [String] {
-        matches(of: #"(?m)^(?:(?:private|fileprivate|internal|public|final) )*(?:struct|class|enum|actor|protocol) "#, in: code)
+        matches(of: #"(?m)^(?:@\w+\s+)*(?:(?:private|fileprivate|internal|public|open|final|indirect) )*(?:struct|class|enum|actor|protocol) "#, in: code)
     }
 
     func testOneTypePerDesignSystemFile() throws {
@@ -284,84 +361,247 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.topLevelTypes(in: "struct A {}\nprivate struct B {}\n").count, 2)
         XCTAssertEqual(Self.topLevelTypes(in: "final class A {}\nenum B {}\n").count, 2)
         XCTAssertEqual(Self.topLevelTypes(in: "struct A {\n    private struct B {}\n    enum C {}\n}\nextension A {}\n").count, 1)
+        XCTAssertEqual(Self.topLevelTypes(in: "struct A {}\n@MainActor struct B {}\n").count, 2)
+        XCTAssertEqual(Self.topLevelTypes(in: "struct A {}\n@MainActor\nfinal class C {}\n").count, 2)
+        XCTAssertEqual(Self.topLevelTypes(in: "struct A {}\nopen class D {}\n").count, 2)
     }
 
     // MARK: - Native controls that stay native
 
-    /// Lines where a style the root's labelled-row style would pull apart has no opt-out nearby.
-    private static func stylesWithoutTheOptOut(in code: String) -> [String] {
+    private static let labelledRowStyles = [".toggleStyle(.checkbox)", ".pickerStyle(.radioGroup)"]
+
+    /// Lines where a style the root's labelled-row style would pull apart has no opt-out in its chain.
+    private static func stylesWithoutTheOptOut(in code: String, styles: [String] = labelledRowStyles) -> [String] {
         let lines = code.components(separatedBy: "\n")
         return lines.indices.filter { index in
-            guard lines[index].contains(".toggleStyle(.checkbox)") || lines[index].contains(".pickerStyle(.radioGroup)") else { return false }
-            return !nearby(index, in: lines).contains { $0.contains(".labeledContentStyle(.automatic)") }
+            guard styles.contains(where: { lines[index].contains($0) }) else { return false }
+            return !chain(around: index, in: lines).contains { $0.contains(".labeledContentStyle(.automatic)") }
         }.map { lines[$0].trimmingCharacters(in: .whitespaces) }
     }
 
+    private static func filesUsing(_ style: String, in sources: [String: String]) -> [String] {
+        sources.filter { code($0.value).contains(style) }.keys.sorted()
+    }
+
     func testASwitchIsOurs() throws {
-        let sources = try Self.sources().mapValues(Self.code)
-        XCTAssertEqual(sources.filter { $0.value.contains(".toggleStyle(.switch)") }.keys.sorted(), ["SettingsToggleStyle.swift"])
-        XCTAssertEqual(sources.filter { $0.value.contains(".toggleStyle(.checkbox)") }.keys.sorted(), ["NewTaskSheet.swift"])
-        XCTAssertEqual(try XCTUnwrap(sources["NewTaskSheet.swift"]).components(separatedBy: ".toggleStyle(.checkbox)").count - 1, 2)
+        let sources = try Self.sources()
+        XCTAssertEqual(Self.filesUsing(".toggleStyle(.switch)", in: sources), ["SettingsToggleStyle.swift"])
+        XCTAssertEqual(Self.filesUsing(".toggleStyle(.checkbox)", in: sources), ["NewTaskSheet.swift"])
+        XCTAssertEqual(Self.code(try XCTUnwrap(sources["NewTaskSheet.swift"])).components(separatedBy: ".toggleStyle(.checkbox)").count - 1, 2)
         for (name, source) in sources {
-            XCTAssertEqual(Self.stylesWithoutTheOptOut(in: source), [], "\(name): the root's labelled-row style pulls this control apart")
+            XCTAssertEqual(Self.stylesWithoutTheOptOut(in: Self.code(source)), [], "\(name): the root's labelled-row style pulls this control apart")
         }
+
+        XCTAssertEqual(Self.filesUsing(".toggleStyle(.switch)", in: ["Page.swift": "Toggle(\"a\", isOn: $a)\n    .toggleStyle(.switch)\n"]), ["Page.swift"])
+        XCTAssertEqual(Self.filesUsing(".toggleStyle(.switch)", in: ["Page.swift": "// not .toggleStyle(.switch)\n"]), [])
 
         XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Toggle(\"a\", isOn: $a)\n    .toggleStyle(.checkbox)\n").count, 1)
         XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Picker(\"a\") {}\n    .pickerStyle(.radioGroup)\n    .labelsHidden()\n").count, 1)
+        // The neighbour's opt-out is on the neighbour.
+        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Toggle(\"a\", isOn: $a)\n    .labeledContentStyle(.automatic)\nToggle(\"b\", isOn: $b)\n    .toggleStyle(.checkbox)\n").count, 1)
         XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Toggle(\"a\", isOn: $a)\n    .toggleStyle(.checkbox)\n    .labeledContentStyle(.automatic)\n").count, 0)
         XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Picker(\"a\") {}\n    .pickerStyle(.radioGroup)\n    .labeledContentStyle(.automatic)\n    .labelsHidden()\n").count, 0)
         XCTAssertEqual(Self.stylesWithoutTheOptOut(in: Self.code("// .toggleStyle(.checkbox) must opt out")).count, 0)
     }
 
+    /// The opt-outs in the docs/SETTINGS.md table with no rule of their own. Each site is right today;
+    /// without this, deleting one or adding a site without one stays green.
+    func testTheNativeSitesStayNative() throws {
+        let sources = try Self.sources()
+
+        var links = 0
+        for (name, source) in sources {
+            let code = Self.code(source)
+            links += Self.openers(of: "Link", in: code).count
+            XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: code), [], "\(name): the root's button style draws this Link as a button")
+            XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: code), [], "\(name): a custom toggle style ignores .labelsHidden()")
+            XCTAssertEqual(Self.bareValuesWithoutAColour(in: code), [], "\(name): the root's labelled-row style leaves a bare value primary")
+        }
+        XCTAssertGreaterThan(links, 0, "the scan found no Link: the pattern went blind")
+
+        let components = Self.code(try XCTUnwrap(sources["SettingsComponents.swift"]))
+        XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
+        XCTAssertEqual(Self.code(try XCTUnwrap(sources["AllTasksPage.swift"])).components(separatedBy: ".disclosureGroupStyle(.automatic)").count - 1, 3,
+                       "All tasks' long groups keep the native disclosure")
+        let segmented = Self.code(try XCTUnwrap(sources["AnimationEditorView.swift"]))
+        XCTAssertTrue(segmented.contains(".pickerStyle(.segmented)"), "the animation editor's segmented picker moved: this rule reads nothing")
+        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: segmented, styles: [".pickerStyle(.segmented)"]), [])
+        XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
+        XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: Self.code(try XCTUnwrap(sources["GeneralSettings.swift"]))))
+
+        XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "Link(\"a\", destination: u)\n").count, 1)
+        // A style on the next view is not on this one.
+        XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "Link(\"a\", destination: u)\nText(\"b\").buttonStyle(.link)\n").count, 1)
+        XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "Link(\"a\", destination: u)\n    .buttonStyle(.link)\n").count, 0)
+        XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "Link(destination: u) {\n    Text(\"a\")\n}\n.buttonStyle(.link)\n").count, 0)
+        // Not a `Link` view.
+        XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "struct Link {\n}\nNavigationLink(\"a\") {}\nRow.Link(title: t)\n").count, 0)
+
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Toggle(\"a\", isOn: $a)\n    .labelsHidden()\n").count, 1)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Defaults.Toggle(key: .a) {\n    Text(\"a\")\n}\n.labelsHidden()\n").count, 1)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Toggle(\"a\", isOn: $a)\n    .labelsHidden()\nText(\"b\")\n    .toggleStyle(SettingsToggleStyle(showsLabel: false))\n").count, 1)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Toggle(\"a\", isOn: $a)\n    .labelsHidden()\n    .toggleStyle(SettingsToggleStyle(showsLabel: false))\n").count, 0)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Defaults.Toggle(key: .a) {\n    Text(\"a\")\n}\n.labelsHidden()\n.toggleStyle(SettingsToggleStyle(showsLabel: false))\n").count, 0)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Toggle(\"a\", isOn: $a)\n    .toggleStyle(.checkbox)\n    .labelsHidden()\n").count, 0)
+        XCTAssertEqual(Self.hiddenLabelsTheStyleCannotSee(in: "Toggle(\"a\", isOn: $a)\n").count, 0)
+
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\")\n}\n").count, 1)
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent {\n    Text(\"b\")\n        .textSelection(.enabled)\n} label: {\n    Text(\"a\")\n}\n").count, 1)
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\")\n        .foregroundStyle(.secondary)\n}\n").count, 0)
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\").foregroundColor(.secondary)\n}\n").count, 0)
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\")\n        .settingsDescriptionStyle()\n}\n").count, 0)
+        XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    TextField(\"b\", text: $b)\n}\n").count, 0)
+
+        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Picker(\"a\") {}\n    .pickerStyle(.segmented)\n", styles: [".pickerStyle(.segmented)"]).count, 1)
+        XCTAssertEqual(Self.filesUsing(".borderedProminent", in: ["Page.swift": "Button(\"a\") {}\n    .buttonStyle(.borderedProminent)\n"]), ["Page.swift"])
+
+        let rows = "LaunchPermissionRow(permission: p)\n    }\n}\n"
+        XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: rows + ".tint(.accentColor)\n"))
+        XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: rows + ".settingsHighlight(id: i)\n"))
+        XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: "Text(\"a\")\n.tint(.accentColor)\n"))
+
+        Self.assertCaught([("SettingsToggleStyle(showsLabel: false)", "SettingsToggleStyle()"),
+                           (".labeledContentStyle(.automatic)", ""),
+                           ("struct SettingsActionRow", "struct RenamedActionRow"),
+                           ("struct SettingsRow<", "struct RenamedRow<")],
+                          in: components, by: Self.sharedComponentProblems)
+    }
+
+    /// `Link`s the root's button style would draw as buttons.
+    private static func linksWithoutTheLinkStyle(in code: String) -> [String] {
+        calls(of: "Link", in: code) { !$0.contains(".buttonStyle(.link)") }
+    }
+
+    /// Toggles with `.labelsHidden()` whose style still draws the label: only `showsLabel: false`
+    /// hides it from ours, and a native checkbox reads the modifier itself.
+    private static func hiddenLabelsTheStyleCannotSee(in code: String) -> [String] {
+        (calls(of: "Toggle", in: code) { Self.hidesALabelOnlyByTheModifier($0) }
+            + calls(of: "Defaults.Toggle", in: code) { Self.hidesALabelOnlyByTheModifier($0) })
+    }
+
+    private static func hidesALabelOnlyByTheModifier(_ chain: String) -> Bool {
+        chain.contains(".labelsHidden()") && !chain.contains("showsLabel: false") && !chain.contains(".toggleStyle(.checkbox)")
+    }
+
+    /// A `Text` straight inside a `LabeledContent` with no colour of its own: the root's labelled-row
+    /// style leaves it primary, where a native row would grey it.
+    private static func bareValuesWithoutAColour(in code: String) -> [String] {
+        groups(of: #"LabeledContent[^\n]*\{\s*\n\s*(Text\([^\n]*)((?:\n\s*\.[^\n]*)*)"#, in: code).compactMap { match in
+            let call = match[1] + match[2]
+            let coloured = call.contains(".foregroundStyle(") || call.contains(".foregroundColor(") || call.contains("settingsDescriptionStyle(")
+            return coloured ? nil : match[1].trimmingCharacters(in: .whitespaces)
+        }
+    }
+
+    /// `LaunchPermissionRow` lives in `Onboarding/`, so no scan here reads its `.borderedProminent`.
+    private static func permissionRowsKeepTheSystemTint(in general: String) -> Bool {
+        !matches(of: #"LaunchPermissionRow\([^\n]*\n\s*\}\n\s*\}\s*\.tint\(\.accentColor\)"#, in: general).isEmpty
+    }
+
+    private static func toggleProblems(in toggle: String) -> [String] {
+        var problems = ["Button {", ".accessibilityRepresentation", "accessibilityReduceMotion"].filter { !toggle.contains($0) }
+        // One dim, and its own: what `.plain` does to a disabled fill is the system's to change, and
+        // the two together lose the knob in the track (seen on the designSystem board).
+        if toggle.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled switch needs exactly one dim of its own")
+        }
+        if toggle.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled switch a second time") }
+        return problems
+    }
+
+    private static func disclosureProblems(in disclosure: String) -> [String] {
+        // The button holds a `Spacer`, so without the priority a description wraps at half the row
+        // (seen on the agentSecurity board).
+        let problems = ["accessibilityReduceMotion", ".accessibilityValue", ".accessibilityElement(children: .combine)",
+                        ".layoutPriority(1)"].filter { !disclosure.contains($0) }
+        // A description is selectable, and selectable text inside a button fights for the click.
+        guard let title = disclosure.range(of: "configuration.label")?.lowerBound,
+              let button = disclosure.range(of: "Button {")?.lowerBound,
+              title < button else { return problems + ["the button must start after the title"] }
+        return problems
+    }
+
     func testTheControlsKeepKeyboardAndVoiceOver() throws {
         let sources = try Self.designSystemSources().mapValues(Self.code)
         let toggle = try XCTUnwrap(sources["SettingsToggleStyle.swift"])
-        for required in ["Button {", ".accessibilityRepresentation", "accessibilityReduceMotion"] {
-            XCTAssertTrue(toggle.contains(required), "SettingsToggleStyle lost \(required)")
-        }
-        // Its `.plain` button dims a disabled switch; an opacity of its own dims it twice, and the
-        // knob disappears into the track (seen on the designSystem board).
-        XCTAssertTrue(toggle.contains(".buttonStyle(.plain)"))
-        XCTAssertFalse(toggle.contains(".opacity("), "SettingsToggleStyle dims a disabled switch twice")
+        XCTAssertEqual(Self.toggleProblems(in: toggle), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([("Button {", "Group {"), (".accessibilityRepresentation", ".accessibilityHidden"),
+                           ("accessibilityReduceMotion", "accessibilityInvertColors"), (dim, ""), (dim, dim + dim),
+                           (".buttonStyle(TrackButtonStyle())", ".buttonStyle(.plain)")],
+                          in: toggle, by: Self.toggleProblems)
+
         let disclosure = try XCTUnwrap(sources["SettingsDisclosureGroupStyle.swift"])
-        for required in ["accessibilityReduceMotion", ".accessibilityValue"] {
-            XCTAssertTrue(disclosure.contains(required), "SettingsDisclosureGroupStyle lost \(required)")
+        XCTAssertEqual(Self.disclosureProblems(in: disclosure), [])
+        Self.assertCaught([("accessibilityReduceMotion", "accessibilityInvertColors"), (".accessibilityValue", ".accessibilityHint"),
+                           (".accessibilityElement(children: .combine)", ".accessibilityElement(children: .ignore)"),
+                           (".layoutPriority(1)", "")],
+                          in: disclosure, by: Self.disclosureProblems)
+        let wrapped = "Button {\n} label: {\n    configuration.label\n}\naccessibilityReduceMotion .accessibilityValue .accessibilityElement(children: .combine) .layoutPriority(1)\n"
+        XCTAssertEqual(Self.disclosureProblems(in: wrapped), ["the button must start after the title"])
+    }
+
+    /// What a press, a hover and a squeeze must leave alone. A custom style's label can be squeezed
+    /// where a native button's cannot: a row broke "Acknowledgements" across two lines before this.
+    private static func buttonProblems(in button: String) -> [String] {
+        [".fixedSize(horizontal: true, vertical: false)",
+         ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
+         "isEnabled && (configuration.isPressed || isHovering)"].filter { !button.contains($0) }
+    }
+
+    func testAButtonKeepsItsWidthAndShowsAPress() throws {
+        let button = Self.code(try XCTUnwrap(try Self.designSystemSources()["SettingsButtonStyle.swift"]))
+        XCTAssertEqual(Self.buttonProblems(in: button), [])
+        Self.assertCaught([(".fixedSize(horizontal: true, vertical: false)", ""),
+                           ("configuration.isPressed ? SettingsTheme.pressedOpacity : 1", "1"),
+                           ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)")],
+                          in: button, by: Self.buttonProblems)
+    }
+
+    /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
+    /// gives headers and footers, so they say theirs, or every section header goes light and every
+    /// footer grows. Its one-line row would squeeze a titled action row's description, and its switch
+    /// would still draw a label in a row that draws the title itself.
+    private static func sharedComponentProblems(in components: String) -> [String] {
+        let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
+                        ("SettingsFooter", ".font(SettingsTheme.description)"),
+                        ("SettingsActionRow", ".labeledContentStyle(.automatic)"),
+                        ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
+        return required.compactMap { component, modifier -> String? in
+            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return "\(component) is gone" }
+            let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
+            return components[start.lowerBound..<end].contains(modifier) ? nil : "\(component) lost \(modifier)"
         }
     }
 
-    /// A custom style's label can be squeezed where a native button's cannot: a row broke
-    /// "Acknowledgements" across two lines before this.
-    func testAButtonKeepsItsWidth() throws {
-        let button = try XCTUnwrap(try Self.designSystemSources()["SettingsButtonStyle.swift"])
-        XCTAssertTrue(Self.code(button).contains(".fixedSize(horizontal: true, vertical: false)"))
-    }
-
-    /// The root's font replaces what a grouped `Form` gives its headers and footers, so the shared
-    /// components must say theirs, or every section header goes light and every footer grows.
     func testSectionHeadersAndFootersKeepTheirOwnType() throws {
         let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
-        for (component, font) in [("SettingsSectionHeader", "SettingsTheme.sectionTitle"), ("SettingsFooter", "SettingsTheme.description")] {
-            let start = try XCTUnwrap(components.range(of: "struct \(component):"), "\(component) is gone")
-            let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
-            XCTAssertTrue(components[start.lowerBound..<end].contains(".font(\(font))"), "\(component) lost .font(\(font))")
-        }
+        XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
+        Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), ("            .font(SettingsTheme.description)\n", ""),
+                           ("struct SettingsSectionHeader", "struct RenamedHeader"), ("struct SettingsFooter:", "struct RenamedFooter:")],
+                          in: components, by: Self.sharedComponentProblems)
     }
 
     /// A root button style takes a default-style `Menu`'s indicator away, and the only cures are the
     /// borderless menu style or a native button style on the menu itself.
     private static func menusWithoutAnIndicator(in code: String) -> [String] {
+        calls(of: "Menu", in: code) { !($0.contains(".menuStyle(.borderlessButton)") || $0.contains(".buttonStyle(.bordered)")) }
+    }
+
+    /// The start of each call of `name` whose modifier chain `isOffender` picks.
+    private static func calls(of name: String, in code: String, whereChain isOffender: (String) -> Bool) -> [String] {
         let characters = Array(code)
-        return menuOpeners(in: code).compactMap { opener in
-            let chain = modifierChain(after: opener, in: characters)
-            let keeps = chain.contains(".menuStyle(.borderlessButton)") || chain.contains(".buttonStyle(.bordered)")
-            return keeps ? nil : String(characters[opener..<min(opener + 24, characters.count)])
+        return openers(of: name, in: code).compactMap { opener in
+            guard isOffender(modifierChain(after: opener, nameLength: name.count, in: characters)) else { return nil }
+            return String(characters[opener..<min(opener + 24, characters.count)])
         }
     }
 
-    /// Where each `Menu` opens, as a `Character` offset. Not `SomeMenu(`, `foo.Menu(` or `resetMenu`.
-    private static func menuOpeners(in code: String) -> [Int] {
-        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z.])Menu(?: \{|\()"#) else {
-            XCTFail("bad Menu pattern")
+    /// Where each call of `name` opens, as a `Character` offset. Not `SomeMenu(`, `foo.Menu(`,
+    /// `resetMenu` or `struct Link {`.
+    private static func openers(of name: String, in code: String) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z.])(?<!struct )"# + NSRegularExpression.escapedPattern(for: name) + #"(?: \{|\()"#) else {
+            XCTFail("bad pattern for \(name)")
             return []
         }
         return regex.matches(in: code, range: NSRange(code.startIndex..., in: code)).compactMap { match in
@@ -371,8 +611,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
     /// What is chained onto the call opening at `start`, past its arguments and every trailing
     /// closure, `label:` included. A modifier inside a closure is on something else.
-    private static func modifierChain(after start: Int, in characters: [Character]) -> String {
-        var index = start + "Menu".count
+    private static func modifierChain(after start: Int, nameLength: Int, in characters: [Character]) -> String {
+        var index = start + nameLength
         func skipWhitespace() {
             while index < characters.count, characters[index].isWhitespace { index += 1 }
         }
@@ -431,7 +671,7 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         var openers = 0
         for (name, source) in try Self.sources() {
             let code = Self.code(source)
-            openers += Self.menuOpeners(in: code).count
+            openers += Self.openers(of: "Menu", in: code).count
             XCTAssertEqual(Self.menusWithoutAnIndicator(in: code), [], "\(name): the root's button style takes this Menu's indicator away")
         }
         XCTAssertGreaterThan(openers, 0, "the scan found no Menu: the pattern went blind")
@@ -455,7 +695,7 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let lines = code.components(separatedBy: "\n")
         return lines.indices.filter { index in
             lines[index].contains("defaultAction")
-                && !nearby(index, in: lines).contains { $0.contains("SettingsButtonStyle(.primary)") }
+                && !chain(around: index, in: lines).contains { $0.contains("SettingsButtonStyle(.primary)") }
         }.map { lines[$0].trimmingCharacters(in: .whitespaces) }
     }
 
@@ -470,6 +710,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Connect\") {}\n    .keyboardShortcut(.defaultAction)\n").count, 1)
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Add\") {}\n    .keyboardShortcut(typing ? nil : .defaultAction)\n    .disabled(x)\n").count, 1)
+        // The neighbour's primary style is on the neighbour.
+        XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Cancel\") {}\n    .buttonStyle(SettingsButtonStyle(.primary))\nButton(\"Save\") {}\n    .keyboardShortcut(.defaultAction)\n").count, 1)
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Connect\") {}\n    .buttonStyle(SettingsButtonStyle(.primary))\n    .keyboardShortcut(.defaultAction)\n").count, 0)
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Connect\") {}\n    .keyboardShortcut(.defaultAction)\n    .buttonStyle(SettingsButtonStyle(.primary))\n").count, 0)
         XCTAssertEqual(Self.flatDefaultActions(in: Self.code("// .defaultAction needs the primary style")).count, 0)
@@ -495,8 +737,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
     // MARK: - Plumbing
 
-    /// The source with every comment blanked and every line kept, so line numbers and "within two
-    /// lines" still mean what they do in the file. Strings are respected: a URL's `//` is not a comment.
+    /// The source with every comment blanked and every line kept, so line numbers still mean what they
+    /// do in the file. Strings are respected: a URL's `//` is not a comment.
     private static func code(_ source: String) -> String {
         let characters = Array(source)
         var out = ""
@@ -535,9 +777,28 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         return out
     }
 
-    /// A line and the two either side of it.
-    private static func nearby(_ index: Int, in lines: [String]) -> ArraySlice<String> {
-        lines[max(0, index - 2)...min(lines.count - 1, index + 2)]
+    /// The modifier chain a line sits in: back to the view it modifies, forward to its last modifier.
+    /// A fixed window would let a neighbouring view's modifier pass for this one's.
+    private static func chain(around index: Int, in lines: [String]) -> ArraySlice<String> {
+        func continues(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty || trimmed.hasPrefix(".")
+        }
+        var first = index
+        while first > 0, continues(lines[first]) { first -= 1 }
+        var last = index
+        while last + 1 < lines.count, continues(lines[last + 1]) { last += 1 }
+        return lines[first...last]
+    }
+
+    /// Each edit must change `source`, and `problems` must report the result.
+    private static func assertCaught(_ edits: [(from: String, to: String)], in source: String, by problems: (String) -> [String],
+                                     file: StaticString = #filePath, line: UInt = #line) {
+        for edit in edits {
+            let edited = source.replacingOccurrences(of: edit.from, with: edit.to)
+            XCTAssertNotEqual(edited, source, "the plant must change the source: \(edit.from)", file: file, line: line)
+            XCTAssertFalse(problems(edited).isEmpty, "the rule misses this edit: \(edit.from)", file: file, line: line)
+        }
     }
 
     private static func matches(of pattern: String, in text: String) -> [String] {

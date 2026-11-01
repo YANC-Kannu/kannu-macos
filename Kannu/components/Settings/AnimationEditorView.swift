@@ -289,7 +289,7 @@ struct AnimationEditorView: View {
                         }
                     }
                 }
-
+                
                 EditorSectionCard(title: "Size & Crop", subtitle: "Match the notch footprint or intentionally exceed it.") {
                     VStack(spacing: 12) {
                         ParameterSliderRow(

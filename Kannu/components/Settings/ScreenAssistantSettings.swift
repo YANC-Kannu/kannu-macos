@@ -176,7 +176,6 @@ struct ScreenAssistantSettings: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("Screen Assistant")
         .onAppear {
             geminiApiKey = SecureSecretsStore.value(for: .geminiAPIKey)

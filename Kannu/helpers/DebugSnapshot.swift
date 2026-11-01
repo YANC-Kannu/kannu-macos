@@ -240,7 +240,8 @@ enum DebugSnapshots {
         try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
     }
 
-    /// Everything `settingsDesignSystem()` gives a page, in every state, and each theme token by name.
+    /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
+    /// press take a pointer), and every colour and font token by name.
     private static var designSystemBoard: some View {
         Form {
             Section {

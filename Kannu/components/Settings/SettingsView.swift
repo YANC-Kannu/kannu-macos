@@ -396,7 +396,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } detail: {
+            // The detail column only: the sidebar keeps its native links until it is replaced.
             detailView(for: resolvedSelection)
+                .settingsDesignSystem()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationSplitViewStyle(.balanced)
@@ -410,7 +412,6 @@ struct SettingsView: View {
         .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in
             selectedTab = request.tab
         }
-        .settingsDesignSystem()
         .frame(width: 700)
         .onChange(of: searchText) { _, newValue in
             let matches = tabsMatchingSearch(newValue)
