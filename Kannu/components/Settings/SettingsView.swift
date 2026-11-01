@@ -8,35 +8,20 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// Groups for organizing settings tabs in the sidebar.
-/// The sidebar's sections, top to bottom in case order: AI Agents leads, Productivity (the timer,
-/// notes and tasks the agents' work is timed and tracked with) right under it, then General.
-enum SettingsTabGroup: String, CaseIterable, Identifiable {
-    case agents
-    case productivity
-    case core
-    case mediaAndDisplay
-    case system
-    case utilities
-    case developer
-    case integrations
+/// Which sidebar list a tab belongs to. The list on screen follows the selected tab.
+enum SettingsTabGroup {
+    /// The sidebar's top: what Kannu does.
+    case product
+    /// Behind the sidebar's Settings row, with a Back row.
+    case settings
+    /// The sidebar's foot, with the Settings row.
     case info
 
-    var id: String { rawValue }
-
-    /// Display title for the section header.  `nil` means no visible header.
+    /// Only the Settings row has a name of its own.
     var title: String? {
         switch self {
-        case .agents:           return String(localized: "AI Agents")
-        // Under Productivity, an unlabelled General and Appearance would read as part of it.
-        case .core:             return String(localized: "General")
-        case .mediaAndDisplay:  return String(localized: "Media & Display")
-        case .system:           return String(localized: "System")
-        case .productivity:     return String(localized: "Productivity")
-        case .utilities:        return String(localized: "Utilities")
-        case .developer:        return String(localized: "Developer")
-        case .integrations:     return String(localized: "Integrations")
-        case .info:             return nil
+        case .settings:         return String(localized: "Settings")
+        case .product, .info:   return nil
         }
     }
 }
@@ -67,21 +52,20 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Which sidebar group this tab belongs to.
+    /// Which sidebar list this tab is on.
     var group: SettingsTabGroup {
         switch self {
-        case .general, .appearance:                                          return .core
-        case .media, .liveActivities, .lockScreen, .devices:                 return .mediaAndDisplay
-        case .hudAndOSD, .battery:                                           return .system
-        case .timer, .notes, .tasks:                              return .productivity
-        case .clipboard, .screenAssistant, .shelf,
-             .downloads, .shortcuts:                                         return .utilities
-        case .stats:                                              return .developer
-        case .agentStatus, .agentSecurity, .llmUsage:                        return .agents
-        case .extensions:                                                    return .integrations
-        case .about:                                                         return .info
+        case .agentStatus, .agentSecurity, .llmUsage, .tasks, .timer, .notes, .clipboard:
+            return .product
+        case .general, .appearance, .liveActivities, .lockScreen, .media, .devices, .hudAndOSD,
+             .battery, .stats, .shelf, .downloads, .screenAssistant, .shortcuts, .extensions:
+            return .settings
+        case .about:
+            return .info
         }
     }
+
+    var isBeta: Bool { self == .downloads || self == .extensions }
 
     var title: String {
         switch self {
@@ -134,33 +118,6 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .agentSecurity: return "shield.lefthalf.filled"
         case .llmUsage: return "gauge.with.dots.needle.bottom.50percent"
         case .about: return "info.circle"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .general: return .blue
-        case .liveActivities: return .pink
-        case .appearance: return .purple
-        case .lockScreen: return .orange
-        case .media: return .green
-        case .devices: return Color(red: 0.1, green: 0.11, blue: 0.12)
-        case .extensions: return Color(red: 0.557, green: 0.353, blue: 0.957)
-        case .timer: return .red
-        case .hudAndOSD: return .indigo
-        case .battery: return Color(red: 0.202, green: 0.783, blue: 0.348, opacity: 1.000)
-        case .stats: return .teal
-        case .clipboard: return .mint
-        case .screenAssistant: return .pink
-        case .downloads: return .gray
-        case .shelf: return .brown
-        case .shortcuts: return .orange
-        case .notes: return Color(red: 0.979, green: 0.716, blue: 0.153, opacity: 1.000)
-        case .tasks: return .green
-        case .agentStatus: return .yellow
-        case .agentSecurity: return .orange
-        case .llmUsage: return .cyan
-        case .about: return .secondary
         }
     }
 
@@ -335,20 +292,26 @@ private struct SettingsForm<Content: View>: View {
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
+    /// A sub-page's own title (Brain › Tasks' All tasks). Nil is the tab's.
+    @State private var pageTitle: String?
 
     var body: some View {
         ScrollViewReader { proxy in
-            content()
-                .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { request -> SettingsHighlightCoordinator.ScrollRequest? in
-                    guard let request, request.tab == tab else { return nil }
-                    return request
-                }) { request in
-                    withAnimation(.easeInOut(duration: 0.45)) {
-                        proxy.scrollTo(request.id, anchor: .center)
+            VStack(spacing: 0) {
+                SettingsPageHeader(title: pageTitle ?? tab.title)
+                content()
+                    .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { request -> SettingsHighlightCoordinator.ScrollRequest? in
+                        guard let request, request.tab == tab else { return nil }
+                        return request
+                    }) { request in
+                        withAnimation(.easeInOut(duration: 0.45)) {
+                            proxy.scrollTo(request.id, anchor: .center)
+                        }
+                        highlightCoordinator.consumeScrollRequest(request)
                     }
-                    highlightCoordinator.consumeScrollRequest(request)
-                }
+            }
         }
+        .onPreferenceChange(SettingsPageTitleKey.self) { pageTitle = $0 }
     }
 }
 
@@ -356,62 +319,30 @@ struct SettingsView: View {
     // Land on the product's core pane, not a generic one — "Watch Your Agents".
     @State private var selectedTab: SettingsTab = .agentStatus
     @State private var searchText: String = ""
+    /// The tab left when the sidebar last changed lists: where Back and the Settings row return to.
+    @State private var tabOnOtherList: SettingsTab?
+    @FocusState private var sidebarHasFocus: Bool
     @StateObject private var highlightCoordinator = SettingsHighlightCoordinator.shared
+    /// A snapshot's window can never take focus, so its board asks for the suggestions outright.
+    private var snapshotShowsSuggestions = false
 
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 12) {
-                SettingsSidebarSearchBar(
-                    text: $searchText,
-                    suggestions: searchSuggestions,
-                    onSuggestionSelected: handleSearchSuggestionSelection
-                )
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-
-                Divider()
-                    .padding(.horizontal, 12)
-
-                List(selection: selectionBinding) {
-                    ForEach(groupedFilteredTabs, id: \.group) { section in
-                        Section {
-                            ForEach(section.tabs) { tab in
-                                NavigationLink(value: tab) {
-                                    sidebarRow(for: tab)
-                                }
-                            }
-                        } header: {
-                            if let title = section.group.title {
-                                SettingsSectionHeader(title)
-                            }
-                        }
-                    }
-                }
-                .listStyle(SidebarListStyle())
-                .frame(minWidth: 200)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .toolbar(removing: .sidebarToggle)
-                .navigationSplitViewColumnWidth(min: 200, ideal: 210, max: 240)
-                .environment(\.defaultMinListRowHeight, 44)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        BrainShell {
+            sidebar
+        } headerAccessory: {
+            SettingsAppearanceToggle()
         } detail: {
-            // The detail column only: the sidebar keeps its native links until it is replaced.
             detailView(for: resolvedSelection)
-                .settingsDesignSystem()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .navigationSplitViewStyle(.balanced)
-        .toolbar(removing: .sidebarToggle)
-        .toolbar { toolbarSpacingShim }
         .environmentObject(highlightCoordinator)
         // The single place tab selection reacts to a navigation request — search-bar picks
         // and external deep links (the notch caffeinate indicator) both flow through here.
         // The scroll itself is handled per-tab by SettingsForm once the target tab's form
-        // exists; this only makes sure that tab is frontmost.
+        // exists; this only makes sure that tab is frontmost. The sidebar follows the tab.
         .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in
             selectedTab = request.tab
         }
+        .settingsDesignSystem()
         .frame(width: 700)
         .onChange(of: searchText) { _, newValue in
             let matches = tabsMatchingSearch(newValue)
@@ -420,25 +351,8 @@ struct SettingsView: View {
                 selectedTab = firstMatch
             }
         }
-        .background {
-            Group {
-                if #available(macOS 26.0, *) {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .glassEffect(
-                            .clear
-                                .tint(Color.white.opacity(0.1))
-                                .interactive(),
-                            in: .rect(cornerRadius: 18)
-                        )
-                } else {
-                    ZStack {
-                        Color(NSColor.windowBackgroundColor)
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(.ultraThinMaterial)
-                    }
-                }
-            }
-            .ignoresSafeArea()
+        .onChange(of: selectedTab) { old, new in
+            if (old.group == .settings) != (new.group == .settings) { tabOnOtherList = old }
         }
     }
 
@@ -446,155 +360,109 @@ struct SettingsView: View {
         availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .general)
     }
 
-    @ToolbarContentBuilder
-    private var toolbarSpacingShim: some ToolbarContent {
-        if #available(macOS 26.0, *) {
-            ToolbarItem(placement: .primaryAction) {
-                toolbarSpacerView
-            }
-            .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .primaryAction) {
-                toolbarSpacerView
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var toolbarSpacerView: some View {
-        Color.clear
-            .frame(width: 96, height: 32)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
     private var filteredTabs: [SettingsTab] {
         tabsMatchingSearch(searchText)
     }
 
-    private var selectionBinding: Binding<SettingsTab> {
-        Binding(
-            get: { resolvedSelection },
-            set: { newValue in
-                selectedTab = newValue
-            }
+    private var isSearching: Bool {
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// No mode flag: the list on screen is whichever one the selected tab is on, so a deep link or a
+    /// search moves the sidebar with no path of its own.
+    private var showsSettingsList: Bool { resolvedSelection.group == .settings }
+
+    private var listedTabs: [SettingsTab] {
+        if isSearching { return filteredTabs }
+        return availableTabs.filter { $0.group == (showsSettingsList ? .settings : .product) }
+    }
+
+    @ViewBuilder
+    private var sidebar: some View {
+        SettingsSidebarSearchBar(
+            text: $searchText,
+            suggestions: searchSuggestions,
+            showsSuggestionsUnfocused: snapshotShowsSuggestions,
+            onSuggestionSelected: handleSearchSuggestionSelection
         )
-    }
-
-    @ViewBuilder
-    private func sidebarIcon(for tab: SettingsTab) -> some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [
-                        tab.tint.opacity(1),
-                        tab.tint.opacity(0.7)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: 26, height: 26)
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.2), lineWidth: 0.7)
-                    .blendMode(.plusLighter)
+        // A custom list, not `List(selection:)`: on macOS that draws its own selection, and
+        // `listRowBackground` does not replace it.
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: SettingsTheme.sidebarRowGap) {
+                    if showsSettingsList && !isSearching {
+                        SettingsSidebarRow(String(localized: "Back"), systemImage: "chevron.left") {
+                            selectedTab = tabOnOtherList ?? .agentStatus
+                            sidebarHasFocus = true
+                        }
+                    }
+                    ForEach(listedTabs) { tabRow($0).id($0) }
+                }
+                .focusable()
+                .focused($sidebarHasFocus)
+                .focusEffectDisabled()
+                .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                    moveSelection(by: press.key == .upArrow ? -1 : 1)
+                    return .handled
+                }
             }
-            .shadow(color: tab.tint.opacity(0.35), radius: 2, x: 0, y: 1)
-            .overlay {
-                Image(systemName: tab.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.white)
-            }
-    }
-
-    @ViewBuilder
-    private func sidebarRow(for tab: SettingsTab) -> some View {
-        HStack(spacing: 10) {
-            sidebarIcon(for: tab)
-            Text(tab.title)
-            if tab == .downloads {
-                Spacer()
-                Text("BETA")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(Color.blue)
-                    )
-            } else if tab == .extensions {
-                Spacer()
-                Text("BETA")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(
-                        Capsule()
-                            .fill(Color.blue)
-                    )
+            // Arrow keys can reach a row off screen, and a custom list does not follow its selection.
+            .onChange(of: resolvedSelection) { _, tab in proxy.scrollTo(tab) }
+        }
+        if !showsSettingsList && !isSearching {
+            VStack(spacing: SettingsTheme.sidebarRowGap) {
+                SettingsSidebarRow(SettingsTabGroup.settings.title ?? "", systemImage: "gearshape") {
+                    selectedTab = tabOnOtherList ?? .general
+                    sidebarHasFocus = true
+                }
+                tabRow(.about)
             }
         }
-        .padding(.vertical, 4)
+    }
+
+    private func tabRow(_ tab: SettingsTab) -> some View {
+        SettingsSidebarRow(tab.title, systemImage: tab.systemImage, isSelected: tab == resolvedSelection,
+                           badge: tab.isBeta ? String(localized: "BETA") : nil) {
+            selectedTab = tab
+            sidebarHasFocus = true
+        }
+    }
+
+    private func moveSelection(by offset: Int) {
+        let tabs = listedTabs
+        guard let index = tabs.firstIndex(of: resolvedSelection), tabs.indices.contains(index + offset) else { return }
+        selectedTab = tabs[index + offset]
     }
 
     private var availableTabs: [SettingsTab] {
-        // Ordered to match group layout: agents → productivity → general → media & display →
-        // system → utilities → developer → integrations → info. Search jumps to the first match in
-        // this order, so it follows the sidebar's.
+        // The sidebar's order: the product list, then the Settings list, then About. Search jumps to
+        // the first match in this order, so it follows the sidebar's.
         let ordered: [SettingsTab] = [
-            // AI Agents — the product's core, so it leads.
             .agentStatus,
             .agentSecurity,
             .llmUsage,
-            // Productivity
+            .tasks,
             .timer,
             .notes,
-            .tasks,
-            // General
+            .clipboard,
             .general,
             .appearance,
-            // Media & Display
-            .media,
             .liveActivities,
             .lockScreen,
+            .media,
             .devices,
-            // System
             .hudAndOSD,
             .battery,
-            // Utilities
-            .clipboard,
-            .screenAssistant,
+            .stats,
             .shelf,
             .downloads,
+            .screenAssistant,
             .shortcuts,
-            // Developer
-            .stats,
-            // Integrations
             .extensions,
-            // Info
             .about
         ]
 
         return ordered
-    }
-
-    /// Groups the filtered tabs into sidebar sections, preserving both
-    /// the group order and the per-group tab order from `availableTabs`.
-    private var groupedFilteredTabs: [(group: SettingsTabGroup, tabs: [SettingsTab])] {
-        let visible = filteredTabs
-        var result: [(group: SettingsTabGroup, tabs: [SettingsTab])] = []
-
-        for group in SettingsTabGroup.allCases {
-            let tabs = visible.filter { $0.group == group }
-            if !tabs.isEmpty {
-                result.append((group: group, tabs: tabs))
-            }
-        }
-
-        return result
     }
 
     private func tabsMatchingSearch(_ query: String) -> [SettingsTab] {
@@ -626,6 +494,8 @@ struct SettingsView: View {
     private struct SettingsSidebarSearchBar: View {
         @Binding var text: String
         let suggestions: [SettingsSearchEntry]
+        /// Only a snapshot's board: its window can never take focus.
+        var showsSuggestionsUnfocused = false
         let onSuggestionSelected: (SettingsSearchEntry) -> Void
 
         @FocusState private var isFocused: Bool
@@ -642,13 +512,13 @@ struct SettingsView: View {
         }
 
         private var showSuggestions: Bool {
-            isFocused && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !suggestions.isEmpty
+            (isFocused || showsSuggestionsUnfocused) && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !suggestions.isEmpty
         }
 
         private var searchField: some View {
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
 
                 TextField("Search Brain", text: $text)
                     .textFieldStyle(.plain)
@@ -660,7 +530,7 @@ struct SettingsView: View {
                         text = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(SettingsTheme.inkSecondary)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear search")
@@ -669,13 +539,13 @@ struct SettingsView: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous)
+                    .fill(SettingsTheme.card)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous)
+                    .stroke(SettingsTheme.line)
             )
         }
 
@@ -695,15 +565,14 @@ struct SettingsView: View {
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous)
+                    .fill(SettingsTheme.card)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.08))
+                RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous)
+                    .stroke(SettingsTheme.line)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .shadow(color: Color.black.opacity(0.2), radius: 8, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: SettingsTheme.fieldRadius, style: .continuous))
             .transition(.opacity.combined(with: .move(edge: .top)))
         }
 
@@ -715,21 +584,21 @@ struct SettingsView: View {
                     } label: {
                         HStack(spacing: 10) {
                             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(suggestion.tab.tint)
+                                .fill(SettingsTheme.card)
                                 .frame(width: 28, height: 28)
                                 .overlay {
                                     Image(systemName: suggestion.tab.systemImage)
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundStyle(Color.white)
+                                        .font(SettingsTheme.bodyStrong)
+                                        .foregroundStyle(SettingsTheme.ink)
                                 }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(suggestion.title)
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(Color.primary)
+                                    .font(SettingsTheme.bodyStrong)
+                                    .foregroundStyle(SettingsTheme.ink)
                                 Text(suggestion.tab.title)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(Color.secondary)
+                                    .font(SettingsTheme.caption)
+                                    .foregroundStyle(SettingsTheme.inkSecondary)
                             }
 
                             Spacer(minLength: 0)
@@ -754,7 +623,7 @@ struct SettingsView: View {
 
         private func rowBackground(for suggestion: SettingsSearchEntry) -> some View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(hoveredSuggestionID == suggestion.id ? Color.white.opacity(0.08) : Color.clear)
+                .fill(hoveredSuggestionID == suggestion.id ? SettingsTheme.hover : Color.clear)
         }
 
         private func selectSuggestion(_ suggestion: SettingsSearchEntry) {
@@ -1179,6 +1048,16 @@ extension SettingsView {
         SettingsTab.allCases
             .filter { filter?.contains($0.rawValue) ?? true }
             .map { tab in (tab.rawValue, AnyView(SettingsView().detailView(for: tab))) }
+    }
+}
+
+extension SettingsView {
+    /// DEBUG snapshot harness: the whole window on a given tab, with a query typed if there is one.
+    init(snapshotTab: SettingsTab, search: String = "", showsSuggestions: Bool = false) {
+        self.init()
+        _selectedTab = State(initialValue: snapshotTab)
+        _searchText = State(initialValue: search)
+        snapshotShowsSuggestions = showsSuggestions
     }
 }
 

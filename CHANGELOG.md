@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's sidebar becomes product pages plus a Settings list
+- **Developer label:** "product pages plus Settings. Clicking Settings swaps the sidebar to the settings list with a Back row"
+- **Agent label:** Claude Code (Opus 5.5) — `BrainShell` holds the layout; `selectedTab` stays the only navigation state
+- **Changes:**
+  - `BrainShell` replaces the split view and its glass: a title row, the sidebar on the paper, and the page in
+    an inset panel. The window stays 700 wide with its standard title bar until the window's own change.
+  - `SettingsTabGroup` is now product, settings and info. The sidebar shows the product list with Settings and
+    About at its foot, or the settings list with Back, whichever the selected tab is on, so a search or a deep
+    link moves it with no path of its own. Back and the Settings row return to where the list last changed.
+  - A query shows one flat list of the matching tabs. Clearing it returns to the selected tab's list.
+  - Every page gets a large title from `SettingsForm`, with no page edit. Tasks names its sub-pages through
+    `settingsPageTitle(_:)` in place of its `.navigationTitle`.
+  - The sidebar is custom rows, so it takes arrow keys itself and follows its own selection. The BETA capsule
+    is `onPrimary` on `ink`. The tab tints are gone, and the search field and suggestions read the theme.
+  - The moon and `brainAppearance` land here. The moon writes the key and nothing applies it yet.
+  - The root moves from the detail column to the shell, and hides a `Form`'s background so the panel shows.
+  - Paths to the settings tabs say "Brain › Settings › General". `BrainPathRulesTests` now reads every level of
+    a path, so "Brain › General" fails though General is a real title. `BrainNamingRulesTests` allows the one
+    "Settings" that means the row inside Brain.
+  - `SettingsSidebarOrderTests` is rewritten for the two lists, and new `BrainShellRulesTests` holds the shell,
+    with plants. Every theme token has a reader, so the not-read-yet set is gone. Boards: `shell`,
+    `shellSettings`, `shellDeepLink`, `shellSearch` and `shellSearchList`, and pages draw on the panel.
+
 ### 2026-11-01 - Brain's theme takes its review findings
 - **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the theme commit
 - **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each

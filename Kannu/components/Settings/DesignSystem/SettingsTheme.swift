@@ -60,7 +60,30 @@ enum SettingsTheme {
         ? .custom("GeistMono-Regular", size: 13)
         : .system(size: 13, weight: .regular, design: .monospaced)
 
-    // MARK: - Layout (child 1's; children 2 and 3 add theirs when something first reads them)
+    // MARK: - The shell
+
+    /// The title bar's height with no toolbar, so the moon centres on the traffic lights.
+    static let titleRowHeight: CGFloat = 28
+    /// Leaves a 492 pt panel in today's 700 pt window. The search suggestions render inside this
+    /// column, and their text needs the room.
+    static let sidebarWidth: CGFloat = 200
+    static let panelInset: CGFloat = 8
+    static let panelRadius: CGFloat = 14
+    static let sidebarStack: CGFloat = 8
+    static let sidebarRowHeight: CGFloat = 32
+    static let sidebarRowRadius: CGFloat = 8
+    static let sidebarRowInset: CGFloat = 10
+    static let sidebarRowGap: CGFloat = 2
+    static let sidebarGlyph: CGFloat = 16
+    static let sidebarRowContent: CGFloat = 10
+    static let sidebarBadgeHorizontalInset: CGFloat = 6
+    static let sidebarBadgeVerticalInset: CGFloat = 2
+    /// The grouped `Form`'s side margin, so a page's title lines up with its section cards.
+    static let pageInset: CGFloat = 20
+    /// The search field and its suggestions.
+    static let fieldRadius: CGFloat = 8
+
+    // MARK: - Controls
 
     static let controlRadius: CGFloat = 7
     static let buttonInset = EdgeInsets(top: 5, leading: 12, bottom: 5, trailing: 12)

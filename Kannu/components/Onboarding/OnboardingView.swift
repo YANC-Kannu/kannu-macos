@@ -141,7 +141,7 @@ struct OnboardingView: View {
 
     /// The source chosen on the second step. After a Not now on its "Control …" row, Now Playing
     /// instead, which needs no Automation, so nothing asks later; the user can pick the app again
-    /// in Brain › Media, where macOS asks in context.
+    /// in Brain › Settings › Media, where macOS asks in context.
     private func applyMusicSource() {
         var source = musicSource
         if LaunchPermissionManager.answer(for: .musicAutomation) == .deferred,

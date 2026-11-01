@@ -19,7 +19,7 @@
 import Defaults
 import SwiftUI
 
-/// Where the notch's Tasks controls open Brain: rows of Brain › Productivity › Tasks, reached
+/// Where the notch's Tasks controls open Brain: rows of Brain › Tasks, reached
 /// through the existing deep link (`SettingsDeepLink`, whose id names the tab), so Brain opens on
 /// the Tasks tab and scrolls to the row.
 enum TasksBrainDestination {

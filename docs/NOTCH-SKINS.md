@@ -3,7 +3,7 @@
 A notch skin is an image Kannu draws behind the notch, in place of the plain black fill. It shows
 when the notch is open and, as a thin strip, when it is closed.
 
-Pick one under **Brain › Appearance › Notch skin**:
+Pick one under **Brain › Settings › Appearance › Notch skin**:
 
 - **Default**: the plain fill.
 - **Horns**: red and black, built in.

@@ -65,7 +65,7 @@ struct PermissionsStepView: View {
                 .padding(.horizontal)
             }
 
-            Text("Change these any time in Brain › General › Permissions, or System Settings › Privacy & Security.")
+            Text("Change these any time in Brain › Settings › General › Permissions, or System Settings › Privacy & Security.")
                 .multilineTextAlignment(.center)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -118,7 +118,7 @@ struct PermissionsStepView: View {
 }
 
 /// One permission: why Kannu wants it, where it stands, and Allow / Not now. Shared by the
-/// onboarding step and Brain › General › Permissions.
+/// onboarding step and Brain › Settings › General › Permissions.
 struct LaunchPermissionRow: View {
     let permission: LaunchPermission
     let musicSource: MediaControllerType

@@ -23,9 +23,10 @@ extension View {
     ///
     /// The tint is `accentStrong` because a root tint also colours Markdown links, which must be read.
     /// There is no root `.foregroundStyle`: it would recolour the labels of native prominent buttons
-    /// and menus.
+    /// and menus. A `Form`'s own background goes so the panel shows through it.
     func settingsDesignSystem() -> some View {
         formStyle(.grouped)
+            .scrollContentBackground(.hidden)
             .font(SettingsTheme.body)
             .tint(SettingsTheme.accentStrong)
             .toggleStyle(SettingsToggleStyle())

@@ -1544,6 +1544,9 @@ and views, not `SettingsView`, so no number here comes from Kannu running with a
 **2026-11-01 addendum: Brain's theme and shared styles add no `onAppear`, no `.task` and no repeating
 animator.** Their animations are bounded eases, and `SettingsAnimationRulesTests` now reads `DesignSystem/`.
 
+**2026-11-01 addendum: Brain's shell adds no `onAppear`, no `.task` and no repeating animator.** Its new
+`@State`s survive a close because the hosting view does (`SettingsWindowController.settingsContent`).
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
