@@ -111,7 +111,8 @@ struct TaskDetailPage: View {
                 if !focused { applyTitle(to: task) }
             }
             .onDisappear { applyTitle(to: task) }
-            // Closing Brain only orders its window out: no focus change, no onDisappear.
+            // Saved at the close itself. `onDisappear` only follows a turn later, when
+            // `SettingsWindowController` takes the page out of the closed window.
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
                 guard (note.object as? NSWindow)?.identifier == SettingsWindowController.windowIdentifier else { return }
                 applyTitle(to: task)

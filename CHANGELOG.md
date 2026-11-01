@@ -27,6 +27,143 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     release workflow all call. It needs Python 3.10 or newer, so the release workflow now sets up its own.
   - `.gitignore` drops `*.txt`, which would have silently left out the font licence and the requirements file,
     so both are excepted. `scripts/RELEASE.md` documents all of this.
+  - `BundledVideoTests` pinned the LFS pointer check to before `hdiutil create`, a line `create-dmg.sh` no
+    longer has. It now pins the check to before the `dmgbuild` run.
+### 2026-11-01 - Delete the last Git LFS pointers and the LFS rules
+- **Developer label:** "Clear the 12 Git LFS pointers whose objects are missing from this repo's LFS store, so the repo no longer depends on LFS"
+- **Agent label:** Claude Code (Opus 5.5) — the 12 unreferenced pointers and `.gitattributes` go; `BundledVideoTests` and the contributor docs stop assuming LFS rules exist
+- **Changes:**
+  - Deleted 11 pointers under `.github/assets/` and `DynamicIslandSamples/dynamicislandscreenrecord.gif`.
+    All were demo clips from Atoll's old README. Nothing in the tree referenced them, and this repo's
+    LFS store answered 404 for all 12, so a checkout with git-lfs installed was expected to fail. David
+    chose to keep none, including `kannu-demo.gif`, which holds the same object as
+    `dynamicislandscreenrecord.gif`: Atoll's "DynamicIsland Demo" recording, not a demo of Kannu.
+  - Deleted `.gitattributes`. It held only the three LFS rules and the exemption for
+    `Kannu/BluetoothHUDAnimations/`, so nothing is left for it to do.
+  - `BundledVideoTests`: `testNoAttributeSendsAFileToLFS` replaces the exemption test and fails if an
+    LFS rule comes back. The movie check and the tests of `scripts/check-no-lfs-pointers.sh` stay, and
+    `create-dmg.sh` still runs that script.
+  - `AGENTS.md` and `CONTRIBUTING.md` state that the repo does not use LFS. `lfs: true` and
+    `GIT_LFS_SKIP_SMUDGE=1` now apply only to older refs, `main` and `release/1.4.0` included until
+    this reaches them.
+  - `docs/REGRESSIONS.md` entry 22: the pointer reading is in the past tense, since the clips became
+    real files in #13.
+  - Put back the blank line between the two entries below, lost resolving #13's `CHANGELOG.md` conflict.
+
+### 2026-11-01 - Ship the Bluetooth HUD clips, not Git LFS pointers
+- **Developer label:** "Find out whether users get real videos or LFS pointers, then fix what is wrong"
+- **Agent label:** Claude Code (Opus 5.5) — the eight HUD clips become ordinary git blobs, and a test and a DMG-time check refuse a pointer
+- **Changes:**
+  - Every published release checked (1.0.0, 1.3.4, 1.4.0-beta.3) bundled 131-byte pointers for all
+    eight clips. `useBluetoothHUD3DIcon` defaults to on, and the views only check that the bundle
+    URL exists, so the inline HUD and the Settings 3D card drew an empty frame instead of the SF
+    Symbol.
+  - `Kannu/BluetoothHUDAnimations/*.mov` are now real files, 3.1 MB in all, each matching the
+    SHA-256 its pointer named. They came from Atoll's LFS store, the only one holding them:
+    `YANC-Kannu/kannu-macos`, `libinmv/kannu` and the fork all answer 404, so `lfs: true` alone
+    would have failed the checkout rather than fixed it.
+  - `.gitattributes` exempts that directory from the LFS rule, so a contributor with git-lfs
+    installed does not commit a pointer back. Nobody needs git-lfs to build.
+  - New `scripts/check-no-lfs-pointers.sh`, run by `create-dmg.sh` before anything is packaged. The
+    release workflow, `manual-release.sh` and `build-dmg.sh` all go through that script.
+  - New `BundledVideoTests`: every movie under `Kannu/` is real, the exemption follows the rule it
+    overrides, the check refuses a pointer, passes real files and fails on a missing path, and
+    `create-dmg.sh` runs it first.
+  - `CONTRIBUTING.md` and `AGENTS.md` state the rule, and why `lfs: true` is not the fix.
+  - No runtime fallback. The tree and the check now rule out the pointer, so the code would have no
+    reachable path.
+  - Real clips cost CPU where pointers cost none: about 5 % of a core while one plays (HEVC with
+    alpha, 168x168, 60 fps, measured off screen). The HUD holds one for its 2.5 seconds. A closed
+    Brain keeps `SettingsLoopingVideoIcon` playing until #12 lands.
+
+### 2026-11-01 - Act on CodeRabbit's review of #12
+- **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore
+- **Changes:**
+  - `SettingsWindowController` records what had focus and a field's caret when the content leaves the
+    window, and puts them back after the second `makeKeyAndOrderFront`, focus before scroll. One key
+    typed after reopening would otherwise have replaced the first field's text, and on a
+    write-through field that overwrites what is stored. If what had focus has left the window,
+    nothing gets it.
+  - Test: `SettingsAnimationRulesTests` pins the focus and caret restore and their order, and rejects
+    a `return` or `guard` between the last `makeKeyAndOrderFront` and `restoreLeftState()`. The
+    planted breakages of the real controller go from eight to fourteen.
+  - `docs/REGRESSIONS.md` entry 22's addendum says what focus does now.
+
+### 2026-11-01 - A closed Brain costs no CPU, whatever its page animates
+- **Developer label:** "Make a closed Brain window stop costing CPU, whatever its pages animate."
+- **Agent label:** Claude Code (Opus 5.5) — closing Brain takes its SwiftUI out of the window a turn after the close and reopening puts it back, measured at 13.9 % before and 0.16 % after with every animating view on one page
+- **Changes:**
+  - `SettingsWindowController` swaps the hosting view for an empty `NSView` a turn after
+    `windowWillClose`, and `showWindow` puts it back before ordering in. An ordered-out window goes
+    on animating at the display's rate; a view out of the window does not, and keeps its state.
+  - The clip views' origins are saved at removal and restored after `showWindow`'s second
+    `makeKeyAndOrderFront`: a text field takes focus on reopening and scrolls itself into view.
+  - `SettingsLoopingVideoIcon` pauses when its view leaves the window and plays when it returns. It
+    cost 5.0 % behind a closed Brain, and leaving the window alone does not stop an `AVPlayer`.
+  - `LottiePreviewThumbnail` gives a page's Lottie a new identity after each `onDisappear`: its Core
+    Animation engine ends the loop when the view leaves the window and never starts it again.
+  - `SpotifyAuthSettingsSection` reads the stored cookie once per visit, because `onAppear` now runs
+    on every reopening and would overwrite one typed and not yet validated.
+  - The Copy for agent button clears "Copied" when it disappears: its `onDisappear` also cancels the
+    task that would have.
+  - Test: `SettingsAnimationRulesTests` pins all of this, checked against planted offenders and by
+    breaking the real controller eight ways.
+  - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
+
+### 2026-10-30 - The Settings highlight stops pulsing once it clears
+- **Developer label:** "Check CPU report"
+- **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings
+- **Changes:**
+  - `SettingsHighlightModifier` pulses with `.repeatCount(3, autoreverses: true)`, not
+    `.repeatForever`. At the 2 s clear, the stroke's colour kept a repeating animator that nothing
+    replaced. Closing Brain only orders its window out, so it ran on at 40-60 % CPU with only the
+    notch on screen until Kannu quit, from the first search result or deep link that highlighted a
+    row. macOS logged it as `cpu_resource` reports on 2026-10-22 and 2026-10-29.
+  - Test: `SettingsAnimationRulesTests` fails on `.repeatForever` under `Kannu/components/Settings/`,
+    and is checked against planted offenders.
+  - `docs/REGRESSIONS.md` gains entry 22 and a Danger zones row.
+
+### 2026-10-29 - Act on CodeRabbit's review of #5
+- **Developer label:** CodeRabbit's review of #5: drain descriptor 3 after Python exits, and use the GPL header block in the new test file
+- **Agent label:** Claude Code (Opus 5.5) — the hook wrapper drains fd 3 after a failed Python run; `HookInputLeftoversTests` gets the block header
+- **Changes:**
+  - Hook script v47, both copies: when `python3` exits non-zero, the wrapper reads what is left on
+    fd 3 and drops it. One example is Apple's `/usr/bin/python3` shim on a Mac without the Command
+    Line Tools, which fails before reading anything. v46 read stdin before Python started, so this
+    path never left the host writing into a pipe nobody reads. Without the drain, a 4 MB payload
+    broke the writer's pipe. A successful run costs no extra process, because Python reads fd 3 to
+    the end before anything else and never exits non-zero on purpose.
+  - Test: in `testThePromptIsNeverWrittenToDiskWhenAStepFails`, the failing-`python3` payload is
+    now larger than the pipe buffer, so the test's own write returns only if the payload is drained.
+  - `HookInputLeftoversTests.swift` starts with the `/* Kannu (കണ്ണ്) … */` GPL header block,
+    the same one `HookInputLeftovers.swift` uses.
+
+### 2026-10-29 - Hook payloads never touch the disk
+- **Developer label:** "The agent-status hook script leaves its stdin temp files behind … prompt contents persist on disk indefinitely — a privacy leak"
+- **Agent label:** Claude Code (Opus 5.5) — hook script v47 hands the payload to Python on file descriptor 3 instead of a temp file, and Kannu sweeps the old leftovers at launch
+- **Changes:**
+  - Hook script v47 (`AgentHookInstaller` and its mirror `scripts/kannu-agent-status.sh`): the
+    wrapper duplicates its stdin onto file descriptor 3 (`exec 3<&0`; a closed stdin becomes
+    `/dev/null`) and Python reads the payload from there, so it is never written to disk. v41 to
+    v46 copied it to `.kannu-input.XXXXXX` in `~/.kannu/agent-status/` and relied on Python's
+    `unlink` and a trailing `rm`. Any hook killed between the copy and the delete (the host's
+    timeout, an interrupt, the host quitting; there was no trap, and SIGKILL cannot be trapped)
+    left the whole payload behind. One Mac had 33 such files from 2026-09-17 on, one of them a full
+    `UserPromptSubmit` payload with the prompt text.
+  - Python still caps the payload at 16 MiB, now counted in bytes. Past the cap it reads the rest
+    and drops it, so the host never blocks writing to a pipe nobody reads. The no-`python3` early
+    exit drains stdin the same way.
+  - At launch, `continueLaunch()` removes `.kannu-input.*` files older than 10 minutes from the
+    status directory, on a utility queue, whether or not agent status is on
+    (`HookInputLeftovers`). It reads only names and modification dates, never contents, removes
+    only regular files, and logs only a count.
+  - Tests: a `HookScriptTests` "v47" group checks that the prompt text is in no file anywhere
+    under `HOME` after a normal run, after the no-`python3` early exit, after a failed status
+    write, after `python3` itself fails, and after the hook is killed mid-read (SIGTERM to the
+    hook, SIGKILL to the hook, SIGKILL to the hook and its children). The group also covers a
+    payload past the cap, and runs again under `/usr/bin/python3` 3.9.
+    `HookInputLeftoversTests` covers the sweep's age filter and name filter.
 
 ### 2026-10-24 - Act on CodeRabbit's review of #72
 - **Developer label:** CodeRabbit's review of #72: the relay parser's validators let a final newline through, and the script's bash tests used `[`

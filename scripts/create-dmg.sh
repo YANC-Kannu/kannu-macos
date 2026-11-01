@@ -14,6 +14,10 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
+# release.yml, manual-release.sh and build-dmg.sh all come through here. Run through bash so a lost
+# executable bit cannot skip it.
+bash "$(dirname "${BASH_SOURCE[0]}")/check-no-lfs-pointers.sh" "$APP_PATH"
+
 if ! command -v dmgbuild >/dev/null 2>&1; then
   cat >&2 <<EOF
 dmgbuild not found on PATH. build-dmg.sh and manual-release.sh set it up themselves; to call this
