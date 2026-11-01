@@ -96,7 +96,9 @@ struct SpotifyAuthSettingsSection: View {
 
                     HStack(spacing: 12) {
                         Link("Open Spotify Web Player", destination: URL(string: "https://open.spotify.com")!)
+                            .buttonStyle(.link)
                         Link("Method source", destination: URL(string: "https://github.com/Paxsenix0/Spotify-Canvas-API")!)
+                            .buttonStyle(.link)
                     }
                     .font(.caption)
                 }

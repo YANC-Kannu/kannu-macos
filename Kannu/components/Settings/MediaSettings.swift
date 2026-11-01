@@ -84,6 +84,8 @@ struct Media: View {
                     VStack(alignment: .leading, spacing: 2) {
                         SettingsFooter("YouTube Music requires this third-party app to be installed: ")
                         Link("https://github.com/th-ch/youtube-music", destination: URL(string: "https://github.com/th-ch/youtube-music")!)
+                            .buttonStyle(.link)
+                            .font(SettingsTheme.description)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
@@ -322,6 +324,7 @@ struct Media: View {
                     Text("Hide DynamicIsland Options")
                 }
                 .pickerStyle(.radioGroup)
+                .labeledContentStyle(.automatic)
                 .labelsHidden()
                 .settingsHighlight(id: highlightID("Hide DynamicIsland Options"))
                 .onChange(of: hideNotchOption) {

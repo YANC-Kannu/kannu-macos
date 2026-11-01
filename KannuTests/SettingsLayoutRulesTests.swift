@@ -170,6 +170,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsColorPicker.swift": 1,      // the colour popover
         "SettingsHelpers.swift": 8,          // badge capsules
         "SettingsPermissionCallout.swift": 1,  // the callout's own card
+        "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
+        "SettingsButtonStyle.swift": 1,      // the button's own chrome
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
@@ -341,6 +343,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertGreaterThan(sources.count, 8, "the Settings directory moved — fix settingsSources()")
         XCTAssertNotNil(sources["SettingsView.swift"])
         XCTAssertNotNil(sources["SettingsComponents.swift"])
+        XCTAssertNotNil(sources["SettingsTheme.swift"], "the scan no longer reaches DesignSystem/")
     }
 
     /// A rule that cannot see a subfolder passes on every file in it, so the walk itself is proved.

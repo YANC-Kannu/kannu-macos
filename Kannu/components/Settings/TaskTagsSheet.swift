@@ -110,6 +110,7 @@ struct TaskTagsSheet: View {
                     TasksManager.shared.setTagColors(keptColorPicks)
                     dismiss()
                 }
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .keyboardShortcut(isTyping ? nil : .defaultAction)
             }
         }

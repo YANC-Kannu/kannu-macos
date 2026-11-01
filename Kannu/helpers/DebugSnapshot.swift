@@ -53,6 +53,7 @@ struct DebugSnapshotRequest {
 enum DebugSnapshots {
     static func run(_ request: DebugSnapshotRequest, viewModel: KannuViewModel) async {
         try? FileManager.default.createDirectory(at: request.directory, withIntermediateDirectories: true)
+        writeFontReport(into: request.directory)
         // Fixture tasks before anything touches the task list: a snapshot never reads or writes
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
@@ -111,6 +112,9 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("components") == true {
             boards.append(("components", AnyView(componentsBoard)))
         }
+        if request.tabs == nil || request.tabs?.contains("designSystem") == true {
+            boards.append(("designSystem", AnyView(designSystemBoard)))
+        }
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
@@ -133,8 +137,10 @@ enum DebugSnapshots {
                 let root = AnyView(view
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
-                    .formStyle(.grouped))
-                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: 490, into: request.directory)
+                    .settingsDesignSystem())
+                // The rules sheet sets its own width, which a page's 490 would crop on both sides.
+                let width: CGFloat = name == "policyRules" ? 560 : 490
+                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -223,6 +229,147 @@ enum DebugSnapshots {
             }
         }
     }
+
+    /// Which fonts this launch really has. `open -W` loses stdout, and a PNG can hide a fallback.
+    private static func writeFontReport(into directory: URL) {
+        let report = """
+        Geist: \(SettingsTheme.geistIsAvailable ? "bundled" : "missing, system font")
+        Geist Mono: \(SettingsTheme.geistMonoIsAvailable ? "bundled" : "missing, system font")
+
+        """
+        try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// Everything `settingsDesignSystem()` gives a page, in every state, and each theme token by name.
+    private static var designSystemBoard: some View {
+        Form {
+            Section {
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on") }
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off") }
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on, disabled") }
+                    .disabled(true)
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off, disabled") }
+                    .disabled(true)
+                SettingsRow(verbatim: "No label, on: the row draws the title",
+                            description: "A description under the title, and the switch on the trailing side.") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, off") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, on, disabled") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "No label, off, disabled") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Toggles")
+            }
+
+            Section {
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard") }
+                    Button(action: {}) { Text(verbatim: "Primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Destructive") }
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard, disabled") }
+                        .disabled(true)
+                    Button(action: {}) { Text(verbatim: "Primary, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                        .disabled(true)
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Small") }
+                    Button(action: {}) { Text(verbatim: "Small primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
+                }
+                .controlSize(.small)
+            } header: {
+                Text(verbatim: "Buttons")
+            }
+
+            Section {
+                LabeledContent {
+                    Text(verbatim: "A bare value")
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } label: {
+                    Text(verbatim: "With a value")
+                }
+                LabeledContent {
+                    TextField(text: .constant("Typed text stays primary")) { Text(verbatim: "Field") }
+                        .labelsHidden()
+                } label: {
+                    Text(verbatim: "With a typed field")
+                }
+                DisclosureGroup(isExpanded: .constant(true)) {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "A row inside") }
+                    LabeledContent {
+                        Text(verbatim: "Another row").foregroundStyle(.secondary).textSelection(.enabled)
+                    } label: {
+                        Text(verbatim: "With a value")
+                    }
+                } label: {
+                    Text(verbatim: "A disclosure, open")
+                }
+                DisclosureGroup(isExpanded: .constant(false)) {
+                    Text(verbatim: "Never shown")
+                } label: {
+                    Text(verbatim: "A disclosure, closed")
+                }
+            } header: {
+                Text(verbatim: "Rows")
+            }
+
+            Section {
+                ForEach(designSystemColors, id: \.name) { swatch in
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                            .fill(swatch.color)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                                    .strokeBorder(SettingsTheme.line)
+                            }
+                            .frame(width: 44, height: 22)
+                        Text(verbatim: swatch.name)
+                            .foregroundStyle(SettingsTheme.ink)
+                    }
+                }
+            } header: {
+                Text(verbatim: "Colours")
+            }
+
+            Section {
+                ForEach(designSystemFonts, id: \.name) { sample in
+                    Text(verbatim: "\(sample.name): Watch your agents")
+                        .font(sample.font)
+                }
+            } header: {
+                Text(verbatim: "Fonts")
+            }
+        }
+    }
+
+    private static let designSystemColors: [(name: String, color: Color)] = [
+        ("paper", SettingsTheme.paper), ("panel", SettingsTheme.panel), ("card", SettingsTheme.card),
+        ("selection", SettingsTheme.selection), ("hover", SettingsTheme.hover), ("line", SettingsTheme.line),
+        ("ink", SettingsTheme.ink), ("inkSecondary", SettingsTheme.inkSecondary),
+        ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
+        ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
+        ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
+    ]
+
+    private static let designSystemFonts: [(name: String, font: Font)] = [
+        ("pageTitle", SettingsTheme.pageTitle), ("body", SettingsTheme.body), ("bodyStrong", SettingsTheme.bodyStrong),
+        ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
+        ("mono", SettingsTheme.mono),
+    ]
 
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.

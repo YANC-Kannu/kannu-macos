@@ -115,6 +115,8 @@ struct ScreenAssistantSettings: View {
 
                     LabeledContent("Attached Files") {
                         Text("\(screenAssistantManager.attachedFiles.count)")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
 
                     LabeledContent("Recording Status") {
