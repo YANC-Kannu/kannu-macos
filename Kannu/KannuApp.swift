@@ -272,6 +272,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private static let loginItemLog = os.Logger(subsystem: "com.kannu.app", category: "LaunchAtLogin")
+    private static let hookLeftoversLog = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     private var isInstalledCopy: Bool {
         let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
@@ -1290,6 +1291,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.dndManager.stopMonitoring()
             }
         }.store(in: &cancellables)
+
+        // Hook scripts v41 to v46 could leave a copy of a hook's payload, the user's prompt included,
+        // in the status directory. Swept whether or not the feature is on: the files outlive turning
+        // it off. Off the main thread, like the reaper; only a count is logged.
+        let hookStatusDirectory = AgentHookInstaller.statusDirectory
+        let hookLeftoversLog = Self.hookLeftoversLog
+        DispatchQueue.global(qos: .utility).async {
+            let removed = HookInputLeftovers.removeStale(in: hookStatusDirectory)
+            if removed > 0 {
+                hookLeftoversLog.info("Removed \(removed, privacy: .public) stale hook payload files")
+            }
+        }
 
         // Agent status (traffic light live activity)
         if Defaults[.enableAgentStatusFeature] {
