@@ -115,6 +115,8 @@ struct ScreenAssistantSettings: View {
 
                     LabeledContent("Attached Files") {
                         Text("\(screenAssistantManager.attachedFiles.count)")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
 
                     LabeledContent("Recording Status") {
@@ -174,7 +176,6 @@ struct ScreenAssistantSettings: View {
                 }
             }
         }
-        .formStyle(.grouped)
         .navigationTitle("Screen Assistant")
         .onAppear {
             geminiApiKey = SecureSecretsStore.value(for: .geminiAPIKey)

@@ -569,6 +569,7 @@ struct URLImportSheet: View {
                 Button("Add") {
                     onImport()
                 }
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .keyboardShortcut(.defaultAction)
                 .disabled(urlInput.isEmpty || nameInput.isEmpty)
             }

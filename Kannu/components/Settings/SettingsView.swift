@@ -295,15 +295,15 @@ private struct SettingsHighlightModifier: ViewModifier {
     private var highlightBackground: some View {
         RoundedRectangle(cornerRadius: 12, style: .continuous)
             .stroke(
-                Color.accentColor.opacity(isActive ? (animatePulse ? 0.95 : 0.4) : 0),
+                SettingsTheme.accent.opacity(isActive ? (animatePulse ? 0.95 : 0.4) : 0),
                 lineWidth: 2
             )
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.accentColor.opacity(isActive ? 0.08 : 0))
+                    .fill(SettingsTheme.accent.opacity(isActive ? 0.08 : 0))
             )
             .padding(-4)
-            .shadow(color: Color.accentColor.opacity(isActive ? 0.25 : 0), radius: animatePulse ? 8 : 2)
+            .shadow(color: SettingsTheme.accent.opacity(isActive ? 0.25 : 0), radius: animatePulse ? 8 : 2)
             // Bounded, never `.repeatForever` (docs/REGRESSIONS.md, entry 22). At the clear `isActive`
             // moves the stroke's colour with no animation, then `animatePulse` moves nothing the
             // colour reads, so nothing ever replaced its repeating animator. It ran on behind the
@@ -396,7 +396,9 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } detail: {
+            // The detail column only: the sidebar keeps its native links until it is replaced.
             detailView(for: resolvedSelection)
+                .settingsDesignSystem()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationSplitViewStyle(.balanced)
@@ -410,7 +412,6 @@ struct SettingsView: View {
         .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { $0 }) { request in
             selectedTab = request.tab
         }
-        .formStyle(.grouped)
         .frame(width: 700)
         .onChange(of: searchText) { _, newValue in
             let matches = tabsMatchingSearch(newValue)

@@ -408,6 +408,7 @@ private struct TaskSourcesSection: View {
                             Button(source.title) { context.connect(source) }
                         }
                     }
+                    .buttonStyle(.bordered)
                     .fixedSize()
                 } label: {
                     SettingsRowLabel("Add a source", description: Text(verbatim: addable.map(\.title).formatted(.list(type: .or))))
@@ -668,6 +669,7 @@ private struct TaskValueSheet: View {
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button(primaryTitle) { save() }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(isEstimate && estimate.estimateReading == .unreadable)
             }

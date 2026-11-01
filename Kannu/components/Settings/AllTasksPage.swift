@@ -228,6 +228,9 @@ struct AllTasksPage: View {
         } label: {
             SettingsRowLabel("Recently closed", description: "Moved to the archive after \(TaskArchive.closedDays) days.")
         }
+        // Stays in the native disclosure until Stage 5 rebuilds this page: this list can be long, and
+        // the custom style would put all its rows in one view.
+        .disclosureGroupStyle(.automatic)
     }
 
     /// Archived tasks: out of every other list. A Jira or GitLab task clears itself
@@ -244,6 +247,8 @@ struct AllTasksPage: View {
         } label: {
             SettingsRowLabel("Archive", description: "Jira and GitLab tasks clear after \(TaskArchive.clearDays) days; yours stay.")
         }
+        // Stays in the native disclosure until Stage 5 rebuilds this page, as above.
+        .disclosureGroupStyle(.automatic)
     }
 
     private func closedRow(_ task: TaskItem) -> some View {
@@ -336,6 +341,8 @@ struct AllTasksPage: View {
         } label: {
             SettingsRowLabel("Tag colours", description: "A task takes its first tag's colour; untagged ones, their source's.")
         }
+        // Stays in the native disclosure until Stage 5 rebuilds this page, as above.
+        .disclosureGroupStyle(.automatic)
     }
 
     private func tagColorBinding(for tag: String) -> Binding<TaskColor> {
