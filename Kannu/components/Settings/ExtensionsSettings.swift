@@ -413,9 +413,9 @@ private struct ExtensionEntryRow: View {
                 Button("Authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
-                
+
                 Button("Deny") {
                     authManager.deny(bundleIdentifier: entry.bundleIdentifier, reason: "Denied by user")
                 }
@@ -434,7 +434,7 @@ private struct ExtensionEntryRow: View {
                 Button("Re-authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
             }
             

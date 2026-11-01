@@ -131,7 +131,7 @@ struct AnimationEditorView: View {
             Button(existingAnimation != nil ? "Save Changes" : "Import") {
                 importAnimation()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SettingsButtonStyle(.primary))
             .keyboardShortcut(.defaultAction)
             .disabled(name.isEmpty || isImporting)
         }
@@ -285,10 +285,11 @@ struct AnimationEditorView: View {
                                 }
                             }
                             .pickerStyle(.segmented)
+                            .labeledContentStyle(.automatic)
                         }
                     }
                 }
-                
+
                 EditorSectionCard(title: "Size & Crop", subtitle: "Match the notch footprint or intentionally exceed it.") {
                     VStack(spacing: 12) {
                         ParameterSliderRow(
@@ -384,7 +385,7 @@ struct AnimationEditorView: View {
                                 Text("Expand notch to follow animation width")
                             }
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(SettingsToggleStyle(showsLabel: false))
                         }
                     }
                 }

@@ -330,7 +330,7 @@ struct Appearance: View {
                         notchSkinManager.importError = nil
                         isSkinImporterPresented = true
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
 
                 SettingsSliderRow("Scrim opacity", value: $notchSkinScrimOpacity, in: 0...0.6, step: 0.05,
@@ -406,7 +406,7 @@ struct Appearance: View {
                         iconImportError = nil
                         isIconImporterPresented = true
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
             } header: {
                 SettingsSectionHeader("App icon")

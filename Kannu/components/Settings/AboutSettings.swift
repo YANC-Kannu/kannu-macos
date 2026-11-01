@@ -56,11 +56,13 @@ struct About: View {
             Section {
                 LabeledContent("Release name") {
                     Text(ReleaseInfo.codename)
+                        .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
                 LabeledContent("Version") {
                     Text(versionText)
                         .monospacedDigit()
+                        .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                 }
                 if SparkleUpdaterController.shared.isEnabled {

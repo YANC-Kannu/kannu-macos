@@ -81,10 +81,14 @@ struct ClipboardSettings: View {
 
                     LabeledContent("Current Items") {
                         Text("\(clipboardManager.clipboardHistory.count)")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
 
                     LabeledContent("Pinned Items") {
                         Text("\(clipboardManager.pinnedItems.count)")
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                     }
 
                     LabeledContent("Monitoring Status") {

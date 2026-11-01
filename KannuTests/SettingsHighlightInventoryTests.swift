@@ -218,6 +218,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
             out[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         XCTAssertNotNil(out["SettingsView.swift"])
+        // No DesignSystem/ file registers an id, so nothing else would notice this walk going flat.
+        XCTAssertNotNil(out["SettingsTheme.swift"])
         return out
     }
 

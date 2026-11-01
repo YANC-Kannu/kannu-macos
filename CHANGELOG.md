@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain gets a theme, and its toggles and buttons their own styles
+- **Developer label:** Brain redesign Stage 2: "`SettingsTheme`, the shared styles"
+- **Agent label:** Claude Code (Opus 5.5) — one root modifier shared with the snapshot boards
+- **Changes:**
+  - New `Kannu/components/Settings/DesignSystem/`: `SettingsTheme` (paper, ink, the eye blue, fonts that
+    use Geist when bundled and the system font at the same size when not), `SettingsToggleStyle`,
+    `SettingsButtonStyle`, `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, and
+    `settingsDesignSystem()`, the one root the window and the snapshot boards both apply.
+  - Every toggle, default button, labelled row and disclosure under Brain takes the new styles. The
+    highlight pulse and descriptions read the theme, and the two monospaced values read its mono font.
+  - Sites that must stay as they are say so: a row's switch hides its label, eight default actions and
+    seven main actions are primary, six `Link`s stay links, `Connect…` keeps its chevron, the checkboxes,
+    the radios and the animation editor's segments keep their layout, All tasks' long groups keep the
+    native disclosure, and six bare values stay secondary.
+  - A button keeps its width and one line, as a native one does: a row had broken "Acknowledgements" in two.
+  - The root's font replaced what a grouped `Form` gives its headers and footers, so
+    `SettingsSectionHeader` and `SettingsFooter` say theirs (the new `sectionTitle`, and `description`).
+  - The `designSystem` snapshot board renders every state and every token by name, each run writes
+    `fonts.txt`, and the `policyRules` board renders at the sheet's own 560 instead of cropping it at 490.
+  - New `SettingsDesignSystemRulesTests`, each rule proved against planted offenders. The layout, highlight
+    and animation scans assert that they read `DesignSystem/`. `docs/SETTINGS.md` gains the design system,
+    and `docs/REGRESSIONS.md` entry 22 an addendum.
+
 ### 2026-11-01 - SettingsView is split into one file per tab
 - **Developer label:** Brain redesign Stage 2: "split the 8,027-line `SettingsView.swift` into one file per tab, with no behaviour change"
 - **Agent label:** Claude Code (Opus 5.5) — a scripted move, so each later stage's edits are small and reviewable

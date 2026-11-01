@@ -80,6 +80,7 @@ final class SettingsAnimationRulesTests: XCTestCase {
     func testNothingUnderSettingsRepeatsForever() throws {
         let sources = try Self.settingsSources()
         XCTAssertFalse(sources.isEmpty, "the scan read nothing: the path moved")
+        XCTAssertNotNil(sources["SettingsTheme.swift"], "the scan no longer reaches DesignSystem/")
         for (name, source) in sources {
             XCTAssertEqual(Self.offenders(in: source), [], "\(name) animates forever while its page is open")
         }
