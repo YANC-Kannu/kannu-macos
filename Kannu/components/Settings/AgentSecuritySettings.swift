@@ -56,8 +56,8 @@ struct AgentSecuritySettings: View {
     /// Which ADR Detection keys the keychain holds; see `adrSecretRow`.
     @State private var storedADRSecrets: Set<SecureSecretKey> = []
 
-    /// The literal form: `SettingsTab` is private to SettingsView.swift, and the highlight
-    /// inventory test accepts exactly this shape (the UsageSettings precedent).
+    /// The literal form: the highlight inventory test accepts exactly this shape (the UsageSettings
+    /// precedent).
     private func highlightID(_ title: String) -> String {
         "agentSecurity-\(title)"
     }

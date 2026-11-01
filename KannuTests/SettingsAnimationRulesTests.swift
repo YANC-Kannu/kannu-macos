@@ -230,7 +230,7 @@ final class SettingsAnimationRulesTests: XCTestCase {
         for (name, source) in sources {
             XCTAssertFalse(Self.playerOffends(source), "\(name) plays on behind a closed Brain")
         }
-        let view = try XCTUnwrap(sources["SettingsView.swift"])
+        let view = try XCTUnwrap(sources["DevicesSettings.swift"])
         XCTAssertTrue(view.contains("onWindowChange?(window != nil)"), "the looping icon no longer follows its window")
     }
 

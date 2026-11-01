@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - SettingsView is split into one file per tab
+- **Developer label:** Brain redesign Stage 2: "split the 8,027-line `SettingsView.swift` into one file per tab, with no behaviour change"
+- **Agent label:** Claude Code (Opus 5.5) — a scripted move, so each later stage's edits are small and reviewable
+- **Changes:**
+  - `SettingsView.swift` keeps the sidebar, search index and deep links, about 1,200 of its 8,048 lines.
+    Each tab moves to its own file under `Kannu/components/Settings/`, with shared pieces in
+    `SettingsHelpers`, `SettingsColorPicker`, `SettingsProviderIcons` and `SettingsPermissionCallout`.
+  - No behaviour change. The only code edits are access levels the move requires: `private` comes off
+    the top-level types another file now names, and `fileprivate` off three members a DEBUG snapshot
+    helper reads. Two imports nothing used are gone.
+  - Tests that named `SettingsView.swift` follow the code: the per-file budgets in
+    `SettingsLayoutRulesTests` split with the same totals, and `FirstLaunchRulesTests` watches every
+    new file, so no scan quietly stopped covering moved code.
+
 ### 2026-11-01 - Large work ships as stacked super PRs, and CI builds them
 - **Developer label:** "stack super prs so that we can conviniently review branches that have changes in limit of coderabbit, and dont request review for the child pr's"
 - **Agent label:** Claude Code (Opus 5.5) — CI on `super/**` and the stacked-PR rules, for the Brain redesign
