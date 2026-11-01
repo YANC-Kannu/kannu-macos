@@ -108,8 +108,9 @@ final class SettingsAnimationRulesTests: XCTestCase {
         let code = code(controller)
         guard let close = body(of: "func windowWillClose(", in: code),
               let remove = body(of: "func removeContentFromClosedWindow(", in: code),
+              let restore = body(of: "func restoreLeftState(", in: code),
               let show = body(of: "func showWindow()", in: code) else {
-            return ["windowWillClose, removeContentFromClosedWindow or showWindow is gone"]
+            return ["windowWillClose, removeContentFromClosedWindow, restoreLeftState or showWindow is gone"]
         }
         var violations: [String] = []
         if !isBefore("DispatchQueue.main.async", "removeContentFromClosedWindow()", in: close) {
@@ -123,17 +124,40 @@ final class SettingsAnimationRulesTests: XCTestCase {
         if !remove.contains("window.contentView = NSView()") {
             violations.append("the content stays in the closed window")
         }
-        if !remove.contains("scrollPositions =") {
-            violations.append("nothing remembers where the page was scrolled to")
+        if !remove.contains("leftState = LeftState(") {
+            violations.append("nothing remembers how the page was left")
+        }
+        // The field editor goes when the content does; the field it was editing stays.
+        if !remove.contains("editor?.delegate") {
+            violations.append("focus is remembered as a field editor that will not come back")
         }
         if !isBefore("restoreContent()", "orderFront", in: show) {
             violations.append("the window can come back empty")
         }
-        // Focus lands, and scrolls its field into view, by the time the second makeKey has run.
-        guard let last = show.range(of: "makeKeyAndOrderFront", options: .backwards),
-              show[last.upperBound...].contains("restoreScrollPositions()") else {
-            violations.append("the scroll position is put back before focus moves it")
-            return violations
+        // Focus lands on the page's first field, and scrolls to it, by the time the second makeKey
+        // has run. Nothing may leave between that and putting them back.
+        if let last = show.range(of: "makeKeyAndOrderFront", options: .backwards),
+           let putBack = show.range(of: "restoreLeftState()", range: last.upperBound..<show.endIndex) {
+            let gap = show[last.upperBound..<putBack.lowerBound]
+            if gap.contains("return") || gap.contains("guard") {
+                violations.append("an early exit can skip putting the page back")
+            }
+        } else {
+            violations.append("the page is put back before focus moves it")
+        }
+        // Left to AppKit, the first field takes focus with its text selected, and one key replaces it.
+        if !restore.contains("window.makeFirstResponder(focus)") {
+            violations.append("focus is not put back")
+        }
+        if !restore.contains("selectedRange = selection") {
+            violations.append("the caret is not put back")
+        }
+        if !restore.contains("?.window === window") {
+            violations.append("focus can go to a view no longer in the window")
+        }
+        // Focusing a field scrolls it into view, so the scroll goes back after it.
+        if !isBefore("makeFirstResponder(focus)", "setBoundsOrigin", in: restore) {
+            violations.append("the scroll goes back before focus moves it again")
         }
         return violations
     }
@@ -156,15 +180,29 @@ final class SettingsAnimationRulesTests: XCTestCase {
             ("taken out during the notification", [(later, "removeContentFromClosedWindow()")]),
             ("reopened in the same turn, then emptied", [("!window.isVisible, ", "")]),
             ("left in the window", [("window.contentView = NSView()", "")]),
-            ("scroll not remembered", [("scrollPositions = Self.scrollers", "_ = Self.scrollers")]),
+            ("state not remembered", [("leftState = LeftState(", "_ = LeftState(")]),
+            ("the field editor remembered, not its field", [
+                ("editor?.delegate as? NSView ?? window.firstResponder as? NSView", "window.firstResponder as? NSView"),
+            ]),
             ("never put back", [("_ = window\n        restoreContent()", "_ = window")]),
             ("put back after ordering in", [
                 ("_ = window\n        restoreContent()", "_ = window"),
                 ("// Activate the app and ensure window gets focus", "restoreContent()"),
             ]),
+            ("page put back before focus lands", [
+                ("self?.window?.makeKeyAndOrderFront(nil)\n            self?.restoreLeftState()",
+                 "self?.restoreLeftState()\n            self?.window?.makeKeyAndOrderFront(nil)"),
+            ]),
+            ("an early exit before the page is put back", [
+                ("self?.window?.makeKeyAndOrderFront(nil)\n            self?.restoreLeftState()",
+                 "self?.window?.makeKeyAndOrderFront(nil)\n            if self?.window?.isKeyWindow == false { return }\n            self?.restoreLeftState()"),
+            ]),
+            ("focus left to AppKit", [("window.makeFirstResponder(focus)", "")]),
+            ("caret left selected", [("field.currentEditor()?.selectedRange = selection", "_ = field")]),
+            ("focus on a view that has gone", [("leftState.focus?.window === window ? leftState.focus : nil", "leftState.focus")]),
             ("scroll put back before focus", [
-                ("self?.window?.makeKeyAndOrderFront(nil)\n            self?.restoreScrollPositions()",
-                 "self?.restoreScrollPositions()\n            self?.window?.makeKeyAndOrderFront(nil)"),
+                ("window.makeFirstResponder(focus)\n", "\n"),
+                ("reflectScrolledClipView(clipView)\n        }", "reflectScrolledClipView(clipView)\n        }\n        window.makeFirstResponder(focus)"),
             ]),
         ]
         for mutation in mutations {

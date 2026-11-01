@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Act on CodeRabbit's review of #12
+- **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore
+- **Changes:**
+  - `SettingsWindowController` records what had focus and a field's caret when the content leaves the
+    window, and puts them back after the second `makeKeyAndOrderFront`, focus before scroll. One key
+    typed after reopening would otherwise have replaced the first field's text, and on a
+    write-through field that overwrites what is stored. If what had focus has left the window,
+    nothing gets it.
+  - Test: `SettingsAnimationRulesTests` pins the focus and caret restore and their order, and rejects
+    a `return` or `guard` between the last `makeKeyAndOrderFront` and `restoreLeftState()`. The
+    planted breakages of the real controller go from eight to fourteen.
+  - `docs/REGRESSIONS.md` entry 22's addendum says what focus does now.
+
 ### 2026-11-01 - A closed Brain costs no CPU, whatever its page animates
 - **Developer label:** "Make a closed Brain window stop costing CPU, whatever its pages animate."
 - **Agent label:** Claude Code (Opus 5.5) — closing Brain takes its SwiftUI out of the window a turn after the close and reopening puts it back, measured at 13.9 % before and 0.16 % after with every animating view on one page

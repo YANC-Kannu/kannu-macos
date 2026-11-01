@@ -31,8 +31,16 @@ class SettingsWindowController: NSWindowController {
     /// Brain's SwiftUI. It sits in the window only while the window is open, and outlives every
     /// close, so its page, scroll position and typing are still there on reopening.
     private var settingsContent: NSHostingView<SettingsView>?
-    /// Where each scroller in the content stood when it left the window.
-    private var scrollPositions: [(clipView: NSClipView, origin: NSPoint)] = []
+    /// How the page was left when the content came out of the window. Nil while it is in the window.
+    private var leftState: LeftState?
+
+    private struct LeftState {
+        /// Nil when nothing on the page had focus.
+        var focus: NSView?
+        /// A text field's caret, since focusing the field again selects all its text.
+        var selection: NSRange?
+        var scrollPositions: [(clipView: NSClipView, origin: NSPoint)]
+    }
 
     private init() {
         let window = NSWindow(
@@ -120,7 +128,7 @@ class SettingsWindowController: NSWindowController {
         DispatchQueue.main.async { [weak self] in
             guard !NSColorPanel.shared.isVisible else { return }
             self?.window?.makeKeyAndOrderFront(nil)
-            self?.restoreScrollPositions()
+            self?.restoreLeftState()
         }
     }
     
@@ -144,18 +152,30 @@ class SettingsWindowController: NSWindowController {
     /// cancellations run now, and its `onAppear`s and `.task`s again on reopening.
     private func removeContentFromClosedWindow() {
         guard let window, !window.isVisible, let settingsContent, window.contentView === settingsContent else { return }
-        scrollPositions = Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
+        let editor = (window.firstResponder as? NSTextView).flatMap { $0.isFieldEditor ? $0 : nil }
+        leftState = LeftState(
+            focus: editor?.delegate as? NSView ?? window.firstResponder as? NSView,
+            selection: editor?.selectedRange(),
+            scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
+        )
         window.contentView = NSView()
     }
 
-    /// Ordering the content back in focuses a text field on its page, and that scrolls the field
-    /// into view, however far past it the page was left.
-    private func restoreScrollPositions() {
-        for (clipView, origin) in scrollPositions where clipView.bounds.origin != origin {
+    /// Ordering the content back in gives the page's first text field focus with its text selected,
+    /// so the next key typed would replace it, and scrolls the page to that field. Whatever had focus
+    /// gets it back, or nothing does; the scroll goes back last, since focusing a field also moves it.
+    private func restoreLeftState() {
+        guard let window, let leftState else { return }
+        self.leftState = nil
+        let focus = leftState.focus?.window === window ? leftState.focus : nil
+        window.makeFirstResponder(focus)
+        if let selection = leftState.selection, let field = focus as? NSTextField {
+            field.currentEditor()?.selectedRange = selection
+        }
+        for (clipView, origin) in leftState.scrollPositions where clipView.bounds.origin != origin {
             clipView.setBoundsOrigin(origin)
             (clipView.superview as? NSScrollView)?.reflectScrolledClipView(clipView)
         }
-        scrollPositions = []
     }
 
     private static func scrollers(in view: NSView) -> [NSScrollView] {
