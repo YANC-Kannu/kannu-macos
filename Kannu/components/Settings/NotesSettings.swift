@@ -147,7 +147,7 @@ struct NotesSettingsView: View {
                 } header: {
                     SettingsSectionHeader("Apple Notes")
                 } footer: {
-                    SettingsFooter("Two-way sync with the macOS Notes app. Notes made in Kannu go to the Kannu folder in Notes. Kannu asks macOS to let it control Notes the first time it syncs, or on the Permissions row in Brain › General.")
+                    SettingsFooter("Two-way sync with the macOS Notes app. Notes made in Kannu go to the Kannu folder in Notes. Kannu asks macOS to let it control Notes the first time it syncs, or on the Permissions row in Brain › Settings › General.")
                 }
             }
         }

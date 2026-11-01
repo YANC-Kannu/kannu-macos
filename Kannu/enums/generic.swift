@@ -59,6 +59,37 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
     }
 }
 
+/// How Brain's window looks. The window alone: the notch stays dark whatever this says.
+enum BrainAppearance: String, CaseIterable, Defaults.Serializable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .system:
+            return String(localized: "Match macOS")
+        case .light:
+            return String(localized: "Light")
+        case .dark:
+            return String(localized: "Dark")
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .system:
+            return String(localized: "Brain follows the appearance set in macOS")
+        case .light:
+            return String(localized: "Brain stays light whatever macOS is set to")
+        case .dark:
+            return String(localized: "Brain stays dark whatever macOS is set to")
+        }
+    }
+}
+
 /// Which Apple Notes the notch's notes sync with.
 /// - `kannuFolder`: two-way, the "Kannu" folder of the default account only. The default.
 /// - `wholeAccount`: also every other note in the default account, shown read-only in the notch, so

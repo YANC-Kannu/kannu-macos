@@ -186,7 +186,7 @@ struct Appearance: View {
 
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Lock screen glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
-                                ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock Screen tab.") : nil) {
+                                ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock screen tab.") : nil) {
                         Picker("Lock screen glass mode", selection: $lockScreenGlassCustomizationMode) {
                             ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
                                 Text(mode.rawValue).tag(mode)

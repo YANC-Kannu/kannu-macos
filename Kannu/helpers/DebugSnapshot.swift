@@ -57,9 +57,10 @@ enum DebugSnapshots {
         // Fixture tasks before anything touches the task list: a snapshot never reads or writes
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
+        SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", AnyView(Form {
+            boards.append(("allTasks", SettingsView.snapshotPageTitle(Form {
                 Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
                 AllTasksPage(query: .constant(""), context: tasksBoardContext())
             })))
@@ -140,7 +141,18 @@ enum DebugSnapshots {
                     .settingsDesignSystem())
                 // The rules sheet sets its own width, which a page's 490 would crop on both sides.
                 let width: CGFloat = name == "policyRules" ? 560 : 490
-                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory)
+                // A page's `Form` has no background of its own now, so it needs the panel behind it.
+                // Sheets and onboarding do not sit on the panel.
+                let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
+                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory,
+                             background: background)
+            }
+        }
+        // The whole window at today's size: the sidebar's two lists, a search and a deep link.
+        for (name, view) in shellBoards where request.tabs == nil || request.tabs?.contains(name) == true {
+            for dark in [false, true] {
+                await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 700, into: request.directory, fixedHeight: 600)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -228,6 +240,32 @@ enum DebugSnapshots {
                 }
             }
         }
+    }
+
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes"]
+
+    /// `SettingsView` applies its own root, so these do not go through the loop that adds it.
+    private static var shellBoards: [(String, AnyView)] {
+        [
+            ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
+            // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
+            // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
+            // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment
+            // because in the app the window's content has been laid out before a link arrives, and sent
+            // during this window's first layout, a row this far down does not scroll.
+            ("shellDeepLink", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
+                        highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays"))
+                }
+            })),
+            // A query with more suggestions than fit, the field focused. A snapshot's window cannot
+            // take focus, so the board asks for the list.
+            ("shellSearch", AnyView(SettingsView(snapshotTab: .hudAndOSD, search: "color", showsSuggestions: true))),
+            // The same flat list once the field has let go: what is left when a suggestion was picked.
+            ("shellSearchList", AnyView(SettingsView(snapshotTab: .general, search: "notch"))),
+        ]
     }
 
     /// Which fonts this launch really has. `open -W` loses stdout, and a PNG can hide a fallback.
@@ -507,11 +545,14 @@ enum DebugSnapshots {
                          open: { _ in }, connect: { _ in })
     }
 
+    /// `fixedHeight` skips the growing below: a board of the whole window has more than one scroll
+    /// view, and the first it finds is the sidebar's.
     private static func render(_ view: AnyView, name: String, dark: Bool, width: CGFloat, into directory: URL,
-                               scale: CGFloat = 2) async {
-        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width)
-            .background(Color(nsColor: .windowBackgroundColor))))
-        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: 900),
+                               scale: CGFloat = 2, background: Color = Color(nsColor: .windowBackgroundColor),
+                               fixedHeight: CGFloat? = nil) async {
+        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width, height: fixedHeight)
+            .background(background)))
+        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: fixedHeight ?? 900),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.ignoresMouseEvents = true
@@ -522,10 +563,11 @@ enum DebugSnapshots {
         try? await Task.sleep(for: .milliseconds(700))
         // A grouped Form is a scroll view that only builds the rows it shows: grow the window to the
         // whole document so every row is laid out and drawn.
-        for _ in 0..<4 {
+        for _ in 0..<(fixedHeight == nil ? 4 : 0) {
             let target: CGFloat
-            if let document = firstScrollView(in: hosting)?.documentView {
-                target = min(12_000, max(200, document.frame.height))
+            if let scroll = firstScrollView(in: hosting), let document = scroll.documentView {
+                // Plus what sits outside the scroller, or a page's header clips its last rows.
+                target = min(12_000, max(200, document.frame.height + hosting.bounds.height - scroll.frame.height))
             } else {
                 target = min(12_000, max(120, hosting.fittingSize.height))
             }

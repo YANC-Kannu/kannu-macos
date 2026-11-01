@@ -89,7 +89,7 @@ class FullscreenMediaDetector: ObservableObject {
         Defaults.publisher(.enableFullscreenMediaDetection, options: [])
             .sink { [weak self] _ in Task { await self?.handleChange() } }
             .store(in: &cancellables)
-        // Granting Accessibility (Brain › Media's row) moves the verdict from the menu-bar
+        // Granting Accessibility (Brain › Settings › Media's row) moves the verdict from the menu-bar
         // fallback to `AXFullScreen`, and revoking it moves it back: neither is a space, playback
         // or setting change, so a fallback misreading used to stand until one came along.
         Task { @MainActor [weak self] in
