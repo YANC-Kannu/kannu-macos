@@ -745,6 +745,9 @@ struct CopyForAgentButton: View {
         }
         .accessibilityLabel(copied ? Text("Copied") : Text("Copy for agent"))
         .help("Copies a request about this finding, ready to paste into your agent. Nothing is sent.")
-        .onDisappear { resetTask?.cancel() }
+        .onDisappear {
+            resetTask?.cancel()
+            copied = false
+        }
     }
 }

@@ -73,7 +73,7 @@ final class NotchInteractionTests: XCTestCase {
                       "the open panel's click-elsewhere close should still be here")
     }
 
-    // MARK: - The open notch (docs/REGRESSIONS.md entry 22)
+    // MARK: - The open notch (docs/REGRESSIONS.md entry 23)
 
     /// The open body as SwiftUI lays it out in its window: 640 × 230, flush with the window's top.
     private let body = CGRect(x: 120, y: 0, width: 640, height: 230)

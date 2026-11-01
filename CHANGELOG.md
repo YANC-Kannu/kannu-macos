@@ -15,6 +15,87 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Extensions: a lock screen widget renders the payload its geometry comes from when two extensions send one id. A notch experience with no tab is refused and dropped from saved state, since nothing renders it.
   - The Cursor diagnostic counts accepted events, so a cache-read-only event no longer logs "0 usable".
   - The renamed Light Use description has its Korean, Dutch, Russian, Thai, Turkish and Simplified Chinese translations back, in the new wording.
+### 2026-11-01 - Delete the last Git LFS pointers and the LFS rules
+- **Developer label:** "Clear the 12 Git LFS pointers whose objects are missing from this repo's LFS store, so the repo no longer depends on LFS"
+- **Agent label:** Claude Code (Opus 5.5) — the 12 unreferenced pointers and `.gitattributes` go; `BundledVideoTests` and the contributor docs stop assuming LFS rules exist
+- **Changes:**
+  - Deleted 11 pointers under `.github/assets/` and `DynamicIslandSamples/dynamicislandscreenrecord.gif`.
+    All were demo clips from Atoll's old README. Nothing in the tree referenced them, and this repo's
+    LFS store answered 404 for all 12, so a checkout with git-lfs installed was expected to fail. David
+    chose to keep none, including `kannu-demo.gif`, which holds the same object as
+    `dynamicislandscreenrecord.gif`: Atoll's "DynamicIsland Demo" recording, not a demo of Kannu.
+  - Deleted `.gitattributes`. It held only the three LFS rules and the exemption for
+    `Kannu/BluetoothHUDAnimations/`, so nothing is left for it to do.
+  - `BundledVideoTests`: `testNoAttributeSendsAFileToLFS` replaces the exemption test and fails if an
+    LFS rule comes back. The movie check and the tests of `scripts/check-no-lfs-pointers.sh` stay, and
+    `create-dmg.sh` still runs that script.
+  - `AGENTS.md` and `CONTRIBUTING.md` state that the repo does not use LFS. `lfs: true` and
+    `GIT_LFS_SKIP_SMUDGE=1` now apply only to older refs, `main` and `release/1.4.0` included until
+    this reaches them.
+  - `docs/REGRESSIONS.md` entry 22: the pointer reading is in the past tense, since the clips became
+    real files in #13.
+  - Put back the blank line between the two entries below, lost resolving #13's `CHANGELOG.md` conflict.
+
+### 2026-11-01 - Ship the Bluetooth HUD clips, not Git LFS pointers
+- **Developer label:** "Find out whether users get real videos or LFS pointers, then fix what is wrong"
+- **Agent label:** Claude Code (Opus 5.5) — the eight HUD clips become ordinary git blobs, and a test and a DMG-time check refuse a pointer
+- **Changes:**
+  - Every published release checked (1.0.0, 1.3.4, 1.4.0-beta.3) bundled 131-byte pointers for all
+    eight clips. `useBluetoothHUD3DIcon` defaults to on, and the views only check that the bundle
+    URL exists, so the inline HUD and the Settings 3D card drew an empty frame instead of the SF
+    Symbol.
+  - `Kannu/BluetoothHUDAnimations/*.mov` are now real files, 3.1 MB in all, each matching the
+    SHA-256 its pointer named. They came from Atoll's LFS store, the only one holding them:
+    `YANC-Kannu/kannu-macos`, `libinmv/kannu` and the fork all answer 404, so `lfs: true` alone
+    would have failed the checkout rather than fixed it.
+  - `.gitattributes` exempts that directory from the LFS rule, so a contributor with git-lfs
+    installed does not commit a pointer back. Nobody needs git-lfs to build.
+  - New `scripts/check-no-lfs-pointers.sh`, run by `create-dmg.sh` before anything is packaged. The
+    release workflow, `manual-release.sh` and `build-dmg.sh` all go through that script.
+  - New `BundledVideoTests`: every movie under `Kannu/` is real, the exemption follows the rule it
+    overrides, the check refuses a pointer, passes real files and fails on a missing path, and
+    `create-dmg.sh` runs it first.
+  - `CONTRIBUTING.md` and `AGENTS.md` state the rule, and why `lfs: true` is not the fix.
+  - No runtime fallback. The tree and the check now rule out the pointer, so the code would have no
+    reachable path.
+  - Real clips cost CPU where pointers cost none: about 5 % of a core while one plays (HEVC with
+    alpha, 168x168, 60 fps, measured off screen). The HUD holds one for its 2.5 seconds. A closed
+    Brain keeps `SettingsLoopingVideoIcon` playing until #12 lands.
+
+### 2026-11-01 - Act on CodeRabbit's review of #12
+- **Developer label:** CodeRabbit's review of #12: reopening Brain moved focus to the page's first text field with its text selected, and the ordering test let an early exit skip putting the page back
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsWindowController` puts back what had focus and its caret, as well as the scroll position; the rules test rejects an exit between the last `makeKeyAndOrderFront` and that restore
+- **Changes:**
+  - `SettingsWindowController` records what had focus and a field's caret when the content leaves the
+    window, and puts them back after the second `makeKeyAndOrderFront`, focus before scroll. One key
+    typed after reopening would otherwise have replaced the first field's text, and on a
+    write-through field that overwrites what is stored. If what had focus has left the window,
+    nothing gets it.
+  - Test: `SettingsAnimationRulesTests` pins the focus and caret restore and their order, and rejects
+    a `return` or `guard` between the last `makeKeyAndOrderFront` and `restoreLeftState()`. The
+    planted breakages of the real controller go from eight to fourteen.
+  - `docs/REGRESSIONS.md` entry 22's addendum says what focus does now.
+
+### 2026-11-01 - A closed Brain costs no CPU, whatever its page animates
+- **Developer label:** "Make a closed Brain window stop costing CPU, whatever its pages animate."
+- **Agent label:** Claude Code (Opus 5.5) — closing Brain takes its SwiftUI out of the window a turn after the close and reopening puts it back, measured at 13.9 % before and 0.16 % after with every animating view on one page
+- **Changes:**
+  - `SettingsWindowController` swaps the hosting view for an empty `NSView` a turn after
+    `windowWillClose`, and `showWindow` puts it back before ordering in. An ordered-out window goes
+    on animating at the display's rate; a view out of the window does not, and keeps its state.
+  - The clip views' origins are saved at removal and restored after `showWindow`'s second
+    `makeKeyAndOrderFront`: a text field takes focus on reopening and scrolls itself into view.
+  - `SettingsLoopingVideoIcon` pauses when its view leaves the window and plays when it returns. It
+    cost 5.0 % behind a closed Brain, and leaving the window alone does not stop an `AVPlayer`.
+  - `LottiePreviewThumbnail` gives a page's Lottie a new identity after each `onDisappear`: its Core
+    Animation engine ends the loop when the view leaves the window and never starts it again.
+  - `SpotifyAuthSettingsSection` reads the stored cookie once per visit, because `onAppear` now runs
+    on every reopening and would overwrite one typed and not yet validated.
+  - The Copy for agent button clears "Copied" when it disappears: its `onDisappear` also cancels the
+    task that would have.
+  - Test: `SettingsAnimationRulesTests` pins all of this, checked against planted offenders and by
+    breaking the real controller eight ways.
+  - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
 
 ### 2026-10-30 - The Settings highlight stops pulsing once it clears
 - **Developer label:** "Check CPU report"
@@ -27,7 +108,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     row. macOS logged it as `cpu_resource` reports on 2026-10-22 and 2026-10-29.
   - Test: `SettingsAnimationRulesTests` fails on `.repeatForever` under `Kannu/components/Settings/`,
     and is checked against planted offenders.
-  - `docs/REGRESSIONS.md` gains entry 23 and a Danger zones row.
+  - `docs/REGRESSIONS.md` gains entry 22 and a Danger zones row.
 
 ### 2026-10-30 - Claude's usage shows a card for each organization
 - **Developer label:** "the usage table of claude is messed up and seem like not fixed, i think its still showing team which is also valid, maybe if a user has both show multiple ones"
@@ -60,7 +141,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `isPointerOnOpenNotch` now also counts every visible child window of this screen's `KannuWindow`
     that takes the mouse, at any depth (`attachedWindowFrames`). A tooltip ignores the mouse and is
     left out.
-  - docs/REGRESSIONS.md: a dated addendum to entry 22. Tests: `NotchInteractionTests`.
+  - docs/REGRESSIONS.md: a dated addendum to entry 23. Tests: `NotchInteractionTests`.
 
 ### 2026-11-01 - The typed search goes once a # or @ word starts
 - **Developer label:** "once user starts with # or @ the search has to go so that he can see ui"
@@ -322,7 +403,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     already fixed on development. The extension lock-screen widgets had the same
     `uniqueKeysWithValues` trap for two extensions sharing a widget id, and now keep the first. The
     note editor's Done button reads its colour through the guarded `NoteItem.color(at:)`.
-  - docs/REGRESSIONS.md entry 22 and a Danger zones row. Tests: the open rect and its margin, a
+  - docs/REGRESSIONS.md entry 23 and a Danger zones row. Tests: the open rect and its margin, a
     source scan of every close path with planted offenders, and the timer tab's no-hold rule.
 
 ### 2026-10-24 - Act on CodeRabbit's review of #72
