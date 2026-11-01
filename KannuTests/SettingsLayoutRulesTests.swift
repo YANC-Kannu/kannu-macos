@@ -278,6 +278,14 @@ final class SettingsLayoutRulesTests: XCTestCase {
         """).count, 1)
         // Primary text is not the rule's business.
         XCTAssertEqual(Self.unselectableInformationalChains(in: "Text(\"title\")").count, 0)
+        // The theme's spellings of the same text count too, or moving to a token would hide it.
+        for token in [".foregroundStyle(SettingsTheme.inkSecondary)", ".font(SettingsTheme.description)",
+                      ".font(SettingsTheme.caption)", ".font(SettingsTheme.micro)"] {
+            let themed = "Text(\"info\")\n    \(token)"
+            XCTAssertEqual(Self.unselectableInformationalChains(in: themed).count, 1, token)
+            XCTAssertEqual(Self.unselectableInformationalChains(in: themed + "\n    .textSelection(.enabled)").count, 0, token)
+        }
+        XCTAssertEqual(Self.unselectableInformationalChains(in: "Text(\"title\")\n    .font(SettingsTheme.body)").count, 0)
     }
 
     func testTheContentStandardScannersCatchPlantedOffenders() {
@@ -288,6 +296,11 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertEqual(Self.adHocFontLines(in: "// .font(.caption) is banned on row text").count, 0)
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").settingsDescriptionStyle()").count, 0)
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(.subheadline)").count, 0)
+        // A token, or a font by name, cannot launder a small font past the rule.
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(.custom(\"Geist-Regular\", size: 10))").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.caption)").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.micro)").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.body)").count, 0)
 
         XCTAssertEqual(Self.inlineSliderLines(in: "Slider(value: $x, in: 0...1)").count, 1)
         XCTAssertEqual(Self.inlineSliderLines(in: "// Slider(value: $x, in: 0...1)").count, 0)
@@ -330,22 +343,52 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertNotNil(sources["SettingsComponents.swift"])
     }
 
+    /// A rule that cannot see a subfolder passes on every file in it, so the walk itself is proved.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files.filter { $0.deletingLastPathComponent().lastPathComponent != "Inner" }), [])
+    }
+
     // MARK: - Plumbing
 
-    /// `Kannu/components/Settings/*.swift`, keyed by file name. The views are not compiled into
-    /// this target, so the rules read the sources as text — the same route
-    /// `SettingsHighlightInventoryTests` takes.
+    /// Every `.swift` file under `Kannu/components/Settings`, at any depth, keyed by file name. The
+    /// views are not compiled into this target, so the rules read the sources as text — the same
+    /// route `SettingsHighlightInventoryTests` takes. Keyed by name, so a second file with the same
+    /// name would hide the first from every rule here: that is a failure, not a quiet overwrite.
     private static func settingsSources() -> [String: String] {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Kannu/components/Settings")
+        let files = swiftFiles(under: dir)
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so a rule reads only one of them")
         var out: [String: String] = [:]
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        for name in files where name.hasSuffix(".swift") {
-            out[name] = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+        for file in files {
+            out[file.lastPathComponent] = try? String(contentsOf: file, encoding: .utf8)
         }
-        return out.compactMapValues { $0 }
+        return out
+    }
+
+    private static func swiftFiles(under directory: URL) -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return [] }
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
     }
 
     /// The shared shape of every pinned-count rule: no file may exceed its pin, and no pin may
@@ -377,11 +420,13 @@ final class SettingsLayoutRulesTests: XCTestCase {
         }
     }
 
-    /// Non-comment lines carrying a caption-sized or pixel-sized font.
+    /// Non-comment lines carrying a caption-sized, pixel-sized or named font. The small theme tokens
+    /// count too, so a token cannot launder a font this rule would otherwise catch.
     private static func adHocFontLines(in text: String) -> [String] {
         matchingLines(in: text) {
             $0.contains(".font(.caption") || $0.contains(".font(.system(size:")
-                || $0.contains(".font(.system(.caption")
+                || $0.contains(".font(.system(.caption") || $0.contains(".font(.custom(")
+                || $0.contains(".font(SettingsTheme.caption") || $0.contains(".font(SettingsTheme.micro")
         }
     }
 
@@ -470,6 +515,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
                 || joined.contains(".foregroundColor(.secondary)")
                 || joined.contains(".font(.caption")
                 || joined.contains(".font(.subheadline")
+                || joined.contains(".foregroundStyle(SettingsTheme.inkSecondary)")
+                || joined.contains(".font(SettingsTheme.description")
+                || joined.contains(".font(SettingsTheme.caption")
+                || joined.contains(".font(SettingsTheme.micro")
             if informational, !joined.contains(".textSelection"),
                !joined.contains(".settingsDescriptionStyle") {
                 out.append(line.trimmingCharacters(in: .whitespaces))

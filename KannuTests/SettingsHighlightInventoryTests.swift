@@ -211,14 +211,41 @@ final class SettingsHighlightInventoryTests: XCTestCase {
     // MARK: - Parsing
 
     private static func sources() throws -> [String: String] {
-        let files = try FileManager.default.contentsOfDirectory(at: settingsDirectory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
+        let files = try swiftFiles(under: settingsDirectory)
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so this inventory reads only one of them")
         var out: [String: String] = [:]
         for file in files {
             out[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         XCTAssertNotNil(out["SettingsView.swift"])
         return out
+    }
+
+    private static func swiftFiles(under directory: URL) throws -> [URL] {
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
+    }
+
+    /// A row registered in a subfolder is in the inventory only as far as this walk reaches.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = try Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
     }
 
     private static func inventory() throws -> Inventory {

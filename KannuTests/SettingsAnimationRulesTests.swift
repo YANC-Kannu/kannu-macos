@@ -33,13 +33,40 @@ final class SettingsAnimationRulesTests: XCTestCase {
         .deletingLastPathComponent()
 
     private static func settingsSources() throws -> [String: String] {
-        let directory = repoRoot.appendingPathComponent("Kannu/components/Settings")
+        let files = try swiftFiles(under: repoRoot.appendingPathComponent("Kannu/components/Settings"))
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so a rule reads only one of them")
         var sources: [String: String] = [:]
-        let files = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
-        for case let file as URL in files where file.pathExtension == "swift" {
+        for file in files {
             sources[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         return sources
+    }
+
+    private static func swiftFiles(under directory: URL) throws -> [URL] {
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
+    }
+
+    /// The `.repeatForever` ban reaches a subfolder only as far as this walk does.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = try Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
     }
 
     /// Lines that start an animation with no end. Comments may name it; code may not.
