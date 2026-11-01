@@ -21,6 +21,8 @@
  */
 
 import AppKit
+import Combine
+import Defaults
 import SwiftUI
 
 class SettingsWindowController: NSWindowController {
@@ -37,6 +39,7 @@ class SettingsWindowController: NSWindowController {
     /// the app never turned `.accessory`, inside a full-screen Space.
     private var closeAfterFullScreen = false
     private var isChangingFullScreen = false
+    private var brainAppearanceObserver: AnyCancellable?
 
     private struct LeftState {
         /// Nil when nothing on the page had focus.
@@ -98,8 +101,30 @@ class SettingsWindowController: NSWindowController {
         window.delegate = self
         
         ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
+
+        observeBrainAppearance()
     }
-    
+
+    /// Here, not in a view: a view does not react while Brain is closed (docs/REGRESSIONS.md, entry 22).
+    /// The first apply is synchronous, so the first open cannot flash. `options: []`, because the
+    /// publisher would otherwise fire that first value a second time.
+    private func observeBrainAppearance() {
+        applyBrainAppearance(Defaults[.brainAppearance])
+        brainAppearanceObserver = Defaults.publisher(.brainAppearance, options: [])
+            .receive(on: RunLoop.main)
+            .sink { [weak self] change in self?.applyBrainAppearance(change.newValue) }
+    }
+
+    /// This window only: the notch stays dark, every other window follows macOS, and nothing here may
+    /// touch `NSApp.appearance`.
+    private func applyBrainAppearance(_ choice: BrainAppearance) {
+        switch choice {
+        case .system: window?.appearance = nil
+        case .light: window?.appearance = NSAppearance(named: .aqua)
+        case .dark: window?.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
     func showWindow() {
         // Ensure window exists
         _ = window

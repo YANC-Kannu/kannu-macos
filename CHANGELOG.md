@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's moon sets its appearance, on its own window only
+- **Developer label:** Brain redesign: "Follows macOS by default, with a moon toggle"
+- **Agent label:** Claude Code (Opus 5.5) — `brainAppearance` applied by the controller, so it works while Brain is closed
+- **Changes:**
+  - `SettingsWindowController` applies `brainAppearance` to its own window: synchronously at setup, so the first
+    open cannot flash, and on every change after, with `options: []`, so the moon works and a change made
+    while Brain is closed is already in place on reopening.
+  - Brain › Settings › Appearance gains a Brain appearance row, the only way back to Match macOS, and search
+    finds it by "dark mode", "light mode", "moon" and "theme".
+  - The notch, the panels and every other window are not touched: nothing else reads the key.
+  - `BrainAppearanceRulesTests`, with plants: only the controller and the boards set a window's `.appearance`, no
+    `NSApp.appearance` and no `preferredColorScheme`, the key has exactly its four readers, and the notch window's
+    own dark line stays.
+  - Sheets, popovers, menus and alerts under a forced appearance take a real window, and have not been seen.
+
 ### 2026-11-01 - Brain goes full screen, and closes cleanly from there
 - **Developer label:** "more better fullscreen supported ui like a premium app"
 - **Agent label:** Claude Code (Opus 5.5) — the fixed root width and `.fullScreenPrimary` change together; a close waits for the exit

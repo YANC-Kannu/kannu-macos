@@ -834,6 +834,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .appearance, title: "Notch fill color", keywords: ["notch color", "background", "fill", "appearance"], highlightID: SettingsTab.appearance.highlightID(for: "Notch fill color")),
             SettingsSearchEntry(tab: .appearance, title: "Notch skin", keywords: ["notch skin", "background", "wallpaper", "custom skin"], highlightID: SettingsTab.appearance.highlightID(for: "Notch skin")),
             SettingsSearchEntry(tab: .appearance, title: "Skin scrim opacity", keywords: ["scrim", "overlay", "darken", "notch skin"], highlightID: SettingsTab.appearance.highlightID(for: "Skin scrim opacity")),
+            SettingsSearchEntry(tab: .appearance, title: "Brain appearance", keywords: ["dark mode", "light mode", "moon", "theme", "appearance"], highlightID: SettingsTab.appearance.highlightID(for: "Brain appearance")),
 
             // Lock Screen
             SettingsSearchEntry(tab: .lockScreen, title: "Preview lock screen widgets", keywords: ["preview", "lock screen", "widgets"], highlightID: SettingsTab.lockScreen.highlightID(for: "Preview lock screen widgets")),

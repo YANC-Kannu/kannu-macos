@@ -109,7 +109,8 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
   the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
   and right is the Settings row. The focus stop is a background, so each row keeps its own ring under Full
   Keyboard Access.
-- **The moon writes `brainAppearance`.** Nothing applies that to the window yet.
+- **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
+  opposite of what is on screen.
 
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellSearch,shellSearchList`
 draws the whole window: both lists, a deep link's scroll and ring, and a search with its suggestions and
@@ -131,6 +132,11 @@ arrow keys and hover take a real window.
   so Brain always reopens windowed, and nothing restores it at launch. The rule is in entry 22.
 - **The notch ignores it.** `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide
   the closed notch under Hide set to Always.
+- **`brainAppearance` is this window's alone.** Match macOS, Light or Dark. `SettingsWindowController` applies it to
+  its own window, synchronously at setup and on every change after, because a view would not react while Brain
+  is closed. Only the moon and Brain › Settings › Appearance write it, and that row is the way back to Match macOS.
+  `NSApp.appearance` and `preferredColorScheme` are banned, so the notch stays dark and every other window follows
+  macOS. `BrainAppearanceRulesTests` holds this.
 
 A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
 enter full screen: `shellWide`, at 1440×900, stands in for it. Pages render at 612 pt, the narrowest panel
