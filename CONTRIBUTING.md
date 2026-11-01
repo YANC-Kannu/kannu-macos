@@ -85,6 +85,8 @@ label precisely because of that. If you are pointing one at this repository, or 
 4. Update documentation if your change affects user-facing behavior.
 5. Wait for review and address feedback promptly.
 
+Work too large for one review ships as stacked super PRs; `AGENTS.md` has the rules.
+
 ## Before Changing Agent Status Code
 
 The agent-status subsystem (`Kannu/managers/AgentStatus/`) has repeatedly re-broken the same
