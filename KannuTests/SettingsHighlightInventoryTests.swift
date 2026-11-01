@@ -95,9 +95,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // 2026-10-28: the minimalistic UI mode is gone (David: "remove minimalistic ui mode"), and
         // with it the UI Mode section: its "Enable Minimalistic UI" entry and three rows (the switch
         // and its two battery rows), one entry, three registrations and three ids fewer.
-        XCTAssertEqual(inventory.entries.count, 243, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 272, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 266, "distinct registered ids")
+        // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
+        // opposite of what is on screen, so this row is the way back to Match macOS.
+        XCTAssertEqual(inventory.entries.count, 244, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {

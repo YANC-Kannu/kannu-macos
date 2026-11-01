@@ -109,13 +109,40 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
   the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
   and right is the Settings row. The focus stop is a background, so each row keeps its own ring under Full
   Keyboard Access.
-- **The moon writes `brainAppearance`.** Nothing applies that to the window yet.
+- **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
+  opposite of what is on screen.
 
-`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellSearch,shellSearchList`
-draws the whole window at today's size: both lists, a deep link's scroll and ring, and a search with its
-suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
+`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
+draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
+with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
 arrow keys and hover take a real window.
+
+## The window
+
+- **Sizes.** It opens at 1100×760 and goes down to 820×560, centred on the screen under the pointer and
+  clamped to it. A page stops at 720 pt, centred in the panel, so a row does not stretch across a
+  full-screen panel. The values are `SettingsTheme`'s `window…` tokens and `pageMaxWidth`. The root's frame
+  has a minimum and no maximum, because SwiftUI's size bridge clamps the window to it (`docs/REGRESSIONS.md`,
+  entry 17).
+- **Transparent title bar.** The title is hidden, and kept for the Window menu and Mission Control. The shell's
+  title row lies under the bar, level with the traffic lights, and the bar's top centre stays empty, because
+  a closed notch can sit over it in full screen. The window moves by its title row, not by its background.
+- **Full screen.** The green button enters it. A close from there leaves full screen first, then closes,
+  so Brain reopens windowed unless the exit itself failed (entry 22). Nothing restores it at launch:
+  `isRestorable` is false, and `WindowFullscreenRulesTests` holds that.
+- **The notch ignores it.** `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide
+  the closed notch under Hide set to Always.
+- **`brainAppearance` is this window's alone.** Match macOS, Light or Dark. `SettingsWindowController` applies it to
+  its own window, synchronously at setup and on every change after, because a view would not react while Brain
+  is closed. Only the moon and Brain › Settings › Appearance write it, and that row is the way back to Match macOS.
+  `NSApp.appearance` and `preferredColorScheme` are banned, so the notch stays dark and every other window follows
+  macOS. `BrainAppearanceRulesTests` holds this.
+
+A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
+enter full screen: `shellWide`, at 1440×900, stands in for it. Pages render at 612 pt, the narrowest panel
+the window can have. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
+the least room.
 
 ## The content standard
 

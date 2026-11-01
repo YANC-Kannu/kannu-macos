@@ -4,6 +4,67 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's window takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the window commits
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the AppKit and guards reviews, and the rules they found missing
+- **Changes:**
+  - A close that was waiting for full screen to end is called off by a sheet that arrived meanwhile. `NSWindow.close()`
+    ignores a sheet, and a sheet closed away with Brain could leave `ModalPresenter`'s count up and the notch refusing
+    to open. The exit after an entry does not toggle under a sheet either, and clears the flag, so no later exit
+    closes Brain by surprise.
+  - The pending flag now stays set until the turn the close runs in, so `showWindow` queued in that gap still cancels,
+    and `windowWillClose` clears it, so a second Command-W in that turn cannot close twice.
+  - Lock Screen Preview joins a full-screen Brain's Space and never becomes one of its tabs. Finishing onboarding with
+    Brain open no longer turns the app `.accessory` under it.
+  - `closingViolations` now proves order, not presence: the exit runs before `.accessory`, `close()` and
+    `windowShouldClose` obey the answer, and `showWindow`'s reset sits above its early return. The real controller is
+    broken 49 ways, up from 34. Deleting the guard in `finishPendingClose` used to pass, and now does not.
+  - `WindowFullscreenRulesTests` holds `isRestorable`, `isMovableByWindowBackground`, placing before ordering in and
+    the clamp, reads the assignments with comments blanked, and bans any height or maximum at the root, not only a
+    width. The appearance rule catches `.init`, `nil` and a direct write to the key, and its window check and the
+    notch's dark line each get a plant. The search boards' smallest-window size is pinned.
+  - `docs/SETTINGS.md`'s board command now includes `shellWide`. It and the previous entry said Brain always reopens
+    windowed; a failed exit closes in full screen, so it now says so.
+  - The full-screen Command-W beep is left to David's ear: nothing here can hear it, and the fix is a window subclass.
+
+### 2026-11-01 - Brain's moon sets its appearance, on its own window only
+- **Developer label:** Brain redesign: "Follows macOS by default, with a moon toggle"
+- **Agent label:** Claude Code (Opus 5.5) — `brainAppearance` applied by the controller, so it works while Brain is closed
+- **Changes:**
+  - `SettingsWindowController` applies `brainAppearance` to its own window: synchronously at setup, so the first
+    open cannot flash, and on every change after, with `options: []`, so the moon works and a change made
+    while Brain is closed is already in place on reopening.
+  - Brain › Settings › Appearance gains a Brain appearance row, the only way back to Match macOS, and search
+    finds it by "dark mode", "light mode", "moon" and "theme".
+  - The notch, the panels and every other window are not touched: nothing else reads the key.
+  - `BrainAppearanceRulesTests`, with plants: only the controller and the boards set a window's `.appearance`, no
+    `NSApp.appearance` and no `preferredColorScheme`, the key has exactly its four readers, and the notch window's
+    own dark line stays.
+  - Sheets, popovers, menus and alerts under a forced appearance take a real window, and have not been seen.
+
+### 2026-11-01 - Brain goes full screen, and closes cleanly from there
+- **Developer label:** "more better fullscreen supported ui like a premium app"
+- **Agent label:** Claude Code (Opus 5.5) — the fixed root width and `.fullScreenPrimary` change together; a close waits for the exit
+- **Changes:**
+  - Brain opens at 1100×760, goes down to 820×560, and can enter full screen. The root's `.frame(width: 700)`
+    goes in the same commit as `.fullScreenPrimary`, in both places the window's behaviour is assigned, because
+    SwiftUI's size bridge would otherwise fight full screen's frame.
+  - A page stops at 720 pt, centred in the panel. Its `Form`'s scrollbar sits at the page's edge until Stage 4.
+  - The title bar is transparent and its title hidden, and the shell's title row lies under it. The window no
+    longer moves by its background, and it is no longer restorable, so it always reopens windowed.
+  - A close in full screen, by the close button, Command-W or `close()`, leaves full screen first and then
+    closes through the usual `windowWillClose`, so the content still comes out of the window. It toggles only
+    when no transition is running and never inside AppKit's callback, and reopening during the exit cancels it.
+  - Placing the window happens before it is ordered in, and clamps to the screen, or a bigger window jumps, and
+    one sized on a big display gets a negative origin on a laptop.
+  - `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide its own closed notch
+    under Hide set to Always.
+  - Boards: pages at 612 pt, the narrowest real panel; `shell`, `shellSettings` and `shellDeepLink` at 1100×760;
+    `shellSearch` and `shellSearchList` at 820×560; and a new `shellWide` at 1440×900, standing in for full screen.
+  - New rules, each proved against planted offenders: the full-screen close broken 20 more ways, `.fullScreenPrimary` in both
+    assignments, no fixed width at the root, the page cap, the title row, and the detector's pid filter.
+  - None of this has entered full screen: a board's window cannot, and nothing here may open a real one.
+
 ### 2026-11-01 - Brain's shell takes its review findings
 - **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the shell commit
 - **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each

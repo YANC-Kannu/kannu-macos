@@ -58,5 +58,7 @@ struct BrainShell<Sidebar: View, HeaderAccessory: View, Detail: View>: View {
             }
         }
         .background(SettingsTheme.paper)
+        // The title row lies under the transparent title bar, level with the traffic lights.
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
