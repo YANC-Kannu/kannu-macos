@@ -60,6 +60,17 @@ final class SettingsSearchRankingTests: XCTestCase {
         }
     }
 
+    /// Two tabs were renamed, and their old names stayed as keywords on one row of each.
+    func testTheOldTabNamesStillFindTheirTabs() throws {
+        let entries = try Self.indexEntries()
+        for (query, title) in [("agent security", "Security findings"), ("controls", "HUD style")] {
+            let titles = SettingsSearchRanking.ranked(entries, query: query, title: \.title, keywords: \.keywords).map(\.title)
+            XCTAssertTrue(titles.contains(title), "\(query) no longer offers \(title)")
+        }
+        let withoutTheKeyword = [Entry(title: "HUD style", keywords: ["inline"])]
+        XCTAssertTrue(SettingsSearchRanking.ranked(withoutTheKeyword, query: "controls", title: \.title, keywords: \.keywords).isEmpty)
+    }
+
     /// The suggestions are no longer cut to a fixed count; a long list scrolls.
     func testSuggestionsAreNotTruncated() throws {
         let source = try Self.settingsSource()

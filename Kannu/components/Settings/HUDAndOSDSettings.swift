@@ -359,7 +359,7 @@ struct HUDAndOSDSettingsView: View {
             // Third-party display integrations (shared across all HUD variants)
             ExternalDisplayIntegrationsSection()
         }
-        .navigationTitle("Controls")
+        .navigationTitle("HUD and OSD")
         .onAppear {
             accessibilityPermission.refreshStatus()
             if #unavailable(macOS 26.0), verticalHUDMaterial == .liquid {

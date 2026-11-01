@@ -39,7 +39,7 @@ enum LaunchPermissionStatus: Equatable {
 
 /// Owns Kannu's launch permissions: whether a feature may make the first touch that raises a
 /// permission's prompt (`mayTouch`), and the requests the onboarding's Permissions step and
-/// Brain › General › Permissions make, one dialog at a time. Features never ask on their own
+/// Brain › Settings › General › Permissions make, one dialog at a time. Features never ask on their own
 /// before onboarding is done, and never for a permission the user deferred.
 @MainActor
 final class LaunchPermissionManager: NSObject, ObservableObject {

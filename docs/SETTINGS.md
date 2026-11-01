@@ -48,12 +48,13 @@ Pages use components, components use the theme. A page names neither a colour no
 component already does.
 
 - **`DesignSystem/` holds one type per file**, each starting with the GPL block:
-  `SettingsTheme` (colours, fonts and control measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
-  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, and `settingsDesignSystem()`.
-- **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's detail
-  column and the snapshot boards both apply it, so they cannot drift, and nothing else sets the form
-  style beside it. The sidebar stays outside it, with its native links. The root has no
-  `.foregroundStyle`: that would recolour the labels of native prominent buttons and menus.
+  `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
+  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, and the
+  shell's own views (below).
+- **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
+  the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
+  it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
+  would recolour the labels of native prominent buttons and menus.
 - **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
   `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
 - **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
@@ -85,6 +86,36 @@ a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A 
 `DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
 `--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
 font token by name. Hover and press take a pointer, so no board shows them.
+
+## The shell and navigation
+
+`BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It
+takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab.
+
+- **Two lists, and no mode flag.** The product list ends at Settings and About; the settings list starts
+  with Back. Which one shows is read from the selected tab (`SettingsTab.group`), and `selectedTab` is
+  the only navigation state. So a search or a deep link moves the sidebar through the writers it already
+  had, with no path of its own. `lastProductTab` and `lastSettingsTab` remember the tab last left on each
+  list, which is where Back and the Settings row return to. A search's jumps write neither: the tab a query
+  started from is remembered, and the tabs it passes through while being typed are not.
+- **A query shows one flat list** of the matching tabs, with no Back row and no Settings row. Clearing it
+  returns to the list the selected tab is on. A deep link to a tab that list leaves out clears the query, so
+  the sidebar still shows the tab. The suggestions render inside the sidebar's column.
+- **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
+  sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
+  sits outside the page's `Form`, so it stays put while the page scrolls.
+- **The sidebar is a custom list, not `List(selection:)`**, which draws its own selection on macOS. So it
+  takes arrow keys itself and follows its own selection, and a row, Back and the Settings row each hand it
+  the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
+  and right is the Settings row. The focus stop is a background, so each row keeps its own ring under Full
+  Keyboard Access.
+- **The moon writes `brainAppearance`.** Nothing applies that to the window yet.
+
+`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellSearch,shellSearchList`
+draws the whole window at today's size: both lists, a deep link's scroll and ring, and a search with its
+suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
+once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
+arrow keys and hover take a real window.
 
 ## The content standard
 
@@ -176,7 +207,8 @@ section describes it, it does not define it.
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
   - The back row is a lone leading borderless `Button` with a chevron `Label`, alone in its own
     `Section` — the one sanctioned lone left-hanging button, because it is navigation, not an
-    action on a row. Nothing else takes this shape.
+    action on a row. Nothing else on a page takes this shape. The sidebar's Back row is shell chrome,
+    not a row of a page.
   - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
     a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
     opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the

@@ -24,7 +24,8 @@ import XCTest
 /// (`SettingsView`, `SettingsWindowController`, `settingsIconInNotch`). The views are not compiled
 /// into the logic target, so the rename is read from the source, the `LaunchGateRulesTests` way:
 /// every string literal under `Kannu/` that still says "Settings" (comments do not count) must be
-/// on the allowlist below, with the reason it does not mean Kannu's own window.
+/// on the allowlist below, with the reason it does not mean Kannu's own window. The one exception
+/// that does mean Brain is the sidebar row opening the settings list inside it (David, 2026-11-01).
 final class BrainNamingRulesTests: XCTestCase {
 
     private static let repoRoot = URL(fileURLWithPath: #filePath)
@@ -32,7 +33,8 @@ final class BrainNamingRulesTests: XCTestCase {
         .deletingLastPathComponent()   // repo root
 
     /// Never Kannu's window, wherever it appears: macOS's own app, in permission prompts and logs.
-    private static let allowedPhrases = ["System Settings"]
+    /// "Brain › Settings": a path to that sidebar row, which says Brain first.
+    private static let allowedPhrases = ["System Settings", "Brain › Settings"]
 
     private enum Match {
         case exactly(String)
@@ -70,6 +72,8 @@ final class BrainNamingRulesTests: XCTestCase {
         Allowed(file: "Kannu/components/Settings/HUDAndOSDSettings.swift",
                 literal: .containing("BetterDisplay's OSD integration is enabled in Settings"),
                 reason: "BetterDisplay's own Settings window"),
+        Allowed(file: "Kannu/components/Settings/SettingsView.swift", literal: .exactly("Settings"),
+                reason: "the sidebar row that opens the settings list inside Brain (David, 2026-11-01); the window itself stays Brain"),
         Allowed(file: "Kannu/components/Settings/ClipboardSettings.swift", literal: .exactly("Settings"),
                 reason: "the Clipboard section's header: that feature's own group of options inside Brain"),
         Allowed(file: "Kannu/components/Settings/SettingsPermissionCallout.swift", literal: .exactly("Open Settings"),
@@ -200,6 +204,13 @@ final class BrainNamingRulesTests: XCTestCase {
         XCTAssertTrue(literals.contains(Literal(line: 7, text: "one Setting")), "a literal inside an interpolation is read on its own")
         XCTAssertTrue(literals.contains(Literal(line: 7, text: #"count: \(…)"#)), "the interpolation does not end its literal")
         XCTAssertEqual(literals.last, Literal(line: 13, text: "after"), "lines are counted through comments and literals")
+    }
+
+    /// The phrase strips only itself: a second "Settings" in the same string is still found.
+    func testAPathThroughTheSettingsRowSaysBrainFirst() {
+        XCTAssertFalse(Self.saysSettings("Brain › Settings › General"))
+        XCTAssertTrue(Self.saysSettings("Brain › Settings, then Open Settings"))
+        XCTAssertTrue(Self.saysSettings("Settings › General"))
     }
 
     // MARK: - Scanning

@@ -75,6 +75,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "DevicesSettings.swift": 1,
         "DownloadsSettings.swift": 1,
         "SettingsHelpers.swift": 2,
+        "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
+        "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -115,7 +117,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 9,  // animation cards, their chips, the URL sheet
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
         "SecurityFindingRow.swift": 2,       // the severity badge chips
-        "SettingsView.swift": 6,             // sidebar chrome and search results
+        "SettingsView.swift": 1,             // a search suggestion's tab name
+        "SettingsSidebarRow.swift": 1,       // the BETA capsule
         "AppearanceSettings.swift": 3,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview
         "DevicesSettings.swift": 3,          // device cards
@@ -161,7 +164,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "NewTaskSheet.swift": 1,             // New Task is a sheet: a sheet pads its own content
         "PolicyRulesEditor.swift": 1,        // the Edit rules sheet: a sheet pads its own content
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 14,            // sidebar chrome
+        "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
+        "BrainShell.swift": 4,               // the shell's own insets
+        "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
+        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page's Form
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 6,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview

@@ -115,7 +115,7 @@ struct TasksSettings: View {
             // A page opens at its top.
             .id(path)
         }
-        .navigationTitle(Text(verbatim: enableTasks ? path.last.map(Self.title) ?? Self.overviewTitle : Self.overviewTitle))
+        .settingsPageTitle(enableTasks ? path.last.map(Self.title) ?? Self.overviewTitle : Self.overviewTitle)
         // Search and deep links land on the overview's rows, never inside a page; only All tasks'
         // own deep link opens it. Settings scrolled before the page changed, so the rebuilt page
         // scrolls to the row again. `initial`: the link may arrive before this tab is built.
@@ -208,7 +208,7 @@ struct TasksSettings: View {
 
     private static var overviewTitle: String { String(localized: "Tasks") }
 
-    /// What a page is called, in its back row's child and in the window's title.
+    /// What a page is called, in its back row's child and in the page's large title.
     static func title(of page: TasksPage) -> String {
         switch page {
         case .source(let source): return source.title

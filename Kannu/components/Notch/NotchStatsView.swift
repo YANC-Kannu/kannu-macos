@@ -344,7 +344,7 @@ struct NotchStatsView: View {
                         .font(.headline)
                         .foregroundColor(.primary)
                     
-                    Text("Enable graph visibility in Brain → Stats to view performance data.")
+                    Text("To view performance data, enable graph visibility in Brain › Settings › Stats.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
