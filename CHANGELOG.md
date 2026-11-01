@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's tabs take the names in the redesign plan
+- **Developer label:** Brain redesign plan: "Agents, Security, Usage…", "Live activities, Lock screen… HUD and OSD"
+- **Agent label:** Claude Code (Opus 5.5) — titles only, ids unchanged
+- **Changes:**
+  - Agent Security is Security, Controls is HUD and OSD, and Live Activities and Lock Screen take sentence case,
+    in the sidebar, in each page's large title and in each tab's `.navigationTitle`.
+  - The paths that name Security say so: the three security messages, the ADR policy prompt and `docs/ADR.md`.
+  - Searching the old words still finds the tab: "agent security" on Security findings, "controls" on HUD style.
+  - `BrainPathRulesTests` moves its head list, its fourteen titles and its message pins with the titles. The
+    section headers "Agent Security" and "Controls" stay: they name sections, not tabs.
+
 ### 2026-11-01 - Brain's sidebar becomes product pages plus a Settings list
 - **Developer label:** "product pages plus Settings. Clicking Settings swaps the sidebar to the settings list with a Back row"
 - **Agent label:** Claude Code (Opus 5.5) — `BrainShell` holds the layout; `selectedTab` stays the only navigation state

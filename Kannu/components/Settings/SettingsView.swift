@@ -70,14 +70,14 @@ enum SettingsTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .general: return String(localized: "General")
-        case .liveActivities: return String(localized: "Live Activities")
+        case .liveActivities: return String(localized: "Live activities")
         case .appearance: return String(localized: "Appearance")
-        case .lockScreen: return String(localized: "Lock Screen")
+        case .lockScreen: return String(localized: "Lock screen")
         case .media: return String(localized: "Media")
         case .devices: return String(localized: "Devices")
         case .extensions: return String(localized: "Extensions")
         case .timer: return String(localized: "Timer")
-        case .hudAndOSD: return String(localized: "Controls")
+        case .hudAndOSD: return String(localized: "HUD and OSD")
         case .battery: return String(localized: "Battery")
         case .stats: return String(localized: "Stats")
         case .clipboard: return String(localized: "Clipboard")
@@ -88,7 +88,7 @@ enum SettingsTab: String, CaseIterable, Identifiable {
         case .notes: return String(localized: "Notes")
         case .tasks: return String(localized: "Tasks")
         case .agentStatus: return String(localized: "Agents")
-        case .agentSecurity: return String(localized: "Agent Security")
+        case .agentSecurity: return String(localized: "Security")
         case .llmUsage: return String(localized: "Usage")
         case .about: return String(localized: "About")
         }
@@ -719,7 +719,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .hudAndOSD, title: "Color-coded volume display", keywords: ["volume", "color"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Color-coded volume display")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Smooth color transitions", keywords: ["gradient", "smooth"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Smooth color transitions")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Show percentages beside progress bars", keywords: ["percentages", "progress"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Show percentages beside progress bars")),
-            SettingsSearchEntry(tab: .hudAndOSD, title: "HUD style", keywords: ["inline", "compact"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "HUD style")),
+            SettingsSearchEntry(tab: .hudAndOSD, title: "HUD style", keywords: ["inline", "compact", "controls"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "HUD style")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Progressbar style", keywords: ["progress", "style"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Progressbar style")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Enable glowing effect", keywords: ["glow", "indicator"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Enable glowing effect")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Use accent color", keywords: ["accent", "color"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Use accent color")),
@@ -910,7 +910,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .agentStatus, title: "Reset traffic light colors", keywords: ["reset", "color", "traffic", "light", "default"], highlightID: SettingsTab.agentStatus.highlightID(for: "Reset traffic light colors")),
             SettingsSearchEntry(tab: .agentStatus, title: "Editor Hooks", keywords: ["agent", "cursor", "vscode", "copilot", "copilot cli", "codex", "claude", "antigravity", "gemini", "gemini cli", "qwen", "opencode", "plugin", "hook", "install", "integration"], highlightID: SettingsTab.agentStatus.highlightID(for: "Cursor Hook")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Connect ADR", keywords: ["adr", "uber", "security", "discovery", "sensor", "connect", "install", "uv", "pipx"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Connect ADR")),
-            SettingsSearchEntry(tab: .agentSecurity, title: "Security findings", keywords: ["security", "finding", "mcp", "unpinned", "plaintext", "undeclared", "acknowledge", "snooze", "shield"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Security findings")),
+            SettingsSearchEntry(tab: .agentSecurity, title: "Security findings", keywords: ["security", "agent security", "finding", "mcp", "unpinned", "plaintext", "undeclared", "acknowledge", "snooze", "shield"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Security findings")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Snapshot folder", keywords: ["snapshot", "folder", "directory", "adr", "discovery", "output"], highlightID: SettingsTab.agentSecurity.highlightID(for: "ADR advanced")),
             SettingsSearchEntry(tab: .agentSecurity, title: "ADR tools folder", keywords: ["adr", "tools", "folder", "path", "uv", "pipx", "sensor", "discovery", "install", "not found"], highlightID: SettingsTab.agentSecurity.highlightID(for: "ADR advanced")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Let Kannu run scans", keywords: ["scan", "adr", "discovery", "automatic", "daily", "schedule"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Let Kannu run scans")),

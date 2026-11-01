@@ -425,7 +425,7 @@ struct LockScreenSettings: View {
         .onAppear(perform: enforceLockScreenGlassConsistency)
         .onChange(of: lockScreenGlassStyle) { _, _ in enforceLockScreenGlassConsistency() }
         .onChange(of: lockScreenGlassCustomizationMode) { _, _ in enforceLockScreenGlassConsistency() }
-        .navigationTitle("Lock Screen")
+        .navigationTitle("Lock screen")
     }
 }
 
