@@ -4,6 +4,54 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - Brain's theme takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the theme commit
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each
+- **Changes:**
+  - A titled `SettingsActionRow` takes the native row again, so wide buttons wrap under the title. "Get a
+    policy" had squeezed its description to about 100 pt.
+  - The root moves to the detail column, so the sidebar keeps its native links. `.formStyle(.grouped)` goes
+    from `ClipboardSettings`, `ScreenAssistantSettings` and `UsageSettings`, which inherit it.
+  - A button dims while pressed, and a switch owns its disabled dim instead of relying on `.plain`.
+  - A disclosure's button starts after its title, because selectable text inside a button fights for the
+    click. The chevron and the empty space beside the title toggle it; the title's text does not.
+  - Allow under General keeps the system blue, since its white label is 2.63:1 on the eye blue in dark. The
+    light `destructive` darkens to `0xBC3226`, 4.61:1 on the hover fill. "Watch for freezes" names its
+    switch for VoiceOver.
+  - Lock Screen's and Media's disabled sections drop their extra 0.5 opacity, which dimmed controls twice.
+  - `SettingsDesignSystemRulesTests` now holds the opt-outs that had no rule (`Link`s, hidden labels, All
+    tasks' disclosures, bare values, the segmented picker) and plants an offender for every rule that had
+    none. Its chain check replaces "within two lines", where a neighbour could launder an offender, and
+    the value scan reads ternaries and the sizes it missed. New rules: one form style, the board names
+    every colour and font, no `.borderedProminent` under Settings.
+  - Recorded late from the commit before the theme: the layout and highlight scans walk every folder under
+    Settings, all three fail on a repeated file name, and the layout scanners count the small theme tokens
+    and named fonts.
+  - Two whitespace-only lines go back to what the base has.
+
+### 2026-11-01 - Brain gets a theme, and its toggles and buttons their own styles
+- **Developer label:** Brain redesign Stage 2: "`SettingsTheme`, the shared styles"
+- **Agent label:** Claude Code (Opus 5.5) — one root modifier shared with the snapshot boards
+- **Changes:**
+  - New `Kannu/components/Settings/DesignSystem/`: `SettingsTheme` (paper, ink, the eye blue, fonts that
+    use Geist when bundled and the system font at the same size when not), `SettingsToggleStyle`,
+    `SettingsButtonStyle`, `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, and
+    `settingsDesignSystem()`, the one root the window and the snapshot boards both apply.
+  - Every toggle, default button, labelled row and disclosure under Brain takes the new styles. The
+    highlight pulse and descriptions read the theme, and the two monospaced values read its mono font.
+  - Sites that must stay as they are say so: a row's switch hides its label, eight default actions and
+    seven main actions are primary, six `Link`s stay links, `Connect…` keeps its chevron, the checkboxes,
+    the radios and the animation editor's segments keep their layout, All tasks' long groups keep the
+    native disclosure, and six bare values stay secondary.
+  - A button keeps its width and one line, as a native one does: a row had broken "Acknowledgements" in two.
+  - The root's font replaced what a grouped `Form` gives its headers and footers, so
+    `SettingsSectionHeader` and `SettingsFooter` say theirs (the new `sectionTitle`, and `description`).
+  - The `designSystem` snapshot board renders every resting and disabled state, and every colour and
+    font token by name, each run writes `fonts.txt`, and the `policyRules` board renders at the sheet's own 560 instead of cropping it at 490.
+  - New `SettingsDesignSystemRulesTests`, each rule proved against planted offenders. The layout, highlight
+    and animation scans assert that they read `DesignSystem/`. `docs/SETTINGS.md` gains the design system,
+    and `docs/REGRESSIONS.md` entry 22 an addendum.
+
 ### 2026-11-01 - SettingsView is split into one file per tab
 - **Developer label:** Brain redesign Stage 2: "split the 8,027-line `SettingsView.swift` into one file per tab, with no behaviour change"
 - **Agent label:** Claude Code (Opus 5.5) — a scripted move, so each later stage's edits are small and reviewable

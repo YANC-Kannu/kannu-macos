@@ -1541,6 +1541,9 @@ banned, since a stuck animator now only waits for the next reopening. Not guarde
 a minimized or fully covered Brain, and the real app itself. The harness compiles the real controller
 and views, not `SettingsView`, so no number here comes from Kannu running with a real page.
 
+**2026-11-01 addendum: Brain's theme and shared styles add no `onAppear`, no `.task` and no repeating
+animator.** Their animations are bounded eases, and `SettingsAnimationRulesTests` now reads `DesignSystem/`.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

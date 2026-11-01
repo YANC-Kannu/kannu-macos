@@ -84,6 +84,8 @@ struct Media: View {
                     VStack(alignment: .leading, spacing: 2) {
                         SettingsFooter("YouTube Music requires this third-party app to be installed: ")
                         Link("https://github.com/th-ch/youtube-music", destination: URL(string: "https://github.com/th-ch/youtube-music")!)
+                            .buttonStyle(.link)
+                            .font(SettingsTheme.description)
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
@@ -310,7 +312,6 @@ struct Media: View {
                 SettingsFooter("These controls mirror the Lock Screen tab.")
             }
             .disabled(!showStandardMediaControls)
-            .opacity(showStandardMediaControls ? 1 : 0.5)
 
             // A radio group: the options are too long for a menu at this width.
             Section {
@@ -322,6 +323,7 @@ struct Media: View {
                     Text("Hide DynamicIsland Options")
                 }
                 .pickerStyle(.radioGroup)
+                .labeledContentStyle(.automatic)
                 .labelsHidden()
                 .settingsHighlight(id: highlightID("Hide DynamicIsland Options"))
                 .onChange(of: hideNotchOption) {

@@ -315,7 +315,7 @@ struct TaskAddRow: View {
     var body: some View {
         SettingsActionRow("Add a task", description: "Title, estimate, tags and a reminder.") {
             Button("New Task") { context.sheet.wrappedValue = .newTask(listFilter: listFilter) }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .disabled(!manager.isReady)
         }
     }
