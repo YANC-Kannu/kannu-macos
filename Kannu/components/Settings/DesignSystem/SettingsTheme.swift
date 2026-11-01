@@ -60,12 +60,20 @@ enum SettingsTheme {
         ? .custom("GeistMono-Regular", size: 13)
         : .system(size: 13, weight: .regular, design: .monospaced)
 
+    // MARK: - The window
+
+    static let windowDefaultWidth: CGFloat = 1100
+    static let windowDefaultHeight: CGFloat = 760
+    static let windowMinWidth: CGFloat = 820
+    static let windowMinHeight: CGFloat = 560
+    /// A page's widest, or a row would stretch across a full-screen panel.
+    static let pageMaxWidth: CGFloat = 720
+
     // MARK: - The shell
 
     /// The title bar's height with no toolbar, so the moon centres on the traffic lights.
     static let titleRowHeight: CGFloat = 28
-    /// Leaves a 492 pt panel in today's 700 pt window. The search suggestions render inside this
-    /// column, and their text needs the room.
+    /// The search suggestions render inside this column, and their text needs the room.
     static let sidebarWidth: CGFloat = 200
     static let panelInset: CGFloat = 8
     static let panelRadius: CGFloat = 14
