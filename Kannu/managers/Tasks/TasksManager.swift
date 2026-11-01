@@ -896,8 +896,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// passed, unless ticked again before then. Local tasks only (`TaskDoneTicks.canTick`).
     func toggleDone(_ taskID: UUID) {
         if doneTicks.isTicked(taskID) {
-            doneTickWork.removeValue(forKey: taskID)?.cancel()
-            _ = doneTicks.toggle(taskID)
+            cancelDoneTick(taskID)
             return
         }
         guard isReady, let task = tasks.first(where: { $0.id == taskID }), TaskDoneTicks.canTick(task),
@@ -913,10 +912,18 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         DispatchQueue.main.asyncAfter(deadline: .now() + TaskDoneTicks.undoSeconds, execute: work)
     }
 
+    /// The undo window ends with nothing marked: the task was ticked again, or went somewhere else
+    /// first, and the end of the window must not mark it done there.
+    private func cancelDoneTick(_ taskID: UUID) {
+        doneTickWork.removeValue(forKey: taskID)?.cancel()
+        if doneTicks.isTicked(taskID) { _ = doneTicks.toggle(taskID) }
+    }
+
     /// Into the archive at once, whatever the source: for a remote task this is its delete, since
     /// a deleted one would only come back on the next sync. Stops the timer first if it is timed.
     /// It stays archived even if its source lists it again; Restore puts it back.
     func archive(_ taskID: UUID) {
+        cancelDoneTick(taskID)
         if timing?.taskID == taskID { stopTiming() }
         update(taskID) {
             $0.visibility = .archived
@@ -928,6 +935,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Out of the archive or Recently closed, back into the task order where it was. A remote
     /// task its source no longer lists goes back to Recently closed at the next complete sync.
     func reopen(_ taskID: UUID) {
+        cancelDoneTick(taskID)
         update(taskID) {
             $0.visibility = .active
             $0.closedAt = nil
@@ -940,6 +948,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func delete(_ taskID: UUID) {
         guard isReady, timing?.taskID != taskID, pendingLink?.taskID != taskID,
               let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return }
+        cancelDoneTick(taskID)
         tasks.removeAll { $0.id == taskID }
         drafts.removeAll { $0.taskID == taskID }
         persist()

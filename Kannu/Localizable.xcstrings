@@ -33040,7 +33040,44 @@
       }
     },
     "Just the essentials for everyday tasks, with fewer features switched on." : {
-
+      "localizations" : {
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일상적인 작업에 꼭 필요한 기능만 제공하며, 켜져 있는 기능이 더 적습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alleen het essentiële voor dagelijkse taken, met minder ingeschakelde functies."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Только самое необходимое для повседневных задач: включено меньше функций."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เฉพาะสิ่งจำเป็นสำหรับงานประจำวัน โดยเปิดใช้งานฟีเจอร์น้อยลง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Günlük görevler için yalnızca temel öğeler, daha az özellik açık."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅提供日常任务所需的基本功能，开启的功能更少。"
+          }
+        }
+      }
     },
     "Kannu" : {
       "comment" : "The name of the app.",

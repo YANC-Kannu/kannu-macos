@@ -146,6 +146,13 @@ final class NotchInteractionTests: XCTestCase {
         XCTAssertEqual(Self.closeProblems(in: try Self.contentViewCode()), [])
     }
 
+    /// Three closes do not wait on the pointer check's loop: that loop itself, a click outside, and
+    /// the swipe. A new direct one would pass the scanner above unseen, so it is an edit here.
+    func testTheDirectClosesAreTheKnownThree() throws {
+        let closes = try Self.contentViewCode().components(separatedBy: "\n").filter { $0.contains("vm.close()") }
+        XCTAssertEqual(closes.count, 3, "a new direct vm.close(): go through closeWhenPointerLeaves, or say why not")
+    }
+
     func testTheCloseScannerCatchesPlantedOffenders() {
         let fixed = """
             .onChange(of: vm.shouldRecheckHover) { _, _ in

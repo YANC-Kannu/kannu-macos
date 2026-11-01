@@ -2264,9 +2264,8 @@ struct ContentView: View {
                         }
 
                         vm.dropEvent = false
-                        if !shouldPreventAutoClose() {
-                            vm.close()
-                        }
+                        // A drag that ended with no drop: the notch stays while the pointer is on it.
+                        closeWhenPointerLeaves(.pointerLeft)
                     }
                 }
         } else {

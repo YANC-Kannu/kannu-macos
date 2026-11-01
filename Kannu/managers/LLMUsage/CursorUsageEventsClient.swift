@@ -34,6 +34,7 @@ struct CursorUsageEventsClient {
         var rejectedNoTimestamp = 0
         var rejectedStale = 0
         var rejectedZeroTokens = 0
+        var acceptedEvents = 0
         var firstEventKeys: [String] = []
         var firstTokenKeys: [String] = []
 
@@ -95,6 +96,7 @@ struct CursorUsageEventsClient {
                     rejectedZeroTokens += 1
                     continue
                 }
+                acceptedEvents += 1
 
                 let costUSD = eventCostUSD(event: event, model: model, counts: counts)
 
@@ -135,7 +137,7 @@ struct CursorUsageEventsClient {
         // not a failure — returning nil here made light-usage weeks render as
         // "Token totals unavailable". Log enough (key names only, never values)
         // to diagnose a future Cursor schema change, which would also land here.
-        if snapshot.week.totalTokens == 0 && snapshot.week.costUSD == 0 {
+        if acceptedEvents == 0 {
             Self.log.notice("""
             usage-events: \(totalEvents) events, 0 usable this week \
             (noTimestamp=\(rejectedNoTimestamp) stale=\(rejectedStale) zeroTokens=\(rejectedZeroTokens)) \

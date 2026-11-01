@@ -166,6 +166,16 @@ final class UsageForecastTests: XCTestCase {
                      "another provider's window says nothing about this one")
     }
 
+    func testAValueWithNoResetForecastsNothingPastItsExpiry() {
+        func outlook(expiresIn seconds: TimeInterval) -> F.Outlook {
+            let current = UsageWindowReading(provider: "claude", key: "five_hour", label: "5-hour", percent: 70, resetsAt: nil,
+                                             severity: nil, observedAt: now, notAfter: now.addingTimeInterval(seconds))
+            return F.outlook(series(end: 70, perHour: 20, count: 6, stepMinutes: 10, resetsIn: nil), current: current, now: now)
+        }
+        XCTAssertEqual(outlook(expiresIn: 3600), .steady, "full in 90 minutes, gone in 60")
+        XCTAssertEqual(outlook(expiresIn: 2 * 3600), .hitsLimit(at: now.addingTimeInterval(1.5 * 3600)))
+    }
+
     func testClaudeReadingsCarryKeysAndLabels() {
         let snapshot = ClaudeUsageSnapshot(windows: [
             .init(key: "five_hour", percent: 42, resetsAt: now.addingTimeInterval(3600)),

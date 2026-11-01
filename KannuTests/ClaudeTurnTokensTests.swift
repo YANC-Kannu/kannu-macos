@@ -179,6 +179,18 @@ final class ClaudeTurnTokensTests: XCTestCase {
         XCTAssertEqual(acc.cacheRead, 831_000, "its tokens still count")
     }
 
+    func testALaterLineOfAnOlderCallLeavesTheContextAlone() {
+        var acc = accumulator()
+        acc.consume(assistant("a", input: 5, cacheWrite: 1000, cacheRead: 400_000))
+        acc.consume(assistant("b", input: 2, cacheWrite: 300, cacheRead: 401_000))
+        acc.consume(assistant("a", input: 5, cacheWrite: 1000, cacheRead: 400_000, output: 90))
+        XCTAssertEqual(acc.context, 401_302, "still the latest call's")
+        XCTAssertEqual(acc.output, 110, "though its later output counts")
+        // A later line of the latest call is that call's own.
+        acc.consume(assistant("b", input: 2, cacheWrite: 300, cacheRead: 401_000, output: 40))
+        XCTAssertEqual(acc.context, 401_302)
+    }
+
     func testAPartialLineWaitsForItsNewline() {
         let record = assistant("a")
         var acc = accumulator()

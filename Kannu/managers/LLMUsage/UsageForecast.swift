@@ -181,6 +181,8 @@ enum UsageForecast {
             }
             return .hitsLimit(at: eta)
         }
+        // A value with no reset says nothing past its expiry, so no "full by" beyond it.
+        if let notAfter = current.notAfter, eta >= notAfter { return .steady }
         return eta.timeIntervalSince(now) > horizonWithoutReset ? .steady : .hitsLimit(at: eta)
     }
 
