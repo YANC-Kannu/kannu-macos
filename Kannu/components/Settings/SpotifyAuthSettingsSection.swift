@@ -22,6 +22,7 @@ import SwiftUI
 
 struct SpotifyAuthSettingsSection: View {
     @State private var spotifySPDCCookie = ""
+    @State private var loadedStoredCookie = false
     @ObservedObject private var spotifyAuthManager = SpotifyAuthManager.shared
     @State private var showingLoginSheet = false
 
@@ -123,6 +124,10 @@ struct SpotifyAuthSettingsSection: View {
             }
         }
         .onAppear {
+            // Once per visit to the page: this runs again on reopening Brain, and a cookie typed but
+            // not yet validated is saved nowhere else.
+            guard !loadedStoredCookie else { return }
+            loadedStoredCookie = true
             spotifySPDCCookie = SecureSecretsStore.value(for: .spotifySPDCCookie)
         }
     }

@@ -312,8 +312,12 @@ private struct SettingsHighlightModifier: ViewModifier {
             )
             .padding(-4)
             .shadow(color: Color.accentColor.opacity(isActive ? 0.25 : 0), radius: animatePulse ? 8 : 2)
+            // Bounded, never `.repeatForever` (docs/REGRESSIONS.md, entry 22). At the clear `isActive`
+            // moves the stroke's colour with no animation, then `animatePulse` moves nothing the
+            // colour reads, so nothing ever replaced its repeating animator. It ran on behind the
+            // closed window, which is only ordered out, at 40-60 % CPU until Kannu quit.
             .animation(
-                isActive ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true) : .default,
+                isActive ? .easeInOut(duration: 0.8).repeatCount(3, autoreverses: true) : .default,
                 value: animatePulse
             )
     }
@@ -3508,7 +3512,7 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
     let size: CGSize
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: NSRect(origin: .zero, size: size))
+        let view = WindowFollowingView(frame: NSRect(origin: .zero, size: size))
         view.wantsLayer = true
 
         let layer = AVPlayerLayer()
@@ -3516,6 +3520,8 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
         layer.frame = view.bounds
         view.layer?.addSublayer(layer)
         context.coordinator.attach(layer: layer, url: url)
+        let coordinator = context.coordinator
+        view.onWindowChange = { inWindow in coordinator.setPlaying(inWindow) }
         return view
     }
 
@@ -3529,6 +3535,25 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
         func attach(layer: AVPlayerLayer, url: URL) {
             controller = SettingsLoopingPlayerController(url: url, autoPlay: true)
             layer.player = controller?.player
+        }
+
+        func setPlaying(_ playing: Bool) {
+            if playing {
+                controller?.play()
+            } else {
+                controller?.pause()
+            }
+        }
+    }
+
+    /// A player runs on at full cost with its view out of the window, unlike SwiftUI's own
+    /// animations, so it has to be stopped by hand when Brain closes (docs/REGRESSIONS.md, entry 22).
+    private final class WindowFollowingView: NSView {
+        var onWindowChange: ((Bool) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window != nil)
         }
     }
 }
