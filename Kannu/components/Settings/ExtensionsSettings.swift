@@ -78,7 +78,6 @@ struct ExtensionsSettingsView: View {
                 if Defaults[.enableExtensionNotchExperiences] {
                     // One row each; they used to share a single packed row.
                     Defaults.Toggle(String(localized:"Show extension tabs"), key: .enableExtensionNotchTabs)
-                    Defaults.Toggle(String(localized:"Allow minimalistic overrides"), key: .enableExtensionNotchMinimalisticOverrides)
                     Defaults.Toggle(String(localized:"Allow interactive web content"), key: .enableExtensionNotchInteractiveWebViews)
                 }
                 

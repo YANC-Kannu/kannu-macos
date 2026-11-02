@@ -56,9 +56,12 @@ final class UsageAlertManager: ObservableObject {
 
     func start() {
         cancellables.removeAll()
-        CursorAgentStatusMonitor.shared.$claudeUsage
-            .sink { [weak self] snapshot in
-                self?.claudeReadings = UsageWindowReading.readings(fromClaude: snapshot, now: Date())
+        let monitor = CursorAgentStatusMonitor.shared
+        monitor.$claudeUsage.combineLatest(monitor.$claudeSecondOrganizationUsage)
+            .sink { [weak self] first, second in
+                let now = Date()
+                self?.claudeReadings = UsageWindowReading.readings(fromClaude: first, now: now)
+                    + UsageWindowReading.readings(fromClaude: second, now: now)
                 self?.evaluate()
             }
             .store(in: &cancellables)
@@ -117,7 +120,8 @@ final class UsageAlertManager: ObservableObject {
             out.append(UsageWindowReading(provider: provider, key: key,
                                           label: label ?? UsageWindowReading.label(provider: provider, key: key),
                                           percent: limit.fraction * 100, resetsAt: limit.resetsAt,
-                                          severity: limit.severity, observedAt: observedAt))
+                                          severity: limit.severity, observedAt: observedAt,
+                                          notAfter: limit.notAfter))
         }
         add("session", session)
         add(weekKey, week, label: weekLabel)
@@ -159,7 +163,8 @@ final class UsageAlertManager: ObservableObject {
         scheduleResetRecheck(now: now)
     }
 
-    /// Nothing republishes when a window resets, so the gauge and "resumes at" would outlive it.
+    /// Nothing republishes when a window resets or a value's expiry passes, so the gauge and
+    /// "resumes at" would outlive it.
     private func scheduleResetRecheck(now: Date) {
         resetTask?.cancel()
         resetTask = nil

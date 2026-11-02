@@ -1181,7 +1181,7 @@ struct NoteEditorView: View {
                 Button(action: onSave) {
                     Text("Done")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
-                        .foregroundStyle(NoteItem.colors[colorIndex])
+                        .foregroundStyle(NoteItem.color(at: colorIndex))
                 }
                 .buttonStyle(PlainButtonStyle())
             }

@@ -22,13 +22,7 @@ enum ProviderID: String, CaseIterable, Identifiable {
     }
 }
 
-struct UsageTotals: Equatable {
-    var inputTokens: Int = 0
-    var outputTokens: Int = 0
-    var costUSD: Double = 0
-    var hasUnpricedModel: Bool = false
-    var totalTokens: Int { inputTokens + outputTokens }
-}
+// `UsageTotals` lives beside `UsageRecord` in ClaudeUsageLine.swift, which the logic test target compiles.
 
 struct ModelUsage: Equatable, Identifiable {
     let model: String
@@ -45,6 +39,9 @@ struct UsageLimit: Equatable {
     /// When the value was read, when the source says. A Claude window can come from a desktop
     /// sample days old; the card shows that age rather than passing the number off as current.
     var observedAt: Date? = nil
+    /// The latest moment the value can still describe a running window, when it has no reset
+    /// (`ClaudeUsageSnapshot.Window.notAfter`); the card drops it then, as it does at a reset.
+    var notAfter: Date? = nil
     var fraction: Double { limit > 0 ? min(used / limit, 1) : 0 }
 }
 
@@ -100,6 +97,9 @@ struct UsageSnapshot: Equatable {
     var session: UsageTotals = .init()
     var today: UsageTotals = .init()
     var week: UsageTotals = .init()
+    /// True when `week` is the plan's own weekly window (Claude's weekly reset less seven days);
+    /// false when it is the last 7 × 24 hours, which the card labels as such.
+    var weekFollowsPlan: Bool = false
     var sessionLimit: UsageLimit? = nil // 5h window quota
     var weekLimit: UsageLimit? = nil // 7d all-models window quota (Cursor: the billing cycle)
     /// The provider's own name for the `weekLimit` bar (Cursor's "Auto" pool); nil keeps the
@@ -133,6 +133,13 @@ struct UsageSnapshot: Equatable {
     /// expired token) rather than a transient error (429, 500+).
     /// Used by `isFatallyUnconfigured` to drop the card from the Usage tab.
     var isAuthFailure: Bool = false
+    /// Keeps this card's forecast series apart from another organization's under the same window
+    /// keys (`ClaudeUsageSnapshot.readingScope`).
+    var readingScope: String? = nil
+    /// Further cards of this provider: Claude's second organization.
+    var extraCards: [UsageSnapshot] = []
+    /// Limits and nothing else: token totals, the status row and Refresh stay on the first card.
+    var limitsOnly: Bool = false
 
     /// True when the provider has nothing useful to show AND the reason is a definitive
     /// auth failure (not signed-in / expired token / 401 / 403) — NOT a transient error

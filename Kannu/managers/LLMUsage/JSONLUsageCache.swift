@@ -66,8 +66,11 @@ struct JSONLUsageScanStats: Equatable {
 /// transcript writer is known to, but such a line is parsed too rather than skipped. Only the five escapes of the key's own
 /// letters count, so the `\u001b` of a tool output's terminal colours never costs a parse.
 ///
-/// Cross-file de-duplication is unchanged: files in listing order, lines in file order, the week
-/// guard first, then the first record of each `dedupKey` (message id + request id) wins.
+/// Cross-file de-duplication: files in listing order, lines in file order, the week guard first, then
+/// one record per `dedupKey` (message id + request id), at the place and time of its first line, with
+/// each count the largest any of its lines reports (`UsageRecord.merging`). The first line alone is
+/// not enough: Claude Code 2.1.219–2.1.304 wrote a subagent message's first line mid-stream, with an
+/// output of 2–16 tokens, and its real output later — 1.09 M output tokens (23 %) of one week lost.
 ///
 /// Not thread-safe. `records(files:now:)` confines it to its own serial utility queue (hence
 /// `@unchecked Sendable`); tests call `refresh` directly from one thread.
@@ -93,7 +96,7 @@ final class JSONLUsageCache: @unchecked Sendable {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "UsageAggregator")
 
     struct Refresh {
-        /// The records that count, in listing then line order: inside the week, first of each key.
+        /// The records that count, in listing then line order: inside the week, one per key.
         let records: [UsageRecord]
         let stats: JSONLUsageScanStats
     }
@@ -161,13 +164,19 @@ final class JSONLUsageCache: @unchecked Sendable {
         }
         entries = entries.filter { listed.contains($0.key) }
 
-        var seen = Set<String>()
+        var position: [String: Int] = [:]
         var counted: [UsageRecord] = []
         func admit(_ record: UsageRecord) {
             // Window guard before the dedup claim, as before: a record outside the week must not
             // claim a key that an in-window duplicate of the same request still needs.
             guard record.timestamp >= weekStart else { return }
-            if let key = record.dedupKey, !seen.insert(key).inserted { return }
+            if let key = record.dedupKey {
+                if let index = position[key] {
+                    counted[index] = counted[index].merging(record)
+                    return
+                }
+                position[key] = counted.count
+            }
             counted.append(record)
         }
         for file in files {

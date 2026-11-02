@@ -53,6 +53,18 @@ final class CursorUsageEventDecoderTests: XCTestCase {
         XCTAssertEqual(counts, CursorUsageEventDecoder.TokenCounts(input: 1200, output: 34, cacheWrite: 5, cacheRead: 600))
     }
 
+    /// The card's split, the same for every provider: Cursor's input (which holds no cache tokens) is
+    /// the uncached input, its cache reads are kept apart and stay out of the headline.
+    func testTheCardSplitKeepsCacheReadsOutOfTheHeadline() {
+        let counts = CursorUsageEventDecoder.TokenCounts(input: 1200, output: 34, cacheWrite: 5, cacheRead: 600)
+        var totals = UsageTotals()
+        counts.add(to: &totals)
+        counts.add(to: &totals)
+        XCTAssertEqual(totals, UsageTotals(uncachedInputTokens: 2400, cacheWriteTokens: 10, cacheReadTokens: 1200,
+                                           outputTokens: 68))
+        XCTAssertEqual(totals.totalTokens, 2400 + 10 + 68)
+    }
+
     func testMalformedValuesDecodeToZero() {
         let fixture = event(#"{"tokenUsage":{"inputTokens":"abc","outputTokens":null,"cacheReadTokens":{"nested":1}}}"#)
         XCTAssertTrue(CursorUsageEventDecoder.tokenCounts(in: fixture).isEmpty)

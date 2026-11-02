@@ -1196,9 +1196,8 @@ class MusicManager: ObservableObject {
 
     private func updateSneakPeek() {
         let standardControlsEnabled = Defaults[.showStandardMediaControls]
-        let minimalisticEnabled = Defaults[.enableMinimalisticUI]
 
-        guard standardControlsEnabled || minimalisticEnabled else { return }
+        guard standardControlsEnabled else { return }
 
         if isPlaying && Defaults[.enableSneakPeek] {
             if Defaults[.sneakPeekStyles] == .standard {

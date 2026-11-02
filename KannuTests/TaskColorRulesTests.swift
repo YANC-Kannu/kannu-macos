@@ -270,7 +270,6 @@ extension TaskColorRulesTests {
         "Kannu/ContentView.swift",
         "Kannu/components/Timer/TimerIconAnimation.swift",
         "Kannu/components/Timer/TimerPopover.swift",
-        "Kannu/components/Notch/MinimalisticMusicPlayerView.swift",
         "Kannu/components/LockScreen/LockScreenTimerWidget.swift",
     ]
     static let presetColorReads = ["activePreset?.color", "activePreset!.color", "activePresetColor", "$0.id == presetId"]

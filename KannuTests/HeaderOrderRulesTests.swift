@@ -26,10 +26,10 @@ import XCTest
 /// moves. `KannuHeader` is a view, not in the logic target, so the order is read from the source
 /// (the `TasksPopoverRulesTests` idiom):
 ///
-/// - inside the open, non-minimalistic block, left to right: the screen-recording indicator, the
-///   Do Not Disturb indicator, the Usage tab's Refresh button, the Tasks button (they come and go),
-///   then the clipboard button, the timer popover button and the Brain button (always there);
-/// - the battery block (minimalistic and normal) comes after that block and is last in the row;
+/// - inside the row's open block, left to right: the screen-recording indicator, the Do Not
+///   Disturb indicator, the Usage tab's Refresh button, the Tasks button (they come and go), then
+///   the clipboard button, the timer popover button and the Brain button (always there);
+/// - the battery block comes after that block and is last in the row;
 /// - the Refresh button shows and hides with a plain fade, driven by an animation on its own gate.
 ///
 /// Each detector has a planted-offender test, so a scanner that stops matching fails instead of
@@ -41,11 +41,13 @@ final class HeaderOrderRulesTests: XCTestCase {
     static let headerPath = "Kannu/components/Notch/KannuHeader.swift"
 
     static let rowMarker = "HStack(spacing: 4) {"
-    static let openMarker = "if vm.notchState == .open && !enableMinimalisticUI {"
+    /// Not unique in the header: the same condition gates a layout spacer before the row, so the
+    /// open block is looked for inside the row only (`openBlockRange`).
+    static let openMarker = "if vm.notchState == .open {"
     static let batteryMarker = "if vm.notchState == .open && showBatteryIndicator {"
     static let refreshMarker = "if coordinator.currentView == .llmUsage {"
     static let refreshAnimation = ".animation(.easeInOut(duration: 0.15), value: coordinator.currentView == .llmUsage)"
-    static let batteryViews = ["KannuBatteryView(", "MinimalisticBatteryView("]
+    static let batteryViews = ["KannuBatteryView("]
 
     /// Items that come and go, in their left-to-right order.
     static let dynamicItems: [(name: String, marker: String)] = [
@@ -102,28 +104,34 @@ final class HeaderOrderRulesTests: XCTestCase {
 
         let withoutRecording = Plant.order.filter { $0 != Plant.recording }
         XCTAssertEqual(Self.orderProblems(in: Plant.header(withoutRecording)),
-                       ["the screen-recording indicator is not in the open, non-minimalistic header"])
+                       ["the screen-recording indicator is not in the open header"])
         XCTAssertEqual(Self.orderProblems(in: Plant.header(withoutRecording, beforeOpen: Plant.recording)),
-                       ["the screen-recording indicator is not in the open, non-minimalistic header"])
+                       ["the screen-recording indicator is not in the open header"])
         XCTAssertEqual(Self.orderProblems(in: Plant.header(Plant.order + [Plant.brain])),
                        ["the Brain button appears more than once"])
-        XCTAssertEqual(Self.orderProblems(in: Plant.header(open: "if vm.notchState == .open {")),
-                       ["the header has no open, non-minimalistic block"])
+
+        // The spacer before the row shares the open block's condition. The scanner must not
+        // mistake it for the open block, with the row's own block present or gone.
+        XCTAssertEqual(Self.orderProblems(in: Plant.header(beforeRow: Plant.spacer)), [])
+        XCTAssertEqual(Self.orderProblems(in: Plant.header(beforeRow: Plant.spacer, open: "if true {")),
+                       ["the header's row has no open block"])
+        XCTAssertEqual(Self.orderProblems(in: Plant.header(open: "if true {")),
+                       ["the header's row has no open block"])
     }
 
     func testTheBatteryScannerCatchesPlantedOffenders() {
         XCTAssertEqual(Self.orderProblems(in: Plant.header(battery: "")), ["the header has no battery block"])
-        let lostView = Plant.battery.replacingOccurrences(of: "MinimalisticBatteryView(level: 1)", with: "EmptyView()")
+        let lostView = Plant.battery.replacingOccurrences(of: "KannuBatteryView(level: 1)", with: "EmptyView()")
         XCTAssertNotEqual(lostView, Plant.battery, "the plant did not take")
         XCTAssertEqual(Self.orderProblems(in: Plant.header(battery: lostView)),
-                       ["the battery block lost MinimalisticBatteryView("])
+                       ["the battery block lost KannuBatteryView("])
         XCTAssertEqual(Self.orderProblems(in: Plant.header(afterBattery: #"Text("x")"#)),
                        ["the battery is not last in the row"])
         let first = Self.orderProblems(in: Plant.header(beforeOpen: Plant.battery, battery: ""))
-        XCTAssertTrue(first.contains("the battery is not after the open, non-minimalistic header"), "\(first)")
+        XCTAssertTrue(first.contains("the battery is not after the open header"), "\(first)")
         XCTAssertTrue(first.contains("the battery is not last in the row"), "\(first)")
         let inside = Self.orderProblems(in: Plant.header(Plant.order + [Plant.battery], battery: ""))
-        XCTAssertTrue(inside.contains("the battery is not after the open, non-minimalistic header"), "\(inside)")
+        XCTAssertTrue(inside.contains("the battery is not after the open header"), "\(inside)")
     }
 
     func testTheRefreshFadeScannerCatchesPlantedOffenders() {
@@ -145,12 +153,12 @@ final class HeaderOrderRulesTests: XCTestCase {
 
     // MARK: - Scanners
 
-    /// Every item once, inside the open, non-minimalistic block; what comes and goes left of what is
-    /// always there; each group in its own order; the battery block after that block and last in the
-    /// row, carrying both battery views.
+    /// Every item once, inside the row's open block; what comes and goes left of what is always
+    /// there; each group in its own order; the battery block after that block and last in the row,
+    /// carrying the battery view.
     static func orderProblems(in header: String) -> [String] {
-        guard let open = blockRange(after: openMarker, in: header) else {
-            return ["the header has no open, non-minimalistic block"]
+        guard let open = openBlockRange(in: header) else {
+            return ["the header's row has no open block"]
         }
         var problems: [String] = []
         var position: [String: String.Index] = [:]
@@ -161,7 +169,7 @@ final class HeaderOrderRulesTests: XCTestCase {
             if let found = header.range(of: item.marker, range: open) {
                 position[item.name] = found.lowerBound
             } else {
-                problems.append("\(item.name) is not in the open, non-minimalistic header")
+                problems.append("\(item.name) is not in the open header")
             }
         }
         let placed: ([(name: String, marker: String)]) -> [(name: String, at: String.Index)] = { group in
@@ -189,7 +197,7 @@ final class HeaderOrderRulesTests: XCTestCase {
             problems.append("the battery block lost \(view)")
         }
         if battery.lowerBound < open.upperBound {
-            problems.append("the battery is not after the open, non-minimalistic header")
+            problems.append("the battery is not after the open header")
         }
         // Last in the row: nothing but the row's own closing brace follows the battery block.
         let row = blockRange(after: rowMarker, in: header)
@@ -231,10 +239,18 @@ final class HeaderOrderRulesTests: XCTestCase {
             .joined(separator: "\n")
     }
 
-    /// From the first `marker` to the end of the balanced `{ … }` it opens (its own brace, when it
-    /// ends with one), or nil.
-    private static func blockRange(after marker: String, in source: String) -> Range<String.Index>? {
-        guard let start = source.range(of: marker),
+    /// The first `openMarker` block inside the row, or nil. The spacer before the row has the same
+    /// condition, so a search of the whole header would find that instead.
+    private static func openBlockRange(in header: String) -> Range<String.Index>? {
+        guard let row = blockRange(after: rowMarker, in: header) else { return nil }
+        return blockRange(after: openMarker, in: header, within: row)
+    }
+
+    /// From the first `marker` (within `bounds`, when given) to the end of the balanced `{ … }` it
+    /// opens (its own brace, when it ends with one), or nil.
+    private static func blockRange(after marker: String, in source: String,
+                                   within bounds: Range<String.Index>? = nil) -> Range<String.Index>? {
+        guard let start = source.range(of: marker, range: bounds ?? source.startIndex..<source.endIndex),
               let open = source[start.lowerBound...].firstIndex(of: "{") else { return nil }
         var depth = 0
         var index = open
@@ -263,17 +279,21 @@ private enum Plant {
     static let brain = #"if Defaults[.settingsIconInNotch] { Button { Image(systemName: "brain") } }"#
     static let battery = """
         if vm.notchState == .open && showBatteryIndicator {
-            if enableMinimalisticUI { MinimalisticBatteryView(level: 1) } else { KannuBatteryView(level: 1) }
+            KannuBatteryView(level: 1)
         }
         """
+    /// The real header's layout spacer: before the row, under the open block's own condition.
+    static let spacer = "if vm.notchState == .open { Color.clear }"
     static let order = [recording, dnd, refresh, tasks, clipboard, timer, hide, brain]
 
     static func header(_ items: [String] = Plant.order,
+                       beforeRow: String = "",
                        beforeOpen: String = "",
                        open: String = HeaderOrderRulesTests.openMarker,
                        battery: String = Plant.battery,
                        afterBattery: String = "") -> String {
         """
+        \(beforeRow)
         HStack(spacing: 4) {
         \(beforeOpen)
         \(open)

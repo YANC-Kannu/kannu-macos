@@ -122,6 +122,39 @@ final class TaskSuggestionTests: XCTestCase {
         XCTAssertFalse(state.isClosed(for: "Deep work 2"))
     }
 
+    // MARK: - A `#tag` or `@time` word sends the list away (David, 2026-10-29)
+
+    func testAHashWordSendsTheListAwayUntilTheTextIsEmptied() {
+        var state = TaskSuggestionState()
+        state.textChanged(to: "Fix lo")
+        XCTAssertTrue(state.wantsToShow(enabled: true, typed: "Fix lo", fieldFocused: true))
+        state.textChanged(to: "Fix login #")
+        XCTAssertFalse(state.wantsToShow(enabled: true, typed: "Fix login #", fieldFocused: true), "a lone # is enough")
+        // The form moves the word into Tags: the list stays away, so Tags shows.
+        state.textChanged(to: "Fix login ")
+        XCTAssertFalse(state.wantsToShow(enabled: true, typed: "Fix login ", fieldFocused: true))
+        state.textChanged(to: "Fix login page")
+        XCTAssertFalse(state.wantsToShow(enabled: true, typed: "Fix login page", fieldFocused: true))
+        state.textChanged(to: "")
+        state.textChanged(to: "Fix")
+        XCTAssertTrue(state.wantsToShow(enabled: true, typed: "Fix", fieldFocused: true), "a new text searches again")
+    }
+
+    func testAnAtWordDoesTooButNotAnAtInsideAWord() {
+        var state = TaskSuggestionState()
+        state.textChanged(to: "Mail a@b.com")
+        XCTAssertTrue(state.wantsToShow(enabled: true, typed: "Mail a@b.com", fieldFocused: true))
+        state.textChanged(to: "Mail a@b.com @")
+        XCTAssertFalse(state.wantsToShow(enabled: true, typed: "Mail a@b.com @", fieldFocused: true))
+    }
+
+    func testAFormOpenedOnWordsStartsWithTheListAway() {
+        let state = TaskSuggestionState(closedOn: "Deep work #kannu")
+        XCTAssertFalse(state.wantsToShow(enabled: true, typed: "Deep work", fieldFocused: true))
+        XCTAssertTrue(TaskSuggestionState(closedOn: "Deep work")
+            .wantsToShow(enabled: true, typed: "Deep work 2", fieldFocused: true))
+    }
+
     func testClosingDropsTheHighlightAndTheHover() {
         let task = TaskItem(title: "Deep work")
         var state = TaskSuggestionState()
