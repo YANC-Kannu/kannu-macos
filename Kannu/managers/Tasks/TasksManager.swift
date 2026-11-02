@@ -305,6 +305,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func start(_ taskID: UUID) -> Bool {
         guard isReady, Defaults[.enableTimerFeature],
               let task = tasks.first(where: { $0.id == taskID }), task.visibility == .active else { return false }
+        // Starting a ticked task undoes the tick: its end would otherwise mark it done and stop
+        // the timer just started.
+        cancelDoneTick(taskID)
         guard timing?.taskID != taskID else { return true }
         let tracked = trackedSeconds(of: task)
         let length = TaskTimeMath.sessionLengthSeconds(
@@ -885,6 +888,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Marking the task being timed done stops the timer first, which ends its time. Done tasks
     /// are Recently closed until `TaskArchive` archives them.
     func markDone(_ taskID: UUID) {
+        // A pending tick would otherwise mark it done a second time when its undo window ends.
+        cancelDoneTick(taskID)
         if timing?.taskID == taskID { stopTiming() }
         update(taskID) {
             $0.visibility = .done

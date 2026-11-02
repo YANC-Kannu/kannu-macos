@@ -174,6 +174,7 @@ final class UsageForecastTests: XCTestCase {
         }
         XCTAssertEqual(outlook(expiresIn: 3600), .steady, "full in 90 minutes, gone in 60")
         XCTAssertEqual(outlook(expiresIn: 2 * 3600), .hitsLimit(at: now.addingTimeInterval(1.5 * 3600)))
+        XCTAssertEqual(outlook(expiresIn: 1.5 * 3600), .steady, "no forecast at the expiry itself")
     }
 
     func testClaudeReadingsCarryKeysAndLabels() {
