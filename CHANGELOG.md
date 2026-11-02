@@ -4,6 +4,13 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-02 - A preset block on a ticked task undoes the tick too
+- **Developer label:** CodeRabbit's third review of #11
+- **Agent label:** Claude Code (Opus 5.5) — `startBlock` cancels a pending done tick, as `start(_:)` now does
+- **Changes:**
+  - `TasksManager.startBlock` cancels the task's pending done tick, so a preset block started on a ticked
+    task isn't stopped when the undo window ends.
+
 ### 2026-11-02 - Act on CodeRabbit's second review of #11
 - **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
 - **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads

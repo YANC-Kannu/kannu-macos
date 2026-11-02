@@ -343,6 +343,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func startBlock(_ taskID: UUID, duration: TimeInterval, preset: TimerPreset?) -> Bool {
         guard isReady, Defaults[.enableTimerFeature], duration > 0,
               let task = tasks.first(where: { $0.id == taskID }), task.visibility == .active else { return false }
+        // As in `start(_:)`: timing a ticked task undoes the tick.
+        cancelDoneTick(taskID)
         let fallback = TimerSessionName.resolved(typed: task.title, fallback: String(localized: "Task"))
         let timer = TimerManager.shared
         timer.startTimer(
