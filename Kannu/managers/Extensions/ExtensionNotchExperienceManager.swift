@@ -197,7 +197,8 @@ final class ExtensionNotchExperienceManager: ObservableObject {
     private func applySnapshot(_ payloads: [ExtensionNotchExperiencePayload], sourcePID: Int32) {
         guard sourcePID != currentProcessID else { return }
         suppressBroadcast = true
-        activeExperiences = payloads.sorted(by: descriptorComparator)
+        // The same filter as `init`: an older Kannu process can still send ones with no tab.
+        activeExperiences = payloads.filter(\.hasTabConfiguration).sorted(by: descriptorComparator)
         suppressBroadcast = false
         logDiagnostics("Applied external notch experience snapshot from PID \(sourcePID) (count: \(payloads.count))")
     }

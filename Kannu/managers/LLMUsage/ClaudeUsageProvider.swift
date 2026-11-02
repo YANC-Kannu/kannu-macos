@@ -72,7 +72,12 @@ struct ClaudeUsageProvider: UsageProvider {
         let monitor = CursorAgentStatusMonitor.shared
         switch monitor.claudeUsageHint {
         case .otherOrganization:
-            snapshot.accountTier = monitor.claudeOrganizationPlanNames.desktop ?? String(localized: "Desktop")
+            // Desktop's plan names Desktop's bars; once they have expired the card shows none, so it
+            // falls back to Claude Code's plan, as when Desktop has no reading at all.
+            let desktopBarsShow = !(monitor.claudeUsage?.displayWindows(now: now).isEmpty ?? true)
+            snapshot.accountTier = desktopBarsShow
+                ? monitor.claudeOrganizationPlanNames.desktop ?? String(localized: "Desktop")
+                : monitor.claudeOrganizationPlanNames.claudeCode ?? String(localized: "Code")
             snapshot.accountNote = nil
         case .otherOrganizationWithoutDesktopReading:
             snapshot.accountTier = monitor.claudeOrganizationPlanNames.claudeCode ?? String(localized: "Code")
