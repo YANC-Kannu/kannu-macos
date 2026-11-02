@@ -110,9 +110,7 @@ func currentRecommendedMinimumNotchWidth() -> CGFloat {
 
 /// Enforces the minimum notch width based on current tab count.
 /// Also clamps to screen width so the notch never exceeds the display.
-/// Only adjusts when not in minimalistic mode.
 func enforceMinimumNotchWidth() {
-    guard !Defaults[.enableMinimalisticUI] else { return }
     let minWidth = currentRecommendedMinimumNotchWidth()
     let maxWidth = maxAllowedNotchWidth()
     var width = Defaults[.openNotchWidth]
@@ -122,37 +120,11 @@ func enforceMinimumNotchWidth() {
         Defaults[.openNotchWidth] = width
     }
 }
-private let minimalisticBaseOpenNotchSize: CGSize = .init(width: 420, height: 180)
-private let minimalisticLyricsExtraHeight: CGFloat = 40
-let minimalisticTimerCountdownTopPadding: CGFloat = 12
-let minimalisticTimerCountdownContentHeight: CGFloat = 82
-let minimalisticTimerCountdownBlockHeight: CGFloat = minimalisticTimerCountdownTopPadding + minimalisticTimerCountdownContentHeight
 let statsSecondRowContentHeight: CGFloat = 120
 let statsGridSpacingHeight: CGFloat = 12
-let notchShadowPaddingStandard: CGFloat = 18
-let notchShadowPaddingMinimalistic: CGFloat = 12
+let notchShadowPadding: CGFloat = 18
 
-@MainActor
-func minimalisticOpenNotchSize(isDynamicIslandMode: Bool) -> CGSize {
-    var size = minimalisticBaseOpenNotchSize
-
-    if isDynamicIslandMode {
-        size.width = 340 // Reduced from 420 for a narrower pill
-        size.height = 144 // Exact height of the minimalistic music player view
-    }
-
-    if Defaults[.enableLyrics] {
-        size.height += minimalisticLyricsExtraHeight
-    }
-
-    if KannuViewCoordinator.shared.timerLiveActivityEnabled && TimerManager.shared.isExternalTimerActive {
-        size.height += minimalisticTimerCountdownBlockHeight
-    }
-
-    return size
-}
 let cornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 19, bottom: 24), closed: (top: 6, bottom: 14))
-let minimalisticCornerRadiusInsets: (opened: (top: CGFloat, bottom: CGFloat), closed: (top: CGFloat, bottom: CGFloat)) = (opened: (top: 35, bottom: 35), closed: cornerRadiusInsets.closed)
 
 // MARK: - Terminal tab clip (notch surface)
 
@@ -190,12 +162,8 @@ func statsAdjustedNotchSize(
     return adjustedSize
 }
 
-func notchShadowPaddingValue(isMinimalistic: Bool) -> CGFloat {
-    isMinimalistic ? notchShadowPaddingMinimalistic : notchShadowPaddingStandard
-}
-
-func addShadowPadding(to size: CGSize, isMinimalistic: Bool) -> CGSize {
-    CGSize(width: size.width, height: size.height + notchShadowPaddingValue(isMinimalistic: isMinimalistic))
+func addShadowPadding(to size: CGSize) -> CGSize {
+    CGSize(width: size.width, height: size.height + notchShadowPadding)
 }
 
 /// Determines whether a specific screen should render the Dynamic Island pill
@@ -278,9 +246,9 @@ func shouldUseDynamicIslandMode(for screenName: String?) -> Bool {
 /// Corner radius insets for the Dynamic Island pill shape.
 /// - closed: half the closed notch height for a true capsule look
 /// - opened: generous radius for smooth expanded pill
-let dynamicIslandPillCornerRadiusInsets: (opened: CGFloat, closed: (standard: CGFloat, minimalistic: CGFloat)) = (
+let dynamicIslandPillCornerRadiusInsets: (opened: CGFloat, closed: CGFloat) = (
     opened: 24,
-    closed: (standard: 16, minimalistic: 16)
+    closed: 16
 )
 
 /// Vertical offset from the top screen edge for the Dynamic Island pill.

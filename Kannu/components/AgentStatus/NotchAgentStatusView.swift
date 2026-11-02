@@ -20,8 +20,6 @@ struct NotchAgentStatusView: View {
     @Default(.agentActiveColor) private var activePaletteColor
     @Default(.agentAwaitingInputColor) private var awaitingPaletteColor
     @Default(.agentStoppedColor) private var stoppedPaletteColor
-    /// The 420/340 pt panels have no room for the run-time column; the status line carries the time.
-    @Default(.enableMinimalisticUI) private var minimalistic
     @State private var isSuppressingScrollGesture = false
     @State private var redBlinkStartTimes: [String: Date] = [:]
     /// The pinned finding whose "Copy for agent" was just pressed; cleared after 2 s.
@@ -35,14 +33,11 @@ struct NotchAgentStatusView: View {
     private var hasSkin: Bool { skinManager.selectedSkinImage != nil }
 
 #if DEBUG
-    /// Snapshot boards only (`DebugSnapshots`): fixture sessions and panel mode instead of the live ones.
+    /// Snapshot boards only (`DebugSnapshots`): fixture sessions instead of the live ones.
     var snapshotSessions: [AgentSessionStatus]? = nil
-    var snapshotMinimalistic: Bool? = nil
     private var sourceSessions: [AgentSessionStatus] { snapshotSessions ?? monitor.sessions }
-    private var isMinimalistic: Bool { snapshotMinimalistic ?? minimalistic }
 #else
     private var sourceSessions: [AgentSessionStatus] { monitor.sessions }
-    private var isMinimalistic: Bool { minimalistic }
 #endif
 
     private var dedupedSessions: [AgentSessionStatus] {
@@ -524,11 +519,7 @@ struct NotchAgentStatusView: View {
                 )
             }
             .layoutPriority(1)
-            if isMinimalistic {
-                Spacer(minLength: 0)
-            } else {
-                AgentTurnMetricsView(session: session, prominent: true)
-            }
+            AgentTurnMetricsView(session: session, prominent: true)
             stateBadge(session.displayState, sessionId: session.id, large: true)
         }
         .padding(12)
@@ -569,11 +560,7 @@ struct NotchAgentStatusView: View {
                 )
             }
             .layoutPriority(1)
-            if isMinimalistic {
-                Spacer(minLength: 0)
-            } else {
-                AgentTurnMetricsView(session: session)
-            }
+            AgentTurnMetricsView(session: session)
             stateBadge(session.displayState, sessionId: session.id, large: false)
         }
         .padding(10)
@@ -590,23 +577,10 @@ struct NotchAgentStatusView: View {
     }
 
     /// The state word and why it stopped. The run time sits in the trailing column
-    /// (`AgentTurnMetricsView`); on the minimalistic panels, which have no room for it, it follows
-    /// here instead.
-    @ViewBuilder
+    /// (`AgentTurnMetricsView`).
     private func statusText(for session: AgentSessionStatus, font: Font) -> some View {
         let suffix = session.runOutcomeSuffix + session.backgroundWorkSuffix + resumeSuffix(for: session)
-        if isMinimalistic, let display = AgentTurnMetricsView.display(for: session) {
-            switch display {
-            case let .live(since):
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(context.date.timeIntervalSince(since)), font: font)
-                }
-            case let .ended(interval):
-                statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(interval), font: font)
-            }
-        } else {
-            statusLine(session, suffix: suffix, font: font)
-        }
+        return statusLine(session, suffix: suffix, font: font)
     }
 
     private func statusLine(_ session: AgentSessionStatus, suffix: String, font: Font) -> some View {

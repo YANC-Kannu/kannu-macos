@@ -28,7 +28,7 @@ final class AgentHookInstaller: ObservableObject {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     static let scriptName = AgentHookLayout.scriptName
-    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=47"
+    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=48"
 
     private static var home: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -1414,6 +1414,8 @@ final class AgentHookInstaller: ObservableObject {
                                "local_agent", "local_workflow"}
         TURN_BG_DONE = {"completed", "failed", "killed", "cancelled", "canceled", "stopped", "error"}
         TURN_MAX_BG_AGENTS = 999
+        # v47: how Claude Code's prompt starts when it hands the model a finished background task's result.
+        TURN_NOTIFICATION_PREFIX = "<task-notification>"
 
         def turn_path(value):
             # Claude's main transcript only: under ~/.claude/projects, a .jsonl, never a subagent's.
@@ -1509,6 +1511,15 @@ final class AgentHookInstaller: ObservableObject {
                     count += 1
             return count
 
+        def task_notification(turn):
+            # v47: a finished background agent's result, which Claude Code submits as a prompt after the Stop.
+            # Only while the ended turn recorded agents left running: anything else typed after a Stop is a new
+            # request. The prefix is checked on a bounded slice, never the whole prompt.
+            if provider != "claude" or parent_id or not turn.get("turn_bg_agents"):
+                return False
+            prompt = data.get("prompt")
+            return isinstance(prompt, str) and prompt[:4096].lstrip().startswith(TURN_NOTIFICATION_PREFIX)
+
         def next_turn(existing, now_ms):
             # (turn keys, transcript path) for this write.
             turn = carried_turn(existing, now_ms)
@@ -1531,7 +1542,11 @@ final class AgentHookInstaller: ObservableObject {
             # requests. Only a prompt to an agent that has stopped starts one.
             open_turn = bool(turn) and "turn_ended_ms" not in turn
             prompted = hook_event in TURN_PROMPT_EVENTS or antigravity_first_call
-            starts = (prompted and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
+            # v47: the prompt that hands back an agent the Stop left running is that request going on: it
+            # resumes the ended turn (start and transcript offset kept) instead of starting one, which wiped the
+            # request's run time, tool calls and tokens each time an agent finished.
+            resumes = prompted and bool(turn) and not open_turn and task_notification(turn)
+            starts = (prompted and not open_turn and not resumes) or (hook_event in TURN_WAKE_EVENTS and not turn)
             if parent_id and turn and hook_event in TURN_WAKE_EVENTS and parent_turn_start() > turn["turn_started_ms"]:
                 # A subagent resumed in a later request of its chat.
                 starts = True
@@ -1546,7 +1561,7 @@ final class AgentHookInstaller: ObservableObject {
                             turn["turn_transcript_offset"] = 0
                     elif size >= 0:
                         turn["turn_transcript_offset"] = size
-            elif turn and hook_event in TURN_WAKE_EVENTS:
+            elif turn and (hook_event in TURN_WAKE_EVENTS or resumes):
                 # Working again after the Stop without a new prompt: still the same request.
                 turn.pop("turn_ended_ms", None)
                 turn.pop("turn_bg_agents", None)

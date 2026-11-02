@@ -169,14 +169,14 @@ final class TimerLifecycleRulesTests: XCTestCase {
                 if isActive { lockAccentColorIfNeeded() } else { isRenamingSession = false }
             }
             .onChange(of: focusedNameField) { previous, current in
-                vm.setAutoCloseSuppression(current != nil, token: nameEditingToken)
+                if previous == .rename, current != .rename { commitRename() }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
                 if note.object is KannuWindow { commitRename() }
             }
             """
         XCTAssertEqual(Self.notchProblems(in: planted), [
-            "a click into another app leaves the name field focused, so the notch never auto-closes",
+            "a click into another app leaves the name field focused",
             "a stopped timer leaves the name field focused",
             "a timer starting or stopping leaves the task form in the composer's place",
         ])
@@ -286,7 +286,7 @@ final class TimerLifecycleRulesTests: XCTestCase {
             problems.append("no didResignKeyNotification observer found")
         }
         for _ in resigns.filter({ !$0.contains("focusedNameField = nil") }) {
-            problems.append("a click into another app leaves the name field focused, so the notch never auto-closes")
+            problems.append("a click into another app leaves the name field focused")
         }
         let stops = SwiftModifierScan.modifiers(".onChange", in: source).filter { $0.hasPrefix(".onChange(of: timerManager.isTimerActive)") }
         if stops.isEmpty {
