@@ -120,7 +120,6 @@ class KannuViewModel: NSObject, ObservableObject {
     }
 
     private func focusClipboardTabIfNeeded() {
-        guard !Defaults[.enableMinimalisticUI] else { return }
         guard Defaults[.enableClipboardManager] else { return }
         guard Defaults[.clipboardDisplayMode] == .separateTab else { return }
         guard let lastCopyDate = ClipboardManager.shared.lastCopiedItemDate else { return }
@@ -166,40 +165,6 @@ class KannuViewModel: NSObject, ObservableObject {
         
         setupDetectorObserver()
 
-        // Observe settings + lyrics changes to dynamically resize the notch
-        let enableLyricsPublisher = Defaults.publisher(.enableLyrics).map { $0.newValue }
-
-        enableLyricsPublisher
-            .combineLatest(MusicManager.shared.$currentLyrics)
-            .removeDuplicates { $0.0 == $1.0 && $0.1 == $1.1 }
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                guard Defaults[.enableMinimalisticUI] else { return }
-                let updatedTarget = self.calculateDynamicNotchSize()
-                guard self.notchState == .open else { return }
-                guard self.notchSize != updatedTarget else { return }
-                withAnimation(.smooth) {
-                    self.notchSize = updatedTarget
-                }
-                if let delegate = AppDelegate.shared {
-                    delegate.ensureWindowSize(
-                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
-                        animated: true,
-                        force: false
-                    )
-                }
-            }
-            .store(in: &cancellables)
-
-        TimerManager.shared.$activeSource
-            .combineLatest(TimerManager.shared.$isTimerActive)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _, _ in
-                self?.handleMinimalisticTimerHeightChange()
-            }
-            .store(in: &cancellables)
-
         coordinator.$statsSecondRowExpansion
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
@@ -213,7 +178,7 @@ class KannuViewModel: NSObject, ObservableObject {
                 }
                 if let delegate = AppDelegate.shared {
                     delegate.ensureWindowSize(
-                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                        addShadowPadding(to: updatedTarget),
                         animated: false,
                         force: false
                     )
@@ -234,7 +199,7 @@ class KannuViewModel: NSObject, ObservableObject {
                 }
                 if let delegate = AppDelegate.shared {
                     delegate.ensureWindowSize(
-                        addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                        addShadowPadding(to: updatedTarget),
                         animated: true,
                         force: false
                     )
@@ -249,7 +214,6 @@ class KannuViewModel: NSObject, ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 guard self.notchState == .open else { return }
-                guard !Defaults[.enableMinimalisticUI] else { return }
                 let updatedTarget = self.calculateDynamicNotchSize()
                 guard self.notchSize != updatedTarget else { return }
                 withAnimation(.smooth) {
@@ -257,7 +221,7 @@ class KannuViewModel: NSObject, ObservableObject {
                 }
                 if let delegate = AppDelegate.shared {
                     delegate.ensureWindowSize(
-                        addShadowPadding(to: updatedTarget, isMinimalistic: false),
+                        addShadowPadding(to: updatedTarget),
                         animated: true,
                         force: false
                     )
@@ -266,23 +230,6 @@ class KannuViewModel: NSObject, ObservableObject {
             .store(in: &cancellables)
     }
 
-    private func handleMinimalisticTimerHeightChange() {
-        guard Defaults[.enableMinimalisticUI] else { return }
-        guard notchState == .open else { return }
-        let updatedTarget = calculateDynamicNotchSize()
-        guard notchSize != updatedTarget else { return }
-        withAnimation(.smooth) {
-            notchSize = updatedTarget
-        }
-        if let delegate = AppDelegate.shared {
-            delegate.ensureWindowSize(
-                addShadowPadding(to: updatedTarget, isMinimalistic: Defaults[.enableMinimalisticUI]),
-                animated: true,
-                force: false
-            )
-        }
-    }
-    
     private func setupDetectorObserver() {
         let enabledPublisher = Defaults
             .publisher(.enableFullscreenMediaDetection)
@@ -350,7 +297,7 @@ class KannuViewModel: NSObject, ObservableObject {
         // on the calling thread, inverting that ordering.
         if let delegate = AppDelegate.shared {
             delegate.ensureWindowSize(
-                addShadowPadding(to: targetSize, isMinimalistic: Defaults[.enableMinimalisticUI]),
+                addShadowPadding(to: targetSize),
                 animated: false,
                 force: true
             )
@@ -365,8 +312,7 @@ class KannuViewModel: NSObject, ObservableObject {
     }
     
     private func calculateDynamicNotchSize() -> CGSize {
-        let baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: screen)) : openNotchSize
-        var adjustedSize = baseSize
+        var adjustedSize = openNotchSize
 
         if coordinator.currentView == .notes || coordinator.currentView == .clipboard {
             let preferred = coordinator.notesLayoutState.preferredHeight
@@ -391,7 +337,7 @@ class KannuViewModel: NSObject, ObservableObject {
 
         // Set the current view to shelf if it contains files and the user enables openShelfByDefault.
         // Otherwise keep the last selected tab (tab retention is always on).
-        if !ShelfStateViewModel.shared.isEmpty && Defaults[.openShelfByDefault] && !Defaults[.enableMinimalisticUI] {
+        if !ShelfStateViewModel.shared.isEmpty && Defaults[.openShelfByDefault] {
             coordinator.currentView = .shelf
         }
     }

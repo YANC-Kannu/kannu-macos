@@ -77,13 +77,14 @@ struct NotchLLMUsageView: View {
 
     var body: some View {
         let active = ProviderID.allCases.filter { isEnabled($0) && isActiveProvider($0) }
-        let innerWidth = M.cardInnerWidth(notchWidth: snapshotNotchWidth ?? vm.notchSize.width, cards: active.count)
+        let entries = cardEntries(active, now: Date())
+        let innerWidth = M.cardInnerWidth(notchWidth: snapshotNotchWidth ?? vm.notchSize.width, cards: entries.count)
 
         // The tab's Refresh control lives in KannuHeader's trailing row, with the items that come
         // and go, left of the fixed buttons (icon-only, shown while this tab is active).
         HStack(alignment: .top, spacing: M.cardSpacing) {
-            ForEach(active) { provider in
-                card(for: provider, innerWidth: innerWidth)
+            ForEach(entries) { entry in
+                card(for: entry, innerWidth: innerWidth)
             }
         }
         .padding(.horizontal, M.tabHorizontalPadding)
@@ -106,20 +107,45 @@ struct NotchLLMUsageView: View {
 
     // MARK: - One card
 
+    /// One card on the tab: a provider's, or a further one of its own (Claude's second organization,
+    /// `UsageSnapshot.extraCards`).
+    private struct CardEntry: Identifiable {
+        let provider: ProviderID
+        let result: UsageResult
+        var isExtra = false
+
+        var id: String {
+            guard isExtra, case .success(let snap) = result else { return provider.rawValue }
+            return provider.rawValue + "@" + (snap.readingScope ?? "")
+        }
+    }
+
+    /// The providers' cards in order. A further card is there only with a live bar to draw.
+    private func cardEntries(_ providers: [ProviderID], now: Date) -> [CardEntry] {
+        providers.flatMap { provider -> [CardEntry] in
+            let providerResult = result(for: provider)
+            guard case .success(let snap) = providerResult else { return [CardEntry(provider: provider, result: providerResult)] }
+            return [CardEntry(provider: provider, result: providerResult)]
+                + snap.extraCards.filter { Self.hasLiveBars(.success($0), now: now) }
+                    .map { CardEntry(provider: provider, result: .success($0), isExtra: true) }
+        }
+    }
+
     /// Header, body and (at most) one status row on the glass the timer's rows sit on. The body
     /// lives under a minute clock: "resets in" is computed from `now` at render, and without a
     /// clock this view only re-rendered when something republished (the 180 s refresh floor at
     /// best), so the countdown sat frozen for minutes. The same `now` drops a window whose reset
     /// has passed.
     @ViewBuilder
-    private func card(for provider: ProviderID, innerWidth: CGFloat) -> some View {
-        let result = result(for: provider)
+    private func card(for entry: CardEntry, innerWidth: CGFloat) -> some View {
+        let provider = entry.provider
+        let result = entry.result
         TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = context.date
-            let status = statusLine(for: provider, result: result)
+            let status = entry.isExtra ? nil : statusLine(for: provider, result: result, now: now)
             let stale = staleLabel(for: result, now: now)
             VStack(alignment: .leading, spacing: M.rowSpacing) {
-                header(for: provider, result: result, stale: stale)
+                header(for: provider, result: result, stale: stale, showsRefresh: !entry.isExtra)
                 body(for: provider, result: result, innerWidth: innerWidth, hasStatus: status != nil, now: now)
                 if let status {
                     statusRow(status)
@@ -135,7 +161,7 @@ struct NotchLLMUsageView: View {
     }
 
     @ViewBuilder
-    private func header(for provider: ProviderID, result: UsageResult, stale: String?) -> some View {
+    private func header(for provider: ProviderID, result: UsageResult, stale: String?, showsRefresh: Bool) -> some View {
         HStack(spacing: M.rowSpacing) {
             AgentProviderIconView(source: .init(providerID: provider), size: M.providerIconSize)
             Text(provider.displayName)
@@ -159,7 +185,7 @@ struct NotchLLMUsageView: View {
                     .accessibilityLabel(stale)
                     .hoverTooltip(stale, edge: .below)
             }
-            if provider == .claude {
+            if provider == .claude, showsRefresh {
                 claudeRefreshButton
             }
         }
@@ -195,16 +221,17 @@ struct NotchLLMUsageView: View {
         if sessions.isEmpty && weekly.isEmpty {
             // No server-side windows: the local token totals are all there is.
             VStack(alignment: .leading, spacing: M.noteRowSpacing) {
-                if snap.logsUnavailable {
+                if snap.limitsOnly {
+                    note(String(localized: "No recent reading"))
+                } else if snap.logsUnavailable {
                     note(String(localized: "No local usage logs yet"))
                 } else {
                     fact(String(localized: "Today"), snap.today, showCost: showCost)
-                    fact(String(localized: "Week"), snap.week, showCost: showCost)
+                    fact(Self.weekLabel(snap), snap.week, showCost: showCost)
                     fact(String(localized: "Session"), snap.session, showCost: showCost)
                 }
                 if let block = snap.localSessionBlock {
-                    note(String(localized: "Session (local) \(Self.compactTokens(block.totalTokens))")
-                         + (resetsIn(block.resetsAt, now: now).map { " · " + $0 } ?? ""))
+                    note(Self.blockText(block) + (resetsIn(block.resetsAt, now: now).map { " · " + $0 } ?? ""))
                 }
             }
         } else if !sessions.isEmpty, let columns = M.columns(innerWidth: innerWidth) {
@@ -287,7 +314,7 @@ struct NotchLLMUsageView: View {
                 } else {
                     fact(String(localized: "Today"), snap.today, showCost: false)
                     Spacer().frame(height: M.noteRowSpacing)
-                    fact(String(localized: "Week"), snap.week, showCost: showCost, onDemand: snap.onDemandSpendUSD)
+                    fact(Self.weekLabel(snap), snap.week, showCost: showCost, onDemand: snap.onDemandSpendUSD)
                 }
             }
         }
@@ -395,9 +422,46 @@ struct NotchLLMUsageView: View {
             .frame(height: M.noteRowHeight * CGFloat(lines), alignment: .leading)
     }
 
-    /// "Today 1.2M · $3.40": a token window's total, and its cost when the provider prices it.
+    /// "Today 1.2M · $3.40 · 48M cached": a token window's total, its cost when the provider prices
+    /// it, then its cache reads, quieter and a size smaller. Those are context re-read on every
+    /// request, 97–98 % of a Claude week, so they never join the headline.
+    @ViewBuilder
     private func fact(_ label: String, _ totals: UsageTotals, showCost: Bool, onDemand: Double? = nil) -> some View {
-        note(Self.factText(label, totals, showCost: showCost, onDemand: onDemand))
+        let text = Self.factText(label, totals, showCost: showCost, onDemand: onDemand)
+        if let cached = Self.cachedText(totals) {
+            (Text(text)
+                + Text(" · " + cached)
+                .font(Self.font(M.glyphFontSize, .medium))
+                .foregroundStyle(.tertiary))
+                .font(Self.font(M.textFontSize, .medium))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(height: M.noteRowHeight, alignment: .leading)
+        } else {
+            note(text)
+        }
+    }
+
+    /// "Week" for the plan's own week (Claude's weekly reset less seven days), "Last 7 days" for the
+    /// rolling 7 × 24 h every other case falls back to.
+    static func weekLabel(_ snap: UsageSnapshot) -> String {
+        snap.weekFollowsPlan ? String(localized: "Week") : String(localized: "Last 7 days")
+    }
+
+    /// "48M cached", or nil when the window read nothing from a cache.
+    static func cachedText(_ totals: UsageTotals) -> String? {
+        guard totals.cacheReadTokens > 0 else { return nil }
+        return String(localized: "\(tokens(totals.cacheReadTokens)) cached")
+    }
+
+    /// "Session (local) 1.2M tok" for the plan's own 5-hour window; "Session (local, approx.)" for the
+    /// hour-floored reconstruction used when Claude has not reported the window's reset.
+    static func blockText(_ block: ClaudeSessionBlocks.CurrentBlock) -> String {
+        block.isApproximate
+            ? String(localized: "Session (local, approx.) \(compactTokens(block.totalTokens))")
+            : String(localized: "Session (local) \(compactTokens(block.totalTokens))")
     }
 
     static func factText(_ label: String, _ totals: UsageTotals, showCost: Bool, onDemand: Double?) -> String {
@@ -482,8 +546,8 @@ struct NotchLLMUsageView: View {
 
     /// One status at a time, in this order: what the Claude refresh found (the user's own action
     /// is pending), then a quota failure with its one-tap fix, then a quota failure alone.
-    private func statusLine(for provider: ProviderID, result: UsageResult) -> StatusLine? {
-        if provider == .claude, let line = claudeStatus { return line }
+    private func statusLine(for provider: ProviderID, result: UsageResult, now: Date) -> StatusLine? {
+        if provider == .claude, let line = claudeStatus() { return line }
         guard case .success(let snap) = result else { return nil }
         if let action = snap.quotaAction {
             return StatusLine(text: snap.quotaError ?? String(localized: "Limits need your approval"),
@@ -499,7 +563,7 @@ struct NotchLLMUsageView: View {
 
     /// What the last Refresh needs the user to know, with the one action that resolves it.
     /// Silent while a fetch runs, except for the sign-in, which is the user's to finish.
-    private var claudeStatus: StatusLine? {
+    private func claudeStatus() -> StatusLine? {
         let status = snapshotRefreshStatus ?? agentMonitor.claudeRefreshStatus
         let refreshing = snapshotRefreshStatus == nil && agentMonitor.isRefreshingClaudeUsage
         let terminal = (String(localized: "Sign in in Terminal"), { agentMonitor.openClaudeSignInInTerminal() })
@@ -532,18 +596,18 @@ struct NotchLLMUsageView: View {
             switch agentMonitor.claudeUsageHint {
             case .signInNeeded:
                 return StatusLine(text: String(localized: "Exact limits need a Claude Code sign-in. Press this card's ↻ to fetch them."))
-            case .otherOrganization:
-                let plans = agentMonitor.claudeOrganizationPlanNames
-                if let code = plans.claudeCode, let desktop = plans.desktop, code != desktop {
-                    return StatusLine(text: String(localized: "Claude Code is signed in to \(code), so these are Claude Desktop's (\(desktop)) readings. Sign Claude Code in to \(desktop), then press this card's ↻ for exact limits."),
-                                      action: terminal)
-                }
-                return StatusLine(text: String(localized: "Claude Code is signed in to another organization, so these are Claude Desktop's readings. Sign it in to Claude Desktop's, then press this card's ↻."),
-                                  action: terminal)
-            case nil:
+            case .otherOrganization, .otherOrganizationWithoutDesktopReading, nil:
+                // Two organizations need no line: each card's plan chip says whose bars it shows.
                 return nil
             }
         }
+    }
+
+    /// Whether the card draws any limit bar at `now`, by the same rule the bars use.
+    private static func hasLiveBars(_ result: UsageResult, now: Date) -> Bool {
+        guard case .success(let snap) = result else { return false }
+        return ([snap.sessionLimit, snap.weekLimit].compactMap { $0 } + snap.extraLimits.map(\.limit))
+            .contains { isLive($0, now: now) }
     }
 
     /// The oldest reading on the card speaks for it: a value days old is said so in the header
@@ -566,11 +630,11 @@ struct NotchLLMUsageView: View {
             // Cursor's split plan names its first bar "Auto" and keys it apart from "week";
             // Antigravity's names the model pool it measures.
             bars.append(.init(week, label: snap.weekLimitLabel ?? snap.limitsLabel ?? String(localized: "All models"),
-                              windowID: Self.windowID(provider, slot: snap.weekLimitKey)))
+                              windowID: Self.windowID(provider, slot: snap.weekLimitKey, scope: snap.readingScope)))
         }
         for extra in snap.extraLimits where !extra.isSessionWindow && Self.isLive(extra.limit, now: now) {
             bars.append(.init(extra.limit, label: extra.label ?? Self.extraLimitLabel(extra),
-                              windowID: Self.windowID(provider, slot: extra.key)))
+                              windowID: Self.windowID(provider, slot: extra.key, scope: snap.readingScope)))
         }
         return bars
     }
@@ -580,11 +644,12 @@ struct NotchLLMUsageView: View {
     private func sessionBars(_ snap: UsageSnapshot, provider: ProviderID, now: Date) -> [QuotaBar] {
         var bars: [QuotaBar] = []
         if let limit = snap.sessionLimit, Self.isLive(limit, now: now) {
-            bars.append(.init(limit, label: snap.limitsLabel, windowID: Self.windowID(provider, slot: "session")))
+            bars.append(.init(limit, label: snap.limitsLabel,
+                              windowID: Self.windowID(provider, slot: "session", scope: snap.readingScope)))
         }
         for extra in snap.extraLimits where extra.isSessionWindow && Self.isLive(extra.limit, now: now) {
             bars.append(.init(extra.limit, label: extra.label ?? Self.extraLimitLabel(extra),
-                              windowID: Self.windowID(provider, slot: extra.key)))
+                              windowID: Self.windowID(provider, slot: extra.key, scope: snap.readingScope)))
         }
         return bars
     }
@@ -650,14 +715,14 @@ struct NotchLLMUsageView: View {
 
     /// The reading id a bar's forecast is kept under: Claude's bars carry the server's window keys,
     /// Codex and Cursor report a session and a week slot.
-    static func windowID(_ provider: ProviderID, slot: String) -> String {
+    static func windowID(_ provider: ProviderID, slot: String, scope: String? = nil) -> String {
         let key: String
         switch (provider, slot) {
         case (.claude, "session"): key = ClaudeUsageSnapshot.fiveHourKey
         case (.claude, "week"): key = ClaudeUsageSnapshot.sevenDayKey
         default: key = slot
         }
-        return UsageWindowReading.id(provider: provider.rawValue, key: key)
+        return UsageWindowReading.id(provider: provider.rawValue, key: key, scope: scope)
     }
 
     /// Names an extra window, preferring the label its provider supplied.
@@ -700,10 +765,10 @@ struct NotchLLMUsageView: View {
         }
     }
 
-    /// A limit with no reset is treated as live (nothing to expire against); one whose reset has
-    /// passed is not shown, matching the fetch-time rule in `ClaudeUsageSnapshot.displayWindows`.
+    /// A limit whose reset has passed, or whose expiry bound has, is not shown — the rule
+    /// `ClaudeUsageSnapshot.displayWindows` applies at fetch time, and the alerts apply too.
     private static func isLive(_ limit: UsageLimit, now: Date) -> Bool {
-        limit.resetsAt.map { $0 > now } ?? true
+        UsageWindowReading.isLive(resetsAt: limit.resetsAt, notAfter: limit.notAfter, now: now)
     }
 
     private func resetsIn(_ date: Date?, now: Date) -> String? {

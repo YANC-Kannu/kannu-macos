@@ -22,8 +22,9 @@ import SwiftUI
 
 /// The task rows of a list — a project, a source with one project or none, Local tasks, All tasks —
 /// in the task order, narrowed by `filter`. A row is the task's colour dot, its title (two lines at
-/// most) and one caption (`TaskRowCaption`), then ▶ or ■ and a › to the task's page. Everything else
-/// a task can do is on its page and on the row's right-click menu.
+/// most) and one caption (`TaskRowCaption`), then a local task's done tick (`TaskDoneTick`), ▶ or ■
+/// and a › to the task's page. Everything else a task can do is on its page and on the row's
+/// right-click menu.
 ///
 /// Rows are not dragged, numbered or stepped up and down (David, 2026-10-23: "no drag and order
 /// tasks or numbering"). The menu's Move to Top is the one move — it picks what the notch's Up next
@@ -70,6 +71,13 @@ struct TaskRowList: View {
         let isTimed = row.timing != nil
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
+                // The tick by ▶ itself (David, 2026-10-29), left of it so ▶ keeps its place.
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                 isEnabled: manager.isReady, size: 14) {
+                        manager.toggleDone(task.id)
+                    }
+                }
                 TaskTimingButton(isTimed: isTimed, canStart: canStart,
                                  start: { manager.start(task.id) }, stop: { manager.stopTiming() })
                 Button {
@@ -160,12 +168,15 @@ struct TaskRowList: View {
         let task = row.task
         let caption = TaskRowCaption(task: task, tracked: manager.trackedSeconds(of: task, now: now), timing: row.timing,
                                      now: now, onProjectPage: onProjectPage)
+        let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
             if showsColorDot {
                 TaskColorDot(color: row.color)
             }
             SettingsRowLabel(Text(verbatim: task.title), description: Self.text(of: caption))
                 .lineLimit(2)
+                // Ticked done and waiting out the undo window.
+                .opacity(isTicked ? 0.45 : 1)
         }
     }
 

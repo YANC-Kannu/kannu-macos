@@ -696,12 +696,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     height += 70
                 }
                 
-                return addShadowPadding(to: CGSize(width: width, height: height), isMinimalistic: Defaults[.enableMinimalisticUI])
+                return addShadowPadding(to: CGSize(width: width, height: height))
             }
         }
         
-        // Use minimalistic or normal size based on settings
-        var baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: vm.screen)) : openNotchSize
+        var baseSize = openNotchSize
         
         // Use a consistent height for different view types
         if coordinator.currentView == .timer {
@@ -716,12 +715,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             isStatsTabActive: coordinator.currentView == .stats,
             secondRowProgress: coordinator.statsSecondRowExpansion
         )
-        let result = addShadowPadding(
-            to: adjustedContentSize,
-            isMinimalistic: Defaults[.enableMinimalisticUI]
-        )
-
-        return result
+        return addShadowPadding(to: adjustedContentSize)
     }
 
     /// Adjusts a base notch size for a specific screen by adding Dynamic Island
@@ -1100,6 +1094,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
         Defaults.Keys.migrateScreenCaptureVisibility()
+        Defaults.Keys.migrateRemovedMinimalisticUI()
         Defaults.Keys.migrateThirdPartyDDCIntegration()
         Defaults.Keys.enforceRemovedFeatureDefaults()
         SecureSecretsStore.migrateFromDefaultsIfNeeded()
@@ -1260,19 +1255,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
 
-        // Observe minimalistic UI setting changes - trigger window resize
-        Defaults.publisher(.enableMinimalisticUI, options: []).sink { [weak self] _ in
-            // Defaults.publisher is raw KVO with no scheduler: the sink runs inside the
-            // `Defaults[...] = x` assignment's own stack frame — from a SwiftUI @Default
-            // binding, that is the middle of a SwiftUI update pass, and resizing an NSWindow
-            // (setFrame + displayIfNeeded) from there is the re-entrancy the
-            // FirstMouseHostingView sizing workaround exists to avoid. Hop like every other
-            // sink here; the next main-actor turn is still before the next frame.
-            Task { @MainActor [weak self] in
-                self?.updateWindowSizeIfNeeded()
-            }
-        }.store(in: &cancellables)
-        
         // Observe screen recording settings changes
         Defaults.publisher(.enableScreenRecordingDetection, options: []).sink { _ in
             if Defaults[.enableScreenRecordingDetection] {
@@ -2381,31 +2363,21 @@ final class MediaControlsStateCoordinator {
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
-        let masterPublisher = Defaults.publisher(.showStandardMediaControls)
-        let minimalisticPublisher = Defaults.publisher(.enableMinimalisticUI)
-
-        Publishers.CombineLatest(masterPublisher, minimalisticPublisher)
+        Defaults.publisher(.showStandardMediaControls)
             .receive(on: RunLoop.main)
-            .sink { [weak self] masterChange, minimalisticChange in
-                self?.handleStateChange(
-                    showStandard: masterChange.newValue,
-                    minimalistic: minimalisticChange.newValue
-                )
+            .sink { [weak self] change in
+                self?.handleStateChange(showStandard: change.newValue)
             }
             .store(in: &cancellables)
     }
 
-    private func handleStateChange(showStandard: Bool, minimalistic: Bool) {
-        if !showStandard && !minimalistic {
-            cacheAndDisableMusicLiveActivity()
-        } else {
-            restoreMusicLiveActivity(clearCache: showStandard)
-        }
-
+    private func handleStateChange(showStandard: Bool) {
         if showStandard {
+            restoreMusicLiveActivity()
             restoreLockScreenPanelIfNeeded()
             restoreMusicControlWindowIfNeeded()
         } else {
+            cacheAndDisableMusicLiveActivity()
             cacheAndDisableLockScreenPanel()
             cacheAndDisableMusicControlWindow()
         }
@@ -2421,16 +2393,14 @@ final class MediaControlsStateCoordinator {
         }
     }
 
-    private func restoreMusicLiveActivity(clearCache: Bool) {
+    private func restoreMusicLiveActivity() {
         guard let cached = Defaults[.cachedMusicLiveActivityPreference] else { return }
 
         if KannuViewCoordinator.shared.musicLiveActivityEnabled != cached {
             KannuViewCoordinator.shared.musicLiveActivityEnabled = cached
         }
 
-        if clearCache {
-            Defaults[.cachedMusicLiveActivityPreference] = nil
-        }
+        Defaults[.cachedMusicLiveActivityPreference] = nil
     }
 
     private func cacheAndDisableLockScreenPanel() {

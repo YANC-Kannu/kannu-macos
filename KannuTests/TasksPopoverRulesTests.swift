@@ -25,9 +25,9 @@ import XCTest
 ///
 /// - opening the popover sets `vm.isTasksPopoverActive`, and leaving the view clears it;
 /// - `ContentView.hasAnyActivePopovers()` includes that flag, or the notch closes under the popover;
-/// - the button has a VoiceOver label and a `.hoverTooltip`; it sits in the open,
-///   non-minimalistic header, before the clipboard button, shown as `TasksHeaderVisibility.isShown`
-///   says (never with tasks off) from the header's own state, and it simply fades;
+/// - the button has a VoiceOver label and a `.hoverTooltip`; it sits in the open header, before
+///   the clipboard button, shown as `TasksHeaderVisibility.isShown` says (never with tasks off)
+///   from the header's own state, and it simply fades;
 /// - no notch view uses `.help(` — it never renders there (docs/REGRESSIONS.md entry 9). The
 ///   pre-commit hook checks the same, but no CI job runs the hook; this test is the CI-side guard;
 /// - Manage tasks…, Connect Jira… / Connect GitLab… and the Brain glyph open Brain › Tasks at
@@ -215,7 +215,7 @@ final class TasksPopoverRulesTests: XCTestCase {
 
     func testThePlacementScannerCatchesPlantedOffenders() {
         let good = """
-            if vm.notchState == .open && !enableMinimalisticUI {
+            if vm.notchState == .open {
                 if showsTasksButton {
                     TasksHeaderButton()
                         .transition(.opacity)
@@ -254,7 +254,7 @@ final class TasksPopoverRulesTests: XCTestCase {
         XCTAssertEqual(Self.placementProblems(in: plant(".transition(.opacity)", ".transition(.scale)")),
                        ["the Tasks button does not simply fade"])
         let afterClipboard = """
-            if vm.notchState == .open && !enableMinimalisticUI {
+            if vm.notchState == .open {
                 if Defaults[.enableClipboardManager] { Button { Image(systemName: "doc.on.clipboard") } }
                 if TasksHeaderVisibility.isShown(enableTasks: enableTasks, currentViewIsTimer: coordinator.currentView == .timer, timerTabExists: enableTimerFeature && timerDisplayMode == .tab, timerIsRunning: timerManager.isTimerActive) {
                     TasksHeaderButton().transition(.opacity)
@@ -267,9 +267,14 @@ final class TasksPopoverRulesTests: XCTestCase {
                        ["the Tasks button's show/hide is not animated"])
         XCTAssertEqual(Self.placementProblems(in: plant("value: showsTasksButton", "value: enableTasks")),
                        ["the Tasks button's show/hide is not animated"])
-        let closed = plant("if vm.notchState == .open && !enableMinimalisticUI {\n    if showsTasksButton {",
+        let closed = plant("if vm.notchState == .open {\n    if showsTasksButton {",
                            "if showsTasksButton {")
-        XCTAssertTrue(Self.placementProblems(in: closed).contains("TasksHeaderButton() is not inside the open, non-minimalistic header"))
+        XCTAssertTrue(Self.placementProblems(in: closed).contains("TasksHeaderButton() is not inside the open header"))
+        // The real header gates a layout spacer on the same condition, before the buttons: it must
+        // neither hide the button's own block nor stand in for it.
+        let spacer = "if vm.notchState == .open { Color.clear }\n"
+        XCTAssertEqual(Self.placementProblems(in: spacer + good), [])
+        XCTAssertTrue(Self.placementProblems(in: spacer + closed).contains("TasksHeaderButton() is not inside the open header"))
         XCTAssertEqual(Self.placementProblems(in: "struct KannuHeader {}"), ["the header shows no TasksHeaderButton()"])
     }
 
@@ -429,7 +434,7 @@ final class TasksPopoverRulesTests: XCTestCase {
         return problems
     }
 
-    /// In `KannuHeader`: inside the open, non-minimalistic header; before the clipboard button; in
+    /// In `KannuHeader`: inside the open header; before the clipboard button; in
     /// an `if` whose condition is (or names a `Bool` property that is) `TasksHeaderVisibility.isShown`
     /// given the header's own state, `enableTasks` included, so `TasksManager` is never built with
     /// tasks off; and shown and hidden with a plain `.transition(.opacity)`, driven by
@@ -437,12 +442,15 @@ final class TasksPopoverRulesTests: XCTestCase {
     static func placementProblems(in header: String) -> [String] {
         guard let button = header.range(of: "TasksHeaderButton()") else { return ["the header shows no TasksHeaderButton()"] }
         var problems: [String] = []
-        if let open = header.range(of: "if vm.notchState == .open && !enableMinimalisticUI {"),
-           let region = block(after: "if vm.notchState == .open && !enableMinimalisticUI {", in: header),
-           open.lowerBound < button.lowerBound, region.contains("TasksHeaderButton()") {
+        // The nearest open gate before the button: a layout spacer earlier in the header has the
+        // same condition, and its block holds no buttons.
+        if let open = header.range(of: "if vm.notchState == .open {", options: .backwards,
+                                   range: header.startIndex..<button.lowerBound),
+           let brace = header[open.lowerBound...].firstIndex(of: "{"),
+           balancedBlock(from: brace, in: header).contains("TasksHeaderButton()") {
             // Inside.
         } else {
-            problems.append("TasksHeaderButton() is not inside the open, non-minimalistic header")
+            problems.append("TasksHeaderButton() is not inside the open header")
         }
         let enclosing = enclosingIf(of: button, in: header)
         let gate = enclosing.map { found -> String in
