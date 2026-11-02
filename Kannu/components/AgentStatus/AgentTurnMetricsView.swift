@@ -19,7 +19,8 @@
 import SwiftUI
 
 /// The trailing column of a Recent chats row: this request's run time, and under it its tool calls
-/// and tokens ("1h 53m 54s" / "212 tools · 1.4M in · 45k out"; "Ran 2h 3m 12s" once it ended).
+/// and tokens ("1h 53m 54s" / "212 tools · 83k in · 40k out · 458k context"; "Ran 2h 3m 12s" once it
+/// ended).
 ///
 /// Observes the token follower itself, so a token update re-renders this column only — never the
 /// list (whose rows each resolve a click-through target). Only a running request ticks, once a
@@ -72,10 +73,13 @@ struct AgentTurnMetricsView: View {
                 durationLine(full: AgentTurnFormat.ran(AgentTurnFormat.duration(interval)),
                              short: AgentTurnFormat.ran(AgentTurnFormat.shortDuration(interval)))
             }
+            // Widest first (`metricsLines` returns at most five); the first that fits is shown.
             ViewThatFits(in: .horizontal) {
-                if let full = lines.full { Text(full) }
-                if let tokensOnly = lines.tokensOnly { Text(tokensOnly) }
-                if let toolsOnly = lines.toolsOnly { Text(toolsOnly) }
+                if lines.count > 0 { Text(lines[0]) }
+                if lines.count > 1 { Text(lines[1]) }
+                if lines.count > 2 { Text(lines[2]) }
+                if lines.count > 3 { Text(lines[3]) }
+                if lines.count > 4 { Text(lines[4]) }
                 EmptyView()
             }
         }

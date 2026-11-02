@@ -66,7 +66,6 @@ struct TimerLiveActivity: View {
     /// Not read here: observed so an edited preset colour redraws `sessionAccent`.
     @Default(.timerPresets) private var timerPresets
     @Default(.timerControlWindowEnabled) private var controlWindowEnabled
-    @Default(.enableMinimalisticUI) private var enableMinimalisticUI
     
     private var notchContentHeight: CGFloat {
         max(0, vm.effectiveClosedNotchHeight - (isHovering ? 0 : 12))
@@ -653,7 +652,6 @@ struct TimerLiveActivity: View {
 
     private func triggerTransientLabel() {
         guard !showsLabel else { return }
-        guard !enableMinimalisticUI else { return }
         cancelTransientLabel()
         withAnimation(.smooth) {
             showTransientLabel = true

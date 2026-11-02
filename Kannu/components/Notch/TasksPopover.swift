@@ -371,12 +371,17 @@ struct TasksPopover: View {
             TextField(String(localized: "Add a task…"), text: $newTitle)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(addTask)
+                // `#tag` and `@time` (`TaskQuickAdd`), shown inside the field's end.
+                .overlay(alignment: .trailing) {
+                    TaskQuickAddChips(text: newTitle, trailingInset: 6)
+                        .allowsHitTesting(false)
+                }
             Button(action: addTask) {
                 Image(systemName: "plus")
                     .imageScale(.large)
             }
             .buttonStyle(.borderless)
-            .disabled(!manager.isReady || TaskItem.cleanedTitle(newTitle) == nil)
+            .disabled(!manager.isReady || TaskItem.cleanedTitle(TaskQuickAdd.title(of: newTitle)) == nil)
             .accessibilityLabel("Add task")
             .hoverTooltip(String(localized: "Add to the top"), edge: .above)
         }
@@ -394,6 +399,7 @@ struct TasksPopover: View {
     private func upNextRow(_ task: TaskItem) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
         let caption = [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · ")
+        let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: task.title)
@@ -404,19 +410,30 @@ struct TasksPopover: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            // Ticked done and waiting out the undo window.
+            .opacity(isTicked ? 0.45 : 1)
             Spacer(minLength: 0)
-            Button {
-                manager.start(task.id)
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 11, weight: .semibold))
-                    .padding(6)
-                    .contentShape(Circle())
+            // The tick by ▶ itself (David, 2026-10-29), left of it so ▶ keeps its place in every
+            // row; apart enough that neither is clicked for the other.
+            HStack(spacing: 6) {
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady) {
+                        manager.toggleDone(task.id)
+                    }
+                }
+                Button {
+                    manager.start(task.id)
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .padding(6)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!enableTimerFeature || !manager.isReady)
+                .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
+                .hoverTooltip(String(localized: "Start timing"), edge: .above)
             }
-            .buttonStyle(.plain)
-            .disabled(!enableTimerFeature || !manager.isReady)
-            .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
-            .hoverTooltip(String(localized: "Start timing"), edge: .above)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 7)

@@ -44,8 +44,10 @@ enum TimerTaskFormMode: Hashable {
 ///
 /// A view of its own, built only while shown; `NotchTimerView` reaches the task list only through
 /// this form's statics (`startFromForm`, `startNamed`, `prepareForTypedStart`), so it never names it.
-/// While a field has focus, or one of its menus tracks, it holds the notch open under tokens of its
-/// own, released when the focus goes, the form goes, or the notch's window stops being key.
+/// While a field has focus it holds the notch open under a token of its own, so an edit survives the
+/// pointer leaving the notch; the hold ends when the focus goes, the form goes, or the notch's window
+/// stops being key (docs/REGRESSIONS.md entry 23). Menus hold nothing here:
+/// `ContentView.closeWhenPointerLeaves` waits for every menu.
 struct TimerTaskForm: View {
     @Environment(\.notchForeground) private var notchForeground
     private typealias M = TimerComposerMetrics
@@ -63,7 +65,6 @@ struct TimerTaskForm: View {
     @FocusState private var focused: Field?
     /// `@State`, so the release names the token that was set.
     @State private var editingToken = UUID()
-    @State private var menuTrackingToken = UUID()
     /// The pointer is on the tag chips: they stay while a click lands, even if the field lets go of
     /// focus on the way.
     @State private var chipsHovered = false
@@ -174,6 +175,13 @@ struct TimerTaskForm: View {
         // A new task's title goes back to the session bar as it is typed: however the form closes,
         // the bar holds it.
         .onChange(of: draft.title) { _, title in
+            // `#tag` and `@time` words leave the title for Tags and the reminder once a space ends
+            // them (`TaskFormDraft.foldingFinishedQuickAdd`); the title that leaves comes back here.
+            let folded = draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
+            if folded != draft {
+                draft = folded
+                return
+            }
             titleSuggestions.textChanged(to: title)
             if draft.isNew { TimerManager.shared.typedSessionName = TaskFormDraft.barText(title) }
         }
@@ -198,21 +206,14 @@ struct TimerTaskForm: View {
             }
         }
         // A click into another app leaves a field focused in a window that is no longer key: drop
-        // it, which lets the notch auto-close again.
+        // it, which ends the hold. The notch then closes on where the pointer is
+        // (`ContentView.closeWhenPointerLeaves`), which also waits while the estimate menu tracks.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             focused = nil
         }
-        // The estimate menu is a window of its own: the pointer leaves the notch to use it.
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(true, token: menuTrackingToken)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
-        }
         .onDisappear {
             vm.setAutoCloseSuppression(false, token: editingToken)
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
         }
     }
 
@@ -232,6 +233,9 @@ struct TimerTaskForm: View {
                             .onSubmit(submitTitle)
                             .onExitCommand(perform: exitTitle)
                             .accessibilityLabel(Text("Task title"))
+                        // `#tag` and `@time` words, for a new task and an edit alike
+                        // (`TaskFormDraft.foldingQuickAdd`).
+                        TaskQuickAddChips(text: draft.title)
                         if !draft.title.isEmpty {
                             clearButton(label: String(localized: "Clear Title")) {
                                 draft.title = ""
@@ -683,6 +687,8 @@ extension TimerTaskForm {
         let manager = TasksManager.shared
         switch route {
         case .pickedTask(let taskID):
+            // The bar keeps the `#tag` and `@time` words typed before the pick.
+            manager.applyQuickAdd(typed: typed, to: taskID)
             if !manager.startBlock(taskID, duration: duration, preset: preset) { otherwise() }
         case .typed(let reuse):
             manager.startTyped(typed, reuse: reuse, duration: duration, preset: preset, otherwise: otherwise)

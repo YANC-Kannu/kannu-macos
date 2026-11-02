@@ -50,7 +50,7 @@ struct ProfileSelectionView: View {
             id: "lightuse",
             name: String(localized: "Light Use"),
             icon: "sparkles",
-            description: String(localized: "Simple and minimal interface with just the essentials for everyday tasks."),
+            description: String(localized: "Just the essentials for everyday tasks, with fewer features switched on."),
             gradient: [Color.green, Color.mint]
         ),
         UserProfile(
@@ -215,7 +215,6 @@ func applyProfileSettings(_ profiles: Set<String>) {
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = true
         Defaults[.enableScreenAssistant] = true
-        Defaults[.enableMinimalisticUI] = false
         // Developers and testers are who can act on a freeze report, and who accept the tick.
         Defaults[.hangWatchdogEnabled] = true
     }
@@ -227,14 +226,12 @@ func applyProfileSettings(_ profiles: Set<String>) {
         Defaults[.inlineHUD] = true
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = false
-        Defaults[.enableMinimalisticUI] = false
         Defaults[.enableScreenAssistant] = false
     }
 
     // Light Use Profile Settings
     let isLightUse = profiles.contains("lightuse")
     if isLightUse {
-        Defaults[.enableMinimalisticUI] = true
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = true
         Defaults[.inlineHUD] = true
@@ -247,13 +244,7 @@ func applyProfileSettings(_ profiles: Set<String>) {
     if isStudent {
         Defaults[.enableTimerFeature] = true
         Defaults[.enableStatsFeature] = false
-        Defaults[.enableMinimalisticUI] = false
         Defaults[.enableScreenAssistant] = false
-    }
-    
-    // If Light Use is NOT selected but others are, ensure minimalistic is OFF
-    if !isLightUse && !profiles.isEmpty {
-        Defaults[.enableMinimalisticUI] = false
     }
     
     // Common settings for all profiles

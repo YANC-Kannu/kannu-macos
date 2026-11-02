@@ -109,10 +109,6 @@ class KannuViewCoordinator: ObservableObject {
     
     @Published var currentView: NotchViews = .home {
         didSet {
-            if Defaults[.enableMinimalisticUI] && currentView != .home {
-                currentView = .home
-                return
-            }
             // Track direction before SwiftUI re-renders
             let oldIdx = Self.tabOrder.firstIndex(of: oldValue) ?? 0
             let newIdx = Self.tabOrder.firstIndex(of: currentView) ?? 0
@@ -200,13 +196,6 @@ class KannuViewCoordinator: ObservableObject {
         }
         .store(in: &cancellables)
 
-        Defaults.publisher(.enableMinimalisticUI)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] change in
-                self?.handleMinimalisticModeChange(change.newValue)
-            }
-            .store(in: &cancellables)
-
         extensionNotchExperienceManager.$activeExperiences
             .receive(on: DispatchQueue.main)
             .sink { [weak self] experiences in
@@ -251,8 +240,7 @@ class KannuViewCoordinator: ObservableObject {
             Defaults.publisher(.showDiskGraph).map { _ in () }.eraseToAnyPublisher(),
             Defaults.publisher(.enableNotes).map { _ in () }.eraseToAnyPublisher(),
             Defaults.publisher(.enableClipboardManager).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.clipboardDisplayMode).map { _ in () }.eraseToAnyPublisher(),
-            Defaults.publisher(.enableMinimalisticUI).map { _ in () }.eraseToAnyPublisher()
+            Defaults.publisher(.clipboardDisplayMode).map { _ in () }.eraseToAnyPublisher()
         )
         .debounce(for: .milliseconds(100), scheduler: DispatchQueue.main)
         .sink { _ in
@@ -269,7 +257,7 @@ class KannuViewCoordinator: ObservableObject {
         // back to .home based on feature flags) have already run — otherwise they race and
         // intermittently clobber the restore depending on which tab was last selected.
         DispatchQueue.main.async { [weak self] in
-            guard let self, !Defaults[.enableMinimalisticUI],
+            guard let self,
                   let raw = UserDefaults.standard.string(forKey: "lastNotchTab"),
                   let restored = NotchViews(rawValue: raw) else { return }
             self.currentView = restored
@@ -303,15 +291,6 @@ class KannuViewCoordinator: ObservableObject {
         guard !isEnabled, currentView == .timer else { return }
         withAnimation(.smooth) {
             currentView = .home
-        }
-    }
-
-    private func handleMinimalisticModeChange(_ isEnabled: Bool) {
-        guard isEnabled else { return }
-        if currentView != .home {
-            withAnimation(.smooth) {
-                currentView = .home
-            }
         }
     }
 
