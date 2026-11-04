@@ -534,6 +534,17 @@ struct AnimationEditorView: View {
     }
 }
 
+#if DEBUG
+extension AnimationEditorView {
+    /// DEBUG snapshot harness: the editor's controls on their own. A local file that holds no animation, so no
+    /// Lottie loads and nothing touches the network.
+    static func snapshotControls() -> AnyView {
+        AnyView(AnimationEditorView(sourceURL: URL(fileURLWithPath: "/dev/null"), isRemoteURL: false,
+                                    animation: .constant(nil)).controlsPanel)
+    }
+}
+#endif
+
 // MARK: - Supporting Views
 
 private struct EditorSectionCard<Content: View>: View {

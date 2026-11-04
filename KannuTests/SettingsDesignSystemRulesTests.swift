@@ -274,6 +274,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("onPrimary", on: ["ink"], atLeast: 7)
         require("ink", on: ["selection"], atLeast: 7)
         require("destructive", on: ["card", "selection"], atLeast: 4.5)
+        // The selected segment's title, on the fill it is raised on.
+        require("ink", on: ["raised"], atLeast: 7)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -305,6 +307,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let faintOnHover = theme.replacingOccurrences(of: "destructive = color(light: 0xBC3226", with: "destructive = color(light: 0xC4362B")
         XCTAssertNotEqual(faintOnHover, theme, "the plant must change the theme")
         XCTAssertEqual(Self.readabilityFailures(in: faintOnHover), ["destructive on selection, light"])
+
+        let darkRaised = theme.replacingOccurrences(of: "raised = color(light: 0xFFFFFF", with: "raised = color(light: 0x3A3A3A")
+        XCTAssertNotEqual(darkRaised, theme, "the plant must change the theme")
+        XCTAssertTrue(Self.readabilityFailures(in: darkRaised).contains("ink on raised, light"))
     }
 
     // MARK: - Every token has a reader
@@ -563,6 +569,88 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                            ("configuration.isPressed ? SettingsTheme.pressedOpacity : 1", "1"),
                            ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)")],
                           in: button, by: Self.buttonProblems)
+    }
+
+    /// What the select keeps: VoiceOver's label, value and adjust, a trigger in our button style, a list that
+    /// closes with Brain, the arrows on a segment, one dim of its own, and an ease that Reduce Motion stops.
+    private static func selectProblems(in select: String) -> [String] {
+        var problems = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(title)",
+                        ".onDisappear { isOpen = false }", ".buttonStyle(SettingsButtonStyle())",
+                        ".accessibilityAddTraits(option == selection ? .isSelected : [])",
+                        ".onKeyPress(keys: [.leftArrow, .rightArrow])",
+                        "reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                        "guard isEnabled else { return }"].filter { !select.contains($0) }
+        if select.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled segment needs exactly one dim of its own")
+        }
+        if select.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled segment a second time") }
+        return problems
+    }
+
+    /// What the open list keeps: a key monitor for its own key window only, out of an input method's way and gone
+    /// with the list; Return and Escape in the field and in the list; letters when it has no field; rows that never
+    /// take the keyboard; a highlight that is announced and a selection that says so; the threshold; the field's chrome.
+    private static func selectListProblems(in list: String) -> [String] {
+        ["event.window === window", "window.isKeyWindow", "hasMarkedText()", "NSEvent.removeMonitor", "dismantleNSView",
+         ".onSubmit", ".onExitCommand(perform: close)", ".onKeyPress(.return)", ".onKeyPress(.escape)",
+         ".onKeyPress(characters:", ".focusable(false)", "AccessibilityNotification.Announcement(",
+         ".accessibilityAddTraits(option == selection ? .isSelected : [])", "SettingsSelectNavigation.searchThreshold",
+         ".settingsField("].filter { !list.contains($0) }
+    }
+
+    func testTheSelectKeepsKeyboardVoiceOverAndReduceMotion() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let select = try XCTUnwrap(sources["SettingsSelect.swift"])
+        XCTAssertEqual(Self.selectProblems(in: select), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".accessibilityAdjustableAction", ".accessibilityAction"),
+                           (".accessibilityValue(", ".accessibilityHint("),
+                           (".accessibilityLabel(title)", ".accessibilityHidden(true)"),
+                           (".onDisappear { isOpen = false }", ""),
+                           (".buttonStyle(SettingsButtonStyle())", ".buttonStyle(BorderlessButtonStyle())"),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           (".onKeyPress(keys: [.leftArrow, .rightArrow])", ".onKeyPress(keys: [.upArrow, .downArrow])"),
+                           ("reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                            ".easeOut(duration: SettingsTheme.quickAnimation)"),
+                           ("guard isEnabled else { return }", ""),
+                           (dim, ""), (dim, dim + dim),
+                           (".buttonStyle(SegmentButtonStyle())", ".buttonStyle(.plain)")],
+                          in: select, by: Self.selectProblems)
+
+        let list = try XCTUnwrap(sources["SettingsSelectList.swift"])
+        XCTAssertEqual(Self.selectListProblems(in: list), [])
+        // `event.window === window` emptied is a monitor that answers for any window.
+        Self.assertCaught([("event.window === window", ""), ("window.isKeyWindow", "true"),
+                           ("hasMarkedText()", "isEditable"), ("NSEvent.removeMonitor", "print"),
+                           ("dismantleNSView", "dismantleView"), (".onSubmit", ".onAppear"),
+                           (".onExitCommand(perform: close)", ""), (".onKeyPress(.return)", ".onKeyPress(.space)"),
+                           (".onKeyPress(.escape)", ".onKeyPress(.tab)"), (".onKeyPress(characters:", ".onKeyPress(keys:"),
+                           (".focusable(false)", ".focusable()"), ("AccessibilityNotification.Announcement(", "print("),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           ("SettingsSelectNavigation.searchThreshold", "3"), (".settingsField(", ".textFieldStyle(")],
+                          in: list, by: Self.selectListProblems)
+    }
+
+    /// What `SettingsField` keeps: the field native and plain inside our chrome, its label hidden for the one beside
+    /// it, its own focus where the caller keeps none, one dim, and never a send-on-Return of its own:
+    /// `WorklogConsentRulesTests` finds one by the literal modifier, and a parameter would slip past it.
+    private static func fieldProblems(in field: String) -> [String] {
+        var problems = [".textFieldStyle(.plain)", ".labelsHidden()", "content.focused($tracksFocus)"].filter { !field.contains($0) }
+        if field.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled field needs exactly one dim of its own")
+        }
+        if field.contains("onSubmit") { problems.append("the field's chrome takes no onSubmit") }
+        return problems
+    }
+
+    func testTheFieldStaysNativeInside() throws {
+        let field = Self.code(try XCTUnwrap(try Self.designSystemSources()["SettingsField.swift"]))
+        XCTAssertEqual(Self.fieldProblems(in: field), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".textFieldStyle(.plain)", ".textFieldStyle(.roundedBorder)"), (".labelsHidden()", ""),
+                           ("content.focused($tracksFocus)", "content"), (dim, ""), (dim, dim + dim),
+                           ("let isFocused: Bool?", "let isFocused: Bool?\n    let onSubmit: () -> Void")],
+                          in: field, by: Self.fieldProblems)
     }
 
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`

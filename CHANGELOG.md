@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain gets its own choice control
+- **Developer label:** Brain redesign Stage 3: "`SettingsSelect`: our own popover, with a search field once a list is long"
+- **Agent label:** Claude Code (Opus 5.5) — options as data, a list with keyboard and VoiceOver, segments for two or three short options
+- **Changes:**
+  - New `SettingsSelect`: a button showing the value that opens our own list in a popover, or two or three
+    segments in place. The options are data (`options:` with `optionTitle:`, or `choices:`), because macOS 14 has
+    no custom picker style. VoiceOver reads the row's title and the value, and its adjust steps the choice.
+  - New `SettingsSelectList`, the open list: a tick on the choice, a highlighted row that the arrows move and
+    VoiceOver announces, Return to pick and Escape to close. Past ten options a search field leads, ranked as
+    Brain's search ranks, and the rows scroll; a shorter list takes typed letters. A highlight the search moved
+    is announced too, and the field's prompt and empty state use catalogued strings ("Search...", "No results").
+  - Segments: under Full Keyboard Access, focus goes with the choice, so Space keeps it, and the arrows follow
+    the layout direction right to left. Option icons are hidden from VoiceOver; the titles name them.
+  - New `SettingsField`, `.settingsField()`: a plain native field inside our chrome, with a focus ring. The list's
+    search wears it.
+  - New `SettingsSelectNavigation`, Foundation only and in the test target: the search, the arrows and
+    type-to-select, held by `SettingsSelectNavigationTests`.
+  - New theme tokens, "Choices and fields": `raised` for the selected segment, with `ink` on it held at 7:1, and
+    the segment, list and field measures.
+  - Boards: `designSystem` gains the choices and the fields; `components` puts the select in a row beside the
+    native picker; new `selectList` draws the list open; new `animationEditorControls` draws the animation
+    editor's controls, which no board drew.
+  - `SettingsDesignSystemRulesTests` holds the select's keyboard, VoiceOver, one dim and Reduce Motion, and the
+    field native inside; `BrainShellRulesTests` keeps page knowledge out of all three.
+
 ### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
 - **Developer label:** "resolve issues and merge mr's also"
 - **Agent label:** Claude Code (Opus 5.5) — the one-line fixes from the second review; the rest answered on the PR
