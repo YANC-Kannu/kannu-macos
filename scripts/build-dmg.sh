@@ -90,8 +90,14 @@ package_dmg() {
     exit 1
   fi
 
+  # dmgbuild is build-time only: a throwaway venv, gone when this script exits.
+  DMGBUILD_VENV="$(mktemp -d)"
+  trap 'rm -rf "$DMGBUILD_VENV"' EXIT
+  echo "==> Installing dmgbuild..."
+  "$ROOT_DIR/scripts/install-dmgbuild.sh" "$DMGBUILD_VENV"
+
   echo "==> Creating DMG..."
-  "$ROOT_DIR/scripts/create-dmg.sh" "$APP_PATH" "$DMG_PATH"
+  PATH="$DMGBUILD_VENV/bin:$PATH" "$ROOT_DIR/scripts/create-dmg.sh" "$APP_PATH" "$DMG_PATH"
 }
 
 if [[ "$SKIP_BUILD" == false ]]; then

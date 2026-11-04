@@ -147,6 +147,8 @@ PrivateWorks
 !scripts/*.sh
 comparison_report.json
 *.txt
+!scripts/dmg-requirements.txt
+!scripts/brand/OFL.txt
 ANIMATION_DEBUG_GUIDE.md
 MIGRATION_SUMMARY.md
 ONBOARDING_ENHANCEMENT.md
