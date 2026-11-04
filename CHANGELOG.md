@@ -4,6 +4,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain's fields take its chrome and stay native inside
+- **Developer label:** Brain redesign Stage 3: "`SettingsField`"
+- **Agent label:** Claude Code (Opus 5.5) — the AppKit field, plain, inside our chrome; its name beside it, never inside
+- **Changes:**
+  - 34 fields wear `.settingsField()`, last on their chain: 27 of the 29 `TextField`s and all 7 `SecureField`s.
+    `.textFieldStyle(.roundedBorder)` and `.labelsHidden()` go; `.focused`, `.onSubmit` and `.onExitCommand` stay
+    on the field.
+  - In a Form a field's name sits beside it. ADR's two model fields, ntfy's topic and server, Pushover's two keys,
+    the webhook URL and the Spotify cookie move into `SettingsRow`s that name them, and ADR's key rows into a
+    `LabeledContent` with the key's name. The Keychain writes in the bindings are unchanged.
+  - What to type goes in `prompt:`. A sheet field that showed its title as its placeholder says it again under the
+    same key (Connect's token fields, a policy rule's command or tool and its reason, the URL sheet, the editor's
+    name), and the preset name, the Gemini key and the extensions search say theirs. Every prompt reuses a key
+    already in the source; none is new.
+  - A field that keeps its own focus passes it to the chrome (`isFocused:`): New Task's title and tags, Add Tags,
+    the time-log length and comment, and a task's estimate. A field's own `.disabled` moves after the chrome, so
+    the chrome dims with it, once.
+  - The estimate field keeps Escape on the field through a small `CancelOnEscape` modifier, still only when its
+    caller gives Escape an action, so its chrome can go last.
+  - The sidebar search and a local task's inline title keep chrome of their own, pinned.
+  - `SettingsDesignSystemRulesTests` holds every field to its chrome, with nothing setting focus after it and a
+    field's own focus passed in, and only the chrome setting a field style; the two above are pinned with their
+    reasons.
+  - `BrainPathRulesTests` reads the source with its comments blanked, so `let a = true // Brain › General` names
+    no path, while a string's `https://` is read whole (promised on #21).
+  - docs/SETTINGS.md gains "Values and fields": the keyboard and VoiceOver table and the field rule. Its component
+    table, design-system list, row rule and slot rule name the new controls. docs/REGRESSIONS.md entry 22 gains
+    its dated line.
+  - A disabled field drops its focus ring, so a field disabled while it had focus does not keep the accent.
+
 ### 2026-11-04 - Brain's sliders and steppers become its own
 - **Developer label:** Brain redesign Stage 3: "`SettingsSlider` (inside `SettingsSliderRow`), `SettingsStepper`"
 - **Agent label:** Claude Code (Opus 5.5) — label, value and an adjustable action for VoiceOver; arrows, Home and End; one edit covers every row

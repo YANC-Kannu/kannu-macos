@@ -39,8 +39,11 @@ struct JiraConnectSheet: View {
             Text("Checked with your site, then kept in your Keychain.")
                 .settingsDescriptionStyle()
             TextField("Site", text: $site, prompt: Text(verbatim: "acme.atlassian.net"))
+                .settingsField()
             TextField("Email", text: $email, prompt: Text(verbatim: "you@example.com"))
-            SecureField("API token", text: $token)
+                .settingsField()
+            SecureField("API token", text: $token, prompt: Text("API token"))
+                .settingsField()
             Link("Create API token…", destination: JiraAPI.createTokenURL)
                 .buttonStyle(.link)
             LabeledContent {
@@ -128,7 +131,9 @@ struct GitLabConnectSheet: View {
                 .settingsDescriptionStyle()
             TextField("Server", text: $server, prompt: Text(verbatim: GitLabHost.defaultServer))
                 .onChange(of: server) { _, _ in problem = nil }
-            SecureField("Personal access token", text: $token)
+                .settingsField()
+            SecureField("Personal access token", text: $token, prompt: Text("Personal access token"))
+                .settingsField()
             Text("`api` to log time; `read_api` lists only")
                 .settingsDescriptionStyle()
             if let createTokenURL {
@@ -231,9 +236,11 @@ struct SourceConnectSheet: View {
             if source == .github {
                 TextField("Server", text: $server, prompt: Text(verbatim: "https://github.com"))
                     .onChange(of: server) { _, _ in problem = nil }
+                    .settingsField()
             }
             if source.usesToken {
-                SecureField(tokenLabel, text: $token)
+                SecureField(tokenLabel, text: $token, prompt: Text(tokenLabel))
+                    .settingsField()
                 if let createTokenURL = TaskSourceStatus.createTokenURL(for: source, server: server) {
                     Link("Create token…", destination: createTokenURL)
                         .buttonStyle(.link)

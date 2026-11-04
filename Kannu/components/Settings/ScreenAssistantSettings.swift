@@ -81,8 +81,8 @@ struct ScreenAssistantSettings: View {
 
                     if showingApiKey {
                         VStack(alignment: .leading, spacing: 8) {
-                            SecureField("Enter your Gemini API Key", text: $apiKeyText)
-                                .textFieldStyle(.roundedBorder)
+                            SecureField("Enter your Gemini API Key", text: $apiKeyText, prompt: Text("Enter your Gemini API Key"))
+                                .settingsField()
 
                             Text("Get your free API key from Google AI Studio")
                                 .settingsDescriptionStyle()

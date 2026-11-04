@@ -547,8 +547,8 @@ struct URLImportSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                TextField("https://example.com/animation.json", text: $urlInput)
-                    .textFieldStyle(.roundedBorder)
+                TextField("https://example.com/animation.json", text: $urlInput, prompt: Text("https://example.com/animation.json"))
+                    .settingsField()
             }
             
             VStack(alignment: .leading, spacing: 8) {
@@ -556,8 +556,8 @@ struct URLImportSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                TextField("My Animation", text: $nameInput)
-                    .textFieldStyle(.roundedBorder)
+                TextField("My Animation", text: $nameInput, prompt: Text("My Animation"))
+                    .settingsField()
             }
             
             HStack {

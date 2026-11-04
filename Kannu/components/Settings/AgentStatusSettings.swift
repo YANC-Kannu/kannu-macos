@@ -282,36 +282,46 @@ struct AgentStatusSettings: View {
 
         switch notificationProvider {
         case .ntfy:
-            TextField("Topic", text: $ntfyTopic)
-                .textFieldStyle(.roundedBorder)
-            TextField("Server URL", text: $ntfyServerURL)
-                .textFieldStyle(.roundedBorder)
+            SettingsRow("Topic") {
+                TextField("Topic", text: $ntfyTopic)
+                    .settingsField()
+            }
+            SettingsRow("Server URL") {
+                TextField("Server URL", text: $ntfyServerURL)
+                    .settingsField()
+            }
         case .pushover:
-            SecureField("User key", text: Binding(
-                get: { pushoverUserKey },
-                set: { newValue in
-                    pushoverUserKey = newValue
-                    SecureSecretsStore.set(newValue, for: .pushoverUserKey)
-                }
-            ))
-                .textFieldStyle(.roundedBorder)
-            SecureField("App token", text: Binding(
-                get: { pushoverAppToken },
-                set: { newValue in
-                    pushoverAppToken = newValue
-                    SecureSecretsStore.set(newValue, for: .pushoverAppToken)
-                }
-            ))
-                .textFieldStyle(.roundedBorder)
+            SettingsRow("User key") {
+                SecureField("User key", text: Binding(
+                    get: { pushoverUserKey },
+                    set: { newValue in
+                        pushoverUserKey = newValue
+                        SecureSecretsStore.set(newValue, for: .pushoverUserKey)
+                    }
+                ))
+                    .settingsField()
+            }
+            SettingsRow("App token") {
+                SecureField("App token", text: Binding(
+                    get: { pushoverAppToken },
+                    set: { newValue in
+                        pushoverAppToken = newValue
+                        SecureSecretsStore.set(newValue, for: .pushoverAppToken)
+                    }
+                ))
+                    .settingsField()
+            }
         case .webhook:
-            TextField("Webhook URL", text: Binding(
-                get: { webhookURL },
-                set: { newValue in
-                    webhookURL = newValue
-                    SecureSecretsStore.set(newValue, for: .webhookURL)
-                }
-            ))
-                .textFieldStyle(.roundedBorder)
+            SettingsRow("Webhook URL") {
+                TextField("Webhook URL", text: Binding(
+                    get: { webhookURL },
+                    set: { newValue in
+                        webhookURL = newValue
+                        SecureSecretsStore.set(newValue, for: .webhookURL)
+                    }
+                ))
+                    .settingsField()
+            }
         }
 
         LabeledContent {

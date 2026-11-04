@@ -86,10 +86,10 @@ struct TaskTagsSheet: View {
             }
 
             TextField("Add a tag", text: $text, prompt: Text("Add a tag"))
-                .labelsHidden()
                 .focused($fieldIsFocused)
-                .disabled(isFull)
                 .onSubmit(addReturnPick)
+                .settingsField(isFocused: fieldIsFocused)
+                .disabled(isFull)
 
             if isFull {
                 Text("\(TaskItem.maxTags) tags is the most")

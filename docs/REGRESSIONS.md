@@ -1593,6 +1593,10 @@ a reopening, since it closed with Brain. Its key monitor lives only while the li
 window and is removed in `dismantleNSView`. The select's one animation is a bounded ease, nil under Reduce Motion, so
 the rest of this entry holds.
 
+**2026-11-04 addendum: Brain's slider and stepper add no animation, no `onAppear` and no `.task`.** The knob follows the
+value, and a drag on the slider cannot move the window, which moves by its title row only. The animation editor's four
+springs, on its zoom and its resets, are now a bounded ease, nil under Reduce Motion, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
