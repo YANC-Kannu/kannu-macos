@@ -18,23 +18,29 @@ fi
 # executable bit cannot skip it.
 bash "$(dirname "${BASH_SOURCE[0]}")/check-no-lfs-pointers.sh" "$APP_PATH"
 
-STAGING_DIR="$(mktemp -d)"
-cleanup() {
-  rm -rf "$STAGING_DIR"
-}
-trap cleanup EXIT
+if ! command -v dmgbuild >/dev/null 2>&1; then
+  cat >&2 <<EOF
+dmgbuild not found on PATH. build-dmg.sh and manual-release.sh set it up themselves; to call this
+script directly, install it into a temporary venv first:
 
-cp -R "$APP_PATH" "$STAGING_DIR/"
-ln -s /Applications "$STAGING_DIR/Applications"
+  scripts/install-dmgbuild.sh /tmp/kannu-dmgbuild
+  PATH="/tmp/kannu-dmgbuild/bin:\$PATH" $0 <path-to-Kannu.app> <output-dmg-path>
+EOF
+  exit 1
+fi
+
+SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$(dirname "$DMG_PATH")"
 rm -f "$DMG_PATH"
 
-hdiutil create \
-  -volname "Kannu" \
-  -srcfolder "$STAGING_DIR" \
-  -ov \
-  -format UDZO \
+# The layout lives in dmg-settings.py. dmgbuild writes it into the volume's .DS_Store and copies the
+# app with ditto, which keeps its signature intact; nothing here scripts Finder or opens a window.
+dmgbuild \
+  -s "$SCRIPTS_DIR/dmg-settings.py" \
+  -D app="$APP_PATH" \
+  -D brand_dir="$SCRIPTS_DIR/brand" \
+  "Kannu" \
   "$DMG_PATH"
 
 # Sign the disk image itself. The app inside is already Developer ID signed and the DMG gets a
