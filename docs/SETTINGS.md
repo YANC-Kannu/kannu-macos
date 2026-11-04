@@ -30,7 +30,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
 | A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
 | A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
-| A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker` |
+| A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker`. The popover focuses its calendar and Escape closes only it; a date is reached by keyboard under Full Keyboard Access |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
 | A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
 | A stepper row | `SettingsStepperRow` — the value then our `SettingsStepper`, same column; never `Stepper` |

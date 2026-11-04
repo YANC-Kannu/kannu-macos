@@ -540,11 +540,11 @@ struct URLImportSheet: View {
     var body: some View {
         SettingsSheet("Add Animation from URL") {
             LabeledContent("Lottie JSON URL") {
-                TextField("https://example.com/animation.json", text: $urlInput, prompt: Text("https://example.com/animation.json"))
+                TextField("Lottie JSON URL", text: $urlInput, prompt: Text("https://example.com/animation.json"))
                     .settingsField()
             }
             LabeledContent("Animation Name") {
-                TextField("My Animation", text: $nameInput, prompt: Text("My Animation"))
+                TextField("Animation Name", text: $nameInput, prompt: Text("My Animation"))
                     .settingsField()
             }
         } buttons: {

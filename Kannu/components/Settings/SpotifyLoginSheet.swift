@@ -53,6 +53,7 @@ struct SpotifyLoginSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Connect Spotify")
                         .font(SettingsTheme.sheetTitle)
+                        .accessibilityAddTraits(.isHeader)
                     Text(statusText)
                         .settingsDescriptionStyle()
                 }

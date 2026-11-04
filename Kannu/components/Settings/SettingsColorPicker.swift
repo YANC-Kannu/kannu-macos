@@ -80,6 +80,7 @@ private struct SettingsColorPickerPopover: View {
                         Image(systemName: "chevron.left")
                     }
                     .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text("Back"))
                     Text("Custom color")
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)

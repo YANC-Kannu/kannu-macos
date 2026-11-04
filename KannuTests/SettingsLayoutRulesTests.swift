@@ -292,7 +292,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedRawColourCounts: [String: Int] = [
         "AgentStatusSettings.swift": 2,      // status green; a preview caption
         "AllTasksPage.swift": 1,             // the partial-result orange
-        "AnimationEditorView.swift": 8,      // the editor's own previews and cards
+        "AnimationEditorView.swift": 7,      // the editor's own previews and cards
         "AppearanceSettings.swift": 10,      // style cards and previews of notch content
         "ClipboardSettings.swift": 4,        // status colours
         "DevicesSettings.swift": 3,          // device cards
