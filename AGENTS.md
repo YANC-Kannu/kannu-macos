@@ -110,8 +110,9 @@ Kannu runs locally. Treat process inspection, shell commands, filesystem access,
 
 ## Commit and PR guidelines
 
-`CONTRIBUTING.md` has the full process; PRs target `development`, one concern each. The part that
-rejects commits is the CHANGELOG entry, so it is restated here in full rather than linked:
+`CONTRIBUTING.md` has the full process; PRs target `development`, one concern each. Work too large
+for one review ships as stacked super PRs, described below the CHANGELOG rules. The part that rejects
+commits is the CHANGELOG entry, so it is restated here in full rather than linked:
 
 1. Define the **developer feature label** — what you are building.
 2. Define the **agent feature label** if an agent did any of the work. The line is required either
@@ -137,6 +138,18 @@ contract; a wrong shape is a rejected commit, not a style note.
 `KannuTests/ChangelogRuleDocsTests.swift` pins this text against the hook's own parser, so if the two
 ever disagree, CI says so instead of an agent finding out at commit time.
 
+**Stacked super PRs.** CodeRabbit allows one review an hour and skips a PR with too many files (sources
+say 150 or 300, so plan for 150). Work too large for one review goes up as a stack:
+
+- Each stage is a `super/<name>` branch with a PR onto the super below it; the bottom one targets
+  `development`. A super's diff is only that stage. Check its file count before requesting a review.
+- Small child PRs merge into their super with a merge commit once CI is green. **Never request a
+  CodeRabbit review on a child PR.**
+- Request reviews on supers only, bottom-up, one at a time, and read them in full.
+- A super merges into `development` only after its review, with a merge commit, never a squash, or the
+  stack above loses its ancestry. Retarget the next super, then delete the merged branch.
+- A fix on a lower super is merged up the stack and re-requested on that super only.
+
 ## Output expectations
 
 For coding tasks report: what changed, why, files affected, important architectural decisions, testing performed, remaining concerns. For audits report: finding, location, why it matters, severity, recommended fix. Never claim code was tested, built, or verified unless that operation was actually performed.
@@ -156,7 +169,7 @@ For coding tasks report: what changed, why, files affected, important architectu
 - **Anything the app bundles must be an ordinary git blob, never Git LFS.** `xcodebuild` copies a 131-byte pointer into the app without complaint. `AVPlayer` then fails with `Cannot Open` and the view draws nothing, because the views only check that the bundle URL exists. Every release through 1.4.0-beta.3 shipped that way. This repo no longer uses LFS: it has no `.gitattributes`, and no tracked file is a pointer. `BundledVideoTests` and `scripts/check-no-lfs-pointers.sh` (run by `create-dmg.sh`) catch a relapse. Older refs still hold pointers, `main` and `release/1.4.0` included until this change reaches them. Their objects are on Atoll's LFS store, not this repo's, so `lfs: true` on a checkout of one would fail.
 - **`Defaults.publisher(...)` without `options: []` fires an initial event on subscription** — any sequencing built on "this only fires on change" silently breaks.
 - `AgentHookInstaller` embeds the hook script (authoritative, versioned via `KANNU_HOOK_SCRIPT_VERSION`); `scripts/kannu-agent-status.sh` is a generated mirror — never let them drift. This is now enforced by the pre-commit hook, because the prose version of this rule failed three times.
-- **CI runs on push and PR to both `main` and `development`** (`.github/workflows/ci.yml`) — but a PR whose *base* is a feature branch gets no Build job at all, only SonarCloud, so a stacked PR can look green having never been compiled. Check which jobs actually ran before trusting a tick.
+- **CI runs on push and PR to both `main` and `development`, and on PRs into `super/*`** (`.github/workflows/ci.yml`) — but a PR whose *base* is any other feature branch gets no Build job at all, so a stacked PR can look green having never been compiled. Check which jobs actually ran before trusting a tick.
 - **Recurring regressions and the invariants that prevent them: `docs/REGRESSIONS.md`.** Read it before changing anything under `Kannu/managers/AgentStatus/` **or any file in that document's Danger zones table** — the table is the list that matters, and it now reaches outside AgentStatus (`ModalPresenter.swift`, `BluetoothAudioManager.swift`). Scoping this line to one directory is exactly why an invariant that was already written down got re-broken twice in a file it did not name. When a rule in that file breaks again, add the dated addendum in the same commit as the fix.
 
 ## Instruction-file integrity

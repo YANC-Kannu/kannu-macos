@@ -70,8 +70,11 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 2,   // "Add" / "Add New" — labels of a tappable card
         "MusicSlotConfigurationView.swift": 1,      // palette item label — draggable/tappable chip
         "SecurityFindingRow.swift": 1,              // severity badge chip, accessibility-hidden
-        "SettingsView.swift": 6,                    // badges and tappable style cards: a
-                                                    // selectable label swallows the card's click
+        // Badges and tappable style cards: a selectable label swallows the card's click.
+        "AppearanceSettings.swift": 2,
+        "DevicesSettings.swift": 1,
+        "DownloadsSettings.swift": 1,
+        "SettingsHelpers.swift": 2,
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -112,9 +115,16 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 9,  // animation cards, their chips, the URL sheet
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
         "SecurityFindingRow.swift": 2,       // the severity badge chips
-        "SettingsView.swift": 33,            // sidebar chrome and search results, style and HUD
-                                             // cards, previews, the colour popover, the
-                                             // timer-preset editor, badge capsules
+        "SettingsView.swift": 6,             // sidebar chrome and search results
+        "AppearanceSettings.swift": 3,       // style cards and previews
+        "CustomOSDSettings.swift": 1,        // the OSD preview
+        "DevicesSettings.swift": 3,          // device cards
+        "DownloadsSettings.swift": 1,        // a badge
+        "HUDAndOSDSettings.swift": 6,        // HUD style cards and previews
+        "LockScreenSettings.swift": 6,       // lock screen previews
+        "SettingsColorPicker.swift": 2,      // the colour popover
+        "SettingsHelpers.swift": 1,          // badge capsules
+        "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
     ]
@@ -130,7 +140,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedInlineSliderCounts: [String: Int] = [
         "AnimationEditorView.swift": 3,      // the animation editor sheet
         "SettingsComponents.swift": 2,       // SettingsSliderRow itself, stepped and unstepped
-        "SettingsView.swift": 1,             // the OSD preview card's own level slider
+        "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
     ]
 
     func testNoSliderIsBuiltByHandInARow() {
@@ -151,8 +161,16 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "NewTaskSheet.swift": 1,             // New Task is a sheet: a sheet pads its own content
         "PolicyRulesEditor.swift": 1,        // the Edit rules sheet: a sheet pads its own content
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 42,            // sidebar chrome, badge capsules, style and HUD
-                                             // cards, previews, the colour popover
+        "SettingsView.swift": 14,            // sidebar chrome
+        "AgentStatusSettings.swift": 1,      // a preview
+        "AppearanceSettings.swift": 6,       // style cards and previews
+        "CustomOSDSettings.swift": 1,        // the OSD preview
+        "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
+        "LockScreenSettings.swift": 4,       // lock screen previews
+        "SettingsColorPicker.swift": 1,      // the colour popover
+        "SettingsHelpers.swift": 8,          // badge capsules
+        "SettingsPermissionCallout.swift": 1,  // the callout's own card
+        "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
         "TaskTagsSheet.swift": 1,            // Add Tags is its own sheet now: a sheet pads its own content

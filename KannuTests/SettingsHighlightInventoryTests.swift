@@ -116,7 +116,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         for word in ["\"quit\"", "\"exit\""] {
             XCTAssertTrue(entry.contains(word), "searching \(word) must find Quit Kannu")
         }
-        XCTAssertTrue(settingsView.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
+        let general = try XCTUnwrap(try Self.sources()["GeneralSettings.swift"])
+        XCTAssertTrue(general.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
     }
 
     // MARK: - Pairing
@@ -172,6 +173,16 @@ final class SettingsHighlightInventoryTests: XCTestCase {
                      "tasksLinearSourceHighlightID", "tasksTodoistSourceHighlightID", "tasksAppleRemindersSourceHighlightID"] {
             XCTAssertTrue(settingsView.contains(": \(link)"), "\(link) is not in taskSourceRows")
         }
+    }
+
+    /// Agents and Stats build their other rows only while their switch is on, so a search lands
+    /// those entries on the switch until then: the redirect is wired for these two tabs only.
+    func testASwitchedOffTabLandsOnItsSwitch() throws {
+        let settingsView = try XCTUnwrap(try Self.sources()["SettingsView.swift"])
+        XCTAssertTrue(settingsView.contains("if entry.tab == .agentStatus, !Defaults[.enableAgentStatusFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.agentMonitoringHighlightID"))
+        XCTAssertTrue(settingsView.contains("if entry.tab == .stats, !Defaults[.enableStatsFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.statsMonitoringHighlightID"))
     }
 
     /// Brain › Tasks' pages below the overview exist only while open, so nothing on them may carry

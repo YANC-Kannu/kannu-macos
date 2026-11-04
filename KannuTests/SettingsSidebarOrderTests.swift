@@ -43,7 +43,7 @@ final class SettingsSidebarOrderTests: XCTestCase {
     }
 
     func testProductivityComesRightAfterAIAgents() throws {
-        let groups = try Self.slice(try Self.source(), from: "private enum SettingsTabGroup", to: "var id: String")
+        let groups = try Self.slice(try Self.source(), from: "enum SettingsTabGroup", to: "var id: String")
         let cases = groups.split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { $0.hasPrefix("case ") }
