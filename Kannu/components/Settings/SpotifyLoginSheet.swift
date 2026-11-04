@@ -52,11 +52,9 @@ struct SpotifyLoginSheet: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Connect Spotify")
-                        .font(.headline)
+                        .font(SettingsTheme.sheetTitle)
                     Text(statusText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                        .settingsDescriptionStyle()
                 }
                 Spacer()
                 Button {
@@ -85,6 +83,9 @@ struct SpotifyLoginSheet: View {
             }
         }
         .frame(minWidth: 520, minHeight: 640)
+        // A sheet is a window of its own, so it takes Brain's root itself; it keeps its own layout.
+        .background(SettingsTheme.panel)
+        .settingsDesignSystem()
     }
 }
 

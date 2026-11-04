@@ -538,46 +538,28 @@ struct URLImportSheet: View {
     let onCancel: () -> Void
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Add Animation from URL")
-                .font(.headline)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Lottie JSON URL")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+        SettingsSheet("Add Animation from URL") {
+            LabeledContent("Lottie JSON URL") {
                 TextField("https://example.com/animation.json", text: $urlInput, prompt: Text("https://example.com/animation.json"))
                     .settingsField()
             }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Animation Name")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
+            LabeledContent("Animation Name") {
                 TextField("My Animation", text: $nameInput, prompt: Text("My Animation"))
                     .settingsField()
             }
-            
-            HStack {
-                Button("Cancel") {
-                    onCancel()
-                }
-                .keyboardShortcut(.cancelAction)
-                
-                Spacer()
-                
-                Button("Add") {
-                    onImport()
-                }
-                .buttonStyle(SettingsButtonStyle(.primary))
-                .keyboardShortcut(.defaultAction)
-                .disabled(urlInput.isEmpty || nameInput.isEmpty)
+        } buttons: {
+            Button("Cancel") {
+                onCancel()
             }
+            .keyboardShortcut(.cancelAction)
+
+            Button("Add") {
+                onImport()
+            }
+            .buttonStyle(SettingsButtonStyle(.primary))
+            .keyboardShortcut(.defaultAction)
+            .disabled(urlInput.isEmpty || nameInput.isEmpty)
         }
-        .padding(24)
-        .frame(width: 400)
     }
 }
 

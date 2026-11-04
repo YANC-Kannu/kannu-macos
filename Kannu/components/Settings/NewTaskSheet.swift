@@ -52,9 +52,6 @@ struct NewTaskSheet: View {
         case tags
     }
 
-    /// As wide as the Connect sheets: room for the estimate and the tags side by side.
-    private static let width: CGFloat = 420
-
     private var draft: TaskFormDraft { newTask.draft }
     private var canAdd: Bool { manager.isReady && draft.canSave }
     /// A tag half-typed: Return completes it, so Add gives up the Return key meanwhile.
@@ -64,14 +61,7 @@ struct NewTaskSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("New Task")
-                    .font(.headline)
-                Text("A local task, added on top of your list. Cancel keeps what you typed.")
-                    .settingsDescriptionStyle()
-            }
-
+        SettingsSheet("New Task", subtitle: Text("A local task, added on top of your list. Cancel keeps what you typed.")) {
             TextField("Title", text: $newTask.draft.title, prompt: Text("What needs doing?"))
                 .focused($focused, equals: .title)
                 .onSubmit { add(andStart: false) }
@@ -112,34 +102,30 @@ struct NewTaskSheet: View {
             }
 
             reminder
-
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if draft != TaskFormDraft() {
-                    Button("Clear All") {
-                        newTask.draft = TaskFormDraft()
-                        focused = .title
-                    }
+        } buttons: {
+            if draft != TaskFormDraft() {
+                Button("Clear All") {
+                    newTask.draft = TaskFormDraft()
+                    focused = .title
                 }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                if enableTimerFeature {
-                    Button {
-                        add(andStart: true)
-                    } label: {
-                        Label("Add & Start", systemImage: "play.fill")
-                    }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!canAdd)
-                }
-                Button("Add") { add(andStart: false) }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(isTypingTag ? nil : .defaultAction)
-                    .disabled(!canAdd)
             }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            if enableTimerFeature {
+                Button {
+                    add(andStart: true)
+                } label: {
+                    Label("Add & Start", systemImage: "play.fill")
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!canAdd)
+            }
+            Button("Add") { add(andStart: false) }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(isTypingTag ? nil : .defaultAction)
+                .disabled(!canAdd)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: Self.width)
         .onAppear {
             // macOS's answer may have changed since the list last asked: the note follows it.
             manager.checkReminderPermission()

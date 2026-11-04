@@ -53,11 +53,16 @@ component already does.
   `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
   control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
-  controls (`SettingsSlider`, `SettingsStepper`), and the shell's own views (below).
+  controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), and the shell's own views
+  (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
   it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
-  would recolour the labels of native prominent buttons and menus.
+  would recolour the labels of native prominent buttons and menus. A sheet is a window of its own, and
+  whether SwiftUI passes the root into a presentation cannot be told from source, so each presented
+  window applies it again: `SettingsSheet` for every sheet, and the two large sheets, the animation
+  editor and Spotify's sign-in, themselves. A sheet is never a `Form`, so the second root changes
+  nothing in it.
 - **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
   `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
 - **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
@@ -355,10 +360,12 @@ section describes it, it does not define it.
   sheet holding every field the item takes — never fields inline in the list (David, 2026-10-24:
   "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's Form, never on the
   row's button: a long, lazy Form drops the row once it scrolls away, and the shortcut with it.
-- A sheet is a padded `VStack`, never a `Form`: a `.headline` heading (and a secondary line under
-  it), the fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for
-  what it does ("Add", "Schedule", "Done"; `.defaultAction`). Return is the primary in every field,
-  except while a tag is being typed, where it completes the tag (Tags, New Task).
+- A sheet is a `SettingsSheet`, never a `Form`: its title (and a secondary line under it), the
+  fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for what it does
+  ("Add", "Schedule", "Done"; `.defaultAction`). A `Spacer` of the sheet's own spreads them only
+  when something leads (Clear All, Remove Estimate). A field's name is a `LabeledContent` label
+  beside it. Return is the primary in every field, except while a tag is being typed, where it
+  completes the tag (Tags, New Task).
 - Every row with a `settingsSearchIndex` entry carries a `.settingsHighlight(id:)` whose id
   matches the entry exactly (`SettingsHighlightInventoryTests` pins the pairing and the counts;
   the counts move only as a deliberate edit).

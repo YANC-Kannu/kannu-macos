@@ -980,6 +980,90 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.flatDefaultActions(in: Self.code("// .defaultAction needs the primary style")).count, 0)
     }
 
+    // MARK: - Sheets
+
+    /// Each sheet that builds a `SettingsSheet`, and the file it lives in.
+    private static let sheetTypes = ["JiraConnectSheet": "TaskConnectSheets.swift", "GitLabConnectSheet": "TaskConnectSheets.swift",
+                                     "SourceConnectSheet": "TaskConnectSheets.swift", "TaskTagsSheet": "TaskTagsSheet.swift",
+                                     "NewTaskSheet": "NewTaskSheet.swift", "TaskValueSheet": "TasksSettings.swift",
+                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift"]
+    /// The two large sheets, which keep layouts of their own and take the root and the panel themselves.
+    private static let largeSheetFiles = ["AnimationEditorView.swift", "SpotifyLoginSheet.swift"]
+
+    /// What `SettingsSheet` keeps: the root and the panel, since a sheet is a window of its own and whether the root's
+    /// styles reach a presentation cannot be told from source, and a title that is a header and can be copied.
+    private static func sheetProblems(in sheet: String) -> [String] {
+        [".settingsDesignSystem()", ".background(SettingsTheme.panel)", ".accessibilityAddTraits(.isHeader)",
+         ".textSelection(.enabled)"].filter { !sheet.contains($0) }
+    }
+
+    /// The text inside `struct name { … }`, its braces balanced, read with strings blanked; nil when there is none.
+    private static func structBody(_ name: String, in source: String) -> String? {
+        let text = Self.code(source, blankingStrings: true)
+        guard let header = text.range(of: #"struct \#(name)\b[^{]*\{"#, options: .regularExpression) else { return nil }
+        let characters = Array(text[text.index(before: header.upperBound)...])
+        var depth = 0, end = 0
+        repeat {
+            if characters[end] == "{" { depth += 1 } else if characters[end] == "}" { depth -= 1 }
+            end += 1
+        } while end < characters.count && depth > 0
+        return String(characters[..<end])
+    }
+
+    /// The sheets whose own body builds no `SettingsSheet(`, by type.
+    private static func sheetsNotBuiltOnTheSheet(in sources: [String: String]) -> [String] {
+        sheetTypes.compactMap { type, file in
+            guard let source = sources[file], let body = structBody(type, in: source), body.contains("SettingsSheet(") else { return type }
+            return nil
+        }.sorted()
+    }
+
+    /// The large sheets missing the root or the panel.
+    private static func largeSheetsWithoutTheRoot(in sources: [String: String]) -> [String] {
+        largeSheetFiles.filter { file in
+            let code = Self.code(sources[file] ?? "")
+            return !code.contains(".settingsDesignSystem()") || !code.contains(".background(SettingsTheme.panel)")
+        }
+    }
+
+    func testEverySheetIsASettingsSheet() throws {
+        let sources = try Self.sources()
+        let sheet = Self.code(try XCTUnwrap(sources["SettingsSheet.swift"]))
+        XCTAssertEqual(Self.sheetProblems(in: sheet), [])
+        Self.assertCaught([(".settingsDesignSystem()", ""), (".background(SettingsTheme.panel)", ".background(SettingsTheme.card)"),
+                           (".accessibilityAddTraits(.isHeader)", ""), (".textSelection(.enabled)", "")],
+                          in: sheet, by: Self.sheetProblems)
+
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: sources), [])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: sources), [])
+
+        // The real files, broken: a sheet back on a bare VStack; Jira's sheet alone, its neighbours still built on
+        // ours; a sheet type gone; a large sheet without its root, or without its panel.
+        func broken(_ file: String, _ from: String, _ to: String, firstOnly: Bool = false) -> [String: String] {
+            var copy = sources
+            let source = sources[file] ?? ""
+            if firstOnly, let range = source.range(of: from) {
+                copy[file] = source.replacingCharacters(in: range, with: to)
+            } else {
+                copy[file] = source.replacingOccurrences(of: from, with: to)
+            }
+            XCTAssertNotEqual(copy[file], source, "the plant must change \(file)")
+            return copy
+        }
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskTagsSheet.swift", "SettingsSheet(", "VStack(")), ["TaskTagsSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "SettingsSheet(", "VStack(", firstOnly: true)),
+                       ["JiraConnectSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "struct GitLabConnectSheet", "struct GitLabSheet")),
+                       ["GitLabConnectSheet"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("AnimationEditorView.swift", ".settingsDesignSystem()", "")),
+                       ["AnimationEditorView.swift"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("SpotifyLoginSheet.swift", ".background(SettingsTheme.panel)", "")),
+                       ["SpotifyLoginSheet.swift"])
+        // A `SettingsSheet(` in a comment builds nothing.
+        XCTAssertNil(Self.structBody("Planted", in: "struct Other {}\n"))
+        XCTAssertEqual(Self.structBody("Planted", in: "struct Planted: View {\n    // SettingsSheet(\n}\n")?.contains("SettingsSheet("), false)
+    }
+
     // MARK: - Licence
 
     private static func filesWithoutTheLicence(in sources: [String: String], licence: String) -> [String] {

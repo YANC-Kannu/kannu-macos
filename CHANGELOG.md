@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's sheets take its theme
+- **Developer label:** Brain redesign Stage 3: "restyled sheets"
+- **Agent label:** Claude Code (Opus 5.5) — one SettingsSheet that applies the root itself, since a sheet is a window of its own
+- **Changes:**
+  - `SettingsSheet`: a title in `sheetTitle` with an optional line under it, the fields, then the buttons trailing,
+    Cancel then the primary, on the panel, 420 pt wide. It applies `settingsDesignSystem()` itself, because a sheet
+    is a window of its own and whether the root reaches a presentation cannot be told from source. A sheet is never
+    a `Form`, so the second root changes nothing in it.
+  - Eight sheets build it: the three Connect sheets, Tags, New Task, the value sheet (Set Estimate, Add Time, Set
+    End Time, Schedule), Edit rules at 560 pt, and Add Animation from URL. Tags and the value sheet grow from 380 pt
+    to 420, and the URL sheet from 400.
+  - A field's name is a `LabeledContent` label beside it (Site, Email, API token, Server, the token, Lottie JSON
+    URL, Animation Name), and every red problem line is `SettingsErrorText`. The URL sheet's Cancel moves to the
+    trailing side.
+  - Tags' drop ring and its highlighted suggestion take `accentStrong`.
+  - The animation editor and Spotify's sign-in keep their own layouts and apply the root and the panel themselves.
+    Spotify's title takes `sheetTitle` and its status line the description style.
+  - Theme tokens `sheetTitle`, `sheetInset`, `sheetStack`, `sheetWidth` and `sheetWidthWide`.
+  - `SettingsDesignSystemRulesTests` holds each of the eight sheets to `SettingsSheet`, struct by struct, and the two
+    large ones to the root and the panel. `SettingsLayoutRulesTests`' padding pins trade the sheets' own for
+    `SettingsSheet`'s one, and `BrainShellRulesTests` keeps page knowledge out of it.
+  - New boards `connectSheet`, `tagsSheet` and `urlImportSheet`; the designSystem board names `sheetTitle`.
+  - docs/SETTINGS.md: the one root, re-applied by each presented window, and the sheet rule. docs/REGRESSIONS.md
+    entry 22 gains its dated line.
+
 ### 2026-11-04 - Brain's fields take its chrome and stay native inside
 - **Developer label:** Brain redesign Stage 3: "`SettingsField`"
 - **Agent label:** Claude Code (Opus 5.5) — the AppKit field, plain, inside our chrome; its name beside it, never inside
