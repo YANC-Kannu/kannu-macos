@@ -53,12 +53,14 @@ struct DebugSnapshotRequest {
 enum DebugSnapshots {
     static func run(_ request: DebugSnapshotRequest, viewModel: KannuViewModel) async {
         try? FileManager.default.createDirectory(at: request.directory, withIntermediateDirectories: true)
+        writeFontReport(into: request.directory)
         // Fixture tasks before anything touches the task list: a snapshot never reads or writes
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
+        SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", AnyView(Form {
+            boards.append(("allTasks", SettingsView.snapshotPageTitle(Form {
                 Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
                 AllTasksPage(query: .constant(""), context: tasksBoardContext())
             })))
@@ -111,6 +113,9 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("components") == true {
             boards.append(("components", AnyView(componentsBoard)))
         }
+        if request.tabs == nil || request.tabs?.contains("designSystem") == true {
+            boards.append(("designSystem", AnyView(designSystemBoard)))
+        }
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
@@ -133,8 +138,25 @@ enum DebugSnapshots {
                 let root = AnyView(view
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
-                    .formStyle(.grouped))
-                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: 490, into: request.directory)
+                    .settingsDesignSystem())
+                // A page at the narrowest panel the window can have: a tab through `SettingsForm`, which pads
+                // it, and a bare `Form` at the width that padding leaves. The rules sheet sets its own width,
+                // which 490 would crop on both sides.
+                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490)
+                    : throughTheForm.contains(name) ? narrowestPanel : narrowestPage
+                // A page's `Form` has no background of its own now, so it needs the panel behind it.
+                // Sheets and onboarding do not sit on the panel.
+                let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
+                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory,
+                             background: background)
+            }
+        }
+        // The whole window: the sidebar's two lists, a search and a deep link.
+        for (name, view) in shellBoards where request.tabs == nil || request.tabs?.contains(name) == true {
+            let size = shellBoardSize(name)
+            for dark in [false, true] {
+                await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: size.width, into: request.directory, fixedHeight: size.height)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -223,6 +245,195 @@ enum DebugSnapshots {
             }
         }
     }
+
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes"]
+
+    /// The smallest window, less the sidebar and the panel's one inset.
+    private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
+    /// What `SettingsForm` leaves a page of that panel: its padding is the page inset less the `Form`'s own margin.
+    private static let narrowestPage = narrowestPanel - 2 * (SettingsTheme.pageInset - SettingsTheme.formMargin)
+    /// The boards drawn through `SettingsForm`, which pads them itself: every tab, and All tasks.
+    private static var throughTheForm: Set<String> { Set(SettingsTab.allCases.map(\.rawValue) + ["allTasks"]) }
+
+    /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
+    /// enter it, and the search boards, at the smallest window, where the sidebar has the least room.
+    private static func shellBoardSize(_ name: String) -> NSSize {
+        switch name {
+        case "shellWide":
+            return NSSize(width: 1440, height: 900)
+        case "shellSearch", "shellSearchList":
+            return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)
+        default:
+            return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        }
+    }
+
+    /// `SettingsView` applies its own root, so these do not go through the loop that adds it.
+    private static var shellBoards: [(String, AnyView)] {
+        [
+            ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
+            ("shellWide", AnyView(SettingsView(snapshotTab: .general))),
+            // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
+            // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
+            // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment
+            // because in the app the window's content has been laid out before a link arrives, and sent
+            // during this window's first layout, a row this far down does not scroll.
+            ("shellDeepLink", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
+                        highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays"))
+                }
+            })),
+            // A query with more suggestions than fit, the field focused. A snapshot's window cannot
+            // take focus, so the board asks for the list.
+            ("shellSearch", AnyView(SettingsView(snapshotTab: .hudAndOSD, search: "color", showsSuggestions: true))),
+            // The same flat list once the field has let go: what is left when a suggestion was picked.
+            ("shellSearchList", AnyView(SettingsView(snapshotTab: .general, search: "notch"))),
+        ]
+    }
+
+    /// Which fonts this launch really has. `open -W` loses stdout, and a PNG can hide a fallback.
+    private static func writeFontReport(into directory: URL) {
+        let report = """
+        Geist: \(SettingsTheme.geistIsAvailable ? "bundled" : "missing, system font")
+        Geist Mono: \(SettingsTheme.geistMonoIsAvailable ? "bundled" : "missing, system font")
+
+        """
+        try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
+    /// press take a pointer), and every colour and font token by name.
+    private static var designSystemBoard: some View {
+        Form {
+            Section {
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on") }
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off") }
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on, disabled") }
+                    .disabled(true)
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off, disabled") }
+                    .disabled(true)
+                SettingsRow(verbatim: "No label, on: the row draws the title",
+                            description: "A description under the title, and the switch on the trailing side.") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, off") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, on, disabled") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "No label, off, disabled") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Toggles")
+            }
+
+            Section {
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard") }
+                    Button(action: {}) { Text(verbatim: "Primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Destructive") }
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard, disabled") }
+                        .disabled(true)
+                    Button(action: {}) { Text(verbatim: "Primary, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                        .disabled(true)
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Small") }
+                    Button(action: {}) { Text(verbatim: "Small primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
+                }
+                .controlSize(.small)
+            } header: {
+                Text(verbatim: "Buttons")
+            }
+
+            Section {
+                LabeledContent {
+                    Text(verbatim: "A bare value")
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } label: {
+                    Text(verbatim: "With a value")
+                }
+                LabeledContent {
+                    TextField(text: .constant("Typed text stays primary")) { Text(verbatim: "Field") }
+                        .labelsHidden()
+                } label: {
+                    Text(verbatim: "With a typed field")
+                }
+                DisclosureGroup(isExpanded: .constant(true)) {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "A row inside") }
+                    LabeledContent {
+                        Text(verbatim: "Another row").foregroundStyle(.secondary).textSelection(.enabled)
+                    } label: {
+                        Text(verbatim: "With a value")
+                    }
+                } label: {
+                    Text(verbatim: "A disclosure, open")
+                }
+                DisclosureGroup(isExpanded: .constant(false)) {
+                    Text(verbatim: "Never shown")
+                } label: {
+                    Text(verbatim: "A disclosure, closed")
+                }
+            } header: {
+                Text(verbatim: "Rows")
+            }
+
+            Section {
+                ForEach(designSystemColors, id: \.name) { swatch in
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                            .fill(swatch.color)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                                    .strokeBorder(SettingsTheme.line)
+                            }
+                            .frame(width: 44, height: 22)
+                        Text(verbatim: swatch.name)
+                            .foregroundStyle(SettingsTheme.ink)
+                    }
+                }
+            } header: {
+                Text(verbatim: "Colours")
+            }
+
+            Section {
+                ForEach(designSystemFonts, id: \.name) { sample in
+                    Text(verbatim: "\(sample.name): Watch your agents")
+                        .font(sample.font)
+                }
+            } header: {
+                Text(verbatim: "Fonts")
+            }
+        }
+    }
+
+    private static let designSystemColors: [(name: String, color: Color)] = [
+        ("paper", SettingsTheme.paper), ("panel", SettingsTheme.panel), ("card", SettingsTheme.card),
+        ("selection", SettingsTheme.selection), ("hover", SettingsTheme.hover), ("line", SettingsTheme.line),
+        ("ink", SettingsTheme.ink), ("inkSecondary", SettingsTheme.inkSecondary),
+        ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
+        ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
+        ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
+    ]
+
+    private static let designSystemFonts: [(name: String, font: Font)] = [
+        ("pageTitle", SettingsTheme.pageTitle), ("body", SettingsTheme.body), ("bodyStrong", SettingsTheme.bodyStrong),
+        ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
+        ("mono", SettingsTheme.mono),
+    ]
 
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.
@@ -359,11 +570,14 @@ enum DebugSnapshots {
                          open: { _ in }, connect: { _ in })
     }
 
+    /// `fixedHeight` skips the growing below: a board of the whole window has more than one scroll
+    /// view, and the first it finds is the sidebar's.
     private static func render(_ view: AnyView, name: String, dark: Bool, width: CGFloat, into directory: URL,
-                               scale: CGFloat = 2) async {
-        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width)
-            .background(Color(nsColor: .windowBackgroundColor))))
-        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: 900),
+                               scale: CGFloat = 2, background: Color = Color(nsColor: .windowBackgroundColor),
+                               fixedHeight: CGFloat? = nil) async {
+        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width, height: fixedHeight)
+            .background(background)))
+        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: fixedHeight ?? 900),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.ignoresMouseEvents = true
@@ -374,10 +588,11 @@ enum DebugSnapshots {
         try? await Task.sleep(for: .milliseconds(700))
         // A grouped Form is a scroll view that only builds the rows it shows: grow the window to the
         // whole document so every row is laid out and drawn.
-        for _ in 0..<4 {
+        for _ in 0..<(fixedHeight == nil ? 4 : 0) {
             let target: CGFloat
-            if let document = firstScrollView(in: hosting)?.documentView {
-                target = min(12_000, max(200, document.frame.height))
+            if let scroll = firstScrollView(in: hosting), let document = scroll.documentView {
+                // Plus what sits outside the scroller, or a page's header clips its last rows.
+                target = min(12_000, max(200, document.frame.height + hosting.bounds.height - scroll.frame.height))
             } else {
                 target = min(12_000, max(120, hosting.fittingSize.height))
             }

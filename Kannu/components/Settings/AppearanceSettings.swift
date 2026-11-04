@@ -48,6 +48,7 @@ struct Appearance: View {
     @Default(.enableLockScreenMediaWidget) private var enableLockScreenMediaWidget
     @Default(.enableLockScreenTimerWidget) private var enableLockScreenTimerWidget
     @Default(.externalDisplayStyle) private var externalDisplayStyle
+    @Default(.brainAppearance) private var brainAppearance
 
     @State private var isIconImporterPresented = false
     @State private var isIconDropTarget = false
@@ -109,6 +110,17 @@ struct Appearance: View {
     var body: some View {
         Form {
             Section {
+                // The moon only picks the opposite of what is on screen, so this is the one way back
+                // to Match macOS.
+                SettingsRow("Brain appearance", description: brainAppearance.description) {
+                    Picker("Brain appearance", selection: $brainAppearance) {
+                        ForEach(BrainAppearance.allCases) { choice in
+                            Text(choice.localizedName)
+                                .tag(choice)
+                        }
+                    }
+                }
+                .settingsHighlight(id: highlightID("Brain appearance"))
                 Toggle("Always show tabs", isOn: $coordinator.alwaysShowTabs)
                 Defaults.Toggle(key: .settingsIconInNotch) {
                     Text("Brain icon in notch")
@@ -186,7 +198,7 @@ struct Appearance: View {
 
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Lock screen glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
-                                ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock Screen tab.") : nil) {
+                                ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock screen tab.") : nil) {
                         Picker("Lock screen glass mode", selection: $lockScreenGlassCustomizationMode) {
                             ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
                                 Text(mode.rawValue).tag(mode)
@@ -330,7 +342,7 @@ struct Appearance: View {
                         notchSkinManager.importError = nil
                         isSkinImporterPresented = true
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
 
                 SettingsSliderRow("Scrim opacity", value: $notchSkinScrimOpacity, in: 0...0.6, step: 0.05,
@@ -406,7 +418,7 @@ struct Appearance: View {
                         iconImportError = nil
                         isIconImporterPresented = true
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
             } header: {
                 SettingsSectionHeader("App icon")

@@ -33,13 +33,40 @@ final class SettingsAnimationRulesTests: XCTestCase {
         .deletingLastPathComponent()
 
     private static func settingsSources() throws -> [String: String] {
-        let directory = repoRoot.appendingPathComponent("Kannu/components/Settings")
+        let files = try swiftFiles(under: repoRoot.appendingPathComponent("Kannu/components/Settings"))
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so a rule reads only one of them")
         var sources: [String: String] = [:]
-        let files = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
-        for case let file as URL in files where file.pathExtension == "swift" {
+        for file in files {
             sources[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         return sources
+    }
+
+    private static func swiftFiles(under directory: URL) throws -> [URL] {
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
+    }
+
+    /// The `.repeatForever` ban reaches a subfolder only as far as this walk does.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = try Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
     }
 
     /// Lines that start an animation with no end. Comments may name it; code may not.
@@ -53,6 +80,7 @@ final class SettingsAnimationRulesTests: XCTestCase {
     func testNothingUnderSettingsRepeatsForever() throws {
         let sources = try Self.settingsSources()
         XCTAssertFalse(sources.isEmpty, "the scan read nothing: the path moved")
+        XCTAssertNotNil(sources["SettingsTheme.swift"], "the scan no longer reaches DesignSystem/")
         for (name, source) in sources {
             XCTAssertEqual(Self.offenders(in: source), [], "\(name) animates forever while its page is open")
         }
@@ -159,6 +187,104 @@ final class SettingsAnimationRulesTests: XCTestCase {
         if !isBefore("makeFirstResponder(focus)", "setBoundsOrigin", in: restore) {
             violations.append("the scroll goes back before focus moves it again")
         }
+        return violations + fullScreenCloseViolations(in: code, show: show)
+    }
+
+    /// A close asked for in full screen waits for the exit, so the window is never ordered out, and the
+    /// app never turned `.accessory`, inside a full-screen Space. This proves the wiring. It cannot
+    /// prove AppKit's timing, which takes a real window (docs/REGRESSIONS.md, entry 22).
+    private static func fullScreenCloseViolations(in code: String, show: String) -> [String] {
+        guard let shouldClose = body(of: "func windowShouldClose(", in: code),
+              let close = body(of: "override func close(", in: code),
+              let willClose = body(of: "func windowWillClose(", in: code),
+              let deferClose = body(of: "func deferCloseUntilWindowed(", in: code),
+              let finish = body(of: "func finishPendingClose(", in: code),
+              let willEnter = body(of: "func windowWillEnterFullScreen(", in: code),
+              let didEnter = body(of: "func windowDidEnterFullScreen(", in: code),
+              let failedEntry = body(of: "func windowDidFailToEnterFullScreen(", in: code),
+              let willExit = body(of: "func windowWillExitFullScreen(", in: code),
+              let didExit = body(of: "func windowDidExitFullScreen(", in: code),
+              let failedExit = body(of: "func windowDidFailToExitFullScreen(", in: code) else {
+            return ["the deferred close or a full-screen delegate method is gone"]
+        }
+        var violations: [String] = []
+        // The answer is what decides, and nothing is ordered out or turned `.accessory` ahead of it.
+        if shouldClose.range(of: #"\{\s*!deferCloseUntilWindowed\(sender\)\s*\}"#, options: .regularExpression) == nil {
+            violations.append("the close button and Command-W close inside the full-screen Space")
+        }
+        if !close.contains("deferCloseUntilWindowed(window) { return }")
+            || !isBefore("deferCloseUntilWindowed(", "super.close()", in: close)
+            || !isBefore("deferCloseUntilWindowed(", "relinquishFocus()", in: close) {
+            violations.append("close() does not wait for the exit")
+        }
+        if !deferClose.contains("styleMask.contains(.fullScreen)") {
+            violations.append("the wait does not look at full screen")
+        }
+        if !deferClose.contains("|| isChangingFullScreen") {
+            violations.append("a close during a transition does not wait")
+        }
+        if !deferClose.contains("closeAfterFullScreen = true") {
+            violations.append("nothing remembers the close it put off")
+        }
+        if !deferClose.contains("toggleFullScreen") {
+            violations.append("the wait never starts the exit")
+        }
+        // A toggle AppKit ignored would lose the close, and a later exit would close Brain by surprise.
+        if !deferClose.contains("if !isChangingFullScreen") {
+            violations.append("the exit can start during a transition")
+        }
+        if !isBefore("DispatchQueue.main.async", "toggleFullScreen", in: didEnter) {
+            violations.append("a close during the entry never starts the exit, or starts it inside AppKit's callback")
+        }
+        if !didEnter.contains("guard let self, self.closeAfterFullScreen") {
+            violations.append("the exit after an entry does not ask whether a reopening cancelled it")
+        }
+        if !didEnter.contains("!self.isChangingFullScreen") {
+            violations.append("the exit after an entry can start during a transition")
+        }
+        // Leaving the flag set would close Brain at some later exit.
+        if !isBefore("self.window?.attachedSheet == nil else { self.closeAfterFullScreen = false", "toggleFullScreen", in: didEnter) {
+            violations.append("the exit after an entry toggles under a sheet, or leaves the close pending")
+        }
+        for (name, method) in [("exit", didExit), ("failed entry", failedEntry), ("failed exit", failedExit)] where !method.contains("finishPendingClose()") {
+            violations.append("the close is forgotten after a \(name)")
+        }
+        for (name, method) in [("entry", willEnter), ("exit", willExit)] where !method.contains("isChangingFullScreen = true") {
+            violations.append("an \(name) is not marked as a transition")
+        }
+        for (name, method) in [("entry", didEnter), ("exit", didExit), ("failed entry", failedEntry), ("failed exit", failedExit)]
+        where !method.contains("isChangingFullScreen = false") {
+            violations.append("the transition never ends after a \(name)")
+        }
+        if !isBefore("guard closeAfterFullScreen", "DispatchQueue.main.async", in: finish) {
+            violations.append("every exit queues a close, asked for or not")
+        }
+        if !isBefore("DispatchQueue.main.async", "window?.close()", in: finish) {
+            violations.append("the close runs inside AppKit's callback, or not at all")
+        }
+        if !isBefore("guard let self, self.closeAfterFullScreen", "window?.close()", in: finish) {
+            violations.append("a reopening in the turn before the close still closes Brain")
+        }
+        // As the entry's queued exit does: a transition that began in the turn between keeps the flag, and
+        // its own end closes Brain.
+        if !finish.contains("guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen") {
+            violations.append("the queued close runs during a transition that began after it")
+        }
+        // In this order: the flag must not outlive a close that a sheet called off.
+        if !isBefore("self.closeAfterFullScreen = false", "self.window?.attachedSheet == nil", in: finish) {
+            violations.append("the close stays pending after it ran")
+        }
+        // Closing under a sheet can leave `ModalPresenter`'s count up, and the notch refusing to open.
+        if !isBefore("self.window?.attachedSheet == nil", "window?.close()", in: finish) {
+            violations.append("the close runs under a sheet")
+        }
+        if !willClose.contains("closeAfterFullScreen = false") {
+            violations.append("a close that got there first leaves the other pending")
+        }
+        // During the exit the window is visible, and `showWindow` returns early there.
+        if !isBefore("closeAfterFullScreen = false", "window?.isVisible == true", in: show) {
+            violations.append("reopening during the exit still closes Brain")
+        }
         return violations
     }
 
@@ -175,6 +301,30 @@ final class SettingsAnimationRulesTests: XCTestCase {
                     self?.removeContentFromClosedWindow()
                 }
         """
+        let exitAfterEntry = """
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
+                    // A sheet arrived during the entry. AppKit could ignore a toggle under it, and a flag
+                    // left set would close Brain at some later exit.
+                    guard self.window?.attachedSheet == nil else { self.closeAfterFullScreen = false; return }
+                    self.window?.toggleFullScreen(nil)
+                }
+        """
+        let closeLater = """
+                DispatchQueue.main.async { [weak self] in
+                    // The flag stays set until here, so `showWindow` can still cancel.
+                    guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
+                    self.closeAfterFullScreen = false
+                    // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it
+                    // ends. A sheet that arrived during the transition keeps Brain open.
+                    guard self.window?.attachedSheet == nil else { return }
+                    self.window?.close()
+                }
+        """
+        let outerGuard = "guard closeAfterFullScreen else { return }\n        // A turn later: this runs"
+        // Anchored: the entry's queued exit has the same guard, and a mutation replaces every occurrence.
+        let closeGuard = "guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }\n            self.closeAfterFullScreen = false"
+        let clearAndSheetGuard = "self.closeAfterFullScreen = false\n            // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it\n            // ends. A sheet that arrived during the transition keeps Brain open.\n            guard self.window?.attachedSheet == nil else { return }"
         let mutations: [(name: String, edits: [(from: String, to: String)])] = [
             ("never taken out", [(later, "")]),
             ("taken out during the notification", [(later, "removeContentFromClosedWindow()")]),
@@ -203,6 +353,86 @@ final class SettingsAnimationRulesTests: XCTestCase {
             ("scroll put back before focus", [
                 ("window.makeFirstResponder(focus)\n", "\n"),
                 ("reflectScrolledClipView(clipView)\n        }", "reflectScrolledClipView(clipView)\n        }\n        window.makeFirstResponder(focus)"),
+            ]),
+            ("closed in full screen without leaving it", [("!deferCloseUntilWindowed(sender)", "true")]),
+            ("windowShouldClose ignores the answer", [("!deferCloseUntilWindowed(sender)", "_ = deferCloseUntilWindowed(sender); return true")]),
+            ("close() skips the wait", [("if let window, deferCloseUntilWindowed(window) { return }", "")]),
+            ("close() ignores the answer", [("deferCloseUntilWindowed(window) { return }", "deferCloseUntilWindowed(window) { }")]),
+            ("close() goes accessory before the wait", [
+                ("if let window, deferCloseUntilWindowed(window) { return }\n        super.close()\n        relinquishFocus()",
+                 "super.close()\n        relinquishFocus()\n        if let window, deferCloseUntilWindowed(window) { return }"),
+            ]),
+            ("the full-screen check is gone", [("window.styleMask.contains(.fullScreen) || ", "")]),
+            ("a close during a transition does not wait", [(" || isChangingFullScreen", "")]),
+            ("the close put off is not remembered", [("closeAfterFullScreen = true", "")]),
+            ("toggles during a transition", [("if !isChangingFullScreen { window.toggleFullScreen(nil) }", "window.toggleFullScreen(nil)")]),
+            ("never starts the exit", [("if !isChangingFullScreen { window.toggleFullScreen(nil) }", "")]),
+            ("a close during the entry is swallowed", [("self.window?.toggleFullScreen(nil)", "")]),
+            ("the exit starts inside AppKit's callback", [(exitAfterEntry, "window?.toggleFullScreen(nil)")]),
+            ("the exit ignores a reopening", [("guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }", "guard let self, !self.isChangingFullScreen else { return }")]),
+            ("the exit ignores a transition", [(", !self.isChangingFullScreen", "")]),
+            ("the exit toggles under a sheet", [("guard self.window?.attachedSheet == nil else { self.closeAfterFullScreen = false; return }", "")]),
+            ("a sheet at the entry leaves the close pending", [("else { self.closeAfterFullScreen = false; return }", "else { return }")]),
+            ("the close is forgotten after the exit", [
+                ("func windowDidExitFullScreen(_ notification: Notification) {\n        isChangingFullScreen = false\n        finishPendingClose()",
+                 "func windowDidExitFullScreen(_ notification: Notification) {\n        isChangingFullScreen = false"),
+            ]),
+            ("the close is forgotten after a failed entry", [
+                ("func windowDidFailToEnterFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false\n        finishPendingClose()",
+                 "func windowDidFailToEnterFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false"),
+            ]),
+            ("the close is forgotten after a failed exit", [
+                ("func windowDidFailToExitFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false\n        finishPendingClose()",
+                 "func windowDidFailToExitFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false"),
+            ]),
+            ("an entry is not marked as a transition", [
+                ("func windowWillEnterFullScreen(_ notification: Notification) {\n        isChangingFullScreen = true",
+                 "func windowWillEnterFullScreen(_ notification: Notification) {"),
+            ]),
+            ("an exit is not marked as a transition", [
+                ("func windowWillExitFullScreen(_ notification: Notification) {\n        isChangingFullScreen = true",
+                 "func windowWillExitFullScreen(_ notification: Notification) {"),
+            ]),
+            ("the transition never ends after an entry", [
+                ("func windowDidEnterFullScreen(_ notification: Notification) {\n        isChangingFullScreen = false",
+                 "func windowDidEnterFullScreen(_ notification: Notification) {"),
+            ]),
+            ("the transition never ends after an exit", [
+                ("func windowDidExitFullScreen(_ notification: Notification) {\n        isChangingFullScreen = false",
+                 "func windowDidExitFullScreen(_ notification: Notification) {"),
+            ]),
+            ("the transition never ends after a failed entry", [
+                ("func windowDidFailToEnterFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false",
+                 "func windowDidFailToEnterFullScreen(_ window: NSWindow) {"),
+            ]),
+            ("the transition never ends after a failed exit", [
+                ("func windowDidFailToExitFullScreen(_ window: NSWindow) {\n        isChangingFullScreen = false",
+                 "func windowDidFailToExitFullScreen(_ window: NSWindow) {"),
+            ]),
+            ("the close runs inside AppKit's callback", [(closeLater, "window?.close()")]),
+            ("every exit queues a close", [(outerGuard, "// A turn later: this runs")]),
+            ("every exit closes Brain", [
+                (outerGuard, "// A turn later: this runs"),
+                (closeGuard, "guard let self else { return }\n            self.closeAfterFullScreen = false"),
+            ]),
+            ("a reopening in the turn before the close still closes", [(closeGuard, "guard let self else { return }\n            self.closeAfterFullScreen = false")]),
+            ("the queued close runs during a new transition", [
+                (closeGuard, "guard let self, self.closeAfterFullScreen else { return }\n            self.closeAfterFullScreen = false"),
+            ]),
+            ("the close stays pending", [(clearAndSheetGuard, "guard self.window?.attachedSheet == nil else { return }")]),
+            ("a sheet at the exit leaves the close pending", [
+                (clearAndSheetGuard, "guard self.window?.attachedSheet == nil else { return }\n            self.closeAfterFullScreen = false"),
+            ]),
+            ("the close runs under a sheet", [("guard self.window?.attachedSheet == nil else { return }", "")]),
+            ("a close that got there first leaves the other pending", [
+                ("func windowWillClose(_ notification: Notification) {\n        // A second Command-W can beat the turn `finishPendingClose` waits for.\n        closeAfterFullScreen = false",
+                 "func windowWillClose(_ notification: Notification) {"),
+            ]),
+            // Anchored: the bare string occurs more than once, and a mutation replaces every occurrence.
+            ("reopening during the exit still closes", [("restoreContent()\n        closeAfterFullScreen = false", "restoreContent()")]),
+            ("the reopening clears the close too late", [
+                ("restoreContent()\n        closeAfterFullScreen = false", "restoreContent()"),
+                ("// Placed before it is ordered in", "closeAfterFullScreen = false\n        // Placed before it is ordered in"),
             ]),
         ]
         for mutation in mutations {

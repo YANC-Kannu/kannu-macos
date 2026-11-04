@@ -244,7 +244,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Use the Media tab to configure sneak peek, lyrics, and floating media controls.")
             }
         }
-        .navigationTitle("Live Activities")
+        .navigationTitle("Live activities")
         .onAppear {
             fullDiskAccessPermission.refreshStatus()
         }

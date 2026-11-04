@@ -81,7 +81,7 @@ struct AgentSecuritySettings: View {
         .onAppear {
             refreshStoredADRSecrets()
         }
-        .navigationTitle("Agent Security")
+        .navigationTitle("Security")
     }
 
     // MARK: - Security

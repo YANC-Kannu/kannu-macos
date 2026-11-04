@@ -110,7 +110,7 @@ struct TimerSettings: View {
                         Text("Mirror macOS Clock timers")
                     }
                     .labelsHidden()
-                    .toggleStyle(.switch)
+                    .toggleStyle(SettingsToggleStyle(showsLabel: false))
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
@@ -222,7 +222,7 @@ struct TimerSettings: View {
         } header: {
             SettingsSectionHeader("Lock Screen Integration")
         } footer: {
-            SettingsFooter("Mirrors the toggle found under Lock Screen settings so timer-specific workflows can enable or disable the widget without switching tabs.")
+            SettingsFooter("Mirrors the toggle found under Lock screen settings so timer-specific workflows can enable or disable the widget without switching tabs.")
         }
     }
 
@@ -231,8 +231,9 @@ struct TimerSettings: View {
         Section {
             LabeledContent("Default Custom Timer") {
                 Text(customDurationDisplay)
-                    .font(.system(.body, design: .monospaced))
+                    .font(SettingsTheme.mono)
                     .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
             TimerDurationStepperRow(title: String(localized: "Hours"), value: $customHours, range: 0...23)

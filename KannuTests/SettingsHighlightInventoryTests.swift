@@ -95,9 +95,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // 2026-10-28: the minimalistic UI mode is gone (David: "remove minimalistic ui mode"), and
         // with it the UI Mode section: its "Enable Minimalistic UI" entry and three rows (the switch
         // and its two battery rows), one entry, three registrations and three ids fewer.
-        XCTAssertEqual(inventory.entries.count, 243, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 272, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 266, "distinct registered ids")
+        // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
+        // opposite of what is on screen, so this row is the way back to Match macOS.
+        XCTAssertEqual(inventory.entries.count, 244, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
@@ -221,14 +223,43 @@ final class SettingsHighlightInventoryTests: XCTestCase {
     // MARK: - Parsing
 
     private static func sources() throws -> [String: String] {
-        let files = try FileManager.default.contentsOfDirectory(at: settingsDirectory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
+        let files = try swiftFiles(under: settingsDirectory)
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so this inventory reads only one of them")
         var out: [String: String] = [:]
         for file in files {
             out[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         XCTAssertNotNil(out["SettingsView.swift"])
+        // No DesignSystem/ file registers an id, so nothing else would notice this walk going flat.
+        XCTAssertNotNil(out["SettingsTheme.swift"])
         return out
+    }
+
+    private static func swiftFiles(under directory: URL) throws -> [URL] {
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
+    }
+
+    /// A row registered in a subfolder is in the inventory only as far as this walk reaches.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = try Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
     }
 
     private static func inventory() throws -> Inventory {

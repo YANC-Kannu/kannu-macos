@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Answer CodeRabbit's first review of the Brain shell
+- **Developer label:** "Yes, and queue #21"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's first review of Super 2b; the rest answered on the PR
+- **Changes:**
+  - Brain's queued close checks for a full-screen transition that began after it was queued, as the entry's
+    queued exit already did: the flag stays set, and that transition's end closes Brain.
+    `SettingsAnimationRulesTests` pins the check and plants its removal.
+  - The sidebar's Back row has a catalog entry, translated into the catalog's 17 other languages.
+  - Russian "Lock screen" reads "Экран блокировки". It read "Загрузка..." ("Loading..."), carried over from the
+    old "Lock Screen" key.
+  - `BrainPathRulesTests` scans every line for a Brain path, not only lines with a quote, and
+    `GeistBundleRulesTests` keeps a font with no PostScript name, so the name check fails for it.
+
 ### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
 - **Developer label:** "resolve issues and merge mr's also"
 - **Agent label:** Claude Code (Opus 5.5) — the one-line fixes from the second review; the rest answered on the PR
@@ -92,6 +105,216 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Notch experiences from another Kannu process drop ones with no tab, as persisted ones already do.
   - `TaskFormDraft.foldingFinishedQuickAdd`'s comment says what it does: words fold wherever they sit.
   - `UsageForecastTests` checks the expiry instant itself.
+
+### 2026-11-04 - Brain's pages start at the panel's leading edge, not in its middle
+- **Developer label:** "is the full brain revamp done, this still looks like a bit empty, any ux research solution for that"
+- **Agent label:** Claude Code (Opus 5.5) — the layout proposal's first slice: a leading frame and a larger page scale
+- **Changes:**
+  - A Brain page is no longer centred in its panel. It starts 32 pt from the panel's leading edge, or 48 pt once
+    the panel is 1,000 pt wide, as in full screen, and keeps its 720 pt cap, so a full-screen panel's spare width
+    gathers on the right instead of floating the page in the middle. The `Form`'s own 20 pt margin is part of that
+    inset, so titles and cards line up on every tab.
+  - The page title is 24 pt on every page, its cap height 44 pt below the panel's top, up from 20 pt at about
+    24 pt.
+  - `SettingsForm` reads the panel's width through `onGeometryChange` as a flag, so a resize redraws a page only when
+    it crosses 1,000 pt. The root gains no state.
+  - New theme tokens `formMargin`, `pageInsetWide`, `widePanelWidth` and `pageHeaderTop`; `pageInset` now means
+    the page's start, 32 pt, and `formMargin` takes over its old meaning.
+  - `BrainShellRulesTests`' cap rule becomes "capped, leading and measured at the panel's width", with plants for a
+    lost cap, a centred page, a lost inset, a doubled `Form` margin, a narrow-only inset, a dead width flag, the cap
+    inside the padding and the flag measured inside the cap. `docs/SETTINGS.md` says where a page starts.
+  - Boards of a bare `Form`, such as the task pages and the finding rows, render at 588 pt, the page `SettingsForm`'s
+    padding leaves at the smallest window, instead of the panel's 612 pt, so a row that clips in Brain clips on its
+    board too. Tabs still render at 612 pt through `SettingsForm`.
+
+### 2026-11-04 - Geist and Geist Mono ship inside Kannu
+- **Developer label:** Brain redesign Stage 2: "Bundle the fonts through `ATSApplicationFontsPath`, with no launch work"
+- **Agent label:** Claude Code (Opus 5.5) — static TTFs, no launch code, no registration call
+- **Changes:**
+  - `Kannu/Fonts/` holds Geist Regular, Medium and SemiBold and Geist Mono Regular, the static TTFs of the
+    Geist v1.9.0 release from `vercel/geist-font`, as ordinary git blobs, with their SIL Open Font License 1.1
+    as `Geist-OFL.txt`. No Geist Mono Medium: no theme token names it. `.gitignore` ignores every `.txt`, so it
+    gains an exception for that one file.
+  - `Kannu/Info.plist` sets `ATSApplicationFontsPath` to `.`. The synchronized group copies the files flat into
+    `Contents/Resources`, and the system activates them from there, so no code registers a font and nothing new
+    runs at launch.
+  - Brain now renders in Geist, and its two monospaced values in Geist Mono. The theme still falls back to the
+    system font at the same sizes if a face is missing.
+  - `NOTICE` credits Geist and names its licence file.
+  - New `GeistBundleRulesTests`, with plants: the plist key, each file a real TrueType font and not an LFS
+    pointer, each file's PostScript name its base name, the theme naming exactly the bundled faces both ways,
+    the licence and the `NOTICE` line, and no `CTFontManagerRegister` under `Kannu/`. `LaunchGateRulesTests`
+    adds `CTFontManager` to what may not run before the Terms of Use.
+
+### 2026-11-01 - Brain's window takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the window commits
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the AppKit and guards reviews, and the rules they found missing
+- **Changes:**
+  - A close that was waiting for full screen to end is called off by a sheet that arrived meanwhile. `NSWindow.close()`
+    ignores a sheet, and a sheet closed away with Brain could leave `ModalPresenter`'s count up and the notch refusing
+    to open. The exit after an entry does not toggle under a sheet either, and clears the flag, so no later exit
+    closes Brain by surprise.
+  - The pending flag now stays set until the turn the close runs in, so `showWindow` queued in that gap still cancels,
+    and `windowWillClose` clears it, so a second Command-W in that turn cannot close twice.
+  - Lock Screen Preview joins a full-screen Brain's Space and never becomes one of its tabs. Finishing onboarding with
+    Brain open no longer turns the app `.accessory` under it.
+  - `closingViolations` now proves order, not presence: the exit runs before `.accessory`, `close()` and
+    `windowShouldClose` obey the answer, and `showWindow`'s reset sits above its early return. The real controller is
+    broken 49 ways, up from 34. Deleting the guard in `finishPendingClose` used to pass, and now does not.
+  - `WindowFullscreenRulesTests` holds `isRestorable`, `isMovableByWindowBackground`, placing before ordering in and
+    the clamp, reads the assignments with comments blanked, and bans any height or maximum at the root, not only a
+    width. The appearance rule catches `.init`, `nil` and a direct write to the key, and its window check and the
+    notch's dark line each get a plant. The search boards' smallest-window size is pinned.
+  - `docs/SETTINGS.md`'s board command now includes `shellWide`. It and the previous entry said Brain always reopens
+    windowed; a failed exit closes in full screen, so it now says so.
+  - The full-screen Command-W beep is left to David's ear: nothing here can hear it, and the fix is a window subclass.
+
+### 2026-11-01 - Brain's moon sets its appearance, on its own window only
+- **Developer label:** Brain redesign: "Follows macOS by default, with a moon toggle"
+- **Agent label:** Claude Code (Opus 5.5) — `brainAppearance` applied by the controller, so it works while Brain is closed
+- **Changes:**
+  - `SettingsWindowController` applies `brainAppearance` to its own window: synchronously at setup, so the first
+    open cannot flash, and on every change after, with `options: []`, so the moon works and a change made
+    while Brain is closed is already in place on reopening.
+  - Brain › Settings › Appearance gains a Brain appearance row, the only way back to Match macOS, and search
+    finds it by "dark mode", "light mode", "moon" and "theme".
+  - The notch, the panels and every other window are not touched: nothing else reads the key.
+  - `BrainAppearanceRulesTests`, with plants: only the controller and the boards set a window's `.appearance`, no
+    `NSApp.appearance` and no `preferredColorScheme`, the key has exactly its four readers, and the notch window's
+    own dark line stays.
+  - Sheets, popovers, menus and alerts under a forced appearance take a real window, and have not been seen.
+
+### 2026-11-01 - Brain goes full screen, and closes cleanly from there
+- **Developer label:** "more better fullscreen supported ui like a premium app"
+- **Agent label:** Claude Code (Opus 5.5) — the fixed root width and `.fullScreenPrimary` change together; a close waits for the exit
+- **Changes:**
+  - Brain opens at 1100×760, goes down to 820×560, and can enter full screen. The root's `.frame(width: 700)`
+    goes in the same commit as `.fullScreenPrimary`, in both places the window's behaviour is assigned, because
+    SwiftUI's size bridge would otherwise fight full screen's frame.
+  - A page stops at 720 pt, centred in the panel. Its `Form`'s scrollbar sits at the page's edge until Stage 4.
+  - The title bar is transparent and its title hidden, and the shell's title row lies under it. The window no
+    longer moves by its background, and it is no longer restorable, so it always reopens windowed.
+  - A close in full screen, by the close button, Command-W or `close()`, leaves full screen first and then
+    closes through the usual `windowWillClose`, so the content still comes out of the window. It toggles only
+    when no transition is running and never inside AppKit's callback, and reopening during the exit cancels it.
+  - Placing the window happens before it is ordered in, and clamps to the screen, or a bigger window jumps, and
+    one sized on a big display gets a negative origin on a laptop.
+  - `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide its own closed notch
+    under Hide set to Always.
+  - Boards: pages at 612 pt, the narrowest real panel; `shell`, `shellSettings` and `shellDeepLink` at 1100×760;
+    `shellSearch` and `shellSearchList` at 820×560; and a new `shellWide` at 1440×900, standing in for full screen.
+  - New rules, each proved against planted offenders: the full-screen close broken 20 more ways, `.fullScreenPrimary` in both
+    assignments, no fixed width at the root, the page cap, the title row, and the detector's pid filter.
+  - None of this has entered full screen: a board's window cannot, and nothing here may open a real one.
+
+### 2026-11-01 - Brain's shell takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the shell commit
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each
+- **Changes:**
+  - Back and the Settings row return to where the user was. `tabOnOtherList` becomes `lastProductTab` and
+    `lastSettingsTab`, and a search's jumps write neither: typing "audio" from General crossed lists twice
+    and left Back on a page never chosen.
+  - The sidebar's focus stop moves to a background, because an outer `focusEffectDisabled` also took the
+    rows' own rings under Full Keyboard Access.
+  - Arrow keys no longer strand the user: from About, or a tab a query has dropped, they enter the list at
+    its near end. Left is Back and right is the Settings row. About stays out of the arrow order.
+  - A deep link to a tab the typed query's flat list leaves out clears the query. The sidebar scrolls to the
+    selected row when a query changes the list under it.
+  - The suggestions and the deep-link scroll respect Reduce Motion.
+  - The stats hint, `ReadMe.md`'s Shortcuts and Notch skin lines say "Settings" in their path, and
+    `BrainPathRulesTests` reads a path written with `→` too. It checks a path's first two levels, which the
+    entry below used to overstate as every level.
+  - Three strings name the Lock screen tab as the tab now spells it, and the catalog takes "Live activities"
+    and "Lock screen" with their translations. "HUD and OSD" and "Security" stay English: nothing translated
+    says the same thing.
+  - The `allTasks` board goes through `SettingsForm`, so it shows a sub-page's large title, and
+    `shellDeepLink` links to a row below the fold, so a dead `scrollTo` cannot draw the same picture. An animated
+    scroll does not move in a board's off-screen window, so the boards scroll at once through a DEBUG-only flag.
+  - New rules, with plants: what each sidebar list shows, the old tab names in search, the root's hidden
+    `Form` background, Reduce Motion, and the boards. The one-navigation-state rule reads the whole struct
+    and every state wrapper, and the chrome rule reads `BrainShell`.
+
+### 2026-11-01 - Brain's tabs take the names in the redesign plan
+- **Developer label:** Brain redesign plan: "Agents, Security, Usage…", "Live activities, Lock screen… HUD and OSD"
+- **Agent label:** Claude Code (Opus 5.5) — titles only, ids unchanged
+- **Changes:**
+  - Agent Security is Security, Controls is HUD and OSD, and Live Activities and Lock Screen take sentence case,
+    in the sidebar, in each page's large title and in each tab's `.navigationTitle`.
+  - The paths that name Security say so: the three security messages, the ADR policy prompt and `docs/ADR.md`.
+  - Searching the old words still finds the tab: "agent security" on Security findings, "controls" on HUD style.
+  - `BrainPathRulesTests` moves its head list, its fourteen titles and its message pins with the titles. The
+    section headers "Agent Security" and "Controls" stay: they name sections, not tabs.
+
+### 2026-11-01 - Brain's sidebar becomes product pages plus a Settings list
+- **Developer label:** "product pages plus Settings. Clicking Settings swaps the sidebar to the settings list with a Back row"
+- **Agent label:** Claude Code (Opus 5.5) — `BrainShell` holds the layout; `selectedTab` stays the only navigation state
+- **Changes:**
+  - `BrainShell` replaces the split view and its glass: a title row, the sidebar on the paper, and the page in
+    an inset panel. The window stays 700 wide with its standard title bar until the window's own change.
+  - `SettingsTabGroup` is now product, settings and info. The sidebar shows the product list with Settings and
+    About at its foot, or the settings list with Back, whichever the selected tab is on, so a search or a deep
+    link moves it with no path of its own. Back and the Settings row return to where the list last changed.
+  - A query shows one flat list of the matching tabs. Clearing it returns to the selected tab's list.
+  - Every page gets a large title from `SettingsForm`, with no page edit. Tasks names its sub-pages through
+    `settingsPageTitle(_:)` in place of its `.navigationTitle`.
+  - The sidebar is custom rows, so it takes arrow keys itself and follows its own selection. The BETA capsule
+    is `onPrimary` on `ink`. The tab tints are gone, and the search field and suggestions read the theme.
+  - The moon and `brainAppearance` land here. The moon writes the key and nothing applies it yet.
+  - The root moves from the detail column to the shell, and hides a `Form`'s background so the panel shows.
+  - Paths to the settings tabs say "Brain › Settings › General". `BrainPathRulesTests` now checks a path's first
+    two levels, so "Brain › General" fails though General is a real title. `BrainNamingRulesTests` allows the one
+    "Settings" that means the row inside Brain.
+  - `SettingsSidebarOrderTests` is rewritten for the two lists, and new `BrainShellRulesTests` holds the shell,
+    with plants. Every theme token has a reader, so the not-read-yet set is gone. Boards: `shell`,
+    `shellSettings`, `shellDeepLink`, `shellSearch` and `shellSearchList`, and pages draw on the panel.
+
+### 2026-11-01 - Brain's theme takes its review findings
+- **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the theme commit
+- **Agent label:** Claude Code (Opus 5.5) — fixes for the Swift and guards reviews, and a rule for each
+- **Changes:**
+  - A titled `SettingsActionRow` takes the native row again, so wide buttons wrap under the title. "Get a
+    policy" had squeezed its description to about 100 pt.
+  - The root moves to the detail column, so the sidebar keeps its native links. `.formStyle(.grouped)` goes
+    from `ClipboardSettings`, `ScreenAssistantSettings` and `UsageSettings`, which inherit it.
+  - A button dims while pressed, and a switch owns its disabled dim instead of relying on `.plain`.
+  - A disclosure's button starts after its title, because selectable text inside a button fights for the
+    click. The chevron and the empty space beside the title toggle it; the title's text does not.
+  - Allow under General keeps the system blue, since its white label is 2.63:1 on the eye blue in dark. The
+    light `destructive` darkens to `0xBC3226`, 4.61:1 on the hover fill. "Watch for freezes" names its
+    switch for VoiceOver.
+  - Lock Screen's and Media's disabled sections drop their extra 0.5 opacity, which dimmed controls twice.
+  - `SettingsDesignSystemRulesTests` now holds the opt-outs that had no rule (`Link`s, hidden labels, All
+    tasks' disclosures, bare values, the segmented picker) and plants an offender for every rule that had
+    none. Its chain check replaces "within two lines", where a neighbour could launder an offender, and
+    the value scan reads ternaries and the sizes it missed. New rules: one form style, the board names
+    every colour and font, no `.borderedProminent` under Settings.
+  - Recorded late from the commit before the theme: the layout and highlight scans walk every folder under
+    Settings, all three fail on a repeated file name, and the layout scanners count the small theme tokens
+    and named fonts.
+  - Two whitespace-only lines go back to what the base has.
+
+### 2026-11-01 - Brain gets a theme, and its toggles and buttons their own styles
+- **Developer label:** Brain redesign Stage 2: "`SettingsTheme`, the shared styles"
+- **Agent label:** Claude Code (Opus 5.5) — one root modifier shared with the snapshot boards
+- **Changes:**
+  - New `Kannu/components/Settings/DesignSystem/`: `SettingsTheme` (paper, ink, the eye blue, fonts that
+    use Geist when bundled and the system font at the same size when not), `SettingsToggleStyle`,
+    `SettingsButtonStyle`, `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, and
+    `settingsDesignSystem()`, the one root the window and the snapshot boards both apply.
+  - Every toggle, default button, labelled row and disclosure under Brain takes the new styles. The
+    highlight pulse and descriptions read the theme, and the two monospaced values read its mono font.
+  - Sites that must stay as they are say so: a row's switch hides its label, eight default actions and
+    seven main actions are primary, six `Link`s stay links, `Connect…` keeps its chevron, the checkboxes,
+    the radios and the animation editor's segments keep their layout, All tasks' long groups keep the
+    native disclosure, and six bare values stay secondary.
+  - A button keeps its width and one line, as a native one does: a row had broken "Acknowledgements" in two.
+  - The root's font replaced what a grouped `Form` gives its headers and footers, so
+    `SettingsSectionHeader` and `SettingsFooter` say theirs (the new `sectionTitle`, and `description`).
+  - The `designSystem` snapshot board renders every resting and disabled state, and every colour and
+    font token by name, each run writes `fonts.txt`, and the `policyRules` board renders at the sheet's own 560 instead of cropping it at 490.
+  - New `SettingsDesignSystemRulesTests`, each rule proved against planted offenders. The layout, highlight
+    and animation scans assert that they read `DesignSystem/`. `docs/SETTINGS.md` gains the design system,
+    and `docs/REGRESSIONS.md` entry 22 an addendum.
 
 ### 2026-11-01 - SettingsView is split into one file per tab
 - **Developer label:** Brain redesign Stage 2: "split the 8,027-line `SettingsView.swift` into one file per tab, with no behaviour change"

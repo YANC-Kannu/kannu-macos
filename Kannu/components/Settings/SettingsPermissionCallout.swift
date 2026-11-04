@@ -65,7 +65,7 @@ struct SettingsPermissionCallout: View {
                 Button(requestButtonTitle) {
                     requestAction()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsButtonStyle(.primary))
 
                 Button(openSettingsButtonTitle) {
                     openSettingsAction()

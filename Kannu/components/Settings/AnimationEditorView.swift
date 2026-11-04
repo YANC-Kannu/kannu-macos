@@ -131,7 +131,7 @@ struct AnimationEditorView: View {
             Button(existingAnimation != nil ? "Save Changes" : "Import") {
                 importAnimation()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SettingsButtonStyle(.primary))
             .keyboardShortcut(.defaultAction)
             .disabled(name.isEmpty || isImporting)
         }
@@ -285,6 +285,7 @@ struct AnimationEditorView: View {
                                 }
                             }
                             .pickerStyle(.segmented)
+                            .labeledContentStyle(.automatic)
                         }
                     }
                 }
@@ -384,7 +385,7 @@ struct AnimationEditorView: View {
                                 Text("Expand notch to follow animation width")
                             }
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(SettingsToggleStyle(showsLabel: false))
                         }
                     }
                 }

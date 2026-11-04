@@ -62,7 +62,7 @@ extension View {
     /// errors. Pass a `tint` only when the colour carries meaning (red for an error, orange for a
     /// partial result); the default secondary is what the rest of the surface uses.
     func settingsDescriptionStyle(tint: Color? = nil) -> some View {
-        font(.subheadline)
+        font(SettingsTheme.description)
             .foregroundStyle(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.secondary))
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
@@ -208,8 +208,8 @@ struct SettingsRow<Control: View>: View {
 
     var body: some View {
         LabeledContent {
-            // A grouped Form draws a Toggle as a switch only when the Toggle is the row itself;
-            // nested in LabeledContent it would fall back to a checkbox.
+            // The row draws the title itself, so a Toggle here shows only its switch. A custom toggle
+            // style ignores `.labelsHidden()`, so the style is told directly.
             // `.labelsHidden()` is an ENVIRONMENT modifier: it reaches everything in the slot.
             // Right for a Toggle/Picker/Stepper (the row draws the title itself); wrong for a
             // Menu or a popover-anchoring button, whose label and item titles it erases — the
@@ -217,7 +217,7 @@ struct SettingsRow<Control: View>: View {
             // LabeledContent or a SettingsActionRow instead (docs/SETTINGS.md).
             control
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(SettingsToggleStyle(showsLabel: false))
         } label: {
             label
         }
@@ -405,6 +405,7 @@ struct SettingsSectionHeader: View {
 
     var body: some View {
         text
+            .font(SettingsTheme.sectionTitle)
             .textSelection(.enabled)
     }
 }
@@ -424,6 +425,8 @@ struct SettingsFooter: View {
 
     var body: some View {
         text
+            // The root's font would otherwise replace the smaller one a grouped Form gives a footer.
+            .font(SettingsTheme.description)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
@@ -481,6 +484,9 @@ struct SettingsActionRow<Buttons: View>: View {
             } label: {
                 label
             }
+            // Wide buttons wrap under the title here. The root's one-line row would squeeze the
+            // description instead, to about 100 pt beside "Copy a prompt that drafts a policy".
+            .labeledContentStyle(.automatic)
         } else {
             HStack(spacing: SettingsMetrics.rowContent) {
                 Spacer(minLength: 0)
