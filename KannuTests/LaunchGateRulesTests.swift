@@ -56,7 +56,8 @@ final class LaunchGateRulesTests: XCTestCase {
     }
 
     /// The pre-gate part of the launch may start only the invariants. Anything that installs hooks,
-    /// starts a monitor or builds a window belongs in `continueLaunch()`.
+    /// starts a monitor or builds a window belongs in `continueLaunch()`. Geist needs no launch work at
+    /// all: the system activates it from `ATSApplicationFontsPath` (`GeistBundleRulesTests`).
     func testNothingElseStartsBeforeTheGate() throws {
         let source = try Self.appDelegate()
         let launch = Self.code(try XCTUnwrap(Self.body(ofFunction: "applicationDidFinishLaunching", in: source)))
@@ -67,7 +68,7 @@ final class LaunchGateRulesTests: XCTestCase {
                           "autoEnableLaunchAtLogin", "showOnboardingWindow", "LockScreenWeatherManager",
                           "SystemHUDManager", "configureProviderDefaultsIfNeeded", "installTopMenuItems",
                           "UNUserNotificationCenter", "requestAuthorization", "TasksManager", "TaskFileStore",
-                          "launchDidContinue"] {
+                          "launchDidContinue", "CTFontManager"] {
             XCTAssertFalse(preGate.contains(forbidden), "\(forbidden) now runs before the Terms of Use are accepted")
         }
         // The one exception, a delegate that asks nothing: testTheReminderDelegateIsInstalledBeforeTheGate.
