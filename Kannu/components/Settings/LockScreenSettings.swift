@@ -119,20 +119,14 @@ struct LockScreenSettings: View {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Material", description: lockScreenGlassStyle == .liquid
                                 ? nil : Text("Custom Liquid settings require the Liquid Glass material.")) {
-                        Picker("Material", selection: $lockScreenGlassStyle) {
-                            ForEach(LockScreenGlassStyle.allCases) { style in
-                                Text(style.rawValue).tag(style)
-                            }
-                        }
+                        SettingsSelect("Material", selection: $lockScreenGlassStyle,
+                                       options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                     }
                     .settingsHighlight(id: highlightID("Material"))
                 } else {
                     SettingsRow("Material", description: Text("Liquid Glass requires macOS 26 or later.")) {
-                        Picker("Material", selection: $lockScreenGlassStyle) {
-                            ForEach(LockScreenGlassStyle.allCases) { style in
-                                Text(style.rawValue).tag(style)
-                            }
-                        }
+                        SettingsSelect("Material", selection: $lockScreenGlassStyle,
+                                       options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                     }
                     .disabled(true)
                     .settingsHighlight(id: highlightID("Material"))
@@ -141,13 +135,9 @@ struct LockScreenSettings: View {
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
                                 ? Text("Use the sliders below to pick unique Apple liquid-glass variants for each widget.") : nil) {
-                        Picker("Glass mode", selection: $lockScreenGlassCustomizationMode) {
-                            ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Glass mode", selection: $lockScreenGlassCustomizationMode,
+                                       options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Glass mode"))
                 }
@@ -241,13 +231,9 @@ struct LockScreenSettings: View {
                 .settingsHighlight(id: highlightID("Show lock screen timer"))
                 SettingsRow("Timer surface", description: timerGlassModeIsGlass
                             ? nil : Text("Classic mode keeps the original translucent black background.")) {
-                    Picker("Timer surface", selection: timerSurfaceBinding) {
-                        ForEach(LockScreenTimerSurfaceMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    SettingsSelect("Timer surface", selection: timerSurfaceBinding,
+                                   options: LockScreenTimerSurfaceMode.allCases, optionTitle: \.rawValue,
+                                   style: .segmented)
                 }
                 .disabled(!enableLockScreenTimerWidget)
                 .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -256,11 +242,8 @@ struct LockScreenSettings: View {
                 if timerGlassModeIsGlass {
                     SettingsRow("Timer glass material", description: lockScreenTimerGlassStyle == .liquid
                                 ? nil : Text("Uses the frosted blur treatment while glass mode is enabled.")) {
-                        Picker("Timer glass material", selection: $lockScreenTimerGlassStyle) {
-                            ForEach(LockScreenGlassStyle.allCases) { style in
-                                Text(style.rawValue).tag(style)
-                            }
-                        }
+                        SettingsSelect("Timer glass material", selection: $lockScreenTimerGlassStyle,
+                                       options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                     }
                     .disabled(!enableLockScreenTimerWidget)
                     .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -268,13 +251,9 @@ struct LockScreenSettings: View {
 
                     if lockScreenTimerGlassStyle == .liquid {
                         SettingsRow("Timer liquid mode") {
-                            Picker("Timer liquid mode", selection: $lockScreenTimerGlassCustomizationMode) {
-                                ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .fixedSize()
+                            SettingsSelect("Timer liquid mode", selection: $lockScreenTimerGlassCustomizationMode,
+                                           options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                           style: .segmented)
                         }
                         .disabled(!enableLockScreenTimerWidget)
                         .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -304,28 +283,25 @@ struct LockScreenSettings: View {
                 .settingsHighlight(id: highlightID("Show lock screen weather"))
 
                 if enableLockScreenWeatherWidget {
-                    Picker("Layout", selection: $lockScreenWeatherWidgetStyle) {
-                        ForEach(LockScreenWeatherWidgetStyle.allCases) { style in
-                            Text(style.rawValue).tag(style)
-                        }
+                    SettingsRow("Layout") {
+                        SettingsSelect("Layout", selection: $lockScreenWeatherWidgetStyle,
+                                       options: LockScreenWeatherWidgetStyle.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
-                    .pickerStyle(.segmented)
                     .settingsHighlight(id: highlightID("Layout"))
 
-                    Picker("Weather data provider", selection: $lockScreenWeatherProviderSource) {
-                        ForEach(LockScreenWeatherProviderSource.allCases) { source in
-                            Text(source.displayName).tag(source)
-                        }
+                    SettingsRow("Weather data provider") {
+                        SettingsSelect("Weather data provider", selection: $lockScreenWeatherProviderSource,
+                                       options: LockScreenWeatherProviderSource.allCases, optionTitle: \.displayName,
+                                       style: .segmented)
                     }
-                    .pickerStyle(.segmented)
                     .settingsHighlight(id: highlightID("Weather data provider"))
 
-                    Picker("Temperature unit", selection: $lockScreenWeatherTemperatureUnit) {
-                        ForEach(LockScreenWeatherTemperatureUnit.allCases) { unit in
-                            Text(unit.rawValue).tag(unit)
-                        }
+                    SettingsRow("Temperature unit") {
+                        SettingsSelect("Temperature unit", selection: $lockScreenWeatherTemperatureUnit,
+                                       options: LockScreenWeatherTemperatureUnit.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
-                    .pickerStyle(.segmented)
                     .settingsHighlight(id: highlightID("Temperature unit"))
 
                     Defaults.Toggle(key: .lockScreenWeatherShowsLocation) {
@@ -350,12 +326,11 @@ struct LockScreenSettings: View {
                     .settingsHighlight(id: highlightID("Show AQI widget"))
 
                     if lockScreenWeatherShowsAQI && lockScreenWeatherProviderSource.supportsAirQuality {
-                        Picker("Air quality scale", selection: $lockScreenWeatherAQIScale) {
-                            ForEach(LockScreenWeatherAirQualityScale.allCases) { scale in
-                                Text(scale.displayName).tag(scale)
-                            }
+                        SettingsRow("Air quality scale") {
+                            SettingsSelect("Air quality scale", selection: $lockScreenWeatherAQIScale,
+                                           options: LockScreenWeatherAirQualityScale.allCases,
+                                           optionTitle: \.displayName, style: .segmented)
                         }
-                        .pickerStyle(.segmented)
                         .settingsHighlight(id: highlightID("Air quality scale"))
                     }
 

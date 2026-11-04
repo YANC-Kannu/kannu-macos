@@ -105,11 +105,8 @@ struct AgentStatusSettings: View {
 
                 Section {
                     SettingsRow("Traffic light style", description: agentTrafficLightStyle.description) {
-                        Picker("Traffic light style", selection: $agentTrafficLightStyle) {
-                            ForEach(AgentTrafficLightStyle.allCases) { style in
-                                Text(style.localizedName).tag(style)
-                            }
-                        }
+                        SettingsSelect("Traffic light style", selection: $agentTrafficLightStyle,
+                                       options: AgentTrafficLightStyle.allCases, optionTitle: \.localizedName)
                     }
                     .settingsHighlight(id: highlightID("Traffic light style"))
                     // Live preview using the same view the notch draws, so this can't drift.
@@ -174,42 +171,45 @@ struct AgentStatusSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Show a red light when no agents are running"))
 
-                    Picker("Hide indicator after agent stops for", selection: $agentStoppedCollapseSeconds) {
-                        Text("3 seconds").tag(3)
-                        Text("5 seconds").tag(5)
-                        Text("10 seconds").tag(10)
-                        Text("15 seconds").tag(15)
-                        Text("30 seconds").tag(30)
-                        Text("1 minute").tag(60)
-                        Text("2 minutes").tag(120)
-                        Text("5 minutes").tag(300)
+                    SettingsRow("Hide indicator after agent stops for") {
+                        SettingsSelect("Hide indicator after agent stops for", selection: $agentStoppedCollapseSeconds, choices: [
+                            3: String(localized: "3 seconds"),
+                            5: String(localized: "5 seconds"),
+                            10: String(localized: "10 seconds"),
+                            15: String(localized: "15 seconds"),
+                            30: String(localized: "30 seconds"),
+                            60: String(localized: "1 minute"),
+                            120: String(localized: "2 minutes"),
+                            300: String(localized: "5 minutes"),
+                        ])
                     }
-                    .pickerStyle(.menu)
                     .disabled(showAgentStoppedIndicator)
                     .opacity(showAgentStoppedIndicator ? 0.5 : 1.0)
                     .settingsHighlight(id: highlightID("Hide red light after"))
 
-                    Picker("Show dim traffic light for", selection: $agentInactiveDisplaySeconds) {
-                        Text("Off").tag(0)
-                        Text("5 seconds").tag(5)
-                        Text("10 seconds").tag(10)
-                        Text("15 seconds").tag(15)
-                        Text("30 seconds").tag(30)
-                        Text("1 minute").tag(60)
-                        Text("2 minutes").tag(120)
+                    SettingsRow("Show dim traffic light for") {
+                        SettingsSelect("Show dim traffic light for", selection: $agentInactiveDisplaySeconds, choices: [
+                            0: String(localized: "Off"),
+                            5: String(localized: "5 seconds"),
+                            10: String(localized: "10 seconds"),
+                            15: String(localized: "15 seconds"),
+                            30: String(localized: "30 seconds"),
+                            60: String(localized: "1 minute"),
+                            120: String(localized: "2 minutes"),
+                        ])
                     }
-                    .pickerStyle(.menu)
                     .disabled(showAgentStoppedIndicator)
                     .opacity(showAgentStoppedIndicator ? 0.5 : 1.0)
                     .settingsHighlight(id: highlightID("Dim traffic light duration"))
 
-                    Picker("Consider agents inactive after", selection: $agentStatusStaleMinutes) {
-                        Text("10 minutes").tag(10)
-                        Text("15 minutes").tag(15)
-                        Text("30 minutes").tag(30)
-                        Text("60 minutes").tag(60)
+                    SettingsRow("Consider agents inactive after") {
+                        SettingsSelect("Consider agents inactive after", selection: $agentStatusStaleMinutes, choices: [
+                            10: String(localized: "10 minutes"),
+                            15: String(localized: "15 minutes"),
+                            30: String(localized: "30 minutes"),
+                            60: String(localized: "60 minutes"),
+                        ])
                     }
-                    .pickerStyle(.menu)
                     .settingsHighlight(id: highlightID("Consider agents inactive after"))
                 } header: {
                     SettingsSectionHeader("Indicator")
@@ -275,11 +275,8 @@ struct AgentStatusSettings: View {
     @ViewBuilder
     private var notificationDeliveryRows: some View {
         SettingsRow("Provider", description: notificationProvider.description) {
-            Picker("Provider", selection: $notificationProvider) {
-                ForEach(AgentStatusNotificationProvider.allCases) { provider in
-                    Text(provider.displayName).tag(provider)
-                }
-            }
+            SettingsSelect("Provider", selection: $notificationProvider,
+                           options: AgentStatusNotificationProvider.allCases, optionTitle: \.displayName)
         }
         .settingsHighlight(id: highlightID("Notification provider"))
 
@@ -353,12 +350,12 @@ struct AgentStatusSettings: View {
                 Text("Notify when inactive")
             }
             SettingsRow("Remind me when an agent is still waiting", description: "One more push if an agent is still waiting for your answer after this long. Only the app's name and how long it has waited are sent.") {
-                Picker("Remind me when an agent is still waiting", selection: $agentWaitReminderMinutes) {
-                    Text("Off").tag(0)
-                    Text("After 3 minutes").tag(3)
-                    Text("After 10 minutes").tag(10)
-                    Text("After 20 minutes").tag(20)
-                }
+                SettingsSelect("Remind me when an agent is still waiting", selection: $agentWaitReminderMinutes, choices: [
+                    0: String(localized: "Off"),
+                    3: String(localized: "After 3 minutes"),
+                    10: String(localized: "After 10 minutes"),
+                    20: String(localized: "After 20 minutes"),
+                ])
             }
             .settingsHighlight(id: highlightID("Remind me when an agent is still waiting"))
             Defaults.Toggle(key: .adrPushHighFindings) {

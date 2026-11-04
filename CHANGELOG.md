@@ -17,6 +17,59 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `BrainPathRulesTests` scans every line for a Brain path, not only lines with a quote, and
     `GeistBundleRulesTests` keeps a font with no PostScript name, so the name check fails for it.
 
+### 2026-11-04 - Brain's pickers become its own choice control
+- **Developer label:** Brain redesign plan: "SwiftUI has no custom picker style, so the 77 `Picker`s become `SettingsSelect`"
+- **Agent label:** Claude Code (Opus 5.5) — 70 pickers moved, 59 by script; All tasks' filter menu waits for Stage 5; a bare `Picker(` now fails a test
+- **Changes:**
+  - 59 pickers move to `SettingsSelect` through a one-off script that is not committed. The 45 that listed an
+    enum's cases through `ForEach` take `options:` with the same title property, and the 14 with literal options
+    take `choices:`, each title a `String(localized:)` under its old catalog key. The 31 that stood bare in a
+    Section are wrapped in a `SettingsRow`, so their `.disabled`, `.opacity`, `.onChange` and highlight now follow
+    the row. No highlight id changes.
+  - The 22 segmented pickers stay segments (`style: .segmented`). The menu style, `.labelsHidden()` and the
+    `.fixedSize()` after a segmented style go.
+  - 11 by hand: General's Display, Notch display height, and each display's Style and Always show, which name
+    "Follow default"; HUD's DDC Provider and Shelf's Quick Share Service with their icons, the saved service
+    showing before discovery ends; Notes to sync, in a row with its description; Media's "Hide DynamicIsland
+    Options", a select instead of three radio buttons; each policy rule's Kind; the animation editor's Loop Mode,
+    as segments.
+  - Shelf's Liquid Glass Variant becomes a slider, like its seven siblings, instead of a 20-row menu.
+  - A display's Reset enables after a Style change: General observes `displayStyleOverrides`, as promised on #18.
+  - All tasks' four filter pickers stay native: ticked submenus inside a native `Menu`, until Stage 5 rebuilds the
+    page.
+  - The idle animations' Add menu and the colour swatch's popover close when Brain closes, as the select's does.
+  - `SettingsLayoutRulesTests` bans `Picker(` under Settings, with All tasks' four pinned, planted offenders, a
+    floor and a select put back on a real page. `SettingsDesignSystemRulesTests` reads code with its strings blanked
+    for the ban, holds every popover under Settings to closing on disappear, and drops the segmented picker's
+    opt-out, which reads nothing now. `BrainAppearanceRulesTests` reads the Brain appearance row's new spelling.
+  - `docs/SETTINGS.md` gains a "Choices" section, the select in a row's slot, and the rule never to render the
+    shelf board; `docs/REGRESSIONS.md` entry 22 gains its line.
+
+### 2026-11-04 - Brain gets its own choice control
+- **Developer label:** Brain redesign Stage 3: "`SettingsSelect`: our own popover, with a search field once a list is long"
+- **Agent label:** Claude Code (Opus 5.5) — options as data, a list with keyboard and VoiceOver, segments for two or three short options
+- **Changes:**
+  - New `SettingsSelect`: a button showing the value that opens our own list in a popover, or two or three
+    segments in place. The options are data (`options:` with `optionTitle:`, or `choices:`), because macOS 14 has
+    no custom picker style. VoiceOver reads the row's title and the value, and its adjust steps the choice.
+  - New `SettingsSelectList`, the open list: a tick on the choice, a highlighted row that the arrows move and
+    VoiceOver announces, Return to pick and Escape to close. Past ten options a search field leads, ranked as
+    Brain's search ranks, and the rows scroll; a shorter list takes typed letters. A highlight the search moved
+    is announced too, and the field's prompt and empty state use catalogued strings ("Search...", "No results").
+  - Segments: under Full Keyboard Access, focus goes with the choice, so Space keeps it, and the arrows follow
+    the layout direction right to left. Option icons are hidden from VoiceOver; the titles name them.
+  - New `SettingsField`, `.settingsField()`: a plain native field inside our chrome, with a focus ring. The list's
+    search wears it.
+  - New `SettingsSelectNavigation`, Foundation only and in the test target: the search, the arrows and
+    type-to-select, held by `SettingsSelectNavigationTests`.
+  - New theme tokens, "Choices and fields": `raised` for the selected segment, with `ink` on it held at 7:1, and
+    the segment, list and field measures.
+  - Boards: `designSystem` gains the choices and the fields; `components` puts the select in a row beside the
+    native picker; new `selectList` draws the list open; new `animationEditorControls` draws the animation
+    editor's controls, which no board drew.
+  - `SettingsDesignSystemRulesTests` holds the select's keyboard, VoiceOver, one dim and Reduce Motion, and the
+    field native inside; `BrainShellRulesTests` keeps page knowledge out of all three.
+
 ### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
 - **Developer label:** "resolve issues and merge mr's also"
 - **Agent label:** Claude Code (Opus 5.5) — the one-line fixes from the second review; the rest answered on the PR

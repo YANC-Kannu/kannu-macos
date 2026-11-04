@@ -128,11 +128,11 @@ struct HUD: View {
         }
 
         Section {
-            Picker("HUD style", selection: $inlineHUD) {
-                Text("Default")
-                    .tag(false)
-                Text("Inline")
-                    .tag(true)
+            SettingsRow("HUD style") {
+                SettingsSelect("HUD style", selection: $inlineHUD, choices: [
+                    false: String(localized: "Default"),
+                    true: String(localized: "Inline"),
+                ])
             }
             .settingsHighlight(id: highlightID("HUD style"))
             .onChange(of: Defaults[.inlineHUD]) {
@@ -143,13 +143,12 @@ struct HUD: View {
                     }
                 }
             }
-            Picker("Progressbar style", selection: $progressBarStyle) {
-                Text("Hierarchical")
-                    .tag(ProgressBarStyle.hierarchical)
-                Text("Gradient")
-                    .tag(ProgressBarStyle.gradient)
-                Text("Segmented")
-                    .tag(ProgressBarStyle.segmented)
+            SettingsRow("Progressbar style") {
+                SettingsSelect("Progressbar style", selection: $progressBarStyle, choices: [
+                    ProgressBarStyle.hierarchical: String(localized: "Hierarchical"),
+                    ProgressBarStyle.gradient: String(localized: "Gradient"),
+                    ProgressBarStyle.segmented: String(localized: "Segmented"),
+                ])
             }
             .settingsHighlight(id: highlightID("Progressbar style"))
             Defaults.Toggle(key: .systemEventIndicatorShadow) {

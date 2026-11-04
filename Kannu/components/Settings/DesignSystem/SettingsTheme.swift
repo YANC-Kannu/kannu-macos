@@ -112,6 +112,23 @@ enum SettingsTheme {
     /// Every bounded control animation. Never `.repeatForever` (docs/REGRESSIONS.md, entry 22).
     static let quickAnimation = 0.15
 
+    // MARK: - Choices and fields
+
+    /// The selected segment, raised off its track.
+    static let raised = color(light: 0xFFFFFF, dark: 0x2B2C31)
+    static let segmentInset = EdgeInsets(top: 3, leading: 10, bottom: 3, trailing: 10)
+    static let segmentTrackInset: CGFloat = 2
+    static let segmentRadius: CGFloat = 5
+    /// Around a popover's content.
+    static let popoverInset: CGFloat = 6
+    static let selectMinWidth: CGFloat = 180
+    static let selectRowHeight: CGFloat = 28
+    static let selectRowInset: CGFloat = 8
+    /// A long list's height: ten rows and half of the next, so it shows there is more to scroll to.
+    static let selectListHeight: CGFloat = 294
+    static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
+    static let focusRingWidth: CGFloat = 2
+
     private static func sans(_ size: CGFloat, _ weight: Font.Weight, _ name: String) -> Font {
         geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)
     }

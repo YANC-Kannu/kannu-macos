@@ -40,5 +40,8 @@ struct KannuColorPickerButton<Content: View>: View {
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             content()
         }
+        // Closing Brain takes its content out of the window and runs this, while `isPresented` survives the
+        // close (docs/REGRESSIONS.md, entry 22). In the notch, closing a popover that is going away is harmless.
+        .onDisappear { isPresented = false }
     }
 }

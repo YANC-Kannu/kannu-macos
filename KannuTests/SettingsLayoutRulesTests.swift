@@ -179,6 +179,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPermissionCallout.swift": 1,  // the callout's own card
         "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
         "SettingsButtonStyle.swift": 1,      // the button's own chrome
+        "SettingsSelect.swift": 2,           // a segment, and the track it sits in
+        "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
+        "SettingsField.swift": 1,            // the field inside its chrome
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
@@ -193,6 +196,62 @@ final class SettingsLayoutRulesTests: XCTestCase {
         assertPinnedCounts(Self.pinnedRowPaddingCounts, scanner: Self.paddingLines,
                            rule: "a padding",
                            cure: "a row in a grouped Form adds none — the Form pads it")
+    }
+
+    // MARK: - Rule 6: a choice is ours
+
+    /// Lines building a native choice control. SwiftUI on macOS 14 has no custom picker style, so a choice
+    /// under Settings is `SettingsSelect` (docs/SETTINGS.md, "Choices"), and these are the ones that cannot be.
+    private static let pinnedNativeControlCounts: [String: Int] = [
+        // The filter menu's ticked submenus: native inside a native Menu; Stage 5 rebuilds the page with
+        // SettingsSelect (plan:75).
+        "AllTasksPage.swift": 4,
+    ]
+
+    func testNoNativeChoiceControlIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeControlCounts, scanner: { Self.nativeControlLines(in: $0, names: ["Picker"]) },
+                           rule: "a native Picker",
+                           cure: "a choice is SettingsSelect in a SettingsRow, `choices:` for literal options")
+        // A floor: the four pinned pickers are still there, so a pattern gone blind fails here.
+        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeControlLines(in: $1, names: ["Picker"]).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no Picker: the pattern went blind")
+
+        for planted in ["Picker(\"a\", selection: $a) {}", "Picker(\n    \"a\",\n    selection: $a\n) {}",
+                        "Picker (\"a\", selection: $a) {}", "SwiftUI.Picker(\"a\", selection: $a) {}",
+                        "Picker<Int, Text, EmptyView>(selection: $a) {} label: {}"] {
+            XCTAssertEqual(Self.nativeControlLines(in: planted, names: ["Picker"]).count, 1, planted)
+        }
+        for clean in ["ColorPicker(\"a\", selection: $a)", "DatePicker(\"a\", selection: $a)",
+                      "SettingsColorPicker(title: \"a\", selection: $a)", "SettingsSelect(\"a\", selection: $a, choices: [1: \"b\"])",
+                      "KannuColorPickerButton(color: c, accessibilityLabel: \"a\") {}", ".pickerStyle(.menu)",
+                      "// Picker(\"a\")", "/* Picker( */", "Text(\"Device Picker Style\")"] {
+            XCTAssertEqual(Self.nativeControlLines(in: clean, names: ["Picker"]), [], clean)
+        }
+
+        // A real page, one select put back.
+        let agents = try XCTUnwrap(Self.settingsSources()["AgentStatusSettings.swift"])
+        let first = try XCTUnwrap(agents.range(of: "SettingsSelect("), "the Agents page has no select to plant on")
+        let planted = agents.replacingCharacters(in: first, with: "Picker(")
+        XCTAssertEqual(Self.nativeControlLines(in: planted, names: ["Picker"]).count, 1)
+    }
+
+    /// One entry per line holding a call of one of `names`, read with comments and strings blanked:
+    /// `Picker(`, `Picker (`, `SwiftUI.Picker(` and `Picker<…>(`, never `ColorPicker(`, `.pickerStyle(`
+    /// or a title such as "Device Picker Style". Not the `openers` lookbehind of the design-system rules,
+    /// which misses `SwiftUI.Picker(`.
+    static func nativeControlLines(in text: String, names: [String]) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*\("#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("bad pattern for \(names)")
+            return []
+        }
+        let nsCode = code as NSString
+        let lineNumbers = regex.matches(in: code, range: NSRange(location: 0, length: nsCode.length)).map { match in
+            nsCode.substring(to: match.range.location).components(separatedBy: "\n").count - 1
+        }
+        let lines = text.components(separatedBy: "\n")
+        return Array(Set(lineNumbers)).sorted().map { lines[$0].trimmingCharacters(in: .whitespaces) }
     }
 
     /// The tokens exist and something reads each of them, so a number cannot drift back into a
