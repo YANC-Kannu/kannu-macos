@@ -26,6 +26,7 @@ struct SettingsDateField: View {
     @Binding private var selection: Date
     private let range: ClosedRange<Date>
     @State private var isOpen = false
+    @FocusState private var calendarHasFocus: Bool
 
     init(_ title: LocalizedStringKey, selection: Binding<Date>, in range: ClosedRange<Date>) {
         self.title = Text(title)
@@ -56,12 +57,17 @@ struct SettingsDateField: View {
                 DatePicker(selection: $selection, in: range, displayedComponents: .date) { title }
                     .datePickerStyle(.graphical)
                     .labelsHidden()
+                    .focused($calendarHasFocus)
                 DatePicker(selection: $selection, in: range, displayedComponents: .hourAndMinute) { title }
                     .datePickerStyle(.field)
                     .labelsHidden()
             }
             .padding(SettingsTheme.popoverInset)
             .background(SettingsTheme.panel)
+            // As SettingsSelectList does: focus a turn later, and Escape closes only the popover, never the sheet
+            // under it (Set End Time, New Task's reminder).
+            .onExitCommand { isOpen = false }
+            .onAppear { DispatchQueue.main.async { calendarHasFocus = true } }
         }
         // Closing Brain runs this, while `isOpen` survives the close (docs/REGRESSIONS.md, entry 22).
         .onDisappear { isOpen = false }

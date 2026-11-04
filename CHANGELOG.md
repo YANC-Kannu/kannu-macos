@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
+- **Developer label:** "Keep it, with fixes"
+- **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks
+- **Changes:**
+  - A date's popover focuses its calendar a turn after it opens, and Escape closes only the popover, never the
+    sheet under it. Reaching a date by keyboard takes Full Keyboard Access (David's call).
+  - The animation editor's Reset All is destructive again, through its role (our style colours by role); the
+    editor's raw-colour pin drops from 8 to 7.
+  - The Spotify and animation-editor titles are headings for VoiceOver, as `SettingsSheet`'s titles are.
+  - The URL import's fields are named "Lottie JSON URL" and "Animation Name", not by their example text.
+  - The colour popover's back chevron reads "Back".
+
 ### 2026-11-05 - Brain's dates open its own popover
 - **Developer label:** Brain redesign plan: "the calendar grid inside our date popover"
 - **Agent label:** Claude Code (Opus 5.5) — our button and popover; the calendar grid and time field stay the system's

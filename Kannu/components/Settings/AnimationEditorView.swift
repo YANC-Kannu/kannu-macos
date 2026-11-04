@@ -112,6 +112,7 @@ struct AnimationEditorView: View {
                 Text(existingAnimation != nil ? "Edit Animation" : "Customize Animation")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 Text(sourceDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -427,7 +428,7 @@ struct AnimationEditorView: View {
                             }
                         }
                         
-                        Button("Reset All") {
+                        Button("Reset All", role: .destructive) {
                             withAnimation {
                                 scale = 1.0
                                 cropWidth = 30
@@ -441,7 +442,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .tint(.red)
                     }
                 }
             }
