@@ -137,7 +137,7 @@ final class BundledVideoTests: XCTestCase {
     func testCreatingADMGRunsTheCheck() throws {
         let script = try read("scripts/create-dmg.sh")
         let check = try XCTUnwrap(script.range(of: "check-no-lfs-pointers.sh"))
-        let create = try XCTUnwrap(script.range(of: "hdiutil create"))
+        let create = try XCTUnwrap(script.range(of: "dmg-settings.py"))
         XCTAssertLessThan(check.lowerBound, create.lowerBound)
     }
 }

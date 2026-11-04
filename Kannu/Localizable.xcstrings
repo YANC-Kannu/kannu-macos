@@ -10214,7 +10214,7 @@
         }
       }
     },
-    "Battery settings and informations are only available on MacBooks" : {
+    "Battery settings and information are only available on MacBooks" : {
       "localizations" : {
         "ko" : {
           "stringUnit" : {
@@ -49023,7 +49023,6 @@
       }
     },
     "Request Access" : {
-      "extractionState" : "stale",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
@@ -49046,13 +49045,13 @@
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Requer Acesso"
+            "value" : "Solicitar Acesso"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удалить выбранное"
+            "value" : "Запросить доступ"
           }
         },
         "th" : {

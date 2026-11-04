@@ -24,6 +24,7 @@ import Defaults
 import SwiftUI
 
 struct Downloads: View {
+    @Default(.enableDownloadListener) var enableDownloadListener
     @Default(.selectedDownloadIndicatorStyle) var selectedDownloadIndicatorStyle
     @Default(.selectedDownloadIconStyle) var selectedDownloadIconStyle
 
@@ -46,7 +47,7 @@ struct Downloads: View {
                         DownloadStyleButton(
                             style: .progress,
                             isSelected: selectedDownloadIndicatorStyle == .progress,
-                            disabled: !Defaults[.enableDownloadListener]
+                            disabled: !enableDownloadListener
                         ) {
                             selectedDownloadIndicatorStyle = .progress
                         }
@@ -54,7 +55,7 @@ struct Downloads: View {
                         DownloadStyleButton(
                             style: .circle,
                             isSelected: selectedDownloadIndicatorStyle == .circle,
-                            disabled: !Defaults[.enableDownloadListener]
+                            disabled: !enableDownloadListener
                         ) {
                             selectedDownloadIndicatorStyle = .circle
                         }

@@ -4,6 +4,95 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
+- **Developer label:** "resolve issues and merge mr's also"
+- **Agent label:** Claude Code (Opus 5.5) — the one-line fixes from the second review; the rest answered on the PR
+- **Changes:**
+  - Battery's no-battery message reads "information", not "informations"; the catalog key moves with it, so
+    its translations stay attached.
+  - Media's Music Source picker shows each source's localized name instead of its raw value.
+  - `SettingsAnimationRulesTests` pins the looping icon's pause inside `setPlaying`'s else branch, not
+    anywhere in the file.
+
+### 2026-11-04 - Act on CodeRabbit's review of the SettingsView split
+- **Developer label:** "resolve issues and merge mr's also"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes agreed from CodeRabbit's review of #18, nearly all in code the split only moved
+- **Changes:**
+  - General shows Minimum hover duration also when a display's own Always show override is Off: that
+    display hides until hovered and waits that long before the island slides in.
+  - General refreshes its display list on `NSApplication.didChangeScreenParametersNotification`, observed
+    on the Form, so the per-display overrides follow a display that comes or goes. The Display row's
+    `onChange(of: NSScreen.screens)`, which ran only when something else redrew the page, is gone.
+  - `SettingsPermissionCallout`'s default request button title is `String(localized: "Request Access")`.
+    The catalog entry is no longer marked stale. Its Russian value, a copy of "Remove selected", now reads
+    "Запросить доступ", and its Brazilian Portuguese value now reads "Solicitar Acesso" instead of "Requer
+    Acesso", which means "Requires access".
+  - Downloads, both HUD pages and Live Activities observe through `@Default` the keys their rows read
+    (`enableDownloadListener`, `useColorCodedVolumeDisplay`, `useColorCodedBatteryDisplay`,
+    `useSmoothColorGradient`, `enableCapsLockIndicator`), so the dependent rows and footers follow their
+    toggles at once instead of at the next unrelated redraw.
+  - The volume step rows and their "Disabled while external display volume integration is active."
+    footer require third-party DDC integration as well as the external volume listener, as
+    `SystemHUDManager` does, so turning DDC off no longer leaves them locked.
+  - While agent monitoring is off, `landingOnABuiltRow` lands every Agents search result on the
+    monitoring switch, and while stats monitoring is off every Stats result on its switch.
+    `SettingsHighlightInventoryTests` pins both redirects.
+  - Enable shelf can be turned off without the folder access Shelf needs; only turning it on still
+    requires that access.
+  - Lock Screen's offset bindings propagate only when the clamped offset changes, as the width bindings
+    already did.
+  - Brain › Timer refuses a preset edit that would bring it to 0:00, as the custom timer's Start already
+    refuses zero.
+  - `SettingsAnimationRulesTests` pins the looping icon's window callback and its `controller?.pause()`.
+  - `ClosedNotchObservationTests` pins each allowed file's exact whole-monitor observer count, and fails
+    when an allowlisted file is gone.
+  - `FirstLaunchRulesTests` allows `WarpAgentStore.databaseURL` only in `CursorAgentStatusMonitor.swift`
+    and `LaunchPermissionManager.swift`, across every file under `Kannu/`.
+
+### 2026-11-01 - A new eye logo and a styled install window
+- **Developer label:** "unslop our logo during install"
+- **Agent label:** Claude Code (Opus 5.5) — one almond eye drawn by a CoreGraphics generator, and a paper-coloured drag-to-install window built with a hash-pinned `dmgbuild`
+- **Changes:**
+  - New logo: one almond eye (കണ്ണ് means eye) with a light outline and a solid blue pupil on a near-black
+    macOS icon shape, flat, replacing two tiny glowing eyes on a full-bleed black square that read as a
+    black square below 64 pt. The 16, 32 and 64 pixel files are redrawn with heavier lids and whole-pixel
+    edges, not scaled down.
+  - `scripts/brand/generate-brand-assets.swift` draws every size in `AppIcon.appiconset`, `logo2`,
+    `.github/assets/kannu-logo.png`, `VolumeIcon.icns` and the DMG background at 1x and 2x. Two runs are
+    byte-identical. `logo2` is edge to edge because `WelcomeView` supplies its own clip shape, so that view
+    needs no change.
+  - The DMG opens on a warm paper window: "To install, *drag* Kannu to Applications" in Instrument Serif, and
+    a drawn amber arrow from the app to the Applications folder. Instrument Serif and its licence live in
+    `scripts/brand/`, only the generator reads them, and nothing from that folder ships in the app.
+  - `scripts/create-dmg.sh` builds through `dmgbuild` and the new `scripts/dmg-settings.py`, which write the
+    Finder layout straight into `.DS_Store`: no Finder scripting and no Automation prompt. Its arguments and
+    its signing block are unchanged.
+  - `dmgbuild` is build-time only, pinned by hash in `scripts/dmg-requirements.txt`, and installed into a
+    temporary venv by the new `scripts/install-dmgbuild.sh`, which `build-dmg.sh`, `manual-release.sh` and the
+    release workflow all call. It needs Python 3.10 or newer, so the release workflow now sets up its own.
+  - `.gitignore` drops `*.txt`, which would have silently left out the font licence and the requirements file,
+    so both are excepted. `scripts/RELEASE.md` documents all of this.
+  - `BundledVideoTests` pinned the LFS pointer check to before `hdiutil create`, a line `create-dmg.sh` no
+    longer has. It now pins the check to before the `dmgbuild` run.
+
+### 2026-11-02 - A preset block on a ticked task undoes the tick too
+- **Developer label:** CodeRabbit's third review of #11
+- **Agent label:** Claude Code (Opus 5.5) — `startBlock` cancels a pending done tick, as `start(_:)` now does
+- **Changes:**
+  - `TasksManager.startBlock` cancels the task's pending done tick, so a preset block started on a ticked
+    task isn't stopped when the undo window ends.
+
+### 2026-11-02 - Act on CodeRabbit's second review of #11
+- **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
+- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads
+- **Changes:**
+  - Marking a task done, or starting it, cancels a pending done tick, so the end of its undo window
+    no longer marks it done a second time or stops a timer just started.
+  - The Claude card names Claude Code's plan once Desktop's bars have expired, instead of Desktop's.
+  - Notch experiences from another Kannu process drop ones with no tab, as persisted ones already do.
+  - `TaskFormDraft.foldingFinishedQuickAdd`'s comment says what it does: words fold wherever they sit.
+  - `UsageForecastTests` checks the expiry instant itself.
+
 ### 2026-11-04 - Brain's pages start at the panel's leading edge, not in its middle
 - **Developer label:** "is the full brain revamp done, this still looks like a bit empty, any ux research solution for that"
 - **Agent label:** Claude Code (Opus 5.5) — the layout proposal's first slice: a leading frame and a larger page scale
@@ -267,6 +356,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Extensions: a lock screen widget renders the payload its geometry comes from when two extensions send one id. A notch experience with no tab is refused and dropped from saved state, since nothing renders it.
   - The Cursor diagnostic counts accepted events, so a cache-read-only event no longer logs "0 usable".
   - The renamed Light Use description has its Korean, Dutch, Russian, Thai, Turkish and Simplified Chinese translations back, in the new wording.
+
 ### 2026-11-01 - Delete the last Git LFS pointers and the LFS rules
 - **Developer label:** "Clear the 12 Git LFS pointers whose objects are missing from this repo's LFS store, so the repo no longer depends on LFS"
 - **Agent label:** Claude Code (Opus 5.5) — the 12 unreferenced pointers and `.gitattributes` go; `BundledVideoTests` and the contributor docs stop assuming LFS rules exist

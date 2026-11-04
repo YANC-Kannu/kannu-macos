@@ -6,6 +6,7 @@
 //
 import AppKit
 import Combine
+import Defaults
 import SwiftUI
 
 /// Which sidebar list a tab belongs to. The list on screen follows the selected tab.
@@ -170,6 +171,10 @@ enum SettingsDeepLink {
     static let tasksListOpenID = SettingsTab.tasks.highlightID(for: "Task list page")
     /// Brain › Tasks › Time to log, shown while an entry waits: the popover's "… more in Brain".
     static let tasksTimeToLogHighlightID = SettingsTab.tasks.highlightID(for: "Time to log")
+    /// Brain › Agents' switch: where search lands for the tab's other rows while monitoring is off.
+    static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
+    /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
+    static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -709,6 +714,18 @@ struct SettingsView: View {
     /// Brain › Tasks builds a source's row only while the source is connected. An entry for that row
     /// lands on Add a source until then, instead of scrolling to a row that was never built.
     private func landingOnABuiltRow(_ entry: SettingsSearchEntry) -> SettingsSearchEntry {
+        // Agents builds its other rows only while monitoring is on: until then they land on its switch.
+        if entry.tab == .agentStatus, !Defaults[.enableAgentStatusFeature] {
+            var landed = entry
+            landed.highlightID = SettingsDeepLink.agentMonitoringHighlightID
+            return landed
+        }
+        // Stats builds its other rows only while stats monitoring is on: until then they land on its switch.
+        if entry.tab == .stats, !Defaults[.enableStatsFeature] {
+            var landed = entry
+            landed.highlightID = SettingsDeepLink.statsMonitoringHighlightID
+            return landed
+        }
         guard let id = entry.highlightID,
               let source = SettingsDeepLink.taskSourceRows.first(where: { $0.value == id })?.key,
               !source.isConnected else { return entry }

@@ -92,7 +92,7 @@ Without `--publish` / `--push-appcast`, the script only builds `build/Kannu.<ver
 ### What the manual script does
 
 1. Verifies the exported app is code-signed
-2. Creates `build/Kannu.<version>.dmg` via [`create-dmg.sh`](create-dmg.sh)
+2. Creates `build/Kannu.<version>.dmg` via [`create-dmg.sh`](create-dmg.sh), with a temporary `dmgbuild` venv (needs Python 3.10+)
 3. Sparkle-signs the DMG and merges [`Updates/appcast.xml`](../Updates/appcast.xml) via [`export-sparkle-update.sh`](export-sparkle-update.sh)
 4. Optionally runs `gh release create` and pushes the appcast to `main`
 
@@ -122,6 +122,35 @@ paths grep that line for the title, so bump it there and nowhere else. 1.0.0 shi
 last of the island names inherited from Atoll (Maldives → Bora Bora → Seychelles → Fiji); that chain
 is not continued.
 
+## The install window
+
+Opening the DMG shows a paper-coloured window with the app icon, an arrow and the Applications folder.
+[`create-dmg.sh`](create-dmg.sh) builds it with [`dmgbuild`](https://dmgbuild.readthedocs.io), using the
+layout in [`dmg-settings.py`](dmg-settings.py). `dmgbuild` writes that layout straight into the volume's
+`.DS_Store`, so there is no Finder scripting, no window on the build machine and no Automation prompt,
+which is what lets it run the same on CI.
+
+`dmgbuild` is a build-time tool and nothing of it ships in the app. [`dmg-requirements.txt`](dmg-requirements.txt)
+pins it and its two dependencies by hash, and [`install-dmgbuild.sh`](install-dmgbuild.sh) installs those
+wheels into a temporary venv. It needs Python 3.10 or newer, which `/usr/bin/python3` is not: the release
+workflow sets up its own, and a local build needs one on `PATH` (`brew install python`).
+`build-dmg.sh`, `manual-release.sh` and the release workflow all set up the venv themselves; calling
+`create-dmg.sh` directly needs `dmgbuild` on `PATH` first, and says how if it is not.
+
+The app icon, the `logo2` image, `.github/assets/kannu-logo.png`, the volume icon and the window's
+background are all drawn by one script, and the outputs are committed:
+
+```bash
+swift scripts/brand/generate-brand-assets.swift
+```
+
+If you move the icons, change `InstallWindow` in that script and `icon_locations` and `window_rect` in
+`dmg-settings.py` together: the script draws the heading and arrow around those positions. Instrument
+Serif is under the SIL Open Font License ([`brand/OFL.txt`](brand/OFL.txt)), and only the generator reads it.
+
+To read a built DMG's layout without opening a window, attach it with `hdiutil attach -nobrowse` and read
+the volume's `.DS_Store` with the `ds_store` package from that venv.
+
 ## Verify signing
 
 ```bash
@@ -141,6 +170,8 @@ CI pipeline: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 
 Scripts:
 
+- [`create-dmg.sh`](create-dmg.sh) — styled DMG via `dmgbuild` and [`dmg-settings.py`](dmg-settings.py), then signs it
+- [`install-dmgbuild.sh`](install-dmgbuild.sh) — pinned `dmgbuild` into a temporary venv
 - [`notarize-dmg.sh`](notarize-dmg.sh) — `notarytool submit` + staple
 - [`export-sparkle-update.sh`](export-sparkle-update.sh) — Sparkle-sign DMG + appcast
 - [`manual-release.sh`](manual-release.sh) — local release helper

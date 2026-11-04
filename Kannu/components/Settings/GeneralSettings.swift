@@ -44,6 +44,7 @@ struct GeneralSettings: View {
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
+    @Default(.alwaysShowOverrides) var alwaysShowOverrides
     @Default(.enableHorizontalMusicGestures) var enableHorizontalMusicGestures
     @Default(.musicGestureBehavior) var musicGestureBehavior
     @Default(.reverseSwipeGestures) var reverseSwipeGestures
@@ -125,9 +126,6 @@ struct GeneralSettings: View {
                     ForEach(screens, id: \.self) { screen in
                         Text(screen)
                     }
-                }
-                .onChange(of: NSScreen.screens) {
-                    screens = NSScreen.screens.compactMap({ $0.localizedName })
                 }
                 .onChange(of: coordinator.preferredScreen) {
                     NotificationCenter.default.post(name: Notification.Name.displayPlacementChanged, object: nil)
@@ -229,6 +227,13 @@ struct GeneralSettings: View {
             gestureControls()
         }
         .navigationTitle("General")
+        // `NSScreen.screens` is not observable: an `onChange(of:)` of it ran only when something
+        // else redrew the page, and a display coming or going need not. A new `screens` redraws
+        // the page, and with it the per-display overrides, which read `NSScreen.screens` too.
+        // On the Form, not the Display row: rows of a lazy Form may not exist when it fires.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            screens = NSScreen.screens.compactMap { $0.localizedName }
+        }
         .onChange(of: openNotchOnHover) {
             if !openNotchOnHover {
                 enableGestures = true
@@ -306,9 +311,10 @@ struct GeneralSettings: View {
                 Text("Open notch on hover")
             }
             .settingsHighlight(id: highlightID("Open notch on hover"))
-            // Also shown with hover-to-open off when a display hides until hovered: the same
-            // value is the dwell before the hidden island slides in.
-            if openNotchOnHover || !alwaysShowOnNonNotchDisplays {
+            // Also shown with hover-to-open off when a display hides until hovered, by default or
+            // through its own "Always show" override: the same value is the dwell before the
+            // hidden island slides in.
+            if openNotchOnHover || !alwaysShowOnNonNotchDisplays || alwaysShowOverrides.values.contains(false) {
                 SettingsSliderRow("Minimum hover duration",
                                   description: "How long the pointer must rest on the notch before it opens. On displays where Kannu hides until hovered, this is also how long the pointer must rest at the top edge before the island slides in.",
                                   value: $minimumHoverDuration, in: 0...2, step: 0.1,

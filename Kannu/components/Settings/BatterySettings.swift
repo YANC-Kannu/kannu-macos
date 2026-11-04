@@ -220,7 +220,7 @@ struct Charge: View {
                     VStack(spacing: 16) {
                         Image(systemName: "battery.100percent.slash")
                             .font(.title)
-                        Text("Battery settings and informations are only available on MacBooks")
+                        Text("Battery settings and information are only available on MacBooks")
                             .font(.title3)
                     }
                 }
