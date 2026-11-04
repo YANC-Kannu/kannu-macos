@@ -34,6 +34,7 @@ struct LiveActivitiesSettings: View {
     @Default(.enableDoNotDisturbDetection) var enableDoNotDisturbDetection
     @Default(.focusIndicatorNonPersistent) var focusIndicatorNonPersistent
     @Default(.capsLockIndicatorTintMode) var capsLockTintMode
+    @Default(.enableCapsLockIndicator) var enableCapsLockIndicator
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.liveActivities.highlightID(for: title)
@@ -161,7 +162,7 @@ struct LiveActivitiesSettings: View {
                 Defaults.Toggle(key: .showCapsLockLabel) {
                     Text("Show Caps Lock label")
                 }
-                .disabled(!Defaults[.enableCapsLockIndicator])
+                .disabled(!enableCapsLockIndicator)
                 .settingsHighlight(id: highlightID("Show Caps Lock label"))
 
                 Picker("Caps Lock color", selection: $capsLockTintMode) {
@@ -170,7 +171,7 @@ struct LiveActivitiesSettings: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .disabled(!Defaults[.enableCapsLockIndicator])
+                .disabled(!enableCapsLockIndicator)
                 .settingsHighlight(id: highlightID("Caps Lock color"))
             } header: {
                 SettingsSectionHeader("Caps Lock Indicator")

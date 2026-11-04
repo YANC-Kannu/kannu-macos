@@ -232,6 +232,8 @@ final class SettingsAnimationRulesTests: XCTestCase {
         }
         let view = try XCTUnwrap(sources["DevicesSettings.swift"])
         XCTAssertTrue(view.contains("onWindowChange?(window != nil)"), "the looping icon no longer follows its window")
+        XCTAssertTrue(view.contains("view.onWindowChange = { inWindow in coordinator.setPlaying(inWindow) }"), "the looping icon's window callback no longer reaches its player")
+        XCTAssertTrue(view.contains("controller?.pause()"), "the looping icon no longer pauses when its window goes")
     }
 
     func testThePlayerDetectorCatchesAnOffender() {

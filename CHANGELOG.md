@@ -4,6 +4,41 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Act on CodeRabbit's review of the SettingsView split
+- **Developer label:** "resolve issues and merge mr's also"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes agreed from CodeRabbit's review of #18, nearly all in code the split only moved
+- **Changes:**
+  - General shows Minimum hover duration also when a display's own Always show override is Off: that
+    display hides until hovered and waits that long before the island slides in.
+  - General refreshes its display list on `NSApplication.didChangeScreenParametersNotification`, observed
+    on the Form, so the per-display overrides follow a display that comes or goes. The Display row's
+    `onChange(of: NSScreen.screens)`, which ran only when something else redrew the page, is gone.
+  - `SettingsPermissionCallout`'s default request button title is `String(localized: "Request Access")`.
+    The catalog entry is no longer marked stale. Its Russian value, a copy of "Remove selected", now reads
+    "Запросить доступ", and its Brazilian Portuguese value now reads "Solicitar Acesso" instead of "Requer
+    Acesso", which means "Requires access".
+  - Downloads, both HUD pages and Live Activities observe through `@Default` the keys their rows read
+    (`enableDownloadListener`, `useColorCodedVolumeDisplay`, `useColorCodedBatteryDisplay`,
+    `useSmoothColorGradient`, `enableCapsLockIndicator`), so the dependent rows and footers follow their
+    toggles at once instead of at the next unrelated redraw.
+  - The volume step rows and their "Disabled while external display volume integration is active."
+    footer require third-party DDC integration as well as the external volume listener, as
+    `SystemHUDManager` does, so turning DDC off no longer leaves them locked.
+  - While agent monitoring is off, `landingOnABuiltRow` lands every Agents search result on the
+    monitoring switch, and while stats monitoring is off every Stats result on its switch.
+    `SettingsHighlightInventoryTests` pins both redirects.
+  - Enable shelf can be turned off without the folder access Shelf needs; only turning it on still
+    requires that access.
+  - Lock Screen's offset bindings propagate only when the clamped offset changes, as the width bindings
+    already did.
+  - Brain › Timer refuses a preset edit that would bring it to 0:00, as the custom timer's Start already
+    refuses zero.
+  - `SettingsAnimationRulesTests` pins the looping icon's window callback and its `controller?.pause()`.
+  - `ClosedNotchObservationTests` pins each allowed file's exact whole-monitor observer count, and fails
+    when an allowlisted file is gone.
+  - `FirstLaunchRulesTests` allows `WarpAgentStore.databaseURL` only in `CursorAgentStatusMonitor.swift`
+    and `LaunchPermissionManager.swift`, across every file under `Kannu/`.
+
 ### 2026-11-01 - A new eye logo and a styled install window
 - **Developer label:** "unslop our logo during install"
 - **Agent label:** Claude Code (Opus 5.5) — one almond eye drawn by a CoreGraphics generator, and a paper-coloured drag-to-install window built with a hash-pinned `dmgbuild`

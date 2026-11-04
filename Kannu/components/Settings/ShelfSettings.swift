@@ -28,6 +28,8 @@ struct Shelf: View {
     @Default(.expandedDragDetection) var expandedDragDetection
     @Default(.copyOnDrag) var copyOnDrag
     @Default(.autoRemoveShelfItems) var autoRemoveShelfItems
+    // Without the access Shelf needs, Enable shelf can still be turned off, just not on.
+    @Default(.dynamicShelf) private var dynamicShelf
     @StateObject private var quickShareService = QuickShareService.shared
     @ObservedObject private var fullDiskAccessPermission = FullDiskAccessPermissionStore.shared
     @ObservedObject private var shelfFolderAccessPermission = ShelfFolderAccessPermissionStore.shared
@@ -90,7 +92,7 @@ struct Shelf: View {
                 Defaults.Toggle(key: .dynamicShelf) {
                     Text("Enable shelf")
                 }
-                .disabled(!canEnableShelf)
+                .disabled(!canEnableShelf && !dynamicShelf)
                 .settingsHighlight(id: highlightID("Enable shelf"))
 
                 Defaults.Toggle(key: .openShelfByDefault) {
