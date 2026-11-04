@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's menus and plain buttons take its theme
+- **Developer label:** Brain redesign Stage 3: "`SettingsMoreMenu`"
+- **Agent label:** Claude Code (Opus 5.5) — our trigger over a native menu; `.bordered` becomes the standard button and `.borderless` a quiet one
+- **Changes:**
+  - `SettingsButtonStyle(.quiet)`: bare at rest, the hover fill under the pointer, the small inset.
+  - The ⋯ of `SettingsMoreMenu`, Tasks' Connect…, an extension's Reset and the estimate presets are our button over
+    a native menu: `.menuStyle(.button)`, our style and `.menuIndicator(.hidden)`, with a `chevron.down` in the label
+    where one is needed. The items stay a native menu, with its keyboard, type-to-select and VoiceOver. All tasks'
+    filter menu stays native until Stage 5.
+  - 20 `.bordered` buttons take the root's standard style: the animation editor's nine, Custom OSD's three preview
+    buttons, Extensions' four, a timer preset's three and the permission callout's one. Revoke Access and Remove are
+    destructive buttons instead of orange- and red-tinted ones.
+  - 9 `.borderless` buttons become quiet: a task row's ▶, ■ and ›, Tasks' back row, a rule's −, the music slots'
+    reset, and the colour popover's three, which take the small size of its compact scale.
+  - The shared components' colours: the tag chip's ring is `accentStrong`, a status line's dot `success` and an
+    error line `destructive`. New token `success`, held to 3:1 on the panel and on cards.
+  - `SettingsDesignSystemRulesTests` holds every menu to our button, All tasks' pinned, and the ⋯ to its quiet
+    trigger; `testTheThemeIsReadable` holds `success`.
+  - The designSystem board gains quiet buttons, enabled and disabled, and a ⋯ trigger, and names `success`.
+  - docs/SETTINGS.md: the component table's quiet button and menus, and the back row's style.
+
 ### 2026-11-05 - Brain's sheets take its theme
 - **Developer label:** Brain redesign Stage 3: "restyled sheets"
 - **Agent label:** Claude Code (Opus 5.5) — one SettingsSheet that applies the root itself, since a sheet is a window of its own

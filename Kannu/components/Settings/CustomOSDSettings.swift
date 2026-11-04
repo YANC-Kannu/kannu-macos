@@ -172,17 +172,14 @@ struct CustomOSDSettings: View {
                             Button("Volume") {
                                 previewType = .volume
                             }
-                            .buttonStyle(.bordered)
 
                             Button("Brightness") {
                                 previewType = .brightness
                             }
-                            .buttonStyle(.bordered)
                                 
                             Button("Backlight") {
                                 previewType = .backlight
                             }
-                            .buttonStyle(.bordered)
                         }
                         .controlSize(.small)
                             

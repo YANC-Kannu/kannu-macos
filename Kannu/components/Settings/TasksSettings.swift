@@ -337,7 +337,7 @@ struct TasksBackRow: View {
                 Image(systemName: "chevron.left")
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(SettingsButtonStyle(.quiet))
         .accessibilityLabel(Text(verbatim: String(localized: "Back to \(parent)")))
     }
 }
@@ -403,12 +403,21 @@ private struct TaskSourcesSection: View {
 
             if !addable.isEmpty {
                 LabeledContent {
-                    Menu("Connect…") {
+                    Menu {
                         ForEach(addable, id: \.self) { source in
                             Button(source.title) { context.connect(source) }
                         }
+                    } label: {
+                        // Our button takes the native indicator away, so the label draws its own chevron.
+                        HStack(spacing: SettingsMetrics.iconGap) {
+                            Text("Connect…")
+                            Image(systemName: "chevron.down")
+                                .accessibilityHidden(true)
+                        }
                     }
-                    .buttonStyle(.bordered)
+                    .menuStyle(.button)
+                    .buttonStyle(SettingsButtonStyle())
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 } label: {
                     SettingsRowLabel("Add a source", description: Text(verbatim: addable.map(\.title).formatted(.list(type: .or))))

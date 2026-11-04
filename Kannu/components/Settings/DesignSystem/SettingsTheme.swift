@@ -41,6 +41,8 @@ enum SettingsTheme {
     static let knob = color(light: 0xFFFFFF, dark: 0xFFFFFF)
     static let onPrimary = color(light: 0xF4F1EA, dark: 0x101114)
     static let destructive = color(light: 0xBC3226, dark: 0xFF6B5E)
+    /// A mark that means ready, such as a status line's dot. Drawn, never read, so 3:1 is its floor.
+    static let success = color(light: 0x2E7D4F, dark: 0x5FD08A)
 
     // MARK: - Fonts: Geist when bundled, the system font at the same size and weight when not
 

@@ -276,6 +276,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("destructive", on: ["card", "selection"], atLeast: 4.5)
         // The selected segment's title, on the fill it is raised on.
         require("ink", on: ["raised"], atLeast: 7)
+        // A mark, not text: a status line's ready dot.
+        require("success", on: ["panel", "card"], atLeast: 3)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -311,6 +313,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let darkRaised = theme.replacingOccurrences(of: "raised = color(light: 0xFFFFFF", with: "raised = color(light: 0x3A3A3A")
         XCTAssertNotEqual(darkRaised, theme, "the plant must change the theme")
         XCTAssertTrue(Self.readabilityFailures(in: darkRaised).contains("ink on raised, light"))
+
+        let paleSuccess = theme.replacingOccurrences(of: "success = color(light: 0x2E7D4F", with: "success = color(light: 0xA8D5B5")
+        XCTAssertNotEqual(paleSuccess, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: paleSuccess), ["success on panel, light", "success on card, light"])
     }
 
     // MARK: - Every token has a reader
@@ -841,10 +847,16 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: components, by: Self.sharedComponentProblems)
     }
 
-    /// A root button style takes a default-style `Menu`'s indicator away, and the only cures are the
-    /// borderless menu style or a native button style on the menu itself.
-    private static func menusWithoutAnIndicator(in code: String) -> [String] {
-        calls(of: "Menu", in: code) { !($0.contains(".menuStyle(.borderlessButton)") || $0.contains(".buttonStyle(.bordered)")) }
+    /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
+    private static let pinnedNativeMenus = ["AllTasksPage.swift": 1]
+
+    /// Menus whose own chain does not have our button draw the trigger. Each menu says so itself, rather than
+    /// leaving it to the root: the button menu style takes the current button style, ours takes the native
+    /// indicator away, and a label that needs a chevron draws `chevron.down` itself.
+    private static func menusNotDrawnByOurButton(in code: String) -> [String] {
+        calls(of: "Menu", in: code) { chain in
+            !(chain.contains(".menuStyle(.button)") && chain.contains("SettingsButtonStyle(") && chain.contains(".menuIndicator(.hidden)"))
+        }
     }
 
     /// The start of each call of `name` whose modifier chain `isOffender` picks.
@@ -930,26 +942,34 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         return chain
     }
 
-    func testEveryMenuKeepsItsIndicator() throws {
+    /// 2026-11-05: was `testEveryMenuKeepsItsIndicator`, which accepted the borderless menu style or a native button
+    /// style on the menu. Now each menu's trigger is our button over a native menu (Stage 3, brain/3-3-sheets-menus).
+    func testEveryMenuIsDrawnByOurButton() throws {
         var openers = 0
         for (name, source) in try Self.sources() {
             let code = Self.code(source)
             openers += Self.openers(of: "Menu", in: code).count
-            XCTAssertEqual(Self.menusWithoutAnIndicator(in: code), [], "\(name): the root's button style takes this Menu's indicator away")
+            XCTAssertEqual(Self.menusNotDrawnByOurButton(in: code).count, Self.pinnedNativeMenus[name] ?? 0,
+                           "\(name): a menu's trigger is our button: \(Self.menusNotDrawnByOurButton(in: code))")
         }
         XCTAssertGreaterThan(openers, 0, "the scan found no Menu: the pattern went blind")
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.fixedSize()\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.menuStyle(.button)\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a\") {}\n} label: {\n    Text(\"x\")\n}\n").count, 1)
+        let ours = "\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n"
+        // The old borderless menu, and the old Connect… with a native button style.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Image(systemName: \"ellipsis.circle\")\n}\n.menuStyle(.borderlessButton)\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 1)
+        // Our style on a menu style that ignores it, or with the native indicator left on.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.borderlessButton)\n.buttonStyle(SettingsButtonStyle())\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle())\n").count, 1)
         // A style inside the label is on the label, not on the menu.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu {\n} label: {\n    Text(\"x\").menuStyle(.borderlessButton)\n}\n").count, 1)
-        // A modifier on the next view is not on this one.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"a\") {}\nText(\"b\")\n    .buttonStyle(.bordered)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")" + ours + "}\n").count, 1)
+        // A style on the next view is not on this one.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"a\") {}\nText(\"b\")" + ours).count, 1)
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}\n.help(\"h\")\n.menuStyle(.borderlessButton)\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
+        // The real `SettingsMoreMenu` shape passes, its comment between the label and the chain included.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: Self.code("Menu {\n    items\n} label: {\n    Image(systemName: \"ellipsis\")\n}\n// Our button draws the trigger.\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n.fixedSize()\n.accessibilityLabel(accessibilityLabel)\n")).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}" + ours).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
     }
 
     /// Lines naming the default action with no primary style beside them. A custom style cannot see
@@ -1062,6 +1082,28 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         // A `SettingsSheet(` in a comment builds nothing.
         XCTAssertNil(Self.structBody("Planted", in: "struct Other {}\n"))
         XCTAssertEqual(Self.structBody("Planted", in: "struct Planted: View {\n    // SettingsSheet(\n}\n")?.contains("SettingsSheet("), false)
+    }
+
+    // MARK: - Menus
+
+    /// What the ⋯ keeps: our quiet button draws its trigger, and its items stay a native menu.
+    private static func moreMenuProblems(in components: String) -> [String] {
+        guard let start = components.range(of: "struct SettingsMoreMenu<") else { return ["SettingsMoreMenu is gone"] }
+        let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
+        let region = components[start.lowerBound..<end]
+        return [".menuStyle(.button)", "SettingsButtonStyle(.quiet)"].filter { !region.contains($0) }
+    }
+
+    func testTheMoreMenuIsOursOverANativeMenu() throws {
+        let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
+        XCTAssertEqual(Self.moreMenuProblems(in: components), [])
+        Self.assertCaught([(".menuStyle(.button)", ".menuStyle(.borderlessButton)"),
+                           ("SettingsButtonStyle(.quiet)", "SettingsButtonStyle()"),
+                           ("struct SettingsMoreMenu<", "struct RenamedMoreMenu<")],
+                          in: components, by: Self.moreMenuProblems)
+        // The style on the next type is not on the menu.
+        let elsewhere = "struct SettingsMoreMenu<Items: View>: View {\n    .menuStyle(.button)\n}\nstruct Other {\n    SettingsButtonStyle(.quiet)\n}\n"
+        XCTAssertEqual(Self.moreMenuProblems(in: elsewhere), ["SettingsButtonStyle(.quiet)"])
     }
 
     // MARK: - Licence

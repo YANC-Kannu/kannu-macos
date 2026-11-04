@@ -90,7 +90,7 @@ struct PolicyRulesEditor: View {
             } label: {
                 Image(systemName: "minus.circle")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
             .help("Remove rule")
             .accessibilityLabel("Remove rule")
         }

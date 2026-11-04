@@ -85,7 +85,7 @@ struct TaskRowList: View {
                 } label: {
                     Image(systemName: "chevron.right")
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(SettingsButtonStyle(.quiet))
                 .accessibilityLabel("Show Details")
             }
         } label: {
@@ -207,14 +207,14 @@ struct TaskTimingButton: View {
                 Image(systemName: "stop.fill")
                     .imageScale(.large)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
             .accessibilityLabel("Stop timing")
         } else {
             Button(action: start) {
                 Image(systemName: "play.fill")
                     .imageScale(.large)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
             .disabled(!canStart)
             .accessibilityLabel("Start timing")
         }
@@ -253,7 +253,8 @@ struct TaskEstimateField: View {
             } label: {
                 Image(systemName: "chevron.down")
             }
-            .menuStyle(.borderlessButton)
+            .menuStyle(.button)
+            .buttonStyle(SettingsButtonStyle(.quiet))
             .menuIndicator(.hidden)
             .fixedSize()
             .accessibilityLabel("Estimate presets")
