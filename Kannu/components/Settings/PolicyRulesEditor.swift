@@ -85,12 +85,8 @@ struct PolicyRulesEditor: View {
 
     private func ruleRow(_ row: Binding<AgentPolicyDraft.Row>) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
-            Picker("Kind", selection: row.kind) {
-                Text("Command").tag(AgentPolicyDraft.Kind.command)
-                Text("Tool").tag(AgentPolicyDraft.Kind.tool)
-            }
-            .labelsHidden()
-            .fixedSize()
+            SettingsSelect("Kind", selection: row.kind,
+                           choices: [.command: String(localized: "Command"), .tool: String(localized: "Tool")])
             TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text)
                 .font(SettingsTheme.mono)
                 .frame(width: 170)

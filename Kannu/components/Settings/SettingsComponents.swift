@@ -211,10 +211,10 @@ struct SettingsRow<Control: View>: View {
             // The row draws the title itself, so a Toggle here shows only its switch. A custom toggle
             // style ignores `.labelsHidden()`, so the style is told directly.
             // `.labelsHidden()` is an ENVIRONMENT modifier: it reaches everything in the slot.
-            // Right for a Toggle/Picker/Stepper (the row draws the title itself); wrong for a
-            // Menu or a popover-anchoring button, whose label and item titles it erases — the
-            // "Policy rules" menu read as dead this way. Those controls go in a raw
-            // LabeledContent or a SettingsActionRow instead (docs/SETTINGS.md).
+            // Right for a Toggle, a Stepper or a SettingsSelect (the row draws the title itself, and the
+            // select's trigger and rows are buttons with plain text, as the components board shows);
+            // wrong for a Menu, whose label and item titles it erases — the "Policy rules" menu read as
+            // dead this way. A Menu goes in a raw LabeledContent or a SettingsActionRow (docs/SETTINGS.md).
             control
                 .labelsHidden()
                 .toggleStyle(SettingsToggleStyle(showsLabel: false))

@@ -105,10 +105,9 @@ struct CustomOSDSettings: View {
             }
 
             Section {
-                Picker("Material", selection: $osdMaterial) {
-                    ForEach(availableOSDMaterials, id: \.self) { material in
-                        Text(material.rawValue).tag(material)
-                    }
+                SettingsRow("Material") {
+                    SettingsSelect("Material", selection: $osdMaterial,
+                                   options: availableOSDMaterials, optionTitle: \.rawValue)
                 }
                 .settingsHighlight(id: highlightID("Material"))
                 .onChange(of: osdMaterial) { _, _ in
@@ -118,13 +117,9 @@ struct CustomOSDSettings: View {
                 if osdMaterial == .liquid {
                     if #available(macOS 26.0, *) {
                         SettingsRow("Glass mode") {
-                            Picker("Glass mode", selection: $osdLiquidGlassCustomizationMode) {
-                                ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .fixedSize()
+                            SettingsSelect("Glass mode", selection: $osdLiquidGlassCustomizationMode,
+                                           options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                           style: .segmented)
                         }
 
                         if osdLiquidGlassCustomizationMode == .customLiquid {
@@ -137,10 +132,9 @@ struct CustomOSDSettings: View {
                     }
                 }
 
-                Picker("Icon & Progress Color", selection: $osdIconColorStyle) {
-                    ForEach(OSDIconColorStyle.allCases, id: \.self) { style in
-                        Text(style.rawValue).tag(style)
-                    }
+                SettingsRow("Icon & Progress Color") {
+                    SettingsSelect("Icon & Progress Color", selection: $osdIconColorStyle,
+                                   options: OSDIconColorStyle.allCases, optionTitle: \.rawValue)
                 }
                 .settingsHighlight(id: highlightID("Icon & Progress Color"))
                 .onChange(of: osdIconColorStyle) { _, _ in

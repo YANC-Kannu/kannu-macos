@@ -180,7 +180,7 @@ final class BrainAppearanceRulesTests: XCTestCase {
 
     /// The moon only picks the opposite of what is on screen, so this is the one way back to Match macOS.
     private static func rowProblems(in page: String) -> [String] {
-        ["ForEach(BrainAppearance.allCases)", "selection: $brainAppearance", ".settingsHighlight(id: highlightID(\"Brain appearance\"))"]
+        ["options: BrainAppearance.allCases", "selection: $brainAppearance", ".settingsHighlight(id: highlightID(\"Brain appearance\"))"]
             .filter { !page.contains($0) }
     }
 
@@ -188,7 +188,7 @@ final class BrainAppearanceRulesTests: XCTestCase {
         let page = try XCTUnwrap(try Self.sources()[Self.page])
         XCTAssertEqual(Self.rowProblems(in: page), [])
         SettingsDesignSystemRulesTests.assertCaught(
-            [("ForEach(BrainAppearance.allCases)", "ForEach([BrainAppearance.light, .dark])"),
+            [("options: BrainAppearance.allCases", "options: [BrainAppearance.light, .dark]"),
              ("selection: $brainAppearance", "selection: .constant(BrainAppearance.system)"),
              (".settingsHighlight(id: highlightID(\"Brain appearance\"))", "")],
             in: page, by: Self.rowProblems)

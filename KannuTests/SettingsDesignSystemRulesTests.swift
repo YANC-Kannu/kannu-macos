@@ -274,6 +274,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("onPrimary", on: ["ink"], atLeast: 7)
         require("ink", on: ["selection"], atLeast: 7)
         require("destructive", on: ["card", "selection"], atLeast: 4.5)
+        // The selected segment's title, on the fill it is raised on.
+        require("ink", on: ["raised"], atLeast: 7)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -305,6 +307,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let faintOnHover = theme.replacingOccurrences(of: "destructive = color(light: 0xBC3226", with: "destructive = color(light: 0xC4362B")
         XCTAssertNotEqual(faintOnHover, theme, "the plant must change the theme")
         XCTAssertEqual(Self.readabilityFailures(in: faintOnHover), ["destructive on selection, light"])
+
+        let darkRaised = theme.replacingOccurrences(of: "raised = color(light: 0xFFFFFF", with: "raised = color(light: 0x3A3A3A")
+        XCTAssertNotEqual(darkRaised, theme, "the plant must change the theme")
+        XCTAssertTrue(Self.readabilityFailures(in: darkRaised).contains("ink on raised, light"))
     }
 
     // MARK: - Every token has a reader
@@ -430,9 +436,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
         XCTAssertEqual(Self.code(try XCTUnwrap(sources["AllTasksPage.swift"])).components(separatedBy: ".disclosureGroupStyle(.automatic)").count - 1, 3,
                        "All tasks' long groups keep the native disclosure")
-        let segmented = Self.code(try XCTUnwrap(sources["AnimationEditorView.swift"]))
-        XCTAssertTrue(segmented.contains(".pickerStyle(.segmented)"), "the animation editor's segmented picker moved: this rule reads nothing")
-        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: segmented, styles: [".pickerStyle(.segmented)"]), [])
+        // 2026-11-04: the segmented picker's opt-out and its plant are gone. Nothing segmented is native any more:
+        // the animation editor's Loop Mode is a SettingsSelect (Stage 3, brain/3-1-select).
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
         XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: Self.code(try XCTUnwrap(sources["GeneralSettings.swift"]))))
 
@@ -459,7 +464,6 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\")\n        .settingsDescriptionStyle()\n}\n").count, 0)
         XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    TextField(\"b\", text: $b)\n}\n").count, 0)
 
-        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Picker(\"a\") {}\n    .pickerStyle(.segmented)\n", styles: [".pickerStyle(.segmented)"]).count, 1)
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: ["Page.swift": "Button(\"a\") {}\n    .buttonStyle(.borderedProminent)\n"]), ["Page.swift"])
 
         let rows = "LaunchPermissionRow(permission: p)\n    }\n}\n"
@@ -563,6 +567,144 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                            ("configuration.isPressed ? SettingsTheme.pressedOpacity : 1", "1"),
                            ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)")],
                           in: button, by: Self.buttonProblems)
+    }
+
+    /// What the select keeps: VoiceOver's label, value and adjust, a trigger in our button style, a list that
+    /// closes with Brain, the arrows on a segment, one dim of its own, and an ease that Reduce Motion stops.
+    private static func selectProblems(in select: String) -> [String] {
+        var problems = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(title)",
+                        ".onDisappear { isOpen = false }", ".buttonStyle(SettingsButtonStyle())",
+                        ".accessibilityAddTraits(option == selection ? .isSelected : [])",
+                        ".onKeyPress(keys: [.leftArrow, .rightArrow])",
+                        "reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                        "guard isEnabled else { return }"].filter { !select.contains($0) }
+        if select.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled segment needs exactly one dim of its own")
+        }
+        if select.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled segment a second time") }
+        return problems
+    }
+
+    /// What the open list keeps: a key monitor for its own key window only, out of an input method's way and gone
+    /// with the list; Return and Escape in the field and in the list; letters when it has no field; rows that never
+    /// take the keyboard; a highlight that is announced and a selection that says so; the threshold; the field's chrome.
+    private static func selectListProblems(in list: String) -> [String] {
+        ["event.window === window", "window.isKeyWindow", "hasMarkedText()", "NSEvent.removeMonitor", "dismantleNSView",
+         ".onSubmit", ".onExitCommand(perform: close)", ".onKeyPress(.return)", ".onKeyPress(.escape)",
+         ".onKeyPress(characters:", ".focusable(false)", "AccessibilityNotification.Announcement(",
+         ".accessibilityAddTraits(option == selection ? .isSelected : [])", "SettingsSelectNavigation.searchThreshold",
+         ".settingsField("].filter { !list.contains($0) }
+    }
+
+    func testTheSelectKeepsKeyboardVoiceOverAndReduceMotion() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let select = try XCTUnwrap(sources["SettingsSelect.swift"])
+        XCTAssertEqual(Self.selectProblems(in: select), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".accessibilityAdjustableAction", ".accessibilityAction"),
+                           (".accessibilityValue(", ".accessibilityHint("),
+                           (".accessibilityLabel(title)", ".accessibilityHidden(true)"),
+                           (".onDisappear { isOpen = false }", ""),
+                           (".buttonStyle(SettingsButtonStyle())", ".buttonStyle(BorderlessButtonStyle())"),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           (".onKeyPress(keys: [.leftArrow, .rightArrow])", ".onKeyPress(keys: [.upArrow, .downArrow])"),
+                           ("reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                            ".easeOut(duration: SettingsTheme.quickAnimation)"),
+                           ("guard isEnabled else { return }", ""),
+                           (dim, ""), (dim, dim + dim),
+                           (".buttonStyle(SegmentButtonStyle())", ".buttonStyle(.plain)")],
+                          in: select, by: Self.selectProblems)
+
+        let list = try XCTUnwrap(sources["SettingsSelectList.swift"])
+        XCTAssertEqual(Self.selectListProblems(in: list), [])
+        // `event.window === window` emptied is a monitor that answers for any window.
+        Self.assertCaught([("event.window === window", ""), ("window.isKeyWindow", "true"),
+                           ("hasMarkedText()", "isEditable"), ("NSEvent.removeMonitor", "print"),
+                           ("dismantleNSView", "dismantleView"), (".onSubmit", ".onAppear"),
+                           (".onExitCommand(perform: close)", ""), (".onKeyPress(.return)", ".onKeyPress(.space)"),
+                           (".onKeyPress(.escape)", ".onKeyPress(.tab)"), (".onKeyPress(characters:", ".onKeyPress(keys:"),
+                           (".focusable(false)", ".focusable()"), ("AccessibilityNotification.Announcement(", "print("),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           ("SettingsSelectNavigation.searchThreshold", "3"), (".settingsField(", ".textFieldStyle(")],
+                          in: list, by: Self.selectListProblems)
+    }
+
+    /// What `SettingsField` keeps: the field native and plain inside our chrome, its label hidden for the one beside
+    /// it, its own focus where the caller keeps none, one dim, and never a send-on-Return of its own:
+    /// `WorklogConsentRulesTests` finds one by the literal modifier, and a parameter would slip past it.
+    private static func fieldProblems(in field: String) -> [String] {
+        var problems = [".textFieldStyle(.plain)", ".labelsHidden()", "content.focused($tracksFocus)"].filter { !field.contains($0) }
+        if field.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled field needs exactly one dim of its own")
+        }
+        if field.contains("onSubmit") { problems.append("the field's chrome takes no onSubmit") }
+        return problems
+    }
+
+    func testTheFieldStaysNativeInside() throws {
+        let field = Self.code(try XCTUnwrap(try Self.designSystemSources()["SettingsField.swift"]))
+        XCTAssertEqual(Self.fieldProblems(in: field), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".textFieldStyle(.plain)", ".textFieldStyle(.roundedBorder)"), (".labelsHidden()", ""),
+                           ("content.focused($tracksFocus)", "content"), (dim, ""), (dim, dim + dim),
+                           ("let isFocused: Bool?", "let isFocused: Bool?\n    let onSubmit: () -> Void")],
+                          in: field, by: Self.fieldProblems)
+    }
+
+    // MARK: - A popover closes with Brain
+
+    /// The flags of `.popover(isPresented: $flag` that no `.onDisappear` in the same file sets to false. Closing
+    /// Brain takes its content out of the window and runs `onDisappear` (docs/REGRESSIONS.md, entry 22), while a
+    /// `@State` flag survives the close, so a popover left open would come back when Brain reopens.
+    private static func popoversThatOutliveBrain(in source: String) -> [String] {
+        let code = Self.code(source, blankingStrings: true)
+        let clears = disappearBodies(in: code)
+        return groups(of: #"\.popover\(\s*isPresented:\s*\$(\w+)"#, in: code).map { $0[1] }.filter { flag in
+            !clears.contains { !matches(of: #"(?<![\w.])(?:self\.)?"# + flag + #"\s*=\s*false\b"#, in: $0).isEmpty }
+        }
+    }
+
+    /// The body of each `.onDisappear { … }`, its braces balanced. Strings are blanked, so their braces never count.
+    private static func disappearBodies(in code: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"\.onDisappear\s*\{"#) else {
+            XCTFail("bad onDisappear pattern")
+            return []
+        }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map { match in
+            let start = match.range.location + match.range.length - 1
+            var end = start, depth = 0
+            repeat {
+                let unit = text.character(at: end)
+                if unit == 0x7B { depth += 1 } else if unit == 0x7D { depth -= 1 }
+                end += 1
+            } while end < text.length && depth > 0
+            return text.substring(with: NSRange(location: start, length: end - start))
+        }
+    }
+
+    func testAPopoverClosesWhenBrainDoes() throws {
+        let sources = try Self.sources()
+        var popovers = 0
+        for (name, source) in sources {
+            popovers += Self.matches(of: #"\.popover\(\s*isPresented:"#, in: Self.code(source)).count
+            XCTAssertEqual(Self.popoversThatOutliveBrain(in: source), [], "\(name): a popover left open comes back when Brain reopens")
+        }
+        XCTAssertGreaterThan(popovers, 0, "the scan found no popover: the pattern went blind")
+
+        let open = "Button(\"a\") { shows.toggle() }\n    .popover(isPresented: $shows, arrowEdge: .bottom) { Text(\"b\") }\n"
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open), ["shows"], "no onDisappear")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { other = false }\n"), ["shows"], "another flag")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { showsMore = false }\n"), ["shows"], "a longer name")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onAppear { shows = false }\n"), ["shows"], "the wrong hook")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    // .onDisappear { shows = false }\n"), ["shows"], "a comment")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { shows = false }\n"), [])
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear {\n        if a { b(\"}\") }\n        shows = false\n    }\n"), [])
+
+        Self.assertCaught([(".onDisappear { isOpen = false }", "")],
+                          in: try XCTUnwrap(sources["SettingsSelect.swift"]), by: Self.popoversThatOutliveBrain)
+        Self.assertCaught([(".onDisappear { showingMenu = false }", ".onDisappear { showingMenu = true }")],
+                          in: try XCTUnwrap(sources["IdleAnimationsSettingsSection.swift"]), by: Self.popoversThatOutliveBrain)
     }
 
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
@@ -751,6 +893,13 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     /// The source with every comment blanked and every line kept, so line numbers still mean what they
     /// do in the file. Strings are respected: a URL's `//` is not a comment.
     static func code(_ source: String) -> String {
+        code(source, blankingStrings: false)
+    }
+
+    /// `blankingStrings` also writes a space for each character inside a string literal, keeping its quotes and
+    /// newlines, so a ban does not read a title such as "Device Picker Style" as a call. An overload, not a default
+    /// argument, so `Self.code` still passes as a one-argument function.
+    static func code(_ source: String, blankingStrings: Bool) -> String {
         let characters = Array(source)
         var out = ""
         var index = 0
@@ -759,9 +908,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
             let character = characters[index]
             let next: Character? = index + 1 < characters.count ? characters[index + 1] : nil
             if inString {
-                out.append(character)
+                out.append(!blankingStrings || character == "\"" || character == "\n" ? character : " ")
                 if character == "\\", let next {
-                    out.append(next)
+                    out.append(blankingStrings && next != "\n" ? " " : next)
                     index += 2
                     continue
                 }

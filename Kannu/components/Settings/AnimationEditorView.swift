@@ -279,13 +279,8 @@ struct AnimationEditorView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            Picker("Loop Mode", selection: $loopMode) {
-                                ForEach(AnimationLoopMode.allCases, id: \.self) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labeledContentStyle(.automatic)
+                            SettingsSelect("Loop Mode", selection: $loopMode, options: AnimationLoopMode.allCases,
+                                           optionTitle: \.rawValue, style: .segmented)
                         }
                     }
                 }
@@ -533,6 +528,17 @@ struct AnimationEditorView: View {
         }
     }
 }
+
+#if DEBUG
+extension AnimationEditorView {
+    /// DEBUG snapshot harness: the editor's controls on their own. A local file that holds no animation, so no
+    /// Lottie loads and nothing touches the network.
+    static func snapshotControls() -> AnyView {
+        AnyView(AnimationEditorView(sourceURL: URL(fileURLWithPath: "/dev/null"), isRemoteURL: false,
+                                    animation: .constant(nil)).controlsPanel)
+    }
+}
+#endif
 
 // MARK: - Supporting Views
 
