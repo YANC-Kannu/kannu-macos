@@ -54,7 +54,7 @@ final class BrainPathRulesTests: XCTestCase {
         let enders: Set<Character> = ["›", ".", ",", ")", "\"", "\\"]
         var found: [[String]] = []
         let normalized = text.replacingOccurrences(of: "→", with: "›")
-        for line in normalized.split(separator: "\n") where line.contains("\"") && line.contains("Brain › ") {
+        for line in normalized.split(separator: "\n") where line.contains("Brain › ") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
             let string = String(line)
