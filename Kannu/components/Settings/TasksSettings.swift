@@ -694,11 +694,13 @@ private struct TaskValueSheet: View {
         switch sheet {
         case .endTime(_, _, _, let start, let nextSessionStart):
             // Date() here, not a stored bound: the list may have rendered long before the click.
-            DatePicker("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())),
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Stopped working at") {
+                SettingsDateField("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())))
+            }
         case .schedule:
-            DatePicker("Remind me at", selection: $date, in: Date()...,
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Remind me at") {
+                SettingsDateField("Remind me at", selection: $date, in: Date()...)
+            }
         case .estimate:
             TaskEstimateField(draft: $estimate, onSubmit: save)
         default:
@@ -807,3 +809,16 @@ struct ReminderPermissionNote: View {
         }
     }
 }
+
+#if DEBUG
+extension TasksSettings {
+    /// DEBUG snapshot harness: Set End Time, the value sheet that shows the date field and, unlike Schedule, runs no
+    /// permission check. The sheet's type is private to this file.
+    static func snapshotEndTimeSheet() -> AnyView {
+        AnyView(TaskValueSheet(sheet: .endTime(taskID: DebugSnapshotFixtures.localTaskID, segmentID: UUID(),
+                                               title: "Write the release notes",
+                                               start: Date().addingTimeInterval(-3 * 3600), nextSessionStart: nil),
+                               onSave: { _ in }))
+    }
+}
+#endif

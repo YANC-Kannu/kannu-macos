@@ -157,7 +157,8 @@ final class TaskTimeMathTests: XCTestCase {
         XCTAssertFalse(setEndTime.contains("max(start, Date())"), "the old now-only clamp is back")
 
         let settings = try Self.source("Kannu/components/Settings/TasksSettings.swift")
-        let picker = try XCTUnwrap(settings.split(separator: "\n").first { $0.contains("DatePicker(") }, "the end-time picker is gone?")
+        // 2026-11-05: the end time is a SettingsDateField now (Stage 3, brain/3-3-sheets-menus), with the same range.
+        let picker = try XCTUnwrap(settings.split(separator: "\n").first { $0.contains("SettingsDateField(") }, "the end-time picker is gone?")
         XCTAssertTrue(picker.contains("nextSessionStart"), "the end-time picker's range must stop at the next session: \(picker)")
         XCTAssertTrue(picker.contains("Date()"), "the picker must cap at its own now, or a Brain window left open forbids the latest stretch: \(picker)")
     }
