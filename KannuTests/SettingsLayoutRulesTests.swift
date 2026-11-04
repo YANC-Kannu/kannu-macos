@@ -179,6 +179,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPermissionCallout.swift": 1,  // the callout's own card
         "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
         "SettingsButtonStyle.swift": 1,      // the button's own chrome
+        "SettingsSelect.swift": 2,           // a segment, and the track it sits in
+        "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
+        "SettingsField.swift": 1,            // the field inside its chrome
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
