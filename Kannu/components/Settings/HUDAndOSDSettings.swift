@@ -115,6 +115,7 @@ struct HUDAndOSDSettingsView: View {
     @Default(.enableBrightnessHUD) var enableBrightnessHUD
     @Default(.enableKeyboardBacklightHUD) var enableKeyboardBacklightHUD
     @Default(.enableThirdPartyDDCIntegration) var enableThirdPartyDDCIntegration
+    @Default(.useColorCodedVolumeDisplay) var useColorCodedVolumeDisplay
     @Default(.verticalHUDShowValue) var verticalHUDShowValue
     @Default(.verticalHUDInteractive) var verticalHUDInteractive
     @Default(.verticalHUDHeight) var verticalHUDHeight
@@ -477,7 +478,7 @@ struct HUDAndOSDSettingsView: View {
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
                 Text("Color-coded Volume")
             }
-            if Defaults[.useColorCodedVolumeDisplay] {
+            if useColorCodedVolumeDisplay {
                 Defaults.Toggle(key: .useSmoothColorGradient) {
                     Text("Smooth color transitions")
                 }
@@ -525,7 +526,7 @@ struct HUDAndOSDSettingsView: View {
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
                 Text("Color-coded Volume")
             }
-            if Defaults[.useColorCodedVolumeDisplay] {
+            if useColorCodedVolumeDisplay {
                 Defaults.Toggle(key: .useSmoothColorGradient) {
                     Text("Smooth color transitions")
                 }
@@ -640,10 +641,10 @@ private struct ExternalDisplayIntegrationsSection: View {
         Section {
             stepRow(Text("Volume step"), value: $volumeStepPercent)
                 .settingsHighlight(id: highlightID("Volume step"))
-                .disabled(enableExternalVolumeControlListener)
+                .disabled(enableThirdPartyDDCIntegration && enableExternalVolumeControlListener)
             stepRow(Text("Volume fine step"), value: $volumeFineStepPercent)
                 .settingsHighlight(id: highlightID("Volume fine step"))
-                .disabled(enableExternalVolumeControlListener)
+                .disabled(enableThirdPartyDDCIntegration && enableExternalVolumeControlListener)
             stepRow(Text("Brightness step"), value: $brightnessStepPercent)
                 .settingsHighlight(id: highlightID("Brightness step"))
                 .disabled(enableThirdPartyDDCIntegration)
@@ -654,7 +655,7 @@ private struct ExternalDisplayIntegrationsSection: View {
             SettingsSectionHeader("Step size")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                if enableExternalVolumeControlListener {
+                if enableThirdPartyDDCIntegration && enableExternalVolumeControlListener {
                     SettingsFooter("Disabled while external display volume integration is active.")
                 }
                 if enableThirdPartyDDCIntegration {

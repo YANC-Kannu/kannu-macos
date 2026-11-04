@@ -175,6 +175,16 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         }
     }
 
+    /// Agents and Stats build their other rows only while their switch is on, so a search lands
+    /// those entries on the switch until then: the redirect is wired for these two tabs only.
+    func testASwitchedOffTabLandsOnItsSwitch() throws {
+        let settingsView = try XCTUnwrap(try Self.sources()["SettingsView.swift"])
+        XCTAssertTrue(settingsView.contains("if entry.tab == .agentStatus, !Defaults[.enableAgentStatusFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.agentMonitoringHighlightID"))
+        XCTAssertTrue(settingsView.contains("if entry.tab == .stats, !Defaults[.enableStatsFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.statsMonitoringHighlightID"))
+    }
+
     /// Brain › Tasks' pages below the overview exist only while open, so nothing on them may carry
     /// a highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). All tasks'
     /// own deep link is on its back row, which the overview's file builds.

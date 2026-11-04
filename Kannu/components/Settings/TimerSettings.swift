@@ -594,7 +594,11 @@ private struct TimerPresetEditorRow: View {
         if let hours { values.hours = hours }
         if let minutes { values.minutes = minutes }
         if let seconds { values.seconds = seconds }
-        preset.duration = TimerPreset.duration(from: values)
+        // Never 0:00: a zero preset would ring a second after it starts, and the custom
+        // timer's Start refuses zero too.
+        let duration = TimerPreset.duration(from: values)
+        guard duration > 0 else { return }
+        preset.duration = duration
     }
 }
 

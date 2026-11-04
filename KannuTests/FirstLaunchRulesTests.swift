@@ -83,6 +83,12 @@ final class FirstLaunchRulesTests: XCTestCase {
                        ["BluetoothAudioManager.swift", "LaunchPermissionManager.swift"])
         XCTAssertEqual(Self.files(in: files, containing: "MusicAuthorization.request()"),
                        ["AnimatedArtworkManager.swift", "LaunchPermissionManager.swift"])
+        // Finding Warp's database stats its container, which raises the same dialog as reading it. This
+        // reads every file under Kannu/, so a lookup in any Brain page fails, subfolders included. Views ask
+        // `LaunchPermissionManager.isWarpInstalled`; the monitor's own lookups are checked function by
+        // function in `problems(in:)`.
+        XCTAssertEqual(Self.files(in: files, containing: "WarpAgentStore.databaseURL"),
+                       ["CursorAgentStatusMonitor.swift", "LaunchPermissionManager.swift"])
         XCTAssertEqual(Self.files(in: files, containing: "AEDeterminePermissionToAutomateTarget("),
                        ["LaunchPermissionManager.swift"])
     }
