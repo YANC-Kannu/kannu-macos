@@ -4,6 +4,34 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain's pickers become its own choice control
+- **Developer label:** Brain redesign plan: "SwiftUI has no custom picker style, so the 77 `Picker`s become `SettingsSelect`"
+- **Agent label:** Claude Code (Opus 5.5) — 70 pickers moved, 59 by script; All tasks' filter menu waits for Stage 5; a bare `Picker(` now fails a test
+- **Changes:**
+  - 59 pickers move to `SettingsSelect` through a one-off script that is not committed. The 45 that listed an
+    enum's cases through `ForEach` take `options:` with the same title property, and the 14 with literal options
+    take `choices:`, each title a `String(localized:)` under its old catalog key. The 31 that stood bare in a
+    Section are wrapped in a `SettingsRow`, so their `.disabled`, `.opacity`, `.onChange` and highlight now follow
+    the row. No highlight id changes.
+  - The 22 segmented pickers stay segments (`style: .segmented`). The menu style, `.labelsHidden()` and the
+    `.fixedSize()` after a segmented style go.
+  - 11 by hand: General's Display, Notch display height, and each display's Style and Always show, which name
+    "Follow default"; HUD's DDC Provider and Shelf's Quick Share Service with their icons, the saved service
+    showing before discovery ends; Notes to sync, in a row with its description; Media's "Hide DynamicIsland
+    Options", a select instead of three radio buttons; each policy rule's Kind; the animation editor's Loop Mode,
+    as segments.
+  - Shelf's Liquid Glass Variant becomes a slider, like its seven siblings, instead of a 20-row menu.
+  - A display's Reset enables after a Style change: General observes `displayStyleOverrides`, as promised on #18.
+  - All tasks' four filter pickers stay native: ticked submenus inside a native `Menu`, until Stage 5 rebuilds the
+    page.
+  - The idle animations' Add menu and the colour swatch's popover close when Brain closes, as the select's does.
+  - `SettingsLayoutRulesTests` bans `Picker(` under Settings, with All tasks' four pinned, planted offenders, a
+    floor and a select put back on a real page. `SettingsDesignSystemRulesTests` reads code with its strings blanked
+    for the ban, holds every popover under Settings to closing on disappear, and drops the segmented picker's
+    opt-out, which reads nothing now. `BrainAppearanceRulesTests` reads the Brain appearance row's new spelling.
+  - `docs/SETTINGS.md` gains a "Choices" section, the select in a row's slot, and the rule never to render the
+    shelf board; `docs/REGRESSIONS.md` entry 22 gains its line.
+
 ### 2026-11-04 - Brain gets its own choice control
 - **Developer label:** Brain redesign Stage 3: "`SettingsSelect`: our own popover, with a search field once a list is long"
 - **Agent label:** Claude Code (Opus 5.5) — options as data, a list with keyboard and VoiceOver, segments for two or three short options

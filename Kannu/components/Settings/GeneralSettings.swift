@@ -45,6 +45,7 @@ struct GeneralSettings: View {
     @Default(.openNotchOnHover) var openNotchOnHover
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
     @Default(.alwaysShowOverrides) var alwaysShowOverrides
+    @Default(.displayStyleOverrides) var displayStyleOverrides
     @Default(.enableHorizontalMusicGestures) var enableHorizontalMusicGestures
     @Default(.musicGestureBehavior) var musicGestureBehavior
     @Default(.reverseSwipeGestures) var reverseSwipeGestures
@@ -108,11 +109,8 @@ struct GeneralSettings: View {
                 }
                 .settingsHighlight(id: highlightID("Quit Kannu"))
                 SettingsRow("Where Kannu appears", description: displayPlacement.description) {
-                    Picker("", selection: $displayPlacement) {
-                        ForEach(DisplayPlacement.allCases) { placement in
-                            Text(placement.localizedName).tag(placement)
-                        }
-                    }
+                    SettingsSelect("Where Kannu appears", selection: $displayPlacement,
+                                   options: DisplayPlacement.allCases, optionTitle: \.localizedName)
                 }
                 .onChange(of: displayPlacement) {
                     NotificationCenter.default.post(name: Notification.Name.displayPlacementChanged, object: nil)
@@ -122,10 +120,8 @@ struct GeneralSettings: View {
                 // Always mounted, disabled when it does not apply: a row that only exists in one
                 // mode makes its own search entry land on nothing in every other mode, and the
                 // inventory test reads source text so it cannot catch that.
-                Picker("Display", selection: $coordinator.preferredScreen) {
-                    ForEach(screens, id: \.self) { screen in
-                        Text(screen)
-                    }
+                SettingsRow("Display") {
+                    SettingsSelect("Display", selection: $coordinator.preferredScreen, options: screens, optionTitle: { $0 })
                 }
                 .onChange(of: coordinator.preferredScreen) {
                     NotificationCenter.default.post(name: Notification.Name.displayPlacementChanged, object: nil)
@@ -133,11 +129,8 @@ struct GeneralSettings: View {
                 .disabled(displayPlacement != .chooseDisplay)
                 .settingsHighlight(id: highlightID("Display"))
                 SettingsRow("Screenshots & recordings", description: screenCaptureVisibility.description) {
-                    Picker("", selection: $screenCaptureVisibility) {
-                        ForEach(ScreenCaptureVisibility.allCases) { option in
-                            Text(option.localizedName).tag(option)
-                        }
-                    }
+                    SettingsSelect("Screenshots & recordings", selection: $screenCaptureVisibility,
+                                   options: ScreenCaptureVisibility.allCases, optionTitle: \.localizedName)
                 }
                 .settingsHighlight(id: highlightID("Screenshots & recordings"))
             } header: {
@@ -164,14 +157,12 @@ struct GeneralSettings: View {
             }
 
             Section {
-                Picker(selection: $notchHeightMode, label:
-                        Text("Notch display height")) {
-                    Text("Match real notch size")
-                        .tag(WindowHeightMode.matchRealNotchSize)
-                    Text("Match menubar height")
-                        .tag(WindowHeightMode.matchMenuBar)
-                    Text("Custom height")
-                        .tag(WindowHeightMode.custom)
+                SettingsRow("Notch display height") {
+                    SettingsSelect("Notch display height", selection: $notchHeightMode, choices: [
+                        .matchRealNotchSize: String(localized: "Match real notch size"),
+                        .matchMenuBar: String(localized: "Match menubar height"),
+                        .custom: String(localized: "Custom height"),
+                    ])
                 }
                         .onChange(of: notchHeightMode) {
                             switch notchHeightMode {
@@ -192,13 +183,12 @@ struct GeneralSettings: View {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
                 }
-                Picker("Non-notch display height", selection: $nonNotchHeightMode) {
-                    Text("Match menubar height")
-                        .tag(WindowHeightMode.matchMenuBar)
-                    Text("Match real notch size")
-                        .tag(WindowHeightMode.matchRealNotchSize)
-                    Text("Custom height")
-                        .tag(WindowHeightMode.custom)
+                SettingsRow("Non-notch display height") {
+                    SettingsSelect("Non-notch display height", selection: $nonNotchHeightMode, choices: [
+                        WindowHeightMode.matchMenuBar: String(localized: "Match menubar height"),
+                        WindowHeightMode.matchRealNotchSize: String(localized: "Match real notch size"),
+                        WindowHeightMode.custom: String(localized: "Custom height"),
+                    ])
                 }
                 .onChange(of: nonNotchHeightMode) {
                     switch nonNotchHeightMode {
@@ -257,14 +247,9 @@ struct GeneralSettings: View {
 
                 if enableHorizontalMusicGestures {
                     SettingsRow("Gesture skip behavior", description: musicGestureBehavior.description) {
-                        Picker("Gesture skip behavior", selection: $musicGestureBehavior) {
-                            ForEach(MusicSkipBehavior.allCases) { behavior in
-                                Text(behavior.displayName)
-                                    .tag(behavior)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Gesture skip behavior", selection: $musicGestureBehavior,
+                                       options: MusicSkipBehavior.allCases, optionTitle: \.displayName,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Gesture skip behavior"))
 
@@ -325,12 +310,8 @@ struct GeneralSettings: View {
                 .settingsHighlight(id: highlightID("Minimum hover duration"))
             }
             SettingsRow("External display style", description: externalDisplayStyle.description) {
-                Picker("External display style", selection: $externalDisplayStyle) {
-                    ForEach(ExternalDisplayStyle.allCases) { style in
-                        Text(style.localizedName)
-                            .tag(style)
-                    }
-                }
+                SettingsSelect("External display style", selection: $externalDisplayStyle,
+                               options: ExternalDisplayStyle.allCases, optionTitle: \.localizedName)
             }
             .onChange(of: externalDisplayStyle) {
                 NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
@@ -377,16 +358,17 @@ struct GeneralSettings: View {
         ForEach(displays, id: \.name) { display in
             let name = display.name
             Section {
-                Picker("Style", selection: displayStyleBinding(for: name)) {
-                    Text("Follow default").tag(ExternalDisplayStyle?.none)
-                    ForEach(ExternalDisplayStyle.allCases) { style in
-                        Text(style.localizedName).tag(ExternalDisplayStyle?.some(style))
-                    }
+                SettingsRow("Style") {
+                    SettingsSelect("Style", selection: displayStyleBinding(for: name),
+                                   options: [nil] + ExternalDisplayStyle.allCases.map(Optional.some),
+                                   optionTitle: { $0?.localizedName ?? String(localized: "Follow default") })
                 }
-                Picker("Always show", selection: alwaysShowBinding(for: name)) {
-                    Text("Follow default").tag(Bool?.none)
-                    Text("On").tag(Bool?.some(true))
-                    Text("Off").tag(Bool?.some(false))
+                SettingsRow("Always show") {
+                    SettingsSelect("Always show", selection: alwaysShowBinding(for: name), choices: [
+                        nil: String(localized: "Follow default"),
+                        true: String(localized: "On"),
+                        false: String(localized: "Off"),
+                    ])
                 }
                 SettingsActionRow {
                     Button("Reset") {
@@ -395,7 +377,7 @@ struct GeneralSettings: View {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
                     .disabled(
-                        Defaults[.displayStyleOverrides][name] == nil
+                        displayStyleOverrides[name] == nil
                             && Defaults[.alwaysShowOverrides][name] == nil
                     )
                 }

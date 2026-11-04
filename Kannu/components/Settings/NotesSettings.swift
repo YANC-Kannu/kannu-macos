@@ -98,12 +98,9 @@ struct NotesSettingsView: View {
                     }
 
                     if enableAppleNotesSync {
-                        Picker(selection: scopeSelection) {
-                            ForEach(AppleNotesSyncScope.allCases) { scope in
-                                Text(scope.localizedName).tag(scope)
-                            }
-                        } label: {
-                            SettingsRowLabel("Notes to sync", description: appleNotesSyncScope.description, tint: nil)
+                        SettingsRow("Notes to sync", description: appleNotesSyncScope.description) {
+                            SettingsSelect("Notes to sync", selection: scopeSelection, options: AppleNotesSyncScope.allCases,
+                                           optionTitle: \.localizedName)
                         }
                         .settingsHighlight(id: highlightID("Notes to sync"))
                         .alert("Sync Only the Kannu Folder?", isPresented: $confirmNarrowingScope) {

@@ -28,6 +28,8 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A section header | `SettingsSectionHeader("…")` — never a raw `Text` in `header: {}` |
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
+| A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
+| A text field's chrome | `.settingsField()`, last on the field's chain |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
 | A slider row | `SettingsSliderRow` — one width everywhere, selectable readout |
 | A stepper row | `SettingsStepperRow` — the value then the stepper, same column |
@@ -49,7 +51,8 @@ component already does.
 
 - **`DesignSystem/` holds one type per file**, each starting with the GPL block:
   `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
-  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, and the
+  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
+  control (`SettingsSelect`, `SettingsSelectList`) and the field's chrome (`SettingsField`), and the
   shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
@@ -73,7 +76,8 @@ A call-site style beats the root, so these stay on purpose until Stage 3:
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.buttonStyle(.bordered)` on `Menu("Connect…")` | A root button style takes a default-style `Menu`'s chevron away; `.menuStyle(.borderlessButton)` is the other cure |
-| `.labeledContentStyle(.automatic)` on a checkbox, a radio group or the segmented picker in `AnimationEditorView`, which sits outside a `Form` | The root's labelled-row style pushes the label and the control to opposite edges |
+| `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
+| All tasks' four filter pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
 | `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
 | `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
@@ -86,6 +90,45 @@ a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A 
 `DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
 `--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
 font token by name. Hover and press take a pointer, so no board shows them.
+
+## Choices
+
+A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
+macOS 14 has no custom picker style, and a custom view cannot read `.tag()`s, so the options are data:
+`options:` with an `optionTitle:` (`\.localizedName`), or `choices: [value: String(localized: "…")]` for
+literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the four
+All tasks keeps.
+
+- **The trigger** is a button in our style showing the value and a chevron. A short list keeps its widest
+  title's width, so the row does not move when the choice changes. A saved value no longer among the options
+  shows its own title (a dash when `choices:` has none for it), so the button is never blank. It draws no
+  title: the row does, and VoiceOver reads the title as its label and the value as its value.
+- **The list** is our own popover: one row per option, a tick on the chosen one, the keyboard's row
+  highlighted. Past ten options (`SettingsSelectNavigation.searchThreshold`) a search field leads, ranked as
+  Brain's search ranks, and the rows scroll at ten and a half rows' height; a shorter list takes typed letters.
+- **Segments**, `style: .segmented`, draw two or three short options in place: one click, every choice in view.
+
+| Key | Where | Does |
+|---|---|---|
+| Space | The trigger, under Full Keyboard Access | Opens the list. Return stays with the window's default button |
+| ↑ ↓ | The list, with or without a field | Moves the highlight, announced |
+| Return | The list or its field | Picks the highlight, or the first match |
+| Escape | The list or its field | Closes; the choice stays as it was |
+| Letters | A list with no field | Type-to-select, a one-second prefix |
+| Typing | The field | Filters, best match first; the highlight goes to the first match |
+| ← → | A segment, under Full Keyboard Access | Moves the choice |
+| VoiceOver adjust | The trigger | Steps the choice without opening the list |
+
+- **A popover closes on disappear.** Closing Brain takes its content out of the window and runs `onDisappear`
+  (docs/REGRESSIONS.md, entry 22), while the flag that opened it survives the close, so a list left open would
+  come back on reopening. Every `.popover(isPresented:)` under Settings sets its flag to false there, and
+  `SettingsDesignSystemRulesTests` holds that.
+- **The arrows reach the list through a key monitor**, because a focused field's editor takes them before
+  SwiftUI sees them. It acts only on the list's own window while that window is key, never while an input
+  method is composing, and goes with the list (`dismantleNSView`).
+- **The list is a view of its own, `SettingsSelectList`,** because a popover is a window of its own and no
+  board captures one: `--kannu-snapshot-tabs selectList` draws it open, and `designSystem` and `components`
+  draw the select in its rows.
 
 ## The shell and navigation
 
@@ -150,6 +193,11 @@ the window can have, through `SettingsForm`, which pads them; a board of a bare 
 page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
 the least room.
 
+**Never list `shelf`, and never run the boards without `--kannu-snapshot-tabs`.** An unfiltered run renders
+every tab, and the Shelf page touches `~/Documents` and `~/Downloads` through its folder access store, whose
+first touch blocks the main thread on a macOS permission prompt (AGENTS.md, "Nothing runs before the Terms of
+Use are accepted"). Check the Shelf page by hand.
+
 ## The content standard
 
 The components above already imply one set of numbers. `SettingsMetrics` in
@@ -204,11 +252,13 @@ section describes it, it does not define it.
 
 ## Section rules
 
-- `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle, Picker,
-  Stepper. It applies `.labelsHidden()` to the whole slot, an environment modifier: a `Menu` or a
-  popover-anchoring button placed there loses its label and its items' titles and reads as dead
-  (the "Policy rules" "…" bug). Such controls go in a raw `LabeledContent` with a
-  `SettingsRowLabel` (the `analysisRow` shape) or a `SettingsActionRow`.
+- `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle,
+  `SettingsSelect`, Stepper. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
+  `Menu` placed there loses its label and its items' titles and reads as dead (the "Policy rules" "…"
+  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `analysisRow` shape) or
+  a `SettingsActionRow`. `SettingsSelect` may sit in the slot, popover and all, because its trigger and
+  its list's rows are buttons with plain text, which the modifier leaves alone: the `components` board
+  shows its value in a row beside a native picker's. A `Menu` still may not.
 
 - `onAppear` runs again every time Brain reopens, not only on arriving at a page: closing takes the
   content out of the window (docs/REGRESSIONS.md, entry 22). One that loads a field must not read
