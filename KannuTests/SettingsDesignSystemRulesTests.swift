@@ -706,6 +706,61 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           by: { Self.valueControlProblems(in: $0, isSlider: false) })
     }
 
+    // MARK: - Fields
+
+    /// The two fields that keep chrome of their own: the sidebar search's, around a glyph and a clear button, and a
+    /// local task's title, typed in place in the body font so it still reads as the row's title (docs/SETTINGS.md).
+    private static let pinnedFieldsWithoutTheChrome = ["SettingsView.swift": 1, "TaskDetailPage.swift": 1]
+
+    /// The start of each `TextField` or `SecureField` call whose own chain has no `.settingsField(`, or sets focus
+    /// after it, or keeps its own focus while the chrome tracks focus as well: two focus bindings on one field. A
+    /// field with its own `.focused` passes it in (`isFocused:`).
+    private static func fieldChromeProblems(in code: String) -> [String] {
+        ["TextField", "SecureField"].flatMap { name in
+            calls(of: name, in: code) { chain in
+                guard let chrome = chain.range(of: ".settingsField(") else { return true }
+                if chain[chrome.upperBound...].contains(".focused(") { return true }
+                return chain[..<chrome.lowerBound].contains(".focused(") && !chain[chrome.lowerBound...].hasPrefix(".settingsField(isFocused:")
+            }
+        }
+    }
+
+    func testEveryFieldWearsTheChrome() throws {
+        var fields = 0
+        for (name, source) in try Self.sources() {
+            let code = Self.code(source)
+            fields += Self.openers(of: "TextField", in: code).count + Self.openers(of: "SecureField", in: code).count
+            XCTAssertEqual(Self.fieldChromeProblems(in: code).count, Self.pinnedFieldsWithoutTheChrome[name] ?? 0,
+                           "\(name): a field wears `.settingsField()` last on its own chain: \(Self.fieldChromeProblems(in: code))")
+        }
+        XCTAssertGreaterThan(fields, 0, "the scan found no field: the pattern went blind")
+
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .onSubmit { b() }\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .settingsField()\n    .focused($x)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField(isFocused: x)\n").count, 0)
+        // The chrome on the next view, or inside the field's label, is not on the field.
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\nText(\"b\")\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(text: $a) {\n    Text(\"a\").settingsField()\n}\n").count, 1)
+
+        Self.assertCaught([(".settingsField()", "")], in: Self.code(try XCTUnwrap(try Self.sources()["AgentStatusSettings.swift"])),
+                          by: Self.fieldChromeProblems)
+    }
+
+    func testOnlyTheFieldSetsAFieldStyle() throws {
+        // The chrome sets `.plain` inside; the two fields with chrome of their own, pinned above, set it themselves.
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: try Self.sources()),
+                       ["SettingsField.swift", "SettingsView.swift", "TaskDetailPage.swift"])
+
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n"]),
+                       ["Page.swift"])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .settingsField()\n"]), [])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "// .textFieldStyle(.plain) is the chrome's\n"]), [])
+    }
+
     // MARK: - A popover closes with Brain
 
     /// The flags of `.popover(isPresented: $flag` that no `.onDisappear` in the same file sets to false. Closing

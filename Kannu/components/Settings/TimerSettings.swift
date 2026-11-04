@@ -521,8 +521,8 @@ private struct TimerPresetEditorRow: View {
                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
                     )
 
-                TextField("Preset name", text: $preset.name)
-                    .textFieldStyle(.roundedBorder)
+                TextField("Preset name", text: $preset.name, prompt: Text("Preset name"))
+                    .settingsField()
 
                 Spacer()
 

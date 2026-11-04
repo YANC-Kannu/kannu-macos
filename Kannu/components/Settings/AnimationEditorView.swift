@@ -263,8 +263,8 @@ struct AnimationEditorView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            TextField("Name", text: $name)
-                                .textFieldStyle(.roundedBorder)
+                            TextField("Name", text: $name, prompt: Text("Name"))
+                                .settingsField()
                         }
                         ParameterSliderRow(
                             title: "Playback Speed",

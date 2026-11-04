@@ -269,20 +269,15 @@ struct TaskEstimateField: View {
 
     @ViewBuilder
     private var field: some View {
-        let text = TextField("Estimate", text: Binding(get: { draft.estimateText }, set: { draft.typeEstimate($0) }),
-                             prompt: Text(verbatim: draft.estimatePrompt))
-            .labelsHidden()
-            .textFieldStyle(.roundedBorder)
+        TextField("Estimate", text: Binding(get: { draft.estimateText }, set: { draft.typeEstimate($0) }),
+                  prompt: Text(verbatim: draft.estimatePrompt))
             .foregroundStyle(draft.estimateReading == .unreadable ? AnyShapeStyle(.orange) : AnyShapeStyle(.primary))
             .focused($focused)
             .onSubmit(onSubmit)
             .help(Text("Type 45m, 1.5h or 2d 3h"))
             .accessibilityHint(Text(accessibilityHint))
-        if let onCancel {
-            text.onExitCommand(perform: onCancel)
-        } else {
-            text
-        }
+            .modifier(CancelOnEscape(action: onCancel))
+            .settingsField(isFocused: focused)
     }
 
     /// Why Add or Save waits, or what was understood: VoiceOver cannot see the orange.
@@ -299,6 +294,20 @@ struct TaskEstimateField: View {
         next.chooseEstimate(seconds)
         draft = next
         onSettle(next)
+    }
+}
+
+/// Escape runs the action only when there is one: with none, Escape goes to whatever holds the field (a sheet's
+/// Cancel). A modifier, so the field's chrome still goes on last and Escape stays on the field (`SettingsField`).
+private struct CancelOnEscape: ViewModifier {
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let action {
+            content.onExitCommand(perform: action)
+        } else {
+            content
+        }
     }
 }
 
