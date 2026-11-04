@@ -301,6 +301,8 @@ private struct SettingsForm<Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// A sub-page's own title (Brain › Tasks' All tasks). Nil is the tab's.
     @State private var pageTitle: String?
+    /// A flag, not the panel's width, so a resize redraws the page only when it crosses `widePanelWidth`.
+    @State private var isWidePanel = false
 
     private var scrollAnimation: Animation? {
         #if DEBUG
@@ -324,10 +326,13 @@ private struct SettingsForm<Content: View>: View {
                         highlightCoordinator.consumeScrollRequest(request)
                     }
             }
-            // Capped, then centred in the panel. The `Form`'s scrollbar sits at the page's edge, not
-            // the panel's, until Stage 4.
+            // Capped, then held the page inset from the panel's leading edge, never centred, so a
+            // full-screen panel's spare width gathers on the right. The `Form` adds its own margin to the
+            // padding. Its scrollbar sits at the page's edge, not the panel's, until Stage 4.
             .frame(maxWidth: SettingsTheme.pageMaxWidth)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, (isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset) - SettingsTheme.formMargin)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: Bool.self) { $0.size.width >= SettingsTheme.widePanelWidth } action: { isWidePanel = $0 }
         }
         .onPreferenceChange(SettingsPageTitleKey.self) { pageTitle = $0 }
     }

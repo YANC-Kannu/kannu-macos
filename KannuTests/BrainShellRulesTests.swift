@@ -304,27 +304,48 @@ final class BrainShellRulesTests: XCTestCase {
 
     // MARK: - The window's width and title bar
 
-    /// In `SettingsForm`, which every page goes through, so no page can miss it. Capped first, then
-    /// centred: the other way round the cap would hold the page to the panel's left edge.
+    /// In `SettingsForm`, which every page goes through, so no page can miss it. Capped first, then held
+    /// the page inset from the panel's leading edge, then measured: the width flag must read the
+    /// panel-wide frame, because above the cap it would see at most 720 pt and never reach
+    /// `widePanelWidth`. Centred, a full-screen page floats in a blank panel; with the cap outside the
+    /// padding, the inset would come out of the page's 720 pt.
     private static func pageCapProblems(in view: String) -> [String] {
         guard let start = view.range(of: "private struct SettingsForm<Content: View>: View {"),
               let end = view.range(of: "struct SettingsView: View {", range: start.upperBound..<view.endIndex) else {
             return ["SettingsForm cannot be found"]
         }
-        let capped = SettingsDesignSystemRulesTests.matches(of: #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth\)\s*\.frame\(maxWidth: \.infinity\)"#,
-                                                            in: String(view[start.upperBound..<end.lowerBound]))
-        return capped.count == 1 ? [] : ["a page is not capped and centred"]
+        let leading = #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth\)\s*"#
+            + #"\.padding\(\.horizontal, \(isWidePanel \? SettingsTheme\.pageInsetWide : SettingsTheme\.pageInset\) - SettingsTheme\.formMargin\)\s*"#
+            + #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*"#
+            + #"\.onGeometryChange\(for: Bool\.self\) \{ \$0\.size\.width >= SettingsTheme\.widePanelWidth \} action: \{ isWidePanel = \$0 \}"#
+        let found = SettingsDesignSystemRulesTests.matches(of: leading, in: String(view[start.upperBound..<end.lowerBound])).count
+        return found == 1 ? [] : ["a page is not capped, held to the leading edge and measured at the panel's width"]
     }
 
-    func testAPageIsCappedAndCentred() throws {
+    private static let pageCap = ".frame(maxWidth: SettingsTheme.pageMaxWidth)"
+    private static let pageInset = ".padding(.horizontal, (isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset) - SettingsTheme.formMargin)"
+    private static let pageLeading = ".frame(maxWidth: .infinity, alignment: .leading)"
+    private static let pageMeasure = ".onGeometryChange(for: Bool.self) { $0.size.width >= SettingsTheme.widePanelWidth } action: { isWidePanel = $0 }"
+
+    func testAPageIsCappedAndLeading() throws {
         let view = try Self.view()
         XCTAssertEqual(Self.pageCapProblems(in: view), [])
-        Self.assertCaught([(".frame(maxWidth: SettingsTheme.pageMaxWidth)", ""),
-                           (".frame(maxWidth: SettingsTheme.pageMaxWidth)\n            .frame(maxWidth: .infinity)",
-                            ".frame(maxWidth: .infinity)\n            .frame(maxWidth: SettingsTheme.pageMaxWidth)")],
+        let line = "\n            "
+        Self.assertCaught([(Self.pageCap, ""),
+                           (Self.pageLeading, ".frame(maxWidth: .infinity)"),
+                           (line + Self.pageInset, ""),
+                           (" - SettingsTheme.formMargin)", ")"),
+                           ("isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset", "isWidePanel ? SettingsTheme.pageInset : SettingsTheme.pageInset"),
+                           ("action: { isWidePanel = $0 }", "action: { _ in }"),
+                           (Self.pageCap + line + Self.pageInset, Self.pageInset + line + Self.pageCap),
+                           (Self.pageCap + line + Self.pageInset + line + Self.pageLeading + line + Self.pageMeasure,
+                            Self.pageMeasure + line + Self.pageCap + line + Self.pageInset + line + Self.pageLeading)],
                           in: view, by: Self.pageCapProblems)
         // On the root instead: the panel's scrollbar would move, and a page outside the root would miss it.
-        XCTAssertFalse(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n}\nstruct SettingsView: View {\n.frame(maxWidth: SettingsTheme.pageMaxWidth)\n.frame(maxWidth: .infinity)\n}").isEmpty)
+        let chain = [Self.pageCap, Self.pageInset, Self.pageLeading, Self.pageMeasure].joined(separator: "\n")
+        XCTAssertEqual(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n}\nstruct SettingsView: View {\n\(chain)\n}"),
+                       ["a page is not capped, held to the leading edge and measured at the panel's width"])
+        XCTAssertEqual(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n\(chain)\n}\nstruct SettingsView: View {\n}"), [])
     }
 
     /// A transparent title bar with the row still below the safe area would leave a blank strip above
@@ -362,9 +383,12 @@ final class BrainShellRulesTests: XCTestCase {
          "return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)",
          "return NSSize(width: 1440, height: 900)",
          "return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)",
-         // A page at the narrowest panel the window can have, or a clipped row goes unseen.
+         // A page at the narrowest panel the window can have, or a clipped row goes unseen. A bare
+         // `Form` gets what `SettingsForm`'s padding leaves of it.
          "SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset",
-         ": narrowestPanel",
+         "narrowestPanel - 2 * (SettingsTheme.pageInset - SettingsTheme.formMargin)",
+         "Set(SettingsTab.allCases.map(\\.rawValue) + [\"allTasks\"])",
+         ": throughTheForm.contains(name) ? narrowestPanel : narrowestPage",
          "document.frame.height + hosting.bounds.height - scroll.frame.height"].filter { !snapshots.contains($0) }
     }
 

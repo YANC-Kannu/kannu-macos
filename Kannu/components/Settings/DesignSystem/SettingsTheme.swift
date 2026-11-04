@@ -47,7 +47,8 @@ enum SettingsTheme {
     static let geistIsAvailable = NSFont(name: "Geist-Regular", size: 13) != nil
     static let geistMonoIsAvailable = NSFont(name: "GeistMono-Regular", size: 13) != nil
 
-    static let pageTitle = sans(20, .semibold, "Geist-SemiBold")
+    /// One size on every page, so the title never changes size between tabs.
+    static let pageTitle = sans(24, .semibold, "Geist-SemiBold")
     static let body = sans(13, .regular, "Geist-Regular")
     static let bodyStrong = sans(13, .medium, "Geist-Medium")
     /// A section's name. The root's font replaces what a grouped `Form` gives its headers, so they say it.
@@ -86,8 +87,15 @@ enum SettingsTheme {
     static let sidebarRowContent: CGFloat = 10
     static let sidebarBadgeHorizontalInset: CGFloat = 6
     static let sidebarBadgeVerticalInset: CGFloat = 2
-    /// The grouped `Form`'s side margin, so a page's title lines up with its section cards.
-    static let pageInset: CGFloat = 20
+    /// The grouped `Form`'s own side margin. The page's title pads by it too, so it lines up with the cards.
+    static let formMargin: CGFloat = 20
+    /// Where a page starts, from the panel's leading edge. A page is held there, never centred.
+    static let pageInset: CGFloat = 32
+    /// The same on a panel at least `widePanelWidth` wide, such as a full-screen one.
+    static let pageInsetWide: CGFloat = 48
+    static let widePanelWidth: CGFloat = 1000
+    /// From the panel's top to the title's frame, which puts the title's cap height 44 pt below it.
+    static let pageHeaderTop: CGFloat = 37
     /// The search field and its suggestions.
     static let fieldRadius: CGFloat = 8
 
