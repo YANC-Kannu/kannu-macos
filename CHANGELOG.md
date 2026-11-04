@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
+- **Developer label:** "resolve issues and merge mr's also"
+- **Agent label:** Claude Code (Opus 5.5) — the one-line fixes from the second review; the rest answered on the PR
+- **Changes:**
+  - Battery's no-battery message reads "information", not "informations"; the catalog key moves with it, so
+    its translations stay attached.
+  - Media's Music Source picker shows each source's localized name instead of its raw value.
+  - `SettingsAnimationRulesTests` pins the looping icon's pause inside `setPlaying`'s else branch, not
+    anywhere in the file.
+
 ### 2026-11-04 - Act on CodeRabbit's review of the SettingsView split
 - **Developer label:** "resolve issues and merge mr's also"
 - **Agent label:** Claude Code (Opus 5.5) — the fixes agreed from CodeRabbit's review of #18, nearly all in code the split only moved
