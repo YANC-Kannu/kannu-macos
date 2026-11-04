@@ -265,6 +265,11 @@ final class SettingsAnimationRulesTests: XCTestCase {
         if !isBefore("guard let self, self.closeAfterFullScreen", "window?.close()", in: finish) {
             violations.append("a reopening in the turn before the close still closes Brain")
         }
+        // As the entry's queued exit does: a transition that began in the turn between keeps the flag, and
+        // its own end closes Brain.
+        if !finish.contains("guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen") {
+            violations.append("the queued close runs during a transition that began after it")
+        }
         // In this order: the flag must not outlive a close that a sheet called off.
         if !isBefore("self.closeAfterFullScreen = false", "self.window?.attachedSheet == nil", in: finish) {
             violations.append("the close stays pending after it ran")
@@ -308,7 +313,7 @@ final class SettingsAnimationRulesTests: XCTestCase {
         let closeLater = """
                 DispatchQueue.main.async { [weak self] in
                     // The flag stays set until here, so `showWindow` can still cancel.
-                    guard let self, self.closeAfterFullScreen else { return }
+                    guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
                     self.closeAfterFullScreen = false
                     // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it
                     // ends. A sheet that arrived during the transition keeps Brain open.
@@ -317,7 +322,8 @@ final class SettingsAnimationRulesTests: XCTestCase {
                 }
         """
         let outerGuard = "guard closeAfterFullScreen else { return }\n        // A turn later: this runs"
-        let closeGuard = "guard let self, self.closeAfterFullScreen else { return }"
+        // Anchored: the entry's queued exit has the same guard, and a mutation replaces every occurrence.
+        let closeGuard = "guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }\n            self.closeAfterFullScreen = false"
         let clearAndSheetGuard = "self.closeAfterFullScreen = false\n            // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it\n            // ends. A sheet that arrived during the transition keeps Brain open.\n            guard self.window?.attachedSheet == nil else { return }"
         let mutations: [(name: String, edits: [(from: String, to: String)])] = [
             ("never taken out", [(later, "")]),
@@ -407,9 +413,12 @@ final class SettingsAnimationRulesTests: XCTestCase {
             ("every exit queues a close", [(outerGuard, "// A turn later: this runs")]),
             ("every exit closes Brain", [
                 (outerGuard, "// A turn later: this runs"),
-                (closeGuard, "guard let self else { return }"),
+                (closeGuard, "guard let self else { return }\n            self.closeAfterFullScreen = false"),
             ]),
-            ("a reopening in the turn before the close still closes", [(closeGuard, "guard let self else { return }")]),
+            ("a reopening in the turn before the close still closes", [(closeGuard, "guard let self else { return }\n            self.closeAfterFullScreen = false")]),
+            ("the queued close runs during a new transition", [
+                (closeGuard, "guard let self, self.closeAfterFullScreen else { return }\n            self.closeAfterFullScreen = false"),
+            ]),
             ("the close stays pending", [(clearAndSheetGuard, "guard self.window?.attachedSheet == nil else { return }")]),
             ("a sheet at the exit leaves the close pending", [
                 (clearAndSheetGuard, "guard self.window?.attachedSheet == nil else { return }\n            self.closeAfterFullScreen = false"),
