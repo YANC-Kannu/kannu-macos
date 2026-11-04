@@ -279,13 +279,8 @@ struct AnimationEditorView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            Picker("Loop Mode", selection: $loopMode) {
-                                ForEach(AnimationLoopMode.allCases, id: \.self) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labeledContentStyle(.automatic)
+                            SettingsSelect("Loop Mode", selection: $loopMode, options: AnimationLoopMode.allCases,
+                                           optionTitle: \.rawValue, style: .segmented)
                         }
                     }
                 }

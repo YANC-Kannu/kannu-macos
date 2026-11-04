@@ -1585,6 +1585,14 @@ this rule claimed the same with 34 and missed real breaks: deleting the guard in
 `isRestorable`, `isMovableByWindowBackground`, placing it before it is ordered in, and the clamp. These prove the
 wiring. They cannot prove AppKit's timing, and nothing has entered full screen under them.
 
+**2026-11-04 addendum: a popover under Settings closes on disappear.** Closing Brain runs `onDisappear` while a
+popover's `@State` flag survives the close, so `SettingsSelect`, the idle animations' Add menu and the colour
+swatch's popover clear theirs there; `testAPopoverClosesWhenBrainDoes` holds every `.popover(isPresented:)` under
+Settings to it. The select's list adds an `onAppear` (focus and the first highlight) that runs when it opens, never on
+a reopening, since it closed with Brain. Its key monitor lives only while the list does, acts only on the list's own
+window and is removed in `dismantleNSView`. The select's one animation is a bounded ease, nil under Reduce Motion, so
+the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

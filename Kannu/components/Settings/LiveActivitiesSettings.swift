@@ -165,12 +165,11 @@ struct LiveActivitiesSettings: View {
                 .disabled(!enableCapsLockIndicator)
                 .settingsHighlight(id: highlightID("Show Caps Lock label"))
 
-                Picker("Caps Lock color", selection: $capsLockTintMode) {
-                    ForEach(CapsLockIndicatorTintMode.allCases) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
+                SettingsRow("Caps Lock color") {
+                    SettingsSelect("Caps Lock color", selection: $capsLockTintMode,
+                                   options: CapsLockIndicatorTintMode.allCases, optionTitle: \.displayName,
+                                   style: .segmented)
                 }
-                .pickerStyle(.segmented)
                 .disabled(!enableCapsLockIndicator)
                 .settingsHighlight(id: highlightID("Caps Lock color"))
             } header: {

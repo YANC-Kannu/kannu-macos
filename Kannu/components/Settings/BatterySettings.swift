@@ -174,14 +174,9 @@ struct Charge: View {
                 }
                 Section {
                     SettingsRow("Low battery style", description: "Compact matches the charging HUD. Standard uses the expanded DynamicNotch-style card.") {
-                        Picker("Low battery style", selection: $lowBatteryHUDStyle) {
-                            ForEach(BatteryNotificationStyle.allCases) { style in
-                                Text(style.title)
-                                    .tag(style)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Low battery style", selection: $lowBatteryHUDStyle,
+                                       options: BatteryNotificationStyle.allCases, optionTitle: \.title,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Low battery style"))
 
@@ -196,14 +191,9 @@ struct Charge: View {
 
                 Section {
                     SettingsRow("Full battery style", description: "Compact keeps the alert inline. Standard uses the taller full-charge HUD with the charging animation.") {
-                        Picker("Full battery style", selection: $fullBatteryHUDStyle) {
-                            ForEach(BatteryNotificationStyle.allCases) { style in
-                                Text(style.title)
-                                    .tag(style)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Full battery style", selection: $fullBatteryHUDStyle,
+                                       options: BatteryNotificationStyle.allCases, optionTitle: \.title,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Full battery style"))
 

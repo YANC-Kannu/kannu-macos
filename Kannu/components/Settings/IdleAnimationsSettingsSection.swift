@@ -518,7 +518,9 @@ struct AddAnimationCard: View {
                 }
                 .frame(width: 180)
             }
-            
+            // Closing Brain runs this, while `showingMenu` survives the close (docs/REGRESSIONS.md, entry 22).
+            .onDisappear { showingMenu = false }
+
             Text("Add New")
                 .font(.caption)
                 .fontWeight(.medium)
