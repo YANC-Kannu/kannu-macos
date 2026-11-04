@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain's pages start at the panel's leading edge, not in its middle
+- **Developer label:** "is the full brain revamp done, this still looks like a bit empty, any ux research solution for that"
+- **Agent label:** Claude Code (Opus 5.5) — the layout proposal's first slice: a leading frame and a larger page scale
+- **Changes:**
+  - A Brain page is no longer centred in its panel. It starts 32 pt from the panel's leading edge, or 48 pt once
+    the panel is 1,000 pt wide, as in full screen, and keeps its 720 pt cap, so a full-screen panel's spare width
+    gathers on the right instead of floating the page in the middle. The `Form`'s own 20 pt margin is part of that
+    inset, so titles and cards line up on every tab.
+  - The page title is 24 pt on every page, its cap height 44 pt below the panel's top, up from 20 pt at about
+    24 pt.
+  - `SettingsForm` reads the panel's width through `onGeometryChange` as a flag, so a resize redraws a page only when
+    it crosses 1,000 pt. The root gains no state.
+  - New theme tokens `formMargin`, `pageInsetWide`, `widePanelWidth` and `pageHeaderTop`; `pageInset` now means
+    the page's start, 32 pt, and `formMargin` takes over its old meaning.
+  - `BrainShellRulesTests`' cap rule becomes "capped, leading and measured at the panel's width", with plants for a
+    lost cap, a centred page, a lost inset, a doubled `Form` margin, a narrow-only inset, a dead width flag, the cap
+    inside the padding and the flag measured inside the cap. `docs/SETTINGS.md` says where a page starts.
+  - Boards of a bare `Form`, such as the task pages and the finding rows, render at 588 pt, the page `SettingsForm`'s
+    padding leaves at the smallest window, instead of the panel's 612 pt, so a row that clips in Brain clips on its
+    board too. Tabs still render at 612 pt through `SettingsForm`.
+
 ### 2026-11-04 - Geist and Geist Mono ship inside Kannu
 - **Developer label:** Brain redesign Stage 2: "Bundle the fonts through `ATSApplicationFontsPath`, with no launch work"
 - **Agent label:** Claude Code (Opus 5.5) — static TTFs, no launch code, no registration call
