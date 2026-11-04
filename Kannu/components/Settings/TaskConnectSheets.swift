@@ -42,6 +42,7 @@ struct JiraConnectSheet: View {
             TextField("Email", text: $email, prompt: Text(verbatim: "you@example.com"))
             SecureField("API token", text: $token)
             Link("Create API token…", destination: JiraAPI.createTokenURL)
+                .buttonStyle(.link)
             LabeledContent {
                 TaskColorPickerButton(
                     selection: $color,
@@ -63,6 +64,7 @@ struct JiraConnectSheet: View {
                 Button("Cancel", role: .cancel) { close() }
                     .keyboardShortcut(.cancelAction)
                 Button("Connect") { connect() }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(connecting != nil || !canConnect)
             }
@@ -131,6 +133,7 @@ struct GitLabConnectSheet: View {
                 .settingsDescriptionStyle()
             if let createTokenURL {
                 Link("Create token…", destination: createTokenURL)
+                    .buttonStyle(.link)
             }
             LabeledContent {
                 TaskColorPickerButton(
@@ -153,6 +156,7 @@ struct GitLabConnectSheet: View {
                 Button("Cancel", role: .cancel) { close() }
                     .keyboardShortcut(.cancelAction)
                 Button("Connect") { connect() }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(connecting != nil || !canConnect)
             }
@@ -232,6 +236,7 @@ struct SourceConnectSheet: View {
                 SecureField(tokenLabel, text: $token)
                 if let createTokenURL = TaskSourceStatus.createTokenURL(for: source, server: server) {
                     Link("Create token…", destination: createTokenURL)
+                        .buttonStyle(.link)
                 }
             }
             LabeledContent {
@@ -256,6 +261,7 @@ struct SourceConnectSheet: View {
                 Button("Cancel", role: .cancel) { close() }
                     .keyboardShortcut(.cancelAction)
                 Button(source.usesToken ? String(localized: "Connect") : String(localized: "Allow Access")) { connect() }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(connecting != nil || (source.usesToken && token.isEmpty))
             }

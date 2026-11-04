@@ -153,6 +153,9 @@ struct GeneralSettings: View {
                         LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController])
                     }
                 }
+                // Shared with onboarding, so Allow stays `.borderedProminent`, and its white label
+                // cannot be read on the root's eye blue in dark.
+                .tint(.accentColor)
                 .settingsHighlight(id: highlightID("Permissions"))
             } header: {
                 SettingsSectionHeader("Permissions")

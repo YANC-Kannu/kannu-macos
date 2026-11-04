@@ -34,7 +34,7 @@ enum AppleNotesSyncError: LocalizedError {
         case .automationDenied:
             return String(localized: "Allow Kannu to control Notes in System Settings → Privacy & Security → Automation.")
         case .automationPostponed:
-            return String(localized: "Allow Kannu to control Notes in Brain › General › Permissions.")
+            return String(localized: "Allow Kannu to control Notes in Brain › Settings › General › Permissions.")
         case .scriptFailed(let message):
             return message
         }

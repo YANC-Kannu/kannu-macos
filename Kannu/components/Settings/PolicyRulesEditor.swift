@@ -67,6 +67,7 @@ struct PolicyRulesEditor: View {
                 Button("Cancel", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Save") { save(replacingChanges: false) }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(saving || draft.problem != nil)
             }
@@ -91,7 +92,7 @@ struct PolicyRulesEditor: View {
             .labelsHidden()
             .fixedSize()
             TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text)
-                .font(.body.monospaced())
+                .font(SettingsTheme.mono)
                 .frame(width: 170)
             TextField("Reason (optional)", text: row.reason)
             Button {

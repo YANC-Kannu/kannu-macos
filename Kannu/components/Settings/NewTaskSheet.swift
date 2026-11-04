@@ -135,6 +135,7 @@ struct NewTaskSheet: View {
                     .disabled(!canAdd)
                 }
                 Button("Add") { add(andStart: false) }
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(isTypingTag ? nil : .defaultAction)
                     .disabled(!canAdd)
             }
@@ -196,6 +197,7 @@ struct NewTaskSheet: View {
                 set: { newTask.draft.reminder = $0 ? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) : nil }
             ))
             .toggleStyle(.checkbox)
+            .labeledContentStyle(.automatic)
             if draft.reminder != nil {
                 DatePicker("Remind me at", selection: Binding(
                     get: { draft.reminder ?? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) },
@@ -207,6 +209,7 @@ struct NewTaskSheet: View {
         if draft.reminder != nil {
             Toggle("Notify me when it's due", isOn: $newTask.draft.notifies)
                 .toggleStyle(.checkbox)
+                .labeledContentStyle(.automatic)
             if draft.notifies {
                 ReminderPermissionNote()
             }

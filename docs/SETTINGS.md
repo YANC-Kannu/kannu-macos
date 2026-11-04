@@ -2,9 +2,9 @@
 
 Shown to users as **Brain**; code keeps the Settings names.
 
-How a Settings section is built in Kannu. These rules exist so every tab reads like System
-Settings, and so anything informational on screen can be selected and copied. They are enforced,
-not advisory: `KannuTests/SettingsLayoutRulesTests.swift` scans the sources under
+How a Settings section is built in Kannu. These rules exist so every tab reads as one calm product
+of its own, on one theme, and so anything informational on screen can be selected and copied. They
+are enforced, not advisory: `KannuTests/SettingsLayoutRulesTests.swift` scans the sources under
 `Kannu/components/Settings/` and fails on a violation, and `.githooks/pre-commit` runs a fast
 subset of the same checks. When a rule here and the test disagree, the test wins — fix this file.
 
@@ -20,7 +20,8 @@ never inside it.
 
 ## Which component for what
 
-All in `Kannu/components/Settings/SettingsComponents.swift`. Never rebuild these shapes by hand.
+All in `Kannu/components/Settings/SettingsComponents.swift`; the styles and the theme they draw with
+live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 
 | You are adding | Use |
 |---|---|
@@ -41,6 +42,114 @@ All in `Kannu/components/Settings/SettingsComponents.swift`. Never rebuild these
 | A spacing, a width, a dot size | `SettingsMetrics.<token>` — never a number in place |
 | A copy-to-pasteboard action for agents | `CopyForAgentButton` |
 
+## The design system
+
+Pages use components, components use the theme. A page names neither a colour nor a font when a
+component already does.
+
+- **`DesignSystem/` holds one type per file**, each starting with the GPL block:
+  `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
+  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, and the
+  shell's own views (below).
+- **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
+  the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
+  it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
+  would recolour the labels of native prominent buttons and menus.
+- **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
+  `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
+- **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
+- **The accent has two strengths.** `accent` is the logo's eye blue, for fills such as a switch that is
+  on. `accentStrong` is for what must be read, and it is the root's tint, because a root tint also
+  colours Markdown links. Native controls that honour `.tint` show it.
+- **A disclosure's button starts after its title.** A row's description is selectable, and selectable
+  text inside a button fights for the click, so the chevron and the empty space beside the title toggle
+  it, as a native disclosure's chevron does.
+
+A call-site style beats the root, so these stay on purpose until Stage 3:
+
+| Site | Why |
+|---|---|
+| `SettingsToggleStyle(showsLabel: false)` | A row that draws the title itself. A custom style ignores `.labelsHidden()`, so it is told |
+| `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
+| `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
+| `.buttonStyle(.bordered)` on `Menu("Connect…")` | A root button style takes a default-style `Menu`'s chevron away; `.menuStyle(.borderlessButton)` is the other cure |
+| `.labeledContentStyle(.automatic)` on a checkbox, a radio group or the segmented picker in `AnimationEditorView`, which sits outside a `Form` | The root's labelled-row style pushes the label and the control to opposite edges |
+| `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
+| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
+| `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
+| `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
+| `.bordered`, `.borderless`, `.plain` and `AccessoryBarButtonStyle` | Not moved yet |
+
+**To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
+something reading it in the same change. `testEveryThemeTokenIsRead` rejects a token with no reader, and
+a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A new file goes in
+`DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
+`--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
+font token by name. Hover and press take a pointer, so no board shows them.
+
+## The shell and navigation
+
+`BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It
+takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab.
+
+- **Two lists, and no mode flag.** The product list ends at Settings and About; the settings list starts
+  with Back. Which one shows is read from the selected tab (`SettingsTab.group`), and `selectedTab` is
+  the only navigation state. So a search or a deep link moves the sidebar through the writers it already
+  had, with no path of its own. `lastProductTab` and `lastSettingsTab` remember the tab last left on each
+  list, which is where Back and the Settings row return to. A search's jumps write neither: the tab a query
+  started from is remembered, and the tabs it passes through while being typed are not.
+- **A query shows one flat list** of the matching tabs, with no Back row and no Settings row. Clearing it
+  returns to the list the selected tab is on. A deep link to a tab that list leaves out clears the query, so
+  the sidebar still shows the tab. The suggestions render inside the sidebar's column.
+- **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
+  sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
+  sits outside the page's `Form`, so it stays put while the page scrolls.
+- **The sidebar is a custom list, not `List(selection:)`**, which draws its own selection on macOS. So it
+  takes arrow keys itself and follows its own selection, and a row, Back and the Settings row each hand it
+  the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
+  and right is the Settings row. The focus stop is a background, so each row keeps its own ring under Full
+  Keyboard Access.
+- **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
+  opposite of what is on screen.
+
+`BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
+draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
+with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
+once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
+arrow keys and hover take a real window.
+
+## The window
+
+- **Sizes.** It opens at 1100×760 and goes down to 820×560, centred on the screen under the pointer and
+  clamped to it. A page stops at 720 pt, so a row does not stretch across a full-screen panel, and it is
+  never centred: it starts 32 pt from the panel's leading edge, or 48 pt on a panel 1,000 pt or wider, so a
+  full-screen panel's spare width gathers on the right instead of on both sides of a floating column.
+  `SettingsForm` pads the page by the inset less `formMargin`, the grouped `Form`'s own 20 pt margin, so
+  titles and cards line up. Its title is 24 pt on every page, its cap height 44 pt below the panel's top. The
+  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`,
+  `formMargin` and `pageHeaderTop`. The root's frame
+  has a minimum and no maximum, because SwiftUI's size bridge clamps the window to it (`docs/REGRESSIONS.md`,
+  entry 17).
+- **Transparent title bar.** The title is hidden, and kept for the Window menu and Mission Control. The shell's
+  title row lies under the bar, level with the traffic lights, and the bar's top centre stays empty, because
+  a closed notch can sit over it in full screen. The window moves by its title row, not by its background.
+- **Full screen.** The green button enters it. A close from there leaves full screen first, then closes,
+  so Brain reopens windowed unless the exit itself failed (entry 22). Nothing restores it at launch:
+  `isRestorable` is false, and `WindowFullscreenRulesTests` holds that.
+- **The notch ignores it.** `FullscreenMediaDetector` skips Kannu's own pid, so Brain in full screen does not hide
+  the closed notch under Hide set to Always.
+- **`brainAppearance` is this window's alone.** Match macOS, Light or Dark. `SettingsWindowController` applies it to
+  its own window, synchronously at setup and on every change after, because a view would not react while Brain
+  is closed. Only the moon and Brain › Settings › Appearance write it, and that row is the way back to Match macOS.
+  `NSApp.appearance` and `preferredColorScheme` are banned, so the notch stays dark and every other window follows
+  macOS. `BrainAppearanceRulesTests` holds this.
+
+A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
+enter full screen: `shellWide`, at 1440×900, stands in for it. Tabs render at 612 pt, the narrowest panel
+the window can have, through `SettingsForm`, which pads them; a board of a bare `Form` renders at 588 pt, the
+page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
+the least room.
+
 ## The content standard
 
 The components above already imply one set of numbers. `SettingsMetrics` in
@@ -49,8 +158,8 @@ section describes it, it does not define it.
 
 | Dimension | The rule | Token |
 |---|---|---|
-| A row's title | The Form's own body type. Never restyled. | — |
-| Every secondary line | `settingsDescriptionStyle()` — `.subheadline`, secondary, selectable. Pass `tint:` only when the colour means something (red for a failure, orange for a partial result). | — |
+| A row's title | The root's `SettingsTheme.body`. Never restyled. | — |
+| Every secondary line | `settingsDescriptionStyle()` — `SettingsTheme.description`, secondary, selectable. Pass `tint:` only when the colour means something (red for a failure, orange for a partial result). | — |
 | Title to description | 2 | `labelStack` |
 | Inside a row's trailing content | 8 | `rowContent` |
 | Between footer lines | 6 | `footerStack` |
@@ -131,7 +240,8 @@ section describes it, it does not define it.
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
   - The back row is a lone leading borderless `Button` with a chevron `Label`, alone in its own
     `Section` — the one sanctioned lone left-hanging button, because it is navigation, not an
-    action on a row. Nothing else takes this shape.
+    action on a row. Nothing else on a page takes this shape. The sidebar's Back row is shell chrome,
+    not a row of a page.
   - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
     a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
     opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the

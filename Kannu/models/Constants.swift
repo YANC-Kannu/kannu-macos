@@ -942,6 +942,7 @@ extension Defaults.Keys {
         // MARK: General
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
+    static let brainAppearance = Key<BrainAppearance>("brainAppearance", default: .system)
     /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
     /// while this is off, because its menu is the way back.
     static let showNotch = Key<Bool>("showNotch", default: true)

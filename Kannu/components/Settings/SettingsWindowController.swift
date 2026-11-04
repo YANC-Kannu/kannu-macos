@@ -21,6 +21,8 @@
  */
 
 import AppKit
+import Combine
+import Defaults
 import SwiftUI
 
 class SettingsWindowController: NSWindowController {
@@ -33,6 +35,11 @@ class SettingsWindowController: NSWindowController {
     private var settingsContent: NSHostingView<SettingsView>?
     /// How the page was left when the content came out of the window. Nil while it is in the window.
     private var leftState: LeftState?
+    /// A close asked for in full screen waits for the exit, so the window is never ordered out, and
+    /// the app never turned `.accessory`, inside a full-screen Space.
+    private var closeAfterFullScreen = false
+    private var isChangingFullScreen = false
+    private var brainAppearanceObserver: AnyCancellable?
 
     private struct LeftState {
         /// Nil when nothing on the page had focus.
@@ -44,7 +51,7 @@ class SettingsWindowController: NSWindowController {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+            contentRect: NSRect(x: 0, y: 0, width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -62,22 +69,27 @@ class SettingsWindowController: NSWindowController {
     private func setupWindow() {
         guard let window = window else { return }
         
+        // Hidden, and kept: the Window menu and Mission Control read it.
         window.title = String(localized: "Kannu Brain")
-        window.titlebarAppearsTransparent = false
-        window.titleVisibility = .visible
-        window.toolbarStyle = .unified
-        window.isMovableByWindowBackground = true
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        // The title row is what drags it. A control dragged inside a page must not move the window.
+        window.isMovableByWindowBackground = false
+        window.backgroundColor = SettingsTheme.windowPaper
+        window.minSize = NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)
         window.level = .normal
-        
+
         // Make it behave like a regular app window with proper Spaces support
-        window.collectionBehavior = [.managed, .participatesInCycle]
-        
+        window.collectionBehavior = [.managed, .participatesInCycle, .fullScreenPrimary]
+
         // Ensure proper window behavior
         window.hidesOnDeactivate = false
         window.isExcludedFromWindowsMenu = false
-        
-        // Configure window to be a standard document-style window
-        window.isRestorable = true
+
+        // Nothing restores it at launch. A window that could come back full screen ahead of the terms
+        // gate is a question this removes.
+        window.isRestorable = false
         window.identifier = Self.windowIdentifier
         
         // Create the SwiftUI content
@@ -89,12 +101,35 @@ class SettingsWindowController: NSWindowController {
         window.delegate = self
         
         ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
+
+        observeBrainAppearance()
     }
-    
+
+    /// Here, not in a view: a view does not react while Brain is closed (docs/REGRESSIONS.md, entry 22).
+    /// The first apply is synchronous, so the first open cannot flash. `options: []`, because the
+    /// publisher would otherwise fire that first value a second time.
+    private func observeBrainAppearance() {
+        applyBrainAppearance(Defaults[.brainAppearance])
+        brainAppearanceObserver = Defaults.publisher(.brainAppearance, options: [])
+            .receive(on: RunLoop.main)
+            .sink { [weak self] change in self?.applyBrainAppearance(change.newValue) }
+    }
+
+    /// This window only: the notch stays dark, every other window follows macOS, and nothing here may
+    /// touch `NSApp.appearance`.
+    private func applyBrainAppearance(_ choice: BrainAppearance) {
+        switch choice {
+        case .system: window?.appearance = nil
+        case .light: window?.appearance = NSAppearance(named: .aqua)
+        case .dark: window?.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
     func showWindow() {
         // Ensure window exists
         _ = window
         restoreContent()
+        closeAfterFullScreen = false
 
         // Utility windows (like NSColorPanel) are unreliable while accessory policy is active.
         NSApp.setActivationPolicy(.regular)
@@ -106,8 +141,8 @@ class SettingsWindowController: NSWindowController {
 
         // Reassert regular window semantics in case any prior state mutated this window.
         window?.level = .normal
-        window?.collectionBehavior = [.managed, .participatesInCycle]
-        
+        window?.collectionBehavior = [.managed, .participatesInCycle, .fullScreenPrimary]
+
         // If window is already visible, bring it to front properly
         if window?.isVisible == true {
             NSApp.activate(ignoringOtherApps: true)
@@ -116,11 +151,13 @@ class SettingsWindowController: NSWindowController {
             return
         }
         
+        // Placed before it is ordered in, or a window this size visibly jumps.
+        centerWindowOnActiveScreen()
+
         // Show the window with proper ordering
         window?.orderFrontRegardless()
         window?.makeKeyAndOrderFront(nil)
-        centerWindowOnActiveScreen()
-        
+
         // Activate the app and ensure window gets focus
         NSApp.activate(ignoringOtherApps: true)
         
@@ -186,7 +223,7 @@ class SettingsWindowController: NSWindowController {
     }
 
     private func centerWindowOnActiveScreen() {
-        guard let window else { return }
+        guard let window, !window.styleMask.contains(.fullScreen) else { return }
 
         let mouseLocation = NSEvent.mouseLocation
         let targetScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
@@ -199,19 +236,46 @@ class SettingsWindowController: NSWindowController {
             return
         }
 
+        // Clamped: a window sized on a big display and reopened on a laptop would otherwise get a
+        // negative origin.
+        let visible = targetScreen.visibleFrame
         var frame = window.frame
-        frame.origin = NSPoint(
-            x: targetScreen.visibleFrame.midX - frame.width / 2,
-            y: targetScreen.visibleFrame.midY - frame.height / 2
-        )
+        frame.size = NSSize(width: min(frame.width, visible.width), height: min(frame.height, visible.height))
+        frame.origin = NSPoint(x: visible.midX - frame.width / 2, y: visible.midY - frame.height / 2)
         window.setFrame(frame, display: true)
     }
-    
+
     override func close() {
+        if let window, deferCloseUntilWindowed(window) { return }
         super.close()
         relinquishFocus()
     }
-    
+
+    /// True when the close must wait. Toggles only when no transition is running: whether AppKit
+    /// honours a toggle during one, or inside its own callback, is a question this never asks. If one
+    /// were ignored, the close would be lost and a later exit would close Brain by surprise.
+    private func deferCloseUntilWindowed(_ window: NSWindow) -> Bool {
+        guard window.styleMask.contains(.fullScreen) || isChangingFullScreen else { return false }
+        closeAfterFullScreen = true
+        if !isChangingFullScreen { window.toggleFullScreen(nil) }
+        return true
+    }
+
+    private func finishPendingClose() {
+        guard closeAfterFullScreen else { return }
+        // A turn later: this runs inside AppKit's transition callback. `NSWindow.close()` does not
+        // ask `windowShouldClose` again, and `windowWillClose` then does all the usual work.
+        DispatchQueue.main.async { [weak self] in
+            // The flag stays set until here, so `showWindow` can still cancel.
+            guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
+            self.closeAfterFullScreen = false
+            // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it
+            // ends. A sheet that arrived during the transition keeps Brain open.
+            guard self.window?.attachedSheet == nil else { return }
+            self.window?.close()
+        }
+    }
+
     private func relinquishFocus() {
         window?.orderOut(nil)
         
@@ -228,6 +292,8 @@ class SettingsWindowController: NSWindowController {
 
 extension SettingsWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        // A second Command-W can beat the turn `finishPendingClose` waits for.
+        closeAfterFullScreen = false
         NSColorPanel.shared.orderOut(nil)
         NSColorPanel.shared.setTarget(nil)
         NSColorPanel.shared.setAction(nil)
@@ -240,9 +306,45 @@ extension SettingsWindowController: NSWindowDelegate {
     }
     
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        return true
+        !deferCloseUntilWindowed(sender)
     }
-    
+
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        isChangingFullScreen = true
+    }
+
+    func windowDidEnterFullScreen(_ notification: Notification) {
+        isChangingFullScreen = false
+        guard closeAfterFullScreen else { return }
+        // A turn later, as in `finishPendingClose`. `showWindow` may clear the flag first.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
+            // A sheet arrived during the entry. AppKit could ignore a toggle under it, and a flag
+            // left set would close Brain at some later exit.
+            guard self.window?.attachedSheet == nil else { self.closeAfterFullScreen = false; return }
+            self.window?.toggleFullScreen(nil)
+        }
+    }
+
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) {
+        isChangingFullScreen = false
+        finishPendingClose()
+    }
+
+    func windowWillExitFullScreen(_ notification: Notification) {
+        isChangingFullScreen = true
+    }
+
+    func windowDidExitFullScreen(_ notification: Notification) {
+        isChangingFullScreen = false
+        finishPendingClose()
+    }
+
+    func windowDidFailToExitFullScreen(_ window: NSWindow) {
+        isChangingFullScreen = false
+        finishPendingClose()
+    }
+
     func windowDidBecomeKey(_ notification: Notification) {
         // Ensure app is in regular mode when window becomes key
         NSApp.setActivationPolicy(.regular)
