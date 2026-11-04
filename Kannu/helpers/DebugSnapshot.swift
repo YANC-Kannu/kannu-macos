@@ -462,6 +462,42 @@ enum DebugSnapshots {
             }
 
             Section {
+                SettingsSliderRow(verbatim: "A stepped slider", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                SettingsSliderRow(verbatim: "An unstepped slider", value: .constant(0.73), in: 0...1,
+                                  valueText: Text(verbatim: "73%"))
+                SettingsSliderRow(verbatim: "A slider, disabled", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                    .disabled(true)
+                SettingsStepperRow(verbatim: "A stepper", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                SettingsStepperRow(verbatim: "A stepper at its minimum", value: .constant(0), in: 0...10,
+                                   valueText: Text(verbatim: "0"))
+                SettingsStepperRow(verbatim: "A stepper, disabled", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                    .disabled(true)
+                SettingsRow(verbatim: "A field in a row") {
+                    TextField(text: .constant("Typed text")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A secure field, empty") {
+                    SecureField(text: .constant(""), prompt: Text(verbatim: "A prompt says what to type")) { Text(verbatim: "Secret") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A vertical field") {
+                    TextField(text: .constant("A long value wraps onto the next line instead of running out of the field, as a cookie does"),
+                              axis: .vertical) { Text(verbatim: "Field") }
+                        .lineLimit(2...4)
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A field, disabled") {
+                    TextField(text: .constant("Typed, disabled")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Values")
+            }
+
+            Section {
                 ForEach(designSystemColors, id: \.name) { swatch in
                     HStack(spacing: SettingsMetrics.rowContent) {
                         RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)

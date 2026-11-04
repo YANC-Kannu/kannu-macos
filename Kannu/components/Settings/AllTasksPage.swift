@@ -78,8 +78,7 @@ struct AllTasksPage: View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
                 TextField("Find", text: $query, prompt: Text("Title, key or tag"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
+                    .settingsField()
                 filterMenu
             }
         } label: {

@@ -526,8 +526,11 @@ struct AgentSecuritySettings: View {
     @ViewBuilder
     private var detectionSetupSections: some View {
         Section {
-            TextField("Reasoning model (Claude)", text: $adrDetectionReasoningModel)
-                .settingsHighlight(id: highlightID("Reasoning model"))
+            SettingsRow("Reasoning model (Claude)") {
+                TextField("Reasoning model (Claude)", text: $adrDetectionReasoningModel)
+                    .settingsField()
+            }
+            .settingsHighlight(id: highlightID("Reasoning model"))
             SettingsRow("Use an Anthropic API key instead of your Claude Code login",
                         description: adrDetectionUseAnthropicAPIKey
                             ? String(localized: "Analyses are billed to the API key below.")
@@ -544,7 +547,10 @@ struct AgentSecuritySettings: View {
             }
             .settingsHighlight(id: highlightID("Triage with OpenAI first"))
             if adrDetectionTriageEnabled {
-                TextField("Triage model (OpenAI)", text: $adrDetectionTriageModel)
+                SettingsRow("Triage model (OpenAI)") {
+                    TextField("Triage model (OpenAI)", text: $adrDetectionTriageModel)
+                        .settingsField()
+                }
                 adrSecretRow(title: "OpenAI API key", key: .openaiAPIKey, text: $adrOpenAIKeyText)
             }
         } header: {
@@ -634,22 +640,27 @@ struct AgentSecuritySettings: View {
     /// Remove — never a keychain read per render (the tab re-renders on every monitor publish).
     @ViewBuilder
     private func adrSecretRow(title: String, key: SecureSecretKey, text: Binding<String>) -> some View {
-        HStack(spacing: SettingsMetrics.rowContent) {
-            SecureField(title, text: text)
-            Button("Save") {
-                SecureSecretsStore.set(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines), for: key)
-                text.wrappedValue = ""
-                refreshStoredADRSecrets()
-            }
-            .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if storedADRSecrets.contains(key) {
-                Text("stored")
-                    .settingsDescriptionStyle()
-                Button("Remove") {
-                    SecureSecretsStore.removeValue(for: key)
+        LabeledContent {
+            HStack(spacing: SettingsMetrics.rowContent) {
+                SecureField(title, text: text)
+                    .settingsField()
+                Button("Save") {
+                    SecureSecretsStore.set(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines), for: key)
+                    text.wrappedValue = ""
                     refreshStoredADRSecrets()
                 }
+                .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if storedADRSecrets.contains(key) {
+                    Text("stored")
+                        .settingsDescriptionStyle()
+                    Button("Remove") {
+                        SecureSecretsStore.removeValue(for: key)
+                        refreshStoredADRSecrets()
+                    }
+                }
             }
+        } label: {
+            SettingsRowLabel(verbatim: title)
         }
     }
 

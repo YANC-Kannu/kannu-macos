@@ -4,6 +4,66 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain's fields take its chrome and stay native inside
+- **Developer label:** Brain redesign Stage 3: "`SettingsField`"
+- **Agent label:** Claude Code (Opus 5.5) — the AppKit field, plain, inside our chrome; its name beside it, never inside
+- **Changes:**
+  - 34 fields wear `.settingsField()`, last on their chain: 27 of the 29 `TextField`s and all 7 `SecureField`s.
+    `.textFieldStyle(.roundedBorder)` and `.labelsHidden()` go; `.focused`, `.onSubmit` and `.onExitCommand` stay
+    on the field.
+  - In a Form a field's name sits beside it. ADR's two model fields, ntfy's topic and server, Pushover's two keys,
+    the webhook URL and the Spotify cookie move into `SettingsRow`s that name them, and ADR's key rows into a
+    `LabeledContent` with the key's name. The Keychain writes in the bindings are unchanged.
+  - What to type goes in `prompt:`. A sheet field that showed its title as its placeholder says it again under the
+    same key (Connect's token fields, a policy rule's command or tool and its reason, the URL sheet, the editor's
+    name), and the preset name, the Gemini key and the extensions search say theirs. Every prompt reuses a key
+    already in the source; none is new.
+  - A field that keeps its own focus passes it to the chrome (`isFocused:`): New Task's title and tags, Add Tags,
+    the time-log length and comment, and a task's estimate. A field's own `.disabled` moves after the chrome, so
+    the chrome dims with it, once.
+  - The estimate field keeps Escape on the field through a small `CancelOnEscape` modifier, still only when its
+    caller gives Escape an action, so its chrome can go last.
+  - The sidebar search and a local task's inline title keep chrome of their own, pinned.
+  - `SettingsDesignSystemRulesTests` holds every field to its chrome, with nothing setting focus after it and a
+    field's own focus passed in, and only the chrome setting a field style; the two above are pinned with their
+    reasons.
+  - `BrainPathRulesTests` reads the source with its comments blanked, so `let a = true // Brain › General` names
+    no path, while a string's `https://` is read whole (promised on #21).
+  - docs/SETTINGS.md gains "Values and fields": the keyboard and VoiceOver table and the field rule. Its component
+    table, design-system list, row rule and slot rule name the new controls. docs/REGRESSIONS.md entry 22 gains
+    its dated line.
+  - A disabled field drops its focus ring, so a field disabled while it had focus does not keep the accent.
+
+### 2026-11-04 - Brain's sliders and steppers become its own
+- **Developer label:** Brain redesign Stage 3: "`SettingsSlider` (inside `SettingsSliderRow`), `SettingsStepper`"
+- **Agent label:** Claude Code (Opus 5.5) — label, value and an adjustable action for VoiceOver; arrows, Home and End; one edit covers every row
+- **Changes:**
+  - `SettingsSlider`: a track filled with the accent up to a knob, whose `controlOff` stroke shows it on the light
+    panel. A click on the track jumps the knob and a drag moves it; a step snaps from the lower bound, and only a
+    change is written. No animation. Right to left it is drawn mirrored, as a native slider is.
+  - `SettingsStepper`: − and + in one capsule. A button at its end of the range turns `controlOff` and is disabled,
+    a colour rather than a second dim. No press-and-hold repeat.
+  - Each is one VoiceOver element with a label, a value and an adjustable action, and a Tab stop only under Full
+    Keyboard Access. The slider takes ← → (mirrored right to left), ↑ ↓, Home and End, and the stepper ↑ ↓. A
+    disabled one ignores keys and VoiceOver's adjust, and dims once.
+  - `SettingsSliderRow` and `SettingsStepperRow` draw them, so one edit covers the 17 slider rows and the 4 stepper
+    rows; the readout column and the 220-pt width stay. By hand: Custom OSD's preview slider, now labelled "Live
+    Preview"; the animation editor's preview zoom, labelled "Preview Zoom", and its `ParameterSliderRow`; and a
+    timer preset's hours, minutes and seconds.
+  - The animation editor's four springs, on its zoom and its resets, become a bounded ease, nil under Reduce
+    Motion.
+  - Theme tokens "Values": `sliderTrackHeight`, `sliderKnob`, `sliderKeyboardFraction`, `stepperButtonWidth`,
+    `stepperHeight` and `hairline`.
+  - `SettingsLayoutRulesTests` bans `Slider(` and `Stepper(` under Settings beside `Picker(`, with plants, a floor
+    and a slider put back on a real page. Its hand-built rule counts ours too, pinned at the four hand sites and the
+    two rows. `SettingsDesignSystemRulesTests` holds both controls' VoiceOver, keyboard, one dim and disabled guard,
+    and `BrainShellRulesTests` keeps page knowledge out of them.
+  - The designSystem board gains "Values": a stepped, an unstepped and a disabled slider; a stepper in the middle,
+    at its minimum and disabled; and fields in rows, typed, secure with a prompt, vertical and disabled.
+  - From the keyboard and VoiceOver review: a disabled slider or stepper is not a Tab stop, the hand-built
+    sliders (zoom, the animation parameters, Live Preview) give VoiceOver their readout, and the rules pin the
+    right-to-left mirroring and the stepper's single stop.
+
 ### 2026-11-04 - Answer CodeRabbit's first review of the Brain shell
 - **Developer label:** "Yes, and queue #21"
 - **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's first review of Super 2b; the rest answered on the PR

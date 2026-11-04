@@ -29,10 +29,10 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
 | A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
-| A text field's chrome | `.settingsField()`, last on the field's chain |
+| A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
-| A slider row | `SettingsSliderRow` — one width everywhere, selectable readout |
-| A stepper row | `SettingsStepperRow` — the value then the stepper, same column |
+| A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
+| A stepper row | `SettingsStepperRow` — the value then our `SettingsStepper`, same column; never `Stepper` |
 | Several footer lines under one group | `SettingsFooterStack { … }` |
 | A read-only trailing value (path, date, count) | `SettingsValueText(value)` |
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
@@ -52,8 +52,8 @@ component already does.
 - **`DesignSystem/` holds one type per file**, each starting with the GPL block:
   `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
-  control (`SettingsSelect`, `SettingsSelectList`) and the field's chrome (`SettingsField`), and the
-  shell's own views (below).
+  control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
+  controls (`SettingsSlider`, `SettingsStepper`), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
   it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
@@ -129,6 +129,47 @@ All tasks keeps.
 - **The list is a view of its own, `SettingsSelectList`,** because a popover is a window of its own and no
   board captures one: `--kannu-snapshot-tabs selectList` draws it open, and `designSystem` and `components`
   draw the select in its rows.
+
+## Values and fields
+
+A slider is `SettingsSlider` and a stepper `SettingsStepper`, inside `SettingsSliderRow` and `SettingsStepperRow`,
+which draw the title and the readout. SwiftUI on macOS 14 has no custom slider or stepper style, so both are our
+own views. `Slider` and `Stepper` are banned under Settings, and `SettingsLayoutRulesTests` pins the few of ours
+drawn by hand outside a row.
+
+- **The slider** is a track filled with the accent up to a knob. A click on the track jumps the knob there and a
+  drag moves it: Brain moves by its title row only, so the drag is the slider's. A step snaps from the lower
+  bound; with none, a key moves it by 5 % of its range. No animation: the knob follows the value. Right to left it
+  is drawn mirrored, as a native slider is.
+- **The stepper** is − and + in one capsule, its value beside it in the row, never inside. A button at its end of
+  the range turns grey and does nothing. No press-and-hold repeat; a held arrow key repeats.
+- **One element for VoiceOver**: the row's title is its label, the readout (or else the number) its value, and an
+  adjustable action lets VoiceOver move it. A disabled one ignores every key and VoiceOver's adjust too.
+
+| Key | Where | Does |
+|---|---|---|
+| ← → | A slider, under Full Keyboard Access | One step back or on, mirrored right to left |
+| ↑ ↓ | A slider or a stepper, under Full Keyboard Access | One step on or back |
+| Home, End | A slider, under Full Keyboard Access | The lower or the upper end |
+| VoiceOver adjust | Either | One step |
+
+**A field** is the native `TextField` or `SecureField`, plain, inside our chrome: `.settingsField()`, last on its
+chain, so typing, the caret, input methods, secure entry, `.focused`, `.onSubmit` and `.onExitCommand` stay the
+field's. Its name sits beside it, never inside:
+
+- In a Form, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
+  chrome hides the field's own label, which VoiceOver keeps.
+- What to type goes in `prompt:`: a catalog key, or `Text(verbatim:)` for an example such as a host name. In a
+  sheet, where the field's title was its placeholder, the prompt says it again.
+- A field that keeps its own focus with `.focused` passes it in, `.settingsField(isFocused:)`, so it never carries
+  a second focus binding, and nothing sets focus after the chrome.
+- A field's `.disabled` goes after the chrome, so the chrome dims with it, once.
+- `.textFieldStyle` belongs to the chrome. Two fields keep chrome of their own: the sidebar search, around a glyph
+  and a clear button, and a local task's title, typed in place in the body font so it reads as the row's title.
+
+`SettingsDesignSystemRulesTests` holds the controls' keyboard, VoiceOver and one dim, and every field to its
+chrome, the two above pinned. `--kannu-snapshot-tabs designSystem` draws each in its resting and disabled
+states, and `components` draws the slider and stepper rows in one column.
 
 ## The shell and navigation
 
@@ -232,9 +273,10 @@ section describes it, it does not define it.
   control column line up down the whole section. A bare `VStack` with `frame(maxWidth: .infinity)`
   is not a row: it runs the full width and breaks the grid. Use `SettingsNoteRow` for a line that
   only says something.
-- **A slider is never hand-built.** `SettingsSliderRow` is the only shape; a row whose value reads
-  in its own title passes `valueText: nil` and the readout column stays reserved, so the bar is
-  the same length everywhere. Same for `SettingsStepperRow`.
+- **A slider or a stepper is never hand-built in a row.** `SettingsSliderRow` and `SettingsStepperRow`
+  are the only row shapes; `SettingsSlider` and `SettingsStepper` by hand only outside a row, pinned.
+  A row whose value reads in its own title passes `valueText: nil` and the readout column stays
+  reserved, so the bar is the same length everywhere.
 - **An error line is a sibling of the row it belongs to**, so it takes that row's inset — including
   inside an Advanced disclosure.
 - **`SettingsValueText` is for a trailing value, never for a leading line.** It is one line with
@@ -253,7 +295,7 @@ section describes it, it does not define it.
 ## Section rules
 
 - `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle,
-  `SettingsSelect`, Stepper. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
+  `SettingsSelect`, a field. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
   `Menu` placed there loses its label and its items' titles and reads as dead (the "Policy rules" "…"
   bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `analysisRow` shape) or
   a `SettingsActionRow`. `SettingsSelect` may sit in the slot, popover and all, because its trigger and
