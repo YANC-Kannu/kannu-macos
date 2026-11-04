@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Geist and Geist Mono ship inside Kannu
+- **Developer label:** Brain redesign Stage 2: "Bundle the fonts through `ATSApplicationFontsPath`, with no launch work"
+- **Agent label:** Claude Code (Opus 5.5) — static TTFs, no launch code, no registration call
+- **Changes:**
+  - `Kannu/Fonts/` holds Geist Regular, Medium and SemiBold and Geist Mono Regular, the static TTFs of the
+    Geist v1.9.0 release from `vercel/geist-font`, as ordinary git blobs, with their SIL Open Font License 1.1
+    as `Geist-OFL.txt`. No Geist Mono Medium: no theme token names it. `.gitignore` ignores every `.txt`, so it
+    gains an exception for that one file.
+  - `Kannu/Info.plist` sets `ATSApplicationFontsPath` to `.`. The synchronized group copies the files flat into
+    `Contents/Resources`, and the system activates them from there, so no code registers a font and nothing new
+    runs at launch.
+  - Brain now renders in Geist, and its two monospaced values in Geist Mono. The theme still falls back to the
+    system font at the same sizes if a face is missing.
+  - `NOTICE` credits Geist and names its licence file.
+  - New `GeistBundleRulesTests`, with plants: the plist key, each file a real TrueType font and not an LFS
+    pointer, each file's PostScript name its base name, the theme naming exactly the bundled faces both ways,
+    the licence and the `NOTICE` line, and no `CTFontManagerRegister` under `Kannu/`. `LaunchGateRulesTests`
+    adds `CTFontManager` to what may not run before the Terms of Use.
+
 ### 2026-11-01 - Brain's window takes its review findings
 - **Developer label:** Brain redesign Stage 2: "Apply every high and medium finding" from the two reviews of the window commits
 - **Agent label:** Claude Code (Opus 5.5) — fixes for the AppKit and guards reviews, and the rules they found missing
