@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-02 - A preset block on a ticked task undoes the tick too
+- **Developer label:** CodeRabbit's third review of #11
+- **Agent label:** Claude Code (Opus 5.5) — `startBlock` cancels a pending done tick, as `start(_:)` now does
+- **Changes:**
+  - `TasksManager.startBlock` cancels the task's pending done tick, so a preset block started on a ticked
+    task isn't stopped when the undo window ends.
+
+### 2026-11-02 - Act on CodeRabbit's second review of #11
+- **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
+- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads
+- **Changes:**
+  - Marking a task done, or starting it, cancels a pending done tick, so the end of its undo window
+    no longer marks it done a second time or stops a timer just started.
+  - The Claude card names Claude Code's plan once Desktop's bars have expired, instead of Desktop's.
+  - Notch experiences from another Kannu process drop ones with no tab, as persisted ones already do.
+  - `TaskFormDraft.foldingFinishedQuickAdd`'s comment says what it does: words fold wherever they sit.
+  - `UsageForecastTests` checks the expiry instant itself.
+
 ### 2026-11-01 - SettingsView is split into one file per tab
 - **Developer label:** Brain redesign Stage 2: "split the 8,027-line `SettingsView.swift` into one file per tab, with no behaviour change"
 - **Agent label:** Claude Code (Opus 5.5) — a scripted move, so each later stage's edits are small and reviewable
