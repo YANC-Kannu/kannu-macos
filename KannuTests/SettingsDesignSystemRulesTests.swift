@@ -1106,6 +1106,64 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.moreMenuProblems(in: elsewhere), ["SettingsButtonStyle(.quiet)"])
     }
 
+    // MARK: - Reduce Motion
+
+    /// The arguments of each `withAnimation(…)` and `.animation(…)`, its parens balanced, and an empty one for a bare
+    /// `withAnimation {`, which takes the default animation. Read with strings blanked.
+    private static func animationArguments(in code: String) -> [String] {
+        let characters = Array(Self.code(code, blankingStrings: true))
+        let text = String(characters)
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])withAnimation\s*[({]|\.animation\s*\("#) else {
+            XCTFail("bad animation pattern")
+            return []
+        }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text) else { return nil }
+            let open = text.distance(from: text.startIndex, to: range.upperBound) - 1
+            guard characters[open] == "(" else { return "" }
+            var depth = 0, end = open
+            repeat {
+                if characters[end] == "(" { depth += 1 } else if characters[end] == ")" { depth -= 1 }
+                end += 1
+            } while end < characters.count && depth > 0
+            return String(characters[open..<end])
+        }
+    }
+
+    /// Animations that Reduce Motion cannot stop or that are not the theme's one bounded ease.
+    private static func motionProblems(in code: String) -> [String] {
+        animationArguments(in: code).filter { arguments in
+            !arguments.contains("reduceMotion ? nil :") || !arguments.contains("SettingsTheme.quickAnimation")
+                || !matches(of: #"\.(?:spring|smooth|bouncy|snappy|interactiveSpring|default)\b"#, in: arguments).isEmpty
+        }
+    }
+
+    /// `DesignSystem/` only: pages keep their own animations until Stage 4 rewrites them.
+    func testDesignSystemAnimationsHonourReduceMotion() throws {
+        var animations = 0
+        for (name, source) in try Self.designSystemSources() {
+            animations += Self.animationArguments(in: source).count
+            XCTAssertEqual(Self.motionProblems(in: source), [], "\(name): an animation that Reduce Motion cannot stop, or not the theme's ease")
+        }
+        // The switch, the disclosure and the segments.
+        XCTAssertGreaterThanOrEqual(animations, 3, "the scan found fewer animations than the design system has: the pattern went blind")
+
+        for planted in ["withAnimation(.spring()) {}", ".animation(.easeOut(duration: SettingsTheme.quickAnimation), value: x)",
+                        ".animation(reduceMotion ? nil : .smooth, value: x)", "withAnimation { x = 1 }", ".animation(.default, value: y)",
+                        "withAnimation(reduceMotion ? nil : .bouncy(duration: SettingsTheme.quickAnimation)) {}"] {
+            XCTAssertEqual(Self.motionProblems(in: planted).count, 1, planted)
+        }
+        let toggle = ".animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation),\n           value: configuration.isOn)"
+        XCTAssertEqual(Self.motionProblems(in: toggle), [])
+        XCTAssertEqual(Self.motionProblems(in: "// withAnimation(.spring()) {}\nText(\"withAnimation(.spring())\")"), [])
+        XCTAssertEqual(Self.animationArguments(in: "withAnimationTimer()\nfoo.animation\n"), [])
+
+        // The real switch, with its guard taken away.
+        let toggleStyle = try XCTUnwrap(try Self.designSystemSources()["SettingsToggleStyle.swift"])
+        Self.assertCaught([("reduceMotion ? nil : ", ""), ("SettingsTheme.quickAnimation", "0.3")],
+                          in: toggleStyle, by: Self.motionProblems)
+    }
+
     // MARK: - Licence
 
     private static func filesWithoutTheLicence(in sources: [String: String], licence: String) -> [String] {

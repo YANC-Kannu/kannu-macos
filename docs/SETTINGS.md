@@ -67,7 +67,9 @@ component already does.
   nothing in it.
 - **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
   `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
-- **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
+- **Geist when bundled, the system font at the same size when not.** Only the theme names a font, and
+  only the theme uses the system's: a text style or `.system` anywhere else is pinned per file and can
+  only shrink (below, "Colours and fonts").
 - **The accent has two strengths.** `accent` is the logo's eye blue, for fills such as a switch that is
   on. `accentStrong` is for what must be read, and it is the root's tint, because a root tint also
   colours Markdown links. Native controls that honour `.tint` show it.
@@ -75,7 +77,7 @@ component already does.
   text inside a button fights for the click, so the chevron and the empty space beside the title toggle
   it, as a native disclosure's chevron does.
 
-A call-site style beats the root, so these stay on purpose until Stage 3:
+A call-site style beats the root, so these stay on purpose:
 
 | Site | Why |
 |---|---|
@@ -83,12 +85,27 @@ A call-site style beats the root, so these stay on purpose until Stage 3:
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
-| All tasks' four filter pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
 | `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
-| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
 | `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
+
+What stays native, and why:
+
+| Control | Why |
+|---|---|
+| System alerts and dialogs: `ModalPresenter`'s `NSAlert`, SwiftUI's `.alert` and `.confirmationDialog` | They cannot be restyled, and `ModalPresenter` is the only modal path (docs/REGRESSIONS.md, entry 14) |
+| File panels: `NSOpenPanel` through `ModalPresenter`, and `.fileImporter` | They cannot be restyled |
+| The colour panel | Never opened under Settings: the swatch's own popover replaced it |
+| A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
+| Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
+| All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
+| New Task's two checkboxes | Stage 5 rebuilds the task form |
+| `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
+| The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
+| `KeyboardShortcuts.Recorder`, Spotify's `WKWebView` | AppKit views of their own |
+| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding (Stage 6), so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
+| The menu bar's look | The redesign plan keeps it |
 
 **To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
 something reading it in the same change. `testEveryThemeTokenIsRead` rejects a token with no reader, and
@@ -96,6 +113,68 @@ a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A 
 `DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
 `--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
 font token by name. Hover and press take a pointer, so no board shows them.
+
+## Colours and fonts
+
+A colour or a font comes from the theme, through a component or a token. `SettingsLayoutRulesTests` reads
+every file under Settings but the theme, with comments and strings blanked, and counts one entry per line:
+
+- **A raw colour:** `Color.<name>` or `NSColor.<name>`; any `Color(`, so `Color(red:…)`, `Color(nsColor:)` and
+  `Color(.systemX)`; a shorthand colour (`.red` to `.black`, and `.accentColor`) anywhere inside a style
+  modifier's arguments (`foregroundStyle`, `fill`, `stroke`, `background`, `tint`, `shadow`, `overlay` and
+  the rest), either arm of a ternary included; a `tint:`, `color:`, `foreground:`, `background:`,
+  `symbolColor:` or `fill:` argument given one; and `AnyShapeStyle(.<colour>)`.
+- **Not raw:** the hierarchical styles (`.primary`, `.secondary`, `.tertiary`, `.quaternary`), which follow
+  the appearance and are the cure for a bare value; `.clear`, the sidebar's focus stop and the readout's
+  reserved column; `NSColor(someColor)`, which only converts a colour; and every `SettingsTheme` token.
+- **A system font:** a text style (`.headline`, `.caption` and the rest) or `.system` inside `.font(…)`, a
+  ternary's arms and `.footnote.bold()` included; `Font.` with one of those; `.font(Font(`;
+  `NSFont.systemFont…` and its siblings; and `.fontWeight(`. The theme keeps the system font as Geist's
+  fallback. "No ad-hoc type in a row" (below) is about size and this rule about the family, so
+  `.font(.caption)` counts in both.
+- **A native button style:** `.bordered`, `.borderless` and `.borderedProminent`. A button is ours:
+  `.primary` for a main action, `.quiet` for a glyph or a back row. The tag chip's capsule is the one left.
+
+The survivors are pinned per file and can only shrink. After Stage 3 they are 127 colour lines and 106 font
+lines, in previews of notch content, status and severity colours, cards with a compact scale of their own,
+and the user's own colours. Stage 4 gives each a token and empties both tables; the test's pins are the
+numbers, and this table only says why.
+
+| File | Colours | Fonts | Why they remain |
+|---|---|---|---|
+| `AgentStatusSettings.swift` | 2 | 1 | Status green; a preview caption |
+| `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
+| `AnimationEditorView.swift` | 8 | 22 | The editor's own dense scale and previews |
+| `AppearanceSettings.swift` | 10 | 3 | Style cards and previews of notch content |
+| `BatterySettings.swift` | 0 | 2 | Battery previews |
+| `ClipboardSettings.swift` | 4 | 1 | Status colours |
+| `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
+| `DevicesSettings.swift` | 3 | 4 | Device cards |
+| `DownloadsSettings.swift` | 5 | 2 | Download style cards |
+| `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
+| `ExtensionsSettings.swift` | 3 | 13 | Status colours; the legend and detail cards |
+| `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
+| `HUDAndOSDSettings.swift` | 17 | 7 | HUD style cards and previews |
+| `IdleAnimationsSettingsSection.swift` | 6 | 10 | Animation cards |
+| `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
+| `LockScreenSettings.swift` | 18 | 6 | Lock screen previews |
+| `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
+| `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
+| `SecurityFindingRow.swift` | 4 | 3 | Severity badges |
+| `SettingsColorPicker.swift` | 2 | 2 | The user's colours (presets, sampler) |
+| `SettingsHelpers.swift` | 6 | 4 | Badge capsules |
+| `SettingsPermissionCallout.swift` | 0 | 1 | The callout's title |
+| `SettingsProviderIcons.swift` | 1 | 0 | An icon's fallback tint |
+| `SpotifyAuthSettingsSection.swift` | 1 | 6 | Status dot; the sign-in card |
+| `StatsSettings.swift` | 2 | 1 | Graph colours |
+| `TaskDetailPage.swift` | 3 | 0 | The unreadable-estimate orange |
+| `TaskRowList.swift` | 2 | 0 | The same orange |
+| `TasksSettings.swift` | 1 | 0 | `ReminderPermissionNote`'s orange |
+| `TimerSettings.swift` | 1 | 5 | The preset editor |
+
+`SettingsDesignSystemRulesTests` holds `DesignSystem/`'s animations to Reduce Motion the same way: every
+`withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
+spring or the default. Pages keep their own until Stage 4.
 
 ## Choices
 
@@ -266,8 +345,9 @@ section describes it, it does not define it.
 
 - **No ad-hoc type in a row.** `.caption`, `.caption2` and `.system(size:)` do not belong on text
   that sits in a Form row's label or control column — that is what made one section's descriptions
-  wrap at three different widths. They stay for badges, chips and icon glyphs, and inside a card
-  that has its own compact scale; `SettingsLayoutRulesTests` pins how many survive per file.
+  wrap at three different widths. They survive only where pinned, for badges, chips and icon glyphs,
+  and inside a card that has its own compact scale: `SettingsLayoutRulesTests` pins them per file
+  twice, by size here and as system fonts ("Colours and fonts").
 - **A row adds no padding.** The grouped `Form` pads its rows already, so `.padding(.vertical, …)`
   on a row makes that one row taller than its neighbours. Padding belongs to cards, popovers,
   chips and empty states — nowhere else. Pinned per file.

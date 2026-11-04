@@ -283,6 +283,242 @@ final class SettingsLayoutRulesTests: XCTestCase {
         }
     }
 
+    // MARK: - Rule 7: colours, fonts and button styles come from the theme
+
+    /// Lines building a raw colour. Each survivor is a preview of notch content, a status or severity colour, a card
+    /// of its own or the user's own colours. Only Stage 4 lowers these, by giving each a theme token; until then a
+    /// pin can only shrink. The theme is excepted: it is where the colours are made.
+    private static let pinnedRawColourCounts: [String: Int] = [
+        "AgentStatusSettings.swift": 2,      // status green; a preview caption
+        "AllTasksPage.swift": 1,             // the partial-result orange
+        "AnimationEditorView.swift": 8,      // the editor's own previews and cards
+        "AppearanceSettings.swift": 10,      // style cards and previews of notch content
+        "ClipboardSettings.swift": 4,        // status colours
+        "DevicesSettings.swift": 3,          // device cards
+        "DownloadsSettings.swift": 5,        // download style cards
+        "EditPanelView.swift": 1,            // dead code but its #Preview
+        "ExtensionsSettings.swift": 3,       // status colours
+        "GeneralSettings.swift": 1,          // .tint(.accentColor) around LaunchPermissionRow, shared with onboarding
+        "HUDAndOSDSettings.swift": 17,       // HUD style cards and previews
+        "IdleAnimationsSettingsSection.swift": 6,  // animation cards
+        "LiveActivitiesSettings.swift": 10,  // each activity's own colour
+        "LockScreenSettings.swift": 18,      // lock screen previews
+        "MusicSlotConfigurationView.swift": 10,    // the slot canvas
+        "ScreenAssistantSettings.swift": 5,  // status colours
+        "SecurityFindingRow.swift": 4,       // severity badges
+        "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
+        "SettingsHelpers.swift": 6,          // badge capsules
+        "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
+        "SpotifyAuthSettingsSection.swift": 1,     // the status dot
+        "StatsSettings.swift": 2,            // graph colours
+        "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
+        "TaskRowList.swift": 2,              // the same orange
+        "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
+        "TimerSettings.swift": 1,            // the preset editor
+    ]
+
+    /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
+    /// way. Separate from the ad-hoc font rule above, which is about size, so `.font(.caption)` counts in both.
+    private static let pinnedSystemFontCounts: [String: Int] = [
+        "AgentStatusSettings.swift": 1,      // a preview caption
+        "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
+        "AppearanceSettings.swift": 3,       // style cards and previews
+        "BatterySettings.swift": 2,          // battery previews
+        "ClipboardSettings.swift": 1,        // a status line
+        "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
+        "DevicesSettings.swift": 4,          // device cards
+        "DownloadsSettings.swift": 2,        // download style cards
+        "EditPanelView.swift": 1,            // dead code but its #Preview
+        "ExtensionsSettings.swift": 13,      // the legend and the detail cards
+        "HUDAndOSDSettings.swift": 7,        // HUD style cards and previews
+        "IdleAnimationsSettingsSection.swift": 10, // animation cards
+        "LockScreenSettings.swift": 6,       // lock screen previews
+        "MusicSlotConfigurationView.swift": 10,    // the slot canvas
+        "ScreenAssistantSettings.swift": 1,  // a status line
+        "SecurityFindingRow.swift": 3,       // severity badges
+        "SettingsColorPicker.swift": 2,      // the colour popover
+        "SettingsHelpers.swift": 4,          // badge capsules
+        "SettingsPermissionCallout.swift": 1,  // the callout's title
+        "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
+        "StatsSettings.swift": 1,            // a graph caption
+        "TimerSettings.swift": 5,            // the preset editor
+    ]
+
+    /// The theme makes the colours and holds the system font as Geist's fallback.
+    private static let theTheme: Set<String> = ["SettingsTheme.swift"]
+
+    func testNoRawColourIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedRawColourCounts, scanner: Self.rawColourLines, rule: "a raw colour",
+                           cure: "a colour comes from SettingsTheme, or is a hierarchical style such as .secondary",
+                           skipping: Self.theTheme)
+        // A floor: the survivors are still there, so a pattern gone blind fails here.
+        let found = Self.settingsSources().filter { !Self.theTheme.contains($0.key) }
+            .values.reduce(0) { $0 + Self.rawColourLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no raw colour: the pattern went blind")
+
+        for planted in [".foregroundStyle(.red)", ".fill(isOn ? .green : .gray)", "Color.orange.opacity(0.9)",
+                        "Color(red: 0.5, green: 0, blue: 1)", "Color(nsColor: .systemBlue)", "NSColor.systemRed",
+                        ".settingsDescriptionStyle(tint: .orange)", "AnyShapeStyle(.orange)", ".shadow(color: .black, radius: 2)",
+                        ".tint(.accentColor)", ".background(\n    Capsule()\n        .fill(.blue)\n)"] {
+            XCTAssertEqual(Self.rawColourLines(in: planted).count, 1, planted)
+        }
+        for clean in [".foregroundStyle(.secondary)", ".foregroundStyle(Color.secondary)", "Color.clear", ".fill(.clear)",
+                      ".foregroundStyle(SettingsTheme.ink)", "// Color.red", "Text(\"Color.red\")", "case .blue:",
+                      "selection = .blue", ".tint(tag.tint)", "NSColor(selection)", ".fill(Color.primary.opacity(0.08))"] {
+            XCTAssertEqual(Self.rawColourLines(in: clean), [], clean)
+        }
+
+        // A real page: the Connect sheet's error line given back its red.
+        let sheets = try XCTUnwrap(Self.settingsSources()["TaskConnectSheets.swift"])
+        let errorLine = try XCTUnwrap(sheets.range(of: "SettingsErrorText(problem)"), "the Connect sheets have no error line to plant on")
+        let planted = sheets.replacingCharacters(in: errorLine, with: "Text(verbatim: problem).settingsDescriptionStyle(tint: .red)")
+        XCTAssertEqual(Self.rawColourLines(in: planted).count, (Self.pinnedRawColourCounts["TaskConnectSheets.swift"] ?? 0) + 1)
+    }
+
+    func testNoSystemFontIsUsedUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedSystemFontCounts, scanner: Self.systemFontLines, rule: "a system font",
+                           cure: "a font comes from SettingsTheme, or from the root",
+                           skipping: Self.theTheme)
+        let found = Self.settingsSources().filter { !Self.theTheme.contains($0.key) }
+            .values.reduce(0) { $0 + Self.systemFontLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no system font: the pattern went blind")
+
+        for planted in [".font(.headline)", ".font(.caption2)", ".font(.system(size: 11))", ".font(.system(.caption, design: .monospaced))",
+                        ".font(Font.system(size: 9))", ".font(.footnote.bold())", ".font(.subheadline.weight(.semibold))",
+                        ".font(isSmall ? .caption : .body)", ".fontWeight(.medium)", "NSFont.systemFont(ofSize: 12)",
+                        "let title = Font.title3", ".font(Font(NSFont.labelFont(ofSize: 11)))", ".font(\n    .system(size: 13,\n            weight: .semibold))"] {
+            XCTAssertEqual(Self.systemFontLines(in: planted).count, 1, planted)
+        }
+        for clean in [".font(SettingsTheme.body)", ".font(SettingsTheme.caption)", "// .font(.headline)", "Text(\".font(.title)\")",
+                      ".font(isSmall ? SettingsTheme.description : SettingsTheme.bodyStrong)", ".font(SettingsTheme.body.weight(.medium))",
+                      "Text(item.title)", ".font(font)"] {
+            XCTAssertEqual(Self.systemFontLines(in: clean), [], clean)
+        }
+
+        // A real page: the Spotify sheet's title back on the system's headline.
+        let spotify = try XCTUnwrap(Self.settingsSources()["SpotifyLoginSheet.swift"])
+        let title = try XCTUnwrap(spotify.range(of: ".font(SettingsTheme.sheetTitle)"), "the Spotify sheet has no title to plant on")
+        XCTAssertEqual(Self.systemFontLines(in: spotify.replacingCharacters(in: title, with: ".font(.headline)")).count,
+                       (Self.pinnedSystemFontCounts["SpotifyLoginSheet.swift"] ?? 0) + 1)
+    }
+
+    /// The tag chip's capsule: `SettingsTagChip` keeps the bordered bezel its colour wash shows through, until Stage 5
+    /// rebuilds tags.
+    private static let pinnedNativeButtonStyleCounts: [String: Int] = ["SettingsComponents.swift": 1]
+
+    func testNativeButtonStylesArePinned() throws {
+        assertPinnedCounts(Self.pinnedNativeButtonStyleCounts, scanner: Self.nativeButtonStyleLines,
+                           rule: "a native button style",
+                           cure: "a button is the root's SettingsButtonStyle, .primary for a main action and .quiet for a glyph or a back row")
+        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeButtonStyleLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no native button style: the pattern went blind")
+
+        for planted in [".buttonStyle(.bordered)", ".buttonStyle(.borderless)", ".buttonStyle(.borderedProminent)",
+                        ".buttonStyle( .bordered )", ".buttonStyle(BorderlessButtonStyle())", ".buttonStyle(BorderedButtonStyle())",
+                        "let style = .borderedProminent"] {
+            XCTAssertEqual(Self.nativeButtonStyleLines(in: planted).count, 1, planted)
+        }
+        for clean in [".buttonStyle(SettingsButtonStyle(.quiet))", ".buttonStyle(.plain)", ".buttonStyle(.link)",
+                      ".menuStyle(.borderlessButton)", ".buttonBorderShape(.capsule)", "// .buttonStyle(.bordered)",
+                      "Text(\".buttonStyle(.borderless)\")"] {
+            XCTAssertEqual(Self.nativeButtonStyleLines(in: clean), [], clean)
+        }
+
+        // A real page: a task row's ▶ back on the borderless style.
+        let rows = try XCTUnwrap(Self.settingsSources()["TaskRowList.swift"])
+        let quiet = try XCTUnwrap(rows.range(of: ".buttonStyle(SettingsButtonStyle(.quiet))"), "the task rows have no quiet button to plant on")
+        XCTAssertEqual(Self.nativeButtonStyleLines(in: rows.replacingCharacters(in: quiet, with: ".buttonStyle(.borderless)")).count, 1)
+    }
+
+    /// The shorthand colours a style or a colour argument can be handed.
+    private static let shorthandColours = "red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown|white|gray|black|accentColor"
+    private static let systemFontStyles = "largeTitle|title2|title3|title|headline|subheadline|body|callout|footnote|caption2|caption|system"
+
+    /// One entry per line building a raw colour, read with comments and strings blanked: `Color.<name>` or
+    /// `NSColor.<name>` but `clear` and the hierarchical styles; any `Color(`, so `Color(red:…)`, `Color(nsColor:)`
+    /// and `Color(.systemX)`; a shorthand colour anywhere inside a style modifier's balanced arguments, either arm of
+    /// a ternary included; a colour argument (`tint:`, `color:`, `foreground:`, `background:`, `symbolColor:`,
+    /// `fill:`) given one; and `AnyShapeStyle(.<colour>)`. `NSColor(someColor)` converts a colour, so it is not one.
+    static func rawColourLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        var offsets = matchOffsets(of: #"(?<![A-Za-z0-9_.])(?:NS)?Color\s*\.\s*(?!(?:clear|primary|secondary|tertiary|quaternary)\b)[a-z]\w*"#,
+                                   in: code)
+        offsets += matchOffsets(of: #"(?<![A-Za-z0-9_.])Color\s*\("#, in: code)
+        offsets += matchOffsets(of: #"\b(?:tint|color|foreground|background|symbolColor|fill)\s*:\s*\.(?:"# + shorthandColours + #")\b"#, in: code)
+        offsets += matchOffsets(of: #"AnyShapeStyle\(\s*\.(?:"# + shorthandColours + #")\b"#, in: code)
+        let styles = #"\.(?:foregroundStyle|foregroundColor|fill|stroke|strokeBorder|background|tint|accentColor|shadow|border|overlay)\s*\("#
+        for arguments in balancedArguments(after: styles, in: code) {
+            offsets += matchOffsets(of: #"(?<![A-Za-z0-9_])\.(?:"# + shorthandColours + #")\b"#, in: code, range: arguments)
+        }
+        return lines(at: offsets, in: code, text: text)
+    }
+
+    /// One entry per line using a system font, read with comments and strings blanked: a text style or `.system`
+    /// anywhere inside `.font(…)`'s balanced arguments, ternary arms and `.footnote.bold()` included; `Font.` with one
+    /// of those; `.font(Font(`; `NSFont.systemFont…` and its siblings; and `.fontWeight(`.
+    static func systemFontLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        var offsets = matchOffsets(of: #"(?<![A-Za-z0-9_.])Font\s*\.\s*(?:"# + systemFontStyles + #")\b"#, in: code)
+        offsets += matchOffsets(of: #"\.font\s*\(\s*Font\s*\("#, in: code)
+        offsets += matchOffsets(of: #"(?<![A-Za-z0-9_.])NSFont\s*\.\s*(?:systemFont|boldSystemFont|monospacedSystemFont|monospacedDigitSystemFont|labelFont|messageFont|controlContentFont|menuFont|menuBarFont|toolTipsFont|titleBarFont|paletteFont|userFont|userFixedPitchFont)"#,
+                                in: code)
+        offsets += matchOffsets(of: #"\.fontWeight\s*\("#, in: code)
+        for arguments in balancedArguments(after: #"\.font\s*\("#, in: code) {
+            offsets += matchOffsets(of: #"(?<![A-Za-z0-9_])\.(?:"# + systemFontStyles + #")\b"#, in: code, range: arguments)
+        }
+        return lines(at: offsets, in: code, text: text)
+    }
+
+    /// One entry per line setting a native button style: `.buttonStyle(.bordered)` or `.buttonStyle(.borderless)`,
+    /// in either spelling, and `.borderedProminent` anywhere. Read with comments and strings blanked.
+    static func nativeButtonStyleLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        let pattern = #"\.buttonStyle\s*\(\s*(?:\.(?:bordered|borderless)|(?:Bordered|Borderless)ButtonStyle\s*\(\s*\))\s*\)"#
+            + #"|(?<![A-Za-z0-9_])\.borderedProminent\b|\bBorderedProminentButtonStyle\b"#
+        return lines(at: matchOffsets(of: pattern, in: code), in: code, text: text)
+    }
+
+    /// Where each match of `pattern` starts in `code`, in UTF-16 units, within `range` when one is given.
+    private static func matchOffsets(of pattern: String, in code: String, range: NSRange? = nil) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("bad pattern: \(pattern)")
+            return []
+        }
+        let whole = NSRange(location: 0, length: (code as NSString).length)
+        return regex.matches(in: code, range: range ?? whole).map(\.range.location)
+    }
+
+    /// The inside of each call `opener` starts, which ends at its `(`: from there to the matching `)`. Strings are
+    /// already blanked, so a paren in one never counts.
+    private static func balancedArguments(after opener: String, in code: String) -> [NSRange] {
+        guard let regex = try? NSRegularExpression(pattern: opener) else {
+            XCTFail("bad pattern: \(opener)")
+            return []
+        }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map { match in
+            let open = match.range.location + match.range.length - 1
+            var depth = 0, index = open
+            repeat {
+                let unit = text.character(at: index)
+                if unit == 0x28 { depth += 1 } else if unit == 0x29 { depth -= 1 }
+                index += 1
+            } while index < text.length && depth > 0
+            // Past the closing paren, or at the end of an unbalanced call.
+            let end = depth == 0 ? index - 1 : index
+            return NSRange(location: open + 1, length: max(0, end - open - 1))
+        }
+    }
+
+    /// The source lines holding `offsets`, once each, in order, trimmed. Blanking keeps every line, so a line of the
+    /// blanked code is the same line of the source.
+    private static func lines(at offsets: [Int], in code: String, text: String) -> [String] {
+        let nsCode = code as NSString
+        let numbers = Set(offsets.map { nsCode.substring(to: $0).components(separatedBy: "\n").count - 1 })
+        let lines = text.components(separatedBy: "\n")
+        return numbers.sorted().map { lines[$0].trimmingCharacters(in: .whitespaces) }
+    }
+
     // MARK: - Rule 4: the components stay selectable
 
     func testTheSharedComponentsKeepTheirTextSelection() throws {
@@ -479,14 +715,16 @@ final class SettingsLayoutRulesTests: XCTestCase {
 
     /// The shared shape of every pinned-count rule: no file may exceed its pin, and no pin may
     /// outlive the code it describes — a stale pin hides the next offender behind its slot.
+    /// `skipped` files are where a rule's subject is defined, such as the theme for colours.
     private func assertPinnedCounts(_ pinned: [String: Int],
                                     scanner: (String) -> [String],
                                     rule: String,
                                     cure: String,
+                                    skipping skipped: Set<String> = [],
                                     file: StaticString = #filePath,
                                     line: UInt = #line) {
         var counts: [String: Int] = [:]
-        for (path, text) in Self.settingsSources() {
+        for (path, text) in Self.settingsSources() where !skipped.contains(path) {
             let found = scanner(text)
             if !found.isEmpty { counts[path] = found.count }
             let allowed = pinned[path] ?? 0
