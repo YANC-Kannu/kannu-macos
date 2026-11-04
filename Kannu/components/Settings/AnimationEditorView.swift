@@ -215,7 +215,6 @@ struct AnimationEditorView: View {
                     Image(systemName: "minus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 SettingsSlider(value: $previewScale, in: 1...10, valueDescription: Text("\(Int(previewScale))x")) { Text("Preview Zoom") }
@@ -228,7 +227,6 @@ struct AnimationEditorView: View {
                     Image(systemName: "plus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 Button("Reset") {
@@ -236,7 +234,6 @@ struct AnimationEditorView: View {
                         previewScale = 10
                     }
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
             }
         }
@@ -404,7 +401,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Fill Notch") {
                             withAnimation {
@@ -417,7 +413,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Up 2x") {
                             withAnimation {
@@ -425,14 +420,12 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = true
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Down") {
                             withAnimation {
                                 scale = 0.75
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Reset All") {
                             withAnimation {
@@ -448,7 +441,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         .tint(.red)
                     }
                 }
@@ -613,7 +605,6 @@ private struct ParameterSliderRow: View {
                             value = resetValue
                         }
                     }
-                    .buttonStyle(.bordered)
                     .controlSize(.mini)
                 }
             }

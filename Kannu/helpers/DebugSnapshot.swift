@@ -382,6 +382,31 @@ enum DebugSnapshots {
                     Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
                 }
                 .controlSize(.small)
+                // Quiet: bare at rest, so these show only their labels; the fill takes a pointer.
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Quiet") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                    Button(action: {}) { Text(verbatim: "Quiet, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                        .disabled(true)
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text(verbatim: "Start timing"))
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .disabled(true)
+                    .accessibilityLabel(Text(verbatim: "Start timing, disabled"))
+                    // A more menu's trigger: our quiet button over a native menu.
+                    SettingsMoreMenu {
+                        Button(action: {}) { Text(verbatim: "Show Details") }
+                    }
+                }
             } header: {
                 Text(verbatim: "Buttons")
             }
@@ -548,7 +573,7 @@ enum DebugSnapshots {
         ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
         ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
         ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
-        ("raised", SettingsTheme.raised),
+        ("raised", SettingsTheme.raised), ("success", SettingsTheme.success),
     ]
 
     private static let designSystemFonts: [(name: String, font: Font)] = [

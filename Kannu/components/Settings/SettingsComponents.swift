@@ -501,10 +501,12 @@ struct SettingsMoreMenu<Items: View>: View {
         Menu {
             items
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .imageScale(.large)
+            Image(systemName: "ellipsis")
         }
-        .menuStyle(.borderlessButton)
+        // Our button draws the trigger (a button menu style takes the current ButtonStyle); the items stay
+        // a native menu, which keeps its own keyboard, type-to-select and VoiceOver.
+        .menuStyle(.button)
+        .buttonStyle(SettingsButtonStyle(.quiet))
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(accessibilityLabel)
@@ -587,7 +589,7 @@ struct SettingsTagChip: View {
         .overlay {
             if isHighlighted {
                 Capsule()
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .strokeBorder(SettingsTheme.accentStrong, lineWidth: 2)
                     .allowsHitTesting(false)
             }
         }
@@ -686,7 +688,7 @@ struct SettingsStatusText: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.footerStack) {
             Circle()
-                .fill(isReady ? Color.green : Color.secondary.opacity(0.5))
+                .fill(isReady ? SettingsTheme.success : Color.secondary.opacity(0.5))
                 .frame(width: SettingsMetrics.statusDot, height: SettingsMetrics.statusDot)
                 .accessibilityHidden(true)
             Text(verbatim: text)
@@ -708,7 +710,7 @@ struct SettingsErrorText: View {
 
     var body: some View {
         Text(verbatim: text)
-            .settingsDescriptionStyle(tint: .red)
+            .settingsDescriptionStyle(tint: SettingsTheme.destructive)
     }
 }
 

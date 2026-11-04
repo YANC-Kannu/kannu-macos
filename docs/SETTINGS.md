@@ -38,7 +38,9 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
 | One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below) |
-| Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button) |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless` |
+| Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
+| A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
 | Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
 | Free-standing explanatory text | `.settingsDescriptionStyle()` (selectable, secondary, wraps) |
 | A spacing, a width, a dot size | `SettingsMetrics.<token>` — never a number in place |
@@ -80,14 +82,13 @@ A call-site style beats the root, so these stay on purpose until Stage 3:
 | `SettingsToggleStyle(showsLabel: false)` | A row that draws the title itself. A custom style ignores `.labelsHidden()`, so it is told |
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
-| `.buttonStyle(.bordered)` on `Menu("Connect…")` | A root button style takes a default-style `Menu`'s chevron away; `.menuStyle(.borderlessButton)` is the other cure |
 | `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
 | All tasks' four filter pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
 | `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
 | `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
-| `.bordered`, `.borderless`, `.plain` and `AccessoryBarButtonStyle` | Not moved yet |
+| `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
 
 **To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
 something reading it in the same change. `testEveryThemeTokenIsRead` rejects a token with no reader, and
@@ -335,10 +336,10 @@ section describes it, it does not define it.
   - A row that exists only in some states (a task source's row, only while it is connected) has a
     standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
-  - The back row is a lone leading borderless `Button` with a chevron `Label`, alone in its own
-    `Section` — the one sanctioned lone left-hanging button, because it is navigation, not an
-    action on a row. Nothing else on a page takes this shape. The sidebar's Back row is shell chrome,
-    not a row of a page.
+  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet)`) with a chevron
+    `Label`, alone in its own `Section` — the one sanctioned lone left-hanging button, because it
+    is navigation, not an action on a row. Nothing else on a page takes this shape. The sidebar's
+    Back row is shell chrome, not a row of a page.
   - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
     a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
     opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the

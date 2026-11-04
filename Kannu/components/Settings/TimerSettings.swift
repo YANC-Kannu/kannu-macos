@@ -545,13 +545,11 @@ private struct TimerPresetEditorRow: View {
                 Button(action: moveUp) {
                     Label("Move Up", systemImage: "chevron.up")
                 }
-                .buttonStyle(.bordered)
                 .disabled(isFirst)
 
                 Button(action: moveDown) {
                     Label("Move Down", systemImage: "chevron.down")
                 }
-                .buttonStyle(.bordered)
                 .disabled(isLast)
 
                 Spacer()
@@ -559,7 +557,6 @@ private struct TimerPresetEditorRow: View {
                 Button(role: .destructive, action: remove) {
                     Label("Delete", systemImage: "trash")
                 }
-                .buttonStyle(.bordered)
             }
             .font(.system(size: 12, weight: .medium))
         }
