@@ -267,7 +267,7 @@ class SettingsWindowController: NSWindowController {
         // ask `windowShouldClose` again, and `windowWillClose` then does all the usual work.
         DispatchQueue.main.async { [weak self] in
             // The flag stays set until here, so `showWindow` can still cancel.
-            guard let self, self.closeAfterFullScreen else { return }
+            guard let self, self.closeAfterFullScreen, !self.isChangingFullScreen else { return }
             self.closeAfterFullScreen = false
             // `NSWindow.close()` does not look at a sheet, and `ModalPresenter` counts one until it
             // ends. A sheet that arrived during the transition keeps Brain open.
