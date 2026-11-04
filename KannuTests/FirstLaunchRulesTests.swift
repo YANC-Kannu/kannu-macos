@@ -40,6 +40,30 @@ final class FirstLaunchRulesTests: XCTestCase {
         "Kannu/managers/ClipboardManager.swift",
         "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
         "Kannu/components/Settings/SettingsView.swift",
+        "Kannu/components/Settings/AboutSettings.swift",
+        "Kannu/components/Settings/AgentStatusSettings.swift",
+        "Kannu/components/Settings/AppearanceSettings.swift",
+        "Kannu/components/Settings/BatterySettings.swift",
+        "Kannu/components/Settings/ClipboardSettings.swift",
+        "Kannu/components/Settings/CustomOSDSettings.swift",
+        "Kannu/components/Settings/DevicesSettings.swift",
+        "Kannu/components/Settings/DownloadsSettings.swift",
+        "Kannu/components/Settings/GeneralSettings.swift",
+        "Kannu/components/Settings/HUDAndOSDSettings.swift",
+        "Kannu/components/Settings/HUDSettings.swift",
+        "Kannu/components/Settings/LiveActivitiesSettings.swift",
+        "Kannu/components/Settings/LockScreenSettings.swift",
+        "Kannu/components/Settings/MediaSettings.swift",
+        "Kannu/components/Settings/NotesSettings.swift",
+        "Kannu/components/Settings/ScreenAssistantSettings.swift",
+        "Kannu/components/Settings/SettingsColorPicker.swift",
+        "Kannu/components/Settings/SettingsHelpers.swift",
+        "Kannu/components/Settings/SettingsPermissionCallout.swift",
+        "Kannu/components/Settings/SettingsProviderIcons.swift",
+        "Kannu/components/Settings/ShelfSettings.swift",
+        "Kannu/components/Settings/ShortcutsSettings.swift",
+        "Kannu/components/Settings/StatsSettings.swift",
+        "Kannu/components/Settings/TimerSettings.swift",
         "Kannu/managers/AppleNotesSyncManager.swift",
         "Kannu/components/Onboarding/NotesSelectionView.swift",
     ]
@@ -59,6 +83,12 @@ final class FirstLaunchRulesTests: XCTestCase {
                        ["BluetoothAudioManager.swift", "LaunchPermissionManager.swift"])
         XCTAssertEqual(Self.files(in: files, containing: "MusicAuthorization.request()"),
                        ["AnimatedArtworkManager.swift", "LaunchPermissionManager.swift"])
+        // Finding Warp's database stats its container, which raises the same dialog as reading it. This
+        // reads every file under Kannu/, so a lookup in any Brain page fails, subfolders included. Views ask
+        // `LaunchPermissionManager.isWarpInstalled`; the monitor's own lookups are checked function by
+        // function in `problems(in:)`.
+        XCTAssertEqual(Self.files(in: files, containing: "WarpAgentStore.databaseURL"),
+                       ["CursorAgentStatusMonitor.swift", "LaunchPermissionManager.swift"])
         XCTAssertEqual(Self.files(in: files, containing: "AEDeterminePermissionToAutomateTarget("),
                        ["LaunchPermissionManager.swift"])
     }
@@ -251,7 +281,8 @@ final class FirstLaunchRulesTests: XCTestCase {
         let monitor = sources["Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift"] ?? ""
         let ungatedWarpLookups = monitor.components(separatedBy: "func ").dropFirst()
             .filter { $0.contains("WarpAgentStore.databaseURL") && !$0.contains("LaunchPermissionManager.mayTouch(.warp)") }
-        let viewsStatWarp = ["Kannu/components/AgentStatus/NotchAgentStatusView.swift", "Kannu/components/Settings/SettingsView.swift"]
+        let viewsStatWarp = (["Kannu/components/AgentStatus/NotchAgentStatusView.swift"]
+            + sources.keys.filter { $0.hasPrefix("Kannu/components/Settings/") })
             .contains { (sources[$0] ?? "").contains("WarpAgentStore.databaseURL") }
         if !ungatedWarpLookups.isEmpty || viewsStatWarp {
             problems.append("something looks up Warp's database without the gate")
