@@ -453,6 +453,10 @@ final class SettingsAnimationRulesTests: XCTestCase {
         }
         let view = try XCTUnwrap(sources["DevicesSettings.swift"])
         XCTAssertTrue(view.contains("onWindowChange?(window != nil)"), "the looping icon no longer follows its window")
+        XCTAssertTrue(view.contains("view.onWindowChange = { inWindow in coordinator.setPlaying(inWindow) }"), "the looping icon's window callback no longer reaches its player")
+        // The pause in `setPlaying`'s else branch, not just anywhere in the file.
+        XCTAssertTrue(view.contains("func setPlaying(_ playing: Bool) {\n            if playing {\n                controller?.play()\n            } else {\n                controller?.pause()\n            }"),
+                      "the looping icon no longer pauses when its window goes")
     }
 
     func testThePlayerDetectorCatchesAnOffender() {

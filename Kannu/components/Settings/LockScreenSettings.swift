@@ -534,8 +534,8 @@ private struct LockScreenPositioningControls: View {
                     let clampedValue = clampOffset(newValue)
                     if weatherOffset != clampedValue {
                         weatherOffset = clampedValue
+                        propagateWeatherOffsetChange(animated: false)
                     }
-                    propagateWeatherOffsetChange(animated: false)
                 }
             )
 
@@ -545,8 +545,8 @@ private struct LockScreenPositioningControls: View {
                     let clampedValue = clampOffset(newValue)
                     if timerOffset != clampedValue {
                         timerOffset = clampedValue
+                        propagateTimerOffsetChange(animated: false)
                     }
-                    propagateTimerOffsetChange(animated: false)
                 }
             )
 
@@ -556,8 +556,8 @@ private struct LockScreenPositioningControls: View {
                     let clampedValue = clampOffset(newValue)
                     if musicOffset != clampedValue {
                         musicOffset = clampedValue
+                        propagateMusicOffsetChange(animated: false)
                     }
-                    propagateMusicOffsetChange(animated: false)
                 }
             )
 

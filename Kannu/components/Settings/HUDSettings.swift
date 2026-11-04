@@ -33,6 +33,9 @@ struct HUD: View {
     @Default(.enableKeyboardBacklightHUD) var enableKeyboardBacklightHUD
     @Default(.enableThirdPartyDDCIntegration) var enableThirdPartyDDCIntegration
     @Default(.systemHUDSensitivity) var systemHUDSensitivity
+    @Default(.useColorCodedVolumeDisplay) var useColorCodedVolumeDisplay
+    @Default(.useColorCodedBatteryDisplay) var useColorCodedBatteryDisplay
+    @Default(.useSmoothColorGradient) var useSmoothColorGradient
     @ObservedObject var coordinator = KannuViewCoordinator.shared
     @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
 
@@ -101,7 +104,7 @@ struct HUD: View {
             .disabled(colorCodingDisabled)
             .settingsHighlight(id: highlightID("Color-coded volume display"))
 
-            if !colorCodingDisabled && (Defaults[.useColorCodedBatteryDisplay] || Defaults[.useColorCodedVolumeDisplay]) {
+            if !colorCodingDisabled && (useColorCodedBatteryDisplay || useColorCodedVolumeDisplay) {
                 Defaults.Toggle(key: .useSmoothColorGradient) {
                     Text("Smooth color transitions")
                 }
@@ -117,7 +120,7 @@ struct HUD: View {
         } footer: {
             if colorCodingDisabled {
                 SettingsFooter("Color-coded fills and smooth gradients are unavailable in Segmented mode. Switch to Hierarchical or Gradient to adjust these options.")
-            } else if Defaults[.useSmoothColorGradient] {
+            } else if useSmoothColorGradient {
                 SettingsFooter("Smooth transitions blend Green (0–60%), Yellow (60–85%), and Red (85–100%) through the entire fill.")
             } else {
                 SettingsFooter("Discrete transitions snap between Green (0–60%), Yellow (60–85%), and Red (85–100%).")

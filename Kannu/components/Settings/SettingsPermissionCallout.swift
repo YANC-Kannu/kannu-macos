@@ -37,7 +37,7 @@ struct SettingsPermissionCallout: View {
         message: String,
         icon: String = "exclamationmark.triangle.fill",
         iconColor: Color = .orange,
-        requestButtonTitle: String = "Request Access",
+        requestButtonTitle: String = String(localized: "Request Access"),
         openSettingsButtonTitle: String = "Open Settings",
         requestAction: @escaping () -> Void,
         openSettingsAction: @escaping () -> Void
