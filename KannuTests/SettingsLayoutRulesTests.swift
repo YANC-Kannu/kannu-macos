@@ -114,7 +114,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedAdHocFontCounts: [String: Int] = [
         "AnimationEditorView.swift": 11,     // the animation editor sheet: its own dense scale
         "ExtensionsSettings.swift": 1,       // the empty state's 48-pt glyph
-        "IdleAnimationsSettingsSection.swift": 9,  // animation cards, their chips, the URL sheet
+        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and their chips
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
         "SecurityFindingRow.swift": 2,       // the severity badge chips
         "SettingsView.swift": 1,             // a search suggestion's tab name
@@ -129,7 +129,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsHelpers.swift": 1,          // badge capsules
         "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
-        "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
     ]
 
     func testRowTextUsesTheFormsTypeOrTheSharedStyle() {
@@ -161,10 +160,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 8,      // the editor sheet
         "EditPanelView.swift": 1,            // a panel, not a Form
         "ExtensionsSettings.swift": 5,       // the empty state and the expanded detail card
-        "IdleAnimationsSettingsSection.swift": 8,  // animation cards, chips, the URL sheet
+        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and chips
         "MusicSlotConfigurationView.swift": 5,     // the slot canvas
-        "NewTaskSheet.swift": 1,             // New Task is a sheet: a sheet pads its own content
-        "PolicyRulesEditor.swift": 1,        // the Edit rules sheet: a sheet pads its own content
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
         "SettingsView.swift": 7,             // the highlight's ring, the search field and its suggestions,
                                              // and the page's inset from the panel's edge
@@ -184,14 +181,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsSelect.swift": 2,           // a segment, and the track it sits in
         "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
         "SettingsField.swift": 1,            // the field inside its chrome
+        "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
-        "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
-        "TaskTagsSheet.swift": 1,            // Add Tags is its own sheet now: a sheet pads its own content
-        "TaskConnectSheets.swift": 3,        // the Connect Jira and Connect GitLab sheets, and the
-                                             // one for the other sources: a sheet pads its own
-                                             // content
-        "TasksSettings.swift": 1,            // the estimate, add-time and end-time sheet
+        "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
     ]
 
     func testNoRowPadsItself() {

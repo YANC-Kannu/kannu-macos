@@ -94,6 +94,9 @@ struct AnimationEditorView: View {
         .frame(idealWidth: 980, idealHeight: 640)
         .frame(minWidth: 860, minHeight: 620)
         .fixedSize()
+        // A sheet is a window of its own, so it takes Brain's root itself; it keeps its own layout.
+        .background(SettingsTheme.panel)
+        .settingsDesignSystem()
         .alert("Import Error", isPresented: $showingError) {
             Button("OK") { }
         } message: {

@@ -631,15 +631,11 @@ private struct TaskValueSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text(heading)
-                .font(.headline)
+        SettingsSheet(heading, subtitle: Text(explanation)) {
             if let subject {
                 Text(verbatim: subject)
                     .settingsDescriptionStyle()
             }
-            Text(explanation)
-                .settingsDescriptionStyle()
             field
             // Only for a reminder that would notify: a muted task's re-timed reminder stays muted
             // (`setSchedule`), as on the task page and in New Task. The bell cannot change while the
@@ -649,38 +645,34 @@ private struct TaskValueSheet: View {
                 ReminderPermissionNote()
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
-                    Button("Remove Estimate") {
-                        onSave(.duration(nil))
-                        dismiss()
-                    }
+        } buttons: {
+            if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
+                Button("Remove Estimate") {
+                    onSave(.duration(nil))
+                    dismiss()
                 }
-                if case .schedule(_, _, .some) = sheet {
-                    Button("Clear Schedule") {
-                        onSave(.cleared)
-                        dismiss()
-                    }
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(primaryTitle) { save() }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isEstimate && estimate.estimateReading == .unreadable)
             }
+            if case .schedule(_, _, .some) = sheet {
+                Button("Clear Schedule") {
+                    onSave(.cleared)
+                    dismiss()
+                }
+            }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(primaryTitle) { save() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(isEstimate && estimate.estimateReading == .unreadable)
         }
         .onChange(of: estimate.estimateText) { _, _ in problem = nil }
         // macOS's answer may have changed since the list last asked: the note follows it.
         .onAppear {
             if case .schedule = sheet { TasksManager.shared.checkReminderPermission() }
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 380)
     }
 
     private var isEstimate: Bool {
