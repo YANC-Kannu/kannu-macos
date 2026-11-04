@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-01 - A new eye logo and a styled install window
+- **Developer label:** "unslop our logo during install"
+- **Agent label:** Claude Code (Opus 5.5) — one almond eye drawn by a CoreGraphics generator, and a paper-coloured drag-to-install window built with a hash-pinned `dmgbuild`
+- **Changes:**
+  - New logo: one almond eye (കണ്ണ് means eye) with a light outline and a solid blue pupil on a near-black
+    macOS icon shape, flat, replacing two tiny glowing eyes on a full-bleed black square that read as a
+    black square below 64 pt. The 16, 32 and 64 pixel files are redrawn with heavier lids and whole-pixel
+    edges, not scaled down.
+  - `scripts/brand/generate-brand-assets.swift` draws every size in `AppIcon.appiconset`, `logo2`,
+    `.github/assets/kannu-logo.png`, `VolumeIcon.icns` and the DMG background at 1x and 2x. Two runs are
+    byte-identical. `logo2` is edge to edge because `WelcomeView` supplies its own clip shape, so that view
+    needs no change.
+  - The DMG opens on a warm paper window: "To install, *drag* Kannu to Applications" in Instrument Serif, and
+    a drawn amber arrow from the app to the Applications folder. Instrument Serif and its licence live in
+    `scripts/brand/`, only the generator reads them, and nothing from that folder ships in the app.
+  - `scripts/create-dmg.sh` builds through `dmgbuild` and the new `scripts/dmg-settings.py`, which write the
+    Finder layout straight into `.DS_Store`: no Finder scripting and no Automation prompt. Its arguments and
+    its signing block are unchanged.
+  - `dmgbuild` is build-time only, pinned by hash in `scripts/dmg-requirements.txt`, and installed into a
+    temporary venv by the new `scripts/install-dmgbuild.sh`, which `build-dmg.sh`, `manual-release.sh` and the
+    release workflow all call. It needs Python 3.10 or newer, so the release workflow now sets up its own.
+  - `.gitignore` drops `*.txt`, which would have silently left out the font licence and the requirements file,
+    so both are excepted. `scripts/RELEASE.md` documents all of this.
+  - `BundledVideoTests` pinned the LFS pointer check to before `hdiutil create`, a line `create-dmg.sh` no
+    longer has. It now pins the check to before the `dmgbuild` run.
+
 ### 2026-11-02 - A preset block on a ticked task undoes the tick too
 - **Developer label:** CodeRabbit's third review of #11
 - **Agent label:** Claude Code (Opus 5.5) — `startBlock` cancels a pending done tick, as `start(_:)` now does
@@ -75,6 +101,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Extensions: a lock screen widget renders the payload its geometry comes from when two extensions send one id. A notch experience with no tab is refused and dropped from saved state, since nothing renders it.
   - The Cursor diagnostic counts accepted events, so a cache-read-only event no longer logs "0 usable".
   - The renamed Light Use description has its Korean, Dutch, Russian, Thai, Turkish and Simplified Chinese translations back, in the new wording.
+
 ### 2026-11-01 - Delete the last Git LFS pointers and the LFS rules
 - **Developer label:** "Clear the 12 Git LFS pointers whose objects are missing from this repo's LFS store, so the repo no longer depends on LFS"
 - **Agent label:** Claude Code (Opus 5.5) — the 12 unreferenced pointers and `.gitattributes` go; `BundledVideoTests` and the contributor docs stop assuming LFS rules exist
