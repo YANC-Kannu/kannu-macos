@@ -183,11 +183,10 @@ struct NewTaskSheet: View {
             .toggleStyle(.checkbox)
             .labeledContentStyle(.automatic)
             if draft.reminder != nil {
-                DatePicker("Remind me at", selection: Binding(
+                SettingsDateField("Remind me at", selection: Binding(
                     get: { draft.reminder ?? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) },
                     set: { newTask.draft.reminder = $0 }
-                ), in: Date()..., displayedComponents: [.date, .hourAndMinute])
-                .labelsHidden()
+                ), in: Date()...)
             }
         }
         if draft.reminder != nil {

@@ -182,6 +182,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
         "SettingsField.swift": 1,            // the field inside its chrome
         "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
+        "SettingsDateField.swift": 1,        // the date popover's content
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view

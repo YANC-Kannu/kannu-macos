@@ -1164,6 +1164,36 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: toggleStyle, by: Self.motionProblems)
     }
 
+    // MARK: - Dates
+
+    /// The files under Settings that build a `DatePicker`. Only the date field may: it holds the system's calendar
+    /// grid and time field inside our popover.
+    private static func filesBuildingADatePicker(in sources: [String: String]) -> [String] {
+        sources.filter { !SettingsLayoutRulesTests.nativeControlLines(in: $0.value, names: ["DatePicker"]).isEmpty }.keys.sorted()
+    }
+
+    func testADateIsOurs() throws {
+        let sources = try Self.sources()
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: sources), ["SettingsDateField.swift"])
+        XCTAssertEqual(SettingsLayoutRulesTests.nativeControlLines(in: try XCTUnwrap(sources["SettingsDateField.swift"]), names: ["DatePicker"]).count,
+                       2, "the calendar grid and the time field")
+
+        for planted in ["DatePicker(\"a\", selection: $d)", "SwiftUI.DatePicker(\"a\", selection: $d)", "DatePicker (\n    \"a\",\n    selection: $d)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": planted]), ["Page.swift"], planted)
+        }
+        for clean in ["SettingsDateField(\"a\", selection: $d, in: Date()...)", "// DatePicker(\"a\")", "Text(\"DatePicker(\")",
+                      ".datePickerStyle(.graphical)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": clean]), [], clean)
+        }
+
+        // A real sheet given its native picker back.
+        let tasks = try XCTUnwrap(sources["TasksSettings.swift"])
+        let field = try XCTUnwrap(tasks.range(of: "SettingsDateField("), "the value sheet has no date field to plant on")
+        var broken = sources
+        broken["TasksSettings.swift"] = tasks.replacingCharacters(in: field, with: "DatePicker(")
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: broken), ["SettingsDateField.swift", "TasksSettings.swift"])
+    }
+
     // MARK: - Licence
 
     private static func filesWithoutTheLicence(in sources: [String: String], licence: String) -> [String] {

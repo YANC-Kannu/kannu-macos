@@ -30,6 +30,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
 | A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
 | A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
+| A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker` |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
 | A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
 | A stepper row | `SettingsStepperRow` — the value then our `SettingsStepper`, same column; never `Stepper` |
@@ -55,8 +56,8 @@ component already does.
   `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
   control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
-  controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), and the shell's own views
-  (below).
+  controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), the date
+  (`SettingsDateField`), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
   it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
@@ -97,6 +98,7 @@ What stays native, and why:
 | System alerts and dialogs: `ModalPresenter`'s `NSAlert`, SwiftUI's `.alert` and `.confirmationDialog` | They cannot be restyled, and `ModalPresenter` is the only modal path (docs/REGRESSIONS.md, entry 14) |
 | File panels: `NSOpenPanel` through `ModalPresenter`, and `.fileImporter` | They cannot be restyled |
 | The colour panel | Never opened under Settings: the swatch's own popover replaced it |
+| The calendar grid and time field inside `SettingsDateField` | They cannot be restyled; the popover around them is ours |
 | A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
 | Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
 | All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |

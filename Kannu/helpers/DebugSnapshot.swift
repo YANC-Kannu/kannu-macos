@@ -86,6 +86,10 @@ enum DebugSnapshots {
             boards.append(("tagsSheet", AnyView(TaskTagsSheet(taskID: DebugSnapshotFixtures.localTaskID, title: "Write the release notes",
                                                              current: ["docs", "planning"], existing: TaskFacets.tags(in: fixture)))))
         }
+        if request.tabs == nil || request.tabs?.contains("valueSheet") == true {
+            // Set End Time: the date as our button. Its popover is a window of its own, so no board draws it open.
+            boards.append(("valueSheet", TasksSettings.snapshotEndTimeSheet()))
+        }
         if request.tabs == nil || request.tabs?.contains("urlImportSheet") == true {
             // A URL typed and no name yet, so Add is off.
             boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
@@ -274,7 +278,8 @@ enum DebugSnapshots {
     }
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
-                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet"]
+                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
+                                                       "valueSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset

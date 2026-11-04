@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's dates open its own popover
+- **Developer label:** Brain redesign plan: "the calendar grid inside our date popover"
+- **Agent label:** Claude Code (Opus 5.5) — our button and popover; the calendar grid and time field stay the system's
+- **Changes:**
+  - `SettingsDateField`: a button in our style with a calendar glyph and the date, opening our popover on the panel,
+    which holds the system's calendar grid over its time field. VoiceOver reads the title as its label and the full
+    date as its value. The popover closes when Brain does, like the select's.
+  - The three dates move to it: Set End Time and Schedule, each named by a `LabeledContent` beside it, and New
+    Task's reminder. The end time keeps its range, up to the next session and the sheet's own now.
+  - `SettingsDesignSystemRulesTests` allows a `DatePicker` only inside the date field, and `TaskTimeMathTests`
+    reads the end time's range from the field. `BrainShellRulesTests` keeps page knowledge out of it.
+  - New board `valueSheet`: Set End Time, the date as our button.
+  - docs/SETTINGS.md's component table and its native table name it; docs/REGRESSIONS.md entry 22's line says its
+    popover closes on disappear.
+
 ### 2026-11-05 - Brain's menus and plain buttons take its theme
 - **Developer label:** Brain redesign Stage 3: "`SettingsMoreMenu`"
 - **Agent label:** Claude Code (Opus 5.5) — our trigger over a native menu; `.bordered` becomes the standard button and `.borderless` a quiet one

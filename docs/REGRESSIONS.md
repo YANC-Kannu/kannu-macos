@@ -1600,7 +1600,8 @@ springs, on its zoom and its resets, are now a bounded ease, nil under Reduce Mo
 **2026-11-05 addendum: Brain's sheets re-apply the root and add no `onAppear`, no `.task` and no animator.** A sheet is a
 window of its own, so `SettingsSheet`, the animation editor and Spotify's sign-in apply `settingsDesignSystem()`
 themselves; the sheets keep the hooks they had (Add Tags' and New Task's first focus, the Schedule sheet's permission
-check, the Connect sheets' cancel), so the rest of this entry holds.
+check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
+select's.
 
 ---
 
