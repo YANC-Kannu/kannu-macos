@@ -32,8 +32,8 @@ import XCTest
 ///    a row that quietly lost copyability.
 /// 4. The shared components themselves keep their `.textSelection`, so a refactor cannot strip
 ///    selectability from every user at once.
-/// 5. The content standard, pinned the same way: no ad-hoc font on row text, no hand-built
-///    `Slider`, no padding on a row. Each is a per-file count with a reason, so the survivors are
+/// 5. The content standard, pinned the same way: no ad-hoc font on row text, no slider or stepper
+///    built by hand, no padding on a row. Each is a per-file count with a reason, so the survivors are
 ///    a deliberate list (cards, chips, previews, popovers) and a new one is an edit here.
 final class SettingsLayoutRulesTests: XCTestCase {
 
@@ -138,18 +138,20 @@ final class SettingsLayoutRulesTests: XCTestCase {
                            cure: "row text uses the root's body type, and every secondary line goes through settingsDescriptionStyle()")
     }
 
-    /// Lines building a `Slider` by hand. `SettingsSliderRow` is the only shape a Settings *row*
-    /// may use, so these are the ones that are not rows.
-    private static let pinnedInlineSliderCounts: [String: Int] = [
-        "AnimationEditorView.swift": 3,      // the animation editor sheet
-        "SettingsComponents.swift": 2,       // SettingsSliderRow itself, stepped and unstepped
+    /// Lines building a slider or a stepper by hand, ours or native. `SettingsSliderRow` and
+    /// `SettingsStepperRow` are the only shapes a Settings *row* may use, so these are the ones that
+    /// are not rows.
+    private static let pinnedHandBuiltValueControlCounts: [String: Int] = [
+        "AnimationEditorView.swift": 2,      // the editor sheet: the preview's zoom, and ParameterSliderRow's
+        "SettingsComponents.swift": 2,       // SettingsSliderRow and SettingsStepperRow themselves
         "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
+        "TimerSettings.swift": 1,            // a preset's hours, minutes and seconds, one control for the three
     ]
 
-    func testNoSliderIsBuiltByHandInARow() {
-        assertPinnedCounts(Self.pinnedInlineSliderCounts, scanner: Self.inlineSliderLines,
-                           rule: "a hand-built Slider",
-                           cure: "a slider row is SettingsSliderRow — one width, one readout column")
+    func testNoValueControlIsBuiltByHandInARow() {
+        assertPinnedCounts(Self.pinnedHandBuiltValueControlCounts, scanner: Self.handBuiltValueControlLines,
+                           rule: "a slider or stepper built by hand",
+                           cure: "a slider row is SettingsSliderRow and a stepper row SettingsStepperRow — one width, one readout column")
     }
 
     /// Lines adding padding. A grouped `Form` pads its own rows, so padding here belongs to a
@@ -198,23 +200,26 @@ final class SettingsLayoutRulesTests: XCTestCase {
                            cure: "a row in a grouped Form adds none — the Form pads it")
     }
 
-    // MARK: - Rule 6: a choice is ours
+    // MARK: - Rule 6: a choice, a slider and a stepper are ours
 
-    /// Lines building a native choice control. SwiftUI on macOS 14 has no custom picker style, so a choice
-    /// under Settings is `SettingsSelect` (docs/SETTINGS.md, "Choices"), and these are the ones that cannot be.
+    /// Lines building a native choice or value control. SwiftUI on macOS 14 has no custom picker, slider or
+    /// stepper style, so under Settings a choice is `SettingsSelect` (docs/SETTINGS.md, "Choices") and a value
+    /// `SettingsSlider` or `SettingsStepper` ("Values and fields"), and these are the ones that cannot be.
     private static let pinnedNativeControlCounts: [String: Int] = [
         // The filter menu's ticked submenus: native inside a native Menu; Stage 5 rebuilds the page with
         // SettingsSelect (plan:75).
         "AllTasksPage.swift": 4,
     ]
 
-    func testNoNativeChoiceControlIsBuiltUnderSettings() throws {
-        assertPinnedCounts(Self.pinnedNativeControlCounts, scanner: { Self.nativeControlLines(in: $0, names: ["Picker"]) },
-                           rule: "a native Picker",
-                           cure: "a choice is SettingsSelect in a SettingsRow, `choices:` for literal options")
+    private static let nativeControlNames = ["Picker", "Slider", "Stepper"]
+
+    func testNoNativeChoiceOrValueControlIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeControlCounts, scanner: { Self.nativeControlLines(in: $0, names: Self.nativeControlNames) },
+                           rule: "a native Picker, Slider or Stepper",
+                           cure: "a choice is SettingsSelect in a SettingsRow, `choices:` for literal options; a value is SettingsSliderRow or SettingsStepperRow")
         // A floor: the four pinned pickers are still there, so a pattern gone blind fails here.
-        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeControlLines(in: $1, names: ["Picker"]).count }
-        XCTAssertGreaterThan(found, 0, "the scan found no Picker: the pattern went blind")
+        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeControlLines(in: $1, names: Self.nativeControlNames).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no native control: the pattern went blind")
 
         for planted in ["Picker(\"a\", selection: $a) {}", "Picker(\n    \"a\",\n    selection: $a\n) {}",
                         "Picker (\"a\", selection: $a) {}", "SwiftUI.Picker(\"a\", selection: $a) {}",
@@ -233,6 +238,22 @@ final class SettingsLayoutRulesTests: XCTestCase {
         let first = try XCTUnwrap(agents.range(of: "SettingsSelect("), "the Agents page has no select to plant on")
         let planted = agents.replacingCharacters(in: first, with: "Picker(")
         XCTAssertEqual(Self.nativeControlLines(in: planted, names: ["Picker"]).count, 1)
+
+        // Sliders and steppers, ours passing and Apple's caught, the same way.
+        for planted in ["Slider(value: $x, in: 0...1)", "Stepper(value: $v, in: 0...9) {}", "Stepper(\"a\", value: $v)",
+                        "SwiftUI.Slider(value: $x, in: 0...1)"] {
+            XCTAssertEqual(Self.nativeControlLines(in: planted, names: Self.nativeControlNames).count, 1, planted)
+        }
+        for clean in ["SettingsSlider(value: $x, in: 0...1) { Text(\"a\") }", "SettingsSliderRow(\"a\", value: $x, in: 0...1, valueText: nil)",
+                      "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }",
+                      "SettingsStepperRow(\"a\", value: $v, in: 0...9, valueText: Text(\"b\"))", "Text(\"Slider color\")"] {
+            XCTAssertEqual(Self.nativeControlLines(in: clean, names: Self.nativeControlNames), [], clean)
+        }
+        // A real page, one slider put back.
+        let osd = try XCTUnwrap(Self.settingsSources()["CustomOSDSettings.swift"])
+        let slider = try XCTUnwrap(osd.range(of: "SettingsSlider("), "the Custom OSD page has no slider to plant on")
+        XCTAssertEqual(Self.nativeControlLines(in: osd.replacingCharacters(in: slider, with: "Slider("),
+                                               names: Self.nativeControlNames).count, 1)
     }
 
     /// One entry per line holding a call of one of `names`, read with comments and strings blanked:
@@ -370,9 +391,12 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.micro)").count, 1)
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.body)").count, 0)
 
-        XCTAssertEqual(Self.inlineSliderLines(in: "Slider(value: $x, in: 0...1)").count, 1)
-        XCTAssertEqual(Self.inlineSliderLines(in: "// Slider(value: $x, in: 0...1)").count, 0)
-        XCTAssertEqual(Self.inlineSliderLines(in: "SettingsSliderRow(\"T\", value: $x, in: 0...1, valueText: nil)").count, 0)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Slider(value: $x, in: 0...1)").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "// Slider(value: $x, in: 0...1)").count, 0)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSliderRow(\"T\", value: $x, in: 0...1, valueText: nil)").count, 0)
+        // Ours, by hand, count once each: only a row is not hand-built.
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider(value: $x, in: 0...1)").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }").count, 1)
 
         XCTAssertEqual(Self.paddingLines(in: ".padding(.vertical, 8)").count, 1)
         XCTAssertEqual(Self.paddingLines(in: "// .padding(12)").count, 0)
@@ -380,7 +404,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
 
         // The same offenders, wrapped the way a long call is usually written. A rule that only
         // reads one physical line at a time is one reformat away from being switched off.
-        XCTAssertEqual(Self.inlineSliderLines(in: """
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: """
         Slider(
             value: $value,
             in: range
@@ -397,7 +421,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
                 .vertical, 8)
         """).count, 1)
         // Joining lines must not join across a comment that sits inside the call.
-        XCTAssertEqual(Self.inlineSliderLines(in: """
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: """
         Slider(
             // value comes from the binding above
             value: $value, in: range)
@@ -499,9 +523,12 @@ final class SettingsLayoutRulesTests: XCTestCase {
         }
     }
 
-    /// Non-comment lines building a `Slider` directly.
-    private static func inlineSliderLines(in text: String) -> [String] {
-        matchingLines(in: text) { $0.contains("Slider(value:") }
+    /// Non-comment lines building a slider or a stepper directly, Apple's or ours: `Slider(value:`,
+    /// `SettingsSlider(value:`, `Stepper(value:` and `SettingsStepper(value:`, never a row.
+    private static func handBuiltValueControlLines(in text: String) -> [String] {
+        matchingLines(in: text) {
+            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\(value:"#, options: .regularExpression) != nil
+        }
     }
 
     /// Non-comment lines adding padding.

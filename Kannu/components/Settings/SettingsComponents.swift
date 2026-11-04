@@ -283,8 +283,7 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
     var body: some View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                slider
-                    .labelsHidden()
+                SettingsSlider(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
                 if let valueText {
                     valueText
                         .monospacedDigit()
@@ -301,15 +300,6 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
             .frame(width: SettingsMetrics.sliderWidth)
         } label: {
             label
-        }
-    }
-
-    @ViewBuilder
-    private var slider: some View {
-        if let step {
-            Slider(value: $value, in: range, step: step) { accessibilityTitle }
-        } else {
-            Slider(value: $value, in: range) { accessibilityTitle }
         }
     }
 }
@@ -375,8 +365,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(minWidth: SettingsMetrics.valueColumn, alignment: .trailing)
-                Stepper(value: $value, in: range, step: step) { accessibilityTitle }
-                    .labelsHidden()
+                SettingsStepper(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
             }
             // The same trailing column a slider row uses, so a section holding both bounds its
             // label column at one width and their descriptions wrap the same way.

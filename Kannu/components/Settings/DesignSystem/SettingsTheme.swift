@@ -129,6 +129,18 @@ enum SettingsTheme {
     static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
     static let focusRingWidth: CGFloat = 2
 
+    // MARK: - Values
+
+    static let sliderTrackHeight: CGFloat = 4
+    /// The slider's knob, and so the slider's height.
+    static let sliderKnob: CGFloat = 16
+    /// How far an arrow key or VoiceOver's adjust moves a slider that has no step: this much of its range.
+    static let sliderKeyboardFraction = 0.05
+    static let stepperButtonWidth: CGFloat = 22
+    static let stepperHeight: CGFloat = 22
+    /// A divider's width.
+    static let hairline: CGFloat = 1
+
     private static func sans(_ size: CGFloat, _ weight: Font.Weight, _ name: String) -> Font {
         geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)
     }
