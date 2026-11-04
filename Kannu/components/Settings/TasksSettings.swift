@@ -704,6 +704,7 @@ private struct TaskValueSheet: View {
             TextField("Length", text: $text, prompt: Text("1h 30m"))
                 .onSubmit(save)
                 .onChange(of: text) { _, _ in problem = nil }
+                .settingsField()
         }
     }
 

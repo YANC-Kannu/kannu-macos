@@ -651,6 +651,116 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: field, by: Self.fieldProblems)
     }
 
+    // MARK: - Values
+
+    /// What the slider and the stepper keep: one element for VoiceOver with a label, a value and an adjustable
+    /// action; the keyboard under Full Keyboard Access only; one dim of their own and no `.plain` second one; and
+    /// nothing moves them while disabled, VoiceOver's adjust included. The slider also takes no drag on a track
+    /// with no room to travel.
+    private static func valueControlProblems(in control: String, isSlider: Bool) -> [String] {
+        var required = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(label)",
+                        ".accessibilityElement(children: .ignore)", ".onKeyPress(keys:", ".focusable(isEnabled, interactions: .activate)",
+                        "guard isEnabled else { return }"]
+        if isSlider {
+            // Right to left it is drawn left to right inside and mirrored whole, its arrows with it.
+            required += ["guard isEnabled, travel > 0", #".environment(\.layoutDirection, .leftToRight)"#,
+                         ".flipsForRightToLeftLayoutDirection(true)",
+                         "(press.key == .rightArrow) == (layoutDirection == .leftToRight)"]
+        } else {
+            // − and + are not stops of their own: the stepper is one.
+            required.append(".focusable(false)")
+        }
+        var problems = required.filter { !control.contains($0) }
+        if control.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled control needs exactly one dim of its own")
+        }
+        if control.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled button a second time") }
+        return problems
+    }
+
+    func testTheValueControlsKeepKeyboardAndVoiceOver() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        let shared: [(from: String, to: String)] = [
+            (".accessibilityAdjustableAction", ".accessibilityAction"), (".accessibilityValue(", ".accessibilityHint("),
+            (".accessibilityLabel(label)", ".accessibilityHidden(true)"),
+            (".accessibilityElement(children: .ignore)", ".accessibilityElement(children: .contain)"),
+            (".onKeyPress(keys:", ".onKeyPress(characters:"), (".focusable(isEnabled, interactions: .activate)", ".focusable(interactions: .activate)"),
+            ("guard isEnabled else { return }", ""), (dim, ""), (dim, dim + dim),
+        ]
+
+        let slider = try XCTUnwrap(sources["SettingsSlider.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: slider, isSlider: true), [])
+        Self.assertCaught(shared + [("guard isEnabled, travel > 0", "guard travel > 0"),
+                                     (".flipsForRightToLeftLayoutDirection(true)", ""),
+                                     (#".environment(\.layoutDirection, .leftToRight)"#, ""),
+                                     ("(press.key == .rightArrow) == (layoutDirection == .leftToRight)",
+                                      "press.key == .rightArrow")],
+                          in: slider,
+                          by: { Self.valueControlProblems(in: $0, isSlider: true) })
+
+        let stepper = try XCTUnwrap(sources["SettingsStepper.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: stepper, isSlider: false), [])
+        Self.assertCaught(shared + [(".buttonStyle(PressStyle())", ".buttonStyle(.plain)"), (".focusable(false)", "")],
+                          in: stepper,
+                          by: { Self.valueControlProblems(in: $0, isSlider: false) })
+    }
+
+    // MARK: - Fields
+
+    /// The two fields that keep chrome of their own: the sidebar search's, around a glyph and a clear button, and a
+    /// local task's title, typed in place in the body font so it still reads as the row's title (docs/SETTINGS.md).
+    private static let pinnedFieldsWithoutTheChrome = ["SettingsView.swift": 1, "TaskDetailPage.swift": 1]
+
+    /// The start of each `TextField` or `SecureField` call whose own chain has no `.settingsField(`, or sets focus
+    /// after it, or keeps its own focus while the chrome tracks focus as well: two focus bindings on one field. A
+    /// field with its own `.focused` passes it in (`isFocused:`).
+    private static func fieldChromeProblems(in code: String) -> [String] {
+        ["TextField", "SecureField"].flatMap { name in
+            calls(of: name, in: code) { chain in
+                guard let chrome = chain.range(of: ".settingsField(") else { return true }
+                if chain[chrome.upperBound...].contains(".focused(") { return true }
+                return chain[..<chrome.lowerBound].contains(".focused(") && !chain[chrome.lowerBound...].hasPrefix(".settingsField(isFocused:")
+            }
+        }
+    }
+
+    func testEveryFieldWearsTheChrome() throws {
+        var fields = 0
+        for (name, source) in try Self.sources() {
+            let code = Self.code(source)
+            fields += Self.openers(of: "TextField", in: code).count + Self.openers(of: "SecureField", in: code).count
+            XCTAssertEqual(Self.fieldChromeProblems(in: code).count, Self.pinnedFieldsWithoutTheChrome[name] ?? 0,
+                           "\(name): a field wears `.settingsField()` last on its own chain: \(Self.fieldChromeProblems(in: code))")
+        }
+        XCTAssertGreaterThan(fields, 0, "the scan found no field: the pattern went blind")
+
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .onSubmit { b() }\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .settingsField()\n    .focused($x)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField(isFocused: x)\n").count, 0)
+        // The chrome on the next view, or inside the field's label, is not on the field.
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\nText(\"b\")\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(text: $a) {\n    Text(\"a\").settingsField()\n}\n").count, 1)
+
+        Self.assertCaught([(".settingsField()", "")], in: Self.code(try XCTUnwrap(try Self.sources()["AgentStatusSettings.swift"])),
+                          by: Self.fieldChromeProblems)
+    }
+
+    func testOnlyTheFieldSetsAFieldStyle() throws {
+        // The chrome sets `.plain` inside; the two fields with chrome of their own, pinned above, set it themselves.
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: try Self.sources()),
+                       ["SettingsField.swift", "SettingsView.swift", "TaskDetailPage.swift"])
+
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n"]),
+                       ["Page.swift"])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .settingsField()\n"]), [])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "// .textFieldStyle(.plain) is the chrome's\n"]), [])
+    }
+
     // MARK: - A popover closes with Brain
 
     /// The flags of `.popover(isPresented: $flag` that no `.onDisappear` in the same file sets to false. Closing

@@ -521,8 +521,8 @@ private struct TimerPresetEditorRow: View {
                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
                     )
 
-                TextField("Preset name", text: $preset.name)
-                    .textFieldStyle(.roundedBorder)
+                TextField("Preset name", text: $preset.name, prompt: Text("Preset name"))
+                    .settingsField()
 
                 Spacer()
 
@@ -598,10 +598,7 @@ private struct TimerPresetComponentControl: View {
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .textSelection(.enabled)
             }
-            Stepper(value: $value, in: range) {
-                Text(title)
-            }
-            .labelsHidden()
+            SettingsStepper(value: $value, in: range, valueDescription: Text("\(value)")) { Text(title) }
         }
         .frame(width: 110, alignment: .leading)
     }

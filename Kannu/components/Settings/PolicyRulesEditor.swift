@@ -87,10 +87,13 @@ struct PolicyRulesEditor: View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
             SettingsSelect("Kind", selection: row.kind,
                            choices: [.command: String(localized: "Command"), .tool: String(localized: "Tool")])
-            TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text)
+            TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text,
+                      prompt: Text(verbatim: row.wrappedValue.kind == .command ? "ssh" : "WebFetch"))
                 .font(SettingsTheme.mono)
                 .frame(width: 170)
-            TextField("Reason (optional)", text: row.reason)
+                .settingsField()
+            TextField("Reason (optional)", text: row.reason, prompt: Text("Reason (optional)"))
+                .settingsField()
             Button {
                 draft.removeRow(row.wrappedValue.id)
             } label: {

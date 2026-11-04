@@ -57,9 +57,9 @@ final class BrainShellRulesTests: XCTestCase {
     }
 
     func testTheShellAndItsRowsKnowNoPage() throws {
-        // The select, its list and the field too: a page hands them their data.
+        // The select, its list, the field, the slider and the stepper too: a page hands them their data.
         for name in ["BrainShell.swift", "SettingsSidebarRow.swift", "SettingsSelect.swift", "SettingsSelectList.swift",
-                     "SettingsField.swift"] {
+                     "SettingsField.swift", "SettingsSlider.swift", "SettingsStepper.swift"] {
             XCTAssertEqual(Self.pageKnowledge(in: try Self.code("DesignSystem/" + name)), [], name)
         }
 

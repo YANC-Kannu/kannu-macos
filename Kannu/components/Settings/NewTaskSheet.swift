@@ -73,8 +73,6 @@ struct NewTaskSheet: View {
             }
 
             TextField("Title", text: $newTask.draft.title, prompt: Text("What needs doing?"))
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
                 .focused($focused, equals: .title)
                 .onSubmit { add(andStart: false) }
                 // `#tag` and `@time` typed in the title (`TaskQuickAdd`), shown inside its end.
@@ -88,6 +86,7 @@ struct NewTaskSheet: View {
                     let folded = newTask.draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
                     if folded != newTask.draft { newTask.draft = folded }
                 }
+                .settingsField(isFocused: focused == .title)
             if let existing = TaskItem.reusable(titled: TaskQuickAdd.title(of: draft.title), in: manager.tasks) {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     Text(verbatim: String(localized: "“\(existing.title)” is already in your list."))
@@ -103,11 +102,10 @@ struct NewTaskSheet: View {
             GoldenRow(spacing: SettingsMetrics.rowContent) {
                 TaskEstimateField(draft: $newTask.draft, onSubmit: { add(andStart: false) })
                 TextField("Tags", text: $newTask.draft.tagsText, prompt: Text("Tags, comma separated"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
                     .focused($focused, equals: .tags)
                     .onSubmit(submitTags)
                     .help(Text("The first tag sets the task's colour"))
+                    .settingsField(isFocused: focused == .tags)
             }
             if !tagOffers.isEmpty {
                 tagOfferChips

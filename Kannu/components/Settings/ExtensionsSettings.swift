@@ -119,8 +119,8 @@ struct ExtensionsSettingsView: View {
                 .padding(.vertical, 40)
             } else {
                 if authManager.entries.count > 3 {
-                    TextField("Search extensions...", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                    TextField("Search extensions...", text: $searchText, prompt: Text("Search extensions..."))
+                        .settingsField()
                 }
                 
                 ForEach(filteredEntries) { entry in

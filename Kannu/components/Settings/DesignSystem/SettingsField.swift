@@ -47,7 +47,7 @@ struct SettingsField: ViewModifier {
         .background(Self.shape.fill(SettingsTheme.card))
         .overlay(Self.shape.strokeBorder(SettingsTheme.line))
         .overlay {
-            if isFocused ?? tracksFocus {
+            if isEnabled, isFocused ?? tracksFocus {
                 Self.shape.strokeBorder(SettingsTheme.accentStrong, lineWidth: SettingsTheme.focusRingWidth)
             }
         }
