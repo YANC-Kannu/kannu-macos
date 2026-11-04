@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Answer CodeRabbit's first review of the Brain shell
+- **Developer label:** "Yes, and queue #21"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's first review of Super 2b; the rest answered on the PR
+- **Changes:**
+  - Brain's queued close checks for a full-screen transition that began after it was queued, as the entry's
+    queued exit already did: the flag stays set, and that transition's end closes Brain.
+    `SettingsAnimationRulesTests` pins the check and plants its removal.
+  - The sidebar's Back row has a catalog entry, translated into the catalog's 17 other languages.
+  - Russian "Lock screen" reads "Экран блокировки". It read "Загрузка..." ("Loading..."), carried over from the
+    old "Lock Screen" key.
+  - `BrainPathRulesTests` scans every line for a Brain path, not only lines with a quote, and
+    `GeistBundleRulesTests` keeps a font with no PostScript name, so the name check fails for it.
+
 ### 2026-11-04 - Brain's pickers become its own choice control
 - **Developer label:** Brain redesign plan: "SwiftUI has no custom picker style, so the 77 `Picker`s become `SettingsSelect`"
 - **Agent label:** Claude Code (Opus 5.5) — 70 pickers moved, 59 by script; All tasks' filter menu waits for Stage 5; a bare `Picker(` now fails a test

@@ -45,7 +45,7 @@ final class GeistBundleRulesTests: XCTestCase {
             XCTAssertEqual([UInt8](data.prefix(4)), [0x00, 0x01, 0x00, 0x00], "\(file.lastPathComponent) is not a TrueType font")
             let font = try XCTUnwrap(CGDataProvider(data: data as CFData).flatMap { CGFont($0) },
                                      "\(file.lastPathComponent) does not load as a font")
-            faces[file.deletingPathExtension().lastPathComponent] = font.postScriptName as String?
+            faces[file.deletingPathExtension().lastPathComponent] = (font.postScriptName as String?) ?? "<no PostScript name>"
         }
         return faces
     }
