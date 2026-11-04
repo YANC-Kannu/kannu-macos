@@ -4,6 +4,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-04 - Brain's sliders and steppers become its own
+- **Developer label:** Brain redesign Stage 3: "`SettingsSlider` (inside `SettingsSliderRow`), `SettingsStepper`"
+- **Agent label:** Claude Code (Opus 5.5) — label, value and an adjustable action for VoiceOver; arrows, Home and End; one edit covers every row
+- **Changes:**
+  - `SettingsSlider`: a track filled with the accent up to a knob, whose `controlOff` stroke shows it on the light
+    panel. A click on the track jumps the knob and a drag moves it; a step snaps from the lower bound, and only a
+    change is written. No animation. Right to left it is drawn mirrored, as a native slider is.
+  - `SettingsStepper`: − and + in one capsule. A button at its end of the range turns `controlOff` and is disabled,
+    a colour rather than a second dim. No press-and-hold repeat.
+  - Each is one VoiceOver element with a label, a value and an adjustable action, and a Tab stop only under Full
+    Keyboard Access. The slider takes ← → (mirrored right to left), ↑ ↓, Home and End, and the stepper ↑ ↓. A
+    disabled one ignores keys and VoiceOver's adjust, and dims once.
+  - `SettingsSliderRow` and `SettingsStepperRow` draw them, so one edit covers the 17 slider rows and the 4 stepper
+    rows; the readout column and the 220-pt width stay. By hand: Custom OSD's preview slider, now labelled "Live
+    Preview"; the animation editor's preview zoom, labelled "Preview Zoom", and its `ParameterSliderRow`; and a
+    timer preset's hours, minutes and seconds.
+  - The animation editor's four springs, on its zoom and its resets, become a bounded ease, nil under Reduce
+    Motion.
+  - Theme tokens "Values": `sliderTrackHeight`, `sliderKnob`, `sliderKeyboardFraction`, `stepperButtonWidth`,
+    `stepperHeight` and `hairline`.
+  - `SettingsLayoutRulesTests` bans `Slider(` and `Stepper(` under Settings beside `Picker(`, with plants, a floor
+    and a slider put back on a real page. Its hand-built rule counts ours too, pinned at the four hand sites and the
+    two rows. `SettingsDesignSystemRulesTests` holds both controls' VoiceOver, keyboard, one dim and disabled guard,
+    and `BrainShellRulesTests` keeps page knowledge out of them.
+  - The designSystem board gains "Values": a stepped, an unstepped and a disabled slider; a stepper in the middle,
+    at its minimum and disabled; and fields in rows, typed, secure with a prompt, vertical and disabled.
+  - From the keyboard and VoiceOver review: a disabled slider or stepper is not a Tab stop, the hand-built
+    sliders (zoom, the animation parameters, Live Preview) give VoiceOver their readout, and the rules pin the
+    right-to-left mirroring and the stepper's single stop.
+
 ### 2026-11-04 - Answer CodeRabbit's first review of the Brain shell
 - **Developer label:** "Yes, and queue #21"
 - **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's first review of Super 2b; the rest answered on the PR

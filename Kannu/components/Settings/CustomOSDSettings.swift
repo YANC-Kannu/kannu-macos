@@ -186,7 +186,10 @@ struct CustomOSDSettings: View {
                         }
                         .controlSize(.small)
                             
-                        Slider(value: $previewValue, in: 0...1)
+                        SettingsSlider(value: $previewValue, in: 0...1,
+                                       valueDescription: Text(Double(previewValue), format: .percent.precision(.fractionLength(0)))) {
+                            Text("Live Preview")
+                        }
                             .frame(width: 160)
                     }
                     .padding(.vertical, 12)

@@ -22,6 +22,7 @@ import Defaults
 
 struct AnimationEditorView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     let sourceURL: URL
     let isRemoteURL: Bool
@@ -204,7 +205,7 @@ struct AnimationEditorView: View {
             }
             HStack(spacing: 10) {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = max(1, previewScale - 1)
                     }
                 } label: {
@@ -214,10 +215,10 @@ struct AnimationEditorView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
-                Slider(value: $previewScale, in: 1...10)
+                SettingsSlider(value: $previewScale, in: 1...10, valueDescription: Text("\(Int(previewScale))x")) { Text("Preview Zoom") }
                 
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = min(10, previewScale + 1)
                     }
                 } label: {
@@ -228,7 +229,7 @@ struct AnimationEditorView: View {
                 .controlSize(.mini)
                 
                 Button("Reset") {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = 10
                     }
                 }
@@ -587,6 +588,7 @@ private struct ParameterSliderRow: View {
     var resetLabel: String? = nil
     var resetValue: CGFloat? = nil
     var step: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -604,7 +606,7 @@ private struct ParameterSliderRow: View {
                 slider
                 if let resetLabel, let resetValue {
                     Button(resetLabel) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                             value = resetValue
                         }
                     }
@@ -622,11 +624,8 @@ private struct ParameterSliderRow: View {
             set: { value = CGFloat($0) }
         )
         let bounds = Double(range.lowerBound)...Double(range.upperBound)
-        if let step {
-            Slider(value: binding, in: bounds, step: Double(step))
-        } else {
-            Slider(value: binding, in: bounds)
-        }
+        SettingsSlider(value: binding, in: bounds, step: step.map { Double($0) },
+                       valueDescription: Text(formatter(value))) { Text(title) }
     }
 }
 

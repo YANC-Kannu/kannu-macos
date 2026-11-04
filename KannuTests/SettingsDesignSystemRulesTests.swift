@@ -651,6 +651,61 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: field, by: Self.fieldProblems)
     }
 
+    // MARK: - Values
+
+    /// What the slider and the stepper keep: one element for VoiceOver with a label, a value and an adjustable
+    /// action; the keyboard under Full Keyboard Access only; one dim of their own and no `.plain` second one; and
+    /// nothing moves them while disabled, VoiceOver's adjust included. The slider also takes no drag on a track
+    /// with no room to travel.
+    private static func valueControlProblems(in control: String, isSlider: Bool) -> [String] {
+        var required = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(label)",
+                        ".accessibilityElement(children: .ignore)", ".onKeyPress(keys:", ".focusable(isEnabled, interactions: .activate)",
+                        "guard isEnabled else { return }"]
+        if isSlider {
+            // Right to left it is drawn left to right inside and mirrored whole, its arrows with it.
+            required += ["guard isEnabled, travel > 0", #".environment(\.layoutDirection, .leftToRight)"#,
+                         ".flipsForRightToLeftLayoutDirection(true)",
+                         "(press.key == .rightArrow) == (layoutDirection == .leftToRight)"]
+        } else {
+            // − and + are not stops of their own: the stepper is one.
+            required.append(".focusable(false)")
+        }
+        var problems = required.filter { !control.contains($0) }
+        if control.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled control needs exactly one dim of its own")
+        }
+        if control.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled button a second time") }
+        return problems
+    }
+
+    func testTheValueControlsKeepKeyboardAndVoiceOver() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        let shared: [(from: String, to: String)] = [
+            (".accessibilityAdjustableAction", ".accessibilityAction"), (".accessibilityValue(", ".accessibilityHint("),
+            (".accessibilityLabel(label)", ".accessibilityHidden(true)"),
+            (".accessibilityElement(children: .ignore)", ".accessibilityElement(children: .contain)"),
+            (".onKeyPress(keys:", ".onKeyPress(characters:"), (".focusable(isEnabled, interactions: .activate)", ".focusable(interactions: .activate)"),
+            ("guard isEnabled else { return }", ""), (dim, ""), (dim, dim + dim),
+        ]
+
+        let slider = try XCTUnwrap(sources["SettingsSlider.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: slider, isSlider: true), [])
+        Self.assertCaught(shared + [("guard isEnabled, travel > 0", "guard travel > 0"),
+                                     (".flipsForRightToLeftLayoutDirection(true)", ""),
+                                     (#".environment(\.layoutDirection, .leftToRight)"#, ""),
+                                     ("(press.key == .rightArrow) == (layoutDirection == .leftToRight)",
+                                      "press.key == .rightArrow")],
+                          in: slider,
+                          by: { Self.valueControlProblems(in: $0, isSlider: true) })
+
+        let stepper = try XCTUnwrap(sources["SettingsStepper.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: stepper, isSlider: false), [])
+        Self.assertCaught(shared + [(".buttonStyle(PressStyle())", ".buttonStyle(.plain)"), (".focusable(false)", "")],
+                          in: stepper,
+                          by: { Self.valueControlProblems(in: $0, isSlider: false) })
+    }
+
     // MARK: - A popover closes with Brain
 
     /// The flags of `.popover(isPresented: $flag` that no `.onDisappear` in the same file sets to false. Closing
