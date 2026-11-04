@@ -29,7 +29,7 @@ struct SettingsPageHeader: View {
             .textSelection(.enabled)
             .accessibilityAddTraits(.isHeader)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, SettingsTheme.pageInset)
-            .padding(.top, SettingsTheme.pageInset)
+            .padding(.horizontal, SettingsTheme.formMargin)
+            .padding(.top, SettingsTheme.pageHeaderTop)
     }
 }

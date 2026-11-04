@@ -121,8 +121,13 @@ arrow keys and hover take a real window.
 ## The window
 
 - **Sizes.** It opens at 1100×760 and goes down to 820×560, centred on the screen under the pointer and
-  clamped to it. A page stops at 720 pt, centred in the panel, so a row does not stretch across a
-  full-screen panel. The values are `SettingsTheme`'s `window…` tokens and `pageMaxWidth`. The root's frame
+  clamped to it. A page stops at 720 pt, so a row does not stretch across a full-screen panel, and it is
+  never centred: it starts 32 pt from the panel's leading edge, or 48 pt on a panel 1,000 pt or wider, so a
+  full-screen panel's spare width gathers on the right instead of on both sides of a floating column.
+  `SettingsForm` pads the page by the inset less `formMargin`, the grouped `Form`'s own 20 pt margin, so
+  titles and cards line up. Its title is 24 pt on every page, its cap height 44 pt below the panel's top. The
+  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`,
+  `formMargin` and `pageHeaderTop`. The root's frame
   has a minimum and no maximum, because SwiftUI's size bridge clamps the window to it (`docs/REGRESSIONS.md`,
   entry 17).
 - **Transparent title bar.** The title is hidden, and kept for the Window menu and Mission Control. The shell's
@@ -140,8 +145,9 @@ arrow keys and hover take a real window.
   macOS. `BrainAppearanceRulesTests` holds this.
 
 A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
-enter full screen: `shellWide`, at 1440×900, stands in for it. Pages render at 612 pt, the narrowest panel
-the window can have. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
+enter full screen: `shellWide`, at 1440×900, stands in for it. Tabs render at 612 pt, the narrowest panel
+the window can have, through `SettingsForm`, which pads them; a board of a bare `Form` renders at 588 pt, the
+page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
 the least room.
 
 ## The content standard

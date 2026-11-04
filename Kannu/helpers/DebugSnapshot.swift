@@ -139,9 +139,11 @@ enum DebugSnapshots {
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
                     .settingsDesignSystem())
-                // A page at the narrowest panel the window can have. The rules sheet sets its own width,
+                // A page at the narrowest panel the window can have: a tab through `SettingsForm`, which pads
+                // it, and a bare `Form` at the width that padding leaves. The rules sheet sets its own width,
                 // which 490 would crop on both sides.
-                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490) : narrowestPanel
+                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490)
+                    : throughTheForm.contains(name) ? narrowestPanel : narrowestPage
                 // A page's `Form` has no background of its own now, so it needs the panel behind it.
                 // Sheets and onboarding do not sit on the panel.
                 let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
@@ -248,6 +250,10 @@ enum DebugSnapshots {
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
+    /// What `SettingsForm` leaves a page of that panel: its padding is the page inset less the `Form`'s own margin.
+    private static let narrowestPage = narrowestPanel - 2 * (SettingsTheme.pageInset - SettingsTheme.formMargin)
+    /// The boards drawn through `SettingsForm`, which pads them itself: every tab, and All tasks.
+    private static var throughTheForm: Set<String> { Set(SettingsTab.allCases.map(\.rawValue) + ["allTasks"]) }
 
     /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
     /// enter it, and the search boards, at the smallest window, where the sidebar has the least room.

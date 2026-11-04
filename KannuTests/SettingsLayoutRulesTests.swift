@@ -164,7 +164,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "NewTaskSheet.swift": 1,             // New Task is a sheet: a sheet pads its own content
         "PolicyRulesEditor.swift": 1,        // the Edit rules sheet: a sheet pads its own content
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
+        "SettingsView.swift": 7,             // the highlight's ring, the search field and its suggestions,
+                                             // and the page's inset from the panel's edge
         "BrainShell.swift": 4,               // the shell's own insets
         "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
         "SettingsPageHeader.swift": 2,       // the large title's insets, above the page's Form
