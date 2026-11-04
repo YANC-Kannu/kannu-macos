@@ -170,8 +170,8 @@ struct TaskFormDraft: Equatable {
 
     /// `foldingQuickAdd` while the title is typed (David, 2026-10-29: "populating tags and reminder
     /// … as we type that and enter space"): once the title ends in a space, the `#tag` and `@time`
-    /// words typed so far leave it for Tags and the reminder at once. A word not yet ended by a space
-    /// stays in the title under its chip, and so does one typed mid-title until the form saves. The
+    /// words typed so far, wherever they sit in it, leave it for Tags and the reminder at once. A
+    /// word not yet ended by a space stays in the title under its chip until one is typed. The
     /// title keeps a trailing space so typing goes on; a draft with nothing to move comes back as it
     /// is, so a change handler that calls this settles at once.
     func foldingFinishedQuickAdd(now: Date, calendar: Calendar) -> TaskFormDraft {
