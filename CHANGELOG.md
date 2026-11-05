@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-06 - Answer the review of Brain's consistency pass
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5
+- **Changes:**
+  - Every choice card is a plain button that carries "selected" itself, so the keyboard reaches it and VoiceOver
+    hears which one is chosen; three were tap gestures. The idle animation's delete glyph sits over its card's
+    button, never inside it, and the card's name is no longer selectable text inside a button.
+  - The search suggestions decide whether to scroll from what is known at once: more than seven matches, or a last
+    row not yet measured, scroll in at most 344 pt, so an unmeasured list is never taller. The row measures, cleared
+    when the matches change, only trim the list to whole rows, and a short fade at its foot says more rows sit below.
+  - The secondary ink is a touch darker in light (#66625A), 4.5:1 on the line colour a badge sits on as well as on
+    every surface; the readability rule holds it there, with the old grey as its plant.
+  - Shelf's Full Disk Access callout and the ADR callout take the offer's blue, as Focus's did.
+  - The Lock Screen glass preview's view, unused since the last change, goes with its `glassdesktop` image.
+  - "Clear History" gains the nine languages it lacked.
+  - A rule now allows `.primary` only on the sheets' default actions and on Tasks' New Task, with a planted offender.
+  - docs/SETTINGS.md: the cards as buttons, the suggestions, the callout colours, Lock screen's counts;
+    docs/REGRESSIONS.md entry 22's addendum.
+
 ### 2026-11-05 - Brain's pages say each thing one way
 - **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the pages
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 10, 11, 13, 16, 17, 18 and 21 on the pages, and the comments that explained a placement by a lazy Form

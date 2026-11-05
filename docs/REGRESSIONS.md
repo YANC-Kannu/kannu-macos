@@ -1668,6 +1668,13 @@ Permissions draw `LaunchPermissionRow` as rows (`asRow`), a layout only: what ea
 unchanged, and `FirstLaunchRulesTests` holds its gates. A page's scroll view now starts 12 pt under the title, a
 padding. So the rest of this entry holds.
 
+**2026-11-06 addendum: the review of that pass adds no `onAppear`, no `.task` and no animator.** The choice cards are
+plain buttons now, so the keyboard reaches them; the idle animation card's hover covers its delete glyph, which sits
+over the card's button. The search suggestions clear their row measures in an `onChange` of the matches, which runs
+only while Brain is open, and read how far their rows reach from `onGeometryChange`, never on a clock; an unmeasured
+list scrolls in at most 344 pt rather than grow. `LockScreenGlassVariantPreviewCell`, unused since the last addendum,
+is deleted with its log hooks and its image. So the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

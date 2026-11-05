@@ -132,30 +132,34 @@ private extension DevicesSettingsView {
         @State private var isHovering = false
 
         var body: some View {
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(backgroundColor)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(borderColor, lineWidth: 1)
-                        )
-                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
+            // A button, so the keyboard reaches the card and VoiceOver hears which one is selected.
+            Button(action: action) {
+                VStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(backgroundColor)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(borderColor, lineWidth: 1)
+                            )
+                            .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
 
-                    preview
-                }
-                .frame(width: 90, height: 64)
-                .onHover { hovering in
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isHovering = hovering
+                        preview
                     }
-                }
+                    .frame(width: 90, height: 64)
+                    .onHover { hovering in
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isHovering = hovering
+                        }
+                    }
 
-                Text(style.title)
-                    .settingsChoiceLabel(isSelected: isSelected)
+                    Text(style.title)
+                        .settingsChoiceLabel(isSelected: isSelected)
+                }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
-            .onTapGesture { action() }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
 
         private var preview: some View {

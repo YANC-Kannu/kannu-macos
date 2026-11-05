@@ -764,7 +764,7 @@ struct AgentSecuritySettings: View {
                 title: String(localized: "Connect ADR"),
                 message: String(localized: "Install ADR Discovery once with uv (or pipx), then press Check again. Requires Python 3.11 or newer; uv brings its own."),
                 icon: "shield.lefthalf.filled",
-                iconColor: .blue,
+                iconColor: SettingsTheme.accentStrong,
                 requestButtonTitle: String(localized: "Copy install command"),
                 openSettingsButtonTitle: String(localized: "Open ADR on GitHub"),
                 requestAction: {

@@ -301,60 +301,59 @@ struct AnimationPreviewCard: View {
     @State private var isHovering = false
     
     var body: some View {
-        VStack(spacing: 8) {
-            // Preview area
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
-                
-                // Animation preview
-                AnimationPreview(animation: animation)
-                    .frame(width: 60, height: 40)
-                
-                // Delete button (only for custom animations)
-                if let onDelete = onDelete, isHovering {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Button {
-                                onDelete()
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.white, .red)
-                                    .font(.system(size: 20))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(4)
-                        }
-                        Spacer()
+        // A button, so the keyboard reaches the card and VoiceOver hears which one is selected. Its name is not
+        // selectable: selectable text inside a button takes the click.
+        Button(action: onSelect) {
+            VStack(spacing: 8) {
+                // Preview area
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
+
+                    // Animation preview
+                    AnimationPreview(animation: animation)
+                        .frame(width: 60, height: 40)
+                }
+                .frame(width: 100, height: 80)
+
+                // Name and badge: the ring says selected, so the badge only says built-in.
+                VStack(spacing: 4) {
+                    Text(animation.name)
+                        .settingsChoiceLabel(isSelected: isSelected)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 100)
+
+                    if animation.isBuiltIn {
+                        SettingsBadge(String(localized: "Built-in"))
                     }
                 }
             }
-            .frame(width: 100, height: 80)
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isHovering = hovering
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // Delete button (only for custom animations), on the tile's corner: over the card's button, never inside its
+        // label, so its click stays its own.
+        .overlay(alignment: .topTrailing) {
+            if let onDelete = onDelete, isHovering {
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.white, .red)
+                        .font(.system(size: 20))
                 }
-            }
-            
-            // Name and badge: the ring says selected, so the badge only says built-in.
-            VStack(spacing: 4) {
-                Text(animation.name)
-                    .settingsChoiceLabel(isSelected: isSelected)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 100)
-                    .textSelection(.enabled)
-                
-                if animation.isBuiltIn {
-                    SettingsBadge(String(localized: "Built-in"))
-                }
+                .buttonStyle(.plain)
+                .padding(4)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
+        // On the whole card, the glyph included, so moving onto the glyph does not hide it.
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
         }
         .contextMenu {
             if let onEdit = onEdit {

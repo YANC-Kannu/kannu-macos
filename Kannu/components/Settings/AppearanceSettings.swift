@@ -471,6 +471,7 @@ struct Appearance: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func notchSkinCard(title: String, image: NSImage?, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -500,6 +501,7 @@ struct Appearance: View {
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func handleSkinDrop(_ providers: [NSItemProvider]) -> Bool {
