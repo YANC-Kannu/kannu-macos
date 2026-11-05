@@ -379,7 +379,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
 /// A Section header. Selectable — a header is explanatory text, not a control label — so the
 /// section's name can be copied like everything else around it. Use it for every
 /// `Section { … } header: { … }` in Settings; `SettingsLayoutRulesTests` rejects a raw `Text`
-/// there.
+/// there. It is the section's heading for VoiceOver, so a badge or a count beside it is not.
 struct SettingsSectionHeader: View {
     private let text: Text
 
@@ -396,6 +396,7 @@ struct SettingsSectionHeader: View {
         text
             .font(SettingsTheme.sectionTitle)
             .textSelection(.enabled)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

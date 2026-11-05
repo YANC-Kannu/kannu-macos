@@ -101,17 +101,22 @@ struct AgentSecuritySettings: View {
                      : String(localized: "No open findings."))
                     .settingsDescriptionStyle()
             } else {
-                ForEach(groups.visible, id: \.group.id) { row in
-                    let finding = row.group.representative
-                    SecurityFindingRow(
-                        row: row,
-                        copyForAgent: { findingsStore.copyAgentPrompt(for: finding) },
-                        acknowledge: { findingsStore.acknowledgeGroup(row.group, projects: $0) },
-                        snooze: { findingsStore.snooze(row.group.id, for: 24 * 3600) },
-                        openChat: findingsStore.hasChat(for: finding)
-                            ? { if !findingsStore.openChat(for: finding) { NSSound.beep() } }
-                            : nil
-                    )
+                // Lazy: findings pile up across scans, and a plain stack builds every row as the page opens. A search
+                // or the notch's deep link lands on this section's header, never on a row (docs/SETTINGS.md, "Pages
+                // and sections").
+                LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
+                    ForEach(groups.visible, id: \.group.id) { row in
+                        let finding = row.group.representative
+                        SecurityFindingRow(
+                            row: row,
+                            copyForAgent: { findingsStore.copyAgentPrompt(for: finding) },
+                            acknowledge: { findingsStore.acknowledgeGroup(row.group, projects: $0) },
+                            snooze: { findingsStore.snooze(row.group.id, for: 24 * 3600) },
+                            openChat: findingsStore.hasChat(for: finding)
+                                ? { if !findingsStore.openChat(for: finding) { NSSound.beep() } }
+                                : nil
+                        )
+                    }
                 }
             }
             if !findingsStore.reviewQueue.isEmpty {

@@ -21,7 +21,9 @@ import SwiftUI
 /// A group of rows on a `SettingsPage`, in place of a `Section`, called the same way: the rows, then `header:` and
 /// `footer:`. The rows sit in a soft card, apart by space and never by a divider. The header and the footer sit
 /// outside the card, in line with the rows' text, as a grouped `Form` placed them; the footer is secondary, as the
-/// `Form` drew it. A modifier on a section reaches the whole of it, header and footer too.
+/// `Form` drew it. A modifier on a section reaches the whole of it, header and footer too. VoiceOver reads the section
+/// as one group, so two like buttons in two sections are told apart; the heading is `SettingsSectionHeader`'s own,
+/// so a badge or a count beside it in the header is not one.
 struct SettingsSection<Content: View, Header: View, Footer: View>: View {
     private let content: Content
     private let header: Header
@@ -37,7 +39,6 @@ struct SettingsSection<Content: View, Header: View, Footer: View>: View {
         // A missing header or footer adds no gap: an empty view is no child of the stack.
         VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
             header
-                .accessibilityAddTraits(.isHeader)
                 .padding(.horizontal, SettingsTheme.sectionPadding.leading)
             VStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
                 content
@@ -49,6 +50,7 @@ struct SettingsSection<Content: View, Header: View, Footer: View>: View {
                 .foregroundStyle(SettingsTheme.inkSecondary)
                 .padding(.horizontal, SettingsTheme.sectionPadding.leading)
         }
+        .accessibilityElement(children: .contain)
     }
 }
 

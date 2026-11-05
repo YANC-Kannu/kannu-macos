@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's pages
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks
+- **Changes:**
+  - The first open after launch no longer focuses a page's first text field. It had nothing to put back, so ordering
+    in focused that field with its text selected, and with every row built it could be one deep in Agents that writes
+    straight through, such as the ntfy topic or a Pushover key. `SettingsWindowController` now records the page just
+    before the first order-in, nothing focused, and puts it back as it does on a reopening.
+  - The task rows (All tasks, Local tasks, a source, a project), the Archive and Security's findings sit in a
+    `LazyVStack` inside their page, so a long list is no longer built whole as the page opens. No search or deep link
+    lands on one of their rows, and going back to a task still scrolls to it by the list's own id.
+  - VoiceOver: only `SettingsSectionHeader` is a heading, so a Beta badge or a count beside it no longer reads as
+    one. A section and a permission callout are each one group, so Shelf's two "Open Privacy & Security" buttons are
+    heard with their callouts.
+  - `SettingsAnimationRulesTests` pins the first open beside the reopening, with five plants;
+    `SettingsDesignSystemRulesTests` moves the heading's pin to `SettingsSectionHeader` and holds the section's group.
+  - docs/SETTINGS.md names the three lazy lists and why; docs/REGRESSIONS.md entry 22 gains its dated line.
+
 ### 2026-11-05 - Brain's pages leave Form
 - **Developer label:** Brain redesign plan: Stage 4, pages
 - **Agent label:** Claude Code (Opus 5.5) — a scripted edit, 31 `Form`s and 145 `Section`s by script and one by hand; every page scrolls across the panel; a bare `Form` or `Section` now fails a test
