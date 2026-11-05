@@ -4,6 +4,39 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of the notch's tag chips and the Tags sheet
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch fixes, and David's picks on their review ("Yes, take them")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 3: the independent reviewer's findings, and a tinted "+N" while it hides a searched tag
+- **Changes:**
+  - While a `#tag` search found a row's first tag and only "+N" fits, the pill is tinted in the accent, so the find
+    still shows. `TaskSearch.foundTags` says which tags the search found; `chipTags` still puts them first.
+  - VoiceOver hears a tag pill's colour, as it heard the swatch's.
+  - Without VoiceOver a right-click menu has no key, so keyboard-only users colour tags in All tasks › Tag colours;
+    docs/SETTINGS.md says so, and names the fifth pinned picker.
+  - Pins, each with a plant: the shortened chip truncates, any swatch beside a pill is the colour twice, the row says
+    when the search found its first tag, and a lone "+N" hiding it is tinted. Three comments that said a tag takes
+    nothing from the caption now say "+N" may.
+
+### 2026-11-05 - The notch rail's caption wins over its tags, and a tag shows its colour once
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch caption and tag colour ("one chip when it fits, +N always")
+- **Agent label:** Claude Code (Opus 5.5) — the rail's caption keeps its time and overtime ahead of the tag chips; the Tags sheet's colour swatch goes, its pick moving to the pill's right-click menu
+- **Changes:**
+  - Rail rows: the caption wins (`TaskTagChips`, the first layout that fits). The whole caption, then the first tag
+    whole, or shortened in the middle to no less than 60 pt (`sideTaskChipMinWidth`), and "+N" for the rest; otherwise
+    one "+N" for every tag, the caption taking the room first (`layoutPriority`). A `#tag` search still puts its tag
+    first. The rule that a tag of up to 12 characters showed whole while the caption gave way is gone.
+  - The caption's overtime (" · 15m over", in orange) is a text of its own at its full width: on a short line the time
+    before it gives way. At the narrowest notch "Fix the flaky timer test" reads "45m… · 15m over +2" (was
+    "45m… #urgent +1"), and "ds-vendors #4264" shows whole with "+1" (was "ds-vendors #…" beside "#backend").
+  - The Tags sheet: the colour swatch before each pill is gone, so the pill's wash is the tag's one colour. Colour, a
+    ticked submenu in the pill's right-click menu, picks it from the presets, staged until Done as the swatch's pick was.
+  - "Colour" is a new catalog key, in the catalog's 17 other languages.
+  - Tests: `NotchTagFilterRulesTests` pins the caption-first layouts and the whole overtime, `TaskColorRulesTests` the
+    pill's one colour and its Colour picker, each scanner with planted offenders; `SettingsLayoutRulesTests` counts the one
+    native picker, which `TaskColorRulesTests` holds inside the right-click menu.
+  - docs/SETTINGS.md (the tag chip's wash, the native Colour submenu) and docs/REGRESSIONS.md (entry 22, a dated line)
+    follow.
+
 ### 2026-11-05 - The notch's task rail shows tags, and filters by one
 - **Developer label:** Brain redesign plan: Stage 5, tags in the notch
 - **Agent label:** Claude Code (Opus 5.5) — the notch's chips, Tag submenu and tag filter, with their rules; the Brain Tasks page waits for David's decision

@@ -51,16 +51,20 @@ enum TaskSearch {
 
     /// `TaskFacets.displayTags` (own, then labels), those `query` finds first, in order; case and accents ignored.
     static func chipTags(of task: TaskItem, query: String) -> [String] {
-        let tags = TaskFacets.displayTags(of: task)
+        let found = foundTags(of: task, query: query)
+        return found + TaskFacets.displayTags(of: task).filter { !found.contains($0) }
+    }
+
+    /// The tags `query` finds, in `displayTags` order: the ones `chipTags` puts first. None without a query.
+    static func foundTags(of task: TaskItem, query: String) -> [String] {
         let words = Word.parse(query)
-        guard !words.isEmpty else { return tags }
+        guard !words.isEmpty else { return [] }
         let labels = task.remote?.labels ?? []
-        let found = tags.filter { tag in
+        return TaskFacets.displayTags(of: task).filter { tag in
             // A label's chip reads its value; its full name finds it too ("workflow::doing").
             let names = [tag] + labels.filter { TaskDetailSummary.labelDisplay($0).lowercased() == tag.lowercased() }
             return words.contains { word in names.contains { word.isFound(in: $0) || word.names($0) } }
         }
-        return found + tags.filter { !found.contains($0) }
     }
 
     private static func searchable(_ task: TaskItem) -> [String] {
