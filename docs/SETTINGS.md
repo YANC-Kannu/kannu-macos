@@ -277,18 +277,29 @@ either closure left out when there is none.
   the page opens, not as the row scrolls into view, and `onDisappear` as the page goes or Brain closes, not as
   the row scrolls away. A row that animates keeps animating while its page is open, in view or not; a closed
   Brain still costs nothing (docs/REGRESSIONS.md, entry 22).
+- **Except three long lists, which are lazy inside the page:** the task rows (`TaskRowList`: All tasks, Local
+  tasks, a source, a project), the Archive once expanded, and Security's findings. Each can hold hundreds of
+  rows, and a plain stack would build them all as the page opens. No search or deep link lands on one of their
+  rows: Tasks' rows carry no highlight id, and the findings' link lands on their section's header. Going back to
+  a task scrolls to its row by the `ForEach`'s own id, which a lazy stack reaches before the row is built. The
+  lazy stack holds only the list's rows, spaced as they were (`sectionRowGap` in a card, the disclosure's default
+  in the Archive), and is left out while the list is empty, since an empty one still takes a row's gap. Anything
+  a search can reach stays outside it.
 - **A section is its rows in a soft card** (`card`, `sectionRadius`), `sectionRowGap` apart: space, never a
   divider. Its header and footer sit outside the card, in line with the rows' text, as the grouped `Form` placed
-  them. The header is a heading for VoiceOver, and the footer takes the secondary ink. A missing header or
-  footer adds no gap. A modifier on a section (`.disabled`, `.opacity`, `.onAppear`, `.sheet`) reaches all of
-  it, its header and footer too.
+  them. `SettingsSectionHeader` is the heading for VoiceOver, not the whole header, so a Beta badge or a count
+  beside it is not one; the footer takes the secondary ink. A missing header or footer adds no gap. For VoiceOver
+  the section is one group, as `SettingsPermissionCallout` is, so like buttons in two of them are told apart
+  (Shelf's two "Open Privacy & Security"). A modifier on a section (`.disabled`, `.opacity`, `.onAppear`,
+  `.sheet`) reaches all of it, its header and footer too.
 - **A section with no rows draws an empty card**, where a `Form` drew nothing, so a section whose rows are all
   conditional sits inside an `if` that guarantees one, as each such section does.
 - **Nothing stays a `Form` or a `Section`.** `SettingsLayoutRulesTests` bans both under Settings, `SwiftUI.Form`
   and `Section(header:)` included, proven on planted offenders; its pin table is empty, and a site that must stay
-  native goes there with its reason. `SettingsDesignSystemRulesTests` holds the section's card, spacing, header
-  and footer, and keeps hooks, animators and laziness out of both views; `BrainShellRulesTests` holds the page's
-  column and the inset's one measurement.
+  native goes there with its reason. `SettingsDesignSystemRulesTests` holds the section's card, spacing, header,
+  footer and group, and keeps hooks, animators and laziness out of both views (the three lazy lists above are
+  inside pages, not in either view); `BrainShellRulesTests` holds the page's column and the inset's one
+  measurement.
 
 ## The shell and navigation
 

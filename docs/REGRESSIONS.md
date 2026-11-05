@@ -1616,6 +1616,20 @@ cost of Appearance open with its previews scrolled out of view, and a full-scree
 now runs all of its page's animations rather than those in view. `SettingsPage` and `SettingsSection` add no
 `onAppear`, no `.task` and no animator, which `SettingsDesignSystemRulesTests` holds, so the rest of this entry holds.
 
+**2026-11-05 addendum: the first open is put back like a reopening, and three long lists are lazy again.** The first
+open after launch had no `leftState`, since nothing had closed, so `restoreLeftState` returned at once, and ordering in
+gave the page's first text field focus, its text selected, as above. With every row built, that field could be one deep
+in Agents that writes straight through (the ntfy topic, a Pushover key, the webhook URL), and the next key typed would
+replace what is stored. `seedLeftStateForFirstOpen` now records the page just before the first order-in, nothing
+focused and every scroller where it starts, and the restore puts it back as on a reopening. It runs once, since every
+later opening has a close's state, and lays the page out first: in a `swiftc` harness with no window ordered in, a
+never-shown hosting view has no scroll view until `layoutSubtreeIfNeeded()`, and a fresh window is its own first
+responder. `closingViolations` pins it, with five more ways to break the real controller (55 in all). **Not measured:**
+the first open in the app; it needs a real window. The task rows, the Archive and Security's findings now sit in a
+`LazyVStack` inside their page: in the harness, 13 of 300 rows were built against 300. So their rows build as they scroll
+in, as in the `Form`. No search or deep link lands on one of them, and their only hook is "Copy for agent" clearing its
+"Copied" on disappear, which now also runs on a scroll, as it did in the `Form`.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
@@ -1702,7 +1716,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll (its 2026-11-05 addendum). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in three long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

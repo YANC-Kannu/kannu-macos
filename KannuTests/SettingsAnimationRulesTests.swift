@@ -130,8 +130,18 @@ final class SettingsAnimationRulesTests: XCTestCase {
         return a.lowerBound < b.lowerBound
     }
 
+    /// Whether `showWindow` calls `call` on the way in from closed: past its early return for a window
+    /// already open, and ahead of the order-in after it.
+    private static func isCalledBeforeOrderingIn(_ call: String, in show: String) -> Bool {
+        guard let visible = show.range(of: "if window?.isVisible == true"),
+              let earlyReturn = show.range(of: "return\n", range: visible.upperBound..<show.endIndex),
+              let called = show.range(of: call, range: earlyReturn.upperBound..<show.endIndex),
+              let ordered = show.range(of: "orderFront", range: earlyReturn.upperBound..<show.endIndex) else { return false }
+        return called.lowerBound < ordered.lowerBound
+    }
+
     /// Everything about the close that the CPU number depends on, and that keeps a reopened Brain
-    /// where it was left.
+    /// where it was left, and a first-opened one as it stood.
     private static func closingViolations(in controller: String) -> [String] {
         let code = code(controller)
         guard let close = body(of: "func windowWillClose(", in: code),
@@ -172,6 +182,26 @@ final class SettingsAnimationRulesTests: XCTestCase {
             }
         } else {
             violations.append("the page is put back before focus moves it")
+        }
+        // The first open has no close to remember, yet ordering in still focuses the page's first text field, and a
+        // page builds every row, so that field can be a deep write-through one. So it is seeded as it stands, nothing
+        // focused, before it is ordered in, and only once: a seed on a reopening would replace what the close kept.
+        if let seed = body(of: "func seedLeftStateForFirstOpen(", in: code) {
+            if !isCalledBeforeOrderingIn("seedLeftStateForFirstOpen()", in: show) {
+                violations.append("the first open is not seeded before it is ordered in")
+            }
+            if seed.range(of: #"LeftState\(\s*focus: nil,"#, options: .regularExpression) == nil {
+                violations.append("the first open keeps the field that ordering in focuses")
+            }
+            // Until it is laid out, a page that has never been on screen has no scroll views to read.
+            if !isBefore("layoutSubtreeIfNeeded()", "leftState = LeftState(", in: seed) {
+                violations.append("the first open reads its scroll views before they exist")
+            }
+            if !seed.contains("guard !hasOpened") || !seed.contains("hasOpened = true") {
+                violations.append("every opening is seeded, so a reopening loses its focus and caret")
+            }
+        } else {
+            violations.append("nothing seeds the first open")
         }
         // Left to AppKit, the first field takes focus with its text selected, and one key replaces it.
         if !restore.contains("window.makeFirstResponder(focus)") {
@@ -354,6 +384,14 @@ final class SettingsAnimationRulesTests: XCTestCase {
                 ("window.makeFirstResponder(focus)\n", "\n"),
                 ("reflectScrolledClipView(clipView)\n        }", "reflectScrolledClipView(clipView)\n        }\n        window.makeFirstResponder(focus)"),
             ]),
+            ("the first open not seeded", [("centerWindowOnActiveScreen()\n        seedLeftStateForFirstOpen()", "centerWindowOnActiveScreen()")]),
+            ("the first open seeded after ordering in", [
+                ("centerWindowOnActiveScreen()\n        seedLeftStateForFirstOpen()", "centerWindowOnActiveScreen()"),
+                ("// Activate the app and ensure window gets focus", "seedLeftStateForFirstOpen()"),
+            ]),
+            ("the first open keeps what ordering in focused", [("focus: nil,", "focus: window?.firstResponder as? NSView,")]),
+            ("the first open read before it is laid out", [("settingsContent.layoutSubtreeIfNeeded()\n", "")]),
+            ("every opening seeded", [("guard !hasOpened, let settingsContent", "guard let settingsContent")]),
             ("closed in full screen without leaving it", [("!deferCloseUntilWindowed(sender)", "true")]),
             ("windowShouldClose ignores the answer", [("!deferCloseUntilWindowed(sender)", "_ = deferCloseUntilWindowed(sender); return true")]),
             ("close() skips the wait", [("if let window, deferCloseUntilWindowed(window) { return }", "")]),

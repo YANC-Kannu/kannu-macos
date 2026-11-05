@@ -239,9 +239,14 @@ struct AllTasksPage: View {
         return DisclosureGroup(isExpanded: $showsArchive) {
             if archived.isEmpty {
                 SettingsNoteRow("The archive is empty", description: "Archived tasks keep their time here.")
-            }
-            ForEach(archived) { task in
-                archivedRow(task)
+            } else {
+                // Lazy: the archive only grows, and expanded it would build every row at once (docs/SETTINGS.md,
+                // "Pages and sections"). The default spacing is the one the disclosure gave its rows.
+                LazyVStack(alignment: .leading) {
+                    ForEach(archived) { task in
+                        archivedRow(task)
+                    }
+                }
             }
         } label: {
             SettingsRowLabel("Archive", description: "Jira and GitLab tasks clear after \(TaskArchive.clearDays) days; yours stay.")

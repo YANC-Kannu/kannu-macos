@@ -312,7 +312,8 @@ final class BrainShellRulesTests: XCTestCase {
     /// `Form`). One scroll view across the panel, so the scrollbar sits at the panel's edge; inside it the column is
     /// capped first, then held the page inset from the panel's leading edge. Centred, a full-screen page floats in a
     /// blank panel; with the cap outside the padding, the inset would come out of the page's 720 pt. A plain `VStack`:
-    /// a lazy one cannot scroll a search to a row it has not built.
+    /// a lazy one cannot scroll a search to a row it has not built. Three long lists no search reaches are lazy inside
+    /// their pages instead, so they are not built whole (docs/SETTINGS.md, "Pages and sections").
     private static func pageColumnProblems(in page: String) -> [String] {
         let column = #"ScrollView \{\s*VStack\(alignment: \.leading, spacing: SettingsTheme\.sectionGap\) \{\s*content\s*\}\s*"#
             + #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth, alignment: \.leading\)\s*"#
