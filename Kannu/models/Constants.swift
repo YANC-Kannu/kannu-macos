@@ -1656,6 +1656,10 @@ extension Defaults.Keys {
     static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
     static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
     static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    /// The notch's Tag filter, beside Show in notch in the same menu (`TaskSourceMenu`):
+    /// `TaskFacets.anyTag` (""), or the one tag, own or a label, the notch's task lists narrow to.
+    /// Brain's Task list keeps its own (`tasksListTagFilter`).
+    static let tasksNotchTagFilter = Key<String>("tasksNotchTagFilter", default: TaskFacets.anyTag)
     // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
     // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
     static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)

@@ -111,10 +111,10 @@ extension TaskSource {
     }
 }
 
-/// The notch's Show in notch for every source, and which sources are connected, kept current from
-/// Defaults for the notch's views (`TaskSourceMenu`, `TasksPopover`, the timer tab's task list). A
-/// view filter only: `TasksManager` never reads it, so it changes what the notch shows and never
-/// what is fetched or what Brain lists. Reads Defaults only — never the Keychain.
+/// The notch's Show in notch for every source, its Tag filter, and which sources are connected,
+/// kept current from Defaults for the notch's views (`TaskSourceMenu`, `TasksPopover`, the timer
+/// tab's task list). A view filter only: `TasksManager` never reads it, so it changes what the notch
+/// shows and never what is fetched or what Brain lists. Reads Defaults only — never the Keychain.
 @MainActor
 final class TaskSourcePreferences: ObservableObject {
     static let shared = TaskSourcePreferences()
@@ -124,6 +124,8 @@ final class TaskSourcePreferences: ObservableObject {
     @Published private(set) var hiddenInNotch: Set<TaskSource> = []
     /// The connected sources, in source order: the ones Show in notch offers beside Local.
     @Published private(set) var connected: [TaskSource] = []
+    /// The Tag filter (`tasksNotchTagFilter`): `TaskFacets.anyTag`, or the one tag the notch lists.
+    @Published private(set) var tagFilter = TaskFacets.anyTag
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
@@ -132,6 +134,7 @@ final class TaskSourcePreferences: ObservableObject {
         Publishers.MergeMany(
             TaskSource.allCases.map { Defaults.publisher($0.showInNotchKey, options: []).map { _ in () }.eraseToAnyPublisher() }
                 + TaskSource.allCases.compactMap(\.scopeKey).map { Defaults.publisher($0, options: []).map { _ in () }.eraseToAnyPublisher() }
+                + [Defaults.publisher(.tasksNotchTagFilter, options: []).map { _ in () }.eraseToAnyPublisher()]
         )
         .receive(on: DispatchQueue.main)
         .sink { [weak self] in
@@ -140,25 +143,33 @@ final class TaskSourcePreferences: ObservableObject {
         .store(in: &cancellables)
     }
 
-    /// Whether Show in notch hides anything, so the notch says "Filtered".
-    var isNarrowing: Bool { !hiddenInNotch.isEmpty }
+    /// Whether Show in notch hides a source or the Tag filter picks a tag, so the notch says "Filtered".
+    var isNarrowing: Bool { !hiddenInNotch.isEmpty || tagFilter != TaskFacets.anyTag }
 
     /// A source's check item.
     func shownBinding(for source: TaskSource) -> Binding<Bool> {
         Binding(get: { Defaults[source.showInNotchKey] }, set: { Defaults[source.showInNotchKey] = $0 })
     }
 
-    /// Show all: every source back in the notch.
+    /// The Tag submenu's choice.
+    var tagBinding: Binding<String> {
+        Binding(get: { Defaults[.tasksNotchTagFilter] }, set: { Defaults[.tasksNotchTagFilter] = $0 })
+    }
+
+    /// Show all: every source back in the notch, and no Tag filter.
     func showAll() {
         for source in TaskSource.allCases where !Defaults[source.showInNotchKey] {
             Defaults[source.showInNotchKey] = true
         }
+        if Defaults[.tasksNotchTagFilter] != TaskFacets.anyTag { Defaults[.tasksNotchTagFilter] = TaskFacets.anyTag }
     }
 
     private func recompute() {
         let connected = TaskSource.remoteSources.filter(\.isConnected)
         let hidden = Set(TaskSource.allCases.filter { !Defaults[$0.showInNotchKey] && $0.isConnected })
+        let tag = Defaults[.tasksNotchTagFilter]
         if connected != self.connected { self.connected = connected }
         if hidden != hiddenInNotch { hiddenInNotch = hidden }
+        if tag != tagFilter { tagFilter = tag }
     }
 }
