@@ -35,7 +35,10 @@ import XCTest
 ///   hides is still found by its name and never made twice;
 /// - the Tag submenu's tags are passed in, so `TaskSourceMenu` never reads `TasksManager`;
 /// - a rail row shows its tags beside the caption (`TaskTagChips`), the search's first, on a line one
-///   chip tall, in the fonts `TimerComposerMetricsTests` measures against the 36 pt row.
+///   chip tall, in the fonts `TimerComposerMetricsTests` measures against the 36 pt row;
+/// - the caption wins (design review finding 7): whole, then the first tag (whole, or shortened to no
+///   less than `sideTaskChipMinWidth`) and "+N" for the rest, else one "+N" for every tag beside a
+///   caption that has the room first; and its overtime never shortens.
 ///
 /// Each detector has a planted-offender test, so a scanner that stops matching fails instead of
 /// passing vacuously.
@@ -197,9 +200,13 @@ final class NotchTagFilterRulesTests: XCTestCase {
         let column = """
             private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
                 HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
-                HStack(spacing: 4) {
-                    HoverRevealText(Text(verbatim: caption).font(.system(size: 11, weight: .medium)), isActive: isHovered)
-                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText))
+                TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText)) {
+                    HStack(spacing: 0) {
+                        HoverRevealText(Text(verbatim: caption).font(.system(size: 11, weight: .medium)), isActive: isHovered)
+                        overText(progress.over)
+                            .font(.system(size: 11, weight: .medium))
+                            .fixedSize()
+                    }
                 }
                 .frame(height: M.sideTaskCaptionHeight)
                 .frame(height: M.sideTaskRowHeight)
@@ -213,25 +220,68 @@ final class NotchTagFilterRulesTests: XCTestCase {
             }
             """
         let chips = """
-            SideChip("#\\(first)", truncates: first.count > Self.wholeTagLength)
-            SideChip("+\\(tags.count - 1)")
+            ViewThatFits(in: .horizontal) {
+                besideWholeCaption(SideChip("#\\(first)"))
+                besideWholeCaption(
+                    SideChip("#\\(first)", truncates: true)
+                        .frame(minWidth: M.sideTaskChipMinWidth, idealWidth: M.sideTaskChipMinWidth)
+                )
+                HStack(spacing: 4) {
+                    caption.layoutPriority(1)
+                    SideChip("+\\(tags.count)")
+                }
+            }
+            private func besideWholeCaption(_ chip: some View) -> some View {
+                HStack(spacing: 4) {
+                    caption.fixedSize()
+                    HStack(spacing: 4) {
+                        chip
+                        if tags.count > 1 {
+                            SideChip("+\\(tags.count - 1)")
+                        }
+                    }
+                }
+            }
             """
         XCTAssertEqual(Self.chipProblems(column: column, chips: chips), [])
         XCTAssertEqual(Self.chipProblems(column: Self.plant("query: searchText", "query: \"\"", in: column), chips: chips),
                        ["a row does not show the tags the search finds first"])
-        // Above the caption, or on a line of its own height, is not beside it.
-        let above = Self.plant("    HoverRevealText(Text(verbatim: caption)", "    TaskTagChips(tags: [])\n    HoverRevealText(Text(verbatim: caption)",
-                               in: Self.plant("    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText))\n", "", in: column))
-        XCTAssertEqual(Self.chipProblems(column: above, chips: chips),
-                       ["a row does not show the tags the search finds first", "the tags are not beside the caption on a line one chip tall"])
+        // The caption above the tags' line (5-2's tags-after-caption order no longer passes), or the line
+        // not one chip tall, is not the caption and its tags on one line.
+        let above = Self.plant("TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText)) {\n", "VStack {\n",
+                               in: Self.plant("    .frame(height: M.sideTaskCaptionHeight)\n",
+                                              "    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText)) {}\n    .frame(height: M.sideTaskCaptionHeight)\n",
+                                              in: column))
+        XCTAssertEqual(Self.chipProblems(column: above, chips: chips), ["the tags are not beside the caption on a line one chip tall"])
         XCTAssertEqual(Self.chipProblems(column: Self.plant(".frame(height: M.sideTaskCaptionHeight)", "", in: column), chips: chips),
                        ["the tags are not beside the caption on a line one chip tall"])
+        // The overtime back inside the clipped caption (5-2's shape), where a short line cut it, or free
+        // to shorten.
+        let concatenated = Self.plant("HoverRevealText(Text(verbatim: caption).font(",
+                                      "HoverRevealText((Text(verbatim: caption) + overText(progress.over)).font(",
+                                      in: Self.plant("overText(progress.over)", "Text(\"x\")", in: column))
+        XCTAssertEqual(Self.chipProblems(column: concatenated, chips: chips),
+                       ["the caption's overtime can shorten: it is not a text of its own at its full width"])
+        XCTAssertEqual(Self.chipProblems(column: Self.plant("        .fixedSize()\n", "", in: column), chips: chips),
+                       ["the caption's overtime can shorten: it is not a text of its own at its full width"])
         XCTAssertEqual(Self.chipProblems(column: Self.plant("size: 12, weight: .semibold", "size: 13, weight: .semibold", in: column), chips: chips),
                        ["the row's title font or its 36 pt height changed: TimerComposerMetricsTests measures them"])
         XCTAssertEqual(Self.chipProblems(column: Self.plant(".padding(.vertical, 2)", ".padding(.vertical, 3)", in: column), chips: chips),
                        ["SideChip's font or padding changed: TimerComposerMetricsTests measures them"])
         XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant("SideChip(\"+\\(tags.count - 1)\")", "", in: chips)),
-                       ["the chips are not the first tag and +N on SideChip"])
+                       ["the chips are not the first tag and +N for the rest, else one +N for every tag"])
+        XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant("SideChip(\"+\\(tags.count)\")", "SideChip(\"+\\(tags.count - 1)\")", in: chips)),
+                       ["the chips are not the first tag and +N for the rest, else one +N for every tag"])
+        // A tag that takes the caption's room: the caption shortened beside the chip, or not first beside +N.
+        XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant("caption.fixedSize()", "caption", in: chips)),
+                       ["the caption does not win: whole beside a chip, first to the room beside +N"])
+        XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant("caption.layoutPriority(1)", "caption", in: chips)),
+                       ["the caption does not win: whole beside a chip, first to the room beside +N"])
+        XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant(".frame(minWidth: M.sideTaskChipMinWidth, idealWidth: M.sideTaskChipMinWidth)",
+                                                                           "", in: chips)),
+                       ["a shortened chip has no floor: it can shrink past reading"])
+        XCTAssertEqual(Self.chipProblems(column: column, chips: Self.plant("ViewThatFits(in: .horizontal)", "HStack", in: chips)),
+                       ["the line is not the first of its layouts that fits"])
     }
 
     // MARK: - Scanning
@@ -310,21 +360,28 @@ final class NotchTagFilterRulesTests: XCTestCase {
         return problems
     }
 
-    /// A rail row shows `TaskTagChips` of the tags the search finds first, after the caption on a line
-    /// one chip tall; the fonts and the chip's padding are the ones the metrics test measures; the
-    /// chips are the first tag with its `#` and "+N", on `SideChip`.
+    /// A rail row passes its caption into `TaskTagChips`, with the tags the search finds first, on a line
+    /// one chip tall, and the caption's overtime is a text of its own at its full width; the fonts and
+    /// the chip's padding are the ones the metrics test measures. `TaskTagChips` lets the caption win
+    /// (finding 7): the first of its layouts that fits is the whole caption, then the first tag with
+    /// its `#`, whole or shortened to no less than `sideTaskChipMinWidth`, and "+N" for the rest; the
+    /// last is one "+N" for every tag beside the caption, which takes the room first. All on `SideChip`.
     static func chipProblems(column: String, chips: String) -> [String] {
         var problems: [String] = []
         let row = body(of: "private func row(_ task: TaskItem", in: column) ?? ""
         if !row.contains("TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText))") {
             problems.append("a row does not show the tags the search finds first")
         }
-        if let caption = row.range(of: ".font(.system(size: 11, weight: .medium))"), let tags = row.range(of: "TaskTagChips("),
+        if let tags = row.range(of: "TaskTagChips("), let caption = row.range(of: ".font(.system(size: 11, weight: .medium))"),
            let line = row.range(of: ".frame(height: M.sideTaskCaptionHeight)"),
-           caption.lowerBound < tags.lowerBound, tags.lowerBound < line.lowerBound {
-            // After the caption, inside its line.
+           tags.lowerBound < caption.lowerBound, caption.lowerBound < line.lowerBound {
+            // The caption goes into the tags' line.
         } else {
             problems.append("the tags are not beside the caption on a line one chip tall")
+        }
+        let overtime = #"overText\(progress\.over\)\s*\.font\(\.system\(size: 11, weight: \.medium\)\)\s*\.fixedSize\(\)"#
+        if row.range(of: overtime, options: .regularExpression) == nil {
+            problems.append("the caption's overtime can shorten: it is not a text of its own at its full width")
         }
         if !(row.contains("font: .system(size: 12, weight: .semibold)") && row.contains(".frame(height: M.sideTaskRowHeight)")) {
             problems.append("the row's title font or its 36 pt height changed: TimerComposerMetricsTests measures them")
@@ -334,8 +391,18 @@ final class NotchTagFilterRulesTests: XCTestCase {
              && chip.contains(".padding(.vertical, 2)")) {
             problems.append("SideChip's font or padding changed: TimerComposerMetricsTests measures them")
         }
-        if !(chips.contains("SideChip(\"#\\(first)\"") && chips.contains("SideChip(\"+\\(tags.count - 1)\")")) {
-            problems.append("the chips are not the first tag and +N on SideChip")
+        if !(chips.contains("SideChip(\"#\\(first)\")") && chips.contains("SideChip(\"+\\(tags.count - 1)\")")
+             && chips.contains("SideChip(\"+\\(tags.count)\")")) {
+            problems.append("the chips are not the first tag and +N for the rest, else one +N for every tag")
+        }
+        if !(chips.contains("caption.fixedSize()") && chips.contains("caption.layoutPriority(1)")) {
+            problems.append("the caption does not win: whole beside a chip, first to the room beside +N")
+        }
+        if !chips.contains(".frame(minWidth: M.sideTaskChipMinWidth, idealWidth: M.sideTaskChipMinWidth)") {
+            problems.append("a shortened chip has no floor: it can shrink past reading")
+        }
+        if !chips.contains("ViewThatFits(in: .horizontal)") {
+            problems.append("the line is not the first of its layouts that fits")
         }
         return problems
     }

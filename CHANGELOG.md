@@ -4,6 +4,26 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - The notch rail's caption wins over its tags, and a tag shows its colour once
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch caption and tag colour ("one chip when it fits, +N always")
+- **Agent label:** Claude Code (Opus 5.5) — the rail's caption keeps its time and overtime ahead of the tag chips; the Tags sheet's colour swatch goes, its pick moving to the pill's right-click menu
+- **Changes:**
+  - Rail rows: the caption wins (`TaskTagChips`, the first layout that fits). The whole caption, then the first tag
+    whole, or shortened in the middle to no less than 60 pt (`sideTaskChipMinWidth`), and "+N" for the rest; otherwise
+    one "+N" for every tag, the caption taking the room first (`layoutPriority`). A `#tag` search still puts its tag
+    first. The rule that a tag of up to 12 characters showed whole while the caption gave way is gone.
+  - The caption's overtime (" · 15m over", in orange) is a text of its own at its full width: on a short line the time
+    before it gives way. At the narrowest notch "Fix the flaky timer test" reads "45m… · 15m over +2" (was
+    "45m… #urgent +1"), and "ds-vendors #4264" shows whole with "+1" (was "ds-vendors #…" beside "#backend").
+  - The Tags sheet: the colour swatch before each pill is gone, so the pill's wash is the tag's one colour. Colour, a
+    ticked submenu in the pill's right-click menu, picks it from the presets, staged until Done as the swatch's pick was.
+  - "Colour" is a new catalog key, in the catalog's 17 other languages.
+  - Tests: `NotchTagFilterRulesTests` pins the caption-first layouts and the whole overtime, `TaskColorRulesTests` the
+    pill's one colour and its Colour picker, each scanner with planted offenders; `SettingsLayoutRulesTests` pins the one
+    native picker, inside the right-click menu.
+  - docs/SETTINGS.md (the tag chip's wash, the native Colour submenu) and docs/REGRESSIONS.md (entry 22, a dated line)
+    follow.
+
 ### 2026-11-05 - The notch's task rail shows tags, and filters by one
 - **Developer label:** Brain redesign plan: Stage 5, tags in the notch
 - **Agent label:** Claude Code (Opus 5.5) — the notch's chips, Tag submenu and tag filter, with their rules; the Brain Tasks page waits for David's decision

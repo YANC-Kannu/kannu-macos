@@ -140,6 +140,9 @@ enum TimerComposerMetrics {
     /// same line. With the 12 pt title and the 1 pt between them it fits the row
     /// (`TimerComposerMetricsTests`).
     static let sideTaskCaptionHeight: CGFloat = 16
+    /// The least a tag's chip shortens to beside a row's whole caption (`TaskTagChips`), so a long tag
+    /// still reads ("#infr…cture"). With less room left, one "+N" stands in for every tag.
+    static let sideTaskChipMinWidth: CGFloat = 60
     static let sideRowSpacing: CGFloat = 4
     /// The Tasks list is never shorter than this many rows (room permitting): the first row's ▶
     /// tooltip opens below it, and a list clipped to one row would swallow the bubble.
