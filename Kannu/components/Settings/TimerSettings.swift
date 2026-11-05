@@ -88,7 +88,7 @@ struct TimerSettings: View {
         .navigationTitle("Timer")
         .onAppear { syncCustomDuration() }
         .onChange(of: customTimerDuration) { _, newValue in syncCustomDuration(newValue) }
-        // On the Form, not the stepper rows: rows of a lazy Form may not exist when these change.
+        // On the page, which owns the three values the stepper rows edit.
         .onChange(of: customHours) { _, _ in updateCustomDuration() }
         .onChange(of: customMinutes) { _, _ in updateCustomDuration() }
         .onChange(of: customSeconds) { _, _ in updateCustomDuration() }

@@ -76,7 +76,7 @@ struct Shelf: View {
                             title: "Full Disk Access for global mode",
                             message: "Without Full Disk Access, Shelf can only read files from Documents and Downloads. Grant Full Disk Access to make Shelf work globally.",
                             icon: "externaldrive.fill",
-                            iconColor: .purple,
+                            iconColor: SettingsTheme.accentStrong,
                             requestButtonTitle: "Request Full Disk Access",
                             openSettingsButtonTitle: "Open Privacy & Security",
                             requestAction: { fullDiskAccessPermission.requestAccessPrompt() },
