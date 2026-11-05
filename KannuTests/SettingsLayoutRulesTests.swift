@@ -77,6 +77,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsHelpers.swift": 2,
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
         "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
+        "AgentsOverview.swift": 2,                  // the hero's state and a row's provider — inside the button that opens the chat
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -169,6 +170,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
         "SettingsPage.swift": 2,             // the page's inset from the panel's edge, and its top and bottom
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
+        "SettingsProductPage.swift": 2,      // the page's inset from the panel's edge, and its top and bottom
+        "AgentsOverview.swift": 5,           // the hero's, a row's, the empty state's and a status cell's cards, and Recent's heading in line with the rows
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 6,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview
@@ -336,7 +339,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// of its own or the user's own colours. Only Stage 4 lowers these, by giving each a theme token; until then a
     /// pin can only shrink. The theme is excepted: it is where the colours are made.
     private static let pinnedRawColourCounts: [String: Int] = [
-        "AgentStatusSettings.swift": 2,      // status green; a preview caption
+        "AgentStatusSettings.swift": 1,      // status green
         "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
         "AppearanceSettings.swift": 10,      // style cards and previews of notch content
@@ -367,7 +370,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
     /// way. Separate from the ad-hoc font rule above, which is about size, so `.font(.caption)` counts in both.
     private static let pinnedSystemFontCounts: [String: Int] = [
-        "AgentStatusSettings.swift": 1,      // a preview caption
         "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
         "AppearanceSettings.swift": 3,       // style cards and previews
         "BatterySettings.swift": 2,          // battery previews

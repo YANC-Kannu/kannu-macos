@@ -300,6 +300,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
+    /// A product page's actions, on its title's row: Agents' gear and its one install offer. Each reads its own store.
+    var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
@@ -319,7 +321,7 @@ private struct SettingsForm<Content: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
-                SettingsPageHeader(title: pageTitle ?? tab.title)
+                SettingsPageHeader(title: pageTitle ?? tab.title, actions: actions)
                 content()
                     .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { request -> SettingsHighlightCoordinator.ScrollRequest? in
                         guard let request, request.tab == tab else { return nil }
@@ -1080,7 +1082,7 @@ struct SettingsView: View {
                 ScreenAssistantSettings()
             }
         case .agentStatus:
-            SettingsForm(tab: .agentStatus) {
+            SettingsForm(tab: .agentStatus, actions: AnyView(AgentsHeaderActions())) {
                 AgentStatusSettings()
             }
         case .agentSecurity:

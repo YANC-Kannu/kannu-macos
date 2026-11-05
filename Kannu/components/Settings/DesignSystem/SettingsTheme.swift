@@ -113,6 +113,23 @@ enum SettingsTheme {
     static let sectionLabelGap: CGFloat = 8
     static let sectionRadius: CGFloat = 12
 
+    // MARK: - Product pages: the product first, then its settings
+
+    /// A product page's own content stops here. Past it the extra width is right margin, as with `pageMaxWidth`.
+    static let productMaxWidth: CGFloat = 1200
+    /// A line of prose, such as an empty state's: about 74 characters at the description's size.
+    static let proseMaxWidth: CGFloat = 380
+    /// The hero card, or the empty state in its place.
+    static let heroMinHeight: CGFloat = 240
+    static let heroPadding: CGFloat = 16
+    static let heroIcon: CGFloat = 28
+    /// A row of a product page's list, and the space between two.
+    static let listRowHeight: CGFloat = 56
+    static let listRowGap: CGFloat = 6
+    static let listRowIcon: CGFloat = 20
+    /// A row's trailing column, its state, metrics and light, so the eye travels a bounded distance.
+    static let listTrailingWidth: CGFloat = 200
+
     // MARK: - Controls
 
     static let controlRadius: CGFloat = 7

@@ -26,6 +26,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | You are adding | Use |
 |---|---|
 | A page | `SettingsPage { … }`: one scroll view across the panel, its sections in one column — never `Form` (below, "Pages and sections") |
+| A product page: what it is about, then its settings | `SettingsProductPage(settingsTitle:) { product } settings: { sections }`, its actions on `SettingsForm` (below, "Product pages"); anything live follows "Live data" |
 | A group of rows | `SettingsSection { rows } header: { … } footer: { … }`, called as `Section` was — never `Section` |
 | A section header | `SettingsSectionHeader("…")` — never a raw `Text` in `header: {}` |
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
@@ -60,7 +61,7 @@ component already does.
   control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
   controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), the date
   (`SettingsDateField`), the page and its sections (`SettingsPage`, `SettingsSection`,
-  `SettingsPageInsetKey`), and the shell's own views (below).
+  `SettingsPageInsetKey`), the product page (`SettingsProductPage`), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
   it. It still sets the grouped form style and hides a `Form`'s background, though no page is a `Form` any
@@ -148,7 +149,7 @@ numbers, and this table only says why.
 
 | File | Colours | Fonts | Why they remain |
 |---|---|---|---|
-| `AgentStatusSettings.swift` | 2 | 1 | Status green; a preview caption |
+| `AgentStatusSettings.swift` | 1 | 0 | Status green (Detected Editors' green and caption left with it, Stage 4 child 2) |
 | `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
 | `AnimationEditorView.swift` | 8 | 22 | The editor's own dense scale and previews |
 | `AppearanceSettings.swift` | 10 | 3 | Style cards and previews of notch content |
@@ -301,6 +302,75 @@ either closure left out when there is none.
   inside pages, not in either view); `BrainShellRulesTests` holds the page's column and the inset's one
   measurement.
 
+## Product pages
+
+A product page opens on what it is about, then its settings. Brain › Agents is the one so far; the redesign plan
+gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+
+- **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
+  across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
+  stands in a column up to `productMaxWidth`, 1,200 pt; past it the extra width is right margin. A full-width
+  "<Page> settings" rule starts the settings, which keep `pageMaxWidth`, so a label stays near its switch. Plain
+  stacks, so a search or a deep link still scrolls to a settings row. The same items in the same order at every
+  width, only wider: no breakpoint and no second layout.
+- **The header's actions** sit on the title's row, at its trailing end, which stops where the product column does:
+  `SettingsForm(tab:actions:)` hands them to `SettingsPageHeader`. Icon buttons first, the page's one primary verb
+  last, each reading its own store. `.toolbar` stays banned.
+- **Agents** leads with a hero titled by its state ("Needs you", "Working", "Finished"), the session
+  `primarySession` ranks first, at least `heroMinHeight` tall. Then Recent chats, rows `listRowHeight` tall and
+  `listRowGap` apart, each with a trailing column of `listTrailingWidth`: the state in words and in its light's
+  colour, the metrics and the light. Then a status row of three equal cells: Editors & hooks (the tools on this Mac,
+  and Install for each one without its hook), Usage (readings near their limit, each with its reset and "As of";
+  never a read of its own) and Security (only while findings wait for review). A click on the hero or a row opens
+  its chat.
+- **An empty state** keeps the hero's place and height: the status, at most one line of `proseMaxWidth`, at most one
+  action. No sessions: "No agents running", with "Install <tool> hook" for the first tool on this Mac without its
+  hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the settings show in both.
+- **Agents' header** holds a gear, which goes to the first settings row, and "Install <tool> hook" only while a tool
+  on this Mac lacks its hook. The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
+  Launch Services from `onAppear`, never in `body` and never Warp's container. The header and the page each ask once a
+  visit, so Brain checks twice; the notch asks as its empty state appears, never on the hover-opens while an agent
+  works.
+- **Nothing moved out of reach.** Every settings row keeps its id, its search entry and its deep link, below the
+  product: Smart caffeinate's link from the notch lands there. Detected Editors became the Editors & hooks cell. Editor
+  Hooks stays a settings section, the one place a hook can be removed.
+- **Boards**: `agents0`, `agents1` and `agents3` draw Agents at the window's first size with no session, one and three,
+  from fixtures (`AgentsOverview.snapshotFixture`), never this Mac's sessions, tools, readings or findings. `shellWide`
+  and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the caffeinate link landing below the product.
+
+## Live data
+
+Brain's content is built once and kept for the app's life. Closing takes it out of the window, and a change published
+while it is out still re-runs `body` (docs/REGRESSIONS.md, entry 22). The agent monitor publishes on every hook write,
+up to about 20 times a second, and Agents is the page Brain opens on. So a page that shows live data keeps three rules,
+which `AgentsPageLiveDataRulesTests` reads from the source, each checked against planted offenders:
+
+1. **Throttled and scoped.** The page copies what it shows into `@State` from one subscription to the one value it
+   needs: Agents' sessions through `$sessions.throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest:
+   true)`, at most twice a second, and the style preview's light through `$trafficLightState.removeDuplicates()`.
+   Nothing under Settings observes the whole monitor (`ClosedNotchObservationTests`). Security's cell follows the
+   findings store's `objectWillChange` on the same throttle and redraws only when its summary changes: while a
+   session runs with permission checks off, every hook write restamps its finding and the store republishes. One leaf
+   runs faster: `AgentTurnMetricsView` observes the token follower, which republishes every 50 ms while it catches up
+   on a long turn, as it does for the notch.
+2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
+   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Security's
+   is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps its loop in a
+   `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
+   (`windowDidChangeOcclusionState`): false while Brain is closed, minimised, hidden with the app, fully covered or in
+   another Space, where a full-screen Brain keeps `isVisible` true. Opening and closing set it too, rather than wait
+   for that change, which can come late, or not at all for a window never shown. It starts false, so nothing live
+   runs before Brain is first on screen. The page reads once as it appears, so it opens on what is happening, not on
+   an empty state.
+3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
+   observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
+   tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The
+   page, its scroll position and anything typed stay.
+
+A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
+walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
+screen in another Space during a busy agent. It needs a real window, so it is David's check before install.
+
 ## The shell and navigation
 
 `BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It
@@ -335,7 +405,7 @@ arrow keys and hover take a real window.
 ## The window
 
 - **Sizes.** It opens at 1100×760 and goes down to 820×560, centred on the screen under the pointer and
-  clamped to it. A page stops at 720 pt, so a row does not stretch across a full-screen panel, and it is
+  clamped to it. A page stops at 720 pt (a product page's product at 1,200: "Product pages"), so a row does not stretch across a full-screen panel, and it is
   never centred: it starts 32 pt from the panel's leading edge, or 48 pt on a panel 1,000 pt or wider, so a
   full-screen panel's spare width gathers on the right instead of on both sides of a floating column.
   `SettingsForm` measures the panel and hands the inset to the page and its title (`settingsPageInset`), so

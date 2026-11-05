@@ -164,6 +164,8 @@ class SettingsWindowController: NSWindowController {
 
         // Activate the app and ensure window gets focus
         NSApp.activate(ignoringOtherApps: true)
+        // On screen from here: a window never shown may already count as visible, and then AppKit sends no change.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Force window to front after activation
         DispatchQueue.main.async { [weak self] in
@@ -298,6 +300,8 @@ class SettingsWindowController: NSWindowController {
 
     private func relinquishFocus() {
         window?.orderOut(nil)
+        // Off screen from here, without waiting for AppKit's occlusion change, which can come late.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Set app back to accessory mode immediately
         NSApp.setActivationPolicy(.accessory)
@@ -372,5 +376,12 @@ extension SettingsWindowController: NSWindowDelegate {
     
     func windowDidResignKey(_ notification: Notification) {
     }
-    
+
+    /// Closed, minimised, hidden with the app, fully covered or left in another Space: AppKit says so here, and a
+    /// page's live views stop until any of the window is on screen again (docs/SETTINGS.md, "Live data"). A full-screen
+    /// Brain parked in another Space keeps `isVisible` true, so this, not the close, is what stops it there.
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let window else { return }
+        BrainVisibility.shared.update(for: window)
+    }
 }

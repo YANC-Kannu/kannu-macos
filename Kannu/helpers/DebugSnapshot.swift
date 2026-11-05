@@ -58,6 +58,11 @@ enum DebugSnapshots {
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
+        // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
+        // of this Mac lands in a PNG.
+        let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
+        AgentsOverview.snapshotFixture = agents
+        ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
             boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
@@ -180,6 +185,18 @@ enum DebugSnapshots {
                              width: size.width, into: request.directory, fixedHeight: size.height)
             }
         }
+        // Brain › Agents with no session, one and three, at the window's first size: what is above the fold is how
+        // full the page looks. Fixtures only.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("agents\(count)") == true {
+            AgentsOverview.snapshotFixture = DebugSnapshotFixtures.agentsOverview(sessions: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "agents\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        AgentsOverview.snapshotFixture = agents
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -283,11 +300,14 @@ enum DebugSnapshots {
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
 
     /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
-    /// enter it, and the search boards, at the smallest window, where the sidebar has the least room.
+    /// enter it, `shellWidest`, a 2,560-pt display in full screen, where Agents' product stops at its cap, and
+    /// the search boards, at the smallest window, where the sidebar has the least room.
     private static func shellBoardSize(_ name: String) -> NSSize {
         switch name {
         case "shellWide":
             return NSSize(width: 1440, height: 900)
+        case "shellWidest":
+            return NSSize(width: 2560, height: 1440)
         case "shellSearch", "shellSearchList":
             return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)
         default:
@@ -300,7 +320,10 @@ enum DebugSnapshots {
         [
             ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
             ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
-            ("shellWide", AnyView(SettingsView(snapshotTab: .general))),
+            // Agents, the default tab and the one product page: its product widens to `productMaxWidth`, its
+            // settings stay at `pageMaxWidth`.
+            ("shellWide", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            ("shellWidest", AnyView(SettingsView(snapshotTab: .agentStatus))),
             // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
             // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
             // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment
@@ -310,6 +333,12 @@ enum DebugSnapshots {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                     SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
                         highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays"))
+                }
+            })),
+            // The notch's caffeinate link lands below Agents' product now, in its settings.
+            ("shellDeepLinkAgents", AnyView(SettingsView(snapshotTab: .general).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(highlightID: SettingsDeepLink.smartCaffeinateHighlightID)
                 }
             })),
             // A query with more suggestions than fit, the field focused. A snapshot's window cannot
@@ -996,6 +1025,33 @@ enum DebugSnapshotFixtures {
         cards.append(card("esc", "claude", "Interrupted chat", "executing", .inactive, ago: 50,
                           turn: HookTurn(startedAt: now.addingTimeInterval(-900), toolCalls: 9)))
         return cards
+    }
+
+    /// Brain › Agents' product with no session, one or three: a Codex chat waiting, then Claude and Cursor at work,
+    /// so three sessions put "Needs you" over two recent rows. Cursor is on this "Mac" without its hook, so the install
+    /// offers show; a Claude window is near its limit; the findings fixture waits for review.
+    static func agentsOverview(sessions count: Int, now: Date) -> AgentsOverviewFixture {
+        let chats = recentChats(now: now)
+        let tools = [
+            AgentToolDetector.Tool(provider: "cursor", name: "Cursor", shortName: "Cursor", hook: .cursor, detected: true),
+            AgentToolDetector.Tool(provider: "claude", name: "Claude Code", shortName: "Claude Code", hook: .claude, detected: true),
+            AgentToolDetector.Tool(provider: "codex", name: "Codex", shortName: "Codex", hook: .codex, detected: true),
+            AgentToolDetector.Tool(provider: "antigravity", name: "Antigravity", shortName: "Antigravity", hook: .antigravity, detected: false),
+            AgentToolDetector.Tool(provider: "warp", name: "Warp", shortName: "Warp", hook: nil, detected: true),
+            AgentToolDetector.Tool(provider: "claudedesktop", name: "Claude Desktop", shortName: "Desktop", hook: nil, detected: true),
+        ]
+        let reading = UsageWindowReading(provider: "claude", key: "five_hour", label: "5-hour", percent: 82,
+                                         resetsAt: now.addingTimeInterval(7200), severity: nil,
+                                         observedAt: now.addingTimeInterval(-720))
+        let findings = self.findings
+        let high = findings.filter { $0.severity == .high }
+        return AgentsOverviewFixture(
+            sessions: Array([chats[3], chats[0], chats[2]].prefix(count)),
+            tools: tools,
+            installedHooks: [.claude, .codex],
+            nearLimit: [reading],
+            security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
+        )
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
