@@ -76,6 +76,25 @@ enum DebugSnapshots {
             typed.draft.reminder = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)
             boards.append(("newTaskSheet", AnyView(NewTaskSheet(newTask: typed, listFilter: .all) { _ in })))
         }
+        if request.tabs == nil || request.tabs?.contains("connectSheet") == true {
+            // It reads only a Defaults colour, and touches no Keychain until Connect.
+            boards.append(("connectSheet", AnyView(JiraConnectSheet())))
+        }
+        if request.tabs == nil || request.tabs?.contains("tagsSheet") == true {
+            // The fixture's local task, with two of the fixture's tags on it and the rest offered.
+            let fixture = DebugSnapshotFixtures.tasksFile(now: Date()).tasks
+            boards.append(("tagsSheet", AnyView(TaskTagsSheet(taskID: DebugSnapshotFixtures.localTaskID, title: "Write the release notes",
+                                                             current: ["docs", "planning"], existing: TaskFacets.tags(in: fixture)))))
+        }
+        if request.tabs == nil || request.tabs?.contains("valueSheet") == true {
+            // Set End Time: the date as our button. Its popover is a window of its own, so no board draws it open.
+            boards.append(("valueSheet", TasksSettings.snapshotEndTimeSheet()))
+        }
+        if request.tabs == nil || request.tabs?.contains("urlImportSheet") == true {
+            // A URL typed and no name yet, so Add is off.
+            boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
+                                                                   nameInput: .constant(""), onImport: {}, onCancel: {}))))
+        }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
             boards.append(("taskPage", AnyView(Form {
                 Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
@@ -259,7 +278,8 @@ enum DebugSnapshots {
     }
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
-                                                       "animationEditorControls"]
+                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
+                                                       "valueSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -367,6 +387,31 @@ enum DebugSnapshots {
                     Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
                 }
                 .controlSize(.small)
+                // Quiet: bare at rest, so these show only their labels; the fill takes a pointer.
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Quiet") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                    Button(action: {}) { Text(verbatim: "Quiet, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                        .disabled(true)
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text(verbatim: "Start timing"))
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .disabled(true)
+                    .accessibilityLabel(Text(verbatim: "Start timing, disabled"))
+                    // A more menu's trigger: our quiet button over a native menu.
+                    SettingsMoreMenu {
+                        Button(action: {}) { Text(verbatim: "Show Details") }
+                    }
+                }
             } header: {
                 Text(verbatim: "Buttons")
             }
@@ -533,11 +578,12 @@ enum DebugSnapshots {
         ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
         ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
         ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
-        ("raised", SettingsTheme.raised),
+        ("raised", SettingsTheme.raised), ("success", SettingsTheme.success),
     ]
 
     private static let designSystemFonts: [(name: String, font: Font)] = [
-        ("pageTitle", SettingsTheme.pageTitle), ("body", SettingsTheme.body), ("bodyStrong", SettingsTheme.bodyStrong),
+        ("pageTitle", SettingsTheme.pageTitle), ("sheetTitle", SettingsTheme.sheetTitle), ("body", SettingsTheme.body),
+        ("bodyStrong", SettingsTheme.bodyStrong),
         ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
         ("mono", SettingsTheme.mono),
     ]

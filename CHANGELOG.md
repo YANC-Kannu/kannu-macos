@@ -4,6 +4,79 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
+- **Developer label:** "Keep it, with fixes"
+- **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks
+- **Changes:**
+  - A date's popover focuses its calendar a turn after it opens, and Escape closes only the popover, never the
+    sheet under it. Reaching a date by keyboard takes Full Keyboard Access (David's call).
+  - The animation editor's Reset All is destructive again, through its role (our style colours by role); the
+    editor's raw-colour pin drops from 8 to 7.
+  - The Spotify and animation-editor titles are headings for VoiceOver, as `SettingsSheet`'s titles are.
+  - The URL import's fields are named "Lottie JSON URL" and "Animation Name", not by their example text.
+  - The colour popover's back chevron reads "Back".
+
+### 2026-11-05 - Brain's dates open its own popover
+- **Developer label:** Brain redesign plan: "the calendar grid inside our date popover"
+- **Agent label:** Claude Code (Opus 5.5) — our button and popover; the calendar grid and time field stay the system's
+- **Changes:**
+  - `SettingsDateField`: a button in our style with a calendar glyph and the date, opening our popover on the panel,
+    which holds the system's calendar grid over its time field. VoiceOver reads the title as its label and the full
+    date as its value. The popover closes when Brain does, like the select's.
+  - The three dates move to it: Set End Time and Schedule, each named by a `LabeledContent` beside it, and New
+    Task's reminder. The end time keeps its range, up to the next session and the sheet's own now.
+  - `SettingsDesignSystemRulesTests` allows a `DatePicker` only inside the date field, and `TaskTimeMathTests`
+    reads the end time's range from the field. `BrainShellRulesTests` keeps page knowledge out of it.
+  - New board `valueSheet`: Set End Time, the date as our button.
+  - docs/SETTINGS.md's component table and its native table name it; docs/REGRESSIONS.md entry 22's line says its
+    popover closes on disappear.
+
+### 2026-11-05 - Brain's menus and plain buttons take its theme
+- **Developer label:** Brain redesign Stage 3: "`SettingsMoreMenu`"
+- **Agent label:** Claude Code (Opus 5.5) — our trigger over a native menu; `.bordered` becomes the standard button and `.borderless` a quiet one
+- **Changes:**
+  - `SettingsButtonStyle(.quiet)`: bare at rest, the hover fill under the pointer, the small inset.
+  - The ⋯ of `SettingsMoreMenu`, Tasks' Connect…, an extension's Reset and the estimate presets are our button over
+    a native menu: `.menuStyle(.button)`, our style and `.menuIndicator(.hidden)`, with a `chevron.down` in the label
+    where one is needed. The items stay a native menu, with its keyboard, type-to-select and VoiceOver. All tasks'
+    filter menu stays native until Stage 5.
+  - 20 `.bordered` buttons take the root's standard style: the animation editor's nine, Custom OSD's three preview
+    buttons, Extensions' four, a timer preset's three and the permission callout's one. Revoke Access and Remove are
+    destructive buttons instead of orange- and red-tinted ones.
+  - 9 `.borderless` buttons become quiet: a task row's ▶, ■ and ›, Tasks' back row, a rule's −, the music slots'
+    reset, and the colour popover's three, which take the small size of its compact scale.
+  - The shared components' colours: the tag chip's ring is `accentStrong`, a status line's dot `success` and an
+    error line `destructive`. New token `success`, held to 3:1 on the panel and on cards.
+  - `SettingsDesignSystemRulesTests` holds every menu to our button, All tasks' pinned, and the ⋯ to its quiet
+    trigger; `testTheThemeIsReadable` holds `success`.
+  - The designSystem board gains quiet buttons, enabled and disabled, and a ⋯ trigger, and names `success`.
+  - docs/SETTINGS.md: the component table's quiet button and menus, and the back row's style.
+
+### 2026-11-05 - Brain's sheets take its theme
+- **Developer label:** Brain redesign Stage 3: "restyled sheets"
+- **Agent label:** Claude Code (Opus 5.5) — one SettingsSheet that applies the root itself, since a sheet is a window of its own
+- **Changes:**
+  - `SettingsSheet`: a title in `sheetTitle` with an optional line under it, the fields, then the buttons trailing,
+    Cancel then the primary, on the panel, 420 pt wide. It applies `settingsDesignSystem()` itself, because a sheet
+    is a window of its own and whether the root reaches a presentation cannot be told from source. A sheet is never
+    a `Form`, so the second root changes nothing in it.
+  - Eight sheets build it: the three Connect sheets, Tags, New Task, the value sheet (Set Estimate, Add Time, Set
+    End Time, Schedule), Edit rules at 560 pt, and Add Animation from URL. Tags and the value sheet grow from 380 pt
+    to 420, and the URL sheet from 400.
+  - A field's name is a `LabeledContent` label beside it (Site, Email, API token, Server, the token, Lottie JSON
+    URL, Animation Name), and every red problem line is `SettingsErrorText`. The URL sheet's Cancel moves to the
+    trailing side.
+  - Tags' drop ring and its highlighted suggestion take `accentStrong`.
+  - The animation editor and Spotify's sign-in keep their own layouts and apply the root and the panel themselves.
+    Spotify's title takes `sheetTitle` and its status line the description style.
+  - Theme tokens `sheetTitle`, `sheetInset`, `sheetStack`, `sheetWidth` and `sheetWidthWide`.
+  - `SettingsDesignSystemRulesTests` holds each of the eight sheets to `SettingsSheet`, struct by struct, and the two
+    large ones to the root and the panel. `SettingsLayoutRulesTests`' padding pins trade the sheets' own for
+    `SettingsSheet`'s one, and `BrainShellRulesTests` keeps page knowledge out of it.
+  - New boards `connectSheet`, `tagsSheet` and `urlImportSheet`; the designSystem board names `sheetTitle`.
+  - docs/SETTINGS.md: the one root, re-applied by each presented window, and the sheet rule. docs/REGRESSIONS.md
+    entry 22 gains its dated line.
+
 ### 2026-11-04 - Brain's fields take its chrome and stay native inside
 - **Developer label:** Brain redesign Stage 3: "`SettingsField`"
 - **Agent label:** Claude Code (Opus 5.5) — the AppKit field, plain, inside our chrome; its name beside it, never inside

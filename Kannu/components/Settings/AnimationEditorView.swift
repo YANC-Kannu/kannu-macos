@@ -94,6 +94,9 @@ struct AnimationEditorView: View {
         .frame(idealWidth: 980, idealHeight: 640)
         .frame(minWidth: 860, minHeight: 620)
         .fixedSize()
+        // A sheet is a window of its own, so it takes Brain's root itself; it keeps its own layout.
+        .background(SettingsTheme.panel)
+        .settingsDesignSystem()
         .alert("Import Error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
@@ -109,6 +112,7 @@ struct AnimationEditorView: View {
                 Text(existingAnimation != nil ? "Edit Animation" : "Customize Animation")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 Text(sourceDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -212,7 +216,6 @@ struct AnimationEditorView: View {
                     Image(systemName: "minus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 SettingsSlider(value: $previewScale, in: 1...10, valueDescription: Text("\(Int(previewScale))x")) { Text("Preview Zoom") }
@@ -225,7 +228,6 @@ struct AnimationEditorView: View {
                     Image(systemName: "plus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 Button("Reset") {
@@ -233,7 +235,6 @@ struct AnimationEditorView: View {
                         previewScale = 10
                     }
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
             }
         }
@@ -401,7 +402,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Fill Notch") {
                             withAnimation {
@@ -414,7 +414,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Up 2x") {
                             withAnimation {
@@ -422,16 +421,14 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = true
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Down") {
                             withAnimation {
                                 scale = 0.75
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Reset All") {
+                        Button("Reset All", role: .destructive) {
                             withAnimation {
                                 scale = 1.0
                                 cropWidth = 30
@@ -445,8 +442,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.red)
                     }
                 }
             }
@@ -610,7 +605,6 @@ private struct ParameterSliderRow: View {
                             value = resetValue
                         }
                     }
-                    .buttonStyle(.bordered)
                     .controlSize(.mini)
                 }
             }

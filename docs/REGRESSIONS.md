@@ -1597,6 +1597,12 @@ the rest of this entry holds.
 value, and a drag on the slider cannot move the window, which moves by its title row only. The animation editor's four
 springs, on its zoom and its resets, are now a bounded ease, nil under Reduce Motion, so the rest of this entry holds.
 
+**2026-11-05 addendum: Brain's sheets re-apply the root and add no `onAppear`, no `.task` and no animator.** A sheet is a
+window of its own, so `SettingsSheet`, the animation editor and Spotify's sign-in apply `settingsDesignSystem()`
+themselves; the sheets keep the hooks they had (Add Tags' and New Task's first focus, the Schedule sheet's permission
+check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
+select's.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

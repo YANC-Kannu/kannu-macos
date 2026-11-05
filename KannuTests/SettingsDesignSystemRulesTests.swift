@@ -276,6 +276,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("destructive", on: ["card", "selection"], atLeast: 4.5)
         // The selected segment's title, on the fill it is raised on.
         require("ink", on: ["raised"], atLeast: 7)
+        // A mark, not text: a status line's ready dot.
+        require("success", on: ["panel", "card"], atLeast: 3)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -311,6 +313,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let darkRaised = theme.replacingOccurrences(of: "raised = color(light: 0xFFFFFF", with: "raised = color(light: 0x3A3A3A")
         XCTAssertNotEqual(darkRaised, theme, "the plant must change the theme")
         XCTAssertTrue(Self.readabilityFailures(in: darkRaised).contains("ink on raised, light"))
+
+        let paleSuccess = theme.replacingOccurrences(of: "success = color(light: 0x2E7D4F", with: "success = color(light: 0xA8D5B5")
+        XCTAssertNotEqual(paleSuccess, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: paleSuccess), ["success on panel, light", "success on card, light"])
     }
 
     // MARK: - Every token has a reader
@@ -841,10 +847,16 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: components, by: Self.sharedComponentProblems)
     }
 
-    /// A root button style takes a default-style `Menu`'s indicator away, and the only cures are the
-    /// borderless menu style or a native button style on the menu itself.
-    private static func menusWithoutAnIndicator(in code: String) -> [String] {
-        calls(of: "Menu", in: code) { !($0.contains(".menuStyle(.borderlessButton)") || $0.contains(".buttonStyle(.bordered)")) }
+    /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
+    private static let pinnedNativeMenus = ["AllTasksPage.swift": 1]
+
+    /// Menus whose own chain does not have our button draw the trigger. Each menu says so itself, rather than
+    /// leaving it to the root: the button menu style takes the current button style, ours takes the native
+    /// indicator away, and a label that needs a chevron draws `chevron.down` itself.
+    private static func menusNotDrawnByOurButton(in code: String) -> [String] {
+        calls(of: "Menu", in: code) { chain in
+            !(chain.contains(".menuStyle(.button)") && chain.contains("SettingsButtonStyle(") && chain.contains(".menuIndicator(.hidden)"))
+        }
     }
 
     /// The start of each call of `name` whose modifier chain `isOffender` picks.
@@ -930,26 +942,34 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         return chain
     }
 
-    func testEveryMenuKeepsItsIndicator() throws {
+    /// 2026-11-05: was `testEveryMenuKeepsItsIndicator`, which accepted the borderless menu style or a native button
+    /// style on the menu. Now each menu's trigger is our button over a native menu (Stage 3, brain/3-3-sheets-menus).
+    func testEveryMenuIsDrawnByOurButton() throws {
         var openers = 0
         for (name, source) in try Self.sources() {
             let code = Self.code(source)
             openers += Self.openers(of: "Menu", in: code).count
-            XCTAssertEqual(Self.menusWithoutAnIndicator(in: code), [], "\(name): the root's button style takes this Menu's indicator away")
+            XCTAssertEqual(Self.menusNotDrawnByOurButton(in: code).count, Self.pinnedNativeMenus[name] ?? 0,
+                           "\(name): a menu's trigger is our button: \(Self.menusNotDrawnByOurButton(in: code))")
         }
         XCTAssertGreaterThan(openers, 0, "the scan found no Menu: the pattern went blind")
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.fixedSize()\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.menuStyle(.button)\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a\") {}\n} label: {\n    Text(\"x\")\n}\n").count, 1)
+        let ours = "\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n"
+        // The old borderless menu, and the old Connect… with a native button style.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Image(systemName: \"ellipsis.circle\")\n}\n.menuStyle(.borderlessButton)\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 1)
+        // Our style on a menu style that ignores it, or with the native indicator left on.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.borderlessButton)\n.buttonStyle(SettingsButtonStyle())\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle())\n").count, 1)
         // A style inside the label is on the label, not on the menu.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu {\n} label: {\n    Text(\"x\").menuStyle(.borderlessButton)\n}\n").count, 1)
-        // A modifier on the next view is not on this one.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"a\") {}\nText(\"b\")\n    .buttonStyle(.bordered)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")" + ours + "}\n").count, 1)
+        // A style on the next view is not on this one.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"a\") {}\nText(\"b\")" + ours).count, 1)
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}\n.help(\"h\")\n.menuStyle(.borderlessButton)\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
+        // The real `SettingsMoreMenu` shape passes, its comment between the label and the chain included.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: Self.code("Menu {\n    items\n} label: {\n    Image(systemName: \"ellipsis\")\n}\n// Our button draws the trigger.\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n.fixedSize()\n.accessibilityLabel(accessibilityLabel)\n")).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}" + ours).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
     }
 
     /// Lines naming the default action with no primary style beside them. A custom style cannot see
@@ -978,6 +998,200 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Connect\") {}\n    .buttonStyle(SettingsButtonStyle(.primary))\n    .keyboardShortcut(.defaultAction)\n").count, 0)
         XCTAssertEqual(Self.flatDefaultActions(in: "Button(\"Connect\") {}\n    .keyboardShortcut(.defaultAction)\n    .buttonStyle(SettingsButtonStyle(.primary))\n").count, 0)
         XCTAssertEqual(Self.flatDefaultActions(in: Self.code("// .defaultAction needs the primary style")).count, 0)
+    }
+
+    // MARK: - Sheets
+
+    /// Each sheet that builds a `SettingsSheet`, and the file it lives in.
+    private static let sheetTypes = ["JiraConnectSheet": "TaskConnectSheets.swift", "GitLabConnectSheet": "TaskConnectSheets.swift",
+                                     "SourceConnectSheet": "TaskConnectSheets.swift", "TaskTagsSheet": "TaskTagsSheet.swift",
+                                     "NewTaskSheet": "NewTaskSheet.swift", "TaskValueSheet": "TasksSettings.swift",
+                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift"]
+    /// The two large sheets, which keep layouts of their own and take the root and the panel themselves.
+    private static let largeSheetFiles = ["AnimationEditorView.swift", "SpotifyLoginSheet.swift"]
+
+    /// What `SettingsSheet` keeps: the root and the panel, since a sheet is a window of its own and whether the root's
+    /// styles reach a presentation cannot be told from source, and a title that is a header and can be copied.
+    private static func sheetProblems(in sheet: String) -> [String] {
+        [".settingsDesignSystem()", ".background(SettingsTheme.panel)", ".accessibilityAddTraits(.isHeader)",
+         ".textSelection(.enabled)"].filter { !sheet.contains($0) }
+    }
+
+    /// The text inside `struct name { … }`, its braces balanced, read with strings blanked; nil when there is none.
+    private static func structBody(_ name: String, in source: String) -> String? {
+        let text = Self.code(source, blankingStrings: true)
+        guard let header = text.range(of: #"struct \#(name)\b[^{]*\{"#, options: .regularExpression) else { return nil }
+        let characters = Array(text[text.index(before: header.upperBound)...])
+        var depth = 0, end = 0
+        repeat {
+            if characters[end] == "{" { depth += 1 } else if characters[end] == "}" { depth -= 1 }
+            end += 1
+        } while end < characters.count && depth > 0
+        return String(characters[..<end])
+    }
+
+    /// The sheets whose own body builds no `SettingsSheet(`, by type.
+    private static func sheetsNotBuiltOnTheSheet(in sources: [String: String]) -> [String] {
+        sheetTypes.compactMap { type, file in
+            guard let source = sources[file], let body = structBody(type, in: source), body.contains("SettingsSheet(") else { return type }
+            return nil
+        }.sorted()
+    }
+
+    /// The large sheets missing the root or the panel.
+    private static func largeSheetsWithoutTheRoot(in sources: [String: String]) -> [String] {
+        largeSheetFiles.filter { file in
+            let code = Self.code(sources[file] ?? "")
+            return !code.contains(".settingsDesignSystem()") || !code.contains(".background(SettingsTheme.panel)")
+        }
+    }
+
+    func testEverySheetIsASettingsSheet() throws {
+        let sources = try Self.sources()
+        let sheet = Self.code(try XCTUnwrap(sources["SettingsSheet.swift"]))
+        XCTAssertEqual(Self.sheetProblems(in: sheet), [])
+        Self.assertCaught([(".settingsDesignSystem()", ""), (".background(SettingsTheme.panel)", ".background(SettingsTheme.card)"),
+                           (".accessibilityAddTraits(.isHeader)", ""), (".textSelection(.enabled)", "")],
+                          in: sheet, by: Self.sheetProblems)
+
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: sources), [])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: sources), [])
+
+        // The real files, broken: a sheet back on a bare VStack; Jira's sheet alone, its neighbours still built on
+        // ours; a sheet type gone; a large sheet without its root, or without its panel.
+        func broken(_ file: String, _ from: String, _ to: String, firstOnly: Bool = false) -> [String: String] {
+            var copy = sources
+            let source = sources[file] ?? ""
+            if firstOnly, let range = source.range(of: from) {
+                copy[file] = source.replacingCharacters(in: range, with: to)
+            } else {
+                copy[file] = source.replacingOccurrences(of: from, with: to)
+            }
+            XCTAssertNotEqual(copy[file], source, "the plant must change \(file)")
+            return copy
+        }
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskTagsSheet.swift", "SettingsSheet(", "VStack(")), ["TaskTagsSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "SettingsSheet(", "VStack(", firstOnly: true)),
+                       ["JiraConnectSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "struct GitLabConnectSheet", "struct GitLabSheet")),
+                       ["GitLabConnectSheet"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("AnimationEditorView.swift", ".settingsDesignSystem()", "")),
+                       ["AnimationEditorView.swift"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("SpotifyLoginSheet.swift", ".background(SettingsTheme.panel)", "")),
+                       ["SpotifyLoginSheet.swift"])
+        // A `SettingsSheet(` in a comment builds nothing.
+        XCTAssertNil(Self.structBody("Planted", in: "struct Other {}\n"))
+        XCTAssertEqual(Self.structBody("Planted", in: "struct Planted: View {\n    // SettingsSheet(\n}\n")?.contains("SettingsSheet("), false)
+    }
+
+    // MARK: - Menus
+
+    /// What the ⋯ keeps: our quiet button draws its trigger, and its items stay a native menu.
+    private static func moreMenuProblems(in components: String) -> [String] {
+        guard let start = components.range(of: "struct SettingsMoreMenu<") else { return ["SettingsMoreMenu is gone"] }
+        let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
+        let region = components[start.lowerBound..<end]
+        return [".menuStyle(.button)", "SettingsButtonStyle(.quiet)"].filter { !region.contains($0) }
+    }
+
+    func testTheMoreMenuIsOursOverANativeMenu() throws {
+        let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
+        XCTAssertEqual(Self.moreMenuProblems(in: components), [])
+        Self.assertCaught([(".menuStyle(.button)", ".menuStyle(.borderlessButton)"),
+                           ("SettingsButtonStyle(.quiet)", "SettingsButtonStyle()"),
+                           ("struct SettingsMoreMenu<", "struct RenamedMoreMenu<")],
+                          in: components, by: Self.moreMenuProblems)
+        // The style on the next type is not on the menu.
+        let elsewhere = "struct SettingsMoreMenu<Items: View>: View {\n    .menuStyle(.button)\n}\nstruct Other {\n    SettingsButtonStyle(.quiet)\n}\n"
+        XCTAssertEqual(Self.moreMenuProblems(in: elsewhere), ["SettingsButtonStyle(.quiet)"])
+    }
+
+    // MARK: - Reduce Motion
+
+    /// The arguments of each `withAnimation(…)` and `.animation(…)`, its parens balanced, and an empty one for a bare
+    /// `withAnimation {`, which takes the default animation. Read with strings blanked.
+    private static func animationArguments(in code: String) -> [String] {
+        let characters = Array(Self.code(code, blankingStrings: true))
+        let text = String(characters)
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])withAnimation\s*[({]|\.animation\s*\("#) else {
+            XCTFail("bad animation pattern")
+            return []
+        }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text) else { return nil }
+            let open = text.distance(from: text.startIndex, to: range.upperBound) - 1
+            guard characters[open] == "(" else { return "" }
+            var depth = 0, end = open
+            repeat {
+                if characters[end] == "(" { depth += 1 } else if characters[end] == ")" { depth -= 1 }
+                end += 1
+            } while end < characters.count && depth > 0
+            return String(characters[open..<end])
+        }
+    }
+
+    /// Animations that Reduce Motion cannot stop or that are not the theme's one bounded ease.
+    private static func motionProblems(in code: String) -> [String] {
+        animationArguments(in: code).filter { arguments in
+            !arguments.contains("reduceMotion ? nil :") || !arguments.contains("SettingsTheme.quickAnimation")
+                || !matches(of: #"\.(?:spring|smooth|bouncy|snappy|interactiveSpring|default)\b"#, in: arguments).isEmpty
+        }
+    }
+
+    /// `DesignSystem/` only: pages keep their own animations until Stage 4 rewrites them.
+    func testDesignSystemAnimationsHonourReduceMotion() throws {
+        var animations = 0
+        for (name, source) in try Self.designSystemSources() {
+            animations += Self.animationArguments(in: source).count
+            XCTAssertEqual(Self.motionProblems(in: source), [], "\(name): an animation that Reduce Motion cannot stop, or not the theme's ease")
+        }
+        // The switch, the disclosure and the segments.
+        XCTAssertGreaterThanOrEqual(animations, 3, "the scan found fewer animations than the design system has: the pattern went blind")
+
+        for planted in ["withAnimation(.spring()) {}", ".animation(.easeOut(duration: SettingsTheme.quickAnimation), value: x)",
+                        ".animation(reduceMotion ? nil : .smooth, value: x)", "withAnimation { x = 1 }", ".animation(.default, value: y)",
+                        "withAnimation(reduceMotion ? nil : .bouncy(duration: SettingsTheme.quickAnimation)) {}"] {
+            XCTAssertEqual(Self.motionProblems(in: planted).count, 1, planted)
+        }
+        let toggle = ".animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation),\n           value: configuration.isOn)"
+        XCTAssertEqual(Self.motionProblems(in: toggle), [])
+        XCTAssertEqual(Self.motionProblems(in: "// withAnimation(.spring()) {}\nText(\"withAnimation(.spring())\")"), [])
+        XCTAssertEqual(Self.animationArguments(in: "withAnimationTimer()\nfoo.animation\n"), [])
+
+        // The real switch, with its guard taken away.
+        let toggleStyle = try XCTUnwrap(try Self.designSystemSources()["SettingsToggleStyle.swift"])
+        Self.assertCaught([("reduceMotion ? nil : ", ""), ("SettingsTheme.quickAnimation", "0.3")],
+                          in: toggleStyle, by: Self.motionProblems)
+    }
+
+    // MARK: - Dates
+
+    /// The files under Settings that build a `DatePicker`. Only the date field may: it holds the system's calendar
+    /// grid and time field inside our popover.
+    private static func filesBuildingADatePicker(in sources: [String: String]) -> [String] {
+        sources.filter { !SettingsLayoutRulesTests.nativeControlLines(in: $0.value, names: ["DatePicker"]).isEmpty }.keys.sorted()
+    }
+
+    func testADateIsOurs() throws {
+        let sources = try Self.sources()
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: sources), ["SettingsDateField.swift"])
+        XCTAssertEqual(SettingsLayoutRulesTests.nativeControlLines(in: try XCTUnwrap(sources["SettingsDateField.swift"]), names: ["DatePicker"]).count,
+                       2, "the calendar grid and the time field")
+
+        for planted in ["DatePicker(\"a\", selection: $d)", "SwiftUI.DatePicker(\"a\", selection: $d)", "DatePicker (\n    \"a\",\n    selection: $d)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": planted]), ["Page.swift"], planted)
+        }
+        for clean in ["SettingsDateField(\"a\", selection: $d, in: Date()...)", "// DatePicker(\"a\")", "Text(\"DatePicker(\")",
+                      ".datePickerStyle(.graphical)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": clean]), [], clean)
+        }
+
+        // A real sheet given its native picker back.
+        let tasks = try XCTUnwrap(sources["TasksSettings.swift"])
+        let field = try XCTUnwrap(tasks.range(of: "SettingsDateField("), "the value sheet has no date field to plant on")
+        var broken = sources
+        broken["TasksSettings.swift"] = tasks.replacingCharacters(in: field, with: "DatePicker(")
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: broken), ["SettingsDateField.swift", "TasksSettings.swift"])
     }
 
     // MARK: - Licence

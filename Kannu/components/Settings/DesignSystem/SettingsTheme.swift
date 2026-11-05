@@ -41,6 +41,8 @@ enum SettingsTheme {
     static let knob = color(light: 0xFFFFFF, dark: 0xFFFFFF)
     static let onPrimary = color(light: 0xF4F1EA, dark: 0x101114)
     static let destructive = color(light: 0xBC3226, dark: 0xFF6B5E)
+    /// A mark that means ready, such as a status line's dot. Drawn, never read, so 3:1 is its floor.
+    static let success = color(light: 0x2E7D4F, dark: 0x5FD08A)
 
     // MARK: - Fonts: Geist when bundled, the system font at the same size and weight when not
 
@@ -49,6 +51,8 @@ enum SettingsTheme {
 
     /// One size on every page, so the title never changes size between tabs.
     static let pageTitle = sans(24, .semibold, "Geist-SemiBold")
+    /// A sheet's title: a sheet is smaller than a page.
+    static let sheetTitle = sans(15, .semibold, "Geist-SemiBold")
     static let body = sans(13, .regular, "Geist-Regular")
     static let bodyStrong = sans(13, .medium, "Geist-Medium")
     /// A section's name. The root's font replaces what a grouped `Form` gives its headers, so they say it.
@@ -140,6 +144,17 @@ enum SettingsTheme {
     static let stepperHeight: CGFloat = 22
     /// A divider's width.
     static let hairline: CGFloat = 1
+
+    // MARK: - Sheets
+
+    /// Around a sheet's content.
+    static let sheetInset: CGFloat = 20
+    /// Between a sheet's title, its fields and its buttons.
+    static let sheetStack: CGFloat = 12
+    /// Every sheet but the rules editor.
+    static let sheetWidth: CGFloat = 420
+    /// The rules editor: a kind, a command and a reason side by side.
+    static let sheetWidthWide: CGFloat = 560
 
     private static func sans(_ size: CGFloat, _ weight: Font.Weight, _ name: String) -> Font {
         geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)
