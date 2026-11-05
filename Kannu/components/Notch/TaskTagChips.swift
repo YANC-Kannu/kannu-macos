@@ -20,8 +20,8 @@ import SwiftUI
 
 /// A notch row's caption and its tags, on one line (`TimerTasksPage`), the tags on the house chip
 /// (`SideChip`). The caption wins: it carries the time and the overtime, and the row is already
-/// tinted in its first tag's colour. So a tag never takes a character from it, and the line is the
-/// first of these that fits (`ViewThatFits`):
+/// tinted in its first tag's colour. So a chip never takes a character from it (only "+N" may, on the
+/// last line below), and the line is the first of these that fits (`ViewThatFits`):
 ///
 /// - the whole caption, then the first tag whole as a chip, "#docs", and "+N" for the rest;
 /// - the whole caption, then that chip shortened in the middle into what is left, never under
@@ -31,19 +31,23 @@ import SwiftUI
 ///   beside a done tick.
 ///
 /// The tags come in the order `TaskSearch.chipTags(of:query:)` gives — own tags, then labels, those
-/// the search found first — so while `#docs` is searched for, the chip shown is #docs. Names come
-/// bare; the `#` is added here. VoiceOver reads every tag, whichever pills show. With no tags, the
+/// the search found first — so while `#docs` is searched for, the chip shown is #docs. When only "+N"
+/// fits, that pill is tinted in the accent while it hides a tag the search found (`foundFirst`), so the
+/// find still shows. Names come bare; the `#` is added here. VoiceOver reads every tag, whichever pills show. With no tags, the
 /// caption is the whole line.
 struct TaskTagChips<Caption: View>: View {
     private typealias M = TimerComposerMetrics
 
     /// Bare names, in the order to show them.
     let tags: [String]
+    /// The first tag is one the search found (`TaskSearch.foundTags`): a lone "+N" hiding it is tinted.
+    let foundFirst: Bool
     /// The row's caption, "42m of 2h · 10m over", drawn first.
     let caption: Caption
 
-    init(tags: [String], @ViewBuilder caption: () -> Caption) {
+    init(tags: [String], foundFirst: Bool = false, @ViewBuilder caption: () -> Caption) {
         self.tags = tags
+        self.foundFirst = foundFirst
         self.caption = caption()
     }
 
@@ -57,7 +61,7 @@ struct TaskTagChips<Caption: View>: View {
                 )
                 HStack(spacing: 4) {
                     caption.layoutPriority(1)
-                    SideChip("+\(tags.count)")
+                    SideChip("+\(tags.count)", tint: foundFirst ? .accentColor : nil)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(everyTag)
                 }

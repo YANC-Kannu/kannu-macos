@@ -214,7 +214,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         assertPinnedCounts(Self.pinnedNativeControlCounts, scanner: { Self.nativeControlLines(in: $0, names: Self.nativeControlNames) },
                            rule: "a native Picker, Slider or Stepper",
                            cure: "a choice is SettingsSelect in a SettingsRow, `choices:` for literal options; a value is SettingsSliderRow or SettingsStepperRow")
-        // A floor: the five pinned pickers are still there, so a pattern gone blind fails here.
+        // A floor: the scan still finds a native control, so a pattern gone blind fails here.
         let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeControlLines(in: $1, names: Self.nativeControlNames).count }
         XCTAssertGreaterThan(found, 0, "the scan found no native control: the pattern went blind")
 

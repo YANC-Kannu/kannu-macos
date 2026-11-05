@@ -253,8 +253,8 @@ extension TimerSidePage {
 ///   nothing moves when the page changes.
 /// - **The list**: the task order as it stands (`TasksManager.activeTasks`), narrowed by Show in
 ///   notch, its Tag filter and the search, so the first row is what the user ordered first. Each row
-///   shows its caption whole, then its first tag and "+N" when they fit, else one "+N" for all its
-///   tags (`TaskTagChips`). The whole page tall,
+///   shows its caption whole with its first tag and "+N" when they fit, else one "+N" for all its
+///   tags, before which only the time gives way (`TaskTagChips`). The whole page tall,
 ///   ending where Start and Reset do. A row expands into its card (`TimerTaskDetail`), and the
 ///   clock opens the Time to log cards (`TimerLogTimePage`); the rail stays beside both.
 ///
@@ -670,7 +670,8 @@ private struct TimerTasksPage: View {
                     // The caption, then the tags that fit beside it, the one the search found first; the
                     // caption wins (`TaskTagChips`). The line is a chip tall in every row, tags or not,
                     // so every row's title sits on the same line.
-                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText)) {
+                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText),
+                                 foundFirst: !TaskSearch.foundTags(of: task, query: searchText).isEmpty) {
                         // The overtime never shortens: on a short line the time before it gives way.
                         HStack(spacing: 0) {
                             HoverRevealText(
