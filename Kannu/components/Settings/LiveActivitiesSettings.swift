@@ -84,7 +84,8 @@ struct LiveActivitiesSettings: View {
                         title: String(localized: "Custom Focus metadata"),
                         message: String(localized: "Full Disk Access unlocks custom Focus icons, colors, and labels. Standard Focus detection works without it, so grant access only if you want personalized indicators."),
                         icon: "externaldrive.fill",
-                        iconColor: .purple,
+                        // An offer, so the offer's blue: orange is for a permission something needs.
+                        iconColor: SettingsTheme.accentStrong,
                         requestButtonTitle: String(localized: "Request Full Disk Access"),
                         openSettingsButtonTitle: String(localized: "Open Privacy & Security"),
                         requestAction: { fullDiskAccessPermission.requestAccessPrompt() },

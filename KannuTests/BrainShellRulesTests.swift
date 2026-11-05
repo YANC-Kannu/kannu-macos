@@ -321,12 +321,24 @@ final class BrainShellRulesTests: XCTestCase {
         let column = #"ScrollView \{\s*VStack\(alignment: \.leading, spacing: SettingsTheme\.sectionGap\) \{\s*content\s*\}\s*"#
             + #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth, alignment: \.leading\)\s*"#
             + #"\.padding\(\.horizontal, inset\)\s*"#
-            + #"\.padding\(\.vertical, SettingsTheme\.sectionGap\)\s*"#
-            + #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\}"#
+            + scrollInsetTail
         var problems = SettingsDesignSystemRulesTests.matches(of: column, in: page).count == 1
-            ? [] : ["a page's column is not capped and held to the leading edge inside one scroll view"]
+            ? [] : ["a page's column is not capped and held to the leading edge inside one scroll view, which starts pageScrollInset under the title"]
         if !page.contains("@Environment(\\.settingsPageInset) private var inset") { problems.append("a page does not take the window's inset") }
         return problems
+    }
+
+    /// The column's top gives up `pageScrollInset`, which the scroll view takes outside it (2026-11-05, the design review's
+    /// finding 19), so a scrolled page is cut that far under the title, never against it, and a page at rest starts where
+    /// it did. `SettingsPage` and `SettingsProductPage` both end this way.
+    private static let scrollInsetTail = #"\.padding\(\.top, SettingsTheme\.sectionGap - SettingsTheme\.pageScrollInset\)\s*"#
+        + #"\.padding\(\.bottom, SettingsTheme\.sectionGap\)\s*"#
+        + #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\}\s*"#
+        + #"\.padding\(\.top, SettingsTheme\.pageScrollInset\)"#
+
+    private static func productScrollInsetProblems(in page: String) -> [String] {
+        SettingsDesignSystemRulesTests.matches(of: #"\.padding\(\.horizontal, inset\)\s*"# + scrollInsetTail, in: page).count == 1
+            ? [] : ["the product page's scroll view does not start pageScrollInset under the title"]
     }
 
     /// In `SettingsForm`, which every tab goes through, so no page can miss it: the width flag reads the panel-wide
@@ -358,14 +370,23 @@ final class BrainShellRulesTests: XCTestCase {
         let cap = ".frame(maxWidth: SettingsTheme.pageMaxWidth, alignment: .leading)"
         let inset = ".padding(.horizontal, inset)"
         let line = "\n            "
+        // The scroll view's own inset gone, or the column's top keeping it too, which moves a page at rest down.
+        let scrollInset = "\n        .padding(.top, SettingsTheme.pageScrollInset)"
+        let columnTop = ".padding(.top, SettingsTheme.sectionGap - SettingsTheme.pageScrollInset)"
         Self.assertCaught([(cap, ""),
                            (Self.pageLeading, ".frame(maxWidth: .infinity)"),
                            (line + inset, ""),
                            (cap + line + inset, inset + line + cap),
                            ("VStack(alignment: .leading, spacing: SettingsTheme.sectionGap)", "LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionGap)"),
                            ("ScrollView {", "Group {"),
-                           ("@Environment(\\.settingsPageInset) private var inset", "private let inset = SettingsTheme.pageInset")],
+                           ("@Environment(\\.settingsPageInset) private var inset", "private let inset = SettingsTheme.pageInset"),
+                           (scrollInset, ""),
+                           (columnTop, ".padding(.top, SettingsTheme.sectionGap)")],
                           in: page, by: Self.pageColumnProblems)
+        let product = try Self.code("DesignSystem/SettingsProductPage.swift")
+        XCTAssertEqual(Self.productScrollInsetProblems(in: product), [])
+        Self.assertCaught([(scrollInset, ""), (columnTop, ".padding(.top, SettingsTheme.sectionGap)")],
+                          in: product, by: Self.productScrollInsetProblems)
 
         let view = try Self.view()
         let header = try Self.code("DesignSystem/SettingsPageHeader.swift")

@@ -58,8 +58,12 @@ struct SettingsProductPage<Product: View, Settings: View>: View {
                 .frame(maxWidth: SettingsTheme.pageMaxWidth, alignment: .leading)
             }
             .padding(.horizontal, inset)
-            .padding(.vertical, SettingsTheme.sectionGap)
+            // As `SettingsPage`: less the scroll view's own inset below, so the page at rest starts where it did.
+            .padding(.top, SettingsTheme.sectionGap - SettingsTheme.pageScrollInset)
+            .padding(.bottom, SettingsTheme.sectionGap)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // A scrolled page is cut this far under the title, never against it.
+        .padding(.top, SettingsTheme.pageScrollInset)
     }
 }

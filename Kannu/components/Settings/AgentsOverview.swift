@@ -121,7 +121,6 @@ struct AgentsOverview: View {
         if !enabled {
             AgentsMessageCard(title: String(localized: "Agent Status is off"), message: nil) {
                 Button("Turn On") { enabled = true }
-                    .buttonStyle(SettingsButtonStyle(.primary))
             }
         } else if let primary {
             AgentsHeroCard(session: primary, live: drawsLive)
@@ -183,7 +182,8 @@ struct AgentsHeaderActions: View {
     }
 }
 
-/// "Install Cursor hook": offered only for a tool on this Mac whose hook is missing.
+/// "Install Cursor hook": offered only for a tool on this Mac whose hook is missing. The standard style, as every
+/// button in a card: `.primary` is a page header's one verb or a sheet's default action (docs/SETTINGS.md).
 private struct AgentsInstallButton: View {
     let tool: AgentToolDetector.Tool
 
@@ -191,7 +191,6 @@ private struct AgentsInstallButton: View {
         Button(String(localized: "Install \(tool.name) hook")) {
             if let hook = tool.hook { AgentHookInstaller.shared.install(hook) }
         }
-        .buttonStyle(SettingsButtonStyle(.primary))
     }
 }
 

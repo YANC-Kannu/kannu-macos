@@ -108,7 +108,7 @@ struct ClipboardSettings: View {
                 }
 
                 SettingsSection {
-                    SettingsActionRow {
+                    SettingsActionRow("Clear History", description: "Permanently removes recent copies or pinned items.") {
                         Button("Clear Pinned Items", role: .destructive) {
                             clipboardManager.pinnedItems.removeAll()
                             clipboardManager.savePinnedItemsToDefaults()
@@ -124,8 +124,6 @@ struct ClipboardSettings: View {
                     }
                 } header: {
                     SettingsSectionHeader("Actions")
-                } footer: {
-                    SettingsFooter("Clear clipboard history removes recent copies. Clear pinned items removes your favorites. Both actions are permanent.")
                 }
 
                 if !clipboardManager.clipboardHistory.isEmpty {

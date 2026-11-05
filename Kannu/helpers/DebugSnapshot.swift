@@ -58,6 +58,8 @@ enum DebugSnapshots {
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
+        // The render draws no video, so Devices' 3D icon shows its movie's first frame.
+        DevicesSettingsView.snapshotDrawsStill = true
         // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
         // of this Mac lands in a PNG.
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
@@ -667,8 +669,8 @@ enum DebugSnapshots {
                                   valueText: Text(verbatim: "1.0s"))
                 SettingsSliderRow(verbatim: "Closed notch / pill width", value: .constant(220.0),
                                   in: 120...400, step: 5, valueText: Text(verbatim: "220 px"))
-                SettingsSliderRow(title: Text(verbatim: "Width: 36px"), value: .constant(36.0),
-                                  in: 24...80, step: 2, valueText: nil)
+                SettingsSliderRow(verbatim: "Width", value: .constant(36.0),
+                                  in: 24...80, step: 2, valueText: Text(verbatim: "36 px"))
                 SettingsStepperRow(verbatim: "Volume step", value: .constant(6),
                                    in: 1...25, valueText: Text(verbatim: "6%"))
                 SettingsNoteRow("Enable media panel blur",
