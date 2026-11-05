@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's theme values and Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count
+- **Changes:**
+  - Editors & hooks counts only tools that have a hook. Warp and Claude Desktop have none and counted as hooked, so
+    Cursor missing its hook beside them read "2 of 3 hooked" with nothing installed; it now reads "0 of 1 hooked",
+    and a Mac with only those two reads "2 tools watched".
+  - Each missing hook is offered once: while the empty state offers the first, the cell offers the rest. It hid them
+    all, so a second missing hook was offered nowhere above Editor Hooks.
+  - The hero's figure reads "Tool calls": it counts calls, beside the cell's "tools watched", which counts editors.
+  - `flush` works for a quiet button only, after its fill and its hover, so a filled button never draws outside its
+    frame and the inset left of a flush label still takes clicks. A pin and two plants hold both.
+  - `AgentsPageLiveDataRulesTests` also reads `AgentTurnMetricsView.figureRow`, the hero's off-screen path, for a
+    clock or a follower, and holds the overview to one tool check a visit, each with plants.
+  - docs/SETTINGS.md: a flush button goes under text, never beside it; the empty state's line runs to two lines at
+    most; the count and the offer as above. Strings: "1 tool watched", "%lld tools watched" and "Tool calls" in all
+    17 languages, sorted; "Tools", added two commits ago and now unused, leaves the catalog.
+
 ### 2026-11-05 - Brain's Agents hero reads in three bands, and offers the install once
 - **Developer label:** Brain redesign plan: Stage 4, the design review's fixes for the Agents page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 1, 3 and 6, with 9's and 8's Agents call sites; the live-data contract held unchanged

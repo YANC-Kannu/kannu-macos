@@ -28,7 +28,8 @@ import SwiftUI
 /// (docs/REGRESSIONS.md entry 9). Digits are never cut: each line falls back to a shorter form, or
 /// to nothing, when it does not fit.
 ///
-/// Brain's hero draws the same numbers as figures instead (`figures`): side by side, each over a label.
+/// Brain's hero draws the same numbers as figures instead (`figures`): side by side, each over a label, on one line
+/// each and without that fallback.
 struct AgentTurnMetricsView: View {
     let session: AgentSessionStatus
     /// The primary card's larger type.
@@ -94,7 +95,7 @@ struct AgentTurnMetricsView: View {
         HStack(alignment: .top, spacing: figures.spacing) {
             figure(runTime, label: String(localized: "Run time"), font: font, figures: figures)
             if toolCalls > 0 {
-                figure(Text(toolCalls.formatted()), label: String(localized: "Tools"), font: font, figures: figures)
+                figure(Text(toolCalls.formatted()), label: String(localized: "Tool calls"), font: font, figures: figures)
             }
             if let tokens {
                 figure(Text(verbatim: "\(AgentTurnFormat.compact(tokens.newInput)) · \(AgentTurnFormat.compact(tokens.output))"),

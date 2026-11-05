@@ -121,7 +121,7 @@ enum SettingsTheme {
 
     /// A product page's own content stops here. Past it the extra width is right margin, as with `pageMaxWidth`.
     static let productMaxWidth: CGFloat = 1200
-    /// A line of prose, such as an empty state's: about 74 characters at the description's size.
+    /// A line of prose, such as an empty state's: about 74 characters at the description's size, 63 at the body's.
     static let proseMaxWidth: CGFloat = 380
     /// The hero card, or the empty state in its place.
     static let heroMinHeight: CGFloat = 200
