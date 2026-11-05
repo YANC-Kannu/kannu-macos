@@ -79,13 +79,16 @@ private struct SettingsColorPickerPopover: View {
                     } label: {
                         Image(systemName: "chevron.left")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text("Back"))
                     Text("Custom color")
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
                     Spacer()
                 }
                 .font(.caption)
+                // The popover's compact scale: our style sets the buttons' type by their size.
+                .controlSize(.small)
                 ColorSpectrumPicker(color: $selection, supportsOpacity: supportsOpacity)
                     .frame(width: 220)
             } else {
@@ -104,12 +107,13 @@ private struct SettingsColorPickerPopover: View {
                     } label: {
                         Label("Pick from screen", systemImage: "eyedropper")
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
                     Spacer()
                     Button("Custom…") { showsSpectrum = true }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(SettingsButtonStyle(.quiet))
                 }
                 .font(.caption)
+                .controlSize(.small)
             }
         }
         .padding(12)

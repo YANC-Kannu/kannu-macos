@@ -33,17 +33,19 @@ struct JiraConnectSheet: View {
     @State private var connecting: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text("Connect Jira Cloud")
-                .font(.headline)
-            Text("Checked with your site, then kept in your Keychain.")
-                .settingsDescriptionStyle()
-            TextField("Site", text: $site, prompt: Text(verbatim: "acme.atlassian.net"))
-                .settingsField()
-            TextField("Email", text: $email, prompt: Text(verbatim: "you@example.com"))
-                .settingsField()
-            SecureField("API token", text: $token, prompt: Text("API token"))
-                .settingsField()
+        SettingsSheet("Connect Jira Cloud", subtitle: Text("Checked with your site, then kept in your Keychain.")) {
+            LabeledContent("Site") {
+                TextField("Site", text: $site, prompt: Text(verbatim: "acme.atlassian.net"))
+                    .settingsField()
+            }
+            LabeledContent("Email") {
+                TextField("Email", text: $email, prompt: Text(verbatim: "you@example.com"))
+                    .settingsField()
+            }
+            LabeledContent("API token") {
+                SecureField("API token", text: $token, prompt: Text("API token"))
+                    .settingsField()
+            }
             Link("Create API token…", destination: JiraAPI.createTokenURL)
                 .buttonStyle(.link)
             LabeledContent {
@@ -55,25 +57,21 @@ struct JiraConnectSheet: View {
                 SettingsRowLabel("Jira colour", description: "For Jira tasks that have no tags.")
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if connecting != nil {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { close() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Connect") { connect() }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(connecting != nil || !canConnect)
+        } buttons: {
+            if connecting != nil {
+                ProgressView()
+                    .controlSize(.small)
             }
+            Spacer()
+            Button("Cancel", role: .cancel) { close() }
+                .keyboardShortcut(.cancelAction)
+            Button("Connect") { connect() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(connecting != nil || !canConnect)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 420)
         .onDisappear {
             connecting?.cancel()
             token = ""
@@ -124,16 +122,16 @@ struct GitLabConnectSheet: View {
     @State private var connecting: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text("Connect GitLab")
-                .font(.headline)
-            Text("Checked with your server, then kept in your Keychain.")
-                .settingsDescriptionStyle()
-            TextField("Server", text: $server, prompt: Text(verbatim: GitLabHost.defaultServer))
-                .onChange(of: server) { _, _ in problem = nil }
-                .settingsField()
-            SecureField("Personal access token", text: $token, prompt: Text("Personal access token"))
-                .settingsField()
+        SettingsSheet("Connect GitLab", subtitle: Text("Checked with your server, then kept in your Keychain.")) {
+            LabeledContent("Server") {
+                TextField("Server", text: $server, prompt: Text(verbatim: GitLabHost.defaultServer))
+                    .onChange(of: server) { _, _ in problem = nil }
+                    .settingsField()
+            }
+            LabeledContent("Personal access token") {
+                SecureField("Personal access token", text: $token, prompt: Text("Personal access token"))
+                    .settingsField()
+            }
             Text("`api` to log time; `read_api` lists only")
                 .settingsDescriptionStyle()
             if let createTokenURL {
@@ -149,25 +147,21 @@ struct GitLabConnectSheet: View {
                 SettingsRowLabel("GitLab colour", description: "For GitLab tasks that have no tags.")
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if connecting != nil {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { close() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Connect") { connect() }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(connecting != nil || !canConnect)
+        } buttons: {
+            if connecting != nil {
+                ProgressView()
+                    .controlSize(.small)
             }
+            Spacer()
+            Button("Cancel", role: .cancel) { close() }
+                .keyboardShortcut(.cancelAction)
+            Button("Connect") { connect() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(connecting != nil || !canConnect)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 420)
         .onDisappear {
             connecting?.cancel()
             token = ""
@@ -228,19 +222,19 @@ struct SourceConnectSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text(verbatim: String(localized: "Connect \(source.title)"))
-                .font(.headline)
-            Text(verbatim: explanation)
-                .settingsDescriptionStyle()
+        SettingsSheet(Text(verbatim: String(localized: "Connect \(source.title)")), subtitle: Text(verbatim: explanation)) {
             if source == .github {
-                TextField("Server", text: $server, prompt: Text(verbatim: "https://github.com"))
-                    .onChange(of: server) { _, _ in problem = nil }
-                    .settingsField()
+                LabeledContent("Server") {
+                    TextField("Server", text: $server, prompt: Text(verbatim: "https://github.com"))
+                        .onChange(of: server) { _, _ in problem = nil }
+                        .settingsField()
+                }
             }
             if source.usesToken {
-                SecureField(tokenLabel, text: $token, prompt: Text(tokenLabel))
-                    .settingsField()
+                LabeledContent(tokenLabel) {
+                    SecureField(tokenLabel, text: $token, prompt: Text(tokenLabel))
+                        .settingsField()
+                }
                 if let createTokenURL = TaskSourceStatus.createTokenURL(for: source, server: server) {
                     Link("Create token…", destination: createTokenURL)
                         .buttonStyle(.link)
@@ -256,25 +250,21 @@ struct SourceConnectSheet: View {
                                  description: String(localized: "For \(source.name) tasks that have no tags."))
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if connecting != nil {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { close() }
-                    .keyboardShortcut(.cancelAction)
-                Button(source.usesToken ? String(localized: "Connect") : String(localized: "Allow Access")) { connect() }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(connecting != nil || (source.usesToken && token.isEmpty))
+        } buttons: {
+            if connecting != nil {
+                ProgressView()
+                    .controlSize(.small)
             }
+            Spacer()
+            Button("Cancel", role: .cancel) { close() }
+                .keyboardShortcut(.cancelAction)
+            Button(source.usesToken ? String(localized: "Connect") : String(localized: "Allow Access")) { connect() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(connecting != nil || (source.usesToken && token.isEmpty))
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 420)
         .onDisappear {
             connecting?.cancel()
             token = ""
