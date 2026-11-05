@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - One answer to which agent tools are on this Mac
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the tool detector Brain and the notch share
+- **Changes:**
+  - `AgentToolDetector` says which of Cursor, Claude Code, Codex, Antigravity, Warp and Claude Desktop have run on
+    this Mac, by file checks and Launch Services, never Warp's container. `AgentHookLayout.toolIsPresent` answers yes
+    for five of them whatever is installed, so it could not say which hook to offer.
+  - The notch's empty state asks it once per visit, from `onAppear`, where it checked six paths on every render.
+  - `FirstLaunchRulesTests` reads the detector for the Warp gate.
+
 ### 2026-11-05 - Answer the review of Brain's pages
 - **Developer label:** Brain redesign plan: Stage 4, pages
 - **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks

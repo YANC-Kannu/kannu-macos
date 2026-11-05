@@ -26,6 +26,8 @@ struct NotchAgentStatusView: View {
     @State private var copiedFindingID: String?
     /// Bumped once when a red badge's blink window ends, so the 10 Hz blink stops on time.
     @State private var blinkWake = Date.distantPast
+    /// The empty state's tools, checked once per visit.
+    @State private var detectedTools: [AgentToolDetector.Tool] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     private let scrollSuppressionToken = UUID()
@@ -61,45 +63,6 @@ struct NotchAgentStatusView: View {
         AgentTrafficLightMapper.primarySession(from: visibleSessions)
     }
 
-    private struct ProviderInstallStatus {
-        let source: AgentProviderIconSource
-        let name: String
-        let detected: Bool
-    }
-
-    private var providerStatuses: [ProviderInstallStatus] {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        return [
-            ProviderInstallStatus(
-                source: .cursor, name: "Cursor",
-                detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)
-            ),
-            ProviderInstallStatus(
-                source: .claude, name: "Claude Code",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)
-            ),
-            ProviderInstallStatus(
-                source: .codex, name: "Codex",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)
-            ),
-            ProviderInstallStatus(
-                source: .antigravity, name: "Antigravity",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".gemini").path)
-            ),
-            ProviderInstallStatus(
-                source: .warp, name: "Warp",
-                // Launch Services, not Warp's container: statting that raises "access data from
-                // other apps", which belongs to onboarding's Permissions step.
-                detected: LaunchPermissionManager.isWarpInstalled
-            ),
-            ProviderInstallStatus(
-                source: .claudeDesktop, name: "Desktop",
-                detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)
-            ),
-        ]
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -133,6 +96,8 @@ struct NotchAgentStatusView: View {
         .onHover { hovering in
             updateScrollGestureSuppression(for: hovering)
         }
+        // The empty state's tools: a visit's file checks, never a render's (`AgentToolDetector`).
+        .onAppear { detectedTools = AgentToolDetector.detect() }
         .onDisappear {
             updateScrollGestureSuppression(for: false)
         }
@@ -151,11 +116,11 @@ struct NotchAgentStatusView: View {
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 0) {
-                ForEach(providerStatuses, id: \.name) { status in
+                ForEach(detectedTools) { status in
                     HStack(spacing: 5) {
-                        AgentProviderIconView(source: status.source, size: 14)
+                        AgentProviderIconView(source: .init(rawProvider: status.provider), size: 14)
                             .opacity(status.detected ? 1 : 0.3)
-                        Text(status.name)
+                        Text(status.shortName)
                             .font(.system(size: 10))
                             .foregroundStyle(status.detected ? .primary : .tertiary)
                             .lineLimit(1)
