@@ -24,9 +24,9 @@ import Defaults
 import SwiftUI
 
 struct AgentStatusSettings: View {
-    // Deliberately not observing CursorAgentStatusMonitor: it publishes on every rescan while
-    // agents run, and the only thing here that shows its state is the preview, which observes it
-    // on its own (AgentTrafficLightStylePreview).
+    // Deliberately not observing CursorAgentStatusMonitor: it publishes on every hook write while
+    // agents run. The product above the settings (AgentsOverview) and the style preview
+    // (AgentTrafficLightStylePreview) each copy what they show, only while Brain is on screen.
     @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
     @ObservedObject var hookInstaller = AgentHookInstaller.shared
     @ObservedObject private var notificationBridge = AgentStatusNotificationBridge.shared
@@ -51,7 +51,6 @@ struct AgentStatusSettings: View {
     @Default(.agentWaitReminderMinutes) var agentWaitReminderMinutes
     @State private var isSendingTestNotification = false
     /// File checks, read when the tab appears rather than on every render.
-    @State private var detectedEditors: [DetectedEditor] = []
     @State private var presentHookTools: Set<AgentHookProvider> = Set(AgentHookProvider.allCases)
 
     private func highlightID(_ title: String) -> String {
@@ -59,7 +58,10 @@ struct AgentStatusSettings: View {
     }
 
     var body: some View {
-        SettingsPage {
+        // The product first, then its settings (docs/SETTINGS.md, "Product pages").
+        SettingsProductPage(settingsTitle: String(localized: "Agent settings")) {
+            AgentsOverview()
+        } settings: {
             SettingsSection {
                 Defaults.Toggle(key: .enableAgentStatusFeature) {
                     Text("Enable Agent Status")
@@ -72,20 +74,12 @@ struct AgentStatusSettings: View {
             }
 
             if enableAgentStatusFeature {
-                SettingsSection {
-                    detectedProvidersGrid
-                } header: {
-                    SettingsSectionHeader("Detected Editors")
-                } footer: {
-                    SettingsFooter("Kannu watches these editors automatically. Install a hook below for richer status on editors marked as not detected.")
-                }
-
                 // Accessibility is optional, not required: without it clicking a chat still activates
                 // the right app — it just can't raise the specific window for IDE-hosted sessions.
                 // Chats Claude Desktop knows deep-link to the exact chat (its session route, see
                 // ClaudeDesktopSessionIndex); Terminal and iTerm2 tabs are picked by AppleScript.
                 SettingsSection {
-                    SettingsRow("Open the exact terminal tab", description: "Clicking a chat that runs in Terminal or iTerm2 brings its tab to the front, and switches tmux to its pane. macOS asks once for permission to control each terminal app.") {
+                    SettingsRow("Open the exact terminal tab", description: "Brings a chat's Terminal or iTerm2 tab forward.") {
                         Defaults.Toggle(key: .openAgentTerminalTab) {
                             Text("Open the exact terminal tab")
                         }
@@ -151,7 +145,7 @@ struct AgentStatusSettings: View {
                 }
 
                 SettingsSection {
-                    SettingsRow("Smart caffeinate", description: "Keeps the Mac awake automatically while any agent is running, and lets it sleep when they stop. While this is on, the manual switch in the notch is hidden.") {
+                    SettingsRow("Smart caffeinate", description: "Keeps the Mac awake while agents run.") {
                         Defaults.Toggle(key: .smartCaffeinate) {
                             Text("Smart caffeinate")
                         }
@@ -239,7 +233,6 @@ struct AgentStatusSettings: View {
             pushoverUserKey = SecureSecretsStore.value(for: .pushoverUserKey)
             pushoverAppToken = SecureSecretsStore.value(for: .pushoverAppToken)
             webhookURL = SecureSecretsStore.value(for: .webhookURL)
-            detectedEditors = Self.detectEditors()
             presentHookTools = Set(AgentHookProvider.allCases.filter { AgentHookInstaller.layout.toolIsPresent($0) })
             hookInstaller.refresh()
             accessibilityPermission.refreshStatus()
@@ -385,48 +378,6 @@ struct AgentStatusSettings: View {
         }
     }
 
-    private struct DetectedEditor: Identifiable {
-        let source: AgentProviderIconSource
-        let name: String
-        let detected: Bool
-        var id: String { name }
-    }
-
-    private static func detectEditors() -> [DetectedEditor] {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        return [
-            DetectedEditor(source: .cursor, name: "Cursor", detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)),
-            DetectedEditor(source: .claude, name: "Claude Code", detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)),
-            DetectedEditor(source: .codex, name: "Codex", detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)),
-            // Launch Services, not Warp's container (whose stat raises a permission dialog).
-            DetectedEditor(source: .warp, name: "Warp", detected: LaunchPermissionManager.isWarpInstalled),
-            DetectedEditor(source: .claudeDesktop, name: "Claude Desktop", detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)),
-        ]
-    }
-
-    private var detectedProvidersGrid: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 12, alignment: .leading)], alignment: .leading, spacing: 10) {
-            ForEach(detectedEditors) { editor in
-                HStack(spacing: 6) {
-                    AgentProviderIconView(source: editor.source, size: 16)
-                        .opacity(editor.detected ? 1 : 0.35)
-                    Text(editor.name)
-                        .font(.subheadline)
-                        .foregroundStyle(editor.detected ? .primary : .secondary)
-                        .lineLimit(1)
-                        .textSelection(.enabled)
-                    Circle()
-                        .fill(editor.detected ? Color.green : Color.secondary.opacity(0.4))
-                        .frame(width: 6, height: 6)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(editor.detected ? Text("\(editor.name), detected") : Text("\(editor.name), not detected"))
-            }
-        }
-    }
-
-
     @ViewBuilder
     private func hookRow(for provider: AgentHookProvider) -> some View {
         let installed = hookInstaller.isInstalled(provider)
@@ -489,17 +440,23 @@ struct AgentStatusSettings: View {
     }
 }
 
-/// The traffic light in Settings, in the chosen style and the monitor's current state. It observes
-/// the monitor itself so the rest of the Agents tab does not re-render on every rescan.
+/// The traffic light in Settings, in the chosen style and the monitor's current state. It follows only
+/// the light, never the whole monitor, and only while Brain is on screen (docs/SETTINGS.md, "Live data"),
+/// so the rest of the Agents tab does not re-render on every rescan and a hidden Brain does no work.
 private struct AgentTrafficLightStylePreview: View {
     let style: AgentTrafficLightStyle
-    @ObservedObject private var monitor = CursorAgentStatusMonitor.shared
+    @ObservedObject private var visibility = BrainVisibility.shared
+    @State private var state: AgentTrafficLightState = .inactive
 
     var body: some View {
-        AgentTrafficLightDots(
-            style: style,
-            state: monitor.trafficLightState == .inactive ? .executing : monitor.trafficLightState
-        )
+        AgentTrafficLightDots(style: style, state: state == .inactive ? .executing : state)
+            .onAppear { state = CursorAgentStatusMonitor.shared.trafficLightState }
+            .task(id: visibility.isOnScreen) {
+                guard visibility.isOnScreen else { return }
+                for await latest in CursorAgentStatusMonitor.shared.$trafficLightState.removeDuplicates().values {
+                    state = latest
+                }
+            }
     }
 }
 

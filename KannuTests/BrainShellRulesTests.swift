@@ -198,7 +198,8 @@ final class BrainShellRulesTests: XCTestCase {
     private static func formsIn(detailOf view: String) -> [String] {
         guard let start = view.range(of: "private func detailView(for tab: SettingsTab)"),
               let end = view.range(of: "#if DEBUG", range: start.upperBound..<view.endIndex) else { return [] }
-        return SettingsDesignSystemRulesTests.matches(of: #"SettingsForm\(tab: \.\w+\)"#, in: String(view[start.upperBound..<end.lowerBound]))
+        // A product page hands its header actions in too (Agents, 2026-11-05: docs/SETTINGS.md, "Product pages").
+        return SettingsDesignSystemRulesTests.matches(of: #"SettingsForm\(tab: \.\w+(?:\)|, actions:)"#, in: String(view[start.upperBound..<end.lowerBound]))
     }
 
     func testEveryTabKeepsItsForm() throws {
@@ -208,6 +209,8 @@ final class BrainShellRulesTests: XCTestCase {
 
         XCTAssertEqual(Self.formsIn(detailOf: "private func detailView(for tab: SettingsTab) {\nSettingsForm(tab: .a)\nSettingsForm(tab: .b)\n}\n#if DEBUG\nSettingsForm(tab: .c)\n"),
                        ["SettingsForm(tab: .a)", "SettingsForm(tab: .b)"])
+        XCTAssertEqual(Self.formsIn(detailOf: "private func detailView(for tab: SettingsTab) {\nSettingsForm(tab: .a, actions: AnyView(A())) {\n}\n#if DEBUG\n"),
+                       ["SettingsForm(tab: .a, actions:"])
         XCTAssertEqual(Self.formsIn(detailOf: "SettingsForm(tab: .a)"), [])
     }
 
@@ -288,7 +291,7 @@ final class BrainShellRulesTests: XCTestCase {
     // MARK: - The large title
 
     private static func titleProblems(form: String, tasks: String) -> [String] {
-        var problems = ["SettingsPageHeader(title: pageTitle ?? tab.title)", ".onPreferenceChange(SettingsPageTitleKey.self)"].filter { !form.contains($0) }
+        var problems = ["SettingsPageHeader(title: pageTitle ?? tab.title, actions: actions)", ".onPreferenceChange(SettingsPageTitleKey.self)"].filter { !form.contains($0) }
         if !tasks.contains(".settingsPageTitle(enableTasks ? path.last.map(Self.title) ?? Self.overviewTitle : Self.overviewTitle)") {
             problems.append("Tasks no longer names its sub-pages")
         }

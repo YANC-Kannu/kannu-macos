@@ -4,6 +4,72 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks
+- **Changes:**
+  - Security's cell follows the findings store at most twice a second and redraws only when its summary changes. It
+    observed the whole store, which republishes on every hook write while a session runs with permission checks off,
+    so Agents could redraw up to about 20 times a second.
+  - Opening and closing Brain set `BrainVisibility` themselves rather than wait for AppKit's occlusion change. A late
+    one could keep the live leaves running after a close; a missing one could leave the first open frozen.
+  - The notch checks the tools as its empty state appears, not on every hover-open while an agent works.
+  - `AgentsPageLiveDataRulesTests` also holds the hero and the rows to `drawsLive`, bans a `Task` inside a live
+    `.task`, and pins the flag's one assignment, its two new writers, Security's throttle and the notch's check, each
+    against plants.
+  - docs/SETTINGS.md and docs/REGRESSIONS.md: Security's rate, the new writers, Brain's two tool checks a visit and the
+    token follower's 50 ms catch-up.
+
+### 2026-11-05 - Brain's Agents page leads with your agents
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the product first, then its settings; fixtures on every board; the live-data contract held clause by clause
+- **Changes:**
+  - Brain › Agents opens on its agents. A hero titled by its state ("Needs you", "Working", "Finished") shows the
+    session the notch ranks first, with its chat, its state in words and colour, its run's metrics and its light.
+    Recent chats follow as rows, and a status row of three cells: Editors & hooks (the tools on this Mac, with Install
+    for each one missing its hook), Usage (readings near their limit, each with its reset and when it was read) and
+    Security (only while findings wait for review). A click on the hero or a row opens its chat.
+  - With no session the hero's place says "No agents running", one line on how to start, and offers the first
+    missing hook; with Agent Status off it says so, with Turn On. The header has a gear to the settings and the same
+    install offer.
+  - `SettingsProductPage` lays a product page out: the product in a column up to 1,200 pt, then a full-width "Agent
+    settings" rule and the settings in their 720-pt column. Every row keeps its id, search entry and deep link.
+    Detected Editors became the Editors & hooks cell; Editor Hooks stays a section, where a hook can be removed. The
+    terminal-tab and Smart caffeinate descriptions are cut to about eight words.
+  - Live data: the sessions come through one subscription throttled to 500 ms, only while Brain is on screen, and
+    the page reads them once as it opens. While Brain is off screen the metrics and the status row give way to a
+    static copy, so neither the token follower, nor a 1 Hz clock, nor the usage and findings stores run for it. A
+    click resolves its target in the action, never while drawing.
+  - 19 new strings, each in the catalog's 17 languages.
+  - Boards: `agents0`, `agents1` and `agents3` at the window's first size, `shellWide` on Agents, `shellWidest` at
+    2,560 pt and `shellDeepLinkAgents`, all from fixtures: no session, tool, reading or finding of this Mac.
+  - `AgentsPageLiveDataRulesTests` holds each clause of the contract, the click, the tool checks and the product
+    page's frame against planted offenders; `BrainShellRulesTests` lets `SettingsForm` take actions.
+  - docs/SETTINGS.md gains "Product pages" and "Live data"; docs/REGRESSIONS.md entry 22 and its Danger zones row
+    gain their dated lines.
+
+### 2026-11-05 - Brain's live views stop while it is off screen
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the visibility signal the live-data contract stands on
+- **Changes:**
+  - `BrainVisibility` says whether any of Brain's window is on screen. `SettingsWindowController` sets it from the
+    window's occlusion state, which goes false when Brain is closed, minimised, hidden, fully covered or in another
+    Space, where a full-screen Brain keeps `isVisible` true. It starts false, so nothing live runs before the first
+    open.
+  - The Agents style preview follows only the light, and only while Brain is on screen. It observed the whole agent
+    monitor, Brain open or not, so every hook write re-ran it. Nothing under Settings observes the monitor now, and
+    `ClosedNotchObservationTests` drops its entry.
+
+### 2026-11-05 - One answer to which agent tools are on this Mac
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the tool detector Brain and the notch share
+- **Changes:**
+  - `AgentToolDetector` says which of Cursor, Claude Code, Codex, Antigravity, Warp and Claude Desktop have run on
+    this Mac, by file checks and Launch Services, never Warp's container. `AgentHookLayout.toolIsPresent` answers yes
+    for five of them whatever is installed, so it could not say which hook to offer.
+  - The notch's empty state asks it once per visit, from `onAppear`, where it checked six paths on every render.
+  - `FirstLaunchRulesTests` reads the detector for the Warp gate.
+
 ### 2026-11-05 - Answer the review of Brain's pages
 - **Developer label:** Brain redesign plan: Stage 4, pages
 - **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks

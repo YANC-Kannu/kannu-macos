@@ -31,6 +31,8 @@ struct AgentTurnMetricsView: View {
     let session: AgentSessionStatus
     /// The primary card's larger type.
     var prominent = false
+    /// Brain's type in place of the notch's (Brain › Agents); nil keeps the notch's.
+    var font: Font? = nil
 
     @ObservedObject private var follower = ClaudeTurnTokenFollower.shared
 
@@ -83,7 +85,7 @@ struct AgentTurnMetricsView: View {
                 EmptyView()
             }
         }
-        .font(prominent ? .caption : .caption2)
+        .font(font ?? (prominent ? .caption : .caption2))
         .monospacedDigit()
         .lineLimit(1)
         .foregroundStyle(.secondary)
