@@ -85,7 +85,7 @@ struct TaskFilter: Equatable {
     /// `TaskFacets.anyProject`, `TaskFacets.noProject`, or a project as `TaskFacets.project` names it.
     var project: String = TaskFacets.anyProject
     var status: TaskStatusFilter = .toDoAndInProgress
-    /// `TaskFacets.anyTag`, or a tag (matched ignoring case).
+    /// `TaskFacets.anyTag`, or a tag as `TaskFacets.displayTags(of:)` gives it, own or a label (matched ignoring case).
     var tag: String = TaskFacets.anyTag
     /// The words typed in All tasks' Find field (`TaskSearch.matches`). Never saved: the page opens
     /// with every task, and only the four filters persist.
@@ -108,7 +108,8 @@ struct TaskFilter: Equatable {
 /// - **Status**: a remote task's status category ("indeterminate" is In Progress, anything else To
 ///   Do); in a file written before categories, a merge request is In Progress. A local task is In
 ///   Progress once it has any recorded time.
-/// - **Tags**: the user's own, compared ignoring case.
+/// - **Tags**: the user's own, then the source's labels (`displayTags(of:)`), compared ignoring case;
+///   `tags(in:)` lists the user's own alone.
 enum TaskFacets {
     static let anyProject = ""
     /// The Project filter's "No project": local tasks. Starts with "#", which no Jira key or GitLab
@@ -237,6 +238,15 @@ enum TaskFacets {
         Array(labels.compactMap { TaskItem.cleanedTitle($0).map { String($0.prefix(50)) } }.prefix(20))
     }
 
+    // MARK: - Tags
+
+    /// What a task shows as tags: own tags in order, then labels (a scoped one by its value), once each ignoring case.
+    static func displayTags(of task: TaskItem) -> [String] {
+        var seen = Set<String>()
+        let labels = (task.remote?.labels ?? []).map(TaskDetailSummary.labelDisplay)
+        return (task.tags + labels).filter { seen.insert($0.lowercased()).inserted }
+    }
+
     // MARK: - Matching
 
     static func matches(_ task: TaskItem, filter: TaskFilter) -> Bool {
@@ -253,7 +263,7 @@ enum TaskFacets {
         }
         if filter.tag != anyTag {
             let wanted = filter.tag.lowercased()
-            guard task.tags.contains(where: { $0.lowercased() == wanted }) else { return false }
+            guard displayTags(of: task).contains(where: { $0.lowercased() == wanted }) else { return false }
         }
         return TaskSearch.matches(task, query: filter.query)
     }
@@ -276,11 +286,21 @@ enum TaskFacets {
         tasks.contains { project(for: $0) == nil }
     }
 
-    /// The tags present, first spelling of each, sorted ignoring case.
+    /// The own tags present, never labels (what tag suggestions offer), first spelling of each, sorted ignoring case.
     static func tags(in tasks: [TaskItem]) -> [String] {
+        firstSpellings(tasks.flatMap(\.tags))
+    }
+
+    /// The Tag filter's choices: own tags and labels (`displayTags`), first spelling of each, sorted ignoring case.
+    static func filterTags(in tasks: [TaskItem]) -> [String] {
+        firstSpellings(tasks.flatMap(displayTags(of:)))
+    }
+
+    /// Each tag once, by its first spelling (compared ignoring case), sorted ignoring case.
+    private static func firstSpellings(_ tags: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
-        for tag in tasks.flatMap(\.tags) where seen.insert(tag.lowercased()).inserted {
+        for tag in tags where seen.insert(tag.lowercased()).inserted {
             result.append(tag)
         }
         return result.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
