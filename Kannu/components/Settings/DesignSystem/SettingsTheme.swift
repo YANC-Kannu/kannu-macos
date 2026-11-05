@@ -51,6 +51,9 @@ enum SettingsTheme {
 
     /// One size on every page, so the title never changes size between tabs.
     static let pageTitle = sans(24, .semibold, "Geist-SemiBold")
+    /// A card's title, the step between a page's title and a row: the hero's state, an empty state's status, and a
+    /// status cell's headline figure.
+    static let cardTitle = sans(17, .semibold, "Geist-SemiBold")
     /// A sheet's title: a sheet is smaller than a page.
     static let sheetTitle = sans(15, .semibold, "Geist-SemiBold")
     static let body = sans(13, .regular, "Geist-Regular")
@@ -105,8 +108,9 @@ enum SettingsTheme {
 
     /// Between two sections, and above the first and below the last.
     static let sectionGap: CGFloat = 24
-    /// A section's card around its rows. Ten at the sides, as the grouped `Form` padded its rows, so a row keeps its width.
-    static let sectionPadding = EdgeInsets(top: 12, leading: 10, bottom: 12, trailing: 10)
+    /// A section's card around its rows. Twelve at the sides too: one inset for text inside and beside a card, so a row,
+    /// a section's header and a card's title start on one edge.
+    static let sectionPadding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
     /// Between two rows of a section: space, never a divider.
     static let sectionRowGap: CGFloat = 14
     /// From a section's header to its card, and from the card to its footer.
@@ -117,11 +121,12 @@ enum SettingsTheme {
 
     /// A product page's own content stops here. Past it the extra width is right margin, as with `pageMaxWidth`.
     static let productMaxWidth: CGFloat = 1200
-    /// A line of prose, such as an empty state's: about 74 characters at the description's size.
+    /// A line of prose, such as an empty state's: about 74 characters at the description's size, 63 at the body's.
     static let proseMaxWidth: CGFloat = 380
     /// The hero card, or the empty state in its place.
-    static let heroMinHeight: CGFloat = 240
-    static let heroPadding: CGFloat = 16
+    static let heroMinHeight: CGFloat = 200
+    /// The same inset as a section's card, so the hero's text starts where every card's does.
+    static let heroPadding: CGFloat = 12
     static let heroIcon: CGFloat = 28
     /// A row of a product page's list, and the space between two.
     static let listRowHeight: CGFloat = 56

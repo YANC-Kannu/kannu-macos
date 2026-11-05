@@ -562,9 +562,15 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     /// What a press, a hover and a squeeze must leave alone. A custom style's label can be squeezed
     /// where a native button's cannot: a row broke "Acknowledgements" across two lines before this.
     private static func buttonProblems(in button: String) -> [String] {
-        [".fixedSize(horizontal: true, vertical: false)",
-         ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
-         "isEnabled && (configuration.isPressed || isHovering)"].filter { !button.contains($0) }
+        let problems = [".fixedSize(horizontal: true, vertical: false)",
+                        ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
+                        "isEnabled && (configuration.isPressed || isHovering)"].filter { !button.contains($0) }
+        // Flush moves only a quiet button's frame, and after the fill and the hover, so both keep the chrome's width:
+        // before them, the label would touch the fill's edge and the inset left of it would stop taking clicks.
+        let flush = ".padding(.leading, flush && prominence == .quiet ? -inset.leading : .zero)"
+        guard let hover = button.range(of: ".onHover"), let padding = button.range(of: flush),
+              hover.upperBound <= padding.lowerBound else { return problems + [flush] }
+        return problems
     }
 
     func testAButtonKeepsItsWidthAndShowsAPress() throws {
@@ -572,7 +578,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.buttonProblems(in: button), [])
         Self.assertCaught([(".fixedSize(horizontal: true, vertical: false)", ""),
                            ("configuration.isPressed ? SettingsTheme.pressedOpacity : 1", "1"),
-                           ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)")],
+                           ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)"),
+                           ("flush && prominence == .quiet ? ", "flush ? "),
+                           (".onHover { isHovering = $0 }",
+                            ".padding(.leading, flush && prominence == .quiet ? -inset.leading : .zero).onHover { isHovering = $0 }")],
                           in: button, by: Self.buttonProblems)
     }
 
