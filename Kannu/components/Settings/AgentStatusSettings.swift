@@ -24,9 +24,9 @@ import Defaults
 import SwiftUI
 
 struct AgentStatusSettings: View {
-    // Deliberately not observing CursorAgentStatusMonitor: it publishes on every rescan while
-    // agents run, and the only thing here that shows its state is the preview, which observes it
-    // on its own (AgentTrafficLightStylePreview).
+    // Deliberately not observing CursorAgentStatusMonitor: it publishes on every hook write while
+    // agents run. The style preview (AgentTrafficLightStylePreview) copies the light it shows, only
+    // while Brain is on screen.
     @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
     @ObservedObject var hookInstaller = AgentHookInstaller.shared
     @ObservedObject private var notificationBridge = AgentStatusNotificationBridge.shared
@@ -489,17 +489,23 @@ struct AgentStatusSettings: View {
     }
 }
 
-/// The traffic light in Settings, in the chosen style and the monitor's current state. It observes
-/// the monitor itself so the rest of the Agents tab does not re-render on every rescan.
+/// The traffic light in Settings, in the chosen style and the monitor's current state. It follows only
+/// the light, never the whole monitor, and only while Brain is on screen (docs/SETTINGS.md, "Live data"),
+/// so the rest of the Agents tab does not re-render on every rescan and a hidden Brain does no work.
 private struct AgentTrafficLightStylePreview: View {
     let style: AgentTrafficLightStyle
-    @ObservedObject private var monitor = CursorAgentStatusMonitor.shared
+    @ObservedObject private var visibility = BrainVisibility.shared
+    @State private var state: AgentTrafficLightState = .inactive
 
     var body: some View {
-        AgentTrafficLightDots(
-            style: style,
-            state: monitor.trafficLightState == .inactive ? .executing : monitor.trafficLightState
-        )
+        AgentTrafficLightDots(style: style, state: state == .inactive ? .executing : state)
+            .onAppear { state = CursorAgentStatusMonitor.shared.trafficLightState }
+            .task(id: visibility.isOnScreen) {
+                guard visibility.isOnScreen else { return }
+                for await latest in CursorAgentStatusMonitor.shared.$trafficLightState.removeDuplicates().values {
+                    state = latest
+                }
+            }
     }
 }
 
