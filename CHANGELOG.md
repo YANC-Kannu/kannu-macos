@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks
+- **Changes:**
+  - Security's cell follows the findings store at most twice a second and redraws only when its summary changes. It
+    observed the whole store, which republishes on every hook write while a session runs with permission checks off,
+    so Agents could redraw up to about 20 times a second.
+  - Opening and closing Brain set `BrainVisibility` themselves rather than wait for AppKit's occlusion change. A late
+    one could keep the live leaves running after a close; a missing one could leave the first open frozen.
+  - The notch checks the tools as its empty state appears, not on every hover-open while an agent works.
+  - `AgentsPageLiveDataRulesTests` also holds the hero and the rows to `drawsLive`, bans a `Task` inside a live
+    `.task`, and pins the flag's one assignment, its two new writers, Security's throttle and the notch's check, each
+    against plants.
+  - docs/SETTINGS.md and docs/REGRESSIONS.md: Security's rate, the new writers, Brain's two tool checks a visit and the
+    token follower's 50 ms catch-up.
+
 ### 2026-11-05 - Brain's Agents page leads with your agents
 - **Developer label:** Brain redesign plan: Stage 4, the Agents product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the product first, then its settings; fixtures on every board; the live-data contract held clause by clause

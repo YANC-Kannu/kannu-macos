@@ -30,7 +30,8 @@ import SwiftUI
 /// 2. **Stopped while Brain is not on screen.** That subscription is a `.task(id:)` on `BrainVisibility.isOnScreen`,
 ///    so it ends when Brain is closed, minimised, hidden, covered or in another Space, and starts again on its return.
 /// 3. **No work while nothing is on screen.** The live leaves, the metrics that observe the token follower and tick
-///    once a second and the status row that observes the usage and findings stores, give way to a static copy.
+///    once a second and the status row that observes the usage store and follows the findings store, give way to a
+///    static copy.
 ///
 /// A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding the target walks
 /// parent processes and asks `NSWorkspace`.
@@ -419,15 +420,28 @@ struct AgentsSecuritySummary: Equatable {
     }
 }
 
-/// The status row while Brain is on screen: it observes the usage and findings stores, so it exists only then.
+/// The status row while Brain is on screen, so it exists only then. It observes the usage store, which changes on a
+/// reading, minutes apart, but not the findings store: while a session runs with permission checks off, every hook
+/// write restamps its finding and the store republishes. Security's summary is read as the row appears, then at most
+/// twice a second, and assigned only when it changed.
 private struct AgentsLiveStatusRow: View {
     let tools: [AgentToolDetector.Tool]
     let offers: [AgentToolDetector.Tool]
     @ObservedObject private var usage = UsageAlertManager.shared
-    @ObservedObject private var findings = SecurityFindingsStore.shared
+    @State private var security = AgentsSecuritySummary(toReview: 0, high: 0, pinnedTitle: nil)
 
     var body: some View {
-        AgentsStatusRow(tools: tools, offers: offers, nearLimit: usage.nearLimit, security: AgentsSecuritySummary(findings.groupRanking))
+        AgentsStatusRow(tools: tools, offers: offers, nearLimit: usage.nearLimit, security: security)
+            .onAppear { security = AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking) }
+            // `objectWillChange` comes before a change; read through the run loop, the summary comes after it.
+            .task {
+                for await _ in SecurityFindingsStore.shared.objectWillChange
+                    .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+                    .values {
+                    let latest = AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking)
+                    if latest != security { security = latest }
+                }
+            }
     }
 }
 
