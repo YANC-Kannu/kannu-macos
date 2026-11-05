@@ -279,9 +279,9 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
 
     // MARK: - Tools are checked once per visit
 
-    /// The detector checks files and Launch Services. The overview and the header each call it from `onAppear`, so
-    /// Brain checks twice a visit, and the notch from its empty state's; never from `body`, and nothing on the page
-    /// checks a file of its own.
+    /// The detector checks files and Launch Services. The overview calls it from `onAppear`, once a visit (the header
+    /// offers no install), and the notch from its empty state's; never from `body`, and nothing on the page checks a
+    /// file of its own.
     static func detectionProblems(in sources: [String: String]) -> [String] {
         var problems: [String] = []
         for (path, source) in sources {

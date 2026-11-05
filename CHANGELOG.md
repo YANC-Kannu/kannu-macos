@@ -4,6 +4,26 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's Agents hero reads in three bands, and offers the install once
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes for the Agents page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 1, 3 and 6, with 9's and 8's Agents call sites; the live-data contract held unchanged
+- **Changes:**
+  - The hero is three bands: its state as the title in a 17-pt card title and its light's colour, with the light at
+    the right; the session as before; and, pinned to the bottom, the run's figures (run time, tools, tokens in · out),
+    each over a small label from the text column, with "Open chat ›" at the right. It is at least 200 pt tall, not
+    240. The whole card stays the one button: "Open chat ›" is a label drawn like a quiet button.
+  - The install offer shows once: in the empty state when that is shown, otherwise in Editors & hooks. Agents' header
+    keeps the gear alone, so Brain checks the tools once a visit, not twice.
+  - Editors & hooks is one status line: "5 tools watched · hooks installed", or "4 of 5 hooked" and then only the tools
+    missing a hook, each with Install. Every hook keeps its icon in Editor Hooks below.
+  - The status cells' headline figures and the empty state's title use the card title; the empty state's line is the
+    body's size. Usage's percentage stands over what it measures, so the narrowest window does not break "5-hour".
+    Security's "Open ›" is a flush quiet button.
+  - `AgentTurnMetricsView` gains a `figures` option for the hero; the notch's column is unchanged.
+  - 7 new strings, each in the catalog's 17 languages.
+  - Boards: `agents1` now has every hook in, so it shows the cell's quiet line; docs/SETTINGS.md and docs/REGRESSIONS.md
+    entry 22 gain their lines.
+
 ### 2026-11-05 - Brain's cards share one inset and a card title
 - **Developer label:** Brain redesign plan: Stage 4, the design review's theme values
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 5, 9 and 8 as theme values and a button option

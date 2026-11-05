@@ -77,7 +77,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsHelpers.swift": 2,
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
         "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
-        "AgentsOverview.swift": 2,                  // the hero's state and a row's provider — inside the button that opens the chat
+        "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -171,7 +171,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPage.swift": 2,             // the page's inset from the panel's edge, and its top and bottom
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
         "SettingsProductPage.swift": 2,      // the page's inset from the panel's edge, and its top and bottom
-        "AgentsOverview.swift": 5,           // the hero's, a row's, the empty state's and a status cell's cards, and Recent's heading in line with the rows
+        "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 6,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview
