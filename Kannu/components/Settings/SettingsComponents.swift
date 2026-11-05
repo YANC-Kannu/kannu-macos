@@ -473,9 +473,8 @@ struct SettingsActionRow<Buttons: View>: View {
             } label: {
                 label
             }
-            // Wide buttons wrap under the title here. The root's one-line row would squeeze the
-            // description instead, to about 100 pt beside "Copy a prompt that drafts a policy".
-            .labeledContentStyle(.automatic)
+            // No style of its own: the root's labelled row puts the buttons trailing. Outside a grouped `Form`,
+            // the automatic style sets them straight after the title (Stage 4, 2026-11-05).
         } else {
             HStack(spacing: SettingsMetrics.rowContent) {
                 Spacer(minLength: 0)

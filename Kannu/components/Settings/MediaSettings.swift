@@ -63,8 +63,8 @@ struct Media: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 SettingsRow("Music Source") {
                     SettingsSelect("Music Source", selection: $mediaController,
                                    options: availableMediaControllers, optionTitle: \.localizedName)
@@ -98,7 +98,7 @@ struct Media: View {
                 SpotifyAuthSettingsSection()
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .showStandardMediaControls) {
                     Text("Show media controls in Dynamic Island")
                 }
@@ -118,7 +118,7 @@ struct Media: View {
                     SettingsFooter("When off, the notch player stays visible with placeholder info while nothing plays.")
                 }
             }
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .showShuffleAndRepeat) {
                     HStack {
                         Text("Enable customizable controls")
@@ -142,16 +142,18 @@ struct Media: View {
                 }
             }
 
-            Section(header: Text("Lock Screen Media")) {
+            SettingsSection {
                 SettingsRow("Enable album art parallax", description: "Applies the notch-style parallax effect to the lock screen media widget album art.") {
                     Defaults.Toggle(key: .lockScreenMusicAlbumParallaxEnabled) {
                         Text("Enable album art parallax")
                     }
                 }
                 .settingsHighlight(id: highlightID("Enable album art parallax"))
+            } header: {
+                SettingsSectionHeader("Lock Screen Media")
             }
             if musicControlWindowEnabled {
-                Section {
+                SettingsSection {
                     SettingsRow("Skip buttons", description: musicSkipBehavior.description) {
                         SettingsSelect("Skip buttons", selection: $musicSkipBehavior,
                                        options: MusicSkipBehavior.allCases, optionTitle: \.displayName,
@@ -162,7 +164,7 @@ struct Media: View {
                     SettingsSectionHeader("Floating window panel skip behaviour")
                 }
             }
-            Section {
+            SettingsSection {
                 SettingsRow("Enable music live activity", description: standardControlsSuppressed
                             ? Text("Standard notch media controls are hidden while this toggle is off.") : nil) {
                     Toggle(
@@ -216,7 +218,7 @@ struct Media: View {
                 SettingsSectionHeader("Media playback live activity")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableRealTimeWaveform) {
                     HStack {
                         Text("Enable real-time waveform")
@@ -247,7 +249,7 @@ struct Media: View {
                 SettingsFooter("Shows a real-time audio spectrum synced to your music. Requires macOS 14.2 or later.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenMediaWidget) {
                     Text("Show lock screen media panel")
                 }
@@ -311,7 +313,7 @@ struct Media: View {
             }
             .disabled(!showStandardMediaControls)
 
-            Section {
+            SettingsSection {
                 SettingsRow("Hide DynamicIsland Options") {
                     SettingsSelect("Hide DynamicIsland Options", selection: $hideNotchOption, choices: [
                         .always: String(localized: "Always hide in fullscreen"),

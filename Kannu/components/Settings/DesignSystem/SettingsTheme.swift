@@ -91,8 +91,6 @@ enum SettingsTheme {
     static let sidebarRowContent: CGFloat = 10
     static let sidebarBadgeHorizontalInset: CGFloat = 6
     static let sidebarBadgeVerticalInset: CGFloat = 2
-    /// The grouped `Form`'s own side margin. The page's title pads by it too, so it lines up with the cards.
-    static let formMargin: CGFloat = 20
     /// Where a page starts, from the panel's leading edge. A page is held there, never centred.
     static let pageInset: CGFloat = 32
     /// The same on a panel at least `widePanelWidth` wide, such as a full-screen one.

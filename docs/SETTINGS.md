@@ -25,11 +25,13 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 
 | You are adding | Use |
 |---|---|
+| A page | `SettingsPage { … }`: one scroll view across the panel, its sections in one column — never `Form` (below, "Pages and sections") |
+| A group of rows | `SettingsSection { rows } header: { … } footer: { … }`, called as `Section` was — never `Section` |
 | A section header | `SettingsSectionHeader("…")` — never a raw `Text` in `header: {}` |
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
 | A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
-| A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
+| A text field | The native field with `.settingsField()` last on its chain; on a page, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
 | A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker`. The popover focuses its calendar and Escape closes only it; a date is reached by keyboard under Full Keyboard Access |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
 | A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
@@ -57,17 +59,20 @@ component already does.
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
   control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
   controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), the date
-  (`SettingsDateField`), and the shell's own views (below).
+  (`SettingsDateField`), the page and its sections (`SettingsPage`, `SettingsSection`,
+  `SettingsPageInsetKey`), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
-  it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
+  it. It still sets the grouped form style and hides a `Form`'s background, though no page is a `Form` any
+  more (below, "Pages and sections"). It has no `.foregroundStyle`: that
   would recolour the labels of native prominent buttons and menus. A sheet is a window of its own, and
   whether SwiftUI passes the root into a presentation cannot be told from source, so each presented
   window applies it again: `SettingsSheet` for every sheet, and the two large sheets, the animation
   editor and Spotify's sign-in, themselves. A sheet is never a `Form`, so the second root changes
   nothing in it.
-- **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
-  `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
+- **The root's font reaches a section's header and footer**, so `SettingsSectionHeader` and
+  `SettingsFooter` say their own, and anything else inside a footer must too. `SettingsSection` gives the
+  footer the secondary ink, as a grouped `Form` did.
 - **Geist when bundled, the system font at the same size when not.** Only the theme names a font, and
   only the theme uses the system's: a text style or `.system` anywhere else is pinned per file and can
   only shrink (below, "Colours and fonts").
@@ -86,8 +91,7 @@ A call-site style beats the root, so these stay on purpose:
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
-| `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
-| `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
+| `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | Kept until Stage 5 rebuilds the page. A grouped `Form` built its rows lazily; on a page, the native disclosure builds them at once, as ours does |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
 | `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
 
@@ -244,7 +248,7 @@ drawn by hand outside a row.
 chain, so typing, the caret, input methods, secure entry, `.focused`, `.onSubmit` and `.onExitCommand` stay the
 field's. Its name sits beside it, never inside:
 
-- In a Form, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
+- On a page, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
   chrome hides the field's own label, which VoiceOver keeps.
 - What to type goes in `prompt:`: a catalog key, or `Text(verbatim:)` for an example such as a host name. In a
   sheet, where the field's title was its placeholder, the prompt says it again.
@@ -257,6 +261,34 @@ field's. Its name sits beside it, never inside:
 `SettingsDesignSystemRulesTests` holds the controls' keyboard, VoiceOver and one dim, and every field to its
 chrome, the two above pinned. `--kannu-snapshot-tabs designSystem` draws each in its resting and disabled
 states, and `components` draws the slider and stepper rows in one column.
+
+## Pages and sections
+
+A page is a `SettingsPage` and a group of rows a `SettingsSection`, both in `DesignSystem/`. macOS 14 has no API
+for a custom form style to take a `Form`'s sections apart, so both are our own views, called the way `Form` and
+`Section` were: `SettingsSection { rows } header: { SettingsSectionHeader("…") } footer: { SettingsFooter("…") }`,
+either closure left out when there is none.
+
+- **The page is one scroll view across the panel**, so its scrollbar sits at the panel's edge and the wheel works
+  anywhere on it. Its sections stand in one column, `sectionGap` apart, capped at `pageMaxWidth` and started
+  `settingsPageInset` from the panel's leading edge (below, "The window"). The large title stays outside it.
+- **It builds every row as it appears.** A plain `VStack`, not a lazy one: a search or a deep link scrolls to a
+  row's id, and a lazy stack cannot scroll to a row it has not built. So a row's `onAppear` and `.task` run as
+  the page opens, not as the row scrolls into view, and `onDisappear` as the page goes or Brain closes, not as
+  the row scrolls away. A row that animates keeps animating while its page is open, in view or not; a closed
+  Brain still costs nothing (docs/REGRESSIONS.md, entry 22).
+- **A section is its rows in a soft card** (`card`, `sectionRadius`), `sectionRowGap` apart: space, never a
+  divider. Its header and footer sit outside the card, in line with the rows' text, as the grouped `Form` placed
+  them. The header is a heading for VoiceOver, and the footer takes the secondary ink. A missing header or
+  footer adds no gap. A modifier on a section (`.disabled`, `.opacity`, `.onAppear`, `.sheet`) reaches all of
+  it, its header and footer too.
+- **A section with no rows draws an empty card**, where a `Form` drew nothing, so a section whose rows are all
+  conditional sits inside an `if` that guarantees one, as each such section does.
+- **Nothing stays a `Form` or a `Section`.** `SettingsLayoutRulesTests` bans both under Settings, `SwiftUI.Form`
+  and `Section(header:)` included, proven on planted offenders; its pin table is empty, and a site that must stay
+  native goes there with its reason. `SettingsDesignSystemRulesTests` holds the section's card, spacing, header
+  and footer, and keeps hooks, animators and laziness out of both views; `BrainShellRulesTests` holds the page's
+  column and the inset's one measurement.
 
 ## The shell and navigation
 
@@ -274,7 +306,7 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
   the sidebar still shows the tab. The suggestions render inside the sidebar's column.
 - **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
   sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
-  sits outside the page's `Form`, so it stays put while the page scrolls.
+  sits outside the page's scroll view, so it stays put while the page scrolls.
 - **The sidebar is a custom list, not `List(selection:)`**, which draws its own selection on macOS. So it
   takes arrow keys itself and follows its own selection, and a row, Back and the Settings row each hand it
   the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
@@ -295,10 +327,10 @@ arrow keys and hover take a real window.
   clamped to it. A page stops at 720 pt, so a row does not stretch across a full-screen panel, and it is
   never centred: it starts 32 pt from the panel's leading edge, or 48 pt on a panel 1,000 pt or wider, so a
   full-screen panel's spare width gathers on the right instead of on both sides of a floating column.
-  `SettingsForm` pads the page by the inset less `formMargin`, the grouped `Form`'s own 20 pt margin, so
+  `SettingsForm` measures the panel and hands the inset to the page and its title (`settingsPageInset`), so
   titles and cards line up. Its title is 24 pt on every page, its cap height 44 pt below the panel's top. The
-  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`,
-  `formMargin` and `pageHeaderTop`. The root's frame
+  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`
+  and `pageHeaderTop`. The root's frame
   has a minimum and no maximum, because SwiftUI's size bridge clamps the window to it (`docs/REGRESSIONS.md`,
   entry 17).
 - **Transparent title bar.** The title is hidden, and kept for the Window menu and Mission Control. The shell's
@@ -316,10 +348,9 @@ arrow keys and hover take a real window.
   macOS. `BrainAppearanceRulesTests` holds this.
 
 A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
-enter full screen: `shellWide`, at 1440×900, stands in for it. Tabs render at 612 pt, the narrowest panel
-the window can have, through `SettingsForm`, which pads them; a board of a bare `Form` renders at 588 pt, the
-page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
-the least room.
+enter full screen: `shellWide`, at 1440×900, stands in for it. Every page renders at 612 pt, the narrowest panel
+the window can have: a `SettingsPage` insets itself, in a tab or on its own. `shellSearch` and `shellSearchList`
+render at the smallest window, where the sidebar has the least room.
 
 **Never list `shelf`, and never run the boards without `--kannu-snapshot-tabs`.** An unfiltered run renders
 every tab, and the Shelf page touches `~/Documents` and `~/Downloads` through its folder access store, whose
@@ -346,14 +377,14 @@ section describes it, it does not define it.
 | Inside a card | 12 | `cardPadding` |
 
 - **No ad-hoc type in a row.** `.caption`, `.caption2` and `.system(size:)` do not belong on text
-  that sits in a Form row's label or control column — that is what made one section's descriptions
+  that sits in a row's label or control column — that is what made one section's descriptions
   wrap at three different widths. They survive only where pinned, for badges, chips and icon glyphs,
   and inside a card that has its own compact scale: `SettingsLayoutRulesTests` pins them per file
   twice, by size here and as system fonts ("Colours and fonts").
-- **A row adds no padding.** The grouped `Form` pads its rows already, so `.padding(.vertical, …)`
+- **A row adds no padding.** Its section pads its rows already, so `.padding(.vertical, …)`
   on a row makes that one row taller than its neighbours. Padding belongs to cards, popovers,
   chips and empty states — nowhere else. Pinned per file.
-- **One control size per section.** A Form row uses the default size. `.small` is for controls
+- **One control size per section.** A row uses the default size. `.small` is for controls
   inside a card (`SettingsPermissionCallout`, `SecurityFindingRow`, an extension's expanded
   panel), and then for every control in that card.
 - **Every row is a row.** `SettingsRow`, `SettingsActionRow`, `SettingsSliderRow`,
@@ -392,9 +423,10 @@ section describes it, it does not define it.
 
 - `onAppear` runs again every time Brain reopens, not only on arriving at a page: closing takes the
   content out of the window (docs/REGRESSIONS.md, entry 22). One that loads a field must not read
-  over what was typed and not yet saved.
+  over what was typed and not yet saved. And it runs for every row as the page opens, not as the row
+  scrolls into view: a page builds all its rows (below, "Pages and sections").
 
-- One concern per `Section`; separate concerns get separate Sections, never a `Divider` inside one.
+- One concern per `SettingsSection`; separate concerns get separate sections, never a `Divider` inside one.
 - A Section earns its gap: a one-row Section spends a whole section gap on one row, so a row that
   serves a Section joins it. A row that only narrows a list (a Find field) is that list's first
   row, not a Section of its own, and a page's folded extras (All tasks' Recently closed, Archive
@@ -441,8 +473,8 @@ section describes it, it does not define it.
   title).
 - A list's Add is one row (Brain › Tasks' Add a task), whose prominent New Task button opens a
   sheet holding every field the item takes — never fields inline in the list (David, 2026-10-24:
-  "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's Form, never on the
-  row's button: a long, lazy Form drops the row once it scrolls away, and the shortcut with it.
+  "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's page, never on the
+  row's button, which the lazy `Form` dropped, shortcut and all, once it scrolled away.
 - A sheet is a `SettingsSheet`, never a `Form`: its title (and a secondary line under it), the
   fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for what it does
   ("Add", "Schedule", "Done"; `.defaultAction`). A `Spacer` of the sheet's own spreads them only

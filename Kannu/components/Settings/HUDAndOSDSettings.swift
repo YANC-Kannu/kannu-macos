@@ -167,8 +167,8 @@ struct HUDAndOSDSettingsView: View {
     var body: some View {
         // One Form for the whole tab. The style cards used to sit above two stacked Forms (the
         // style's settings, then the display integrations), each scrolling on its own.
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 HStack(spacing: 10) {
                     HUDSelectionCard(
                         title: String(localized: "Dynamic Island"),
@@ -336,7 +336,7 @@ struct HUDAndOSDSettingsView: View {
                 if #available(macOS 15.0, *) {
                     CustomOSDSettings()
                 } else {
-                    Section {
+                    SettingsSection {
                         VStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 32))
@@ -408,7 +408,7 @@ struct HUDAndOSDSettingsView: View {
     @ViewBuilder
     private func controlsSections(permissionMessage: String) -> some View {
         if !accessibilityPermission.isAuthorized && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: permissionMessage,
                     requestAction: {
@@ -424,7 +424,7 @@ struct HUDAndOSDSettingsView: View {
         }
 
         if accessibilityPermission.isAuthorized || enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
                 SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
@@ -444,7 +444,7 @@ struct HUDAndOSDSettingsView: View {
     var verticalHUDSections: some View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Vertical HUD.")
 
-        Section {
+        SettingsSection {
             Toggle("Show Percentage", isOn: $verticalHUDShowValue)
             Toggle("Use Accent Color", isOn: $verticalHUDUseAccentColor)
             Toggle("Interactive (Drag to Change)", isOn: $verticalHUDInteractive)
@@ -482,7 +482,7 @@ struct HUDAndOSDSettingsView: View {
             SettingsSectionHeader("Behavior & Style")
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("HUD Position") {
                 SettingsSelect("HUD Position", selection: $verticalHUDPosition, choices: [
                     "left": String(localized: "Left"),
@@ -497,7 +497,7 @@ struct HUDAndOSDSettingsView: View {
             SettingsFooter("Choose directly on which side of the screen the vertical bar appears.")
         }
 
-        Section {
+        SettingsSection {
             dimensionSlider(Text("Width: \(Int(verticalHUDWidth))px"), value: $verticalHUDWidth, in: 24...80, step: 2)
             dimensionSlider(Text("Height: \(Int(verticalHUDHeight))px"), value: $verticalHUDHeight, in: 100...500, step: 10)
             SettingsActionRow {
@@ -516,7 +516,7 @@ struct HUDAndOSDSettingsView: View {
     var circularHUDSections: some View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Circular HUD.")
 
-        Section {
+        SettingsSection {
             Toggle("Show Percentage", isOn: $circularHUDShowValue)
             Toggle("Use Accent Color", isOn: $circularHUDUseAccentColor)
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
@@ -531,7 +531,7 @@ struct HUDAndOSDSettingsView: View {
             SettingsSectionHeader("Style")
         }
 
-        Section {
+        SettingsSection {
             dimensionSlider(Text("Size: \(Int(circularHUDSize))px"), value: $circularHUDSize, in: 40...200, step: 5)
             dimensionSlider(Text("Line Width: \(Int(circularHUDStrokeWidth))px"), value: $circularHUDStrokeWidth, in: 2...16, step: 1)
             SettingsActionRow {
@@ -634,7 +634,7 @@ private struct ExternalDisplayIntegrationsSection: View {
 
     /// Step size and display-app integration sections, drawn inside the Controls tab's Form.
     var body: some View {
-        Section {
+        SettingsSection {
             stepRow(Text("Volume step"), value: $volumeStepPercent)
                 .settingsHighlight(id: highlightID("Volume step"))
                 .disabled(enableThirdPartyDDCIntegration && enableExternalVolumeControlListener)
@@ -661,7 +661,7 @@ private struct ExternalDisplayIntegrationsSection: View {
             }
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("Enable third-party DDC app integration", description: enableThirdPartyDDCIntegration
                         ? nil : Text("Enable to route BetterDisplay or Lunar display adjustments through Kannu's active HUD style.")) {
                 Toggle("Enable third-party DDC app integration", isOn: $enableThirdPartyDDCIntegration)

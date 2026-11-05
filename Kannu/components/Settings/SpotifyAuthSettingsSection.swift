@@ -31,7 +31,7 @@ struct SpotifyAuthSettingsSection: View {
     }
 
     var body: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 Button {
                     showingLoginSheet = true

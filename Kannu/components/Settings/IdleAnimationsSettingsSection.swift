@@ -52,7 +52,7 @@ struct IdleAnimationsSettingsSection: View {
     @State private var editingExistingAnimation: CustomIdleAnimation?
     
     var body: some View {
-        Section {
+        SettingsSection {
             if showNotHumanFace {
                 // Horizontal scrollable grid of animations
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -565,7 +565,7 @@ struct URLImportSheet: View {
 
 // MARK: - Preview
 #Preview {
-    Form {
+    SettingsPage {
         IdleAnimationsSettingsSection()
     }
     .frame(width: 600, height: 400)

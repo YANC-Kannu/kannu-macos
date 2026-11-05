@@ -153,7 +153,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
                            cure: "a slider row is SettingsSliderRow and a stepper row SettingsStepperRow — one width, one readout column")
     }
 
-    /// Lines adding padding. A grouped `Form` pads its own rows, so padding here belongs to a
+    /// Lines adding padding. A section pads its own rows, so padding here belongs to a
     /// card, a chip, a popover, a preview or an empty state — never to a row, which would make
     /// that one row taller than its neighbours.
     private static let pinnedRowPaddingCounts: [String: Int] = [
@@ -163,11 +163,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 7,  // animation cards and chips
         "MusicSlotConfigurationView.swift": 5,     // the slot canvas
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 7,             // the highlight's ring, the search field and its suggestions,
-                                             // and the page's inset from the panel's edge
+        "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
         "BrainShell.swift": 4,               // the shell's own insets
         "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
-        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page's Form
+        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
         "SettingsPage.swift": 2,             // the page's inset from the panel's edge, and its top and bottom
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
         "AgentStatusSettings.swift": 1,      // a preview
@@ -193,7 +192,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     func testNoRowPadsItself() {
         assertPinnedCounts(Self.pinnedRowPaddingCounts, scanner: Self.paddingLines,
                            rule: "a padding",
-                           cure: "a row in a grouped Form adds none — the Form pads it")
+                           cure: "a row in a section adds none — the section pads it")
     }
 
     // MARK: - Rule 6: a choice, a slider and a stepper are ours
@@ -252,13 +251,58 @@ final class SettingsLayoutRulesTests: XCTestCase {
                                                names: Self.nativeControlNames).count, 1)
     }
 
+    // MARK: - Rule 8: a page and a section are ours
+
+    /// Lines building a native `Form` or `Section`. macOS 14 has no API for a custom form style to take a section
+    /// apart, so under Settings a page is `SettingsPage` and a group of rows `SettingsSection`, called the same way
+    /// (docs/SETTINGS.md, "Pages and sections"). These are the ones that cannot be: none, so a pin needs a reason.
+    private static let pinnedNativeContainerCounts: [String: Int] = [:]
+
+    private static let nativeContainerNames = ["Form", "Section"]
+
+    private static func nativeContainerLines(in text: String, names: [String] = SettingsLayoutRulesTests.nativeContainerNames) -> [String] {
+        nativeControlLines(in: text, names: names, opening: #"[({]"#)
+    }
+
+    func testNoNativeFormOrSectionIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeContainerCounts, scanner: { Self.nativeContainerLines(in: $0) },
+                           rule: "a native Form or Section",
+                           cure: "a page is SettingsPage and a group of rows SettingsSection: the rows, then header: and footer:")
+        // A floor: the same scan, pointed at ours, finds the pages and their sections, so a pattern gone blind fails here.
+        let sources = Self.settingsSources()
+        let pages = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsPage"]).count }
+        let sections = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsSection"]).count }
+        XCTAssertGreaterThan(pages, 0, "the scan found no page: the pattern went blind")
+        XCTAssertGreaterThan(sections, 0, "the scan found no section: the pattern went blind")
+
+        for planted in ["Form {}", "Form{\n}", "SwiftUI.Form {}", "Form (\n) {}", "Section {}", "Section(\"a\") {}",
+                        "Section(header: Text(\"a\")) {}", "SwiftUI.Section {}", "return Section {",
+                        "Section {\n    row\n} header: {\n    SettingsSectionHeader(\"a\")\n}", "Section<Text, Text, EmptyView> {"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: planted).count, 1, planted)
+        }
+        for clean in ["SettingsPage {}", "SettingsSection {}", "SettingsSectionHeader(\"a\")", "IdleAnimationsSettingsSection()",
+                      "TimeToLogSection(draft: d)", "Shortcuts().shortcutsSection", "private var tasksSection: some View {",
+                      "TaskForm(draft: d)", ".formStyle(.grouped)", "// Form {", "/* Section { */", "Text(\"Form {\")",
+                      "SettingsFooter(\"Section {\")"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: clean), [], clean)
+        }
+
+        // Real pages, one section and one page put back.
+        let general = try XCTUnwrap(sources["GeneralSettings.swift"])
+        let section = try XCTUnwrap(general.range(of: "SettingsSection {"), "the General page has no section to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: general.replacingCharacters(in: section, with: "Section {")).count, 1)
+        let downloads = try XCTUnwrap(sources["DownloadsSettings.swift"])
+        let page = try XCTUnwrap(downloads.range(of: "SettingsPage {"), "the Downloads page has no page to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: downloads.replacingCharacters(in: page, with: "SwiftUI.Form {")).count, 1)
+    }
+
     /// One entry per line holding a call of one of `names`, read with comments and strings blanked:
     /// `Picker(`, `Picker (`, `SwiftUI.Picker(` and `Picker<…>(`, never `ColorPicker(`, `.pickerStyle(`
     /// or a title such as "Device Picker Style". Not the `openers` lookbehind of the design-system rules,
-    /// which misses `SwiftUI.Picker(`.
-    static func nativeControlLines(in text: String, names: [String]) -> [String] {
+    /// which misses `SwiftUI.Picker(`. `opening` is what starts the call; a container opens with a brace too.
+    static func nativeControlLines(in text: String, names: [String], opening: String = #"\("#) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
-        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*\("#
+        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*"# + opening
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             XCTFail("bad pattern for \(names)")
             return []

@@ -478,7 +478,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: "Text(\"a\")\n.tint(.accentColor)\n"))
 
         Self.assertCaught([("SettingsToggleStyle(showsLabel: false)", "SettingsToggleStyle()"),
-                           (".labeledContentStyle(.automatic)", ""),
+                           ("HStack(spacing: SettingsMetrics.rowContent) { buttons }",
+                            "HStack(spacing: SettingsMetrics.rowContent) { buttons }.labeledContentStyle(.automatic)"),
                            ("struct SettingsActionRow", "struct RenamedActionRow"),
                            ("struct SettingsRow<", "struct RenamedRow<")],
                           in: components, by: Self.sharedComponentProblems)
@@ -874,19 +875,29 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     }
 
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
-    /// gives headers and footers, so they say theirs, or every section header goes light and every
-    /// footer grows. Its one-line row would squeeze a titled action row's description, and its switch
-    /// would still draw a label in a row that draws the title itself.
+    /// gave headers and footers, so they say theirs, or every section header goes light and every
+    /// footer grows. Its switch would still draw a label in a row that draws the title itself. A titled
+    /// action row takes the root's row, so its buttons are trailing: outside a grouped `Form` the automatic
+    /// style sets them straight after the title (2026-11-05, Stage 4: it opted out, for the `Form`'s wrap).
     private static func sharedComponentProblems(in components: String) -> [String] {
+        func region(of component: String) -> Substring? {
+            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return nil }
+            let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
+            return components[start.lowerBound..<end]
+        }
         let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
                         ("SettingsFooter", ".font(SettingsTheme.description)"),
-                        ("SettingsActionRow", ".labeledContentStyle(.automatic)"),
                         ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
-        return required.compactMap { component, modifier -> String? in
-            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return "\(component) is gone" }
-            let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
-            return components[start.lowerBound..<end].contains(modifier) ? nil : "\(component) lost \(modifier)"
+        var problems = required.compactMap { component, modifier -> String? in
+            guard let body = region(of: component) else { return "\(component) is gone" }
+            return body.contains(modifier) ? nil : "\(component) lost \(modifier)"
         }
+        if let actionRow = region(of: "SettingsActionRow") {
+            if actionRow.contains(".labeledContentStyle(") { problems.append("SettingsActionRow sets a labelled-row style of its own") }
+        } else {
+            problems.append("SettingsActionRow is gone")
+        }
+        return problems
     }
 
     func testSectionHeadersAndFootersKeepTheirOwnType() throws {

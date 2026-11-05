@@ -35,8 +35,8 @@ struct Shortcuts: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableShortcuts) {
                     Text("Enable global keyboard shortcuts")
                 }
@@ -55,7 +55,7 @@ struct Shortcuts: View {
     }
 
     var shortcutsSection: some View {
-        Section {
+        SettingsSection {
             shortcutRow("Toggle Sneak Peek:", name: .toggleSneakPeek,
                         description: Text("Sneak Peek shows the media title and artist under the notch for a few seconds."))
             shortcutRow("Toggle Notch Open:", name: .toggleNotchOpen,

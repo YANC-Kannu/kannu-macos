@@ -90,8 +90,8 @@ struct LockScreenSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenLiveActivity) {
                     Text("Enable lock screen live activity")
                 }
@@ -102,7 +102,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Controls whether Kannu mirrors lock/unlock events with its own live activity.")
             }
 
-            Section {
+            SettingsSection {
                 SettingsActionRow {
                     Button(previewManager.isPreviewVisible ? "Hide lock screen preview" : "Preview lock screen widgets") {
                         previewManager.togglePreview()
@@ -115,7 +115,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Opens a transparent preview window with mock data that mirrors the current lock screen widget configuration.")
             }
 
-            Section {
+            SettingsSection {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Material", description: lockScreenGlassStyle == .liquid
                                 ? nil : Text("Custom Liquid settings require the Liquid Glass material.")) {
@@ -147,7 +147,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Choose the global material mode for lock screen widgets. Custom Liquid unlocks per-widget variant sliders while Standard sticks to the classic frosted/liquid options.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenMediaWidget) {
                     Text("Show lock screen media panel")
                 }
@@ -224,7 +224,7 @@ struct LockScreenSettings: View {
             }
             .disabled(!showStandardMediaControls)
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenTimerWidget) {
                     Text("Show lock screen timer")
                 }
@@ -276,7 +276,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Controls the optional timer widget that floats above the media panel, including its classic, frosted, or liquid glass surface independent of the global material setting.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenWeatherWidget) {
                     Text("Show lock screen weather")
                 }
@@ -347,7 +347,7 @@ struct LockScreenSettings: View {
 
 
             if BatteryActivityManager.shared.hasBattery() {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .lockScreenBatteryShowsBatteryGauge) {
                         Text("Show battery indicator")
                     }
@@ -383,7 +383,7 @@ struct LockScreenSettings: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenFocusWidget) {
                     Text("Show focus widget")
                 }
@@ -502,7 +502,7 @@ private struct LockScreenPositioningControls: View {
     private let timerWidthRange: ClosedRange<Double> = 320...LockScreenTimerWidget.defaultWidth
 
     var body: some View {
-        Section {
+        SettingsSection {
             let weatherBinding = Binding<Double>(
                 get: { weatherOffset },
                 set: { newValue in
@@ -571,7 +571,7 @@ private struct LockScreenPositioningControls: View {
                 .textCase(nil)
         }
 
-        Section {
+        SettingsSection {
             widthRow(
                 title: String(localized: "Media Panel Width"),
                 value: musicWidthBinding,

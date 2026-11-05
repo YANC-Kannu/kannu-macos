@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's pages leave Form
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — a scripted edit, 31 `Form`s and 145 `Section`s by script and one by hand; every page scrolls across the panel; a bare `Form` or `Section` now fails a test
+- **Changes:**
+  - Every `Form` under Settings is a `SettingsPage` and every `Section` a `SettingsSection`, Agents included. A one-off
+    script changed one word per site and refused what it could not rewrite: Media's
+    `Section(header: Text("Lock Screen Media"))`, done by hand, now has a `SettingsSectionHeader`.
+  - Every page scrolls across the whole panel, so its scrollbar sits at the panel's edge. `SettingsForm` measures the
+    panel and hands the inset to the page and its large title; `formMargin`, the `Form`'s own margin, is gone. At the
+    default window size the cards are 720 pt wide, the cap, where the `Form` left 680.
+  - Sections are soft cards with no row dividers. A page builds every row as it appears, so a search can scroll to any
+    of them, and a row's `onAppear` runs as the page opens, not as the row scrolls into view.
+  - A titled `SettingsActionRow` takes the root's labelled row, so its buttons stay trailing: outside a `Form` the
+    automatic style set them straight after the title.
+  - The boards' `Form`s and `Section`s are pages and sections too, and every page board renders at the narrowest panel,
+    612 pt.
+  - `SettingsLayoutRulesTests` bans `Form` and `Section` under Settings, `SwiftUI.Form` and `Section(header:)`
+    included, with plants, a floor, two real pages put back and an empty pin table. `BrainShellRulesTests` holds the
+    page's column, capped and leading inside one scroll view, and the inset's one measurement; the boards' pins follow
+    the new width.
+  - docs/SETTINGS.md gains "Pages and sections" and updates the component table, the window, the boards and the
+    section rules. docs/REGRESSIONS.md entry 22 notes that a page builds every row as it appears.
+
 ### 2026-11-05 - Brain gets its own page and section
 - **Developer label:** Brain redesign plan: Stage 4, pages
 - **Agent label:** Claude Code (Opus 5.5) — `SettingsPage` and `SettingsSection`, called as `Form` and `Section` are, so the next change renames one word per site

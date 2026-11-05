@@ -40,7 +40,7 @@ struct ExtensionsSettingsView: View {
     }
     
     var body: some View {
-        Form {
+        SettingsPage {
             globalTogglesSection
             
             if authManager.isExtensionsFeatureEnabled {
@@ -60,7 +60,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var globalTogglesSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(String(localized:"Enable third-party extensions"), key: .enableThirdPartyExtensions)
                 .settingsHighlight(id: highlightID("Enable third-party extensions"))
             
@@ -96,7 +96,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var authorizedAppsSection: some View {
-        Section {
+        SettingsSection {
             if authManager.entries.isEmpty {
                 // An empty state is a card, not a row: it is the one place in this section that
                 // may pad and centre itself.
@@ -524,8 +524,8 @@ extension ExtensionsSettingsView {
                                         status: .denied, grantedAt: granted,
                                         lastDeniedReason: "Asked for lock screen widgets 40 times in five minutes."),
         ]
-        return AnyView(Form {
-            Section {
+        return AnyView(SettingsPage {
+            SettingsSection {
                 ForEach(entries) { entry in
                     ExtensionEntryRow(entry: entry, onRemove: {}, initiallyExpanded: entry.status == .denied)
                 }
