@@ -42,7 +42,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless` |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
 | A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
-| Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
+| Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour, the one place the colour shows (no swatch beside the chip); `init(adding:kind:)` for an offer ("#planning", "+ pl") |
 | Free-standing explanatory text | `.settingsDescriptionStyle()` (selectable, secondary, wraps) |
 | A spacing, a width, a dot size | `SettingsMetrics.<token>` — never a number in place |
 | A copy-to-pasteboard action for agents | `CopyForAgentButton` |
@@ -102,6 +102,7 @@ What stays native, and why:
 | A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
 | Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
 | All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
+| The Tags sheet's Colour picker | A ticked submenu of a tag pill's right-click menu, a native menu, which no popover can join. It replaced the swatch beside the pill, so the tag's colour shows once, as the pill's wash. Without VoiceOver a right-click menu has no key, so a keyboard-only user colours tags in All tasks › Tag colours, whose swatches take focus |
 | New Task's two checkboxes | Stage 5 rebuilds the task form |
 | `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
 | The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
@@ -184,7 +185,7 @@ A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that
 macOS 14 has no custom picker style, and a custom view cannot read `.tag()`s, so the options are data:
 `options:` with an `optionTitle:` (`\.localizedName`), or `choices: [value: String(localized: "…")]` for
 literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the four
-All tasks keeps.
+All tasks keeps and the Tags sheet's Colour submenu.
 
 - **The trigger** is a button in our style showing the value and a chevron. A short list keeps its widest
   title's width, so the row does not move when the choice changes. A saved value no longer among the options

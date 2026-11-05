@@ -161,8 +161,17 @@ final class TaskSearchTests: XCTestCase {
 
     // MARK: - Chips
 
-    /// A row shows one chip and +N (David, 2026-11-01), so a tag the search finds moves first: the
-    /// chip shown is the tag searched for. The rest keep the order `displayTags` gives.
+    /// A row shows one chip when it fits and +N always (David, 2026-11-01, amended 2026-11-05), so a
+    /// tag the search finds moves first: the chip shown, when one is, is the tag searched for. The rest keep the order `displayTags` gives.
+    /// What the search found is said apart, so a lone "+N" hiding it can be tinted (`TaskTagChips`).
+    func testFoundTagsAreTheOnesTheSearchFinds() {
+        let task = TaskItem(title: "Order beans", tags: ["tea", "Café"])
+        XCTAssertEqual(TaskSearch.foundTags(of: task, query: "#cafe"), ["Café"])
+        XCTAssertEqual(TaskSearch.foundTags(of: task, query: "beans"), [], "a title word finds no tag")
+        XCTAssertEqual(TaskSearch.foundTags(of: task, query: ""), [])
+        XCTAssertEqual(TaskSearch.chipTags(of: task, query: "#cafe").first, TaskSearch.foundTags(of: task, query: "#cafe").first)
+    }
+
     func testATagTheSearchFindsIsTheFirstChip() {
         let task = TaskItem(source: .gitlab, title: "Fix",
                             remote: remote(key: "g/a#1", kind: .issue, iid: 1, labels: ["workflow::sprint_backlog", "backend"]),
