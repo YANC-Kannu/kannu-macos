@@ -65,7 +65,7 @@ struct AllTasksPage: View {
     var body: some View {
         tasksSection
         // A Section earns its gap (docs/SETTINGS.md): the folded extras are rows of one Section.
-        Section {
+        SettingsSection {
             recentlyClosedGroup
             archiveGroup
             tagColorsGroup
@@ -158,7 +158,7 @@ struct AllTasksPage: View {
         let filter = filter
         let rows = manager.listedTasks(filter)
         let total = manager.activeTasks.count
-        return Section {
+        return SettingsSection {
             if case .failed(let reason) = manager.loadState {
                 SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }
@@ -239,9 +239,14 @@ struct AllTasksPage: View {
         return DisclosureGroup(isExpanded: $showsArchive) {
             if archived.isEmpty {
                 SettingsNoteRow("The archive is empty", description: "Archived tasks keep their time here.")
-            }
-            ForEach(archived) { task in
-                archivedRow(task)
+            } else {
+                // Lazy: the archive only grows, and expanded it would build every row at once (docs/SETTINGS.md,
+                // "Pages and sections"). The default spacing is the one the disclosure gave its rows.
+                LazyVStack(alignment: .leading) {
+                    ForEach(archived) { task in
+                        archivedRow(task)
+                    }
+                }
             }
         } label: {
             SettingsRowLabel("Archive", description: "Jira and GitLab tasks clear after \(TaskArchive.clearDays) days; yours stay.")

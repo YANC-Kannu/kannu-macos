@@ -75,7 +75,7 @@ struct CustomOSDSettings: View {
     /// style's Accessibility and hide-on-disable side effects, and the macOS 26 material fallback).
     var body: some View {
         if !hasAccessibilityPermission && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: "Accessibility permission is needed to intercept system controls for the Custom OSD.",
                     requestAction: { accessibilityPermission.requestAuthorizationPrompt() },
@@ -87,7 +87,7 @@ struct CustomOSDSettings: View {
         }
 
         if hasAccessibilityPermission || enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 Toggle("Volume OSD", isOn: $enableOSDVolume)
                     .settingsHighlight(id: highlightID("Volume OSD"))
                 Toggle("Brightness OSD", isOn: $enableOSDBrightness)
@@ -104,7 +104,7 @@ struct CustomOSDSettings: View {
                 SettingsFooter("Choose which system controls should display custom OSD windows.")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow("Material") {
                     SettingsSelect("Material", selection: $osdMaterial,
                                    options: availableOSDMaterials, optionTitle: \.rawValue)
@@ -152,7 +152,7 @@ struct CustomOSDSettings: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 HStack {
                     Spacer()
                     VStack(spacing: 16) {

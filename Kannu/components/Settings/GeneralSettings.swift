@@ -66,8 +66,8 @@ struct GeneralSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
                     Defaults.Toggle(key: .menubarIcon) {
                         Text("Menubar icon")
@@ -137,7 +137,7 @@ struct GeneralSettings: View {
                 SettingsSectionHeader("System features")
             }
 
-            Section {
+            SettingsSection {
                 // Onboarding's Permissions rows: what a Not now there held back is allowed here,
                 // one macOS dialog at a time.
                 VStack(spacing: 10) {
@@ -156,7 +156,7 @@ struct GeneralSettings: View {
                 SettingsFooter("Kannu asks macOS for a permission only when you press Allow. What you skip stays off until you allow it here.")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow("Notch display height") {
                     SettingsSelect("Notch display height", selection: $notchHeightMode, choices: [
                         .matchRealNotchSize: String(localized: "Match real notch size"),
@@ -233,7 +233,7 @@ struct GeneralSettings: View {
 
     @ViewBuilder
     func gestureControls() -> some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableGestures) {
                 Text("Enable gestures")
             }
@@ -283,7 +283,7 @@ struct GeneralSettings: View {
 
     @ViewBuilder
     func NotchBehaviour() -> some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .extendHoverArea) {
                 Text("Extend hover area")
             }
@@ -357,7 +357,7 @@ struct GeneralSettings: View {
     func perDisplayOverrideSections(_ displays: [(name: String, isBuiltIn: Bool)]) -> some View {
         ForEach(displays, id: \.name) { display in
             let name = display.name
-            Section {
+            SettingsSection {
                 SettingsRow("Style") {
                     SettingsSelect("Style", selection: displayStyleBinding(for: name),
                                    options: [nil] + ExternalDisplayStyle.allCases.map(Optional.some),
@@ -431,7 +431,7 @@ extension GeneralSettings {
     /// DEBUG snapshot harness: the per-display overrides, which list only displays without a
     /// notch (none on a lone MacBook), for two made-up displays.
     static func snapshotPerDisplayRows() -> AnyView {
-        AnyView(Form {
+        AnyView(SettingsPage {
             GeneralSettings().perDisplayOverrideSections([
                 (name: "Studio Display (made up)", isBuiltIn: false),
                 (name: "Built-in Display (made up)", isBuiltIn: true),

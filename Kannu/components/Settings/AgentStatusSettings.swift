@@ -59,8 +59,8 @@ struct AgentStatusSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableAgentStatusFeature) {
                     Text("Enable Agent Status")
                 }
@@ -72,7 +72,7 @@ struct AgentStatusSettings: View {
             }
 
             if enableAgentStatusFeature {
-                Section {
+                SettingsSection {
                     detectedProvidersGrid
                 } header: {
                     SettingsSectionHeader("Detected Editors")
@@ -84,7 +84,7 @@ struct AgentStatusSettings: View {
                 // the right app — it just can't raise the specific window for IDE-hosted sessions.
                 // Chats Claude Desktop knows deep-link to the exact chat (its session route, see
                 // ClaudeDesktopSessionIndex); Terminal and iTerm2 tabs are picked by AppleScript.
-                Section {
+                SettingsSection {
                     SettingsRow("Open the exact terminal tab", description: "Clicking a chat that runs in Terminal or iTerm2 brings its tab to the front, and switches tmux to its pane. macOS asks once for permission to control each terminal app.") {
                         Defaults.Toggle(key: .openAgentTerminalTab) {
                             Text("Open the exact terminal tab")
@@ -103,7 +103,7 @@ struct AgentStatusSettings: View {
                     SettingsSectionHeader("Click-through")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsRow("Traffic light style", description: agentTrafficLightStyle.description) {
                         SettingsSelect("Traffic light style", selection: $agentTrafficLightStyle,
                                        options: AgentTrafficLightStyle.allCases, optionTitle: \.localizedName)
@@ -150,7 +150,7 @@ struct AgentStatusSettings: View {
                     SettingsFooter("The yellow light is most reliable when hooks are installed.")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsRow("Smart caffeinate", description: "Keeps the Mac awake automatically while any agent is running, and lets it sleep when they stop. While this is on, the manual switch in the notch is hidden.") {
                         Defaults.Toggle(key: .smartCaffeinate) {
                             Text("Smart caffeinate")
@@ -163,7 +163,7 @@ struct AgentStatusSettings: View {
                     SettingsFooter("Only system sleep is prevented, so the display may still sleep while agents keep running. Closing the lid always sleeps the Mac.")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsRow("Show a red light when no agents are running", description: "When off, the light hides once agents go quiet.") {
                         Defaults.Toggle(key: .showAgentStoppedIndicator) {
                             Text("Show a red light when no agents are running")
@@ -217,7 +217,7 @@ struct AgentStatusSettings: View {
                     SettingsFooter("After an agent stops, the red light stays visible for the chosen time, then all lights dim for the inactive duration, then the traffic light disappears entirely. While the red light is kept visible when idle, the hide and dim delays have no effect.")
                 }
 
-                Section {
+                SettingsSection {
                     ForEach(AgentHookProvider.allCases) { provider in
                         hookRow(for: provider)
                     }
@@ -251,7 +251,7 @@ struct AgentStatusSettings: View {
 
     @ViewBuilder
     private var mobileNotificationSections: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableAgentStatusMobileNotifications) {
                 Text("Enable mobile notifications")
             }
@@ -355,7 +355,7 @@ struct AgentStatusSettings: View {
 
     /// What gets pushed.
     private var notificationEventsSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .agentStatusNotifyOnInactive) {
                 Text("Notify when inactive")
             }
@@ -575,8 +575,8 @@ extension AgentStatusSettings {
     /// DEBUG snapshot harness: the mobile-notification rows that only show once pushes are on.
     static func snapshotNotificationRows() -> AnyView {
         let settings = AgentStatusSettings()
-        return AnyView(Form {
-            Section { settings.notificationDeliveryRows } header: { SettingsSectionHeader("Mobile Notifications") }
+        return AnyView(SettingsPage {
+            SettingsSection { settings.notificationDeliveryRows } header: { SettingsSectionHeader("Mobile Notifications") }
             settings.notificationEventsSection
         })
     }

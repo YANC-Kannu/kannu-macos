@@ -94,9 +94,9 @@ struct TasksSettings: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            Form {
+            SettingsPage {
                 if enableTasks, let page = path.last {
-                    Section {
+                    SettingsSection {
                         backRow(from: page)
                     }
                     pageContent(page)
@@ -238,7 +238,7 @@ struct TasksSettings: View {
             TaskOverviewSections(sheet: $sheet, openAllTasks: { path.append(.allTasks) })
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("Enable tasks", description: "Plan your work and time it.") {
                 Defaults.Toggle(key: .enableTasks) {
                     Text("Enable tasks")
@@ -379,7 +379,7 @@ private struct TaskSourcesSection: View {
         let sources = manager.syncs.map(\.source)
         let connected = sources.filter(\.isConnected)
         let addable = sources.filter { !$0.isConnected }
-        Section {
+        SettingsSection {
             LabeledContent {
                 openButton(count: counts[.local] ?? 0, page: .source(.local))
             } label: {
@@ -499,7 +499,7 @@ private struct TaskOverviewSections: View {
     /// the way in.
     private var allTasksSection: some View {
         let counts = TaskFacets.counts(manager.activeTasks)
-        return Section {
+        return SettingsSection {
             if case .failed(let reason) = manager.loadState {
                 SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }
@@ -527,7 +527,7 @@ private struct TaskOverviewSections: View {
     private var interruptedSection: some View {
         let interrupted = manager.interruptedSessions
         if !interrupted.isEmpty {
-            Section {
+            SettingsSection {
                 ForEach(interrupted) { entry in
                     LabeledContent {
                         HStack(spacing: SettingsMetrics.rowContent) {

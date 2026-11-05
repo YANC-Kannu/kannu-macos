@@ -35,8 +35,8 @@ struct ClipboardSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableClipboardManager) {
                     Text("Enable Clipboard Manager")
                 }
@@ -56,7 +56,7 @@ struct ClipboardSettings: View {
             }
 
             if enableClipboardManager {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showClipboardIcon) {
                         Text("Show Clipboard Icon")
                     }
@@ -107,7 +107,7 @@ struct ClipboardSettings: View {
                     }
                 }
 
-                Section {
+                SettingsSection {
                     SettingsActionRow {
                         Button("Clear Pinned Items", role: .destructive) {
                             clipboardManager.pinnedItems.removeAll()
@@ -129,7 +129,7 @@ struct ClipboardSettings: View {
                 }
 
                 if !clipboardManager.clipboardHistory.isEmpty {
-                    Section {
+                    SettingsSection {
                         ForEach(clipboardManager.clipboardHistory) { item in
                             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                                 HStack(spacing: SettingsMetrics.rowContent) {

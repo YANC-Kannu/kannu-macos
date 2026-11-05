@@ -60,8 +60,8 @@ enum DebugSnapshots {
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", SettingsView.snapshotPageTitle(Form {
-                Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
+            boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
+                SettingsSection { TasksBackRow(parent: String(localized: "Tasks")) {} }
                 AllTasksPage(query: .constant(""), context: tasksBoardContext())
             })))
         }
@@ -96,15 +96,15 @@ enum DebugSnapshots {
                                                                    nameInput: .constant(""), onImport: {}, onCancel: {}))))
         }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
-            boards.append(("taskPage", AnyView(Form {
-                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
+            boards.append(("taskPage", AnyView(SettingsPage {
+                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
                 TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID, context: tasksBoardContext())
             })))
         }
         if request.tabs == nil || request.tabs?.contains("localTaskPage") == true {
             // A local task: its title typed in place, a reminder with Notify off.
-            boards.append(("localTaskPage", AnyView(Form {
-                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
+            boards.append(("localTaskPage", AnyView(SettingsPage {
+                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
                 TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID, context: tasksBoardContext())
             })))
         }
@@ -162,12 +162,10 @@ enum DebugSnapshots {
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
                     .settingsDesignSystem())
-                // A page at the narrowest panel the window can have: a tab through `SettingsForm`, which pads
-                // it, and a bare `Form` at the width that padding leaves. The rules sheet sets its own width,
-                // which 490 would crop on both sides.
-                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490)
-                    : throughTheForm.contains(name) ? narrowestPanel : narrowestPage
-                // A page's `Form` has no background of its own now, so it needs the panel behind it.
+                // A page at the narrowest panel the window can have: a `SettingsPage` insets itself, in a tab or
+                // on its own. The rules sheet sets its own width, which 490 would crop on both sides.
+                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490) : narrowestPanel
+                // A page has no background of its own, so it needs the panel behind it.
                 // Sheets and onboarding do not sit on the panel.
                 let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
                 await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory,
@@ -283,10 +281,6 @@ enum DebugSnapshots {
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
-    /// What `SettingsForm` leaves a page of that panel: its padding is the page inset less the `Form`'s own margin.
-    private static let narrowestPage = narrowestPanel - 2 * (SettingsTheme.pageInset - SettingsTheme.formMargin)
-    /// The boards drawn through `SettingsForm`, which pads them itself: every tab, and All tasks.
-    private static var throughTheForm: Set<String> { Set(SettingsTab.allCases.map(\.rawValue) + ["allTasks"]) }
 
     /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
     /// enter it, and the search boards, at the smallest window, where the sidebar has the least room.
@@ -339,8 +333,8 @@ enum DebugSnapshots {
     /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
     /// press take a pointer), and every colour and font token by name.
     private static var designSystemBoard: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on") }
                 Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off") }
                 Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on, disabled") }
@@ -366,7 +360,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Toggles")
             }
 
-            Section {
+            SettingsSection {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     Button(action: {}) { Text(verbatim: "Standard") }
                     Button(action: {}) { Text(verbatim: "Primary") }
@@ -416,7 +410,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Buttons")
             }
 
-            Section {
+            SettingsSection {
                 LabeledContent {
                     Text(verbatim: "A bare value")
                         .foregroundStyle(.secondary)
@@ -463,7 +457,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Rows")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow(verbatim: "A popover select", description: "Our list opens from it; the button shows the value.") {
                     SettingsSelect("A popover select", selection: .constant(1),
                                    choices: [0: "Off", 1: "After 3 minutes", 2: "After 10 minutes"])
@@ -506,7 +500,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Choices")
             }
 
-            Section {
+            SettingsSection {
                 SettingsSliderRow(verbatim: "A stepped slider", value: .constant(0.4), in: 0...1, step: 0.1,
                                   valueText: Text(verbatim: "0.4"))
                 SettingsSliderRow(verbatim: "An unstepped slider", value: .constant(0.73), in: 0...1,
@@ -542,7 +536,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Values")
             }
 
-            Section {
+            SettingsSection {
                 ForEach(designSystemColors, id: \.name) { swatch in
                     HStack(spacing: SettingsMetrics.rowContent) {
                         RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
@@ -560,7 +554,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Colours")
             }
 
-            Section {
+            SettingsSection {
                 ForEach(designSystemFonts, id: \.name) { sample in
                     Text(verbatim: "\(sample.name): Watch your agents")
                         .font(sample.font)
@@ -591,8 +585,8 @@ enum DebugSnapshots {
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.
     private static var componentsBoard: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Toggle(isOn: .constant(true)) {
                     Text(verbatim: "Native two-Text label")
                     Text(verbatim: "The second Text of a native label, for comparison with the description below.")
@@ -636,7 +630,7 @@ enum DebugSnapshots {
             // The content standard: every row in this section is built from SettingsMetrics, so
             // the label column, the slider bars and the readouts must line up down the whole
             // section — that is what this board is for.
-            Section {
+            SettingsSection {
                 SettingsSliderRow(verbatim: "Minimum hover duration",
                                   description: "How long the pointer must rest on the notch before it opens.",
                                   value: .constant(1.0), in: 0...2, step: 0.1,
@@ -661,7 +655,7 @@ enum DebugSnapshots {
                 }
             }
 
-            Section {
+            SettingsSection {
                 SettingsActionRow("Scan now", description: "Last run by Kannu Sep 11, 2026 at 4:54 AM") {
                     Button(action: {}) { Text(verbatim: "Scan now") }
                 }
@@ -683,7 +677,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Actions and values")
             }
 
-            Section {
+            SettingsSection {
                 ForEach(
                     Array(SecurityFindingsStore.buildGroupRanking(
                         findings: DebugSnapshotFixtures.findings,
@@ -765,8 +759,8 @@ enum DebugSnapshots {
         window.orderFrontRegardless()
         hosting.layoutSubtreeIfNeeded()
         try? await Task.sleep(for: .milliseconds(700))
-        // A grouped Form is a scroll view that only builds the rows it shows: grow the window to the
-        // whole document so every row is laid out and drawn.
+        // A page is a scroll view, which draws only what it shows: grow the window to the whole document so
+        // every row is drawn.
         for _ in 0..<(fixedHeight == nil ? 4 : 0) {
             let target: CGFloat
             if let scroll = firstScrollView(in: hosting), let document = scroll.documentView {

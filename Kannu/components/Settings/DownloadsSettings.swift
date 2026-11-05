@@ -33,8 +33,8 @@ struct Downloads: View {
     }
 
     var body: some View {
-        SwiftUI.Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableDownloadListener) {
                     Text("Enable download detection")
                 }

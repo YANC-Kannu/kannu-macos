@@ -33,8 +33,11 @@ class SettingsWindowController: NSWindowController {
     /// Brain's SwiftUI. It sits in the window only while the window is open, and outlives every
     /// close, so its page, scroll position and typing are still there on reopening.
     private var settingsContent: NSHostingView<SettingsView>?
-    /// How the page was left when the content came out of the window. Nil while it is in the window.
+    /// How the page was left when the content came out of the window, or how it stood before the first open.
+    /// Nil once it is put back.
     private var leftState: LeftState?
+    /// False until the first open, which has no close to remember and gets a `leftState` of its own.
+    private var hasOpened = false
     /// A close asked for in full screen waits for the exit, so the window is never ordered out, and
     /// the app never turned `.accessory`, inside a full-screen Space.
     private var closeAfterFullScreen = false
@@ -153,6 +156,7 @@ class SettingsWindowController: NSWindowController {
         
         // Placed before it is ordered in, or a window this size visibly jumps.
         centerWindowOnActiveScreen()
+        seedLeftStateForFirstOpen()
 
         // Show the window with proper ordering
         window?.orderFrontRegardless()
@@ -196,6 +200,22 @@ class SettingsWindowController: NSWindowController {
             scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
         )
         window.contentView = NSView()
+    }
+
+    /// The first open has no `leftState`, since nothing has closed, yet ordering the window in still gives the
+    /// page's first text field focus, selects its text and scrolls to it. A page builds every row, so that field can
+    /// be a deep one that writes straight through, such as Agents' ntfy topic or a Pushover key, and the next key
+    /// typed would replace what is stored. So the first open is put back like a reopening, to how it stood: nothing
+    /// focused, every scroller where it starts. Laid out first, since until then the page has no scroll views.
+    private func seedLeftStateForFirstOpen() {
+        guard !hasOpened, let settingsContent else { return }
+        hasOpened = true
+        settingsContent.layoutSubtreeIfNeeded()
+        leftState = LeftState(
+            focus: nil,
+            selection: nil,
+            scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
+        )
     }
 
     /// Ordering the content back in gives the page's first text field focus with its text selected,

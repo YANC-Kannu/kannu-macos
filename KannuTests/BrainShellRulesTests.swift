@@ -58,9 +58,10 @@ final class BrainShellRulesTests: XCTestCase {
 
     func testTheShellAndItsRowsKnowNoPage() throws {
         // The select, its list, the field, the slider, the stepper, the sheet and the date too: a page hands them their data.
+        // The page, the section and the page's inset too: a page hands them its rows.
         for name in ["BrainShell.swift", "SettingsSidebarRow.swift", "SettingsSelect.swift", "SettingsSelectList.swift",
                      "SettingsField.swift", "SettingsSlider.swift", "SettingsStepper.swift", "SettingsSheet.swift",
-                     "SettingsDateField.swift"] {
+                     "SettingsDateField.swift", "SettingsPage.swift", "SettingsSection.swift", "SettingsPageInsetKey.swift"] {
             XCTAssertEqual(Self.pageKnowledge(in: try Self.code("DesignSystem/" + name)), [], name)
         }
 
@@ -307,48 +308,78 @@ final class BrainShellRulesTests: XCTestCase {
 
     // MARK: - The window's width and title bar
 
-    /// In `SettingsForm`, which every page goes through, so no page can miss it. Capped first, then held
-    /// the page inset from the panel's leading edge, then measured: the width flag must read the
-    /// panel-wide frame, because above the cap it would see at most 720 pt and never reach
-    /// `widePanelWidth`. Centred, a full-screen page floats in a blank panel; with the cap outside the
-    /// padding, the inset would come out of the page's 720 pt.
-    private static func pageCapProblems(in view: String) -> [String] {
+    /// In `SettingsPage`, which every tab's page is (2026-11-05, Stage 4: it was `SettingsForm`'s chain around a
+    /// `Form`). One scroll view across the panel, so the scrollbar sits at the panel's edge; inside it the column is
+    /// capped first, then held the page inset from the panel's leading edge. Centred, a full-screen page floats in a
+    /// blank panel; with the cap outside the padding, the inset would come out of the page's 720 pt. A plain `VStack`:
+    /// a lazy one cannot scroll a search to a row it has not built. Three long lists no search reaches are lazy inside
+    /// their pages instead, so they are not built whole (docs/SETTINGS.md, "Pages and sections").
+    private static func pageColumnProblems(in page: String) -> [String] {
+        let column = #"ScrollView \{\s*VStack\(alignment: \.leading, spacing: SettingsTheme\.sectionGap\) \{\s*content\s*\}\s*"#
+            + #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth, alignment: \.leading\)\s*"#
+            + #"\.padding\(\.horizontal, inset\)\s*"#
+            + #"\.padding\(\.vertical, SettingsTheme\.sectionGap\)\s*"#
+            + #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*\}"#
+        var problems = SettingsDesignSystemRulesTests.matches(of: column, in: page).count == 1
+            ? [] : ["a page's column is not capped and held to the leading edge inside one scroll view"]
+        if !page.contains("@Environment(\\.settingsPageInset) private var inset") { problems.append("a page does not take the window's inset") }
+        return problems
+    }
+
+    /// In `SettingsForm`, which every tab goes through, so no page can miss it: the width flag reads the panel-wide
+    /// frame, because above the cap it would see at most 720 pt and never reach `widePanelWidth`, and the page and its
+    /// title both take the inset it picks, so they line up.
+    private static func pageMeasureProblems(in view: String, header: String) -> [String] {
         guard let start = view.range(of: "private struct SettingsForm<Content: View>: View {"),
               let end = view.range(of: "struct SettingsView: View {", range: start.upperBound..<view.endIndex) else {
             return ["SettingsForm cannot be found"]
         }
-        let leading = #"\.frame\(maxWidth: SettingsTheme\.pageMaxWidth\)\s*"#
-            + #"\.padding\(\.horizontal, \(isWidePanel \? SettingsTheme\.pageInsetWide : SettingsTheme\.pageInset\) - SettingsTheme\.formMargin\)\s*"#
-            + #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*"#
+        let measured = #"\.frame\(maxWidth: \.infinity, alignment: \.leading\)\s*"#
+            + #"\.environment\(\\\.settingsPageInset, isWidePanel \? SettingsTheme\.pageInsetWide : SettingsTheme\.pageInset\)\s*"#
             + #"\.onGeometryChange\(for: Bool\.self\) \{ \$0\.size\.width >= SettingsTheme\.widePanelWidth \} action: \{ isWidePanel = \$0 \}"#
-        let found = SettingsDesignSystemRulesTests.matches(of: leading, in: String(view[start.upperBound..<end.lowerBound])).count
-        return found == 1 ? [] : ["a page is not capped, held to the leading edge and measured at the panel's width"]
+        let found = SettingsDesignSystemRulesTests.matches(of: measured, in: String(view[start.upperBound..<end.lowerBound])).count
+        var problems = found == 1 ? [] : ["a page's inset is not measured at the panel's width and handed down"]
+        if !header.contains("@Environment(\\.settingsPageInset) private var inset") || !header.contains(".padding(.horizontal, inset)") {
+            problems.append("the title does not start where the page does")
+        }
+        return problems
     }
 
-    private static let pageCap = ".frame(maxWidth: SettingsTheme.pageMaxWidth)"
-    private static let pageInset = ".padding(.horizontal, (isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset) - SettingsTheme.formMargin)"
     private static let pageLeading = ".frame(maxWidth: .infinity, alignment: .leading)"
+    private static let pageInsetHandedDown = ".environment(\\.settingsPageInset, isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset)"
     private static let pageMeasure = ".onGeometryChange(for: Bool.self) { $0.size.width >= SettingsTheme.widePanelWidth } action: { isWidePanel = $0 }"
 
     func testAPageIsCappedAndLeading() throws {
-        let view = try Self.view()
-        XCTAssertEqual(Self.pageCapProblems(in: view), [])
+        let page = try Self.code("DesignSystem/SettingsPage.swift")
+        XCTAssertEqual(Self.pageColumnProblems(in: page), [])
+        let cap = ".frame(maxWidth: SettingsTheme.pageMaxWidth, alignment: .leading)"
+        let inset = ".padding(.horizontal, inset)"
         let line = "\n            "
-        Self.assertCaught([(Self.pageCap, ""),
+        Self.assertCaught([(cap, ""),
                            (Self.pageLeading, ".frame(maxWidth: .infinity)"),
-                           (line + Self.pageInset, ""),
-                           (" - SettingsTheme.formMargin)", ")"),
-                           ("isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset", "isWidePanel ? SettingsTheme.pageInset : SettingsTheme.pageInset"),
+                           (line + inset, ""),
+                           (cap + line + inset, inset + line + cap),
+                           ("VStack(alignment: .leading, spacing: SettingsTheme.sectionGap)", "LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionGap)"),
+                           ("ScrollView {", "Group {"),
+                           ("@Environment(\\.settingsPageInset) private var inset", "private let inset = SettingsTheme.pageInset")],
+                          in: page, by: Self.pageColumnProblems)
+
+        let view = try Self.view()
+        let header = try Self.code("DesignSystem/SettingsPageHeader.swift")
+        XCTAssertEqual(Self.pageMeasureProblems(in: view, header: header), [])
+        Self.assertCaught([("isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset", "isWidePanel ? SettingsTheme.pageInset : SettingsTheme.pageInset"),
                            ("action: { isWidePanel = $0 }", "action: { _ in }"),
-                           (Self.pageCap + line + Self.pageInset, Self.pageInset + line + Self.pageCap),
-                           (Self.pageCap + line + Self.pageInset + line + Self.pageLeading + line + Self.pageMeasure,
-                            Self.pageMeasure + line + Self.pageCap + line + Self.pageInset + line + Self.pageLeading)],
-                          in: view, by: Self.pageCapProblems)
-        // On the root instead: the panel's scrollbar would move, and a page outside the root would miss it.
-        let chain = [Self.pageCap, Self.pageInset, Self.pageLeading, Self.pageMeasure].joined(separator: "\n")
-        XCTAssertEqual(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n}\nstruct SettingsView: View {\n\(chain)\n}"),
-                       ["a page is not capped, held to the leading edge and measured at the panel's width"])
-        XCTAssertEqual(Self.pageCapProblems(in: "private struct SettingsForm<Content: View>: View {\n\(chain)\n}\nstruct SettingsView: View {\n}"), [])
+                           (line + Self.pageInsetHandedDown, ""),
+                           (Self.pageLeading + line + Self.pageInsetHandedDown + line + Self.pageMeasure,
+                            Self.pageMeasure + line + Self.pageLeading + line + Self.pageInsetHandedDown)],
+                          in: view) { Self.pageMeasureProblems(in: $0, header: header) }
+        Self.assertCaught([(".padding(.horizontal, inset)", ".padding(.horizontal, SettingsTheme.pageInset)")],
+                          in: header) { Self.pageMeasureProblems(in: view, header: $0) }
+        // On the root instead: a page outside the root would miss it, and a board would never see it.
+        let chain = [Self.pageLeading, Self.pageInsetHandedDown, Self.pageMeasure].joined(separator: "\n")
+        XCTAssertEqual(Self.pageMeasureProblems(in: "private struct SettingsForm<Content: View>: View {\n}\nstruct SettingsView: View {\n\(chain)\n}", header: header),
+                       ["a page's inset is not measured at the panel's width and handed down"])
+        XCTAssertEqual(Self.pageMeasureProblems(in: "private struct SettingsForm<Content: View>: View {\n\(chain)\n}\nstruct SettingsView: View {\n}", header: header), [])
     }
 
     /// A transparent title bar with the row still below the safe area would leave a blank strip above
@@ -379,19 +410,18 @@ final class BrainShellRulesTests: XCTestCase {
     private static func boardProblems(in snapshots: String) -> [String] {
         ["(\"shell\", AnyView(", "(\"shellSettings\", AnyView(", "(\"shellWide\", AnyView(", "(\"shellDeepLink\", AnyView(",
          "(\"shellSearch\", AnyView(", "(\"shellSearchList\", AnyView(",
-         "SettingsView.snapshotPageTitle(Form {",
+         "SettingsView.snapshotPageTitle(SettingsPage {",
          "SettingsTab.general.highlightID(for: \"Always show on non-notch displays\")",
          "SettingsHighlightCoordinator.snapshotScrollsAtOnce = true",
          "width: size.width, into: request.directory, fixedHeight: size.height",
          "return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)",
          "return NSSize(width: 1440, height: 900)",
          "return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)",
-         // A page at the narrowest panel the window can have, or a clipped row goes unseen. A bare
-         // `Form` gets what `SettingsForm`'s padding leaves of it.
+         // A page at the narrowest panel the window can have, or a clipped row goes unseen. A `SettingsPage`
+         // insets itself, in a tab or on its own, so every page board takes the whole panel (2026-11-05, Stage 4:
+         // a bare `Form` took what `SettingsForm`'s padding left of it).
          "SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset",
-         "narrowestPanel - 2 * (SettingsTheme.pageInset - SettingsTheme.formMargin)",
-         "Set(SettingsTab.allCases.map(\\.rawValue) + [\"allTasks\"])",
-         ": throughTheForm.contains(name) ? narrowestPanel : narrowestPage",
+         "(name == \"policyRules\" ? 560 : 490) : narrowestPanel",
          "document.frame.height + hosting.bounds.height - scroll.frame.height"].filter { !snapshots.contains($0) }
     }
 

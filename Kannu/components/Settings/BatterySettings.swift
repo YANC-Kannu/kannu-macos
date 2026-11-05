@@ -81,9 +81,9 @@ struct Charge: View {
     }
 
     var body: some View {
-        Form {
+        SettingsPage {
             if BatteryActivityManager.shared.hasBattery() {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showBatteryIndicator) {
                         Text("Show battery indicator")
                     }
@@ -99,7 +99,7 @@ struct Charge: View {
                 } header: {
                     SettingsSectionHeader("General")
                 }
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showBatteryPercentage) {
                         Text("Show battery percentage")
                     }
@@ -111,7 +111,7 @@ struct Charge: View {
                 } header: {
                     SettingsSectionHeader("Battery Information")
                 }
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showChargingBatteryHUD) {
                         Text("Charging HUD")
                     }
@@ -131,7 +131,7 @@ struct Charge: View {
                 } footer: {
                     SettingsFooter("These temporary HUDs recreate the charging, low-battery, and full-battery notch alerts.")
                 }
-                Section {
+                SettingsSection {
                     SettingsSliderRow("Charging duration", value: chargingDurationBinding, in: 1...10, step: 1,
                                       valueText: Text("\(chargingBatteryHUDDuration)s"))
                     .settingsHighlight(id: highlightID("Charging duration"))
@@ -152,7 +152,7 @@ struct Charge: View {
                 } header: {
                     SettingsSectionHeader("HUD Duration")
                 }
-                Section {
+                SettingsSection {
                     testHUDRow(Label("Charging HUD", systemImage: "bolt.fill"),
                                accessibilityLabel: Text("Test charging HUD"), kind: .charging)
                     .disabled(!showPowerStatusNotifications || !showChargingBatteryHUD)
@@ -172,7 +172,7 @@ struct Charge: View {
                 } footer: {
                     SettingsFooter("Runs the real notch animation on the current target display. If an external screen is using Dynamic Island mode, the battery HUD is sent there first.")
                 }
-                Section {
+                SettingsSection {
                     SettingsRow("Low battery style", description: "Compact matches the charging HUD. Standard uses the expanded DynamicNotch-style card.") {
                         SettingsSelect("Low battery style", selection: $lowBatteryHUDStyle,
                                        options: BatteryNotificationStyle.allCases, optionTitle: \.title,
@@ -189,7 +189,7 @@ struct Charge: View {
                 .disabled(!showPowerStatusNotifications || !showLowBatteryHUD)
                 .opacity(sectionOpacity(showPowerStatusNotifications && showLowBatteryHUD))
 
-                Section {
+                SettingsSection {
                     SettingsRow("Full battery style", description: "Compact keeps the alert inline. Standard uses the taller full-charge HUD with the charging animation.") {
                         SettingsSelect("Full battery style", selection: $fullBatteryHUDStyle,
                                        options: BatteryNotificationStyle.allCases, optionTitle: \.title,

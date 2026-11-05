@@ -18,9 +18,11 @@
 
 import SwiftUI
 
-/// A page's large title, above its `Form`. It sits outside the page's scroll view, so it stays put.
+/// A page's large title, above its `SettingsPage`. It sits outside the page's scroll view, so it stays put, and
+/// starts where the page does.
 struct SettingsPageHeader: View {
     let title: String
+    @Environment(\.settingsPageInset) private var inset
 
     var body: some View {
         Text(verbatim: title)
@@ -29,7 +31,7 @@ struct SettingsPageHeader: View {
             .textSelection(.enabled)
             .accessibilityAddTraits(.isHeader)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, SettingsTheme.formMargin)
+            .padding(.horizontal, inset)
             .padding(.top, SettingsTheme.pageHeaderTop)
     }
 }

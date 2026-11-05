@@ -4,6 +4,64 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's pages
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks
+- **Changes:**
+  - The first open after launch no longer focuses a page's first text field. It had nothing to put back, so ordering
+    in focused that field with its text selected, and with every row built it could be one deep in Agents that writes
+    straight through, such as the ntfy topic or a Pushover key. `SettingsWindowController` now records the page just
+    before the first order-in, nothing focused, and puts it back as it does on a reopening.
+  - The task rows (All tasks, Local tasks, a source, a project), the Archive and Security's findings sit in a
+    `LazyVStack` inside their page, so a long list is no longer built whole as the page opens. No search or deep link
+    lands on one of their rows, and going back to a task still scrolls to it by the list's own id.
+  - VoiceOver: only `SettingsSectionHeader` is a heading, so a Beta badge or a count beside it no longer reads as
+    one. A section and a permission callout are each one group, so Shelf's two "Open Privacy & Security" buttons are
+    heard with their callouts.
+  - `SettingsAnimationRulesTests` pins the first open beside the reopening, with five plants;
+    `SettingsDesignSystemRulesTests` moves the heading's pin to `SettingsSectionHeader` and holds the section's group.
+  - docs/SETTINGS.md names the three lazy lists and why; docs/REGRESSIONS.md entry 22 gains its dated line.
+
+### 2026-11-05 - Brain's pages leave Form
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — a scripted edit, 31 `Form`s and 145 `Section`s by script and one by hand; every page scrolls across the panel; a bare `Form` or `Section` now fails a test
+- **Changes:**
+  - Every `Form` under Settings is a `SettingsPage` and every `Section` a `SettingsSection`, Agents included. A one-off
+    script changed one word per site and refused what it could not rewrite: Media's
+    `Section(header: Text("Lock Screen Media"))`, done by hand, now has a `SettingsSectionHeader`.
+  - Every page scrolls across the whole panel, so its scrollbar sits at the panel's edge. `SettingsForm` measures the
+    panel and hands the inset to the page and its large title; `formMargin`, the `Form`'s own margin, is gone. At the
+    default window size the cards are 720 pt wide, the cap, where the `Form` left 680.
+  - Sections are soft cards with no row dividers. A page builds every row as it appears, so a search can scroll to any
+    of them, and a row's `onAppear` runs as the page opens, not as the row scrolls into view.
+  - A titled `SettingsActionRow` takes the root's labelled row, so its buttons stay trailing: outside a `Form` the
+    automatic style set them straight after the title.
+  - The boards' `Form`s and `Section`s are pages and sections too, and every page board renders at the narrowest panel,
+    612 pt.
+  - `SettingsLayoutRulesTests` bans `Form` and `Section` under Settings, `SwiftUI.Form` and `Section(header:)`
+    included, with plants, a floor, two real pages put back and an empty pin table. `BrainShellRulesTests` holds the
+    page's column, capped and leading inside one scroll view, and the inset's one measurement; the boards' pins follow
+    the new width.
+  - docs/SETTINGS.md gains "Pages and sections" and updates the component table, the window, the boards and the
+    section rules. docs/REGRESSIONS.md entry 22 notes that a page builds every row as it appears.
+
+### 2026-11-05 - Brain gets its own page and section
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsPage` and `SettingsSection`, called as `Form` and `Section` are, so the next change renames one word per site
+- **Changes:**
+  - `SettingsPage`: one scroll view across the panel, its sections in one plain `VStack` column, capped at
+    `pageMaxWidth` and started `settingsPageInset` from the panel's leading edge. Not lazy: a search scrolls to a
+    row's id, and a lazy stack cannot scroll to a row it has not built.
+  - `SettingsSection`: the rows in a soft card, apart by space and never by a divider; the header above the card as a
+    heading for VoiceOver and the footer under it in the secondary ink, both in line with the rows' text. `header:`
+    and `footer:` are optional, as on `Section`.
+  - `SettingsPageInsetKey`: the inset a page and its title start at, `pageInset` unless the window says otherwise.
+  - Theme tokens "Pages and sections": `sectionGap`, `sectionPadding`, `sectionRowGap`, `sectionLabelGap` and
+    `sectionRadius`.
+  - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
+    and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
+    `SettingsLayoutRulesTests` pins their padding.
+
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"
 - **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks

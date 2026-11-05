@@ -57,9 +57,17 @@ struct TaskRowList: View {
             timingIsPaused: manager.timing?.isPaused ?? false
         )
         let canStart = enableTimerFeature && manager.isReady
-        ForEach(list.rows) { row in
-            taskRow(row, showsColorDot: list.showsColorDots, canStart: canStart)
-                .id(row.id)
+        // Lazy, unlike the page around it: a list can hold hundreds of tasks, and a plain stack builds every row as
+        // the page opens. No search or deep link lands on a row here, and going back scrolls to a task by this
+        // `ForEach`'s own id, which a lazy stack reaches before the row is built (docs/SETTINGS.md, "Pages and
+        // sections"). Only with rows: an empty stack would still take a row's gap in its section.
+        if !list.rows.isEmpty {
+            LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
+                ForEach(list.rows) { row in
+                    taskRow(row, showsColorDot: list.showsColorDots, canStart: canStart)
+                        .id(row.id)
+                }
+            }
         }
     }
 
