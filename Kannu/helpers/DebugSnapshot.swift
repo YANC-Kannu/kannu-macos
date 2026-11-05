@@ -1030,7 +1030,8 @@ enum DebugSnapshotFixtures {
 
     /// Brain › Agents' product with no session, one or three: a Codex chat waiting, then Claude and Cursor at work,
     /// so three sessions put "Needs you" over two recent rows. Cursor is on this "Mac" without its hook, so the install
-    /// offers show; a Claude window is near its limit; the findings fixture waits for review.
+    /// offer shows, in the empty state for none and in Editors & hooks for three; with one, every hook is in, so that
+    /// cell shows its quiet line. A Claude window is near its limit; the findings fixture waits for review.
     static func agentsOverview(sessions count: Int, now: Date) -> AgentsOverviewFixture {
         let chats = recentChats(now: now)
         let tools = [
@@ -1046,10 +1047,11 @@ enum DebugSnapshotFixtures {
                                          observedAt: now.addingTimeInterval(-720))
         let findings = self.findings
         let high = findings.filter { $0.severity == .high }
+        let installed: Set<AgentHookProvider> = count == 1 ? [.claude, .codex, .cursor] : [.claude, .codex]
         return AgentsOverviewFixture(
             sessions: Array([chats[3], chats[0], chats[2]].prefix(count)),
             tools: tools,
-            installedHooks: [.claude, .codex],
+            installedHooks: installed,
             nearLimit: [reading],
             security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
         )

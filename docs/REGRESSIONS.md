@@ -1648,6 +1648,15 @@ measured:** CPU with Agents open, closed after being opened on it, and parked fu
 busy agent, and that AppKit reports each of those as an occlusion change; nothing here may open a real window.
 `AgentsPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
+**2026-11-05 addendum: Agents' header checks no tools, and the hero's figures are the same live leaf.** The install
+offer left the header (the design review's finding 3), and the header's `onAppear` and its tool check went with it, so
+Brain checks the tools once a visit, from the overview's `onAppear`. The hero's metrics are now figures through
+`AgentTurnMetricsView`'s new `figures` option, nil in the notch and in Brain's rows: still the one live leaf, drawn
+only under `if live`, with the same 1 Hz `TimelineView` and token follower; its static copy lays out the frozen numbers
+through the same `figureRow`, with no clock. "Open chat ›" is a label inside the hero's button, not a second button. The
+flush quiet button and the 12-pt insets add no `onAppear`, no `.task` and no animator. `AgentsPageLiveDataRulesTests`
+passes with its clauses and plants unchanged, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

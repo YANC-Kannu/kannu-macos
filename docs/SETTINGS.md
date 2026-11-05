@@ -316,27 +316,35 @@ gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks 
 - **The header's actions** sit on the title's row, at its trailing end, which stops where the product column does:
   `SettingsForm(tab:actions:)` hands them to `SettingsPageHeader`. Icon buttons first, the page's one primary verb
   last, each reading its own store. `.toolbar` stays banned.
-- **Agents** leads with a hero titled by its state ("Needs you", "Working", "Finished"), the session
-  `primarySession` ranks first, at least `heroMinHeight` tall. Then Recent chats, rows `listRowHeight` tall and
-  `listRowGap` apart, each with a trailing column of `listTrailingWidth`: the state in words and in its light's
-  colour, the metrics and the light. Then a status row of three equal cells: Editors & hooks (the tools on this Mac,
-  and Install for each one without its hook), Usage (readings near their limit, each with its reset and "As of";
-  never a read of its own) and Security (only while findings wait for review). A click on the hero or a row opens
-  its chat.
-- **An empty state** keeps the hero's place and height: the status, at most one line of `proseMaxWidth`, at most one
-  action. No sessions: "No agents running", with "Install <tool> hook" for the first tool on this Mac without its
-  hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the settings show in both.
-- **Agents' header** holds a gear, which goes to the first settings row, and "Install <tool> hook" only while a tool
-  on this Mac lacks its hook. The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
-  Launch Services from `onAppear`, never in `body` and never Warp's container. The header and the page each ask once a
-  visit, so Brain checks twice; the notch asks as its empty state appears, never on the hover-opens while an agent
-  works.
+- **Agents** leads with a hero for the session `primarySession` ranks first, at least `heroMinHeight` (200 pt) tall,
+  in three bands. Top: its state as the title ("Needs you", "Working", "Finished"), in `cardTitle` and in its light's
+  colour, with the light at the right. Middle: the icon, provider · project, the chat and the state in words. Bottom,
+  pinned: the run's figures, each over a small label (Run time, Tools, Tokens in · out), from the text column, and
+  "Open chat ›" at the right. The whole card is one button, so "Open chat ›" is a label drawn like a quiet button, never
+  a button inside a button. Then Recent chats, rows `listRowHeight` tall and `listRowGap` apart, each with a trailing
+  column of `listTrailingWidth`: the state in words and in its light's colour, the metrics and the light. Then a status
+  row of three equal cells: Editors & hooks (one line, "5 tools watched · hooks installed", or "4 of 5 hooked" and then
+  each tool missing its hook, with Install; a tool with no hook to install, such as Warp, counts as hooked), Usage
+  (readings near their limit, each its percentage over what it measures, with its reset and "As of"; never a read of
+  its own) and Security (only while findings wait for review). A cell's headline figure is `cardTitle`, and a quiet
+  cell is one line. A click on the hero or a row opens its chat.
+- **An empty state** keeps the hero's place and height: the status in `cardTitle`, at most one line of `proseMaxWidth`
+  in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
+  first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the
+  settings show in both.
+- **Agents' header** holds the gear alone, which goes to the first settings row. **The install offer shows once:** in
+  the empty state while that is shown, otherwise in the Editors & hooks cell, never in the header and never twice (the
+  cell's `showsInstall`). The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
+  Launch Services from the page's `onAppear`, once a visit, never in `body` and never Warp's container; the notch asks as
+  its empty state appears, never on the hover-opens while an agent works.
 - **Nothing moved out of reach.** Every settings row keeps its id, its search entry and its deep link, below the
   product: Smart caffeinate's link from the notch lands there. Detected Editors became the Editors & hooks cell. Editor
-  Hooks stays a settings section, the one place a hook can be removed.
+  Hooks stays a settings section: every hook with its tool's icon, and the one place a hook can be removed.
 - **Boards**: `agents0`, `agents1` and `agents3` draw Agents at the window's first size with no session, one and three,
-  from fixtures (`AgentsOverview.snapshotFixture`), never this Mac's sessions, tools, readings or findings. `shellWide`
-  and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the caffeinate link landing below the product.
+  from fixtures (`AgentsOverview.snapshotFixture`), never this Mac's sessions, tools, readings or findings. `agents0`
+  shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
+  `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
+  caffeinate link landing below the product.
 
 ## Live data
 
@@ -365,7 +373,8 @@ which `AgentsPageLiveDataRulesTests` reads from the source, each checked against
 3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
    observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
    tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The
-   page, its scroll position and anything typed stay.
+   page, its scroll position and anything typed stay. The hero's figures are the same leaf with its `figures` option
+   (nil in the notch and in Brain's rows), and their static copy lays out through the same `figureRow`, with no clock.
 
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
 walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full

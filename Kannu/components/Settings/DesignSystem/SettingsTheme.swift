@@ -124,7 +124,7 @@ enum SettingsTheme {
     /// A line of prose, such as an empty state's: about 74 characters at the description's size.
     static let proseMaxWidth: CGFloat = 380
     /// The hero card, or the empty state in its place.
-    static let heroMinHeight: CGFloat = 240
+    static let heroMinHeight: CGFloat = 200
     /// The same inset as a section's card, so the hero's text starts where every card's does.
     static let heroPadding: CGFloat = 12
     static let heroIcon: CGFloat = 28
