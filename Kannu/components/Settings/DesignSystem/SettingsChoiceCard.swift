@@ -19,7 +19,8 @@
 import SwiftUI
 
 /// The one way a choice card says "selected" (docs/SETTINGS.md, "Choices"): an accent ring around its tile, and its name
-/// in ink, medium when chosen. No dot, no pill and no tinted fill. VoiceOver hears the name as selected.
+/// in ink, medium when chosen. No dot, no pill and no tinted fill. The card is a plain `Button` that carries
+/// `.isSelected` itself, so VoiceOver hears it and the keyboard reaches it.
 extension View {
     /// The ring, in the tile's own shape. The strong accent: the ring is the one mark that says selected, and the eye
     /// blue is 2.3:1 on a light card, under the 3:1 such a mark needs.
@@ -35,6 +36,5 @@ extension View {
     func settingsChoiceLabel(isSelected: Bool) -> some View {
         font(isSelected ? SettingsTheme.bodyStrong : SettingsTheme.body)
             .foregroundStyle(SettingsTheme.ink)
-            .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

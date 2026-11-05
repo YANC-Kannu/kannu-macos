@@ -267,6 +267,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         }
         require("ink", on: ["paper", "panel", "card"], atLeast: 7)
         require("inkSecondary", on: ["paper", "panel", "card"], atLeast: 4.5)
+        // A badge's text, on the line colour it sits on (`SettingsBadge`).
+        require("inkSecondary", on: ["line"], atLeast: 4.5)
         require("accentStrong", on: ["paper", "panel", "card"], atLeast: 4.5)
         require("controlOff", on: ["panel", "card"], atLeast: 3)
         // The labels the button style really draws, on the fills it really draws them on: `card`
@@ -297,6 +299,11 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let faintDark = theme.replacingOccurrences(of: "dark: 0xA3A199", with: "dark: 0x3A3A3A")
         XCTAssertNotEqual(faintDark, theme, "the plant must change the theme")
         XCTAssertTrue(Self.readabilityFailures(in: faintDark).contains("inkSecondary on card, dark"))
+
+        // The grey before the badge needed it: 4.2:1 on the line colour, though 5:1 on a card.
+        let oldGrey = theme.replacingOccurrences(of: "inkSecondary = color(light: 0x66625A", with: "inkSecondary = color(light: 0x6B675E")
+        XCTAssertNotEqual(oldGrey, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: oldGrey), ["inkSecondary on line, light"])
 
         let otherBlue = theme.replacingOccurrences(of: "accent = color(light: 0x4DA3FF", with: "accent = color(light: 0x1D69C9")
         XCTAssertNotEqual(otherBlue, theme, "the plant must change the theme")

@@ -172,7 +172,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
         "CustomOSDSettings.swift": 1,        // the OSD preview
         "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
-        "LockScreenSettings.swift": 4,       // lock screen previews
+        "LockScreenSettings.swift": 3,       // lock screen previews (the glass sample went with its view)
         "SettingsColorPicker.swift": 1,      // the colour popover
         "SettingsHelpers.swift": 4,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsBadge.swift": 1,            // the one badge's own inset
@@ -349,7 +349,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
         "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
         "LiveActivitiesSettings.swift": 10,  // each activity's own colour
-        "LockScreenSettings.swift": 18,      // lock screen previews
+        "LockScreenSettings.swift": 15,      // lock screen previews (the glass sample went with its view)
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
         "SecurityFindingRow.swift": 3,       // severity badges
@@ -473,6 +473,49 @@ final class SettingsLayoutRulesTests: XCTestCase {
         let rows = try XCTUnwrap(Self.settingsSources()["TaskRowList.swift"])
         let quiet = try XCTUnwrap(rows.range(of: ".buttonStyle(SettingsButtonStyle(.quiet))"), "the task rows have no quiet button to plant on")
         XCTAssertEqual(Self.nativeButtonStyleLines(in: rows.replacingCharacters(in: quiet, with: ".buttonStyle(.borderless)")).count, 1)
+    }
+
+    /// `.primary` means the one thing to do here, so it is a sheet's default action or a page header's one verb, never a
+    /// callout's or a card's button (2026-11-05, the design review's finding 4; docs/SETTINGS.md). An exact list: a new
+    /// primary anywhere else, or one gone from here, fails.
+    private static let pinnedPrimaryButtonCounts: [String: Int] = [
+        "AnimationEditorView.swift": 1,      // the animation editor sheet's Save or Import
+        "IdleAnimationsSettingsSection.swift": 1,  // the URL sheet's Add
+        "NewTaskSheet.swift": 1,             // the New Task sheet's Add
+        "PolicyRulesEditor.swift": 1,        // the rules editor sheet's Save
+        "TaskConnectSheets.swift": 3,        // the three Connect sheets' Connect
+        "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
+        "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
+        "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+    ]
+
+    func testOnlySheetsAndNewTaskArePrimary() throws {
+        assertPinnedCounts(Self.pinnedPrimaryButtonCounts, scanner: Self.primaryButtonLines,
+                           rule: "a primary button",
+                           cure: "a callout's or a card's button takes the standard style; .primary is a sheet's default action or a page header's one verb")
+        for planted in [".buttonStyle(SettingsButtonStyle(.primary))", ".buttonStyle(SettingsButtonStyle( .primary ))",
+                        "let style = SettingsButtonStyle(.primary)", "SettingsButtonStyle(\n    .primary)"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1, planted)
+        }
+        for clean in [".buttonStyle(SettingsButtonStyle())", ".buttonStyle(SettingsButtonStyle(.quiet, flush: true))",
+                      "// .buttonStyle(SettingsButtonStyle(.primary))", "Text(\"SettingsButtonStyle(.primary)\")",
+                      "if prominence == .primary { return SettingsTheme.onPrimary }"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: clean), [], clean)
+        }
+
+        // A real page: Appearance's Upload skin, a card's button, given back the primary style.
+        let appearance = try XCTUnwrap(Self.settingsSources()["AppearanceSettings.swift"])
+        let upload = try XCTUnwrap(appearance.range(of: "isSkinImporterPresented = true\n                    }"), "Appearance has no Upload skin to plant on")
+        let planted = appearance.replacingCharacters(in: upload, with: "isSkinImporterPresented = true\n                    }\n                    .buttonStyle(SettingsButtonStyle(.primary))")
+        XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1)
+        XCTAssertEqual(Self.primaryButtonLines(in: appearance), [])
+    }
+
+    /// One entry per line naming `SettingsButtonStyle(.primary)`, its spacing and wrapping aside, read with comments and
+    /// strings blanked.
+    static func primaryButtonLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        return lines(at: matchOffsets(of: #"\bSettingsButtonStyle\s*\(\s*\.primary\b"#, in: code), in: code, text: text)
     }
 
     /// The shorthand colours a style or a colour argument can be handed.

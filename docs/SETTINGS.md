@@ -45,7 +45,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›", a finding's "Details ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
 | A badge beside a title ("Beta", "Alpha", "Built-in") | `SettingsBadge`, through `customBadge(text:)` and `alphaBadge()`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius. Never a capsule of a colour of its own. The sidebar's BETA pill is Stage 6's |
 | A choice drawn as cards (a HUD style, an idle animation, a skin, an icon) | `.settingsChoiceRing(shape, isSelected:)` on the tile and `.settingsChoiceLabel(isSelected:)` on its name (below, "Choices") |
-| A callout, or a row's expanded details, inside a section | `SettingsPermissionCallout`, or `.settingsCalloutCard()`: the card's own colour inside a 1-pt line border, never a darker slab, and its buttons the standard style |
+| A callout, or a row's expanded details, inside a section | `SettingsPermissionCallout`, or `.settingsCalloutCard()`: the card's own colour inside a 1-pt line border, never a darker slab, and its buttons the standard style. A callout's title is orange for a permission something needs and `accentStrong` for an offer (Focus, Shelf's Full Disk Access, ADR), never a colour of its own |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
 | A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
 | Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
@@ -169,7 +169,7 @@ numbers, and this table only says why.
 | `HUDAndOSDSettings.swift` | 15 | 6 | HUD style previews and the cards' resting fill |
 | `IdleAnimationsSettingsSection.swift` | 3 | 5 | The cards' resting fill, the Add card and the delete glyph |
 | `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
-| `LockScreenSettings.swift` | 18 | 6 | Lock screen previews |
+| `LockScreenSettings.swift` | 15 | 6 | Lock screen previews |
 | `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
 | `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
 | `SecurityFindingRow.swift` | 3 | 1 | Severity badges |
@@ -207,8 +207,10 @@ All tasks keeps.
 - **Choice cards** (a HUD style, an idle animation, a notch skin, an app icon, a download or Bluetooth icon style) say
   "selected" one way: a 2-pt `accentStrong` ring around the tile (`settingsChoiceRing`; the eye blue is 2.3:1 on a
   light card, under the 3:1 a state mark needs), and the name under it in ink, `bodyStrong` when chosen and `body`
-  when not (`settingsChoiceLabel`), which VoiceOver reads as selected too. No dot, no pill and no tinted fill. A second
-  state, such as an idle animation's "Built-in", is the badge.
+  when not (`settingsChoiceLabel`). No dot, no pill and no tinted fill. A second state, such as an idle animation's
+  "Built-in", is the badge. Each card is a `Button` in the `.plain` style that carries `.isSelected` itself, as a
+  sidebar row does, so the keyboard reaches it and VoiceOver hears which card is chosen; its name is not selectable,
+  and a glyph on it (an idle animation's delete) is an overlay over the button, never inside its label.
 
 | Key | Where | Does |
 |---|---|---|
@@ -410,9 +412,12 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 - **A query shows one flat list** of the matching tabs, with no Back row and no Settings row. Clearing it
   returns to the list the selected tab is on. A deep link to a tab that list leaves out clears the query, so
   the sidebar still shows the tab. The suggestions render inside the sidebar's column.
-- **A suggestion is a row:** its title in `body`, two lines at most, and its tab under it in `description`. The list
-  shows whole rows only: each row measures where its bottom edge falls, and the list ends at the lowest one under
-  344 pt, so it never cuts a row's text; the rest scroll into view.
+- **A suggestion is a row:** its title in `body`, two lines at most, and its tab under it in `description`. Whether
+  the list scrolls is decided from what is known at once: more than seven matches, or a last row not yet measured,
+  scroll, in at most 344 pt, so the list is never taller than that, even unmeasured. Each row measures where its
+  bottom edge falls, and the measures only trim the scroll view to the lowest one under 344 pt, so it never cuts a
+  row's text; they are cleared when the matches change. While rows sit below the foot, a short fade
+  (`suggestionFade`) says there is more.
 - **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
   sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
   sits outside the page's scroll view, so it stays put while the page scrolls.
