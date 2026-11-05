@@ -4,6 +4,23 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - A #tag search finds the whole tag, and labels count as tags
+- **Developer label:** Brain redesign plan: Stage 5, task logic
+- **Agent label:** Claude Code (Opus 5.5) — pure logic and tests for the Tasks page and the notch; no view changes
+- **Changes:**
+  - `TaskFacets.displayTags(of:)`: a task's own tags in the user's order, then its labels in the server's, a scoped
+    label by its value, once each ignoring case.
+  - `TaskFacets.filterTags(in:)`: what the Tag filter will offer, own tags and labels alike, the first spelling of
+    each, sorted ignoring case. `tags(in:)` stays own tags only, for tag suggestions.
+  - The Tag filter (`TaskFilter.tag`) finds a label as it finds an own tag, so every choice `filterTags` offers
+    finds its tasks. All tasks' menu still offers own tags until the Tasks page moves to `filterTags`.
+  - `TaskSearch`: a `#word` finds a tag or label that is the word as a whole, or else the word with its `#`
+    anywhere. `#work` no longer finds "Homework" or "workshop", and `#4264` still finds "group/app#4264". Plain
+    words and a `#` alone search as before.
+  - `TaskSearch.chipTags(of:query:)`: `displayTags` with the tags the search finds first, so a row's one chip is the
+    tag searched for.
+  - `TaskFacetsTests` and `TaskSearchTests` cover each rule, the `#work` and `#4264` cases with their neighbours.
+
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"
 - **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks
