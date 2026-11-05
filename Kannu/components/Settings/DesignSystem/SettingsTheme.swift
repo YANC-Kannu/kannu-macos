@@ -41,6 +41,8 @@ enum SettingsTheme {
     static let knob = color(light: 0xFFFFFF, dark: 0xFFFFFF)
     static let onPrimary = color(light: 0xF4F1EA, dark: 0x101114)
     static let destructive = color(light: 0xBC3226, dark: 0xFF6B5E)
+    /// A mark that means ready, such as a status line's dot. Drawn, never read, so 3:1 is its floor.
+    static let success = color(light: 0x2E7D4F, dark: 0x5FD08A)
 
     // MARK: - Fonts: Geist when bundled, the system font at the same size and weight when not
 
@@ -49,6 +51,8 @@ enum SettingsTheme {
 
     /// One size on every page, so the title never changes size between tabs.
     static let pageTitle = sans(24, .semibold, "Geist-SemiBold")
+    /// A sheet's title: a sheet is smaller than a page.
+    static let sheetTitle = sans(15, .semibold, "Geist-SemiBold")
     static let body = sans(13, .regular, "Geist-Regular")
     static let bodyStrong = sans(13, .medium, "Geist-Medium")
     /// A section's name. The root's font replaces what a grouped `Form` gives its headers, so they say it.
@@ -111,6 +115,46 @@ enum SettingsTheme {
     static let pressedOpacity = 0.7
     /// Every bounded control animation. Never `.repeatForever` (docs/REGRESSIONS.md, entry 22).
     static let quickAnimation = 0.15
+
+    // MARK: - Choices and fields
+
+    /// The selected segment, raised off its track.
+    static let raised = color(light: 0xFFFFFF, dark: 0x2B2C31)
+    static let segmentInset = EdgeInsets(top: 3, leading: 10, bottom: 3, trailing: 10)
+    static let segmentTrackInset: CGFloat = 2
+    static let segmentRadius: CGFloat = 5
+    /// Around a popover's content.
+    static let popoverInset: CGFloat = 6
+    static let selectMinWidth: CGFloat = 180
+    static let selectRowHeight: CGFloat = 28
+    static let selectRowInset: CGFloat = 8
+    /// A long list's height: ten rows and half of the next, so it shows there is more to scroll to.
+    static let selectListHeight: CGFloat = 294
+    static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
+    static let focusRingWidth: CGFloat = 2
+
+    // MARK: - Values
+
+    static let sliderTrackHeight: CGFloat = 4
+    /// The slider's knob, and so the slider's height.
+    static let sliderKnob: CGFloat = 16
+    /// How far an arrow key or VoiceOver's adjust moves a slider that has no step: this much of its range.
+    static let sliderKeyboardFraction = 0.05
+    static let stepperButtonWidth: CGFloat = 22
+    static let stepperHeight: CGFloat = 22
+    /// A divider's width.
+    static let hairline: CGFloat = 1
+
+    // MARK: - Sheets
+
+    /// Around a sheet's content.
+    static let sheetInset: CGFloat = 20
+    /// Between a sheet's title, its fields and its buttons.
+    static let sheetStack: CGFloat = 12
+    /// Every sheet but the rules editor.
+    static let sheetWidth: CGFloat = 420
+    /// The rules editor: a kind, a command and a reason side by side.
+    static let sheetWidthWide: CGFloat = 560
 
     private static func sans(_ size: CGFloat, _ weight: Font.Weight, _ name: String) -> Font {
         geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)

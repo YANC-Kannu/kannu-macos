@@ -65,10 +65,9 @@ struct Media: View {
     var body: some View {
         Form {
             Section {
-                Picker("Music Source", selection: $mediaController) {
-                    ForEach(availableMediaControllers) { controller in
-                        Text(controller.localizedName).tag(controller)
-                    }
+                SettingsRow("Music Source") {
+                    SettingsSelect("Music Source", selection: $mediaController,
+                                   options: availableMediaControllers, optionTitle: \.localizedName)
                 }
                 .onChange(of: mediaController) { _, _ in
                     NotificationCenter.default.post(
@@ -154,13 +153,9 @@ struct Media: View {
             if musicControlWindowEnabled {
                 Section {
                     SettingsRow("Skip buttons", description: musicSkipBehavior.description) {
-                        Picker("Skip buttons", selection: $musicSkipBehavior) {
-                            ForEach(MusicSkipBehavior.allCases) { behavior in
-                                Text(behavior.displayName).tag(behavior)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Skip buttons", selection: $musicSkipBehavior,
+                                       options: MusicSkipBehavior.allCases, optionTitle: \.displayName,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Skip buttons"))
                 } header: {
@@ -202,10 +197,9 @@ struct Media: View {
                 .settingsHighlight(id: highlightID("Enable album art parallax effect"))
 
 
-                Picker("Sneak Peek Style", selection: $sneakPeekStyles){
-                    ForEach(SneakPeekStyle.allCases) { style in
-                        Text(style.rawValue).tag(style)
-                    }
+                SettingsRow("Sneak Peek Style") {
+                    SettingsSelect("Sneak Peek Style", selection: $sneakPeekStyles,
+                                   options: SneakPeekStyle.allCases, optionTitle: \.rawValue)
                 }
                 .disabled(!enableSneakPeek)
                 .settingsHighlight(id: highlightID("Sneak Peek Style"))
@@ -231,15 +225,19 @@ struct Media: View {
                 }
                 .settingsHighlight(id: highlightID("Enable real-time waveform"))
                 
-                Picker("Visualizer candles", selection: $visualizerBarCount) {
-                    Text("4").tag(4)
-                    Text("5").tag(5)
-                    Text("6").tag(6)
+                SettingsRow("Visualizer candles") {
+                    SettingsSelect("Visualizer candles", selection: $visualizerBarCount, choices: [
+                        4: String(localized: "4"),
+                        5: String(localized: "5"),
+                        6: String(localized: "6"),
+                    ])
                 }
                 
-                Picker("Color extraction", selection: $colorExtractionMode) {
-                    Text("Legacy").tag(ColorExtractionMode.legacy)
-                    Text("Vibrant").tag(ColorExtractionMode.vibrant)
+                SettingsRow("Color extraction") {
+                    SettingsSelect("Color extraction", selection: $colorExtractionMode, choices: [
+                        ColorExtractionMode.legacy: String(localized: "Legacy"),
+                        ColorExtractionMode.vibrant: String(localized: "Vibrant"),
+                    ])
                 }
                 
                 Toggle("Scrubbable real-time waveform", isOn: $enableWaveformScrubber)
@@ -313,18 +311,14 @@ struct Media: View {
             }
             .disabled(!showStandardMediaControls)
 
-            // A radio group: the options are too long for a menu at this width.
             Section {
-                Picker(selection: $hideNotchOption) {
-                    Text("Always hide in fullscreen").tag(HideNotchOption.always)
-                    Text("Hide only when NowPlaying app is in fullscreen").tag(HideNotchOption.nowPlayingOnly)
-                    Text("Never hide").tag(HideNotchOption.never)
-                } label: {
-                    Text("Hide DynamicIsland Options")
+                SettingsRow("Hide DynamicIsland Options") {
+                    SettingsSelect("Hide DynamicIsland Options", selection: $hideNotchOption, choices: [
+                        .always: String(localized: "Always hide in fullscreen"),
+                        .nowPlayingOnly: String(localized: "Hide only when NowPlaying app is in fullscreen"),
+                        .never: String(localized: "Never hide"),
+                    ])
                 }
-                .pickerStyle(.radioGroup)
-                .labeledContentStyle(.automatic)
-                .labelsHidden()
                 .settingsHighlight(id: highlightID("Hide DynamicIsland Options"))
                 .onChange(of: hideNotchOption) {
                     Defaults[.enableFullscreenMediaDetection] = hideNotchOption != .never

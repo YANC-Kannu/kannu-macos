@@ -119,8 +119,8 @@ struct ExtensionsSettingsView: View {
                 .padding(.vertical, 40)
             } else {
                 if authManager.entries.count > 3 {
-                    TextField("Search extensions...", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                    TextField("Search extensions...", text: $searchText, prompt: Text("Search extensions..."))
+                        .settingsField()
                 }
                 
                 ForEach(filteredEntries) { entry in
@@ -401,7 +401,6 @@ private struct ExtensionEntryRow: View {
             Button("Reset Rate Limits") {
                 authManager.resetRateLimits(for: entry.bundleIdentifier)
             }
-            .buttonStyle(.bordered)
             .controlSize(.small)
         }
     }
@@ -419,16 +418,13 @@ private struct ExtensionEntryRow: View {
                 Button("Deny") {
                     authManager.deny(bundleIdentifier: entry.bundleIdentifier, reason: "Denied by user")
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
                 
             case .authorized:
-                Button("Revoke Access") {
+                Button("Revoke Access", role: .destructive) {
                     authManager.revoke(bundleIdentifier: entry.bundleIdentifier, reason: "Revoked by user")
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
-                .tint(.orange)
                 
             case .denied, .revoked:
                 Button("Re-authorize") {
@@ -442,12 +438,10 @@ private struct ExtensionEntryRow: View {
             
             resetMenu
 
-            Button("Remove") {
+            Button("Remove", role: .destructive) {
                 onRemove()
             }
-            .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.red)
         }
     }
 
@@ -468,9 +462,16 @@ private struct ExtensionEntryRow: View {
             }
             .disabled(!hasNotchExperiences)
         } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise.circle")
+            // Our button takes the native indicator away, so the label draws its own chevron.
+            HStack(spacing: SettingsMetrics.iconGap) {
+                Label("Reset", systemImage: "arrow.counterclockwise.circle")
+                Image(systemName: "chevron.down")
+                    .accessibilityHidden(true)
+            }
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(SettingsButtonStyle())
+        .menuIndicator(.hidden)
         .controlSize(.small)
     }
 

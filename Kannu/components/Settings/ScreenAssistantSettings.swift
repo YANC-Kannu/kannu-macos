@@ -81,8 +81,8 @@ struct ScreenAssistantSettings: View {
 
                     if showingApiKey {
                         VStack(alignment: .leading, spacing: 8) {
-                            SecureField("Enter your Gemini API Key", text: $apiKeyText)
-                                .textFieldStyle(.roundedBorder)
+                            SecureField("Enter your Gemini API Key", text: $apiKeyText, prompt: Text("Enter your Gemini API Key"))
+                                .settingsField()
 
                             Text("Get your free API key from Google AI Studio")
                                 .settingsDescriptionStyle()
@@ -105,12 +105,10 @@ struct ScreenAssistantSettings: View {
                         }
                     }
 
-                    Picker("Display Mode", selection: $screenAssistantDisplayMode) {
-                        ForEach(ScreenAssistantDisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
+                    SettingsRow("Display Mode") {
+                        SettingsSelect("Display Mode", selection: $screenAssistantDisplayMode,
+                                       options: ScreenAssistantDisplayMode.allCases, optionTitle: \.displayName)
                     }
-                    .pickerStyle(.menu)
                     .settingsHighlight(id: highlightID("Display Mode"))
 
                     LabeledContent("Attached Files") {

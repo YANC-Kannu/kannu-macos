@@ -152,14 +152,14 @@ private struct WorklogDraftRow: View {
                     HStack(spacing: SettingsMetrics.rowContent) {
                         // No .onSubmit: Return confirms the length, never sends it. Only Log does.
                         TextField("Length", text: $durationText, prompt: Text(verbatim: "1h 15m"))
-                            .labelsHidden()
-                            .disabled(isSending)
                             .focused($focusedField, equals: .length)
+                            .settingsField(isFocused: focusedField == .length)
+                            .disabled(isSending)
                         if source == .jira {
                             TextField("Comment", text: $comment, prompt: Text("Comment (optional)"))
-                                .labelsHidden()
-                                .disabled(isSending)
                                 .focused($focusedField, equals: .comment)
+                                .settingsField(isFocused: focusedField == .comment)
+                                .disabled(isSending)
                         }
                     }
                 }

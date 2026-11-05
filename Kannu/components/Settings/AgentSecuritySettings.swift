@@ -120,11 +120,8 @@ struct AgentSecuritySettings: View {
             }
 
             SettingsRow("High-severity alerts in the notch", description: adrHighAlertMode.description) {
-                Picker("High-severity alerts in the notch", selection: $adrHighAlertMode) {
-                    ForEach(ADRHighAlertMode.allCases) { mode in
-                        Text(mode.localizedName).tag(mode)
-                    }
-                }
+                SettingsSelect("High-severity alerts in the notch", selection: $adrHighAlertMode,
+                               options: ADRHighAlertMode.allCases, optionTitle: \.localizedName)
             }
             .settingsHighlight(id: highlightID("High-severity alerts in the notch"))
 
@@ -529,8 +526,11 @@ struct AgentSecuritySettings: View {
     @ViewBuilder
     private var detectionSetupSections: some View {
         Section {
-            TextField("Reasoning model (Claude)", text: $adrDetectionReasoningModel)
-                .settingsHighlight(id: highlightID("Reasoning model"))
+            SettingsRow("Reasoning model (Claude)") {
+                TextField("Reasoning model (Claude)", text: $adrDetectionReasoningModel)
+                    .settingsField()
+            }
+            .settingsHighlight(id: highlightID("Reasoning model"))
             SettingsRow("Use an Anthropic API key instead of your Claude Code login",
                         description: adrDetectionUseAnthropicAPIKey
                             ? String(localized: "Analyses are billed to the API key below.")
@@ -547,7 +547,10 @@ struct AgentSecuritySettings: View {
             }
             .settingsHighlight(id: highlightID("Triage with OpenAI first"))
             if adrDetectionTriageEnabled {
-                TextField("Triage model (OpenAI)", text: $adrDetectionTriageModel)
+                SettingsRow("Triage model (OpenAI)") {
+                    TextField("Triage model (OpenAI)", text: $adrDetectionTriageModel)
+                        .settingsField()
+                }
                 adrSecretRow(title: "OpenAI API key", key: .openaiAPIKey, text: $adrOpenAIKeyText)
             }
         } header: {
@@ -559,23 +562,29 @@ struct AgentSecuritySettings: View {
                 .settingsHighlight(id: highlightID("Context servers"))
             Toggle("Context: source code analyzer", isOn: $adrDetectionContextSourceCode)
             Toggle("Context: policy store", isOn: $adrDetectionContextPolicy)
-            Picker("Reasoning timeout", selection: $adrDetectionTimeoutSeconds) {
-                Text("2 minutes").tag(120)
-                Text("5 minutes").tag(300)
-                Text("10 minutes").tag(600)
+            SettingsRow("Reasoning timeout") {
+                SettingsSelect("Reasoning timeout", selection: $adrDetectionTimeoutSeconds, choices: [
+                    120: String(localized: "2 minutes"),
+                    300: String(localized: "5 minutes"),
+                    600: String(localized: "10 minutes"),
+                ])
             }
-            Picker("Messages sent (newest)", selection: $adrDetectionMaxMessages) {
-                Text("100").tag(100)
-                Text("200").tag(200)
-                Text("400").tag(400)
-                Text("800").tag(800)
+            SettingsRow("Messages sent (newest)") {
+                SettingsSelect("Messages sent (newest)", selection: $adrDetectionMaxMessages, choices: [
+                    100: String(localized: "100"),
+                    200: String(localized: "200"),
+                    400: String(localized: "400"),
+                    800: String(localized: "800"),
+                ])
             }
             .settingsHighlight(id: highlightID("Messages sent"))
-            Picker("Transcript budget", selection: $adrDetectionMaxCharacters) {
-                Text("60k characters").tag(60_000)
-                Text("150k characters").tag(150_000)
-                Text("400k characters").tag(400_000)
-                Text("No limit").tag(0)
+            SettingsRow("Transcript budget") {
+                SettingsSelect("Transcript budget", selection: $adrDetectionMaxCharacters, choices: [
+                    60_000: String(localized: "60k characters"),
+                    150_000: String(localized: "150k characters"),
+                    400_000: String(localized: "400k characters"),
+                    0: String(localized: "No limit"),
+                ])
             }
             .settingsHighlight(id: highlightID("Transcript budget"))
             Toggle("Confirm before every analysis", isOn: $adrDetectionConfirmEachRun)
@@ -631,22 +640,27 @@ struct AgentSecuritySettings: View {
     /// Remove — never a keychain read per render (the tab re-renders on every monitor publish).
     @ViewBuilder
     private func adrSecretRow(title: String, key: SecureSecretKey, text: Binding<String>) -> some View {
-        HStack(spacing: SettingsMetrics.rowContent) {
-            SecureField(title, text: text)
-            Button("Save") {
-                SecureSecretsStore.set(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines), for: key)
-                text.wrappedValue = ""
-                refreshStoredADRSecrets()
-            }
-            .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if storedADRSecrets.contains(key) {
-                Text("stored")
-                    .settingsDescriptionStyle()
-                Button("Remove") {
-                    SecureSecretsStore.removeValue(for: key)
+        LabeledContent {
+            HStack(spacing: SettingsMetrics.rowContent) {
+                SecureField(title, text: text)
+                    .settingsField()
+                Button("Save") {
+                    SecureSecretsStore.set(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines), for: key)
+                    text.wrappedValue = ""
                     refreshStoredADRSecrets()
                 }
+                .disabled(text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if storedADRSecrets.contains(key) {
+                    Text("stored")
+                        .settingsDescriptionStyle()
+                    Button("Remove") {
+                        SecureSecretsStore.removeValue(for: key)
+                        refreshStoredADRSecrets()
+                    }
+                }
             }
+        } label: {
+            SettingsRowLabel(verbatim: title)
         }
     }
 

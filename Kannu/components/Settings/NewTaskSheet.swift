@@ -52,9 +52,6 @@ struct NewTaskSheet: View {
         case tags
     }
 
-    /// As wide as the Connect sheets: room for the estimate and the tags side by side.
-    private static let width: CGFloat = 420
-
     private var draft: TaskFormDraft { newTask.draft }
     private var canAdd: Bool { manager.isReady && draft.canSave }
     /// A tag half-typed: Return completes it, so Add gives up the Return key meanwhile.
@@ -64,17 +61,8 @@ struct NewTaskSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("New Task")
-                    .font(.headline)
-                Text("A local task, added on top of your list. Cancel keeps what you typed.")
-                    .settingsDescriptionStyle()
-            }
-
+        SettingsSheet("New Task", subtitle: Text("A local task, added on top of your list. Cancel keeps what you typed.")) {
             TextField("Title", text: $newTask.draft.title, prompt: Text("What needs doing?"))
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
                 .focused($focused, equals: .title)
                 .onSubmit { add(andStart: false) }
                 // `#tag` and `@time` typed in the title (`TaskQuickAdd`), shown inside its end.
@@ -88,6 +76,7 @@ struct NewTaskSheet: View {
                     let folded = newTask.draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
                     if folded != newTask.draft { newTask.draft = folded }
                 }
+                .settingsField(isFocused: focused == .title)
             if let existing = TaskItem.reusable(titled: TaskQuickAdd.title(of: draft.title), in: manager.tasks) {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     Text(verbatim: String(localized: "“\(existing.title)” is already in your list."))
@@ -103,45 +92,40 @@ struct NewTaskSheet: View {
             GoldenRow(spacing: SettingsMetrics.rowContent) {
                 TaskEstimateField(draft: $newTask.draft, onSubmit: { add(andStart: false) })
                 TextField("Tags", text: $newTask.draft.tagsText, prompt: Text("Tags, comma separated"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
                     .focused($focused, equals: .tags)
                     .onSubmit(submitTags)
                     .help(Text("The first tag sets the task's colour"))
+                    .settingsField(isFocused: focused == .tags)
             }
             if !tagOffers.isEmpty {
                 tagOfferChips
             }
 
             reminder
-
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if draft != TaskFormDraft() {
-                    Button("Clear All") {
-                        newTask.draft = TaskFormDraft()
-                        focused = .title
-                    }
+        } buttons: {
+            if draft != TaskFormDraft() {
+                Button("Clear All") {
+                    newTask.draft = TaskFormDraft()
+                    focused = .title
                 }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                if enableTimerFeature {
-                    Button {
-                        add(andStart: true)
-                    } label: {
-                        Label("Add & Start", systemImage: "play.fill")
-                    }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!canAdd)
-                }
-                Button("Add") { add(andStart: false) }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(isTypingTag ? nil : .defaultAction)
-                    .disabled(!canAdd)
             }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            if enableTimerFeature {
+                Button {
+                    add(andStart: true)
+                } label: {
+                    Label("Add & Start", systemImage: "play.fill")
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!canAdd)
+            }
+            Button("Add") { add(andStart: false) }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(isTypingTag ? nil : .defaultAction)
+                .disabled(!canAdd)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: Self.width)
         .onAppear {
             // macOS's answer may have changed since the list last asked: the note follows it.
             manager.checkReminderPermission()
@@ -199,11 +183,10 @@ struct NewTaskSheet: View {
             .toggleStyle(.checkbox)
             .labeledContentStyle(.automatic)
             if draft.reminder != nil {
-                DatePicker("Remind me at", selection: Binding(
+                SettingsDateField("Remind me at", selection: Binding(
                     get: { draft.reminder ?? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) },
                     set: { newTask.draft.reminder = $0 }
-                ), in: Date()..., displayedComponents: [.date, .hourAndMinute])
-                .labelsHidden()
+                ), in: Date()...)
             }
         }
         if draft.reminder != nil {

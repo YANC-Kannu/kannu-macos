@@ -251,8 +251,8 @@ private struct SourceOptionRows: View {
                 LabeledContent {
                     HStack(spacing: SettingsMetrics.rowContent) {
                         TextField("Issue filter (JQL)", text: $jiraJQL, prompt: Text(verbatim: JiraAPI.defaultJQL))
-                            .labelsHidden()
                             .onSubmit { manager.refresh(.jira) }
+                            .settingsField()
                         Button("Reset") {
                             jiraJQL = JiraAPI.defaultJQL
                             manager.refresh(.jira)
@@ -290,8 +290,8 @@ private struct SourceOptionRows: View {
             LabeledContent {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     TextField("Todoist filter", text: $todoistFilter, prompt: Text("today | overdue"))
-                        .labelsHidden()
                         .onSubmit { manager.refresh(.todoist) }
+                        .settingsField()
                     Button("Clear") {
                         todoistFilter = ""
                         manager.refresh(.todoist)

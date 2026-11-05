@@ -19,9 +19,10 @@
 import SwiftUI
 
 /// Brain's button. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a sheet's default
-/// action asks for `.primary` itself; `SettingsDesignSystemRulesTests` holds every site to that.
+/// action asks for `.primary` itself; `SettingsDesignSystemRulesTests` holds every site to that. `.quiet` is
+/// bare at rest and fills only under the pointer: a glyph on a row, a back row, a menu's ⋯.
 struct SettingsButtonStyle: ButtonStyle {
-    enum Prominence { case standard, primary }
+    enum Prominence { case standard, primary, quiet }
     private let prominence: Prominence
 
     init(_ prominence: Prominence = .standard) { self.prominence = prominence }
@@ -46,10 +47,14 @@ struct SettingsButtonStyle: ButtonStyle {
             return configuration.role == .destructive ? SettingsTheme.destructive : SettingsTheme.ink
         }
 
-        private var chromeColor: Color {
-            if prominence == .primary { return SettingsTheme.ink }
+        /// Nil leaves a quiet button bare at rest.
+        private var chromeColor: Color? {
+            switch prominence {
+            case .primary: return SettingsTheme.ink
             // `.onHover` keeps firing on a disabled button, hence the check.
-            return isEnabled && (configuration.isPressed || isHovering) ? SettingsTheme.selection : SettingsTheme.card
+            case .standard: return isEnabled && (configuration.isPressed || isHovering) ? SettingsTheme.selection : SettingsTheme.card
+            case .quiet: return isEnabled && (configuration.isPressed || isHovering) ? SettingsTheme.hover : nil
+            }
         }
 
         var body: some View {
@@ -59,8 +64,10 @@ struct SettingsButtonStyle: ButtonStyle {
                 .fixedSize(horizontal: true, vertical: false)
                 .font(isSmall ? SettingsTheme.description : SettingsTheme.bodyStrong)
                 .foregroundStyle(labelColor)
-                .padding(isSmall ? SettingsTheme.buttonInsetSmall : SettingsTheme.buttonInset)
-                .background(shape.fill(chromeColor))
+                .padding(isSmall || prominence == .quiet ? SettingsTheme.buttonInsetSmall : SettingsTheme.buttonInset)
+                .background {
+                    if let chromeColor { shape.fill(chromeColor) }
+                }
                 .overlay {
                     if prominence == .standard { shape.strokeBorder(SettingsTheme.line) }
                 }

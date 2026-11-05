@@ -211,10 +211,10 @@ struct SettingsRow<Control: View>: View {
             // The row draws the title itself, so a Toggle here shows only its switch. A custom toggle
             // style ignores `.labelsHidden()`, so the style is told directly.
             // `.labelsHidden()` is an ENVIRONMENT modifier: it reaches everything in the slot.
-            // Right for a Toggle/Picker/Stepper (the row draws the title itself); wrong for a
-            // Menu or a popover-anchoring button, whose label and item titles it erases — the
-            // "Policy rules" menu read as dead this way. Those controls go in a raw
-            // LabeledContent or a SettingsActionRow instead (docs/SETTINGS.md).
+            // Right for a Toggle, a Stepper or a SettingsSelect (the row draws the title itself, and the
+            // select's trigger and rows are buttons with plain text, as the components board shows);
+            // wrong for a Menu, whose label and item titles it erases — the "Policy rules" menu read as
+            // dead this way. A Menu goes in a raw LabeledContent or a SettingsActionRow (docs/SETTINGS.md).
             control
                 .labelsHidden()
                 .toggleStyle(SettingsToggleStyle(showsLabel: false))
@@ -283,8 +283,7 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
     var body: some View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                slider
-                    .labelsHidden()
+                SettingsSlider(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
                 if let valueText {
                     valueText
                         .monospacedDigit()
@@ -301,15 +300,6 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
             .frame(width: SettingsMetrics.sliderWidth)
         } label: {
             label
-        }
-    }
-
-    @ViewBuilder
-    private var slider: some View {
-        if let step {
-            Slider(value: $value, in: range, step: step) { accessibilityTitle }
-        } else {
-            Slider(value: $value, in: range) { accessibilityTitle }
         }
     }
 }
@@ -375,8 +365,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(minWidth: SettingsMetrics.valueColumn, alignment: .trailing)
-                Stepper(value: $value, in: range, step: step) { accessibilityTitle }
-                    .labelsHidden()
+                SettingsStepper(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
             }
             // The same trailing column a slider row uses, so a section holding both bounds its
             // label column at one width and their descriptions wrap the same way.
@@ -512,10 +501,12 @@ struct SettingsMoreMenu<Items: View>: View {
         Menu {
             items
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .imageScale(.large)
+            Image(systemName: "ellipsis")
         }
-        .menuStyle(.borderlessButton)
+        // Our button draws the trigger (a button menu style takes the current ButtonStyle); the items stay
+        // a native menu, which keeps its own keyboard, type-to-select and VoiceOver.
+        .menuStyle(.button)
+        .buttonStyle(SettingsButtonStyle(.quiet))
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(accessibilityLabel)
@@ -598,7 +589,7 @@ struct SettingsTagChip: View {
         .overlay {
             if isHighlighted {
                 Capsule()
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .strokeBorder(SettingsTheme.accentStrong, lineWidth: 2)
                     .allowsHitTesting(false)
             }
         }
@@ -697,7 +688,7 @@ struct SettingsStatusText: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.footerStack) {
             Circle()
-                .fill(isReady ? Color.green : Color.secondary.opacity(0.5))
+                .fill(isReady ? SettingsTheme.success : Color.secondary.opacity(0.5))
                 .frame(width: SettingsMetrics.statusDot, height: SettingsMetrics.statusDot)
                 .accessibilityHidden(true)
             Text(verbatim: text)
@@ -719,7 +710,7 @@ struct SettingsErrorText: View {
 
     var body: some View {
         Text(verbatim: text)
-            .settingsDescriptionStyle(tint: .red)
+            .settingsDescriptionStyle(tint: SettingsTheme.destructive)
     }
 }
 

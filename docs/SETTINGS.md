@@ -28,15 +28,20 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A section header | `SettingsSectionHeader("…")` — never a raw `Text` in `header: {}` |
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
+| A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
+| A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
+| A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker`. The popover focuses its calendar and Escape closes only it; a date is reached by keyboard under Full Keyboard Access |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
-| A slider row | `SettingsSliderRow` — one width everywhere, selectable readout |
-| A stepper row | `SettingsStepperRow` — the value then the stepper, same column |
+| A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
+| A stepper row | `SettingsStepperRow` — the value then our `SettingsStepper`, same column; never `Stepper` |
 | Several footer lines under one group | `SettingsFooterStack { … }` |
 | A read-only trailing value (path, date, count) | `SettingsValueText(value)` |
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
 | One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below) |
-| Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button) |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless` |
+| Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
+| A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
 | Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
 | Free-standing explanatory text | `.settingsDescriptionStyle()` (selectable, secondary, wraps) |
 | A spacing, a width, a dot size | `SettingsMetrics.<token>` — never a number in place |
@@ -49,15 +54,23 @@ component already does.
 
 - **`DesignSystem/` holds one type per file**, each starting with the GPL block:
   `SettingsTheme` (colours, fonts and measures), `SettingsToggleStyle`, `SettingsButtonStyle`,
-  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, and the
-  shell's own views (below).
+  `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
+  control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
+  controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), the date
+  (`SettingsDateField`), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
   it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
-  would recolour the labels of native prominent buttons and menus.
+  would recolour the labels of native prominent buttons and menus. A sheet is a window of its own, and
+  whether SwiftUI passes the root into a presentation cannot be told from source, so each presented
+  window applies it again: `SettingsSheet` for every sheet, and the two large sheets, the animation
+  editor and Spotify's sign-in, themselves. A sheet is never a `Form`, so the second root changes
+  nothing in it.
 - **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
   `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
-- **Geist when bundled, the system font at the same size when not.** Only the theme names a font.
+- **Geist when bundled, the system font at the same size when not.** Only the theme names a font, and
+  only the theme uses the system's: a text style or `.system` anywhere else is pinned per file and can
+  only shrink (below, "Colours and fonts").
 - **The accent has two strengths.** `accent` is the logo's eye blue, for fills such as a switch that is
   on. `accentStrong` is for what must be read, and it is the root's tint, because a root tint also
   colours Markdown links. Native controls that honour `.tint` show it.
@@ -65,20 +78,36 @@ component already does.
   text inside a button fights for the click, so the chevron and the empty space beside the title toggle
   it, as a native disclosure's chevron does.
 
-A call-site style beats the root, so these stay on purpose until Stage 3:
+A call-site style beats the root, so these stay on purpose:
 
 | Site | Why |
 |---|---|
 | `SettingsToggleStyle(showsLabel: false)` | A row that draws the title itself. A custom style ignores `.labelsHidden()`, so it is told |
 | `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
-| `.buttonStyle(.bordered)` on `Menu("Connect…")` | A root button style takes a default-style `Menu`'s chevron away; `.menuStyle(.borderlessButton)` is the other cure |
-| `.labeledContentStyle(.automatic)` on a checkbox, a radio group or the segmented picker in `AnimationEditorView`, which sits outside a `Form` | The root's labelled-row style pushes the label and the control to opposite edges |
+| `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
 | `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
-| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding, so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
-| `.bordered`, `.borderless`, `.plain` and `AccessoryBarButtonStyle` | Not moved yet |
+| `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
+
+What stays native, and why:
+
+| Control | Why |
+|---|---|
+| System alerts and dialogs: `ModalPresenter`'s `NSAlert`, SwiftUI's `.alert` and `.confirmationDialog` | They cannot be restyled, and `ModalPresenter` is the only modal path (docs/REGRESSIONS.md, entry 14) |
+| File panels: `NSOpenPanel` through `ModalPresenter`, and `.fileImporter` | They cannot be restyled |
+| The colour panel | Never opened under Settings: the swatch's own popover replaced it |
+| The calendar grid and time field inside `SettingsDateField` | They cannot be restyled; the popover around them is ours |
+| A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
+| Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
+| All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
+| New Task's two checkboxes | Stage 5 rebuilds the task form |
+| `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
+| The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
+| `KeyboardShortcuts.Recorder`, Spotify's `WKWebView` | AppKit views of their own |
+| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding (Stage 6), so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
+| The menu bar's look | The redesign plan keeps it |
 
 **To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
 something reading it in the same change. `testEveryThemeTokenIsRead` rejects a token with no reader, and
@@ -86,6 +115,148 @@ a colour that text sits on or is drawn in goes into `testTheThemeIsReadable`. A 
 `DesignSystem/` with no `project.pbxproj` edit. `SettingsDesignSystemRulesTests` holds all of this, and
 `--kannu-snapshot-tabs designSystem` renders every resting and disabled state, and every colour and
 font token by name. Hover and press take a pointer, so no board shows them.
+
+## Colours and fonts
+
+A colour or a font comes from the theme, through a component or a token. `SettingsLayoutRulesTests` reads
+every file under Settings but the theme, with comments and strings blanked, and counts one entry per line:
+
+- **A raw colour:** `Color.<name>` or `NSColor.<name>`; any `Color(`, so `Color(red:…)`, `Color(nsColor:)` and
+  `Color(.systemX)`; a shorthand colour (`.red` to `.black`, and `.accentColor`) anywhere inside a style
+  modifier's arguments (`foregroundStyle`, `fill`, `stroke`, `background`, `tint`, `shadow`, `overlay` and
+  the rest), either arm of a ternary included; a `tint:`, `color:`, `foreground:`, `background:`,
+  `symbolColor:` or `fill:` argument given one; and `AnyShapeStyle(.<colour>)`.
+- **Not raw:** the hierarchical styles (`.primary`, `.secondary`, `.tertiary`, `.quaternary`), which follow
+  the appearance and are the cure for a bare value; `.clear`, the sidebar's focus stop and the readout's
+  reserved column; `NSColor(someColor)`, which only converts a colour; and every `SettingsTheme` token.
+- **A system font:** a text style (`.headline`, `.caption` and the rest) or `.system` inside `.font(…)`, a
+  ternary's arms and `.footnote.bold()` included; `Font.` with one of those; `.font(Font(`;
+  `NSFont.systemFont…` and its siblings; and `.fontWeight(`. The theme keeps the system font as Geist's
+  fallback. "No ad-hoc type in a row" (below) is about size and this rule about the family, so
+  `.font(.caption)` counts in both.
+- **A native button style:** `.bordered`, `.borderless` and `.borderedProminent`. A button is ours:
+  `.primary` for a main action, `.quiet` for a glyph or a back row. The tag chip's capsule is the one left.
+
+The survivors are pinned per file and can only shrink. After Stage 3 they are 126 colour lines and 106 font
+lines, in previews of notch content, status and severity colours, cards with a compact scale of their own,
+and the user's own colours. Stage 4 gives each a token and empties both tables; the test's pins are the
+numbers, and this table only says why.
+
+| File | Colours | Fonts | Why they remain |
+|---|---|---|---|
+| `AgentStatusSettings.swift` | 2 | 1 | Status green; a preview caption |
+| `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
+| `AnimationEditorView.swift` | 7 | 22 | The editor's own dense scale and previews |
+| `AppearanceSettings.swift` | 10 | 3 | Style cards and previews of notch content |
+| `BatterySettings.swift` | 0 | 2 | Battery previews |
+| `ClipboardSettings.swift` | 4 | 1 | Status colours |
+| `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
+| `DevicesSettings.swift` | 3 | 4 | Device cards |
+| `DownloadsSettings.swift` | 5 | 2 | Download style cards |
+| `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
+| `ExtensionsSettings.swift` | 3 | 13 | Status colours; the legend and detail cards |
+| `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
+| `HUDAndOSDSettings.swift` | 17 | 7 | HUD style cards and previews |
+| `IdleAnimationsSettingsSection.swift` | 6 | 10 | Animation cards |
+| `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
+| `LockScreenSettings.swift` | 18 | 6 | Lock screen previews |
+| `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
+| `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
+| `SecurityFindingRow.swift` | 4 | 3 | Severity badges |
+| `SettingsColorPicker.swift` | 2 | 2 | The user's colours (presets, sampler) |
+| `SettingsHelpers.swift` | 6 | 4 | Badge capsules |
+| `SettingsPermissionCallout.swift` | 0 | 1 | The callout's title |
+| `SettingsProviderIcons.swift` | 1 | 0 | An icon's fallback tint |
+| `SpotifyAuthSettingsSection.swift` | 1 | 6 | Status dot; the sign-in card |
+| `StatsSettings.swift` | 2 | 1 | Graph colours |
+| `TaskDetailPage.swift` | 3 | 0 | The unreadable-estimate orange |
+| `TaskRowList.swift` | 2 | 0 | The same orange |
+| `TasksSettings.swift` | 1 | 0 | `ReminderPermissionNote`'s orange |
+| `TimerSettings.swift` | 1 | 5 | The preset editor |
+
+`SettingsDesignSystemRulesTests` holds `DesignSystem/`'s animations to Reduce Motion the same way: every
+`withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
+spring or the default. Pages keep their own until Stage 4.
+
+## Choices
+
+A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
+macOS 14 has no custom picker style, and a custom view cannot read `.tag()`s, so the options are data:
+`options:` with an `optionTitle:` (`\.localizedName`), or `choices: [value: String(localized: "…")]` for
+literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the four
+All tasks keeps.
+
+- **The trigger** is a button in our style showing the value and a chevron. A short list keeps its widest
+  title's width, so the row does not move when the choice changes. A saved value no longer among the options
+  shows its own title (a dash when `choices:` has none for it), so the button is never blank. It draws no
+  title: the row does, and VoiceOver reads the title as its label and the value as its value.
+- **The list** is our own popover: one row per option, a tick on the chosen one, the keyboard's row
+  highlighted. Past ten options (`SettingsSelectNavigation.searchThreshold`) a search field leads, ranked as
+  Brain's search ranks, and the rows scroll at ten and a half rows' height; a shorter list takes typed letters.
+- **Segments**, `style: .segmented`, draw two or three short options in place: one click, every choice in view.
+
+| Key | Where | Does |
+|---|---|---|
+| Space | The trigger, under Full Keyboard Access | Opens the list. Return stays with the window's default button |
+| ↑ ↓ | The list, with or without a field | Moves the highlight, announced |
+| Return | The list or its field | Picks the highlight, or the first match |
+| Escape | The list or its field | Closes; the choice stays as it was |
+| Letters | A list with no field | Type-to-select, a one-second prefix |
+| Typing | The field | Filters, best match first; the highlight goes to the first match |
+| ← → | A segment, under Full Keyboard Access | Moves the choice |
+| VoiceOver adjust | The trigger | Steps the choice without opening the list |
+
+- **A popover closes on disappear.** Closing Brain takes its content out of the window and runs `onDisappear`
+  (docs/REGRESSIONS.md, entry 22), while the flag that opened it survives the close, so a list left open would
+  come back on reopening. Every `.popover(isPresented:)` under Settings sets its flag to false there, and
+  `SettingsDesignSystemRulesTests` holds that.
+- **The arrows reach the list through a key monitor**, because a focused field's editor takes them before
+  SwiftUI sees them. It acts only on the list's own window while that window is key, never while an input
+  method is composing, and goes with the list (`dismantleNSView`).
+- **The list is a view of its own, `SettingsSelectList`,** because a popover is a window of its own and no
+  board captures one: `--kannu-snapshot-tabs selectList` draws it open, and `designSystem` and `components`
+  draw the select in its rows.
+
+## Values and fields
+
+A slider is `SettingsSlider` and a stepper `SettingsStepper`, inside `SettingsSliderRow` and `SettingsStepperRow`,
+which draw the title and the readout. SwiftUI on macOS 14 has no custom slider or stepper style, so both are our
+own views. `Slider` and `Stepper` are banned under Settings, and `SettingsLayoutRulesTests` pins the few of ours
+drawn by hand outside a row.
+
+- **The slider** is a track filled with the accent up to a knob. A click on the track jumps the knob there and a
+  drag moves it: Brain moves by its title row only, so the drag is the slider's. A step snaps from the lower
+  bound; with none, a key moves it by 5 % of its range. No animation: the knob follows the value. Right to left it
+  is drawn mirrored, as a native slider is.
+- **The stepper** is − and + in one capsule, its value beside it in the row, never inside. A button at its end of
+  the range turns grey and does nothing. No press-and-hold repeat; a held arrow key repeats.
+- **One element for VoiceOver**: the row's title is its label, the readout (or else the number) its value, and an
+  adjustable action lets VoiceOver move it. A disabled one ignores every key and VoiceOver's adjust too.
+
+| Key | Where | Does |
+|---|---|---|
+| ← → | A slider, under Full Keyboard Access | One step back or on, mirrored right to left |
+| ↑ ↓ | A slider or a stepper, under Full Keyboard Access | One step on or back |
+| Home, End | A slider, under Full Keyboard Access | The lower or the upper end |
+| VoiceOver adjust | Either | One step |
+
+**A field** is the native `TextField` or `SecureField`, plain, inside our chrome: `.settingsField()`, last on its
+chain, so typing, the caret, input methods, secure entry, `.focused`, `.onSubmit` and `.onExitCommand` stay the
+field's. Its name sits beside it, never inside:
+
+- In a Form, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
+  chrome hides the field's own label, which VoiceOver keeps.
+- What to type goes in `prompt:`: a catalog key, or `Text(verbatim:)` for an example such as a host name. In a
+  sheet, where the field's title was its placeholder, the prompt says it again.
+- A field that keeps its own focus with `.focused` passes it in, `.settingsField(isFocused:)`, so it never carries
+  a second focus binding, and nothing sets focus after the chrome.
+- A field's `.disabled` goes after the chrome, so the chrome dims with it, once.
+- `.textFieldStyle` belongs to the chrome. Two fields keep chrome of their own: the sidebar search, around a glyph
+  and a clear button, and a local task's title, typed in place in the body font so it reads as the row's title.
+
+`SettingsDesignSystemRulesTests` holds the controls' keyboard, VoiceOver and one dim, and every field to its
+chrome, the two above pinned. `--kannu-snapshot-tabs designSystem` draws each in its resting and disabled
+states, and `components` draws the slider and stepper rows in one column.
 
 ## The shell and navigation
 
@@ -150,6 +321,11 @@ the window can have, through `SettingsForm`, which pads them; a board of a bare 
 page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
 the least room.
 
+**Never list `shelf`, and never run the boards without `--kannu-snapshot-tabs`.** An unfiltered run renders
+every tab, and the Shelf page touches `~/Documents` and `~/Downloads` through its folder access store, whose
+first touch blocks the main thread on a macOS permission prompt (AGENTS.md, "Nothing runs before the Terms of
+Use are accepted"). Check the Shelf page by hand.
+
 ## The content standard
 
 The components above already imply one set of numbers. `SettingsMetrics` in
@@ -171,8 +347,9 @@ section describes it, it does not define it.
 
 - **No ad-hoc type in a row.** `.caption`, `.caption2` and `.system(size:)` do not belong on text
   that sits in a Form row's label or control column — that is what made one section's descriptions
-  wrap at three different widths. They stay for badges, chips and icon glyphs, and inside a card
-  that has its own compact scale; `SettingsLayoutRulesTests` pins how many survive per file.
+  wrap at three different widths. They survive only where pinned, for badges, chips and icon glyphs,
+  and inside a card that has its own compact scale: `SettingsLayoutRulesTests` pins them per file
+  twice, by size here and as system fonts ("Colours and fonts").
 - **A row adds no padding.** The grouped `Form` pads its rows already, so `.padding(.vertical, …)`
   on a row makes that one row taller than its neighbours. Padding belongs to cards, popovers,
   chips and empty states — nowhere else. Pinned per file.
@@ -184,9 +361,10 @@ section describes it, it does not define it.
   control column line up down the whole section. A bare `VStack` with `frame(maxWidth: .infinity)`
   is not a row: it runs the full width and breaks the grid. Use `SettingsNoteRow` for a line that
   only says something.
-- **A slider is never hand-built.** `SettingsSliderRow` is the only shape; a row whose value reads
-  in its own title passes `valueText: nil` and the readout column stays reserved, so the bar is
-  the same length everywhere. Same for `SettingsStepperRow`.
+- **A slider or a stepper is never hand-built in a row.** `SettingsSliderRow` and `SettingsStepperRow`
+  are the only row shapes; `SettingsSlider` and `SettingsStepper` by hand only outside a row, pinned.
+  A row whose value reads in its own title passes `valueText: nil` and the readout column stays
+  reserved, so the bar is the same length everywhere.
 - **An error line is a sibling of the row it belongs to**, so it takes that row's inset — including
   inside an Advanced disclosure.
 - **`SettingsValueText` is for a trailing value, never for a leading line.** It is one line with
@@ -204,11 +382,13 @@ section describes it, it does not define it.
 
 ## Section rules
 
-- `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle, Picker,
-  Stepper. It applies `.labelsHidden()` to the whole slot, an environment modifier: a `Menu` or a
-  popover-anchoring button placed there loses its label and its items' titles and reads as dead
-  (the "Policy rules" "…" bug). Such controls go in a raw `LabeledContent` with a
-  `SettingsRowLabel` (the `analysisRow` shape) or a `SettingsActionRow`.
+- `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle,
+  `SettingsSelect`, a field. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
+  `Menu` placed there loses its label and its items' titles and reads as dead (the "Policy rules" "…"
+  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `analysisRow` shape) or
+  a `SettingsActionRow`. `SettingsSelect` may sit in the slot, popover and all, because its trigger and
+  its list's rows are buttons with plain text, which the modifier leaves alone: the `components` board
+  shows its value in a row beside a native picker's. A `Menu` still may not.
 
 - `onAppear` runs again every time Brain reopens, not only on arriving at a page: closing takes the
   content out of the window (docs/REGRESSIONS.md, entry 22). One that loads a field must not read
@@ -238,10 +418,10 @@ section describes it, it does not define it.
   - A row that exists only in some states (a task source's row, only while it is connected) has a
     standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
-  - The back row is a lone leading borderless `Button` with a chevron `Label`, alone in its own
-    `Section` — the one sanctioned lone left-hanging button, because it is navigation, not an
-    action on a row. Nothing else on a page takes this shape. The sidebar's Back row is shell chrome,
-    not a row of a page.
+  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet)`) with a chevron
+    `Label`, alone in its own `Section` — the one sanctioned lone left-hanging button, because it
+    is navigation, not an action on a row. Nothing else on a page takes this shape. The sidebar's
+    Back row is shell chrome, not a row of a page.
   - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
     a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
     opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the
@@ -263,10 +443,12 @@ section describes it, it does not define it.
   sheet holding every field the item takes — never fields inline in the list (David, 2026-10-24:
   "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's Form, never on the
   row's button: a long, lazy Form drops the row once it scrolls away, and the shortcut with it.
-- A sheet is a padded `VStack`, never a `Form`: a `.headline` heading (and a secondary line under
-  it), the fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for
-  what it does ("Add", "Schedule", "Done"; `.defaultAction`). Return is the primary in every field,
-  except while a tag is being typed, where it completes the tag (Tags, New Task).
+- A sheet is a `SettingsSheet`, never a `Form`: its title (and a secondary line under it), the
+  fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for what it does
+  ("Add", "Schedule", "Done"; `.defaultAction`). A `Spacer` of the sheet's own spreads them only
+  when something leads (Clear All, Remove Estimate). A field's name is a `LabeledContent` label
+  beside it. Return is the primary in every field, except while a tag is being typed, where it
+  completes the tag (Tags, New Task).
 - Every row with a `settingsSearchIndex` entry carries a `.settingsHighlight(id:)` whose id
   matches the entry exactly (`SettingsHighlightInventoryTests` pins the pairing and the counts;
   the counts move only as a deliberate edit).

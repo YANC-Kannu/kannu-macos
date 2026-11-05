@@ -4,6 +4,153 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
+- **Developer label:** "Yes, request it"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's review of Super 3; the rest answered on the PR
+- **Changes:**
+  - Segments: the arrows step from the focused segment, which Full Keyboard Access can leave on one that is not
+    the choice.
+  - `SettingsSlider` keeps its upper bound: End and a drag past the end reach it when the step does not divide the
+    range.
+  - `SettingsStepper` steps from a value inside its range and measures before stepping, so a stored value near the
+    type's limit cannot overflow.
+  - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
+    with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
+  - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
+
+### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
+- **Developer label:** "Keep it, with fixes"
+- **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks
+- **Changes:**
+  - A date's popover focuses its calendar a turn after it opens, and Escape closes only the popover, never the
+    sheet under it. Reaching a date by keyboard takes Full Keyboard Access (David's call).
+  - The animation editor's Reset All is destructive again, through its role (our style colours by role); the
+    editor's raw-colour pin drops from 8 to 7.
+  - The Spotify and animation-editor titles are headings for VoiceOver, as `SettingsSheet`'s titles are.
+  - The URL import's fields are named "Lottie JSON URL" and "Animation Name", not by their example text.
+  - The colour popover's back chevron reads "Back".
+
+### 2026-11-05 - Brain's dates open its own popover
+- **Developer label:** Brain redesign plan: "the calendar grid inside our date popover"
+- **Agent label:** Claude Code (Opus 5.5) — our button and popover; the calendar grid and time field stay the system's
+- **Changes:**
+  - `SettingsDateField`: a button in our style with a calendar glyph and the date, opening our popover on the panel,
+    which holds the system's calendar grid over its time field. VoiceOver reads the title as its label and the full
+    date as its value. The popover closes when Brain does, like the select's.
+  - The three dates move to it: Set End Time and Schedule, each named by a `LabeledContent` beside it, and New
+    Task's reminder. The end time keeps its range, up to the next session and the sheet's own now.
+  - `SettingsDesignSystemRulesTests` allows a `DatePicker` only inside the date field, and `TaskTimeMathTests`
+    reads the end time's range from the field. `BrainShellRulesTests` keeps page knowledge out of it.
+  - New board `valueSheet`: Set End Time, the date as our button.
+  - docs/SETTINGS.md's component table and its native table name it; docs/REGRESSIONS.md entry 22's line says its
+    popover closes on disappear.
+
+### 2026-11-05 - Brain's menus and plain buttons take its theme
+- **Developer label:** Brain redesign Stage 3: "`SettingsMoreMenu`"
+- **Agent label:** Claude Code (Opus 5.5) — our trigger over a native menu; `.bordered` becomes the standard button and `.borderless` a quiet one
+- **Changes:**
+  - `SettingsButtonStyle(.quiet)`: bare at rest, the hover fill under the pointer, the small inset.
+  - The ⋯ of `SettingsMoreMenu`, Tasks' Connect…, an extension's Reset and the estimate presets are our button over
+    a native menu: `.menuStyle(.button)`, our style and `.menuIndicator(.hidden)`, with a `chevron.down` in the label
+    where one is needed. The items stay a native menu, with its keyboard, type-to-select and VoiceOver. All tasks'
+    filter menu stays native until Stage 5.
+  - 20 `.bordered` buttons take the root's standard style: the animation editor's nine, Custom OSD's three preview
+    buttons, Extensions' four, a timer preset's three and the permission callout's one. Revoke Access and Remove are
+    destructive buttons instead of orange- and red-tinted ones.
+  - 9 `.borderless` buttons become quiet: a task row's ▶, ■ and ›, Tasks' back row, a rule's −, the music slots'
+    reset, and the colour popover's three, which take the small size of its compact scale.
+  - The shared components' colours: the tag chip's ring is `accentStrong`, a status line's dot `success` and an
+    error line `destructive`. New token `success`, held to 3:1 on the panel and on cards.
+  - `SettingsDesignSystemRulesTests` holds every menu to our button, All tasks' pinned, and the ⋯ to its quiet
+    trigger; `testTheThemeIsReadable` holds `success`.
+  - The designSystem board gains quiet buttons, enabled and disabled, and a ⋯ trigger, and names `success`.
+  - docs/SETTINGS.md: the component table's quiet button and menus, and the back row's style.
+
+### 2026-11-05 - Brain's sheets take its theme
+- **Developer label:** Brain redesign Stage 3: "restyled sheets"
+- **Agent label:** Claude Code (Opus 5.5) — one SettingsSheet that applies the root itself, since a sheet is a window of its own
+- **Changes:**
+  - `SettingsSheet`: a title in `sheetTitle` with an optional line under it, the fields, then the buttons trailing,
+    Cancel then the primary, on the panel, 420 pt wide. It applies `settingsDesignSystem()` itself, because a sheet
+    is a window of its own and whether the root reaches a presentation cannot be told from source. A sheet is never
+    a `Form`, so the second root changes nothing in it.
+  - Eight sheets build it: the three Connect sheets, Tags, New Task, the value sheet (Set Estimate, Add Time, Set
+    End Time, Schedule), Edit rules at 560 pt, and Add Animation from URL. Tags and the value sheet grow from 380 pt
+    to 420, and the URL sheet from 400.
+  - A field's name is a `LabeledContent` label beside it (Site, Email, API token, Server, the token, Lottie JSON
+    URL, Animation Name), and every red problem line is `SettingsErrorText`. The URL sheet's Cancel moves to the
+    trailing side.
+  - Tags' drop ring and its highlighted suggestion take `accentStrong`.
+  - The animation editor and Spotify's sign-in keep their own layouts and apply the root and the panel themselves.
+    Spotify's title takes `sheetTitle` and its status line the description style.
+  - Theme tokens `sheetTitle`, `sheetInset`, `sheetStack`, `sheetWidth` and `sheetWidthWide`.
+  - `SettingsDesignSystemRulesTests` holds each of the eight sheets to `SettingsSheet`, struct by struct, and the two
+    large ones to the root and the panel. `SettingsLayoutRulesTests`' padding pins trade the sheets' own for
+    `SettingsSheet`'s one, and `BrainShellRulesTests` keeps page knowledge out of it.
+  - New boards `connectSheet`, `tagsSheet` and `urlImportSheet`; the designSystem board names `sheetTitle`.
+  - docs/SETTINGS.md: the one root, re-applied by each presented window, and the sheet rule. docs/REGRESSIONS.md
+    entry 22 gains its dated line.
+
+### 2026-11-04 - Brain's fields take its chrome and stay native inside
+- **Developer label:** Brain redesign Stage 3: "`SettingsField`"
+- **Agent label:** Claude Code (Opus 5.5) — the AppKit field, plain, inside our chrome; its name beside it, never inside
+- **Changes:**
+  - 34 fields wear `.settingsField()`, last on their chain: 27 of the 29 `TextField`s and all 7 `SecureField`s.
+    `.textFieldStyle(.roundedBorder)` and `.labelsHidden()` go; `.focused`, `.onSubmit` and `.onExitCommand` stay
+    on the field.
+  - In a Form a field's name sits beside it. ADR's two model fields, ntfy's topic and server, Pushover's two keys,
+    the webhook URL and the Spotify cookie move into `SettingsRow`s that name them, and ADR's key rows into a
+    `LabeledContent` with the key's name. The Keychain writes in the bindings are unchanged.
+  - What to type goes in `prompt:`. A sheet field that showed its title as its placeholder says it again under the
+    same key (Connect's token fields, a policy rule's command or tool and its reason, the URL sheet, the editor's
+    name), and the preset name, the Gemini key and the extensions search say theirs. Every prompt reuses a key
+    already in the source; none is new.
+  - A field that keeps its own focus passes it to the chrome (`isFocused:`): New Task's title and tags, Add Tags,
+    the time-log length and comment, and a task's estimate. A field's own `.disabled` moves after the chrome, so
+    the chrome dims with it, once.
+  - The estimate field keeps Escape on the field through a small `CancelOnEscape` modifier, still only when its
+    caller gives Escape an action, so its chrome can go last.
+  - The sidebar search and a local task's inline title keep chrome of their own, pinned.
+  - `SettingsDesignSystemRulesTests` holds every field to its chrome, with nothing setting focus after it and a
+    field's own focus passed in, and only the chrome setting a field style; the two above are pinned with their
+    reasons.
+  - `BrainPathRulesTests` reads the source with its comments blanked, so `let a = true // Brain › General` names
+    no path, while a string's `https://` is read whole (promised on #21).
+  - docs/SETTINGS.md gains "Values and fields": the keyboard and VoiceOver table and the field rule. Its component
+    table, design-system list, row rule and slot rule name the new controls. docs/REGRESSIONS.md entry 22 gains
+    its dated line.
+  - A disabled field drops its focus ring, so a field disabled while it had focus does not keep the accent.
+
+### 2026-11-04 - Brain's sliders and steppers become its own
+- **Developer label:** Brain redesign Stage 3: "`SettingsSlider` (inside `SettingsSliderRow`), `SettingsStepper`"
+- **Agent label:** Claude Code (Opus 5.5) — label, value and an adjustable action for VoiceOver; arrows, Home and End; one edit covers every row
+- **Changes:**
+  - `SettingsSlider`: a track filled with the accent up to a knob, whose `controlOff` stroke shows it on the light
+    panel. A click on the track jumps the knob and a drag moves it; a step snaps from the lower bound, and only a
+    change is written. No animation. Right to left it is drawn mirrored, as a native slider is.
+  - `SettingsStepper`: − and + in one capsule. A button at its end of the range turns `controlOff` and is disabled,
+    a colour rather than a second dim. No press-and-hold repeat.
+  - Each is one VoiceOver element with a label, a value and an adjustable action, and a Tab stop only under Full
+    Keyboard Access. The slider takes ← → (mirrored right to left), ↑ ↓, Home and End, and the stepper ↑ ↓. A
+    disabled one ignores keys and VoiceOver's adjust, and dims once.
+  - `SettingsSliderRow` and `SettingsStepperRow` draw them, so one edit covers the 17 slider rows and the 4 stepper
+    rows; the readout column and the 220-pt width stay. By hand: Custom OSD's preview slider, now labelled "Live
+    Preview"; the animation editor's preview zoom, labelled "Preview Zoom", and its `ParameterSliderRow`; and a
+    timer preset's hours, minutes and seconds.
+  - The animation editor's four springs, on its zoom and its resets, become a bounded ease, nil under Reduce
+    Motion.
+  - Theme tokens "Values": `sliderTrackHeight`, `sliderKnob`, `sliderKeyboardFraction`, `stepperButtonWidth`,
+    `stepperHeight` and `hairline`.
+  - `SettingsLayoutRulesTests` bans `Slider(` and `Stepper(` under Settings beside `Picker(`, with plants, a floor
+    and a slider put back on a real page. Its hand-built rule counts ours too, pinned at the four hand sites and the
+    two rows. `SettingsDesignSystemRulesTests` holds both controls' VoiceOver, keyboard, one dim and disabled guard,
+    and `BrainShellRulesTests` keeps page knowledge out of them.
+  - The designSystem board gains "Values": a stepped, an unstepped and a disabled slider; a stepper in the middle,
+    at its minimum and disabled; and fields in rows, typed, secure with a prompt, vertical and disabled.
+  - From the keyboard and VoiceOver review: a disabled slider or stepper is not a Tab stop, the hand-built
+    sliders (zoom, the animation parameters, Live Preview) give VoiceOver their readout, and the rules pin the
+    right-to-left mirroring and the stepper's single stop.
+
 ### 2026-11-04 - Answer CodeRabbit's first review of the Brain shell
 - **Developer label:** "Yes, and queue #21"
 - **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's first review of Super 2b; the rest answered on the PR
@@ -16,6 +163,59 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     old "Lock Screen" key.
   - `BrainPathRulesTests` scans every line for a Brain path, not only lines with a quote, and
     `GeistBundleRulesTests` keeps a font with no PostScript name, so the name check fails for it.
+
+### 2026-11-04 - Brain's pickers become its own choice control
+- **Developer label:** Brain redesign plan: "SwiftUI has no custom picker style, so the 77 `Picker`s become `SettingsSelect`"
+- **Agent label:** Claude Code (Opus 5.5) — 70 pickers moved, 59 by script; All tasks' filter menu waits for Stage 5; a bare `Picker(` now fails a test
+- **Changes:**
+  - 59 pickers move to `SettingsSelect` through a one-off script that is not committed. The 45 that listed an
+    enum's cases through `ForEach` take `options:` with the same title property, and the 14 with literal options
+    take `choices:`, each title a `String(localized:)` under its old catalog key. The 31 that stood bare in a
+    Section are wrapped in a `SettingsRow`, so their `.disabled`, `.opacity`, `.onChange` and highlight now follow
+    the row. No highlight id changes.
+  - The 22 segmented pickers stay segments (`style: .segmented`). The menu style, `.labelsHidden()` and the
+    `.fixedSize()` after a segmented style go.
+  - 11 by hand: General's Display, Notch display height, and each display's Style and Always show, which name
+    "Follow default"; HUD's DDC Provider and Shelf's Quick Share Service with their icons, the saved service
+    showing before discovery ends; Notes to sync, in a row with its description; Media's "Hide DynamicIsland
+    Options", a select instead of three radio buttons; each policy rule's Kind; the animation editor's Loop Mode,
+    as segments.
+  - Shelf's Liquid Glass Variant becomes a slider, like its seven siblings, instead of a 20-row menu.
+  - A display's Reset enables after a Style change: General observes `displayStyleOverrides`, as promised on #18.
+  - All tasks' four filter pickers stay native: ticked submenus inside a native `Menu`, until Stage 5 rebuilds the
+    page.
+  - The idle animations' Add menu and the colour swatch's popover close when Brain closes, as the select's does.
+  - `SettingsLayoutRulesTests` bans `Picker(` under Settings, with All tasks' four pinned, planted offenders, a
+    floor and a select put back on a real page. `SettingsDesignSystemRulesTests` reads code with its strings blanked
+    for the ban, holds every popover under Settings to closing on disappear, and drops the segmented picker's
+    opt-out, which reads nothing now. `BrainAppearanceRulesTests` reads the Brain appearance row's new spelling.
+  - `docs/SETTINGS.md` gains a "Choices" section, the select in a row's slot, and the rule never to render the
+    shelf board; `docs/REGRESSIONS.md` entry 22 gains its line.
+
+### 2026-11-04 - Brain gets its own choice control
+- **Developer label:** Brain redesign Stage 3: "`SettingsSelect`: our own popover, with a search field once a list is long"
+- **Agent label:** Claude Code (Opus 5.5) — options as data, a list with keyboard and VoiceOver, segments for two or three short options
+- **Changes:**
+  - New `SettingsSelect`: a button showing the value that opens our own list in a popover, or two or three
+    segments in place. The options are data (`options:` with `optionTitle:`, or `choices:`), because macOS 14 has
+    no custom picker style. VoiceOver reads the row's title and the value, and its adjust steps the choice.
+  - New `SettingsSelectList`, the open list: a tick on the choice, a highlighted row that the arrows move and
+    VoiceOver announces, Return to pick and Escape to close. Past ten options a search field leads, ranked as
+    Brain's search ranks, and the rows scroll; a shorter list takes typed letters. A highlight the search moved
+    is announced too, and the field's prompt and empty state use catalogued strings ("Search...", "No results").
+  - Segments: under Full Keyboard Access, focus goes with the choice, so Space keeps it, and the arrows follow
+    the layout direction right to left. Option icons are hidden from VoiceOver; the titles name them.
+  - New `SettingsField`, `.settingsField()`: a plain native field inside our chrome, with a focus ring. The list's
+    search wears it.
+  - New `SettingsSelectNavigation`, Foundation only and in the test target: the search, the arrows and
+    type-to-select, held by `SettingsSelectNavigationTests`.
+  - New theme tokens, "Choices and fields": `raised` for the selected segment, with `ink` on it held at 7:1, and
+    the segment, list and field measures.
+  - Boards: `designSystem` gains the choices and the fields; `components` puts the select in a row beside the
+    native picker; new `selectList` draws the list open; new `animationEditorControls` draws the animation
+    editor's controls, which no board drew.
+  - `SettingsDesignSystemRulesTests` holds the select's keyboard, VoiceOver, one dim and Reduce Motion, and the
+    field native inside; `BrainShellRulesTests` keeps page knowledge out of all three.
 
 ### 2026-11-04 - Answer CodeRabbit's second review of the SettingsView split
 - **Developer label:** "resolve issues and merge mr's also"

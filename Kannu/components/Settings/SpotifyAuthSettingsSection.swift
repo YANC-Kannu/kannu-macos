@@ -49,11 +49,13 @@ struct SpotifyAuthSettingsSection: View {
                 }
             }
 
-            TextField("sp_dc cookie", text: $spotifySPDCCookie, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .font(.caption.monospaced())
-                .lineLimit(2...4)
-                .textSelection(.enabled)
+            SettingsRow("sp_dc cookie") {
+                TextField("sp_dc cookie", text: $spotifySPDCCookie, axis: .vertical)
+                    .font(.caption.monospaced())
+                    .lineLimit(2...4)
+                    .textSelection(.enabled)
+                    .settingsField()
+            }
 
             if let authErrorMessage = spotifyAuthManager.authErrorMessage, !authErrorMessage.isEmpty {
                 SettingsErrorText(authErrorMessage)

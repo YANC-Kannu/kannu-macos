@@ -156,7 +156,7 @@ private struct ScrollHintIndicator: View {
                     musicControlSlots = MusicControlButton.defaultLayout
                 }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
         }
     }
 

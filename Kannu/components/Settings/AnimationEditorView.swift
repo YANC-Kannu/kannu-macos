@@ -22,6 +22,7 @@ import Defaults
 
 struct AnimationEditorView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     let sourceURL: URL
     let isRemoteURL: Bool
@@ -93,6 +94,9 @@ struct AnimationEditorView: View {
         .frame(idealWidth: 980, idealHeight: 640)
         .frame(minWidth: 860, minHeight: 620)
         .fixedSize()
+        // A sheet is a window of its own, so it takes Brain's root itself; it keeps its own layout.
+        .background(SettingsTheme.panel)
+        .settingsDesignSystem()
         .alert("Import Error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
@@ -108,6 +112,7 @@ struct AnimationEditorView: View {
                 Text(existingAnimation != nil ? "Edit Animation" : "Customize Animation")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 Text(sourceDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -204,35 +209,32 @@ struct AnimationEditorView: View {
             }
             HStack(spacing: 10) {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = max(1, previewScale - 1)
                     }
                 } label: {
                     Image(systemName: "minus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
-                Slider(value: $previewScale, in: 1...10)
+                SettingsSlider(value: $previewScale, in: 1...10, valueDescription: Text("\(Int(previewScale))x")) { Text("Preview Zoom") }
                 
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = min(10, previewScale + 1)
                     }
                 } label: {
                     Image(systemName: "plus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 Button("Reset") {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = 10
                     }
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
             }
         }
@@ -262,8 +264,8 @@ struct AnimationEditorView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            TextField("Name", text: $name)
-                                .textFieldStyle(.roundedBorder)
+                            TextField("Name", text: $name, prompt: Text("Name"))
+                                .settingsField()
                         }
                         ParameterSliderRow(
                             title: "Playback Speed",
@@ -279,13 +281,8 @@ struct AnimationEditorView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            Picker("Loop Mode", selection: $loopMode) {
-                                ForEach(AnimationLoopMode.allCases, id: \.self) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
-                            .labeledContentStyle(.automatic)
+                            SettingsSelect("Loop Mode", selection: $loopMode, options: AnimationLoopMode.allCases,
+                                           optionTitle: \.rawValue, style: .segmented)
                         }
                     }
                 }
@@ -405,7 +402,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Fill Notch") {
                             withAnimation {
@@ -418,7 +414,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Up 2x") {
                             withAnimation {
@@ -426,16 +421,14 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = true
                             }
                         }
-                        .buttonStyle(.bordered)
                         
                         Button("Scale Down") {
                             withAnimation {
                                 scale = 0.75
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Reset All") {
+                        Button("Reset All", role: .destructive) {
                             withAnimation {
                                 scale = 1.0
                                 cropWidth = 30
@@ -449,8 +442,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.red)
                     }
                 }
             }
@@ -534,6 +525,17 @@ struct AnimationEditorView: View {
     }
 }
 
+#if DEBUG
+extension AnimationEditorView {
+    /// DEBUG snapshot harness: the editor's controls on their own. A local file that holds no animation, so no
+    /// Lottie loads and nothing touches the network.
+    static func snapshotControls() -> AnyView {
+        AnyView(AnimationEditorView(sourceURL: URL(fileURLWithPath: "/dev/null"), isRemoteURL: false,
+                                    animation: .constant(nil)).controlsPanel)
+    }
+}
+#endif
+
 // MARK: - Supporting Views
 
 private struct EditorSectionCard<Content: View>: View {
@@ -581,6 +583,7 @@ private struct ParameterSliderRow: View {
     var resetLabel: String? = nil
     var resetValue: CGFloat? = nil
     var step: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -598,11 +601,10 @@ private struct ParameterSliderRow: View {
                 slider
                 if let resetLabel, let resetValue {
                     Button(resetLabel) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                             value = resetValue
                         }
                     }
-                    .buttonStyle(.bordered)
                     .controlSize(.mini)
                 }
             }
@@ -616,11 +618,8 @@ private struct ParameterSliderRow: View {
             set: { value = CGFloat($0) }
         )
         let bounds = Double(range.lowerBound)...Double(range.upperBound)
-        if let step {
-            Slider(value: binding, in: bounds, step: Double(step))
-        } else {
-            Slider(value: binding, in: bounds)
-        }
+        SettingsSlider(value: binding, in: bounds, step: step.map { Double($0) },
+                       valueDescription: Text(formatter(value))) { Text(title) }
     }
 }
 

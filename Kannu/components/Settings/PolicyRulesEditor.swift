@@ -29,12 +29,9 @@ struct PolicyRulesEditor: View {
     @State private var saveError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text("Edit rules")
-                .font(.headline)
-            Text("Commands and tools your agents may not use. A command rule matches the command's first word; a tool rule matches the tool's exact name.")
-                .settingsDescriptionStyle()
-
+        SettingsSheet("Edit rules",
+                      subtitle: Text("Commands and tools your agents may not use. A command rule matches the command's first word; a tool rule matches the tool's exact name."),
+                      width: SettingsTheme.sheetWidthWide) {
             Divider()
 
             ScrollView {
@@ -58,22 +55,16 @@ struct PolicyRulesEditor: View {
             }
 
             if let problem = saveError ?? draft.problem {
-                Text(problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Save") { save(replacingChanges: false) }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(saving || draft.problem != nil)
-            }
+        } buttons: {
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button("Save") { save(replacingChanges: false) }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(saving || draft.problem != nil)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 560)
         .alert("The rules changed while you were editing", isPresented: $showConflict) {
             Button("Replace with mine") { save(replacingChanges: true) }
             Button("Reload") { reload() }
@@ -85,22 +76,21 @@ struct PolicyRulesEditor: View {
 
     private func ruleRow(_ row: Binding<AgentPolicyDraft.Row>) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
-            Picker("Kind", selection: row.kind) {
-                Text("Command").tag(AgentPolicyDraft.Kind.command)
-                Text("Tool").tag(AgentPolicyDraft.Kind.tool)
-            }
-            .labelsHidden()
-            .fixedSize()
-            TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text)
+            SettingsSelect("Kind", selection: row.kind,
+                           choices: [.command: String(localized: "Command"), .tool: String(localized: "Tool")])
+            TextField(row.wrappedValue.kind == .command ? "ssh" : "WebFetch", text: row.text,
+                      prompt: Text(verbatim: row.wrappedValue.kind == .command ? "ssh" : "WebFetch"))
                 .font(SettingsTheme.mono)
                 .frame(width: 170)
-            TextField("Reason (optional)", text: row.reason)
+                .settingsField()
+            TextField("Reason (optional)", text: row.reason, prompt: Text("Reason (optional)"))
+                .settingsField()
             Button {
                 draft.removeRow(row.wrappedValue.id)
             } label: {
                 Image(systemName: "minus.circle")
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
             .help("Remove rule")
             .accessibilityLabel("Remove rule")
         }

@@ -448,22 +448,17 @@ struct HUDAndOSDSettingsView: View {
             Toggle("Show Percentage", isOn: $verticalHUDShowValue)
             Toggle("Use Accent Color", isOn: $verticalHUDUseAccentColor)
             Toggle("Interactive (Drag to Change)", isOn: $verticalHUDInteractive)
-            Picker("Material", selection: $verticalHUDMaterial) {
-                ForEach(availableVerticalMaterials, id: \.self) { material in
-                    Text(material.rawValue).tag(material)
-                }
+            SettingsRow("Material") {
+                SettingsSelect("Material", selection: $verticalHUDMaterial,
+                               options: availableVerticalMaterials, optionTitle: \.rawValue)
             }
 
             if verticalHUDMaterial == .liquid {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Glass mode") {
-                        Picker("Glass mode", selection: $verticalHUDLiquidGlassCustomizationMode) {
-                            ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Glass mode", selection: $verticalHUDLiquidGlassCustomizationMode,
+                                       options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
 
                     if verticalHUDLiquidGlassCustomizationMode == .customLiquid {
@@ -488,11 +483,12 @@ struct HUDAndOSDSettingsView: View {
         }
 
         Section {
-            Picker("HUD Position", selection: $verticalHUDPosition) {
-                Text("Left").tag("left")
-                Text("Right").tag("right")
+            SettingsRow("HUD Position") {
+                SettingsSelect("HUD Position", selection: $verticalHUDPosition, choices: [
+                    "left": String(localized: "Left"),
+                    "right": String(localized: "Right"),
+                ])
             }
-            .pickerStyle(.menu)
 
             dimensionSlider(Text("Screen Padding: \(Int(verticalHUDPadding))px"), value: $verticalHUDPadding, in: 0...100, step: 4)
         } header: {
@@ -673,17 +669,10 @@ private struct ExternalDisplayIntegrationsSection: View {
             .settingsHighlight(id: highlightID("Third-party DDC app integration"))
 
             if enableThirdPartyDDCIntegration {
-                Picker("Provider", selection: $thirdPartyDDCProvider) {
-                    ForEach(ThirdPartyDDCProvider.allCases) { provider in
-                        HStack {
-                            AppIconImage(
-                                bundleIdentifiers: provider.bundleIdentifiers,
-                                symbolFallback: "display",
-                                symbolColor: .secondary
-                            )
-                            Text(provider.displayName)
-                        }
-                        .tag(provider)
+                SettingsRow("Provider") {
+                    SettingsSelect("Provider", selection: $thirdPartyDDCProvider, options: ThirdPartyDDCProvider.allCases,
+                                   optionTitle: \.displayName) {
+                        AppIconImage(bundleIdentifiers: $0.bundleIdentifiers, symbolFallback: "display", symbolColor: .secondary)
                     }
                 }
                 .settingsHighlight(id: highlightID("Third-party DDC provider"))
