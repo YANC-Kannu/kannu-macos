@@ -337,7 +337,7 @@ struct TasksBackRow: View {
                 Image(systemName: "chevron.left")
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(SettingsButtonStyle(.quiet))
         .accessibilityLabel(Text(verbatim: String(localized: "Back to \(parent)")))
     }
 }
@@ -403,12 +403,21 @@ private struct TaskSourcesSection: View {
 
             if !addable.isEmpty {
                 LabeledContent {
-                    Menu("Connect…") {
+                    Menu {
                         ForEach(addable, id: \.self) { source in
                             Button(source.title) { context.connect(source) }
                         }
+                    } label: {
+                        // Our button takes the native indicator away, so the label draws its own chevron.
+                        HStack(spacing: SettingsMetrics.iconGap) {
+                            Text("Connect…")
+                            Image(systemName: "chevron.down")
+                                .accessibilityHidden(true)
+                        }
                     }
-                    .buttonStyle(.bordered)
+                    .menuStyle(.button)
+                    .buttonStyle(SettingsButtonStyle())
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 } label: {
                     SettingsRowLabel("Add a source", description: Text(verbatim: addable.map(\.title).formatted(.list(type: .or))))
@@ -631,15 +640,11 @@ private struct TaskValueSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text(heading)
-                .font(.headline)
+        SettingsSheet(heading, subtitle: Text(explanation)) {
             if let subject {
                 Text(verbatim: subject)
                     .settingsDescriptionStyle()
             }
-            Text(explanation)
-                .settingsDescriptionStyle()
             field
             // Only for a reminder that would notify: a muted task's re-timed reminder stays muted
             // (`setSchedule`), as on the task page and in New Task. The bell cannot change while the
@@ -649,38 +654,34 @@ private struct TaskValueSheet: View {
                 ReminderPermissionNote()
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
-                    Button("Remove Estimate") {
-                        onSave(.duration(nil))
-                        dismiss()
-                    }
+        } buttons: {
+            if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
+                Button("Remove Estimate") {
+                    onSave(.duration(nil))
+                    dismiss()
                 }
-                if case .schedule(_, _, .some) = sheet {
-                    Button("Clear Schedule") {
-                        onSave(.cleared)
-                        dismiss()
-                    }
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(primaryTitle) { save() }
-                    .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isEstimate && estimate.estimateReading == .unreadable)
             }
+            if case .schedule(_, _, .some) = sheet {
+                Button("Clear Schedule") {
+                    onSave(.cleared)
+                    dismiss()
+                }
+            }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(primaryTitle) { save() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(isEstimate && estimate.estimateReading == .unreadable)
         }
         .onChange(of: estimate.estimateText) { _, _ in problem = nil }
         // macOS's answer may have changed since the list last asked: the note follows it.
         .onAppear {
             if case .schedule = sheet { TasksManager.shared.checkReminderPermission() }
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 380)
     }
 
     private var isEstimate: Bool {
@@ -693,17 +694,20 @@ private struct TaskValueSheet: View {
         switch sheet {
         case .endTime(_, _, _, let start, let nextSessionStart):
             // Date() here, not a stored bound: the list may have rendered long before the click.
-            DatePicker("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())),
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Stopped working at") {
+                SettingsDateField("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())))
+            }
         case .schedule:
-            DatePicker("Remind me at", selection: $date, in: Date()...,
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Remind me at") {
+                SettingsDateField("Remind me at", selection: $date, in: Date()...)
+            }
         case .estimate:
             TaskEstimateField(draft: $estimate, onSubmit: save)
         default:
             TextField("Length", text: $text, prompt: Text("1h 30m"))
                 .onSubmit(save)
                 .onChange(of: text) { _, _ in problem = nil }
+                .settingsField()
         }
     }
 
@@ -805,3 +809,16 @@ struct ReminderPermissionNote: View {
         }
     }
 }
+
+#if DEBUG
+extension TasksSettings {
+    /// DEBUG snapshot harness: Set End Time, the value sheet that shows the date field and, unlike Schedule, runs no
+    /// permission check. The sheet's type is private to this file.
+    static func snapshotEndTimeSheet() -> AnyView {
+        AnyView(TaskValueSheet(sheet: .endTime(taskID: DebugSnapshotFixtures.localTaskID, segmentID: UUID(),
+                                               title: "Write the release notes",
+                                               start: Date().addingTimeInterval(-3 * 3600), nextSessionStart: nil),
+                               onSave: { _ in }))
+    }
+}
+#endif

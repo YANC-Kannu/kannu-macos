@@ -274,6 +274,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         require("onPrimary", on: ["ink"], atLeast: 7)
         require("ink", on: ["selection"], atLeast: 7)
         require("destructive", on: ["card", "selection"], atLeast: 4.5)
+        // The selected segment's title, on the fill it is raised on.
+        require("ink", on: ["raised"], atLeast: 7)
+        // A mark, not text: a status line's ready dot.
+        require("success", on: ["panel", "card"], atLeast: 3)
         if let accent = colours["accent"] {
             if accent.light != 0x4DA3FF || accent.dark != 0x4DA3FF { failures.append("accent is no longer the eye blue") }
         } else {
@@ -305,6 +309,14 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let faintOnHover = theme.replacingOccurrences(of: "destructive = color(light: 0xBC3226", with: "destructive = color(light: 0xC4362B")
         XCTAssertNotEqual(faintOnHover, theme, "the plant must change the theme")
         XCTAssertEqual(Self.readabilityFailures(in: faintOnHover), ["destructive on selection, light"])
+
+        let darkRaised = theme.replacingOccurrences(of: "raised = color(light: 0xFFFFFF", with: "raised = color(light: 0x3A3A3A")
+        XCTAssertNotEqual(darkRaised, theme, "the plant must change the theme")
+        XCTAssertTrue(Self.readabilityFailures(in: darkRaised).contains("ink on raised, light"))
+
+        let paleSuccess = theme.replacingOccurrences(of: "success = color(light: 0x2E7D4F", with: "success = color(light: 0xA8D5B5")
+        XCTAssertNotEqual(paleSuccess, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: paleSuccess), ["success on panel, light", "success on card, light"])
     }
 
     // MARK: - Every token has a reader
@@ -430,9 +442,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
         XCTAssertEqual(Self.code(try XCTUnwrap(sources["AllTasksPage.swift"])).components(separatedBy: ".disclosureGroupStyle(.automatic)").count - 1, 3,
                        "All tasks' long groups keep the native disclosure")
-        let segmented = Self.code(try XCTUnwrap(sources["AnimationEditorView.swift"]))
-        XCTAssertTrue(segmented.contains(".pickerStyle(.segmented)"), "the animation editor's segmented picker moved: this rule reads nothing")
-        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: segmented, styles: [".pickerStyle(.segmented)"]), [])
+        // 2026-11-04: the segmented picker's opt-out and its plant are gone. Nothing segmented is native any more:
+        // the animation editor's Loop Mode is a SettingsSelect (Stage 3, brain/3-1-select).
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
         XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: Self.code(try XCTUnwrap(sources["GeneralSettings.swift"]))))
 
@@ -459,7 +470,6 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    Text(\"b\")\n        .settingsDescriptionStyle()\n}\n").count, 0)
         XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    TextField(\"b\", text: $b)\n}\n").count, 0)
 
-        XCTAssertEqual(Self.stylesWithoutTheOptOut(in: "Picker(\"a\") {}\n    .pickerStyle(.segmented)\n", styles: [".pickerStyle(.segmented)"]).count, 1)
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: ["Page.swift": "Button(\"a\") {}\n    .buttonStyle(.borderedProminent)\n"]), ["Page.swift"])
 
         let rows = "LaunchPermissionRow(permission: p)\n    }\n}\n"
@@ -565,6 +575,254 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: button, by: Self.buttonProblems)
     }
 
+    /// What the select keeps: VoiceOver's label, value and adjust, a trigger in our button style, a list that
+    /// closes with Brain, the arrows on a segment, one dim of its own, and an ease that Reduce Motion stops.
+    private static func selectProblems(in select: String) -> [String] {
+        var problems = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(title)",
+                        ".onDisappear { isOpen = false }", ".buttonStyle(SettingsButtonStyle())",
+                        ".accessibilityAddTraits(option == selection ? .isSelected : [])",
+                        ".onKeyPress(keys: [.leftArrow, .rightArrow])",
+                        "reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                        "guard isEnabled else { return }"].filter { !select.contains($0) }
+        if select.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled segment needs exactly one dim of its own")
+        }
+        if select.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled segment a second time") }
+        return problems
+    }
+
+    /// What the open list keeps: a key monitor for its own key window only, out of an input method's way and gone
+    /// with the list; Return and Escape in the field and in the list; letters when it has no field; rows that never
+    /// take the keyboard; a highlight that is announced and a selection that says so; the threshold; the field's chrome.
+    private static func selectListProblems(in list: String) -> [String] {
+        ["event.window === window", "window.isKeyWindow", "hasMarkedText()", "NSEvent.removeMonitor", "dismantleNSView",
+         ".onSubmit", ".onExitCommand(perform: close)", ".onKeyPress(.return)", ".onKeyPress(.escape)",
+         ".onKeyPress(characters:", ".focusable(false)", "AccessibilityNotification.Announcement(",
+         ".accessibilityAddTraits(option == selection ? .isSelected : [])", "SettingsSelectNavigation.searchThreshold",
+         ".settingsField("].filter { !list.contains($0) }
+    }
+
+    func testTheSelectKeepsKeyboardVoiceOverAndReduceMotion() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let select = try XCTUnwrap(sources["SettingsSelect.swift"])
+        XCTAssertEqual(Self.selectProblems(in: select), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".accessibilityAdjustableAction", ".accessibilityAction"),
+                           (".accessibilityValue(", ".accessibilityHint("),
+                           (".accessibilityLabel(title)", ".accessibilityHidden(true)"),
+                           (".onDisappear { isOpen = false }", ""),
+                           (".buttonStyle(SettingsButtonStyle())", ".buttonStyle(BorderlessButtonStyle())"),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           (".onKeyPress(keys: [.leftArrow, .rightArrow])", ".onKeyPress(keys: [.upArrow, .downArrow])"),
+                           ("reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)",
+                            ".easeOut(duration: SettingsTheme.quickAnimation)"),
+                           ("guard isEnabled else { return }", ""),
+                           (dim, ""), (dim, dim + dim),
+                           (".buttonStyle(SegmentButtonStyle())", ".buttonStyle(.plain)")],
+                          in: select, by: Self.selectProblems)
+
+        let list = try XCTUnwrap(sources["SettingsSelectList.swift"])
+        XCTAssertEqual(Self.selectListProblems(in: list), [])
+        // `event.window === window` emptied is a monitor that answers for any window.
+        Self.assertCaught([("event.window === window", ""), ("window.isKeyWindow", "true"),
+                           ("hasMarkedText()", "isEditable"), ("NSEvent.removeMonitor", "print"),
+                           ("dismantleNSView", "dismantleView"), (".onSubmit", ".onAppear"),
+                           (".onExitCommand(perform: close)", ""), (".onKeyPress(.return)", ".onKeyPress(.space)"),
+                           (".onKeyPress(.escape)", ".onKeyPress(.tab)"), (".onKeyPress(characters:", ".onKeyPress(keys:"),
+                           (".focusable(false)", ".focusable()"), ("AccessibilityNotification.Announcement(", "print("),
+                           (".accessibilityAddTraits(option == selection ? .isSelected : [])", ""),
+                           ("SettingsSelectNavigation.searchThreshold", "3"), (".settingsField(", ".textFieldStyle(")],
+                          in: list, by: Self.selectListProblems)
+    }
+
+    /// What `SettingsField` keeps: the field native and plain inside our chrome, its label hidden for the one beside
+    /// it, its own focus where the caller keeps none, one dim, and never a send-on-Return of its own:
+    /// `WorklogConsentRulesTests` finds one by the literal modifier, and a parameter would slip past it.
+    private static func fieldProblems(in field: String) -> [String] {
+        var problems = [".textFieldStyle(.plain)", ".labelsHidden()", "content.focused($tracksFocus)"].filter { !field.contains($0) }
+        if field.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled field needs exactly one dim of its own")
+        }
+        if field.contains("onSubmit") { problems.append("the field's chrome takes no onSubmit") }
+        return problems
+    }
+
+    func testTheFieldStaysNativeInside() throws {
+        let field = Self.code(try XCTUnwrap(try Self.designSystemSources()["SettingsField.swift"]))
+        XCTAssertEqual(Self.fieldProblems(in: field), [])
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        Self.assertCaught([(".textFieldStyle(.plain)", ".textFieldStyle(.roundedBorder)"), (".labelsHidden()", ""),
+                           ("content.focused($tracksFocus)", "content"), (dim, ""), (dim, dim + dim),
+                           ("let isFocused: Bool?", "let isFocused: Bool?\n    let onSubmit: () -> Void")],
+                          in: field, by: Self.fieldProblems)
+    }
+
+    // MARK: - Values
+
+    /// What the slider and the stepper keep: one element for VoiceOver with a label, a value and an adjustable
+    /// action; the keyboard under Full Keyboard Access only; one dim of their own and no `.plain` second one; and
+    /// nothing moves them while disabled, VoiceOver's adjust included. The slider also takes no drag on a track
+    /// with no room to travel.
+    private static func valueControlProblems(in control: String, isSlider: Bool) -> [String] {
+        var required = [".accessibilityAdjustableAction", ".accessibilityValue(", ".accessibilityLabel(label)",
+                        ".accessibilityElement(children: .ignore)", ".onKeyPress(keys:", ".focusable(isEnabled, interactions: .activate)",
+                        "guard isEnabled else { return }"]
+        if isSlider {
+            // Right to left it is drawn left to right inside and mirrored whole, its arrows with it.
+            required += ["guard isEnabled, travel > 0", #".environment(\.layoutDirection, .leftToRight)"#,
+                         ".flipsForRightToLeftLayoutDirection(true)",
+                         "(press.key == .rightArrow) == (layoutDirection == .leftToRight)"]
+        } else {
+            // − and + are not stops of their own: the stepper is one.
+            required.append(".focusable(false)")
+        }
+        var problems = required.filter { !control.contains($0) }
+        if control.components(separatedBy: ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)").count != 2 {
+            problems.append("a disabled control needs exactly one dim of its own")
+        }
+        if control.contains(".buttonStyle(.plain)") { problems.append("`.plain` dims a disabled button a second time") }
+        return problems
+    }
+
+    func testTheValueControlsKeepKeyboardAndVoiceOver() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let dim = ".opacity(isEnabled ? 1 : SettingsTheme.disabledOpacity)"
+        let shared: [(from: String, to: String)] = [
+            (".accessibilityAdjustableAction", ".accessibilityAction"), (".accessibilityValue(", ".accessibilityHint("),
+            (".accessibilityLabel(label)", ".accessibilityHidden(true)"),
+            (".accessibilityElement(children: .ignore)", ".accessibilityElement(children: .contain)"),
+            (".onKeyPress(keys:", ".onKeyPress(characters:"), (".focusable(isEnabled, interactions: .activate)", ".focusable(interactions: .activate)"),
+            ("guard isEnabled else { return }", ""), (dim, ""), (dim, dim + dim),
+        ]
+
+        let slider = try XCTUnwrap(sources["SettingsSlider.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: slider, isSlider: true), [])
+        Self.assertCaught(shared + [("guard isEnabled, travel > 0", "guard travel > 0"),
+                                     (".flipsForRightToLeftLayoutDirection(true)", ""),
+                                     (#".environment(\.layoutDirection, .leftToRight)"#, ""),
+                                     ("(press.key == .rightArrow) == (layoutDirection == .leftToRight)",
+                                      "press.key == .rightArrow")],
+                          in: slider,
+                          by: { Self.valueControlProblems(in: $0, isSlider: true) })
+
+        let stepper = try XCTUnwrap(sources["SettingsStepper.swift"])
+        XCTAssertEqual(Self.valueControlProblems(in: stepper, isSlider: false), [])
+        Self.assertCaught(shared + [(".buttonStyle(PressStyle())", ".buttonStyle(.plain)"), (".focusable(false)", "")],
+                          in: stepper,
+                          by: { Self.valueControlProblems(in: $0, isSlider: false) })
+    }
+
+    // MARK: - Fields
+
+    /// The two fields that keep chrome of their own: the sidebar search's, around a glyph and a clear button, and a
+    /// local task's title, typed in place in the body font so it still reads as the row's title (docs/SETTINGS.md).
+    private static let pinnedFieldsWithoutTheChrome = ["SettingsView.swift": 1, "TaskDetailPage.swift": 1]
+
+    /// The start of each `TextField` or `SecureField` call whose own chain has no `.settingsField(`, or sets focus
+    /// after it, or keeps its own focus while the chrome tracks focus as well: two focus bindings on one field. A
+    /// field with its own `.focused` passes it in (`isFocused:`).
+    private static func fieldChromeProblems(in code: String) -> [String] {
+        ["TextField", "SecureField"].flatMap { name in
+            calls(of: name, in: code) { chain in
+                guard let chrome = chain.range(of: ".settingsField(") else { return true }
+                if chain[chrome.upperBound...].contains(".focused(") { return true }
+                return chain[..<chrome.lowerBound].contains(".focused(") && !chain[chrome.lowerBound...].hasPrefix(".settingsField(isFocused:")
+            }
+        }
+    }
+
+    func testEveryFieldWearsTheChrome() throws {
+        var fields = 0
+        for (name, source) in try Self.sources() {
+            let code = Self.code(source)
+            fields += Self.openers(of: "TextField", in: code).count + Self.openers(of: "SecureField", in: code).count
+            XCTAssertEqual(Self.fieldChromeProblems(in: code).count, Self.pinnedFieldsWithoutTheChrome[name] ?? 0,
+                           "\(name): a field wears `.settingsField()` last on its own chain: \(Self.fieldChromeProblems(in: code))")
+        }
+        XCTAssertGreaterThan(fields, 0, "the scan found no field: the pattern went blind")
+
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .onSubmit { b() }\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "SecureField(\"a\", text: $a)\n    .settingsField()\n").count, 0)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .settingsField()\n    .focused($x)\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\n    .focused($x)\n    .settingsField(isFocused: x)\n").count, 0)
+        // The chrome on the next view, or inside the field's label, is not on the field.
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(\"a\", text: $a)\nText(\"b\")\n    .settingsField()\n").count, 1)
+        XCTAssertEqual(Self.fieldChromeProblems(in: "TextField(text: $a) {\n    Text(\"a\").settingsField()\n}\n").count, 1)
+
+        Self.assertCaught([(".settingsField()", "")], in: Self.code(try XCTUnwrap(try Self.sources()["AgentStatusSettings.swift"])),
+                          by: Self.fieldChromeProblems)
+    }
+
+    func testOnlyTheFieldSetsAFieldStyle() throws {
+        // The chrome sets `.plain` inside; the two fields with chrome of their own, pinned above, set it themselves.
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: try Self.sources()),
+                       ["SettingsField.swift", "SettingsView.swift", "TaskDetailPage.swift"])
+
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .textFieldStyle(.roundedBorder)\n"]),
+                       ["Page.swift"])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "TextField(\"a\", text: $a)\n    .settingsField()\n"]), [])
+        XCTAssertEqual(Self.filesUsing(".textFieldStyle(", in: ["Page.swift": "// .textFieldStyle(.plain) is the chrome's\n"]), [])
+    }
+
+    // MARK: - A popover closes with Brain
+
+    /// The flags of `.popover(isPresented: $flag` that no `.onDisappear` in the same file sets to false. Closing
+    /// Brain takes its content out of the window and runs `onDisappear` (docs/REGRESSIONS.md, entry 22), while a
+    /// `@State` flag survives the close, so a popover left open would come back when Brain reopens.
+    private static func popoversThatOutliveBrain(in source: String) -> [String] {
+        let code = Self.code(source, blankingStrings: true)
+        let clears = disappearBodies(in: code)
+        return groups(of: #"\.popover\(\s*isPresented:\s*\$(\w+)"#, in: code).map { $0[1] }.filter { flag in
+            !clears.contains { !matches(of: #"(?<![\w.])(?:self\.)?"# + flag + #"\s*=\s*false\b"#, in: $0).isEmpty }
+        }
+    }
+
+    /// The body of each `.onDisappear { … }`, its braces balanced. Strings are blanked, so their braces never count.
+    private static func disappearBodies(in code: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"\.onDisappear\s*\{"#) else {
+            XCTFail("bad onDisappear pattern")
+            return []
+        }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map { match in
+            let start = match.range.location + match.range.length - 1
+            var end = start, depth = 0
+            repeat {
+                let unit = text.character(at: end)
+                if unit == 0x7B { depth += 1 } else if unit == 0x7D { depth -= 1 }
+                end += 1
+            } while end < text.length && depth > 0
+            return text.substring(with: NSRange(location: start, length: end - start))
+        }
+    }
+
+    func testAPopoverClosesWhenBrainDoes() throws {
+        let sources = try Self.sources()
+        var popovers = 0
+        for (name, source) in sources {
+            popovers += Self.matches(of: #"\.popover\(\s*isPresented:"#, in: Self.code(source)).count
+            XCTAssertEqual(Self.popoversThatOutliveBrain(in: source), [], "\(name): a popover left open comes back when Brain reopens")
+        }
+        XCTAssertGreaterThan(popovers, 0, "the scan found no popover: the pattern went blind")
+
+        let open = "Button(\"a\") { shows.toggle() }\n    .popover(isPresented: $shows, arrowEdge: .bottom) { Text(\"b\") }\n"
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open), ["shows"], "no onDisappear")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { other = false }\n"), ["shows"], "another flag")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { showsMore = false }\n"), ["shows"], "a longer name")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onAppear { shows = false }\n"), ["shows"], "the wrong hook")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    // .onDisappear { shows = false }\n"), ["shows"], "a comment")
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear { shows = false }\n"), [])
+        XCTAssertEqual(Self.popoversThatOutliveBrain(in: open + "    .onDisappear {\n        if a { b(\"}\") }\n        shows = false\n    }\n"), [])
+
+        Self.assertCaught([(".onDisappear { isOpen = false }", "")],
+                          in: try XCTUnwrap(sources["SettingsSelect.swift"]), by: Self.popoversThatOutliveBrain)
+        Self.assertCaught([(".onDisappear { showingMenu = false }", ".onDisappear { showingMenu = true }")],
+                          in: try XCTUnwrap(sources["IdleAnimationsSettingsSection.swift"]), by: Self.popoversThatOutliveBrain)
+    }
+
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
     /// gives headers and footers, so they say theirs, or every section header goes light and every
     /// footer grows. Its one-line row would squeeze a titled action row's description, and its switch
@@ -589,10 +847,16 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: components, by: Self.sharedComponentProblems)
     }
 
-    /// A root button style takes a default-style `Menu`'s indicator away, and the only cures are the
-    /// borderless menu style or a native button style on the menu itself.
-    private static func menusWithoutAnIndicator(in code: String) -> [String] {
-        calls(of: "Menu", in: code) { !($0.contains(".menuStyle(.borderlessButton)") || $0.contains(".buttonStyle(.bordered)")) }
+    /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
+    private static let pinnedNativeMenus = ["AllTasksPage.swift": 1]
+
+    /// Menus whose own chain does not have our button draw the trigger. Each menu says so itself, rather than
+    /// leaving it to the root: the button menu style takes the current button style, ours takes the native
+    /// indicator away, and a label that needs a chevron draws `chevron.down` itself.
+    private static func menusNotDrawnByOurButton(in code: String) -> [String] {
+        calls(of: "Menu", in: code) { chain in
+            !(chain.contains(".menuStyle(.button)") && chain.contains("SettingsButtonStyle(") && chain.contains(".menuIndicator(.hidden)"))
+        }
     }
 
     /// The start of each call of `name` whose modifier chain `isOffender` picks.
@@ -678,26 +942,34 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         return chain
     }
 
-    func testEveryMenuKeepsItsIndicator() throws {
+    /// 2026-11-05: was `testEveryMenuKeepsItsIndicator`, which accepted the borderless menu style or a native button
+    /// style on the menu. Now each menu's trigger is our button over a native menu (Stage 3, brain/3-3-sheets-menus).
+    func testEveryMenuIsDrawnByOurButton() throws {
         var openers = 0
         for (name, source) in try Self.sources() {
             let code = Self.code(source)
             openers += Self.openers(of: "Menu", in: code).count
-            XCTAssertEqual(Self.menusWithoutAnIndicator(in: code), [], "\(name): the root's button style takes this Menu's indicator away")
+            XCTAssertEqual(Self.menusNotDrawnByOurButton(in: code).count, Self.pinnedNativeMenus[name] ?? 0,
+                           "\(name): a menu's trigger is our button: \(Self.menusNotDrawnByOurButton(in: code))")
         }
         XCTAssertGreaterThan(openers, 0, "the scan found no Menu: the pattern went blind")
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.fixedSize()\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") { Button(\"a\") {} }\n.menuStyle(.button)\n").count, 1)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a\") {}\n} label: {\n    Text(\"x\")\n}\n").count, 1)
+        let ours = "\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n"
+        // The old borderless menu, and the old Connect… with a native button style.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Image(systemName: \"ellipsis.circle\")\n}\n.menuStyle(.borderlessButton)\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 1)
+        // Our style on a menu style that ignores it, or with the native indicator left on.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.borderlessButton)\n.buttonStyle(SettingsButtonStyle())\n.menuIndicator(.hidden)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")\n}\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle())\n").count, 1)
         // A style inside the label is on the label, not on the menu.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu {\n} label: {\n    Text(\"x\").menuStyle(.borderlessButton)\n}\n").count, 1)
-        // A modifier on the next view is not on this one.
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"a\") {}\nText(\"b\")\n    .buttonStyle(.bordered)\n").count, 1)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu {\n} label: {\n    Text(\"x\")" + ours + "}\n").count, 1)
+        // A style on the next view is not on this one.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "Menu(\"a\") {}\nText(\"b\")" + ours).count, 1)
 
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "Menu(\"Connect…\") {\n}\n.buttonStyle(.bordered)\n.fixedSize()\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}\n.help(\"h\")\n.menuStyle(.borderlessButton)\n").count, 0)
-        XCTAssertEqual(Self.menusWithoutAnIndicator(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
+        // The real `SettingsMoreMenu` shape passes, its comment between the label and the chain included.
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: Self.code("Menu {\n    items\n} label: {\n    Image(systemName: \"ellipsis\")\n}\n// Our button draws the trigger.\n.menuStyle(.button)\n.buttonStyle(SettingsButtonStyle(.quiet))\n.menuIndicator(.hidden)\n.fixedSize()\n.accessibilityLabel(accessibilityLabel)\n")).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "return Menu {\n    Button(\"a {\") {}\n} label: {\n    Text(\"x\")\n}" + ours).count, 0)
+        XCTAssertEqual(Self.menusNotDrawnByOurButton(in: "resetMenu\n.buttonStyle(.plain)\nSomeMenu(\"a\") {}\nfoo.Menu(\"b\") {}\n").count, 0)
     }
 
     /// Lines naming the default action with no primary style beside them. A custom style cannot see
@@ -728,6 +1000,200 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.flatDefaultActions(in: Self.code("// .defaultAction needs the primary style")).count, 0)
     }
 
+    // MARK: - Sheets
+
+    /// Each sheet that builds a `SettingsSheet`, and the file it lives in.
+    private static let sheetTypes = ["JiraConnectSheet": "TaskConnectSheets.swift", "GitLabConnectSheet": "TaskConnectSheets.swift",
+                                     "SourceConnectSheet": "TaskConnectSheets.swift", "TaskTagsSheet": "TaskTagsSheet.swift",
+                                     "NewTaskSheet": "NewTaskSheet.swift", "TaskValueSheet": "TasksSettings.swift",
+                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift"]
+    /// The two large sheets, which keep layouts of their own and take the root and the panel themselves.
+    private static let largeSheetFiles = ["AnimationEditorView.swift", "SpotifyLoginSheet.swift"]
+
+    /// What `SettingsSheet` keeps: the root and the panel, since a sheet is a window of its own and whether the root's
+    /// styles reach a presentation cannot be told from source, and a title that is a header and can be copied.
+    private static func sheetProblems(in sheet: String) -> [String] {
+        [".settingsDesignSystem()", ".background(SettingsTheme.panel)", ".accessibilityAddTraits(.isHeader)",
+         ".textSelection(.enabled)"].filter { !sheet.contains($0) }
+    }
+
+    /// The text inside `struct name { … }`, its braces balanced, read with strings blanked; nil when there is none.
+    private static func structBody(_ name: String, in source: String) -> String? {
+        let text = Self.code(source, blankingStrings: true)
+        guard let header = text.range(of: #"struct \#(name)\b[^{]*\{"#, options: .regularExpression) else { return nil }
+        let characters = Array(text[text.index(before: header.upperBound)...])
+        var depth = 0, end = 0
+        repeat {
+            if characters[end] == "{" { depth += 1 } else if characters[end] == "}" { depth -= 1 }
+            end += 1
+        } while end < characters.count && depth > 0
+        return String(characters[..<end])
+    }
+
+    /// The sheets whose own body builds no `SettingsSheet(`, by type.
+    private static func sheetsNotBuiltOnTheSheet(in sources: [String: String]) -> [String] {
+        sheetTypes.compactMap { type, file in
+            guard let source = sources[file], let body = structBody(type, in: source), body.contains("SettingsSheet(") else { return type }
+            return nil
+        }.sorted()
+    }
+
+    /// The large sheets missing the root or the panel.
+    private static func largeSheetsWithoutTheRoot(in sources: [String: String]) -> [String] {
+        largeSheetFiles.filter { file in
+            let code = Self.code(sources[file] ?? "")
+            return !code.contains(".settingsDesignSystem()") || !code.contains(".background(SettingsTheme.panel)")
+        }
+    }
+
+    func testEverySheetIsASettingsSheet() throws {
+        let sources = try Self.sources()
+        let sheet = Self.code(try XCTUnwrap(sources["SettingsSheet.swift"]))
+        XCTAssertEqual(Self.sheetProblems(in: sheet), [])
+        Self.assertCaught([(".settingsDesignSystem()", ""), (".background(SettingsTheme.panel)", ".background(SettingsTheme.card)"),
+                           (".accessibilityAddTraits(.isHeader)", ""), (".textSelection(.enabled)", "")],
+                          in: sheet, by: Self.sheetProblems)
+
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: sources), [])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: sources), [])
+
+        // The real files, broken: a sheet back on a bare VStack; Jira's sheet alone, its neighbours still built on
+        // ours; a sheet type gone; a large sheet without its root, or without its panel.
+        func broken(_ file: String, _ from: String, _ to: String, firstOnly: Bool = false) -> [String: String] {
+            var copy = sources
+            let source = sources[file] ?? ""
+            if firstOnly, let range = source.range(of: from) {
+                copy[file] = source.replacingCharacters(in: range, with: to)
+            } else {
+                copy[file] = source.replacingOccurrences(of: from, with: to)
+            }
+            XCTAssertNotEqual(copy[file], source, "the plant must change \(file)")
+            return copy
+        }
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskTagsSheet.swift", "SettingsSheet(", "VStack(")), ["TaskTagsSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "SettingsSheet(", "VStack(", firstOnly: true)),
+                       ["JiraConnectSheet"])
+        XCTAssertEqual(Self.sheetsNotBuiltOnTheSheet(in: broken("TaskConnectSheets.swift", "struct GitLabConnectSheet", "struct GitLabSheet")),
+                       ["GitLabConnectSheet"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("AnimationEditorView.swift", ".settingsDesignSystem()", "")),
+                       ["AnimationEditorView.swift"])
+        XCTAssertEqual(Self.largeSheetsWithoutTheRoot(in: broken("SpotifyLoginSheet.swift", ".background(SettingsTheme.panel)", "")),
+                       ["SpotifyLoginSheet.swift"])
+        // A `SettingsSheet(` in a comment builds nothing.
+        XCTAssertNil(Self.structBody("Planted", in: "struct Other {}\n"))
+        XCTAssertEqual(Self.structBody("Planted", in: "struct Planted: View {\n    // SettingsSheet(\n}\n")?.contains("SettingsSheet("), false)
+    }
+
+    // MARK: - Menus
+
+    /// What the ⋯ keeps: our quiet button draws its trigger, and its items stay a native menu.
+    private static func moreMenuProblems(in components: String) -> [String] {
+        guard let start = components.range(of: "struct SettingsMoreMenu<") else { return ["SettingsMoreMenu is gone"] }
+        let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
+        let region = components[start.lowerBound..<end]
+        return [".menuStyle(.button)", "SettingsButtonStyle(.quiet)"].filter { !region.contains($0) }
+    }
+
+    func testTheMoreMenuIsOursOverANativeMenu() throws {
+        let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
+        XCTAssertEqual(Self.moreMenuProblems(in: components), [])
+        Self.assertCaught([(".menuStyle(.button)", ".menuStyle(.borderlessButton)"),
+                           ("SettingsButtonStyle(.quiet)", "SettingsButtonStyle()"),
+                           ("struct SettingsMoreMenu<", "struct RenamedMoreMenu<")],
+                          in: components, by: Self.moreMenuProblems)
+        // The style on the next type is not on the menu.
+        let elsewhere = "struct SettingsMoreMenu<Items: View>: View {\n    .menuStyle(.button)\n}\nstruct Other {\n    SettingsButtonStyle(.quiet)\n}\n"
+        XCTAssertEqual(Self.moreMenuProblems(in: elsewhere), ["SettingsButtonStyle(.quiet)"])
+    }
+
+    // MARK: - Reduce Motion
+
+    /// The arguments of each `withAnimation(…)` and `.animation(…)`, its parens balanced, and an empty one for a bare
+    /// `withAnimation {`, which takes the default animation. Read with strings blanked.
+    private static func animationArguments(in code: String) -> [String] {
+        let characters = Array(Self.code(code, blankingStrings: true))
+        let text = String(characters)
+        guard let regex = try? NSRegularExpression(pattern: #"(?<![A-Za-z0-9_])withAnimation\s*[({]|\.animation\s*\("#) else {
+            XCTFail("bad animation pattern")
+            return []
+        }
+        return regex.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text) else { return nil }
+            let open = text.distance(from: text.startIndex, to: range.upperBound) - 1
+            guard characters[open] == "(" else { return "" }
+            var depth = 0, end = open
+            repeat {
+                if characters[end] == "(" { depth += 1 } else if characters[end] == ")" { depth -= 1 }
+                end += 1
+            } while end < characters.count && depth > 0
+            return String(characters[open..<end])
+        }
+    }
+
+    /// Animations that Reduce Motion cannot stop or that are not the theme's one bounded ease.
+    private static func motionProblems(in code: String) -> [String] {
+        animationArguments(in: code).filter { arguments in
+            !arguments.contains("reduceMotion ? nil :") || !arguments.contains("SettingsTheme.quickAnimation")
+                || !matches(of: #"\.(?:spring|smooth|bouncy|snappy|interactiveSpring|default)\b"#, in: arguments).isEmpty
+        }
+    }
+
+    /// `DesignSystem/` only: pages keep their own animations until Stage 4 rewrites them.
+    func testDesignSystemAnimationsHonourReduceMotion() throws {
+        var animations = 0
+        for (name, source) in try Self.designSystemSources() {
+            animations += Self.animationArguments(in: source).count
+            XCTAssertEqual(Self.motionProblems(in: source), [], "\(name): an animation that Reduce Motion cannot stop, or not the theme's ease")
+        }
+        // The switch, the disclosure and the segments.
+        XCTAssertGreaterThanOrEqual(animations, 3, "the scan found fewer animations than the design system has: the pattern went blind")
+
+        for planted in ["withAnimation(.spring()) {}", ".animation(.easeOut(duration: SettingsTheme.quickAnimation), value: x)",
+                        ".animation(reduceMotion ? nil : .smooth, value: x)", "withAnimation { x = 1 }", ".animation(.default, value: y)",
+                        "withAnimation(reduceMotion ? nil : .bouncy(duration: SettingsTheme.quickAnimation)) {}"] {
+            XCTAssertEqual(Self.motionProblems(in: planted).count, 1, planted)
+        }
+        let toggle = ".animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation),\n           value: configuration.isOn)"
+        XCTAssertEqual(Self.motionProblems(in: toggle), [])
+        XCTAssertEqual(Self.motionProblems(in: "// withAnimation(.spring()) {}\nText(\"withAnimation(.spring())\")"), [])
+        XCTAssertEqual(Self.animationArguments(in: "withAnimationTimer()\nfoo.animation\n"), [])
+
+        // The real switch, with its guard taken away.
+        let toggleStyle = try XCTUnwrap(try Self.designSystemSources()["SettingsToggleStyle.swift"])
+        Self.assertCaught([("reduceMotion ? nil : ", ""), ("SettingsTheme.quickAnimation", "0.3")],
+                          in: toggleStyle, by: Self.motionProblems)
+    }
+
+    // MARK: - Dates
+
+    /// The files under Settings that build a `DatePicker`. Only the date field may: it holds the system's calendar
+    /// grid and time field inside our popover.
+    private static func filesBuildingADatePicker(in sources: [String: String]) -> [String] {
+        sources.filter { !SettingsLayoutRulesTests.nativeControlLines(in: $0.value, names: ["DatePicker"]).isEmpty }.keys.sorted()
+    }
+
+    func testADateIsOurs() throws {
+        let sources = try Self.sources()
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: sources), ["SettingsDateField.swift"])
+        XCTAssertEqual(SettingsLayoutRulesTests.nativeControlLines(in: try XCTUnwrap(sources["SettingsDateField.swift"]), names: ["DatePicker"]).count,
+                       2, "the calendar grid and the time field")
+
+        for planted in ["DatePicker(\"a\", selection: $d)", "SwiftUI.DatePicker(\"a\", selection: $d)", "DatePicker (\n    \"a\",\n    selection: $d)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": planted]), ["Page.swift"], planted)
+        }
+        for clean in ["SettingsDateField(\"a\", selection: $d, in: Date()...)", "// DatePicker(\"a\")", "Text(\"DatePicker(\")",
+                      ".datePickerStyle(.graphical)"] {
+            XCTAssertEqual(Self.filesBuildingADatePicker(in: ["Page.swift": clean]), [], clean)
+        }
+
+        // A real sheet given its native picker back.
+        let tasks = try XCTUnwrap(sources["TasksSettings.swift"])
+        let field = try XCTUnwrap(tasks.range(of: "SettingsDateField("), "the value sheet has no date field to plant on")
+        var broken = sources
+        broken["TasksSettings.swift"] = tasks.replacingCharacters(in: field, with: "DatePicker(")
+        XCTAssertEqual(Self.filesBuildingADatePicker(in: broken), ["SettingsDateField.swift", "TasksSettings.swift"])
+    }
+
     // MARK: - Licence
 
     private static func filesWithoutTheLicence(in sources: [String: String], licence: String) -> [String] {
@@ -751,6 +1217,13 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     /// The source with every comment blanked and every line kept, so line numbers still mean what they
     /// do in the file. Strings are respected: a URL's `//` is not a comment.
     static func code(_ source: String) -> String {
+        code(source, blankingStrings: false)
+    }
+
+    /// `blankingStrings` also writes a space for each character inside a string literal, keeping its quotes and
+    /// newlines, so a ban does not read a title such as "Device Picker Style" as a call. An overload, not a default
+    /// argument, so `Self.code` still passes as a one-argument function.
+    static func code(_ source: String, blankingStrings: Bool) -> String {
         let characters = Array(source)
         var out = ""
         var index = 0
@@ -759,9 +1232,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
             let character = characters[index]
             let next: Character? = index + 1 < characters.count ? characters[index + 1] : nil
             if inString {
-                out.append(character)
+                out.append(!blankingStrings || character == "\"" || character == "\n" ? character : " ")
                 if character == "\\", let next {
-                    out.append(next)
+                    out.append(blankingStrings && next != "\n" ? " " : next)
                     index += 2
                     continue
                 }

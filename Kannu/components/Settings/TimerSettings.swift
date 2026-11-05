@@ -124,13 +124,8 @@ struct TimerSettings: View {
                 .settingsHighlight(id: highlightID("Mirror macOS Clock timers"))
 
                 SettingsRow("Timer controls appear as", description: timerDisplayMode.description) {
-                    Picker("Timer controls appear as", selection: $timerDisplayMode) {
-                        ForEach(TimerDisplayMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
+                    SettingsSelect("Timer controls appear as", selection: $timerDisplayMode,
+                                   options: TimerDisplayMode.allCases, optionTitle: \.displayName, style: .segmented)
                 }
                 .settingsHighlight(id: highlightID("Timer controls appear as"))
             }
@@ -171,13 +166,8 @@ struct TimerSettings: View {
             .settingsHighlight(id: highlightID("Show lock screen timer widget"))
             SettingsRow("Timer surface", description: timerGlassModeIsGlass
                         ? nil : Text("Classic mode keeps the original translucent black background.")) {
-                Picker("Timer surface", selection: timerSurfaceBinding) {
-                    ForEach(LockScreenTimerSurfaceMode.allCases) { mode in
-                        Text(mode.rawValue).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
+                SettingsSelect("Timer surface", selection: timerSurfaceBinding,
+                               options: LockScreenTimerSurfaceMode.allCases, optionTitle: \.rawValue, style: .segmented)
             }
             .disabled(!enableLockScreenTimerWidget)
             .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -186,11 +176,8 @@ struct TimerSettings: View {
             if timerGlassModeIsGlass {
                 SettingsRow("Timer glass material", description: lockScreenTimerGlassStyle == .liquid
                             ? nil : Text("Uses the frosted blur treatment while glass mode is enabled.")) {
-                    Picker("Timer glass material", selection: $lockScreenTimerGlassStyle) {
-                        ForEach(LockScreenGlassStyle.allCases) { style in
-                            Text(style.rawValue).tag(style)
-                        }
-                    }
+                    SettingsSelect("Timer glass material", selection: $lockScreenTimerGlassStyle,
+                                   options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                 }
                 .disabled(!enableLockScreenTimerWidget)
                 .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -198,13 +185,9 @@ struct TimerSettings: View {
 
                 if lockScreenTimerGlassStyle == .liquid {
                     SettingsRow("Timer liquid mode") {
-                        Picker("Timer liquid mode", selection: $lockScreenTimerGlassCustomizationMode) {
-                            ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Timer liquid mode", selection: $lockScreenTimerGlassCustomizationMode,
+                                       options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
                     .disabled(!enableLockScreenTimerWidget)
                     .opacity(enableLockScreenTimerWidget ? 1 : 0.5)
@@ -249,12 +232,10 @@ struct TimerSettings: View {
     @ViewBuilder
     private var appearanceSection: some View {
         Section {
-            Picker("Timer tint", selection: $colorMode) {
-                ForEach(TimerIconColorMode.allCases) { mode in
-                    Text(mode.displayName).tag(mode)
-                }
+            SettingsRow("Timer tint") {
+                SettingsSelect("Timer tint", selection: $colorMode,
+                               options: TimerIconColorMode.allCases, optionTitle: \.displayName, style: .segmented)
             }
-            .pickerStyle(.segmented)
             .settingsHighlight(id: highlightID("Timer tint"))
 
             if colorMode == .solid {
@@ -262,12 +243,10 @@ struct TimerSettings: View {
                     .settingsHighlight(id: highlightID("Solid colour"))
             }
 
-            Picker("Custom timer style", selection: $timerInputStyle) {
-                ForEach(TimerInputStyle.allCases) { style in
-                    Text(style.displayName).tag(style)
-                }
+            SettingsRow("Custom timer style") {
+                SettingsSelect("Custom timer style", selection: $timerInputStyle,
+                               options: TimerInputStyle.allCases, optionTitle: \.displayName, style: .segmented)
             }
-            .pickerStyle(.segmented)
             .settingsHighlight(id: highlightID("Custom timer style"))
 
             Toggle("Show timer name", isOn: $showsLabel)
@@ -281,12 +260,10 @@ struct TimerSettings: View {
             }
             .disabled(showsLabel)
 
-            Picker("Progress style", selection: $progressStyle) {
-                ForEach(TimerProgressStyle.allCases) { style in
-                    Text(style.rawValue).tag(style)
-                }
+            SettingsRow("Progress style") {
+                SettingsSelect("Progress style", selection: $progressStyle,
+                               options: TimerProgressStyle.allCases, optionTitle: \.rawValue, style: .segmented)
             }
-            .pickerStyle(.segmented)
             .disabled(!showsProgress)
             .settingsHighlight(id: highlightID("Progress style"))
         } header: {
@@ -544,8 +521,8 @@ private struct TimerPresetEditorRow: View {
                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
                     )
 
-                TextField("Preset name", text: $preset.name)
-                    .textFieldStyle(.roundedBorder)
+                TextField("Preset name", text: $preset.name, prompt: Text("Preset name"))
+                    .settingsField()
 
                 Spacer()
 
@@ -568,13 +545,11 @@ private struct TimerPresetEditorRow: View {
                 Button(action: moveUp) {
                     Label("Move Up", systemImage: "chevron.up")
                 }
-                .buttonStyle(.bordered)
                 .disabled(isFirst)
 
                 Button(action: moveDown) {
                     Label("Move Down", systemImage: "chevron.down")
                 }
-                .buttonStyle(.bordered)
                 .disabled(isLast)
 
                 Spacer()
@@ -582,7 +557,6 @@ private struct TimerPresetEditorRow: View {
                 Button(role: .destructive, action: remove) {
                     Label("Delete", systemImage: "trash")
                 }
-                .buttonStyle(.bordered)
             }
             .font(.system(size: 12, weight: .medium))
         }
@@ -621,10 +595,7 @@ private struct TimerPresetComponentControl: View {
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .textSelection(.enabled)
             }
-            Stepper(value: $value, in: range) {
-                Text(title)
-            }
-            .labelsHidden()
+            SettingsStepper(value: $value, in: range, valueDescription: Text("\(value)")) { Text(title) }
         }
         .frame(width: 110, alignment: .leading)
     }

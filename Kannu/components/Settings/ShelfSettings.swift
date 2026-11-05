@@ -123,16 +123,13 @@ struct Shelf: View {
             Section {
                 SettingsRow("Quick Share Service", description: selectedProvider == nil
                             ? nil : Text("Files dropped on the shelf will be shared via this service")) {
-                    Picker("Quick Share Service", selection: $quickShareProvider) {
-                        ForEach(quickShareService.availableProviders, id: \.id) { provider in
-                            HStack {
-                                QuickShareProviderIconImage(provider: provider, size: 16)
-                                Text(provider.id)
-                            }
-                            .tag(provider.id)
+                    // The saved id shows before discovery ends: the select draws the selection's own title.
+                    SettingsSelect("Quick Share Service", selection: $quickShareProvider,
+                                   options: quickShareService.availableProviders.map(\.id), optionTitle: { $0 }) { id in
+                        if let provider = quickShareService.availableProviders.first(where: { $0.id == id }) {
+                            QuickShareProviderIconImage(provider: provider, size: 16)
                         }
                     }
-                    .pickerStyle(.menu)
                 }
                 .settingsHighlight(id: highlightID("Quick Share Service"))
             } header: {
@@ -161,24 +158,30 @@ private struct LocalSendSettingsSection: View {
     
     @Default(.localSendDevicePickerGlassMode) private var glassMode
     @Default(.localSendDevicePickerLiquidGlassVariant) private var liquidGlassVariant
-    
+
+    private var liquidVariantRange: ClosedRange<Double> {
+        Double(LiquidGlassVariant.supportedRange.lowerBound)...Double(LiquidGlassVariant.supportedRange.upperBound)
+    }
+
+    /// The variant's seven siblings are sliders, so this one is too, through the same clamp.
+    private var liquidGlassVariantBinding: Binding<Double> {
+        Binding(
+            get: { Double(liquidGlassVariant.rawValue) },
+            set: { newValue in liquidGlassVariant = LiquidGlassVariant.clamped(Int(newValue.rounded())) }
+        )
+    }
+
     var body: some View {
         Section {
-            Picker("Device Picker Style", selection: $glassMode) {
-                ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                    Text(mode.localizedName).tag(mode)
-                }
+            SettingsRow("Device Picker Style") {
+                SettingsSelect("Device Picker Style", selection: $glassMode,
+                               options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.localizedName)
             }
-            .pickerStyle(.menu)
             .settingsHighlight(id: highlightID("Device Picker Style"))
 
             if glassMode == .customLiquid {
-                Picker("Liquid Glass Variant", selection: $liquidGlassVariant) {
-                    ForEach(LiquidGlassVariant.allCases) { variant in
-                        Text("Variant \(variant.rawValue)").tag(variant)
-                    }
-                }
-                .pickerStyle(.menu)
+                variantSliderRow(value: liquidGlassVariantBinding, current: liquidGlassVariant.rawValue,
+                                 range: liquidVariantRange, title: String(localized: "Liquid Glass Variant"))
             }
         } header: {
             SettingsSectionHeader("LocalSend Device Picker")

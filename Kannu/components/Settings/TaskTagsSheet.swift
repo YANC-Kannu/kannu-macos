@@ -64,14 +64,7 @@ struct TaskTagsSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("Tags")
-                    .font(.headline)
-                Text(verbatim: title)
-                    .settingsDescriptionStyle()
-            }
-
+        SettingsSheet("Tags", subtitle: Text(verbatim: title)) {
             if tags.isEmpty {
                 Text("No tags yet. Tags stay on this Mac.")
                     .settingsDescriptionStyle()
@@ -86,10 +79,10 @@ struct TaskTagsSheet: View {
             }
 
             TextField("Add a tag", text: $text, prompt: Text("Add a tag"))
-                .labelsHidden()
                 .focused($fieldIsFocused)
-                .disabled(isFull)
                 .onSubmit(addReturnPick)
+                .settingsField(isFocused: fieldIsFocused)
+                .disabled(isFull)
 
             if isFull {
                 Text("\(TaskItem.maxTags) tags is the most")
@@ -97,25 +90,20 @@ struct TaskTagsSheet: View {
             } else if !suggestions.isEmpty {
                 suggestionList
             }
-
-            HStack(spacing: SettingsMetrics.rowContent) {
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                // While a tag is being typed, Return adds it (the field's submit), never Done. A
-                // click on Done adds what Return would first, so the last tag typed is never lost.
-                Button("Done") {
-                    addReturnPick()
-                    TasksManager.shared.setTags(tags, for: taskID)
-                    TasksManager.shared.setTagColors(keptColorPicks)
-                    dismiss()
-                }
-                .buttonStyle(SettingsButtonStyle(.primary))
-                .keyboardShortcut(isTyping ? nil : .defaultAction)
+        } buttons: {
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            // While a tag is being typed, Return adds it (the field's submit), never Done. A
+            // click on Done adds what Return would first, so the last tag typed is never lost.
+            Button("Done") {
+                addReturnPick()
+                TasksManager.shared.setTags(tags, for: taskID)
+                TasksManager.shared.setTagColors(keptColorPicks)
+                dismiss()
             }
+            .buttonStyle(SettingsButtonStyle(.primary))
+            .keyboardShortcut(isTyping ? nil : .defaultAction)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 380)
         .onAppear { fieldIsFocused = true }
     }
 
@@ -136,7 +124,7 @@ struct TaskTagsSheet: View {
         .overlay {
             if dropTarget == tag {
                 Capsule()
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .strokeBorder(SettingsTheme.accentStrong, lineWidth: 2)
                     .allowsHitTesting(false)
             }
         }
@@ -206,7 +194,7 @@ struct TaskTagsSheet: View {
                 }
                 .buttonStyle(.plain)
                 // The line Return would pick, and the one under the pointer, in the accent colour.
-                .foregroundStyle(isHighlighted(suggestion, in: shown) ? Color.accentColor : Color.primary)
+                .foregroundStyle(isHighlighted(suggestion, in: shown) ? SettingsTheme.accentStrong : Color.primary)
                 // For VoiceOver, the line Return picks: the pointer's line is never what Return adds.
                 .accessibilityAddTraits(TaskTagEditing.returnPick(for: text, in: shown) == suggestion ? .isSelected : [])
                 .onHover { isOver in

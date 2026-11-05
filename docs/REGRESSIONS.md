@@ -1585,6 +1585,24 @@ this rule claimed the same with 34 and missed real breaks: deleting the guard in
 `isRestorable`, `isMovableByWindowBackground`, placing it before it is ordered in, and the clamp. These prove the
 wiring. They cannot prove AppKit's timing, and nothing has entered full screen under them.
 
+**2026-11-04 addendum: a popover under Settings closes on disappear.** Closing Brain runs `onDisappear` while a
+popover's `@State` flag survives the close, so `SettingsSelect`, the idle animations' Add menu and the colour
+swatch's popover clear theirs there; `testAPopoverClosesWhenBrainDoes` holds every `.popover(isPresented:)` under
+Settings to it. The select's list adds an `onAppear` (focus and the first highlight) that runs when it opens, never on
+a reopening, since it closed with Brain. Its key monitor lives only while the list does, acts only on the list's own
+window and is removed in `dismantleNSView`. The select's one animation is a bounded ease, nil under Reduce Motion, so
+the rest of this entry holds.
+
+**2026-11-04 addendum: Brain's slider and stepper add no animation, no `onAppear` and no `.task`.** The knob follows the
+value, and a drag on the slider cannot move the window, which moves by its title row only. The animation editor's four
+springs, on its zoom and its resets, are now a bounded ease, nil under Reduce Motion, so the rest of this entry holds.
+
+**2026-11-05 addendum: Brain's sheets re-apply the root and add no `onAppear`, no `.task` and no animator.** A sheet is a
+window of its own, so `SettingsSheet`, the animation editor and Spotify's sign-in apply `settingsDesignSystem()`
+themselves; the sheets keep the hooks they had (Add Tags' and New Task's first focus, the Schedule sheet's permission
+check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
+select's.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

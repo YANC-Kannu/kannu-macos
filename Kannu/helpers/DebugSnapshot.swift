@@ -76,6 +76,25 @@ enum DebugSnapshots {
             typed.draft.reminder = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)
             boards.append(("newTaskSheet", AnyView(NewTaskSheet(newTask: typed, listFilter: .all) { _ in })))
         }
+        if request.tabs == nil || request.tabs?.contains("connectSheet") == true {
+            // It reads only a Defaults colour, and touches no Keychain until Connect.
+            boards.append(("connectSheet", AnyView(JiraConnectSheet())))
+        }
+        if request.tabs == nil || request.tabs?.contains("tagsSheet") == true {
+            // The fixture's local task, with two of the fixture's tags on it and the rest offered.
+            let fixture = DebugSnapshotFixtures.tasksFile(now: Date()).tasks
+            boards.append(("tagsSheet", AnyView(TaskTagsSheet(taskID: DebugSnapshotFixtures.localTaskID, title: "Write the release notes",
+                                                             current: ["docs", "planning"], existing: TaskFacets.tags(in: fixture)))))
+        }
+        if request.tabs == nil || request.tabs?.contains("valueSheet") == true {
+            // Set End Time: the date as our button. Its popover is a window of its own, so no board draws it open.
+            boards.append(("valueSheet", TasksSettings.snapshotEndTimeSheet()))
+        }
+        if request.tabs == nil || request.tabs?.contains("urlImportSheet") == true {
+            // A URL typed and no name yet, so Add is off.
+            boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
+                                                                   nameInput: .constant(""), onImport: {}, onCancel: {}))))
+        }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
             boards.append(("taskPage", AnyView(Form {
                 Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
@@ -94,6 +113,10 @@ enum DebugSnapshots {
         }
         if request.tabs == nil || request.tabs?.contains("policyRules") == true {
             boards.append(("policyRules", AnyView(PolicyRulesEditor(draft: AgentPolicyDraft(previewing: DebugSnapshotFixtures.agentPolicy)))))
+        }
+        if request.tabs == nil || request.tabs?.contains("animationEditorControls") == true {
+            // No other board draws the animation editor: its controls, with no Lottie loaded.
+            boards.append(("animationEditorControls", AnimationEditorView.snapshotControls()))
         }
         if request.tabs == nil || request.tabs?.contains("detection") == true {
             boards.append(("detection", AgentSecuritySettings.snapshotDetectionRows()))
@@ -157,6 +180,14 @@ enum DebugSnapshots {
             for dark in [false, true] {
                 await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
                              width: size.width, into: request.directory, fixedHeight: size.height)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("selectList") == true {
+            // A popover is a window of its own and the render captures one hosting view, so the open list is
+            // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
+            for dark in [false, true] {
+                await render(AnyView(selectListBoard.settingsDesignSystem()), name: "selectList" + (dark ? "-dark" : "-light"),
+                             dark: dark, width: 560, into: request.directory, background: SettingsTheme.paper, fixedHeight: 420)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -246,7 +277,9 @@ enum DebugSnapshots {
         }
     }
 
-    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes"]
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
+                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
+                                                       "valueSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -354,6 +387,31 @@ enum DebugSnapshots {
                     Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
                 }
                 .controlSize(.small)
+                // Quiet: bare at rest, so these show only their labels; the fill takes a pointer.
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Quiet") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                    Button(action: {}) { Text(verbatim: "Quiet, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                        .disabled(true)
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text(verbatim: "Start timing"))
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .disabled(true)
+                    .accessibilityLabel(Text(verbatim: "Start timing, disabled"))
+                    // A more menu's trigger: our quiet button over a native menu.
+                    SettingsMoreMenu {
+                        Button(action: {}) { Text(verbatim: "Show Details") }
+                    }
+                }
             } header: {
                 Text(verbatim: "Buttons")
             }
@@ -369,8 +427,22 @@ enum DebugSnapshots {
                 LabeledContent {
                     TextField(text: .constant("Typed text stays primary")) { Text(verbatim: "Field") }
                         .labelsHidden()
+                        .settingsField()
                 } label: {
                     Text(verbatim: "With a typed field")
+                }
+                LabeledContent {
+                    TextField(text: .constant("Typed, disabled")) { Text(verbatim: "Field") }
+                        .settingsField()
+                        .disabled(true)
+                } label: {
+                    Text(verbatim: "With a typed field, disabled")
+                }
+                LabeledContent {
+                    TextField(text: .constant(""), prompt: Text(verbatim: "A prompt says what to type")) { Text(verbatim: "Field") }
+                        .settingsField()
+                } label: {
+                    Text(verbatim: "With an empty field")
                 }
                 DisclosureGroup(isExpanded: .constant(true)) {
                     Toggle(isOn: .constant(true)) { Text(verbatim: "A row inside") }
@@ -389,6 +461,85 @@ enum DebugSnapshots {
                 }
             } header: {
                 Text(verbatim: "Rows")
+            }
+
+            Section {
+                SettingsRow(verbatim: "A popover select", description: "Our list opens from it; the button shows the value.") {
+                    SettingsSelect("A popover select", selection: .constant(1),
+                                   choices: [0: "Off", 1: "After 3 minutes", 2: "After 10 minutes"])
+                }
+                SettingsRow(verbatim: "A popover select, disabled") {
+                    SettingsSelect("A popover select, disabled", selection: .constant(1),
+                                   choices: [0: "Off", 1: "After 3 minutes", 2: "After 10 minutes"])
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "With icons") {
+                    SettingsSelect("With icons", selection: .constant("terminal"), options: ["terminal", "folder", "safari"],
+                                   optionTitle: { $0.capitalized }) { Image(systemName: $0) }
+                }
+                SettingsRow(verbatim: "A saved choice no longer offered", description: "It shows its own title.") {
+                    SettingsSelect("A saved choice no longer offered", selection: .constant("Studio Display"),
+                                   options: ["Built-in Retina Display", "LG UltraFine"], optionTitle: { $0 })
+                }
+                SettingsRow(verbatim: "A literal choice no longer offered", description: "It has no title, so a dash.") {
+                    SettingsSelect("A literal choice no longer offered", selection: .constant(7), choices: [3: "3 items", 5: "5 items"])
+                }
+                SettingsRow(verbatim: "Two segments") {
+                    SettingsSelect("Two segments", selection: .constant("°C"), options: ["°C", "°F"], optionTitle: { $0 },
+                                   style: .segmented)
+                }
+                SettingsRow(verbatim: "Three segments") {
+                    SettingsSelect("Three segments", selection: .constant("Standard"), options: ["Standard", "Custom Liquid", "Classic"],
+                                   optionTitle: { $0 }, style: .segmented)
+                }
+                SettingsRow(verbatim: "Two segments, disabled") {
+                    SettingsSelect("Two segments, disabled", selection: .constant("°F"), options: ["°C", "°F"], optionTitle: { $0 },
+                                   style: .segmented)
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "Three segments, disabled") {
+                    SettingsSelect("Three segments, disabled", selection: .constant("Custom Liquid"),
+                                   options: ["Standard", "Custom Liquid", "Classic"], optionTitle: { $0 }, style: .segmented)
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Choices")
+            }
+
+            Section {
+                SettingsSliderRow(verbatim: "A stepped slider", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                SettingsSliderRow(verbatim: "An unstepped slider", value: .constant(0.73), in: 0...1,
+                                  valueText: Text(verbatim: "73%"))
+                SettingsSliderRow(verbatim: "A slider, disabled", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                    .disabled(true)
+                SettingsStepperRow(verbatim: "A stepper", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                SettingsStepperRow(verbatim: "A stepper at its minimum", value: .constant(0), in: 0...10,
+                                   valueText: Text(verbatim: "0"))
+                SettingsStepperRow(verbatim: "A stepper, disabled", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                    .disabled(true)
+                SettingsRow(verbatim: "A field in a row") {
+                    TextField(text: .constant("Typed text")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A secure field, empty") {
+                    SecureField(text: .constant(""), prompt: Text(verbatim: "A prompt says what to type")) { Text(verbatim: "Secret") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A vertical field") {
+                    TextField(text: .constant("A long value wraps onto the next line instead of running out of the field, as a cookie does"),
+                              axis: .vertical) { Text(verbatim: "Field") }
+                        .lineLimit(2...4)
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A field, disabled") {
+                    TextField(text: .constant("Typed, disabled")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Values")
             }
 
             Section {
@@ -427,10 +578,12 @@ enum DebugSnapshots {
         ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
         ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
         ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
+        ("raised", SettingsTheme.raised), ("success", SettingsTheme.success),
     ]
 
     private static let designSystemFonts: [(name: String, font: Font)] = [
-        ("pageTitle", SettingsTheme.pageTitle), ("body", SettingsTheme.body), ("bodyStrong", SettingsTheme.bodyStrong),
+        ("pageTitle", SettingsTheme.pageTitle), ("sheetTitle", SettingsTheme.sheetTitle), ("body", SettingsTheme.body),
+        ("bodyStrong", SettingsTheme.bodyStrong),
         ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
         ("mono", SettingsTheme.mono),
     ]
@@ -464,6 +617,12 @@ enum DebugSnapshots {
                         Text(verbatim: "Until acknowledged").tag(0)
                         Text(verbatim: "Glyph only").tag(1)
                     } label: { Text(verbatim: "High-severity alerts in the notch") }
+                }
+                // The same row with ours. The row hides its slot's labels: the button's value must still show.
+                SettingsRow(verbatim: "High-severity alerts in the notch, ours",
+                            description: "A shield pill stays beside the traffic light until you acknowledge the finding. Click it to open the panel.") {
+                    SettingsSelect("High-severity alerts in the notch", selection: .constant(0),
+                                   choices: [0: "Until acknowledged", 1: "Glyph only"])
                 }
                 Picker(selection: .constant(0)) {
                     Text(verbatim: "Until acknowledged").tag(0)
@@ -539,6 +698,26 @@ enum DebugSnapshots {
                 Text(verbatim: "Security findings")
             }
         }
+    }
+
+    /// The open list, as its popover holds it: eight options with the third chosen, and 24 tags with "pla" typed,
+    /// whose choice is far down the matches, so the list has scrolled to it.
+    private static var selectListBoard: some View {
+        let tags = ["docs", "planning", "urgent", "display", "backend", "platform", "replay", "frontend", "playback", "explain",
+                    "release", "placeholder", "design", "template", "playground", "research", "airplane", "plaintext", "bugfix",
+                    "workplace", "plans-q4", "infra", "q4-plan", "ui-playtest"]
+        return HStack(alignment: .top, spacing: 24) {
+            SettingsSelectList(title: Text(verbatim: "Hide red light after"), selection: .constant("10 seconds"),
+                               options: ["3 seconds", "5 seconds", "10 seconds", "15 seconds", "30 seconds", "1 minute",
+                                         "2 minutes", "5 minutes"],
+                               optionTitle: { $0 }, icon: { _ in EmptyView() }, close: {})
+                .fixedSize()
+            SettingsSelectList(title: Text(verbatim: "Tag"), selection: .constant("airplane"), options: tags,
+                               optionTitle: { $0 }, query: "pla", icon: { _ in EmptyView() }, close: {})
+                .fixedSize()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// The live and preview dots in every state, on black, for a pixel-level before/after.

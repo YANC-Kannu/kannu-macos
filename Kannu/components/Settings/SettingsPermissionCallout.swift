@@ -70,7 +70,6 @@ struct SettingsPermissionCallout: View {
                 Button(openSettingsButtonTitle) {
                     openSettingsAction()
                 }
-                .buttonStyle(.bordered)
             }
             .controlSize(.small)
         }

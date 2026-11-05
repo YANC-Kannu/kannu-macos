@@ -115,12 +115,11 @@ struct StatsSettings: View {
                     .settingsHighlight(id: highlightID("CPU Usage"))
 
                     if showCpuGraph {
-                        Picker("Temperature unit", selection: $cpuTemperatureUnit) {
-                            ForEach(LockScreenWeatherTemperatureUnit.allCases) { unit in
-                                Text(unit.rawValue).tag(unit)
-                            }
+                        SettingsRow("Temperature unit") {
+                            SettingsSelect("Temperature unit", selection: $cpuTemperatureUnit,
+                                           options: LockScreenWeatherTemperatureUnit.allCases, optionTitle: \.rawValue,
+                                           style: .segmented)
                         }
-                        .pickerStyle(.segmented)
                         .settingsHighlight(id: highlightID("Temperature unit"))
                     }
                     Defaults.Toggle(key: .showMemoryGraph) {

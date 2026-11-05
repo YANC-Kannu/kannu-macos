@@ -113,12 +113,8 @@ struct Appearance: View {
                 // The moon only picks the opposite of what is on screen, so this is the one way back
                 // to Match macOS.
                 SettingsRow("Brain appearance", description: brainAppearance.description) {
-                    Picker("Brain appearance", selection: $brainAppearance) {
-                        ForEach(BrainAppearance.allCases) { choice in
-                            Text(choice.localizedName)
-                                .tag(choice)
-                        }
-                    }
+                    SettingsSelect("Brain appearance", selection: $brainAppearance,
+                                   options: BrainAppearance.allCases, optionTitle: \.localizedName)
                 }
                 .settingsHighlight(id: highlightID("Brain appearance"))
                 Toggle("Always show tabs", isOn: $coordinator.alwaysShowTabs)
@@ -146,12 +142,8 @@ struct Appearance: View {
             if !mainScreenHasPhysicalNotch {
                 Section {
                     SettingsRow("Main screen style", description: externalDisplayStyle.description) {
-                        Picker("Main screen style", selection: $externalDisplayStyle) {
-                            ForEach(ExternalDisplayStyle.allCases) { style in
-                                Text(style.localizedName)
-                                    .tag(style)
-                            }
-                        }
+                        SettingsSelect("Main screen style", selection: $externalDisplayStyle,
+                                       options: ExternalDisplayStyle.allCases, optionTitle: \.localizedName)
                     }
                     .onChange(of: externalDisplayStyle) {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
@@ -177,20 +169,14 @@ struct Appearance: View {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Material", description: lockScreenGlassStyle == .liquid
                                 ? nil : Text("Custom Liquid settings require the Liquid Glass material.")) {
-                        Picker("Material", selection: $lockScreenGlassStyle) {
-                            ForEach(LockScreenGlassStyle.allCases) { style in
-                                Text(style.rawValue).tag(style)
-                            }
-                        }
+                        SettingsSelect("Material", selection: $lockScreenGlassStyle,
+                                       options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                     }
                     .settingsHighlight(id: highlightID("Lock screen material"))
                 } else {
                     SettingsRow("Material", description: Text("Liquid Glass requires macOS 26 or later.")) {
-                        Picker("Material", selection: $lockScreenGlassStyle) {
-                            ForEach(LockScreenGlassStyle.allCases) { style in
-                                Text(style.rawValue).tag(style)
-                            }
-                        }
+                        SettingsSelect("Material", selection: $lockScreenGlassStyle,
+                                       options: LockScreenGlassStyle.allCases, optionTitle: \.rawValue)
                     }
                     .disabled(true)
                     .settingsHighlight(id: highlightID("Lock screen material"))
@@ -199,13 +185,9 @@ struct Appearance: View {
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Lock screen glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
                                 ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock screen tab.") : nil) {
-                        Picker("Lock screen glass mode", selection: $lockScreenGlassCustomizationMode) {
-                            ForEach(LockScreenGlassCustomizationMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
+                        SettingsSelect("Lock screen glass mode", selection: $lockScreenGlassCustomizationMode,
+                                       options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
+                                       style: .segmented)
                     }
                     .settingsHighlight(id: highlightID("Lock screen glass mode"))
 
@@ -245,10 +227,9 @@ struct Appearance: View {
                     Text("Enable blur effect behind album art")
                 }
                 .settingsHighlight(id: highlightID("Enable blur effect behind album art"))
-                Picker("Slider color", selection: $sliderColor) {
-                    ForEach(SliderColorEnum.allCases, id: \.self) { option in
-                        Text(option.rawValue)
-                    }
+                SettingsRow("Slider color") {
+                    SettingsSelect("Slider color", selection: $sliderColor,
+                                   options: SliderColorEnum.allCases, optionTitle: \.rawValue)
                 }
                 .settingsHighlight(id: highlightID("Slider color"))
             } header: {

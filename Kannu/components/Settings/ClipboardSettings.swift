@@ -62,21 +62,20 @@ struct ClipboardSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Show Clipboard Icon"))
 
-                    Picker("Display Mode", selection: $clipboardDisplayMode) {
-                        ForEach(ClipboardDisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
+                    SettingsRow("Display Mode") {
+                        SettingsSelect("Display Mode", selection: $clipboardDisplayMode,
+                                       options: ClipboardDisplayMode.allCases, optionTitle: \.displayName)
                     }
-                    .pickerStyle(.menu)
                     .settingsHighlight(id: highlightID("Display Mode"))
 
-                    Picker("History Size", selection: $clipboardHistorySize) {
-                        Text("3 items").tag(3)
-                        Text("5 items").tag(5)
-                        Text("7 items").tag(7)
-                        Text("10 items").tag(10)
+                    SettingsRow("History Size") {
+                        SettingsSelect("History Size", selection: $clipboardHistorySize, choices: [
+                            3: String(localized: "3 items"),
+                            5: String(localized: "5 items"),
+                            7: String(localized: "7 items"),
+                            10: String(localized: "10 items"),
+                        ])
                     }
-                    .pickerStyle(.menu)
                     .settingsHighlight(id: highlightID("History Size"))
 
                     LabeledContent("Current Items") {

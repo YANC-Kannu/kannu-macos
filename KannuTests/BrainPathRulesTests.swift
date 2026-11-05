@@ -47,13 +47,15 @@ final class BrainPathRulesTests: XCTestCase {
     private static let fourteenTitles = ["General", "Appearance", "Live activities", "Lock screen", "Media", "Devices", "HUD and OSD",
                                          "Battery", "Stats", "Shelf", "Downloads", "Screen Assistant", "Shortcuts", "Extensions"]
 
-    /// Every "Brain › a › b" in the text's string-bearing lines, as its segments, with `→` read as `›`
-    /// because a string written that way goes stale the same way. Comment lines are skipped. A segment
-    /// ends at `›`, `.`, `,`, `)`, `"` or `\`, and only `›` lets the path go on.
+    /// Every "Brain › a › b" in the text, as its segments, with `→` read as `›` because a string written
+    /// that way goes stale the same way. The text is read with its comments blanked
+    /// (`SettingsDesignSystemRulesTests.code`), so a comment names no path, trailing a line of code or not,
+    /// while a string, `https://` and all, is read whole. A segment ends at `›`, `.`, `,`, `)`, `"` or `\`,
+    /// and only `›` lets the path go on.
     private static func paths(in text: String) -> [[String]] {
         let enders: Set<Character> = ["›", ".", ",", ")", "\"", "\\"]
         var found: [[String]] = []
-        let normalized = text.replacingOccurrences(of: "→", with: "›")
+        let normalized = SettingsDesignSystemRulesTests.code(text).replacingOccurrences(of: "→", with: "›")
         for line in normalized.split(separator: "\n") where line.contains("Brain › ") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
@@ -141,9 +143,12 @@ final class BrainPathRulesTests: XCTestCase {
         XCTAssertEqual(problems(#"let a = "(Brain › Security › Analyze chats)""#), [])
         XCTAssertEqual(problems(#"let a = "Brain › Settings""#), [])
 
-        // A comment line is prose, whatever it names.
+        // A comment line is prose, whatever it names, and so is a comment after code (promised on #21).
         XCTAssertEqual(Self.paths(in: #"// says "Brain › General""#), [])
         XCTAssertEqual(Self.paths(in: #"* says "Brain › General""#), [])
+        XCTAssertEqual(Self.paths(in: "let a = true // Brain › General"), [])
+        // A string's `//` starts no comment.
+        XCTAssertEqual(Self.paths(in: #"let a = "https://kannu.app, then Brain › Settings › General.""#), [["Settings", "General"]])
     }
 
     func testTheSecurityMessagesNameTheSecurityTab() throws {
