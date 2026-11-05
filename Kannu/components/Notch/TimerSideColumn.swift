@@ -253,7 +253,8 @@ extension TimerSidePage {
 ///   nothing moves when the page changes.
 /// - **The list**: the task order as it stands (`TasksManager.activeTasks`), narrowed by Show in
 ///   notch, its Tag filter and the search, so the first row is what the user ordered first. Each row
-///   shows its first tag and "+N" beside its caption (`TaskTagChips`). The whole page tall,
+///   shows its caption whole, then its first tag and "+N" when they fit, else one "+N" for all its
+///   tags (`TaskTagChips`). The whole page tall,
 ///   ending where Start and Reset do. A row expands into its card (`TimerTaskDetail`), and the
 ///   clock opens the Time to log cards (`TimerLogTimePage`); the rail stays beside both.
 ///
@@ -666,17 +667,22 @@ private struct TimerTasksPage: View {
                 let isHovered = hoveredRowID == task.id
                 VStack(alignment: .leading, spacing: 1) {
                     HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
-                    // The tags beside the caption, the one the search found first. The line is a chip
-                    // tall in every row, tags or not, so every row's title sits on the same line.
-                    HStack(spacing: 4) {
-                        HoverRevealText(
-                            (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
-                                + overText(progress.over))
-                                .font(.system(size: 11, weight: .medium)),
-                            isActive: isHovered
-                        )
+                    // The caption, then the tags that fit beside it, the one the search found first; the
+                    // caption wins (`TaskTagChips`). The line is a chip tall in every row, tags or not,
+                    // so every row's title sits on the same line.
+                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText)) {
+                        // The overtime never shortens: on a short line the time before it gives way.
+                        HStack(spacing: 0) {
+                            HoverRevealText(
+                                Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.system(size: 11, weight: .medium)),
+                                isActive: isHovered
+                            )
+                            overText(progress.over)
+                                .font(.system(size: 11, weight: .medium))
+                                .fixedSize()
+                        }
                         .foregroundStyle(.secondary)
-                        TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText))
                     }
                     .frame(height: M.sideTaskCaptionHeight)
                 }

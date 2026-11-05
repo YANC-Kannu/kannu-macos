@@ -1603,6 +1603,10 @@ themselves; the sheets keep the hooks they had (Add Tags' and New Task's first f
 check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
 select's.
 
+**2026-11-05 addendum: the Tags sheet's colour swatch is gone.** A tag's colour shows once, as its pill's wash (design
+review finding 23), and is picked from Colour in the pill's right-click menu, a native submenu with no `@State` of its own.
+The sheet loses the swatch's popover and adds no `onAppear`, no `.task` and no animator, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

@@ -26,7 +26,8 @@ import SwiftUI
 /// `TasksManager.setTags` and the colours picked here through `setTagColors`; Cancel, or Escape,
 /// keeps both as they were.
 ///
-/// Each pill leads with its tag's colour swatch, which opens the presets. The first tag gives the
+/// Each pill is washed in its tag's colour, the one place the sheet shows it; Colour, in the pill's
+/// right-click menu, picks it from the presets. The first tag gives the
 /// task its colour (`TaskColoring.color`), so the pills reorder: drag one onto another to take its
 /// place (`TaskTagEditing.moving`), or right-click it — Move to Front, Move Left, Move Right — the
 /// same three moves VoiceOver offers as the pill's actions. A task's integration is never one of its
@@ -109,18 +110,11 @@ struct TaskTagsSheet: View {
 
     // MARK: - Pills
 
-    /// One tag: its colour swatch, then the chip that removes it, washed in the tag's colour. Drag it
-    /// onto another pill to take that pill's place; the right-click menu and the matching VoiceOver
-    /// actions move it too.
+    /// One tag: the chip that removes it, washed in the tag's colour, with no swatch beside it, so the
+    /// colour shows once. Drag it onto another pill to take that pill's place; the right-click menu
+    /// and the matching VoiceOver actions move it too, and the menu's Colour picks its colour.
     private func pill(_ tag: String, at index: Int) -> some View {
-        let tagColor = color(of: tag)
-        return HStack(spacing: SettingsMetrics.iconGap) {
-            TaskColorPickerButton(
-                selection: colorBinding(for: tag),
-                accessibilityLabel: String(localized: "Colour of tag \(tag): \(tagColor.localizedName)")
-            )
-            SettingsTagChip(tag, tint: tagColor.tint) { tags = TaskTagEditing.removing(tag, from: tags) }
-        }
+        return SettingsTagChip(tag, tint: color(of: tag).tint) { tags = TaskTagEditing.removing(tag, from: tags) }
         .overlay {
             if dropTarget == tag {
                 Capsule()
@@ -151,6 +145,13 @@ struct TaskTagsSheet: View {
                 .disabled(index == 0)
             Button("Move Right") { tags = TaskTagEditing.moving(tag, to: index + 1, in: tags) }
                 .disabled(index == tags.count - 1)
+            Divider()
+            // The tag's colour, ticked: a native submenu, staged until Done like the tags.
+            Picker("Colour", selection: colorBinding(for: tag)) {
+                ForEach(TaskColor.allCases) { option in
+                    Text(option.localizedName).tag(option)
+                }
+            }
         }
         // The same moves as named actions, so VoiceOver reaches them on the pill itself. `moving`
         // clamps, so a move past either end leaves the order as it is.
