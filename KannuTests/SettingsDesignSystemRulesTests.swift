@@ -657,6 +657,56 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: field, by: Self.fieldProblems)
     }
 
+    // MARK: - Pages and sections
+
+    /// What `SettingsSection` keeps: a soft card in the theme's colour and radius around its rows, apart by space and
+    /// never by a divider; a header that is a heading for VoiceOver and a footer in the secondary ink, both in line with
+    /// the rows' text, as the grouped `Form` placed them; and the three ways a `Section` was called. The page's column
+    /// is `BrainShellRulesTests.testAPageIsCappedAndLeading`.
+    private static func sectionProblems(in section: String) -> [String] {
+        var problems = [".background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))",
+                        "VStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap)", ".padding(SettingsTheme.sectionPadding)",
+                        ".accessibilityAddTraits(.isHeader)", ".foregroundStyle(SettingsTheme.inkSecondary)",
+                        "where Header == EmptyView, Footer == EmptyView {", "where Footer == EmptyView {", "where Header == EmptyView {"]
+            .filter { !section.contains($0) }
+        if section.components(separatedBy: ".padding(.horizontal, SettingsTheme.sectionPadding.leading)").count != 3 {
+            problems.append("the header and the footer are not in line with the rows")
+        }
+        if section.contains("Divider") { problems.append("rows apart by a divider") }
+        return problems
+    }
+
+    /// Neither the page nor the section does anything on its own: no hook and no animator, since closing Brain runs
+    /// `onDisappear` and reopening `onAppear` (docs/REGRESSIONS.md, entry 22). And nothing lazy: a search scrolls to a
+    /// row's id, and a lazy stack cannot scroll to a row it has not built.
+    private static func pageLifecycleProblems(in code: String) -> [String] {
+        [".onAppear", ".onDisappear", ".task", "withAnimation", ".animation(", "TimelineView", "Lazy", "List", "Form"].filter { code.contains($0) }
+    }
+
+    func testThePageAndItsSectionsKeepTheirShape() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let section = try XCTUnwrap(sources["SettingsSection.swift"])
+        XCTAssertEqual(Self.sectionProblems(in: section), [])
+        let padding = ".padding(.horizontal, SettingsTheme.sectionPadding.leading)"
+        Self.assertCaught([("SettingsTheme.card, in:", "SettingsTheme.paper, in:"), ("cornerRadius: SettingsTheme.sectionRadius", "cornerRadius: SettingsTheme.controlRadius"),
+                           ("spacing: SettingsTheme.sectionRowGap", "spacing: 0"), (".padding(SettingsTheme.sectionPadding)", ""),
+                           (".accessibilityAddTraits(.isHeader)", ""), (".foregroundStyle(SettingsTheme.inkSecondary)", ".foregroundStyle(SettingsTheme.ink)"),
+                           (padding, ""), ("where Footer == EmptyView {", "where Footer == Text {"),
+                           ("                content\n", "                content\n                Divider()\n")],
+                          in: section, by: Self.sectionProblems)
+
+        let page = try XCTUnwrap(sources["SettingsPage.swift"])
+        for code in [page, section] {
+            XCTAssertEqual(Self.pageLifecycleProblems(in: code), [])
+        }
+        Self.assertCaught([("VStack(alignment: .leading, spacing: SettingsTheme.sectionGap)", "LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionGap)"),
+                           ("ScrollView {", "List {"), ("ScrollView {", "ScrollView {\n.onAppear {}"), ("ScrollView {", "ScrollView {\n.task {}")],
+                          in: page, by: Self.pageLifecycleProblems)
+        Self.assertCaught([("var body: some View {", "var body: some View {\nwithAnimation(nil) {}"),
+                           ("var body: some View {", "var body: some View {\n.onDisappear {}")],
+                          in: section, by: Self.pageLifecycleProblems)
+    }
+
     // MARK: - Values
 
     /// What the slider and the stepper keep: one element for VoiceOver with a label, a value and an adjustable

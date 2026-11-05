@@ -168,6 +168,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "BrainShell.swift": 4,               // the shell's own insets
         "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
         "SettingsPageHeader.swift": 2,       // the large title's insets, above the page's Form
+        "SettingsPage.swift": 2,             // the page's inset from the panel's edge, and its top and bottom
+        "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 6,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview
