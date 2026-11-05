@@ -19,19 +19,29 @@
 import SwiftUI
 
 /// A page's large title, above its `SettingsPage`. It sits outside the page's scroll view, so it stays put, and
-/// starts where the page does.
+/// starts where the page does. A product page's actions sit on the same row, at its trailing end, which stops where
+/// the page's product column does (docs/SETTINGS.md, "Product pages").
 struct SettingsPageHeader: View {
     let title: String
+    /// Icon buttons first, the page's one primary verb last. Most pages have none.
+    var actions: AnyView?
     @Environment(\.settingsPageInset) private var inset
 
     var body: some View {
-        Text(verbatim: title)
-            .font(SettingsTheme.pageTitle)
-            .foregroundStyle(SettingsTheme.ink)
-            .textSelection(.enabled)
-            .accessibilityAddTraits(.isHeader)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, inset)
-            .padding(.top, SettingsTheme.pageHeaderTop)
+        HStack(spacing: SettingsTheme.sectionLabelGap) {
+            Text(verbatim: title)
+                .font(SettingsTheme.pageTitle)
+                .foregroundStyle(SettingsTheme.ink)
+                .textSelection(.enabled)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            if let actions {
+                actions
+            }
+        }
+        .frame(maxWidth: SettingsTheme.productMaxWidth, alignment: .leading)
+        .padding(.horizontal, inset)
+        .padding(.top, SettingsTheme.pageHeaderTop)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
