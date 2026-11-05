@@ -478,7 +478,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: "Text(\"a\")\n.tint(.accentColor)\n"))
 
         Self.assertCaught([("SettingsToggleStyle(showsLabel: false)", "SettingsToggleStyle()"),
-                           (".labeledContentStyle(.automatic)", ""),
+                           ("HStack(spacing: SettingsMetrics.rowContent) { buttons }",
+                            "HStack(spacing: SettingsMetrics.rowContent) { buttons }.labeledContentStyle(.automatic)"),
                            ("struct SettingsActionRow", "struct RenamedActionRow"),
                            ("struct SettingsRow<", "struct RenamedRow<")],
                           in: components, by: Self.sharedComponentProblems)
@@ -657,6 +658,63 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: field, by: Self.fieldProblems)
     }
 
+    // MARK: - Pages and sections
+
+    /// What `SettingsSection` keeps: a soft card in the theme's colour and radius around its rows, apart by space and
+    /// never by a divider; a header and a footer in the secondary ink, both in line with the rows' text, as the grouped
+    /// `Form` placed them; one group for VoiceOver, so like buttons in two sections are told apart; and the three ways a
+    /// `Section` was called. The heading is `SettingsSectionHeader`'s own (`testSectionHeadersAndFootersKeepTheirOwnType`):
+    /// on the whole header slot it would make a badge or a count beside the title a heading too. The page's column is
+    /// `BrainShellRulesTests.testAPageIsCappedAndLeading`.
+    private static func sectionProblems(in section: String) -> [String] {
+        var problems = [".background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))",
+                        "VStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap)", ".padding(SettingsTheme.sectionPadding)",
+                        ".accessibilityElement(children: .contain)", ".foregroundStyle(SettingsTheme.inkSecondary)",
+                        "where Header == EmptyView, Footer == EmptyView {", "where Footer == EmptyView {", "where Header == EmptyView {"]
+            .filter { !section.contains($0) }
+        if section.components(separatedBy: ".padding(.horizontal, SettingsTheme.sectionPadding.leading)").count != 3 {
+            problems.append("the header and the footer are not in line with the rows")
+        }
+        if section.contains("Divider") { problems.append("rows apart by a divider") }
+        if section.contains(".isHeader") { problems.append("the whole header slot is a heading, a badge or count beside the title too") }
+        return problems
+    }
+
+    /// Neither the page nor the section does anything on its own: no hook and no animator, since closing Brain runs
+    /// `onDisappear` and reopening `onAppear` (docs/REGRESSIONS.md, entry 22). And nothing lazy: a search scrolls to a
+    /// row's id, and a lazy stack cannot scroll to a row it has not built. The exception is inside pages, never here:
+    /// three long lists that no search reaches are lazy themselves (the task rows, the Archive, Security's findings), so
+    /// a long list is not built whole as its page opens (docs/SETTINGS.md, "Pages and sections").
+    private static func pageLifecycleProblems(in code: String) -> [String] {
+        [".onAppear", ".onDisappear", ".task", "withAnimation", ".animation(", "TimelineView", "Lazy", "List", "Form"].filter { code.contains($0) }
+    }
+
+    func testThePageAndItsSectionsKeepTheirShape() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let section = try XCTUnwrap(sources["SettingsSection.swift"])
+        XCTAssertEqual(Self.sectionProblems(in: section), [])
+        let padding = ".padding(.horizontal, SettingsTheme.sectionPadding.leading)"
+        Self.assertCaught([("SettingsTheme.card, in:", "SettingsTheme.paper, in:"), ("cornerRadius: SettingsTheme.sectionRadius", "cornerRadius: SettingsTheme.controlRadius"),
+                           ("spacing: SettingsTheme.sectionRowGap", "spacing: 0"), (".padding(SettingsTheme.sectionPadding)", ""),
+                           (".accessibilityElement(children: .contain)", ""),
+                           ("            header\n                .padding", "            header\n                .accessibilityAddTraits(.isHeader)\n                .padding"),
+                           (".foregroundStyle(SettingsTheme.inkSecondary)", ".foregroundStyle(SettingsTheme.ink)"),
+                           (padding, ""), ("where Footer == EmptyView {", "where Footer == Text {"),
+                           ("                content\n", "                content\n                Divider()\n")],
+                          in: section, by: Self.sectionProblems)
+
+        let page = try XCTUnwrap(sources["SettingsPage.swift"])
+        for code in [page, section] {
+            XCTAssertEqual(Self.pageLifecycleProblems(in: code), [])
+        }
+        Self.assertCaught([("VStack(alignment: .leading, spacing: SettingsTheme.sectionGap)", "LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionGap)"),
+                           ("ScrollView {", "List {"), ("ScrollView {", "ScrollView {\n.onAppear {}"), ("ScrollView {", "ScrollView {\n.task {}")],
+                          in: page, by: Self.pageLifecycleProblems)
+        Self.assertCaught([("var body: some View {", "var body: some View {\nwithAnimation(nil) {}"),
+                           ("var body: some View {", "var body: some View {\n.onDisappear {}")],
+                          in: section, by: Self.pageLifecycleProblems)
+    }
+
     // MARK: - Values
 
     /// What the slider and the stepper keep: one element for VoiceOver with a label, a value and an adjustable
@@ -824,25 +882,38 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     }
 
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
-    /// gives headers and footers, so they say theirs, or every section header goes light and every
-    /// footer grows. Its one-line row would squeeze a titled action row's description, and its switch
-    /// would still draw a label in a row that draws the title itself.
+    /// gave headers and footers, so they say theirs, or every section header goes light and every
+    /// footer grows. Its switch would still draw a label in a row that draws the title itself. A titled
+    /// action row takes the root's row, so its buttons are trailing: outside a grouped `Form` the automatic
+    /// style sets them straight after the title (2026-11-05, Stage 4: it opted out, for the `Form`'s wrap).
+    /// The section header is a heading for VoiceOver itself, so a badge or a count beside it is not.
     private static func sharedComponentProblems(in components: String) -> [String] {
-        let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
-                        ("SettingsFooter", ".font(SettingsTheme.description)"),
-                        ("SettingsActionRow", ".labeledContentStyle(.automatic)"),
-                        ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
-        return required.compactMap { component, modifier -> String? in
-            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return "\(component) is gone" }
+        func region(of component: String) -> Substring? {
+            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return nil }
             let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
-            return components[start.lowerBound..<end].contains(modifier) ? nil : "\(component) lost \(modifier)"
+            return components[start.lowerBound..<end]
         }
+        let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
+                        ("SettingsSectionHeader", ".accessibilityAddTraits(.isHeader)"),
+                        ("SettingsFooter", ".font(SettingsTheme.description)"),
+                        ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
+        var problems = required.compactMap { component, modifier -> String? in
+            guard let body = region(of: component) else { return "\(component) is gone" }
+            return body.contains(modifier) ? nil : "\(component) lost \(modifier)"
+        }
+        if let actionRow = region(of: "SettingsActionRow") {
+            if actionRow.contains(".labeledContentStyle(") { problems.append("SettingsActionRow sets a labelled-row style of its own") }
+        } else {
+            problems.append("SettingsActionRow is gone")
+        }
+        return problems
     }
 
     func testSectionHeadersAndFootersKeepTheirOwnType() throws {
         let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
-        Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), ("            .font(SettingsTheme.description)\n", ""),
+        Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), (".accessibilityAddTraits(.isHeader)", ""),
+                           ("            .font(SettingsTheme.description)\n", ""),
                            ("struct SettingsSectionHeader", "struct RenamedHeader"), ("struct SettingsFooter:", "struct RenamedFooter:")],
                           in: components, by: Self.sharedComponentProblems)
     }

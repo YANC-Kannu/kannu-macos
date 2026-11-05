@@ -77,9 +77,11 @@ struct SettingsPermissionCallout: View {
         .padding(SettingsMetrics.cardPadding)
         .background(Color.secondary.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous))
+        // One group for VoiceOver: Shelf shows two callouts, each with an "Open Privacy & Security".
+        .accessibilityElement(children: .contain)
     }
 }
 
 #Preview {
-    Form { HUD() }
+    SettingsPage { HUD() }
 }

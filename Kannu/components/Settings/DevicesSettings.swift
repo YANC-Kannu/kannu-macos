@@ -38,8 +38,8 @@ struct DevicesSettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .showBluetoothDeviceConnections) {
                     Text("Show Bluetooth device connections")
                 }
@@ -87,7 +87,7 @@ struct DevicesSettingsView: View {
                 SettingsFooter("Displays a HUD notification when Bluetooth audio devices (headphones, AirPods, speakers) connect, showing device name and battery level.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .useColorCodedBatteryDisplay) {
                     Text("Color-coded battery display")
                 }

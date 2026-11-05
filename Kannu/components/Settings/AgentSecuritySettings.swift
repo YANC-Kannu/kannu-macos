@@ -63,7 +63,7 @@ struct AgentSecuritySettings: View {
     }
 
     var body: some View {
-        Form {
+        SettingsPage {
             if enableAgentStatusFeature {
                 securityFindingsSection
                 adrDiscoverySection
@@ -71,7 +71,7 @@ struct AgentSecuritySettings: View {
                 agentPolicySection
                 sessionAnalysisSections
             } else {
-                Section {
+                SettingsSection {
                     SettingsFooter("Agent monitoring is off. Turn on Enable Agent Status in the Agents tab and the security checks, findings and scans appear here.")
                 } header: {
                     SettingsSectionHeader("Agent Security")
@@ -87,7 +87,7 @@ struct AgentSecuritySettings: View {
     // MARK: - Security
 
     private var securityFindingsSection: some View {
-        Section {
+        SettingsSection {
             if let error = findingsStore.snapshotError {
                 SettingsErrorText(error)
             }
@@ -101,17 +101,22 @@ struct AgentSecuritySettings: View {
                      : String(localized: "No open findings."))
                     .settingsDescriptionStyle()
             } else {
-                ForEach(groups.visible, id: \.group.id) { row in
-                    let finding = row.group.representative
-                    SecurityFindingRow(
-                        row: row,
-                        copyForAgent: { findingsStore.copyAgentPrompt(for: finding) },
-                        acknowledge: { findingsStore.acknowledgeGroup(row.group, projects: $0) },
-                        snooze: { findingsStore.snooze(row.group.id, for: 24 * 3600) },
-                        openChat: findingsStore.hasChat(for: finding)
-                            ? { if !findingsStore.openChat(for: finding) { NSSound.beep() } }
-                            : nil
-                    )
+                // Lazy: findings pile up across scans, and a plain stack builds every row as the page opens. A search
+                // or the notch's deep link lands on this section's header, never on a row (docs/SETTINGS.md, "Pages
+                // and sections").
+                LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
+                    ForEach(groups.visible, id: \.group.id) { row in
+                        let finding = row.group.representative
+                        SecurityFindingRow(
+                            row: row,
+                            copyForAgent: { findingsStore.copyAgentPrompt(for: finding) },
+                            acknowledge: { findingsStore.acknowledgeGroup(row.group, projects: $0) },
+                            snooze: { findingsStore.snooze(row.group.id, for: 24 * 3600) },
+                            openChat: findingsStore.hasChat(for: finding)
+                                ? { if !findingsStore.openChat(for: finding) { NSSound.beep() } }
+                                : nil
+                        )
+                    }
                 }
             }
             if !findingsStore.reviewQueue.isEmpty {
@@ -148,7 +153,7 @@ struct AgentSecuritySettings: View {
     /// Sensor) behind one Advanced disclosure. Search entries for the tucked-away rows land on
     /// the disclosure itself, so search never points at a hidden row.
     private var adrDiscoverySection: some View {
-        Section {
+        SettingsSection {
             adrToolRow(.discovery)
                 .settingsHighlight(id: highlightID("Connect ADR"))
             if !adr.discovery.isFound && adr.discovery.state != .unchecked {
@@ -264,7 +269,7 @@ struct AgentSecuritySettings: View {
     }
 
     private var kannuChecksSection: some View {
-        Section {
+        SettingsSection {
             SettingsRow("Look for hidden text in what agents read", description: "Some characters are invisible to you but readable by the AI, and can hide instructions. Kannu checks prompts and tool results on this Mac. No AI model is used and nothing is sent anywhere.") {
                 Defaults.Toggle(key: .detectHiddenText) {
                     Text("Look for hidden text in what agents read")
@@ -309,7 +314,7 @@ struct AgentSecuritySettings: View {
 
     /// The user's own block list, enforced where a host's hook can refuse a call.
     private var agentPolicySection: some View {
-        Section {
+        SettingsSection {
             // A raw LabeledContent, NOT SettingsRow: the row component applies `.labelsHidden()`
             // to its whole control slot (meant for the Toggle/Picker case), and a Menu in that
             // slot inherits it — the ellipsis collapsed and the "…" menu was dead. Same shape as
@@ -446,7 +451,7 @@ struct AgentSecuritySettings: View {
     /// ADR Detection — off by default, behind a consent alert, and every run is the user's click.
     @ViewBuilder
     private var sessionAnalysisSections: some View {
-        Section {
+        SettingsSection {
             // Consent is asked through a SwiftUI alert, not a modal inside the binding setter: a
             // nested run loop there fought the toggle's own state update and the switch fell back.
             SettingsRow("Analyze chats with ADR Detection", description: "Opt-in, per chat. Right-click a finished Claude Code chat in the notch and choose \"Analyze with ADR Detection\". The transcript is sent to the model providers below under your own keys — nothing is ever sent automatically.") {
@@ -525,7 +530,7 @@ struct AgentSecuritySettings: View {
     /// Models, keys, context and limits for ADR Detection, and the recent analyses.
     @ViewBuilder
     private var detectionSetupSections: some View {
-        Section {
+        SettingsSection {
             SettingsRow("Reasoning model (Claude)") {
                 TextField("Reasoning model (Claude)", text: $adrDetectionReasoningModel)
                     .settingsField()
@@ -557,7 +562,7 @@ struct AgentSecuritySettings: View {
             SettingsSectionHeader("Analysis models")
         }
 
-        Section {
+        SettingsSection {
             Toggle("Context: threat intelligence", isOn: $adrDetectionContextThreatIntelligence)
                 .settingsHighlight(id: highlightID("Context servers"))
             Toggle("Context: source code analyzer", isOn: $adrDetectionContextSourceCode)
@@ -596,7 +601,7 @@ struct AgentSecuritySettings: View {
         }
 
         if findingsStore.lastAnalysisError != nil || !findingsStore.analyses.isEmpty {
-            Section {
+            SettingsSection {
                 if let error = findingsStore.lastAnalysisError {
                     SettingsErrorText(error)
                 }
@@ -838,8 +843,8 @@ extension AgentSecuritySettings {
     /// turning it on (the harness shares the user's Defaults).
     static func snapshotDetectionRows() -> AnyView {
         let settings = AgentSecuritySettings()
-        return AnyView(Form {
-            Section { settings.detectionCheckoutRows } header: { SettingsSectionHeader("Session analysis") }
+        return AnyView(SettingsPage {
+            SettingsSection { settings.detectionCheckoutRows } header: { SettingsSectionHeader("Session analysis") }
             settings.detectionSetupSections
         })
     }
@@ -851,8 +856,8 @@ extension AgentSecuritySettings {
         let groups = SecurityFindingsStore.buildGroupRanking(
             findings: findings, acknowledgedGroups: [:], legacyAcknowledged: [], snoozes: []
         )
-        return AnyView(Form {
-            Section {
+        return AnyView(SettingsPage {
+            SettingsSection {
                 ForEach(groups.rows, id: \.group.id) { row in
                     SecurityFindingRow(row: row, copyForAgent: {}, acknowledge: { _ in }, snooze: {},
                                        openChat: row.group.representative.sessionID == nil ? nil : {})

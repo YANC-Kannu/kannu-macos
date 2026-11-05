@@ -91,8 +91,6 @@ enum SettingsTheme {
     static let sidebarRowContent: CGFloat = 10
     static let sidebarBadgeHorizontalInset: CGFloat = 6
     static let sidebarBadgeVerticalInset: CGFloat = 2
-    /// The grouped `Form`'s own side margin. The page's title pads by it too, so it lines up with the cards.
-    static let formMargin: CGFloat = 20
     /// Where a page starts, from the panel's leading edge. A page is held there, never centred.
     static let pageInset: CGFloat = 32
     /// The same on a panel at least `widePanelWidth` wide, such as a full-screen one.
@@ -102,6 +100,18 @@ enum SettingsTheme {
     static let pageHeaderTop: CGFloat = 37
     /// The search field and its suggestions.
     static let fieldRadius: CGFloat = 8
+
+    // MARK: - Pages and sections
+
+    /// Between two sections, and above the first and below the last.
+    static let sectionGap: CGFloat = 24
+    /// A section's card around its rows. Ten at the sides, as the grouped `Form` padded its rows, so a row keeps its width.
+    static let sectionPadding = EdgeInsets(top: 12, leading: 10, bottom: 12, trailing: 10)
+    /// Between two rows of a section: space, never a divider.
+    static let sectionRowGap: CGFloat = 14
+    /// From a section's header to its card, and from the card to its footer.
+    static let sectionLabelGap: CGFloat = 8
+    static let sectionRadius: CGFloat = 12
 
     // MARK: - Controls
 

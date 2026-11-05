@@ -78,7 +78,7 @@ struct TimerSettings: View {
     }
 
     var body: some View {
-        Form {
+        SettingsPage {
             timerFeatureSection
 
             if enableTimerFeature {
@@ -96,7 +96,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var timerFeatureSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableTimerFeature) {
                 Text("Enable timer feature")
             }
@@ -159,7 +159,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var lockScreenIntegrationSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableLockScreenTimerWidget) {
                 Text("Show lock screen timer widget")
             }
@@ -211,7 +211,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var customTimerSection: some View {
-        Section {
+        SettingsSection {
             LabeledContent("Default Custom Timer") {
                 Text(customDurationDisplay)
                     .font(SettingsTheme.mono)
@@ -231,7 +231,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var appearanceSection: some View {
-        Section {
+        SettingsSection {
             SettingsRow("Timer tint") {
                 SettingsSelect("Timer tint", selection: $colorMode,
                                options: TimerIconColorMode.allCases, optionTitle: \.displayName, style: .segmented)
@@ -275,7 +275,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var timerPresetsSection: some View {
-        Section {
+        SettingsSection {
             if timerPresets.isEmpty {
                 Text("No presets configured. Add a preset to make it appear in the timer popover.")
                     .settingsDescriptionStyle()
@@ -310,7 +310,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var timerSoundSection: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 HStack(spacing: 8) {
                     Button("Reset to Default") {

@@ -55,7 +55,7 @@ struct HUD: View {
     /// this style's Accessibility side effects).
     var body: some View {
         if !hasAccessibilityPermission && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: "Without Accessibility permission macOS handles the volume and brightness keys itself and shows its own HUD, so Kannu hides its own to avoid two HUDs stacking. Granting it lets Kannu replace them.",
                     requestAction: { accessibilityPermission.requestAuthorizationPrompt() },
@@ -69,7 +69,7 @@ struct HUD: View {
 
 
         if enableSystemHUD && !Defaults[.enableCustomOSD] && (hasAccessibilityPermission || enableThirdPartyDDCIntegration) {
-            Section {
+            SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
                 SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
@@ -84,7 +84,7 @@ struct HUD: View {
             }
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("Play feedback when volume is changed", description: "Plays the supplied feedback clip whenever you press the hardware volume keys.") {
                 Defaults.Toggle(key: .playVolumeChangeFeedback) {
                     Text("Play feedback when volume is changed")
@@ -97,7 +97,7 @@ struct HUD: View {
             SettingsFooter("Requires Accessibility permission so Dynamic Island can intercept the hardware volume keys.")
         }
 
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
                 Text("Color-coded volume display")
             }
@@ -127,7 +127,7 @@ struct HUD: View {
             }
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("HUD style") {
                 SettingsSelect("HUD style", selection: $inlineHUD, choices: [
                     false: String(localized: "Default"),
