@@ -108,6 +108,9 @@ enum SettingsTheme {
 
     /// Between two sections, and above the first and below the last.
     static let sectionGap: CGFloat = 24
+    /// From the title's row to the page's scroll view, so a scrolled page is cut this far under the title, never against
+    /// it. The page's own top padding gives up as much, so a page at rest starts where it did.
+    static let pageScrollInset: CGFloat = 12
     /// A section's card around its rows. Twelve at the sides too: one inset for text inside and beside a card, so a row,
     /// a section's header and a card's title start on one edge.
     static let sectionPadding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
@@ -164,6 +167,14 @@ enum SettingsTheme {
     static let selectListHeight: CGFloat = 294
     static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
     static let focusRingWidth: CGFloat = 2
+    /// A choice card's one selected look: an accent ring this wide around its tile.
+    static let choiceRingWidth: CGFloat = 2
+
+    // MARK: - Badges
+
+    /// A badge beside a title on a page ("Beta", "Alpha", "Built-in"): quiet, on the line colour.
+    static let badgeInset = EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6)
+    static let badgeRadius: CGFloat = 4
 
     // MARK: - Values
 

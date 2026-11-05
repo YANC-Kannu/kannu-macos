@@ -74,7 +74,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AppearanceSettings.swift": 2,
         "DevicesSettings.swift": 1,
         "DownloadsSettings.swift": 1,
-        "SettingsHelpers.swift": 2,
+        "SettingsBadge.swift": 1,                   // the one badge on a page
+        "SettingsHelpers.swift": 1,                 // the "Coming soon" tag, unused
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
         "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
         "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
@@ -118,8 +119,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 7,  // animation cards and their chips
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
         "SecurityFindingRow.swift": 2,       // the severity badge chips
-        "SettingsView.swift": 1,             // a search suggestion's tab name
         "SettingsSidebarRow.swift": 1,       // the BETA capsule
+        "SettingsBadge.swift": 1,            // the one badge, in the caption's size
         "AppearanceSettings.swift": 3,       // style cards and previews
         "CustomOSDSettings.swift": 1,        // the OSD preview
         "DevicesSettings.swift": 3,          // device cards
@@ -127,7 +128,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "HUDAndOSDSettings.swift": 6,        // HUD style cards and previews
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "SettingsHelpers.swift": 1,          // badge capsules
         "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
     ]
@@ -168,9 +168,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "BrainShell.swift": 4,               // the shell's own insets
         "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
         "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
-        "SettingsPage.swift": 2,             // the page's inset from the panel's edge, and its top and bottom
+        "SettingsPage.swift": 4,             // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
-        "SettingsProductPage.swift": 2,      // the page's inset from the panel's edge, and its top and bottom
+        "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 6,       // style cards and previews
@@ -178,8 +178,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
         "LockScreenSettings.swift": 4,       // lock screen previews
         "SettingsColorPicker.swift": 1,      // the colour popover
-        "SettingsHelpers.swift": 8,          // badge capsules
-        "SettingsPermissionCallout.swift": 1,  // the callout's own card
+        "SettingsHelpers.swift": 4,          // the unused "Upgrade to Pro" and "Coming soon" capsules
+        "SettingsBadge.swift": 1,            // the one badge's own inset
+        "SettingsCalloutCard.swift": 1,      // a callout's own card, and a row's expanded details
         "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
         "SettingsButtonStyle.swift": 2,      // the button's own chrome, and a flush button pulled back onto its column
         "SettingsSelect.swift": 2,           // a segment, and the track it sits in
@@ -357,7 +358,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "ScreenAssistantSettings.swift": 5,  // status colours
         "SecurityFindingRow.swift": 4,       // severity badges
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
-        "SettingsHelpers.swift": 6,          // badge capsules
+        "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
         "SpotifyAuthSettingsSection.swift": 1,     // the status dot
         "StatsSettings.swift": 2,            // graph colours
@@ -386,7 +387,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "ScreenAssistantSettings.swift": 1,  // a status line
         "SecurityFindingRow.swift": 3,       // severity badges
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "SettingsHelpers.swift": 4,          // badge capsules
+        "SettingsHelpers.swift": 2,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsPermissionCallout.swift": 1,  // the callout's title
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
         "StatsSettings.swift": 1,            // a graph caption
