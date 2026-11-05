@@ -4,6 +4,34 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's Agents page leads with your agents
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the product first, then its settings; fixtures on every board; the live-data contract held clause by clause
+- **Changes:**
+  - Brain › Agents opens on its agents. A hero titled by its state ("Needs you", "Working", "Finished") shows the
+    session the notch ranks first, with its chat, its state in words and colour, its run's metrics and its light.
+    Recent chats follow as rows, and a status row of three cells: Editors & hooks (the tools on this Mac, with Install
+    for each one missing its hook), Usage (readings near their limit, each with its reset and when it was read) and
+    Security (only while findings wait for review). A click on the hero or a row opens its chat.
+  - With no session the hero's place says "No agents running", one line on how to start, and offers the first
+    missing hook; with Agent Status off it says so, with Turn On. The header has a gear to the settings and the same
+    install offer.
+  - `SettingsProductPage` lays a product page out: the product in a column up to 1,200 pt, then a full-width "Agent
+    settings" rule and the settings in their 720-pt column. Every row keeps its id, search entry and deep link.
+    Detected Editors became the Editors & hooks cell; Editor Hooks stays a section, where a hook can be removed. The
+    terminal-tab and Smart caffeinate descriptions are cut to about eight words.
+  - Live data: the sessions come through one subscription throttled to 500 ms, only while Brain is on screen, and
+    the page reads them once as it opens. While Brain is off screen the metrics and the status row give way to a
+    static copy, so neither the token follower, nor a 1 Hz clock, nor the usage and findings stores run for it. A
+    click resolves its target in the action, never while drawing.
+  - 19 new strings, each in the catalog's 17 languages.
+  - Boards: `agents0`, `agents1` and `agents3` at the window's first size, `shellWide` on Agents, `shellWidest` at
+    2,560 pt and `shellDeepLinkAgents`, all from fixtures: no session, tool, reading or finding of this Mac.
+  - `AgentsPageLiveDataRulesTests` holds each clause of the contract, the click, the tool checks and the product
+    page's frame against planted offenders; `BrainShellRulesTests` lets `SettingsForm` take actions.
+  - docs/SETTINGS.md gains "Product pages" and "Live data"; docs/REGRESSIONS.md entry 22 and its Danger zones row
+    gain their dated lines.
+
 ### 2026-11-05 - Brain's live views stop while it is off screen
 - **Developer label:** Brain redesign plan: Stage 4, the Agents product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the visibility signal the live-data contract stands on
