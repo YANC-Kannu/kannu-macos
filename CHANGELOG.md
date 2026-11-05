@@ -4,6 +4,23 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain gets its own page and section
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsPage` and `SettingsSection`, called as `Form` and `Section` are, so the next change renames one word per site
+- **Changes:**
+  - `SettingsPage`: one scroll view across the panel, its sections in one plain `VStack` column, capped at
+    `pageMaxWidth` and started `settingsPageInset` from the panel's leading edge. Not lazy: a search scrolls to a
+    row's id, and a lazy stack cannot scroll to a row it has not built.
+  - `SettingsSection`: the rows in a soft card, apart by space and never by a divider; the header above the card as a
+    heading for VoiceOver and the footer under it in the secondary ink, both in line with the rows' text. `header:`
+    and `footer:` are optional, as on `Section`.
+  - `SettingsPageInsetKey`: the inset a page and its title start at, `pageInset` unless the window says otherwise.
+  - Theme tokens "Pages and sections": `sectionGap`, `sectionPadding`, `sectionRowGap`, `sectionLabelGap` and
+    `sectionRadius`.
+  - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
+    and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
+    `SettingsLayoutRulesTests` pins their padding.
+
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"
 - **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks
