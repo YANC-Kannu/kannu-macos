@@ -119,13 +119,14 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertEqual(Self.allTasksLinkProblems(in: Self.code(try Self.raw(Self.sideColumnPath))), [])
     }
 
-    /// The toolbar's list honours Show in notch as the popover does (`TaskSourceMenu` is the same
-    /// menu), then the search, both over the connected baseline.
+    /// The toolbar's list honours Show in notch and its Tag filter as the popover does
+    /// (`TaskSourceMenu` is the same menu), then the search, all over the connected baseline.
     func testTheListHonoursShowInNotchAndTheSearch() throws {
         let page = try Self.declaration("private struct TimerTasksPage", in: Self.code(try Self.raw(Self.sideColumnPath)))
         XCTAssertTrue(page.contains("TaskSearch.filter(TaskOrdering.active(manager.activeTasks, listed: notchFilter), query: searchText)"))
         XCTAssertTrue(page.contains("TaskSourceMenu(openBrain:"), "the filter is the popover's menu")
-        XCTAssertTrue(page.contains("TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)"))
+        XCTAssertTrue(page.contains(
+            "TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, tag: preferences.tagFilter, alwaysListed: manager.timing?.taskID)"))
     }
 
     /// The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`), which also

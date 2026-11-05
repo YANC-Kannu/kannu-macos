@@ -29,7 +29,8 @@ import XCTest
 ///   preset, a typed length) never does, rings like a preset, and is named and keyed like a task;
 ///   only the user's estimate edit retargets, and a rename renames the running session;
 /// - a typed start waits for the task file like a reminder's Start, after it in each place, and
-///   "Show local" turns on only where a task is added;
+///   the notch's filters let a task show (`showInNotch`: Show local, the Tag filter) only where one is
+///   added;
 /// - a preset with a form open starts what the form shows, never `start(_:)`; a picked task never
 ///   falls back to making or reusing one;
 /// - `NotchTimerView` builds the task list, offers the typed search, draws a pick and starts a task
@@ -151,9 +152,9 @@ final class TimerTaskSessionRulesTests: XCTestCase {
 
     func testTheTypedStartScannerCatchesAPlantedOffender() {
         let planted = """
-        func startBlock(_ taskID: UUID) -> Bool { showLocalTasks() }
+        func startBlock(_ taskID: UUID) -> Bool { showInNotch(taskID) }
         func startTyped(_ typed: String) { switch loadState { case .loading: pendingTypedStart = (typed) } }
-        private func startTypedNow(_ typed: String) -> Bool { showLocalTasks(); if let added = addTask(title: typed, estimateSeconds: nil) { } }
+        private func startTypedNow(_ typed: String) -> Bool { showInNotch(id); if let added = addTask(title: typed, estimateSeconds: nil) { } }
         func addTask(from draft: TaskFormDraft) -> UUID? { forgetFormDraft(editing: nil) }
         func startFromReminder(_ taskID: UUID) { pendingReminderStart?.completion() }
         private func load() async { loadState = .failed(reason); if let pending = pendingReminderStart { pending.completion() } }
@@ -329,12 +330,12 @@ final class TimerTaskSessionRulesTests: XCTestCase {
             problems.append("the file being read never runs a waiting typed start")
         }
         let now = body(of: "private func startTypedNow(", in: source) ?? ""
-        let showsOnlyOnAdd = now.components(separatedBy: "showLocalTasks()").count == 2
-            && after("showLocalTasks()", "addTask(title: typed", in: now)
-        if !showsOnlyOnAdd || (body(of: "func startBlock(", in: source)?.contains("showLocalTasks()") ?? true) {
+        let showsOnlyOnAdd = now.components(separatedBy: "showInNotch(").count == 2
+            && after("showInNotch(", "addTask(title: typed", in: now)
+        if !showsOnlyOnAdd || (body(of: "func startBlock(", in: source)?.contains("showInNotch(") ?? true) {
             problems.append("Show local turns on for a reuse or a pick")
         }
-        if !(body(of: "func addTask(from draft: TaskFormDraft)", in: source)?.contains("showLocalTasks()") ?? false) {
+        if !(body(of: "func addTask(from draft: TaskFormDraft)", in: source)?.contains("showInNotch(") ?? false) {
             problems.append("Add no longer shows local tasks")
         }
         return problems
