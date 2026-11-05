@@ -115,6 +115,8 @@ struct TaskTagsSheet: View {
     /// and the matching VoiceOver actions move it too, and the menu's Colour picks its colour.
     private func pill(_ tag: String, at index: Int) -> some View {
         return SettingsTagChip(tag, tint: color(of: tag).tint) { tags = TaskTagEditing.removing(tag, from: tags) }
+        // VoiceOver hears the colour, which the swatch beside the pill used to say.
+        .accessibilityValue(Text(verbatim: color(of: tag).localizedName))
         .overlay {
             if dropTarget == tag {
                 Capsule()

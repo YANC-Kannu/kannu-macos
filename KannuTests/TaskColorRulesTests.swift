@@ -165,6 +165,8 @@ final class TaskColorRulesTests: XCTestCase {
         let swatch = pill.replacingOccurrences(of: "HStack { Text(tag) }",
                                                with: "HStack { TaskColorPickerButton(selection: colorBinding(for: tag)); Text(tag) }")
         XCTAssertEqual(Self.tagsSheetProblems(in: swatch + cancel + done), ["pill draws a colour swatch beside its chip"])
+        let dot = pill.replacingOccurrences(of: "HStack { Text(tag) }", with: "HStack { TaskColorDot(color(of: tag)); Text(tag) }")
+        XCTAssertEqual(Self.tagsSheetProblems(in: dot + cancel + done), ["pill draws a colour swatch beside its chip"])
         let noPicker = pill.replacingOccurrences(of: "Picker(\"Colour\", selection: colorBinding(for: tag)) { }", with: "")
         XCTAssertEqual(Self.tagsSheetProblems(in: noPicker + cancel + done), ["pill's right-click menu has no Colour picker"])
         let pickerOutside = noPicker.replacingOccurrences(of: "HStack { Text(tag) }",
@@ -241,7 +243,7 @@ extension TaskColorRulesTests {
                 ".accessibilityAction(named: Text(\"Move to Front\"))",
             ]
             problems += reorder.filter { !pill.contains($0) }.map { "pill has no \($0)" }
-            if pill.contains("TaskColorPickerButton(") {
+            if ["TaskColorPickerButton(", "TaskColorDot(", "KannuColorPickerButton("].contains(where: { pill.contains($0) }) {
                 problems.append("pill draws a colour swatch beside its chip")
             }
             if !(body(of: ".contextMenu", in: String(pill))?.contains("Picker(\"Colour\", selection: colorBinding(for: tag))") ?? false) {
