@@ -133,8 +133,13 @@ enum TimerComposerMetrics {
     /// The column's centre sits over 100 pt in from the notch's side, well clear of its 24 pt
     /// bottom corner radius, so the flat bottom edge is the one that counts.
     static let sidePagerFooterOffset: CGFloat = 14
-    /// One task row: key and title on one line, "42m of 2h" under it, and ▶.
+    /// One task row: key and title on one line, "42m of 2h" and the tags under it, and ▶.
     static let sideTaskRowHeight: CGFloat = 36
+    /// A row's second line, the caption and its tag chips (`TaskTagChips`): one `SideChip` tall (a
+    /// 10 pt line and 2 pt above and below) in every row, tags or not, so every title sits on the
+    /// same line. With the 12 pt title and the 1 pt between them it fits the row
+    /// (`TimerComposerMetricsTests`).
+    static let sideTaskCaptionHeight: CGFloat = 16
     static let sideRowSpacing: CGFloat = 4
     /// The Tasks list is never shorter than this many rows (room permitting): the first row's ▶
     /// tooltip opens below it, and a list clipped to one row would swallow the bubble.

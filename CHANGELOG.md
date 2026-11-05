@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - The notch's task rail shows tags, and filters by one
+- **Developer label:** Brain redesign plan: Stage 5, tags in the notch
+- **Agent label:** Claude Code (Opus 5.5) — the notch's chips, Tag submenu and tag filter, with their rules; the Brain Tasks page waits for David's decision
+- **Changes:**
+  - Rail rows show the first tag and "+N" beside the caption (`TaskTagChips`, on `SideChip`), the tag a `#tag` search
+    finds first (`TaskSearch.chipTags`). A short tag shows whole and the caption gives way, sliding into view on hover;
+    a tag over 12 characters shares the line and shortens in the middle.
+  - The caption line is one chip tall in every row (`sideTaskCaptionHeight`, 16 pt), so titles line up with or without
+    tags; the row stays 36 pt.
+  - `TaskSourceMenu` gets a Tag submenu: All, then each tag as "#docs", ticked as picked. Its tags are passed in
+    (`TaskFacets.filterTags` of what Show in notch lists), so the menu stays free of `TasksManager`. A picked tag no task
+    has any more still shows.
+  - New key `tasksNotchTagFilter`, beside Show in notch: `TaskSourcePreferences` follows it, `isNarrowing` counts it (the
+    "Filtered" line, the filled glyph) and `showAll()` clears it. The rail and the popover's Up next list through it
+    (`TaskOrdering.viewFilter(hidden:tag:alwaysListed:)`), and the timed task always shows.
+  - Adding a task in the notch clears a tag filter that would hide it (`TaskOrdering.tagFilter(_:afterAdding:)`), in
+    `TasksManager.showInNotch` (was `showLocalTasks`). The task form and a typed start called it already; the popover's
+    Add a task now calls it instead of its own Local line. Brain's New Task leaves the notch's filters alone.
+  - The typed search under the timer bar and a new task's title ignores the tag filter, so a task it hides is still
+    found by its name and never made twice.
+  - "Tag" is a new catalog key, in the catalog's 17 other languages; the submenu's "All" is the existing key.
+  - Tests: `TaskSourceFilterTests` (the filter, the timed task, the add rule), `NotchTagFilterRulesTests` (the wiring,
+    each scanner with planted offenders), `TimerComposerMetricsTests` (a chip measured against the 36 pt row).
+    `TimerSideColumnRulesTests`, `TimerTaskSessionRulesTests` and `TaskFormWiringTests` follow the changed calls.
+  - New board `notchTasks`: the rail's Tasks page at the narrowest notch, with the fixture tasks; one of them now has two
+    tags, for "+1".
+
 ### 2026-11-05 - A #tag search finds the whole tag, and labels count as tags
 - **Developer label:** Brain redesign plan: Stage 5, task logic
 - **Agent label:** Claude Code (Opus 5.5) — pure logic and tests for the Tasks page and the notch; no view changes

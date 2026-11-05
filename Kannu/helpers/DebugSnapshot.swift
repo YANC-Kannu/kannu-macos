@@ -238,6 +238,28 @@ enum DebugSnapshots {
                 .environment(\.colorScheme, .dark)
             await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
         }
+        if request.tabs == nil || request.tabs?.contains("notchTasks") == true {
+            // The timer tab's Tasks page in the narrowest notch, its rail hanging in the gap to the left:
+            // the fixture tasks at the page's own height (three rows), then tall enough for every row.
+            typealias M = TimerComposerMetrics
+            let columnWidth = M.sideColumnWidth(notchWidth: M.smallestOpenNotchWidth)
+            let inset = M.railOffset + 8
+            let pages: [(suffix: String, height: CGFloat)] = [
+                ("", M.sidePageHeight(budget: M.minimumTabBudget, style: .manualWithPresets)),
+                ("-all", M.sideTaskRowsHeight(count: 10)),
+            ]
+            for page in pages {
+                let view = TimerSideColumn(page: .tasks, select: { _ in }, tasksAvailable: true, presetsAvailable: false,
+                                           budget: page.height, pageHeight: page.height, columnWidth: columnWidth, presets: [],
+                                           activePresetID: nil, startPreset: { _ in }, taskStarted: {}, editTask: { _ in })
+                    .environmentObject(viewModel)
+                    .padding(EdgeInsets(top: 8, leading: inset, bottom: 8, trailing: 8))
+                    .background(Color.black)
+                    .notchAppearance(.dark, fill: .black)
+                await render(AnyView(view), name: "notchTasks-\(Int(M.smallestOpenNotchWidth))\(page.suffix)", dark: true,
+                             width: columnWidth + inset + 8, into: request.directory, fixedHeight: page.height + 16)
+            }
+        }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
             // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read, and
@@ -843,7 +865,7 @@ enum DebugSnapshotFixtures {
     static let localTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F02")!
 
     /// About a dozen tasks for the Tasks boards (`TasksManager.snapshotFile`): estimates, tags with
-    /// colours, an overdue reminder, one past its estimate, a Jira task with its own estimate, a
+    /// colours (one task has two, for a notch row's "+1"), an overdue reminder, one past its estimate, a Jira task with its own estimate, a
     /// GitLab issue and merge request, one done and one archived. Never written anywhere.
     static func tasksFile(now: Date) -> TasksFile {
         func segment(_ minutes: Int, endingHoursAgo hours: Double = 2) -> WorkSegment {
@@ -863,7 +885,7 @@ enum DebugSnapshotFixtures {
             TaskItem(title: "Prepare the sprint review", localEstimateSeconds: 3600,
                      scheduledAt: now.addingTimeInterval(-26 * 3600)),
             TaskItem(title: "Fix the flaky timer test", localEstimateSeconds: 30 * 60, segments: [segment(45)],
-                     tags: ["urgent"]),
+                     tags: ["urgent", "timer"]),
             TaskItem(title: "Reply to the design feedback"),
             TaskItem(id: jiraTaskID, source: .jira, title: "Customer API: org-scoped file upload keys",
                      remote: remote("ABC-412", estimate: 2 * 3600, status: "In Progress")),
