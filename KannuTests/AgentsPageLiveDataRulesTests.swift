@@ -35,6 +35,9 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
     // MARK: - Clause 1: throttled and scoped
 
     private static let sessionsFeed = #"CursorAgentStatusMonitor\.shared\.\$sessions\s*\.throttle\(for: \.milliseconds\(500\), scheduler: RunLoop\.main, latest: true\)\s*\.values"#
+    private static let findingsFeed = #"SecurityFindingsStore\.shared\.objectWillChange\s*\.throttle\(for: \.milliseconds\(500\), scheduler: RunLoop\.main, latest: true\)\s*\.values"#
+    /// A `Task` started inside a `.task` is not its child: it outlives the cancel, one more each time Brain comes back.
+    private static let unstructuredTask = #"\bTask\s*(?:\{|\(|\.detached)"#
 
     /// One subscription to the monitor's sessions, throttled to two updates a second, and nothing else of the monitor:
     /// no observer, no `onReceive`, no sink, and the list read once, on appearing, not in `body`.
@@ -100,8 +103,10 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
     // MARK: - Clause 2: stopped while Brain is not on screen
 
     /// Every subscription on the page starts only while Brain is on screen and ends when it is not: a `.task` keyed on
-    /// the visibility flag, which returns at once while it is false. The flag comes from the window's occlusion state,
-    /// which covers closed, minimised, hidden, covered and another Space; a close alone would miss the last.
+    /// the visibility flag, which returns at once while it is false, with no `Task` inside. The flag comes from the
+    /// window's occlusion state, which covers closed, minimised, hidden, covered and another Space; a close alone would
+    /// miss the last. Opening and closing set it too, since that change can come late, or not at all for a window never
+    /// shown, and it is assigned in one place.
     static func offScreenProblems(overview: String, settings: String, controller: String, visibility: String) -> [String] {
         var problems: [String] = []
         for (name, source, feed) in [("the overview", overview, "$sessions"), ("the style preview", settings, "$trafficLightState")] {
@@ -115,14 +120,22 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
                 problems.append("\(name) subscribes while Brain is off screen")
                 continue
             }
+            if task.range(of: unstructuredTask, options: .regularExpression) != nil {
+                problems.append("\(name) subscribes in a Task its .task cannot cancel")
+            }
         }
         let controllerCode = SettingsDesignSystemRulesTests.code(controller)
-        if !(body(after: "func windowDidChangeOcclusionState(", in: controllerCode) ?? "").contains("BrainVisibility.shared.update(for: window)") {
-            problems.append("the window does not say when it leaves the screen")
+        for (writer, problem) in [("func windowDidChangeOcclusionState(", "the window does not say when it leaves the screen"),
+                                  ("func showWindow() {", "opening does not say Brain is on screen"),
+                                  ("private func relinquishFocus() {", "closing does not say Brain left the screen")]
+            where !(body(after: writer, in: controllerCode) ?? "").contains("BrainVisibility.shared.update(for: window)") {
+            problems.append(problem)
         }
         let flag = SettingsDesignSystemRulesTests.code(visibility)
-        if !flag.contains("window.isVisible && window.occlusionState.contains(.visible)") {
-            problems.append("on screen is not read from the occlusion state")
+        if !flag.contains("let onScreen = window.isVisible && window.occlusionState.contains(.visible)")
+            || !flag.contains("if onScreen != isOnScreen { isOnScreen = onScreen }")
+            || flag.components(separatedBy: "isOnScreen = ").count - 1 != 2 {
+            problems.append("on screen is not read from the occlusion state, or is set elsewhere")
         }
         if !flag.contains("@Published private(set) var isOnScreen = false") {
             problems.append("something live could start before Brain is first on screen")
@@ -137,34 +150,53 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         let visibility = try Self.source(Self.visibilityPath)
         XCTAssertEqual(Self.offScreenProblems(overview: overview, settings: settings, controller: controller, visibility: visibility), [])
 
+        let sessionsLoop = "            for await latest in CursorAgentStatusMonitor.shared.$sessions\n"
+            + "                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)\n"
+            + "                .values {\n                sessions = latest\n            }\n"
         SettingsDesignSystemRulesTests.assertCaught([
             (".task(id: visibility.isOnScreen) {", ".task {"),
             ("            guard visibility.isOnScreen else { return }\n", ""),
+            (sessionsLoop, "            Task {\n" + sessionsLoop + "            }\n"),
         ], in: overview) { Self.offScreenProblems(overview: $0, settings: settings, controller: controller, visibility: visibility) }
         SettingsDesignSystemRulesTests.assertCaught([
             (".task(id: visibility.isOnScreen) {", ".task(id: style) {"),
             ("                guard visibility.isOnScreen else { return }\n", ""),
         ], in: settings) { Self.offScreenProblems(overview: overview, settings: $0, controller: controller, visibility: visibility) }
+        let update = "        if let window { BrainVisibility.shared.update(for: window) }\n"
+        let opened = "        // On screen from here: a window never shown may already count as visible, and then AppKit sends no change.\n"
+        let closed = "        // Off screen from here, without waiting for AppKit's occlusion change, which can come late.\n"
         SettingsDesignSystemRulesTests.assertCaught([
             ("        BrainVisibility.shared.update(for: window)\n", ""),
+            (opened + update, opened),
+            (closed + update, closed),
         ], in: controller) { Self.offScreenProblems(overview: overview, settings: settings, controller: $0, visibility: visibility) }
         SettingsDesignSystemRulesTests.assertCaught([
             ("window.isVisible && window.occlusionState.contains(.visible)", "window.isVisible"),
             ("var isOnScreen = false", "var isOnScreen = true"),
+            ("isOnScreen = onScreen }", "isOnScreen = true }"),
+            ("    private init() {}", "    private init() { isOnScreen = true }"),
         ], in: visibility) { Self.offScreenProblems(overview: overview, settings: settings, controller: controller, visibility: $0) }
     }
 
     // MARK: - Clause 3: no work while nothing is on screen
 
     /// While Brain is off screen the live leaves give way to a static copy: the metrics, which observe the token
-    /// follower and tick once a second, and the status row, which observes the usage and findings stores. Nothing else
-    /// on the page observes those, and nothing on it keeps a clock.
+    /// follower and tick once a second, drawn live by the hero and the rows only while `drawsLive`, and the status row,
+    /// which observes the usage store. The findings store republishes on every hook write while a session runs with
+    /// permission checks off, so it is never observed whole: Security's summary comes through one subscription
+    /// throttled to 500 ms, inside the live row, and is assigned only on a change. Nothing else on the page observes
+    /// those stores, and nothing on it keeps a clock.
     static func frozenProblems(in overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
         var problems: [String] = []
         if code.components(separatedBy: "AgentTurnMetricsView(").count - 1 != 1
             || SettingsDesignSystemRulesTests.matches(of: #"if live \{\s*AgentTurnMetricsView\("#, in: code).count != 1 {
             problems.append("the live metrics are drawn while Brain is off screen")
+        }
+        for leaf in ["AgentsHeroCard", "AgentsSessionRow"] {
+            let calls = code.components(separatedBy: "\(leaf)(session:").count - 1
+            let gated = SettingsDesignSystemRulesTests.matches(of: leaf + #"\(session: \w+, live: drawsLive\)"#, in: code).count
+            if calls != 1 || gated != 1 { problems.append("\(leaf) draws live whatever Brain's visibility") }
         }
         if code.components(separatedBy: "AgentsLiveStatusRow(").count - 1 != 1
             || SettingsDesignSystemRulesTests.matches(of: #"if visibility\.isOnScreen \{\s*AgentsLiveStatusRow\("#, in: code).count != 1 {
@@ -173,10 +205,20 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         if !code.contains("return visibility.isOnScreen") {
             problems.append("the live leaves do not follow Brain's visibility")
         }
-        let observers = SettingsDesignSystemRulesTests.matches(of: #"@ObservedObject[^\n]*(?:UsageAlertManager|SecurityFindingsStore)"#, in: code)
         let liveRow = region(from: "private struct AgentsLiveStatusRow", to: "private struct AgentsStatusRow", in: code) ?? ""
-        if observers.count != 2 || SettingsDesignSystemRulesTests.matches(of: #"@ObservedObject[^\n]*(?:UsageAlertManager|SecurityFindingsStore)"#, in: liveRow).count != 2 {
-            problems.append("the usage or findings store is observed outside the live status row")
+        let usage = #"@ObservedObject[^\n]*UsageAlertManager"#
+        if SettingsDesignSystemRulesTests.matches(of: usage, in: code).count != 1 || SettingsDesignSystemRulesTests.matches(of: usage, in: liveRow).count != 1 {
+            problems.append("the usage store is observed outside the live status row")
+        }
+        if !SettingsDesignSystemRulesTests.matches(of: #"@(?:ObservedObject|StateObject|EnvironmentObject)[^\n]*SecurityFindingsStore"#, in: code).isEmpty
+            || code.range(of: #"\.onReceive\([^\n]*SecurityFindingsStore|SecurityFindingsStore[^\n]*\.sink"#, options: .regularExpression) != nil {
+            problems.append("the findings store is followed at its own rate")
+        }
+        if SettingsDesignSystemRulesTests.matches(of: findingsFeed, in: code).count != 1
+            || SettingsDesignSystemRulesTests.matches(of: findingsFeed, in: liveRow).count != 1
+            || !liveRow.contains("if latest != security { security = latest }")
+            || liveRow.range(of: unstructuredTask, options: .regularExpression) != nil {
+            problems.append("Security's summary does not come through one throttled subscription in the live row, assigned on a change")
         }
         for clock in ["TimelineView", "ClaudeTurnTokenFollower", "Timer.", ".repeatForever"] where code.contains(clock) {
             problems.append("the page keeps a clock or a follower of its own: \(clock)")
@@ -187,12 +229,26 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
     func testNothingWorksWhileNothingIsOnScreen() throws {
         let overview = try Self.source(Self.overviewPath)
         XCTAssertEqual(Self.frozenProblems(in: overview), [])
+        let securityLoop = "                for await _ in SecurityFindingsStore.shared.objectWillChange\n"
+            + "                    .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)\n"
+            + "                    .values {\n"
+            + "                    let latest = AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking)\n"
+            + "                    if latest != security { security = latest }\n"
+            + "                }\n"
         SettingsDesignSystemRulesTests.assertCaught([
             ("        if live {\n", "        if true {\n"),
+            ("AgentsHeroCard(session: primary, live: drawsLive)", "AgentsHeroCard(session: primary, live: true)"),
+            ("AgentsSessionRow(session: session, live: drawsLive)", "AgentsSessionRow(session: session, live: true)"),
             ("        if visibility.isOnScreen {\n            AgentsLiveStatusRow", "        if true {\n            AgentsLiveStatusRow"),
             ("        return visibility.isOnScreen", "        return true"),
             ("    @ObservedObject private var hookInstaller = AgentHookInstaller.shared\n    @Default",
              "    @ObservedObject private var hookInstaller = AgentHookInstaller.shared\n    @ObservedObject private var usage = UsageAlertManager.shared\n    @Default"),
+            ("    @State private var security = AgentsSecuritySummary(toReview: 0, high: 0, pinnedTitle: nil)",
+             "    @ObservedObject private var findings = SecurityFindingsStore.shared\n    @State private var security = AgentsSecuritySummary(toReview: 0, high: 0, pinnedTitle: nil)"),
+            ("SecurityFindingsStore.shared.objectWillChange\n                    .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)\n                    .values",
+             "SecurityFindingsStore.shared.objectWillChange.values"),
+            ("if latest != security { security = latest }", "security = latest"),
+            (securityLoop, "                Task {\n" + securityLoop + "                }\n"),
             ("    @State private var sessions: [AgentSessionStatus] = []",
              "    @State private var sessions: [AgentSessionStatus] = []\n    @ObservedObject private var follower = ClaudeTurnTokenFollower.shared"),
             ("            lead(primary: primary)\n", "            lead(primary: primary)\n            TimelineView(.periodic(from: .now, by: 1)) { _ in EmptyView() }\n"),
@@ -223,8 +279,9 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
 
     // MARK: - Tools are checked once per visit
 
-    /// The detector checks files and Launch Services. The notch's empty state, the overview and the header call it from
-    /// `onAppear`, once per visit, never from `body`; nothing on the page checks a file of its own.
+    /// The detector checks files and Launch Services. The overview and the header each call it from `onAppear`, so
+    /// Brain checks twice a visit, and the notch from its empty state's; never from `body`, and nothing on the page
+    /// checks a file of its own.
     static func detectionProblems(in sources: [String: String]) -> [String] {
         var problems: [String] = []
         for (path, source) in sources {
@@ -239,6 +296,16 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         return problems
     }
 
+    /// While an agent works, every hover-open lands on Agent Status, so the notch checks only from its empty state,
+    /// which shows while none does.
+    static func notchDetectionProblems(in notch: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(notch)
+        let emptyState = body(after: "private var emptyStateView: some View {", in: code) ?? ""
+        guard code.components(separatedBy: "AgentToolDetector.detect()").count - 1 == 1,
+              emptyState.contains("AgentToolDetector.detect()") else { return ["the notch checks its tools outside its empty state"] }
+        return []
+    }
+
     func testTheToolsAreCheckedOncePerVisit() throws {
         let sources = try Dictionary(uniqueKeysWithValues: [Self.overviewPath, Self.notchPath].map { ($0, try Self.source($0)) })
         XCTAssertEqual(Self.detectionProblems(in: sources), [])
@@ -247,6 +314,11 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
             ("let watched = tools.filter(\\.detected)", "let watched = AgentToolDetector.detect().filter(\\.detected)"),
             ("let watched = tools.filter(\\.detected)", "let watched = tools.filter { FileManager.default.fileExists(atPath: $0.name) }"),
         ], in: overview) { Self.detectionProblems(in: [Self.overviewPath: $0]) }
+        let notch = try XCTUnwrap(sources[Self.notchPath])
+        XCTAssertEqual(Self.notchDetectionProblems(in: notch), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("        .ownsVerticalScroll()\n", "        .ownsVerticalScroll()\n        .onAppear { detectedTools = AgentToolDetector.detect() }\n"),
+        ], in: notch, by: Self.notchDetectionProblems)
     }
 
     // MARK: - The product page's frame

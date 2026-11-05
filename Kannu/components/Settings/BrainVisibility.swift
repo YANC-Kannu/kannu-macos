@@ -33,7 +33,8 @@ final class BrainVisibility: ObservableObject {
     private init() {}
 
     /// From the window's occlusion state, which AppKit changes in every one of the cases above.
-    /// `SettingsWindowController` calls it whenever that state changes.
+    /// `SettingsWindowController` calls it whenever that state changes, and as it opens and closes Brain: the change
+    /// can come late, and may not come at all for a window never shown before.
     func update(for window: NSWindow) {
         let onScreen = window.isVisible && window.occlusionState.contains(.visible)
         if onScreen != isOnScreen { isOnScreen = onScreen }

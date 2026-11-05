@@ -26,7 +26,7 @@ struct NotchAgentStatusView: View {
     @State private var copiedFindingID: String?
     /// Bumped once when a red badge's blink window ends, so the 10 Hz blink stops on time.
     @State private var blinkWake = Date.distantPast
-    /// The empty state's tools, checked once per visit.
+    /// The empty state's tools, checked as it appears.
     @State private var detectedTools: [AgentToolDetector.Tool] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -96,8 +96,6 @@ struct NotchAgentStatusView: View {
         .onHover { hovering in
             updateScrollGestureSuppression(for: hovering)
         }
-        // The empty state's tools: a visit's file checks, never a render's (`AgentToolDetector`).
-        .onAppear { detectedTools = AgentToolDetector.detect() }
         .onDisappear {
             updateScrollGestureSuppression(for: false)
         }
@@ -148,6 +146,9 @@ struct NotchAgentStatusView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+        // A visit's file checks, never a render's (`AgentToolDetector`). Here, not on the whole view: while an agent
+        // works, every hover-open lands on Agent Status, and the empty state is not shown.
+        .onAppear { detectedTools = AgentToolDetector.detect() }
     }
 
     /// Top-right caffeinate control, visible in every panel state. Two faces:

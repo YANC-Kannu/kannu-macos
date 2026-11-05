@@ -327,9 +327,10 @@ gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks 
   action. No sessions: "No agents running", with "Install <tool> hook" for the first tool on this Mac without its
   hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the settings show in both.
 - **Agents' header** holds a gear, which goes to the first settings row, and "Install <tool> hook" only while a tool
-  on this Mac lacks its hook. The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`), which the
-  notch's empty state asks too: file checks and Launch Services, once per visit from `onAppear`, never in `body` and
-  never Warp's container.
+  on this Mac lacks its hook. The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
+  Launch Services from `onAppear`, never in `body` and never Warp's container. The header and the page each ask once a
+  visit, so Brain checks twice; the notch asks as its empty state appears, never on the hover-opens while an agent
+  works.
 - **Nothing moved out of reach.** Every settings row keeps its id, its search entry and its deep link, below the
   product: Smart caffeinate's link from the notch lands there. Detected Editors became the Editors & hooks cell. Editor
   Hooks stays a settings section, the one place a hook can be removed.
@@ -347,17 +348,24 @@ which `AgentsPageLiveDataRulesTests` reads from the source, each checked against
 1. **Throttled and scoped.** The page copies what it shows into `@State` from one subscription to the one value it
    needs: Agents' sessions through `$sessions.throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest:
    true)`, at most twice a second, and the style preview's light through `$trafficLightState.removeDuplicates()`.
-   Nothing under Settings observes the whole monitor (`ClosedNotchObservationTests`).
+   Nothing under Settings observes the whole monitor (`ClosedNotchObservationTests`). Security's cell follows the
+   findings store's `objectWillChange` on the same throttle and redraws only when its summary changes: while a
+   session runs with permission checks off, every hook write restamps its finding and the store republishes. One leaf
+   runs faster: `AgentTurnMetricsView` observes the token follower, which republishes every 50 ms while it catches up
+   on a long turn, as it does for the notch.
 2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
-   once while the flag is false, so it ends when the flag goes false and starts again when it comes back.
-   `BrainVisibility.isOnScreen` follows the window's occlusion state (`windowDidChangeOcclusionState`): false while
-   Brain is closed, minimised, hidden with the app, fully covered or in another Space, where a full-screen Brain keeps
-   `isVisible` true. It starts false, so nothing live runs before Brain is first on screen. The page reads once as it
-   appears, so it opens on what is happening, not on an empty state.
+   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Security's
+   is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps its loop in a
+   `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
+   (`windowDidChangeOcclusionState`): false while Brain is closed, minimised, hidden with the app, fully covered or in
+   another Space, where a full-screen Brain keeps `isVisible` true. Opening and closing set it too, rather than wait
+   for that change, which can come late, or not at all for a window never shown. It starts false, so nothing live
+   runs before Brain is first on screen. The page reads once as it appears, so it opens on what is happening, not on
+   an empty state.
 3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
    observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
-   tokens; the status row, which observes the usage and findings stores, is read once instead. The page, its scroll
-   position and anything typed stay.
+   tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The
+   page, its scroll position and anything typed stay.
 
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
 walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full

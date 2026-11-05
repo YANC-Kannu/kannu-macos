@@ -164,6 +164,8 @@ class SettingsWindowController: NSWindowController {
 
         // Activate the app and ensure window gets focus
         NSApp.activate(ignoringOtherApps: true)
+        // On screen from here: a window never shown may already count as visible, and then AppKit sends no change.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Force window to front after activation
         DispatchQueue.main.async { [weak self] in
@@ -298,6 +300,8 @@ class SettingsWindowController: NSWindowController {
 
     private func relinquishFocus() {
         window?.orderOut(nil)
+        // Off screen from here, without waiting for AppKit's occlusion change, which can come late.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Set app back to accessory mode immediately
         NSApp.setActivationPolicy(.accessory)
