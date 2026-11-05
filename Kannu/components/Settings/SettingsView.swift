@@ -616,17 +616,28 @@ struct SettingsView: View {
             )
         }
 
-        /// Past this many matches the list scrolls rather than growing down the sidebar.
-        private static let visibleSuggestionRows = 8
-        /// One suggestion with its divider: 28 pt icon, 7 pt padding above and below, 1 pt divider.
-        private static let suggestionRowHeight: CGFloat = 43
+        /// The list's tallest, eight one-line rows: past it the list scrolls rather than growing down the sidebar.
+        private static let maxListHeight: CGFloat = 344
+        /// The rows' own space, where each measures its bottom edge.
+        private static let rowSpace = "suggestionRows"
+        /// Each row's bottom edge in the list, measured, since a title takes one line or two.
+        @State private var rowBottoms: [SettingsSearchEntry.ID: CGFloat] = [:]
+
+        /// Whole rows only: the list ends at the lowest row bottom that fits under `maxListHeight`, so the last row it
+        /// shows is never cut; the rest scroll into view.
+        private var listHeight: CGFloat {
+            suggestions.compactMap { rowBottoms[$0.id] }.filter { $0 <= Self.maxListHeight }.max() ?? Self.maxListHeight
+        }
+
+        private var listScrolls: Bool {
+            (suggestions.last.flatMap { rowBottoms[$0.id] } ?? 0) > Self.maxListHeight
+        }
 
         private var suggestionList: some View {
             Group {
-                if suggestions.count > Self.visibleSuggestionRows {
-                    // Half a row more than fits shows there is more to scroll to.
+                if listScrolls {
                     ScrollView { suggestionRows }
-                        .frame(height: (CGFloat(Self.visibleSuggestionRows) + 0.5) * Self.suggestionRowHeight)
+                        .frame(height: listHeight)
                 } else {
                     suggestionRows
                 }
@@ -661,10 +672,11 @@ struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(suggestion.title)
-                                    .font(SettingsTheme.bodyStrong)
+                                    .font(SettingsTheme.body)
                                     .foregroundStyle(SettingsTheme.ink)
+                                    .lineLimit(2)
                                 Text(suggestion.tab.title)
-                                    .font(SettingsTheme.caption)
+                                    .font(SettingsTheme.description)
                                     .foregroundStyle(SettingsTheme.inkSecondary)
                             }
 
@@ -679,6 +691,9 @@ struct SettingsView: View {
                     .onHover { hovering in
                         hoveredSuggestionID = hovering ? suggestion.id : (hoveredSuggestionID == suggestion.id ? nil : hoveredSuggestionID)
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.rowSpace)).maxY } action: {
+                        rowBottoms[suggestion.id] = $0
+                    }
 
                     if suggestion.id != suggestions.last?.id {
                         Divider()
@@ -686,6 +701,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .coordinateSpace(.named(Self.rowSpace))
         }
 
         private func rowBackground(for suggestion: SettingsSearchEntry) -> some View {

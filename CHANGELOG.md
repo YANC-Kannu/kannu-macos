@@ -4,6 +4,23 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's shared pieces get one look each
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the shared components
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 11, 12, 14, 19 and 20 where a shared component carries them, and the looks the pages take next
+- **Changes:**
+  - A callout keeps its card as a boundary, the card's colour inside a 1-pt line border instead of a darker slab, and
+    its buttons take the standard style (`settingsCalloutCard`, `SettingsPermissionCallout`).
+  - One badge, `SettingsBadge`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius.
+    "Beta" and "Built-in" use it, and "ALPHA" becomes "Alpha" in the same badge.
+  - One selected look for a choice card, a 2-pt accent ring and the name in ink, medium when chosen
+    (`settingsChoiceRing`, `settingsChoiceLabel`).
+  - A colour swatch carries a white ring inside a hairline, so it never reads as a status dot.
+  - A page's scroll view starts 12 pt under the title, so a scrolled page is never cut against it; at rest a page
+    starts where it did.
+  - The search suggestions show whole rows only, each title in the body's size over two lines at most, its tab under
+    it in the description's.
+  - "Alpha" in all 17 languages; the pins follow the badge, the callout and the page.
+
 ### 2026-11-05 - Answer the review of Brain's theme values and Agents page
 - **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count
