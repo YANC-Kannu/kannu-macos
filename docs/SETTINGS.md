@@ -42,7 +42,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
 | One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below) |
-| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless` |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one, alone under or beside text (a back row, "Open ›"), is `flush: true`, so its label keeps that text's edge (below, "The content standard") |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
 | A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
 | Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
@@ -159,7 +159,7 @@ numbers, and this table only says why.
 | `DevicesSettings.swift` | 3 | 4 | Device cards |
 | `DownloadsSettings.swift` | 5 | 2 | Download style cards |
 | `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
-| `ExtensionsSettings.swift` | 3 | 13 | Status colours; the legend and detail cards |
+| `ExtensionsSettings.swift` | 3 | 12 | Status colours; the legend and detail cards |
 | `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
 | `HUDAndOSDSettings.swift` | 17 | 7 | HUD style cards and previews |
 | `IdleAnimationsSettingsSection.swift` | 6 | 10 | Animation cards |
@@ -454,8 +454,17 @@ section describes it, it does not define it.
 | A slider's or stepper's whole trailing column, or a typed value beside its button (a task's Time row) | 220 | `sliderWidth` |
 | Its readout, trailing, monospaced digits | minWidth 40 | `valueColumn` |
 | The ready dot in a status line | 7 | `statusDot` |
-| A control's title to its glyph ("Open ›", a tag chip's ×) | 4 | `iconGap` |
+| A control's title to its glyph ("Open ›", "‹ Tasks", a tag chip's ×) | 4 | `iconGap` |
 | Inside a card | 12 | `cardPadding` |
+
+- **One inset, 12 pt, for text inside and beside a card.** A section's rows, header and footer (`sectionPadding`), the
+  hero and an empty state (`heroPadding`) and a status cell (`cardPadding`) all start their text 12 pt in, so a page's
+  titles share one edge. Only the page's title and the "<Page> settings" rule sit on the column's edge. A lone quiet
+  button keeps that edge with `flush`: bare at rest, its 8-pt inset would set its label off the text above it, so the
+  label sits on the edge and the fill under the pointer reaches left instead.
+- **A card's title is `cardTitle`, 17 pt,** the step between the page's 24 and a row's 13: the hero's state, an empty
+  state's status (Agents, Extensions) and a status cell's headline figure. An empty state's one line is `body` on
+  `inkSecondary`, not a description: it teaches, so it reads as text.
 
 - **No ad-hoc type in a row.** `.caption`, `.caption2` and `.system(size:)` do not belong on text
   that sits in a row's label or control column — that is what made one section's descriptions
@@ -531,10 +540,10 @@ section describes it, it does not define it.
   - A row that exists only in some states (a task source's row, only while it is connected) has a
     standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
-  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet)`) with a chevron
-    `Label`, alone in its own `Section` — the one sanctioned lone left-hanging button, because it
-    is navigation, not an action on a row. Nothing else on a page takes this shape. The sidebar's
-    Back row is shell chrome, not a row of a page.
+  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet, flush: true)`), its
+    chevron `iconGap` before its title, alone in its own `Section` — the one sanctioned lone
+    left-hanging button, because it is navigation, not an action on a row. Nothing else on a page
+    takes this shape. The sidebar's Back row is shell chrome, not a row of a page.
   - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
     a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
     opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the

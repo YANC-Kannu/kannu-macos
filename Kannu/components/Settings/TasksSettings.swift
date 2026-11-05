@@ -324,20 +324,19 @@ struct TasksPageContext {
 
 /// Atop every page, alone in its own Section: up one level, naming where it goes ("‹ GitLab"). The
 /// one sanctioned lone leading button in Brain (docs/SETTINGS.md): it is navigation, not an action
-/// on a row.
+/// on a row. Flush, so its chevron starts on the rows' text column.
 struct TasksBackRow: View {
     let parent: String
     let back: () -> Void
 
     var body: some View {
         Button(action: back) {
-            Label {
-                Text(verbatim: parent)
-            } icon: {
+            HStack(spacing: SettingsMetrics.iconGap) {
                 Image(systemName: "chevron.left")
+                Text(verbatim: parent)
             }
         }
-        .buttonStyle(SettingsButtonStyle(.quiet))
+        .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
         .accessibilityLabel(Text(verbatim: String(localized: "Back to \(parent)")))
     }
 }

@@ -106,13 +106,17 @@ struct ExtensionsSettingsView: View {
                         .foregroundStyle(.secondary.opacity(0.5))
                         .accessibilityHidden(true)
 
+                    // An empty state's type, as on Agents: its title a card title, its line the body's size.
                     Text("No extensions yet")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(SettingsTheme.cardTitle)
+                        .foregroundStyle(SettingsTheme.ink)
                         .textSelection(.enabled)
 
                     Text("Apps using Extension Kit will appear here once they request permission")
-                        .settingsDescriptionStyle()
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)

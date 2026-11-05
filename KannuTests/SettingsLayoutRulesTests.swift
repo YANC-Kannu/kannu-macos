@@ -181,7 +181,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsHelpers.swift": 8,          // badge capsules
         "SettingsPermissionCallout.swift": 1,  // the callout's own card
         "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
-        "SettingsButtonStyle.swift": 1,      // the button's own chrome
+        "SettingsButtonStyle.swift": 2,      // the button's own chrome, and a flush button pulled back onto its column
         "SettingsSelect.swift": 2,           // a segment, and the track it sits in
         "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
         "SettingsField.swift": 1,            // the field inside its chrome
@@ -378,7 +378,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "DevicesSettings.swift": 4,          // device cards
         "DownloadsSettings.swift": 2,        // download style cards
         "EditPanelView.swift": 1,            // dead code but its #Preview
-        "ExtensionsSettings.swift": 13,      // the legend and the detail cards
+        "ExtensionsSettings.swift": 12,      // the legend and the detail cards
         "HUDAndOSDSettings.swift": 7,        // HUD style cards and previews
         "IdleAnimationsSettingsSection.swift": 10, // animation cards
         "LockScreenSettings.swift": 6,       // lock screen previews
