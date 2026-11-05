@@ -4,6 +4,57 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Answer the review of Brain's theme values and Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count
+- **Changes:**
+  - Editors & hooks counts only tools that have a hook. Warp and Claude Desktop have none and counted as hooked, so
+    Cursor missing its hook beside them read "2 of 3 hooked" with nothing installed; it now reads "0 of 1 hooked",
+    and a Mac with only those two reads "2 tools watched".
+  - Each missing hook is offered once: while the empty state offers the first, the cell offers the rest. It hid them
+    all, so a second missing hook was offered nowhere above Editor Hooks.
+  - The hero's figure reads "Tool calls": it counts calls, beside the cell's "tools watched", which counts editors.
+  - `flush` works for a quiet button only, after its fill and its hover, so a filled button never draws outside its
+    frame and the inset left of a flush label still takes clicks. A pin and two plants hold both.
+  - `AgentsPageLiveDataRulesTests` also reads `AgentTurnMetricsView.figureRow`, the hero's off-screen path, for a
+    clock or a follower, and holds the overview to one tool check a visit, each with plants.
+  - docs/SETTINGS.md: a flush button goes under text, never beside it; the empty state's line runs to two lines at
+    most; the count and the offer as above. Strings: "1 tool watched", "%lld tools watched" and "Tool calls" in all
+    17 languages, sorted; "Tools", added two commits ago and now unused, leaves the catalog.
+
+### 2026-11-05 - Brain's Agents hero reads in three bands, and offers the install once
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes for the Agents page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 1, 3 and 6, with 9's and 8's Agents call sites; the live-data contract held unchanged
+- **Changes:**
+  - The hero is three bands: its state as the title in a 17-pt card title and its light's colour, with the light at
+    the right; the session as before; and, pinned to the bottom, the run's figures (run time, tools, tokens in · out),
+    each over a small label from the text column, with "Open chat ›" at the right. It is at least 200 pt tall, not
+    240. The whole card stays the one button: "Open chat ›" is a label drawn like a quiet button.
+  - The install offer shows once: in the empty state when that is shown, otherwise in Editors & hooks. Agents' header
+    keeps the gear alone, so Brain checks the tools once a visit, not twice.
+  - Editors & hooks is one status line: "5 tools watched · hooks installed", or "4 of 5 hooked" and then only the tools
+    missing a hook, each with Install. Every hook keeps its icon in Editor Hooks below.
+  - The status cells' headline figures and the empty state's title use the card title; the empty state's line is the
+    body's size. Usage's percentage stands over what it measures, so the narrowest window does not break "5-hour".
+    Security's "Open ›" is a flush quiet button.
+  - `AgentTurnMetricsView` gains a `figures` option for the hero; the notch's column is unchanged.
+  - 7 new strings, each in the catalog's 17 languages.
+  - Boards: `agents1` now has every hook in, so it shows the cell's quiet line; docs/SETTINGS.md and docs/REGRESSIONS.md
+    entry 22 gain their lines.
+
+### 2026-11-05 - Brain's cards share one inset and a card title
+- **Developer label:** Brain redesign plan: Stage 4, the design review's theme values
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 5, 9 and 8 as theme values and a button option
+- **Changes:**
+  - One inset for text inside and beside a card: a section's sides and the hero's padding are 12 pt, so a row, a
+    section's header and a card's title start on one edge. Only the page's title and the settings rule sit at 0.
+  - `cardTitle`, 17 pt semibold Geist, the step between the page's title and a row. "No extensions yet" uses it, with its
+    line in the body's size on the secondary ink.
+  - `SettingsButtonStyle(.quiet, flush: true)` puts a lone quiet button's label on its column, and the fill under the
+    pointer reaches left by the inset. Tasks' back rows use it, their chevron 4 pt from the title.
+  - The design-system board names `cardTitle`; the layout pins move with the button's padding and Extensions' font;
+    docs/SETTINGS.md gains the inset, the card title and flush buttons.
+
 ### 2026-11-05 - Answer the review of Brain's Agents page
 - **Developer label:** Brain redesign plan: Stage 4, the Agents product page
 - **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks

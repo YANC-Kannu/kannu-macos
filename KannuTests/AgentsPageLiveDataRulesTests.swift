@@ -31,6 +31,7 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
     private static let visibilityPath = "Kannu/components/Settings/BrainVisibility.swift"
     private static let productPagePath = "Kannu/components/Settings/DesignSystem/SettingsProductPage.swift"
     private static let notchPath = "Kannu/components/AgentStatus/NotchAgentStatusView.swift"
+    private static let metricsPath = "Kannu/components/AgentStatus/AgentTurnMetricsView.swift"
 
     // MARK: - Clause 1: throttled and scoped
 
@@ -226,6 +227,18 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         return problems
     }
 
+    /// Brain's static hero lays out through `AgentTurnMetricsView.figureRow`, which the overview does not own, so that
+    /// path is held to the same rule: no clock, no follower, no observed store.
+    static func staticFigureProblems(in metrics: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(metrics)
+        guard let row = region(from: "static func figureRow", to: "static func display", in: code) else {
+            return ["the static figures are not where this rule reads them"]
+        }
+        return ["TimelineView", "ClaudeTurnTokenFollower", "follower", "Timer.", "@ObservedObject", ".repeatForever"]
+            .filter { row.contains($0) }
+            .map { "the static figures keep a clock or a follower: \($0)" }
+    }
+
     func testNothingWorksWhileNothingIsOnScreen() throws {
         let overview = try Self.source(Self.overviewPath)
         XCTAssertEqual(Self.frozenProblems(in: overview), [])
@@ -253,6 +266,12 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
              "    @State private var sessions: [AgentSessionStatus] = []\n    @ObservedObject private var follower = ClaudeTurnTokenFollower.shared"),
             ("            lead(primary: primary)\n", "            lead(primary: primary)\n            TimelineView(.periodic(from: .now, by: 1)) { _ in EmptyView() }\n"),
         ], in: overview, by: Self.frozenProblems)
+        let metrics = try Self.source(Self.metricsPath)
+        XCTAssertEqual(Self.staticFigureProblems(in: metrics), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("figure(runTime, label:", "figure(TimelineView(.periodic(from: .now, by: 1)) { _ in runTime }, label:"),
+            ("            if let tokens {\n", "            if let tokens = ClaudeTurnTokenFollower.shared.latest {\n"),
+        ], in: metrics, by: Self.staticFigureProblems)
     }
 
     // MARK: - A click resolves its target in the action
@@ -279,9 +298,9 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
 
     // MARK: - Tools are checked once per visit
 
-    /// The detector checks files and Launch Services. The overview and the header each call it from `onAppear`, so
-    /// Brain checks twice a visit, and the notch from its empty state's; never from `body`, and nothing on the page
-    /// checks a file of its own.
+    /// The detector checks files and Launch Services. The overview calls it from `onAppear`, once a visit (the header
+    /// offers no install), and the notch from its empty state's; never from `body`, and nothing on the page checks a
+    /// file of its own.
     static func detectionProblems(in sources: [String: String]) -> [String] {
         var problems: [String] = []
         for (path, source) in sources {
@@ -291,6 +310,7 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
                 .compactMap { body(after: "", in: "{" + $0) }
                 .reduce(0) { $0 + $1.components(separatedBy: "AgentToolDetector.detect()").count - 1 }
             if calls == 0 || calls != inAppear { problems.append("\(path) checks the tools outside onAppear") }
+            if path == overviewPath, calls != 1 { problems.append("\(path) checks the tools more than once a visit") }
             if code.contains("fileExists(") { problems.append("\(path) checks a file of its own") }
         }
         return problems
@@ -313,6 +333,7 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             ("let watched = tools.filter(\\.detected)", "let watched = AgentToolDetector.detect().filter(\\.detected)"),
             ("let watched = tools.filter(\\.detected)", "let watched = tools.filter { FileManager.default.fileExists(atPath: $0.name) }"),
+            ("            tools = AgentToolDetector.detect()\n", "            tools = AgentToolDetector.detect()\n            tools = AgentToolDetector.detect()\n"),
         ], in: overview) { Self.detectionProblems(in: [Self.overviewPath: $0]) }
         let notch = try XCTUnwrap(sources[Self.notchPath])
         XCTAssertEqual(Self.notchDetectionProblems(in: notch), [])

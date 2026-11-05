@@ -72,6 +72,8 @@ struct AgentsOverview: View {
         let visible = AgentTrafficLightMapper.latestSessions(sessions).filter(\.isVisible)
         let primary = AgentTrafficLightMapper.primarySession(from: visible)
         let recent = visible.filter { $0.id != primary?.id }.sorted { $0.updatedAt > $1.updatedAt }
+        // Each missing hook is offered once: the empty state, when shown, offers the first, and Editors & hooks the rest.
+        let leadShowsInstall = enabled && primary == nil && !offers.isEmpty
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
             lead(primary: primary)
             if enabled, !recent.isEmpty {
@@ -84,7 +86,7 @@ struct AgentsOverview: View {
                 }
                 .accessibilityElement(children: .contain)
             }
-            statusRow
+            statusRow(showsFirstOffer: !leadShowsInstall)
         }
         .onAppear {
             #if DEBUG
@@ -138,45 +140,34 @@ struct AgentsOverview: View {
     // MARK: - The status row: live while Brain is on screen, a static copy while not
 
     @ViewBuilder
-    private var statusRow: some View {
+    private func statusRow(showsFirstOffer: Bool) -> some View {
         #if DEBUG
         if let fixture = Self.snapshotFixture {
-            AgentsStatusRow(tools: tools, offers: offers, nearLimit: fixture.nearLimit, security: fixture.security)
+            AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: fixture.nearLimit,
+                            security: fixture.security)
         } else {
-            liveOrFrozenStatusRow
+            liveOrFrozenStatusRow(showsFirstOffer: showsFirstOffer)
         }
         #else
-        liveOrFrozenStatusRow
+        liveOrFrozenStatusRow(showsFirstOffer: showsFirstOffer)
         #endif
     }
 
     @ViewBuilder
-    private var liveOrFrozenStatusRow: some View {
+    private func liveOrFrozenStatusRow(showsFirstOffer: Bool) -> some View {
         if visibility.isOnScreen {
-            AgentsLiveStatusRow(tools: tools, offers: offers)
+            AgentsLiveStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer)
         } else {
             // Read once as it froze, not observed: nothing is on screen to show a change.
-            AgentsStatusRow(tools: tools, offers: offers, nearLimit: UsageAlertManager.shared.nearLimit,
+            AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: UsageAlertManager.shared.nearLimit,
                             security: AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking))
         }
     }
 }
 
-/// Agents' header actions (docs/SETTINGS.md, "Product pages"): the gear, which goes to the page's settings, and an
-/// install offer, only while a tool on this Mac has no hook. Each reads its own store.
+/// Agents' header action (docs/SETTINGS.md, "Product pages"): the gear, which goes to the page's settings. The install
+/// offer is the page's, never the header's: in the empty state when that is shown, otherwise in Editors & hooks.
 struct AgentsHeaderActions: View {
-    @ObservedObject private var hookInstaller = AgentHookInstaller.shared
-    @State private var tools: [AgentToolDetector.Tool] = []
-
-    private var offer: AgentToolDetector.Tool? {
-        AgentToolDetector.hookOffers(in: tools) { hook in
-            #if DEBUG
-            if let fixture = AgentsOverview.snapshotFixture { return fixture.installedHooks.contains(hook) }
-            #endif
-            return hookInstaller.isInstalled(hook)
-        }.first
-    }
-
     var body: some View {
         HStack(spacing: SettingsMetrics.rowContent) {
             Button {
@@ -188,18 +179,6 @@ struct AgentsHeaderActions: View {
             .buttonStyle(SettingsButtonStyle(.quiet))
             .help(String(localized: "Agent settings"))
             .accessibilityLabel(String(localized: "Agent settings"))
-            if let offer {
-                AgentsInstallButton(tool: offer)
-            }
-        }
-        .onAppear {
-            #if DEBUG
-            if let fixture = AgentsOverview.snapshotFixture {
-                tools = fixture.tools
-                return
-            }
-            #endif
-            tools = AgentToolDetector.detect()
         }
     }
 }
@@ -219,7 +198,9 @@ private struct AgentsInstallButton: View {
 // MARK: - The hero and the rows
 
 /// The session that matters most, titled by its state: a stopped run ranks above one awaiting input
-/// (`AgentTrafficLightMapper.primarySession`). A click opens its chat.
+/// (`AgentTrafficLightMapper.primarySession`). Three bands: the state in its light's colour, with the light; the session
+/// as a row shows it; and, pinned to the bottom, the run's figures from the text column, with "Open chat ›". The whole
+/// card is one button, so a click anywhere opens its chat.
 private struct AgentsHeroCard: View {
     let session: AgentSessionStatus
     let live: Bool
@@ -237,9 +218,12 @@ private struct AgentsHeroCard: View {
             _ = AgentSessionOpener.open(session)
         } label: {
             VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
-                Text(verbatim: title)
-                    .font(SettingsTheme.sectionTitle)
-                    .foregroundStyle(SettingsTheme.inkSecondary)
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    AgentsStateWord(session: session, font: SettingsTheme.cardTitle, text: title)
+                    Spacer(minLength: 0)
+                    AgentTrafficLightDots(style: .classic, state: session.displayState)
+                        .accessibilityHidden(true)
+                }
                 HStack(alignment: .top, spacing: SettingsMetrics.cardPadding) {
                     AgentProviderIconView(source: .init(rawProvider: session.provider), size: SettingsTheme.heroIcon)
                     VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
@@ -253,12 +237,21 @@ private struct AgentsHeroCard: View {
                             .lineLimit(2)
                         AgentsStateWord(session: session, font: SettingsTheme.bodyStrong)
                     }
-                    Spacer(minLength: 0)
-                    AgentTrafficLightDots(style: .classic, state: session.displayState)
-                        .accessibilityHidden(true)
                 }
                 Spacer(minLength: 0)
-                AgentsMetrics(session: session, live: live, font: SettingsTheme.sheetTitle, prominent: true)
+                HStack(alignment: .bottom, spacing: SettingsMetrics.rowContent) {
+                    AgentsMetrics(session: session, live: live, font: SettingsTheme.cardTitle, figures: true)
+                        // On the text column: past the icon and its gap.
+                        .padding(.leading, SettingsTheme.heroIcon + SettingsMetrics.cardPadding)
+                    Spacer(minLength: 0)
+                    // A quiet button's look, but a label: the card is the one button, never a button inside a button.
+                    HStack(spacing: SettingsMetrics.iconGap) {
+                        Text("Open chat")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(SettingsTheme.bodyStrong)
+                    .foregroundStyle(SettingsTheme.ink)
+                }
             }
             .padding(SettingsTheme.heroPadding)
             .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight, alignment: .topLeading)
@@ -295,7 +288,7 @@ private struct AgentsSessionRow: View {
                 Spacer(minLength: SettingsMetrics.rowContent)
                 HStack(spacing: SettingsMetrics.rowContent) {
                     AgentsStateWord(session: session, font: SettingsTheme.description)
-                    AgentsMetrics(session: session, live: live, font: SettingsTheme.description, prominent: false)
+                    AgentsMetrics(session: session, live: live, font: SettingsTheme.description, figures: false)
                     AgentTrafficLightDots(style: .minimal, state: session.displayState)
                         .accessibilityHidden(true)
                 }
@@ -310,10 +303,12 @@ private struct AgentsSessionRow: View {
     }
 }
 
-/// A session's state in words, in its light's colour, so the state does not rest on colour alone.
+/// A session's state in words, in its light's colour, so the state does not rest on colour alone. The hero passes its
+/// title ("Needs you") as `text`, in the same colour.
 private struct AgentsStateWord: View {
     let session: AgentSessionStatus
     let font: Font
+    var text: String? = nil
     @Default(.agentActiveColor) private var active
     @Default(.agentAwaitingInputColor) private var awaiting
     @Default(.agentStoppedColor) private var stopped
@@ -328,7 +323,7 @@ private struct AgentsStateWord: View {
     }
 
     var body: some View {
-        Text(verbatim: session.displayState.displayName + session.runOutcomeSuffix + session.backgroundWorkSuffix)
+        Text(verbatim: text ?? session.displayState.displayName + session.runOutcomeSuffix + session.backgroundWorkSuffix)
             .font(font)
             .foregroundStyle(colour)
             .lineLimit(1)
@@ -336,16 +331,24 @@ private struct AgentsStateWord: View {
 }
 
 /// The run's metrics. Live, `AgentTurnMetricsView`, which observes the token follower and ticks once a second; while
-/// Brain is not on screen, a static copy that does neither: the run time as it froze and the tool count.
+/// Brain is not on screen, a static copy that does neither: the run time as it froze and the tool count. The hero draws
+/// them as figures, each over its label; a row, as its trailing column.
 private struct AgentsMetrics: View {
     let session: AgentSessionStatus
     let live: Bool
     let font: Font
-    let prominent: Bool
+    let figures: Bool
+
+    /// The figures in ink, their labels in the description's type under them, a section's gap apart.
+    private static let figureStyle = AgentTurnMetricsView.Figures(numberColor: SettingsTheme.ink, labelFont: SettingsTheme.description,
+                                                                  labelColor: SettingsTheme.inkSecondary, spacing: SettingsTheme.sectionGap)
 
     var body: some View {
         if live {
-            AgentTurnMetricsView(session: session, prominent: prominent, font: font)
+            AgentTurnMetricsView(session: session, font: font, figures: figures ? Self.figureStyle : nil)
+        } else if figures, let display = AgentTurnMetricsView.display(for: session) {
+            AgentTurnMetricsView.figureRow(runTime: Text(verbatim: Self.runTime(display)), toolCalls: session.turn?.toolCalls ?? 0,
+                                           tokens: nil, font: font, figures: Self.figureStyle)
         } else if let display = AgentTurnMetricsView.display(for: session) {
             VStack(alignment: .trailing, spacing: SettingsMetrics.labelStack) {
                 Text(verbatim: Self.duration(display))
@@ -367,6 +370,14 @@ private struct AgentsMetrics: View {
         case let .ended(interval): return AgentTurnFormat.ran(AgentTurnFormat.duration(interval))
         }
     }
+
+    /// A figure's run time: the time alone, since its label says what it is.
+    private static func runTime(_ display: AgentTurnDisplay) -> String {
+        switch display {
+        case let .live(since): return AgentTurnFormat.duration(Date().timeIntervalSince(since))
+        case let .ended(interval): return AgentTurnFormat.duration(interval)
+        }
+    }
 }
 
 /// The hero's place when there is no agent to show: the status, at most one line that teaches, and at most one
@@ -383,12 +394,16 @@ private struct AgentsMessageCard<Action: View>: View {
                 .foregroundStyle(SettingsTheme.inkSecondary)
                 .accessibilityHidden(true)
             Text(verbatim: title)
-                .font(SettingsTheme.sectionTitle)
+                .font(SettingsTheme.cardTitle)
                 .foregroundStyle(SettingsTheme.ink)
                 .textSelection(.enabled)
             if let message {
+                // The body's size on the secondary ink: an empty state's one line teaches, so it reads as text.
                 Text(verbatim: message)
-                    .settingsDescriptionStyle()
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: SettingsTheme.proseMaxWidth)
             }
@@ -427,11 +442,12 @@ struct AgentsSecuritySummary: Equatable {
 private struct AgentsLiveStatusRow: View {
     let tools: [AgentToolDetector.Tool]
     let offers: [AgentToolDetector.Tool]
+    let showsFirstOffer: Bool
     @ObservedObject private var usage = UsageAlertManager.shared
     @State private var security = AgentsSecuritySummary(toReview: 0, high: 0, pinnedTitle: nil)
 
     var body: some View {
-        AgentsStatusRow(tools: tools, offers: offers, nearLimit: usage.nearLimit, security: security)
+        AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: usage.nearLimit, security: security)
             .onAppear { security = AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking) }
             // `objectWillChange` comes before a change; read through the run loop, the summary comes after it.
             .task {
@@ -446,10 +462,14 @@ private struct AgentsLiveStatusRow: View {
 }
 
 /// Three cells of equal width and height: Editors & hooks, Usage, and Security only while there is something to
-/// review. Usage never starts a read of its own; each reading says when it was taken.
+/// review. Usage never starts a read of its own; each reading says when it was taken. A cell's headline figure is a
+/// card title; a quiet cell is one line.
 private struct AgentsStatusRow: View {
     let tools: [AgentToolDetector.Tool]
     let offers: [AgentToolDetector.Tool]
+    /// False while the empty state above offers the first missing hook: the cell then offers the rest, so each tool is
+    /// offered once.
+    let showsFirstOffer: Bool
     let nearLimit: [UsageWindowReading]
     let security: AgentsSecuritySummary
 
@@ -483,37 +503,49 @@ private struct AgentsStatusRow: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// The tools Kannu watches on this Mac, and an install offer for each one whose hook is missing.
+    /// One status line: "5 tools watched · hooks installed", or "2 of 3 hooked" and then each tool missing its hook,
+    /// with Install. Only a tool that has a hook counts toward "hooked": Warp and Claude Desktop are watched, never
+    /// hooked, and a Mac with only those reads "2 tools watched". Each hook, with its tool's icon, is in Editor Hooks
+    /// below.
     @ViewBuilder
     private var editors: some View {
         let watched = tools.filter(\.detected)
+        let hookable = watched.filter { $0.hook != nil }
         if watched.isEmpty {
             Text("No tools found")
                 .settingsDescriptionStyle()
+        } else if offers.isEmpty {
+            Text(verbatim: Self.watchedLine(watched.count, hooksInstalled: !hookable.isEmpty))
+                .settingsDescriptionStyle()
         } else {
-            SettingsFlowLayout(spacing: SettingsMetrics.rowContent) {
-                ForEach(watched) { tool in
-                    HStack(spacing: SettingsMetrics.iconGap) {
-                        AgentProviderIconView(source: .init(rawProvider: tool.provider), size: SettingsTheme.listRowIcon)
-                        Text(verbatim: tool.name)
-                            .settingsDescriptionStyle()
+            Text("\(hookable.count - offers.count) of \(hookable.count) hooked")
+                .font(SettingsTheme.cardTitle)
+                .foregroundStyle(SettingsTheme.ink)
+                .textSelection(.enabled)
+            ForEach(showsFirstOffer ? offers : Array(offers.dropFirst())) { offer in
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Text(verbatim: offer.name)
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.ink)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    Button("Install") {
+                        if let hook = offer.hook { AgentHookInstaller.shared.install(hook) }
                     }
+                    .buttonStyle(SettingsButtonStyle())
+                    .controlSize(.small)
                 }
             }
         }
-        ForEach(offers) { offer in
-            HStack(spacing: SettingsMetrics.rowContent) {
-                Text(verbatim: offer.name)
-                    .font(SettingsTheme.body)
-                    .foregroundStyle(SettingsTheme.ink)
-                    .textSelection(.enabled)
-                Spacer(minLength: 0)
-                Button("Install") {
-                    if let hook = offer.hook { AgentHookInstaller.shared.install(hook) }
-                }
-                .buttonStyle(SettingsButtonStyle())
-                .controlSize(.small)
-            }
+    }
+
+    /// "N tools watched", with "· hooks installed" only when a watched tool has a hook to install.
+    private static func watchedLine(_ count: Int, hooksInstalled: Bool) -> String {
+        switch (count == 1, hooksInstalled) {
+        case (true, true): return String(localized: "1 tool watched · hooks installed")
+        case (false, true): return String(localized: "\(count) tools watched · hooks installed")
+        case (true, false): return String(localized: "1 tool watched")
+        case (false, false): return String(localized: "\(count) tools watched")
         }
     }
 
@@ -527,11 +559,14 @@ private struct AgentsStatusRow: View {
             let now = Date()
             ForEach(nearLimit.prefix(2), id: \.id) { reading in
                 VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                    Text(verbatim: "\(AgentSessionStatus.providerLabel(for: reading.provider)) \(reading.label) "
-                         + (reading.percent / 100).formatted(.percent.precision(.fractionLength(0))))
-                        .font(SettingsTheme.bodyStrong)
+                    // The figure, then what it measures, as the hero's figures read: "Claude 5-hour 82%" whole in the
+                    // card title broke at its hyphen in the narrowest window's cell.
+                    Text(verbatim: (reading.percent / 100).formatted(.percent.precision(.fractionLength(0))))
+                        .font(SettingsTheme.cardTitle)
                         .foregroundStyle(SettingsTheme.ink)
                         .textSelection(.enabled)
+                    Text(verbatim: "\(AgentSessionStatus.providerLabel(for: reading.provider)) \(reading.label)")
+                        .settingsDescriptionStyle()
                     if let reset = reading.resetsAt {
                         Text("Resets \(UsageForecast.clock(reset, now: now))")
                             .settingsDescriptionStyle()
@@ -547,7 +582,7 @@ private struct AgentsStatusRow: View {
     @ViewBuilder
     private var findings: some View {
         Text("To review: \(security.toReview)")
-            .font(SettingsTheme.bodyStrong)
+            .font(SettingsTheme.cardTitle)
             .foregroundStyle(SettingsTheme.ink)
             .textSelection(.enabled)
         if security.high > 0 {
@@ -567,7 +602,8 @@ private struct AgentsStatusRow: View {
                 Image(systemName: "chevron.right")
             }
         }
-        .buttonStyle(SettingsButtonStyle(.quiet))
+        // Alone under the cell's text, so its label sits on that text's column.
+        .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
     }
 }
 

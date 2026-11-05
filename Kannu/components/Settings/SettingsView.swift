@@ -300,7 +300,7 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear and its one install offer. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
