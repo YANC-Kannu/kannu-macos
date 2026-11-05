@@ -87,8 +87,9 @@ struct SettingsButtonStyle: ButtonStyle {
                 .opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)
                 .onHover { isHovering = $0 }
                 // Flush: the button's frame starts at its label, so the label sits on the column; the chrome and the
-                // pointer's area reach past it to the left.
-                .padding(.leading, flush ? -inset.leading : .zero)
+                // pointer's area reach past it to the left. Quiet only: a filled button would draw its chrome outside
+                // its frame at rest.
+                .padding(.leading, flush && prominence == .quiet ? -inset.leading : .zero)
         }
     }
 }

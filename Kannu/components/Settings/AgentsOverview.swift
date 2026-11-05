@@ -72,7 +72,7 @@ struct AgentsOverview: View {
         let visible = AgentTrafficLightMapper.latestSessions(sessions).filter(\.isVisible)
         let primary = AgentTrafficLightMapper.primarySession(from: visible)
         let recent = visible.filter { $0.id != primary?.id }.sorted { $0.updatedAt > $1.updatedAt }
-        // The install offer shows once: in the empty state when that is shown, otherwise in Editors & hooks.
+        // Each missing hook is offered once: the empty state, when shown, offers the first, and Editors & hooks the rest.
         let leadShowsInstall = enabled && primary == nil && !offers.isEmpty
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
             lead(primary: primary)
@@ -86,7 +86,7 @@ struct AgentsOverview: View {
                 }
                 .accessibilityElement(children: .contain)
             }
-            statusRow(showsInstall: !leadShowsInstall)
+            statusRow(showsFirstOffer: !leadShowsInstall)
         }
         .onAppear {
             #if DEBUG
@@ -140,26 +140,26 @@ struct AgentsOverview: View {
     // MARK: - The status row: live while Brain is on screen, a static copy while not
 
     @ViewBuilder
-    private func statusRow(showsInstall: Bool) -> some View {
+    private func statusRow(showsFirstOffer: Bool) -> some View {
         #if DEBUG
         if let fixture = Self.snapshotFixture {
-            AgentsStatusRow(tools: tools, offers: offers, showsInstall: showsInstall, nearLimit: fixture.nearLimit,
+            AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: fixture.nearLimit,
                             security: fixture.security)
         } else {
-            liveOrFrozenStatusRow(showsInstall: showsInstall)
+            liveOrFrozenStatusRow(showsFirstOffer: showsFirstOffer)
         }
         #else
-        liveOrFrozenStatusRow(showsInstall: showsInstall)
+        liveOrFrozenStatusRow(showsFirstOffer: showsFirstOffer)
         #endif
     }
 
     @ViewBuilder
-    private func liveOrFrozenStatusRow(showsInstall: Bool) -> some View {
+    private func liveOrFrozenStatusRow(showsFirstOffer: Bool) -> some View {
         if visibility.isOnScreen {
-            AgentsLiveStatusRow(tools: tools, offers: offers, showsInstall: showsInstall)
+            AgentsLiveStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer)
         } else {
             // Read once as it froze, not observed: nothing is on screen to show a change.
-            AgentsStatusRow(tools: tools, offers: offers, showsInstall: showsInstall, nearLimit: UsageAlertManager.shared.nearLimit,
+            AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: UsageAlertManager.shared.nearLimit,
                             security: AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking))
         }
     }
@@ -442,12 +442,12 @@ struct AgentsSecuritySummary: Equatable {
 private struct AgentsLiveStatusRow: View {
     let tools: [AgentToolDetector.Tool]
     let offers: [AgentToolDetector.Tool]
-    let showsInstall: Bool
+    let showsFirstOffer: Bool
     @ObservedObject private var usage = UsageAlertManager.shared
     @State private var security = AgentsSecuritySummary(toReview: 0, high: 0, pinnedTitle: nil)
 
     var body: some View {
-        AgentsStatusRow(tools: tools, offers: offers, showsInstall: showsInstall, nearLimit: usage.nearLimit, security: security)
+        AgentsStatusRow(tools: tools, offers: offers, showsFirstOffer: showsFirstOffer, nearLimit: usage.nearLimit, security: security)
             .onAppear { security = AgentsSecuritySummary(SecurityFindingsStore.shared.groupRanking) }
             // `objectWillChange` comes before a change; read through the run loop, the summary comes after it.
             .task {
@@ -467,8 +467,9 @@ private struct AgentsLiveStatusRow: View {
 private struct AgentsStatusRow: View {
     let tools: [AgentToolDetector.Tool]
     let offers: [AgentToolDetector.Tool]
-    /// False while the empty state above offers the install, so the offer shows once.
-    let showsInstall: Bool
+    /// False while the empty state above offers the first missing hook: the cell then offers the rest, so each tool is
+    /// offered once.
+    let showsFirstOffer: Bool
     let nearLimit: [UsageWindowReading]
     let security: AgentsSecuritySummary
 
@@ -502,40 +503,49 @@ private struct AgentsStatusRow: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// One status line: "5 tools watched · hooks installed", or "4 of 5 hooked" and then each tool missing its hook,
-    /// with Install. A tool with no hook to install, such as Warp, counts as hooked. Each hook, with its tool's icon, is
-    /// in Editor Hooks below.
+    /// One status line: "5 tools watched · hooks installed", or "2 of 3 hooked" and then each tool missing its hook,
+    /// with Install. Only a tool that has a hook counts toward "hooked": Warp and Claude Desktop are watched, never
+    /// hooked, and a Mac with only those reads "2 tools watched". Each hook, with its tool's icon, is in Editor Hooks
+    /// below.
     @ViewBuilder
     private var editors: some View {
         let watched = tools.filter(\.detected)
+        let hookable = watched.filter { $0.hook != nil }
         if watched.isEmpty {
             Text("No tools found")
                 .settingsDescriptionStyle()
         } else if offers.isEmpty {
-            Text(verbatim: watched.count == 1 ? String(localized: "1 tool watched · hooks installed")
-                 : String(localized: "\(watched.count) tools watched · hooks installed"))
+            Text(verbatim: Self.watchedLine(watched.count, hooksInstalled: !hookable.isEmpty))
                 .settingsDescriptionStyle()
         } else {
-            Text("\(watched.count - offers.count) of \(watched.count) hooked")
+            Text("\(hookable.count - offers.count) of \(hookable.count) hooked")
                 .font(SettingsTheme.cardTitle)
                 .foregroundStyle(SettingsTheme.ink)
                 .textSelection(.enabled)
-            if showsInstall {
-                ForEach(offers) { offer in
-                    HStack(spacing: SettingsMetrics.rowContent) {
-                        Text(verbatim: offer.name)
-                            .font(SettingsTheme.body)
-                            .foregroundStyle(SettingsTheme.ink)
-                            .textSelection(.enabled)
-                        Spacer(minLength: 0)
-                        Button("Install") {
-                            if let hook = offer.hook { AgentHookInstaller.shared.install(hook) }
-                        }
-                        .buttonStyle(SettingsButtonStyle())
-                        .controlSize(.small)
+            ForEach(showsFirstOffer ? offers : Array(offers.dropFirst())) { offer in
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Text(verbatim: offer.name)
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.ink)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    Button("Install") {
+                        if let hook = offer.hook { AgentHookInstaller.shared.install(hook) }
                     }
+                    .buttonStyle(SettingsButtonStyle())
+                    .controlSize(.small)
                 }
             }
+        }
+    }
+
+    /// "N tools watched", with "· hooks installed" only when a watched tool has a hook to install.
+    private static func watchedLine(_ count: Int, hooksInstalled: Bool) -> String {
+        switch (count == 1, hooksInstalled) {
+        case (true, true): return String(localized: "1 tool watched · hooks installed")
+        case (false, true): return String(localized: "\(count) tools watched · hooks installed")
+        case (true, false): return String(localized: "1 tool watched")
+        case (false, false): return String(localized: "\(count) tools watched")
         }
     }
 

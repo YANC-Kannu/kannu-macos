@@ -42,7 +42,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
 | One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below) |
-| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one, alone under or beside text (a back row, "Open ›"), is `flush: true`, so its label keeps that text's edge (below, "The content standard") |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
 | A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
 | Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
@@ -319,22 +319,23 @@ gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks 
 - **Agents** leads with a hero for the session `primarySession` ranks first, at least `heroMinHeight` (200 pt) tall,
   in three bands. Top: its state as the title ("Needs you", "Working", "Finished"), in `cardTitle` and in its light's
   colour, with the light at the right. Middle: the icon, provider · project, the chat and the state in words. Bottom,
-  pinned: the run's figures, each over a small label (Run time, Tools, Tokens in · out), from the text column, and
+  pinned: the run's figures, each over a small label (Run time, Tool calls, Tokens in · out), from the text column, and
   "Open chat ›" at the right. The whole card is one button, so "Open chat ›" is a label drawn like a quiet button, never
   a button inside a button. Then Recent chats, rows `listRowHeight` tall and `listRowGap` apart, each with a trailing
   column of `listTrailingWidth`: the state in words and in its light's colour, the metrics and the light. Then a status
-  row of three equal cells: Editors & hooks (one line, "5 tools watched · hooks installed", or "4 of 5 hooked" and then
-  each tool missing its hook, with Install; a tool with no hook to install, such as Warp, counts as hooked), Usage
+  row of three equal cells: Editors & hooks (one line, "5 tools watched · hooks installed", or "2 of 3 hooked" and then
+  each tool missing its hook, with Install; only a tool that has a hook counts toward "hooked", so Warp and Claude
+  Desktop are watched, never hooked), Usage
   (readings near their limit, each its percentage over what it measures, with its reset and "As of"; never a read of
   its own) and Security (only while findings wait for review). A cell's headline figure is `cardTitle`, and a quiet
   cell is one line. A click on the hero or a row opens its chat.
-- **An empty state** keeps the hero's place and height: the status in `cardTitle`, at most one line of `proseMaxWidth`
-  in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
+- **An empty state** keeps the hero's place and height: the status in `cardTitle`, one short sentence at most
+  `proseMaxWidth` wide (two lines at most) in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
   first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the
   settings show in both.
-- **Agents' header** holds the gear alone, which goes to the first settings row. **The install offer shows once:** in
-  the empty state while that is shown, otherwise in the Editors & hooks cell, never in the header and never twice (the
-  cell's `showsInstall`). The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
+- **Agents' header** holds the gear alone, which goes to the first settings row. **Each missing hook is offered once:**
+  the empty state, while shown, offers the first and the Editors & hooks cell the rest; otherwise the cell offers them
+  all. Never in the header, never twice (the cell's `showsFirstOffer`). The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
   Launch Services from the page's `onAppear`, once a visit, never in `body` and never Warp's container; the notch asks as
   its empty state appears, never on the hover-opens while an agent works.
 - **Nothing moved out of reach.** Every settings row keeps its id, its search entry and its deep link, below the
