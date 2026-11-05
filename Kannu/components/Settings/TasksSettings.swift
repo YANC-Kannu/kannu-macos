@@ -42,7 +42,8 @@ struct TasksSettings: View {
     @Default(.enableTasks) private var enableTasks
     @Default(.tasksDefaultSessionMinutes) private var defaultSessionMinutes
 
-    // On the Form, not on a row: rows of a long, lazy Form may not exist when these change.
+    // On the tab, not on a row: a row goes with its page when the path changes, and the task rows
+    // are lazy, built only while in view, so a row may not exist when these change.
     @State private var sheet: TaskSheet?
     @State private var pendingDelete: TaskItem?
     /// New Task's draft, kept between sheets so Cancel loses nothing. A box in `@State`, deliberately
@@ -63,10 +64,9 @@ struct TasksSettings: View {
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
-    /// ⌘N, New Task, on the Form rather than on Add a task's button: that row scrolls out of a long,
-    /// lazy Form and would take a shortcut on its button with it. Only on the pages that have the
-    /// row. The filter is read when pressed, so this tab observes neither the filters nor the
-    /// manager (with Tasks off, nothing here touches `TasksManager`).
+    /// ⌘N, New Task, on the tab rather than on Add a task's button: one shortcut for both pages
+    /// that have that row, and only on them. The filter is read when pressed, so this tab observes
+    /// neither the filters nor the manager (with Tasks off, nothing here touches `TasksManager`).
     @ViewBuilder
     private var newTaskShortcut: some View {
         if enableTasks, let page = path.last, page == .allTasks || page == .source(.local) {
@@ -311,8 +311,8 @@ enum TasksPage: Hashable {
 }
 
 /// What a page needs from the tab. The sheets (New Task's draft with them) and the alerts live on
-/// the outer Form, because rows of a long, lazy Form may not exist when they change; `open` goes
-/// one level in.
+/// the tab, because a row goes with its page when the path changes and the task rows are lazy;
+/// `open` goes one level in.
 struct TasksPageContext {
     let sheet: Binding<TaskSheet?>
     let pendingDelete: Binding<TaskItem?>

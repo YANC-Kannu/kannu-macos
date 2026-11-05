@@ -133,7 +133,7 @@ struct ScreenAssistantSettings: View {
                 }
 
                 SettingsSection {
-                    SettingsActionRow {
+                    SettingsActionRow("Clear files", description: "Permanently removes attached files and recordings.") {
                         Button("Clear All Files", role: .destructive) {
                             screenAssistantManager.clearAllFiles()
                         }
@@ -142,8 +142,6 @@ struct ScreenAssistantSettings: View {
                     }
                 } header: {
                     SettingsSectionHeader("Actions")
-                } footer: {
-                    SettingsFooter("Clear all files removes all attached files and audio recordings. This action is permanent.")
                 }
 
                 if !screenAssistantManager.attachedFiles.isEmpty {

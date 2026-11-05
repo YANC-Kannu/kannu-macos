@@ -70,10 +70,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 2,   // "Add" / "Add New" — labels of a tappable card
         "MusicSlotConfigurationView.swift": 1,      // palette item label — draggable/tappable chip
         "SecurityFindingRow.swift": 1,              // severity badge chip, accessibility-hidden
-        // Badges and tappable style cards: a selectable label swallows the card's click.
-        "AppearanceSettings.swift": 2,
-        "DevicesSettings.swift": 1,
-        "DownloadsSettings.swift": 1,
+        // Badges: decorative chips. A choice card's name takes `settingsChoiceLabel`, so the scan no longer counts it.
         "SettingsBadge.swift": 1,                   // the one badge on a page
         "SettingsHelpers.swift": 1,                 // the "Coming soon" tag, unused
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
@@ -116,16 +113,15 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedAdHocFontCounts: [String: Int] = [
         "AnimationEditorView.swift": 11,     // the animation editor sheet: its own dense scale
         "ExtensionsSettings.swift": 1,       // the empty state's 48-pt glyph
-        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and their chips
+        "IdleAnimationsSettingsSection.swift": 4,  // the Add card and the delete glyph; a card's name is `settingsChoiceLabel`
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
-        "SecurityFindingRow.swift": 2,       // the severity badge chips
+        "SecurityFindingRow.swift": 1,       // the severity badge chip
         "SettingsSidebarRow.swift": 1,       // the BETA capsule
         "SettingsBadge.swift": 1,            // the one badge, in the caption's size
-        "AppearanceSettings.swift": 3,       // style cards and previews
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "CustomOSDSettings.swift": 1,        // the OSD preview
-        "DevicesSettings.swift": 3,          // device cards
-        "DownloadsSettings.swift": 1,        // a badge
-        "HUDAndOSDSettings.swift": 6,        // HUD style cards and previews
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
+        "HUDAndOSDSettings.swift": 5,        // HUD style previews
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
         "TimerSettings.swift": 4,            // the timer-preset editor
@@ -160,8 +156,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedRowPaddingCounts: [String: Int] = [
         "AnimationEditorView.swift": 8,      // the editor sheet
         "EditPanelView.swift": 1,            // a panel, not a Form
-        "ExtensionsSettings.swift": 5,       // the empty state and the expanded detail card
-        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and chips
+        "ExtensionsSettings.swift": 4,       // the empty state, the expanded details' gap, and the status chip
+        "IdleAnimationsSettingsSection.swift": 5,  // the cards' scrolling strip, the delete glyph, and the Add menu's two items
         "MusicSlotConfigurationView.swift": 5,     // the slot canvas
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
         "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
@@ -173,7 +169,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
         "AgentStatusSettings.swift": 1,      // a preview
-        "AppearanceSettings.swift": 6,       // style cards and previews
+        "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
         "CustomOSDSettings.swift": 1,        // the OSD preview
         "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
         "LockScreenSettings.swift": 4,       // lock screen previews
@@ -343,20 +339,20 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AgentStatusSettings.swift": 1,      // status green
         "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
-        "AppearanceSettings.swift": 10,      // style cards and previews of notch content
+        "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
         "ClipboardSettings.swift": 4,        // status colours
-        "DevicesSettings.swift": 3,          // device cards
-        "DownloadsSettings.swift": 5,        // download style cards
+        "DevicesSettings.swift": 1,          // the icon style card's resting fill
+        "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
         "ExtensionsSettings.swift": 3,       // status colours
         "GeneralSettings.swift": 1,          // .tint(.accentColor) around LaunchPermissionRow, shared with onboarding
-        "HUDAndOSDSettings.swift": 17,       // HUD style cards and previews
-        "IdleAnimationsSettingsSection.swift": 6,  // animation cards
+        "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
+        "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
         "LiveActivitiesSettings.swift": 10,  // each activity's own colour
         "LockScreenSettings.swift": 18,      // lock screen previews
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
-        "SecurityFindingRow.swift": 4,       // severity badges
+        "SecurityFindingRow.swift": 3,       // severity badges
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
         "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
@@ -372,20 +368,19 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// way. Separate from the ad-hoc font rule above, which is about size, so `.font(.caption)` counts in both.
     private static let pinnedSystemFontCounts: [String: Int] = [
         "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
-        "AppearanceSettings.swift": 3,       // style cards and previews
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "BatterySettings.swift": 2,          // battery previews
         "ClipboardSettings.swift": 1,        // a status line
         "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
-        "DevicesSettings.swift": 4,          // device cards
-        "DownloadsSettings.swift": 2,        // download style cards
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
         "EditPanelView.swift": 1,            // dead code but its #Preview
         "ExtensionsSettings.swift": 12,      // the legend and the detail cards
-        "HUDAndOSDSettings.swift": 7,        // HUD style cards and previews
-        "IdleAnimationsSettingsSection.swift": 10, // animation cards
+        "HUDAndOSDSettings.swift": 6,        // HUD style previews
+        "IdleAnimationsSettingsSection.swift": 5,  // the Add card and the delete glyph
         "LockScreenSettings.swift": 6,       // lock screen previews
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 1,  // a status line
-        "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityFindingRow.swift": 1,       // the severity badge
         "SettingsColorPicker.swift": 2,      // the colour popover
         "SettingsHelpers.swift": 2,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsPermissionCallout.swift": 1,  // the callout's title

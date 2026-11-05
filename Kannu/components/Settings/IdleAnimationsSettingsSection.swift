@@ -306,13 +306,7 @@ struct AnimationPreviewCard: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color(nsColor: .controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(
-                                isSelected ? Color.accentColor : Color.clear,
-                                lineWidth: 2.5
-                            )
-                    )
+                    .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
                 
                 // Animation preview
                 AnimationPreview(animation: animation)
@@ -344,32 +338,17 @@ struct AnimationPreviewCard: View {
                 }
             }
             
-            // Name and badge
+            // Name and badge: the ring says selected, so the badge only says built-in.
             VStack(spacing: 4) {
                 Text(animation.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .settingsChoiceLabel(isSelected: isSelected)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .frame(width: 100)
                     .textSelection(.enabled)
                 
-                if isSelected {
-                    Text("Selected")
-                        .font(.system(size: 10))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.accentColor)
-                        )
-                } else if animation.isBuiltIn {
-                    Text("Built-in")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                if animation.isBuiltIn {
+                    SettingsBadge(String(localized: "Built-in"))
                 }
             }
         }

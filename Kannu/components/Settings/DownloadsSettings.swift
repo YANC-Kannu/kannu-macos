@@ -86,8 +86,9 @@ struct Downloads: View {
                         .fill(backgroundColor)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(borderColor, lineWidth: isSelected ? 2 : 1)
+                                .strokeBorder(borderColor, lineWidth: 1)
                         )
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
 
                     if style == .progress {
                         ProgressView()
@@ -108,12 +109,10 @@ struct Downloads: View {
                 }
 
                 Text(style.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .settingsChoiceLabel(isSelected: isSelected)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
                     .frame(width: 100)
-                    .foregroundStyle(disabled ? .secondary : .primary)
             }
             .contentShape(Rectangle())
             .onTapGesture {
@@ -126,13 +125,11 @@ struct Downloads: View {
 
         private var backgroundColor: Color {
             if disabled { return Color(nsColor: .controlBackgroundColor) }
-            if isSelected { return Color.accentColor.opacity(0.1) }
             if isHovering { return Color.primary.opacity(0.05) }
             return Color(nsColor: .controlBackgroundColor)
         }
 
         private var borderColor: Color {
-            if isSelected { return Color.accentColor }
             if isHovering { return Color.primary.opacity(0.1) }
             return Color.clear
         }

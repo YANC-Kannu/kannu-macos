@@ -103,7 +103,7 @@ struct LockScreenSettings: View {
             }
 
             SettingsSection {
-                SettingsActionRow {
+                SettingsActionRow("Preview widgets", description: "Opens a transparent window with mock data.") {
                     Button(previewManager.isPreviewVisible ? "Hide lock screen preview" : "Preview lock screen widgets") {
                         previewManager.togglePreview()
                     }
@@ -111,8 +111,6 @@ struct LockScreenSettings: View {
                 .settingsHighlight(id: highlightID("Preview lock screen widgets"))
             } header: {
                 SettingsSectionHeader("Preview")
-            } footer: {
-                SettingsFooter("Opens a transparent preview window with mock data that mirrors the current lock screen widget configuration.")
             }
 
             SettingsSection {

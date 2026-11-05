@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's pages say each thing one way
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the pages
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 10, 11, 13, 16, 17, 18 and 21 on the pages, and the comments that explained a placement by a lazy Form
+- **Changes:**
+  - Card buttons take the standard style: Appearance's Upload skin and Add icon, an extension's Authorize and
+    Re-authorize, and Agents' Turn On and Install hook. `.primary` stays on sheets' default actions and on Tasks' New
+    Task, the page's one verb until Stage 5 gives it a header.
+  - Every choice card says "selected" with the one ring, and its name in ink: the HUD style's dot, the idle animation's
+    "Selected" pill and the skin's and icon's blue name pills go, with the tinted fill on the download and Bluetooth
+    cards. An idle animation's "Built-in" is the badge.
+  - General's Permissions are rows of their card, their buttons trailing, not cards inside it; onboarding keeps its
+    cards. An extension's expanded details are a bordered card, not a darker one.
+  - A finding's "Details" is a flush quiet button in ink, its chevron after the word.
+  - Slider values move from titles into the readout: HUD's Width, Height, Size, Screen padding and Line width, and
+    General's two custom notch sizes.
+  - Lock screen's Preview and the Actions of Clipboard and Screen Assistant get a title and a caption, their footers
+    moved into the caption; About's two report buttons share one row, each keeping its search landing.
+  - The Focus callout takes the offer's blue. Appearance drops the Lock Screen glass preview, an empty panel; the Lock
+    screen page's Preview shows the real widgets. A board draws Devices' 3D icon from its movie's first frame, since
+    boards draw no video; the app plays the movie as before.
+  - Comments that explained a placement by "a lazy Form" give today's reason (Tasks, Timer, General, HUD and OSD).
+  - Strings: 11 new keys in all 17 languages; 10 keys this change left unused leave the catalog.
+  - Pins follow the counts that moved; docs/SETTINGS.md and docs/REGRESSIONS.md entry 22 gain their lines.
+
 ### 2026-11-05 - Brain's shared pieces get one look each
 - **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the shared components
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 11, 12, 14, 19 and 20 where a shared component carries them, and the looks the pages take next
