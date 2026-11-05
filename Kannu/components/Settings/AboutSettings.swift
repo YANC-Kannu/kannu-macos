@@ -52,8 +52,8 @@ struct About: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 LabeledContent("Release name") {
                     Text(ReleaseInfo.codename)
                         .foregroundStyle(.secondary)
@@ -76,7 +76,7 @@ struct About: View {
                 SettingsSectionHeader("Version info")
             }
 
-            Section {
+            SettingsSection {
                 SettingsActionRow("Terms of Use", description: termsAcceptanceText) {
                     Button("View") { LegalDocuments.open(.terms) { legalDocumentMissing = !$0 } }
                 }
@@ -96,7 +96,7 @@ struct About: View {
                 SettingsSectionHeader("Legal")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow(
                     "Watch for freezes",
                     description: "If Kannu's interface stops responding for five seconds, it writes down what it was doing to ~/Library/Logs/Kannu and offers you the note next time it starts. Nothing is shown while it is stuck, and nothing is sent anywhere. On by default for the Developer profile."

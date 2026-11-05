@@ -81,5 +81,5 @@ struct SettingsPermissionCallout: View {
 }
 
 #Preview {
-    Form { HUD() }
+    SettingsPage { HUD() }
 }

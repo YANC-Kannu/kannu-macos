@@ -65,7 +65,7 @@ struct AllTasksPage: View {
     var body: some View {
         tasksSection
         // A Section earns its gap (docs/SETTINGS.md): the folded extras are rows of one Section.
-        Section {
+        SettingsSection {
             recentlyClosedGroup
             archiveGroup
             tagColorsGroup
@@ -158,7 +158,7 @@ struct AllTasksPage: View {
         let filter = filter
         let rows = manager.listedTasks(filter)
         let total = manager.activeTasks.count
-        return Section {
+        return SettingsSection {
             if case .failed(let reason) = manager.loadState {
                 SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }

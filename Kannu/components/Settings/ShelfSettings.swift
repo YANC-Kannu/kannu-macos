@@ -55,9 +55,9 @@ struct Shelf: View {
     }
 
     var body: some View {
-        Form {
+        SettingsPage {
             if !canEnableShelf || !fullDiskAccessPermission.isAuthorized {
-                Section {
+                SettingsSection {
                     if !canEnableShelf {
                         SettingsPermissionCallout(
                             title: "Additional folder access required",
@@ -88,7 +88,7 @@ struct Shelf: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .dynamicShelf) {
                     Text("Enable shelf")
                 }
@@ -120,7 +120,7 @@ struct Shelf: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow("Quick Share Service", description: selectedProvider == nil
                             ? nil : Text("Files dropped on the shelf will be shared via this service")) {
                     // The saved id shows before discovery ends: the select draws the selection's own title.
@@ -172,7 +172,7 @@ private struct LocalSendSettingsSection: View {
     }
 
     var body: some View {
-        Section {
+        SettingsSection {
             SettingsRow("Device Picker Style") {
                 SettingsSelect("Device Picker Style", selection: $glassMode,
                                options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.localizedName)

@@ -55,7 +55,7 @@ struct TaskDetailPage: View {
             // one card with "Details" centred (David's picture, 2026-10-24).
             content(task)
         } else {
-            Section {
+            SettingsSection {
                 SettingsNoteRow("This task is gone", description: "It was deleted, or cleared from the archive.")
             }
         }
@@ -77,7 +77,7 @@ struct TaskDetailPage: View {
         let remoteLabels = (task.remote?.labels ?? []).map(TaskDetailSummary.labelDisplay)
         let line = [summary.shortKey, summary.status.name, summary.isDraft ? String(localized: "Draft") : nil]
             .compactMap { $0 }.joined(separator: " · ")
-        return Section {
+        return SettingsSection {
             LabeledContent {
                 if task.visibility == .active {
                     HStack(spacing: SettingsMetrics.rowContent) {
@@ -235,7 +235,7 @@ struct TaskDetailPage: View {
     // MARK: - Details
 
     private func detailsSection(_ task: TaskItem, summary: TaskDetailSummary) -> some View {
-        Section {
+        SettingsSection {
             if let note = summary.note {
                 SettingsNoteRow(verbatim: note)
             }
@@ -312,7 +312,7 @@ struct TaskDetailPage: View {
     @ViewBuilder
     private func endSection(_ task: TaskItem) -> some View {
         let isTimed = manager.timing?.taskID == task.id
-        Section {
+        SettingsSection {
             switch task.visibility {
             case .active:
                 if task.source == .local {

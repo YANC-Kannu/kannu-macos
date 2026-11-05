@@ -331,12 +331,12 @@ private struct SettingsForm<Content: View>: View {
                         highlightCoordinator.consumeScrollRequest(request)
                     }
             }
-            // Capped, then held the page inset from the panel's leading edge, never centred, so a
-            // full-screen panel's spare width gathers on the right. The `Form` adds its own margin to the
-            // padding. Its scrollbar sits at the page's edge, not the panel's, until Stage 4.
-            .frame(maxWidth: SettingsTheme.pageMaxWidth)
-            .padding(.horizontal, (isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset) - SettingsTheme.formMargin)
+            // The page is one scroll view across the panel, so its scrollbar sits at the panel's edge. It caps
+            // its own column and starts it the inset from the panel's leading edge, never centred, so a
+            // full-screen panel's spare width gathers on the right; the title starts there too. Measured here,
+            // at the panel's width, and handed to both.
             .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.settingsPageInset, isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset)
             .onGeometryChange(for: Bool.self) { $0.size.width >= SettingsTheme.widePanelWidth } action: { isWidePanel = $0 }
         }
         .onPreferenceChange(SettingsPageTitleKey.self) { pageTitle = $0 }
@@ -1148,14 +1148,14 @@ extension SettingsView {
 
     /// DEBUG snapshot harness: the shortcut recorder rows, shown only once global shortcuts are on.
     static func snapshotShortcutRows() -> AnyView {
-        AnyView(Form { Shortcuts().shortcutsSection })
+        AnyView(SettingsPage { Shortcuts().shortcutsSection })
     }
 
     /// DEBUG snapshot harness: the Controls tab's Custom OSD, Vertical Bar and Circular sections, which
     /// show only when that style's card is selected (the harness must not change the user's choice).
     static func snapshotControlsStyles() -> AnyView {
         let controls = HUDAndOSDSettingsView()
-        return AnyView(Form {
+        return AnyView(SettingsPage {
             if #available(macOS 15.0, *) {
                 CustomOSDSettings()
             }

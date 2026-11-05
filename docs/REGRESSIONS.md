@@ -1603,6 +1603,19 @@ themselves; the sheets keep the hooks they had (Add Tags' and New Task's first f
 check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
 select's.
 
+**2026-11-05 addendum: a page builds every row as it appears.** Stage 4 replaced the grouped `Form` with `SettingsPage`,
+a plain `VStack` in one scroll view: a search or a deep link scrolls to a row's id, and a lazy stack cannot scroll to a
+row it has not built. The `Form` built a row as it scrolled in and dropped it as it scrolled out. So a row's `onAppear`
+and `.task` now run as the page opens, and its `onDisappear` as the page goes or Brain closes, never on a scroll. Every
+hook under Settings was read against this, and none needed a change: each loads or checks once per visit (Agents' stored
+secrets, Security's ADR check and policy, a task source's stale sync, Appearance's notch width) or saves on leaving
+(a task's title and estimate, which also save at the close itself). A row that animates now animates while its page is
+open, in view or not: Appearance's idle-animation previews, Devices' looping icon, Downloads' spinner and a task page's
+minute clock. Closing still takes the content out, so a closed Brain costs nothing, as before. **Not measured:** the
+cost of Appearance open with its previews scrolled out of view, and a full-screen Brain parked in another Space, which
+now runs all of its page's animations rather than those in view. `SettingsPage` and `SettingsSection` add no
+`onAppear`, no `.task` and no animator, which `SettingsDesignSystemRulesTests` holds, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
@@ -1689,7 +1702,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll (its 2026-11-05 addendum). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

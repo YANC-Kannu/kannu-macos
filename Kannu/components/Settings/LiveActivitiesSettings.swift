@@ -41,8 +41,8 @@ struct LiveActivitiesSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableScreenRecordingDetection) {
                     Text("Enable Screen Recording Detection")
                 }
@@ -78,7 +78,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Uses event-driven private API for real-time screen recording detection")
             }
 
-            Section {
+            SettingsSection {
                 if !fullDiskAccessPermission.isAuthorized {
                     SettingsPermissionCallout(
                         title: String(localized: "Custom Focus metadata"),
@@ -153,7 +153,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Listens for Focus session changes via distributed notifications")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableCapsLockIndicator) {
                     Text("Show Caps Lock Indicator")
                 }
@@ -178,7 +178,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Adds a notch HUD when Caps Lock is enabled, with optional label and tint controls.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableCameraDetection) {
                     Text("Enable Camera Detection")
                 }
@@ -231,7 +231,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Shows green camera icon and yellow microphone icon when in use. Uses event-driven CoreAudio and CoreMediaIO APIs.")
             }
 
-            Section {
+            SettingsSection {
                 Toggle(
                     "Enable music live activity",
                     isOn: $coordinator.musicLiveActivityEnabled.animation()

@@ -37,8 +37,8 @@ struct ScreenAssistantSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableScreenAssistant) {
                     Text("Enable Screen Assistant")
                 }
@@ -50,7 +50,7 @@ struct ScreenAssistantSettings: View {
             }
 
             if enableScreenAssistant {
-                Section {
+                SettingsSection {
                     LabeledContent {
                         HStack(spacing: 8) {
                             if geminiApiKey.isEmpty {
@@ -132,7 +132,7 @@ struct ScreenAssistantSettings: View {
                     }
                 }
 
-                Section {
+                SettingsSection {
                     SettingsActionRow {
                         Button("Clear All Files", role: .destructive) {
                             screenAssistantManager.clearAllFiles()
@@ -147,7 +147,7 @@ struct ScreenAssistantSettings: View {
                 }
 
                 if !screenAssistantManager.attachedFiles.isEmpty {
-                    Section {
+                    SettingsSection {
                         ForEach(screenAssistantManager.attachedFiles) { file in
                             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                                 HStack(spacing: SettingsMetrics.rowContent) {
