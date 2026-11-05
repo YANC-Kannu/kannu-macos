@@ -138,8 +138,9 @@ private extension DevicesSettingsView {
                         .fill(backgroundColor)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(borderColor, lineWidth: isSelected ? 2 : 1)
+                                .strokeBorder(borderColor, lineWidth: 1)
                         )
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
 
                     preview
                 }
@@ -151,8 +152,7 @@ private extension DevicesSettingsView {
                 }
 
                 Text(style.title)
-                    .font(.caption)
-                    .fontWeight(.medium)
+                    .settingsChoiceLabel(isSelected: isSelected)
             }
             .contentShape(Rectangle())
             .onTapGesture { action() }
@@ -182,18 +182,23 @@ private extension DevicesSettingsView {
         }
 
         private var backgroundColor: Color {
-            if isSelected { return Color.accentColor.opacity(0.12) }
             if isHovering { return Color.primary.opacity(0.05) }
             return Color(nsColor: .controlBackgroundColor)
         }
 
         private var borderColor: Color {
-            if isSelected { return Color.accentColor }
             if isHovering { return Color.primary.opacity(0.1) }
             return Color.clear
         }
     }
 }
+
+#if DEBUG
+extension DevicesSettingsView {
+    /// Set by the boards (`DebugSnapshots`): the 3D icon shows its movie's first frame instead of playing it.
+    static var snapshotDrawsStill = false
+}
+#endif
 
 private struct SettingsLoopingVideoIcon: NSViewRepresentable {
     let url: URL
@@ -202,6 +207,19 @@ private struct SettingsLoopingVideoIcon: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = WindowFollowingView(frame: NSRect(origin: .zero, size: size))
         view.wantsLayer = true
+
+        #if DEBUG
+        // A board renders the layer tree, which draws no video, so the 3D option came out empty: a board shows the
+        // movie's first frame instead, and makes no player.
+        if DevicesSettingsView.snapshotDrawsStill {
+            let still = CALayer()
+            still.contents = try? AVAssetImageGenerator(asset: AVURLAsset(url: url)).copyCGImage(at: .zero, actualTime: nil)
+            still.contentsGravity = .resizeAspect
+            still.frame = view.bounds
+            view.layer?.addSublayer(still)
+            return view
+        }
+        #endif
 
         let layer = AVPlayerLayer()
         layer.videoGravity = .resizeAspect

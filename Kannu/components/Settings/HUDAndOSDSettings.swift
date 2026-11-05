@@ -373,8 +373,8 @@ struct HUDAndOSDSettingsView: View {
             }
         }
         // These lived on the Dynamic Island and Custom OSD sub-views' own Forms, live only while that
-        // style was selected. Rows of a lazy Form cannot host them reliably, so they sit here, keyed
-        // by the selected style exactly as before.
+        // style was selected. A style's sections are built only while it is selected, and these must see
+        // the switch away from it too, so they sit here, keyed by the selected style exactly as before.
         .onChange(of: selectedTab) { _, _ in
             accessibilityPermission.refreshStatus()
         }
@@ -490,7 +490,7 @@ struct HUDAndOSDSettingsView: View {
                 ])
             }
 
-            dimensionSlider(Text("Screen Padding: \(Int(verticalHUDPadding))px"), value: $verticalHUDPadding, in: 0...100, step: 4)
+            dimensionSlider("Screen padding", value: $verticalHUDPadding, in: 0...100, step: 4)
         } header: {
             SettingsSectionHeader("Position")
         } footer: {
@@ -498,8 +498,8 @@ struct HUDAndOSDSettingsView: View {
         }
 
         SettingsSection {
-            dimensionSlider(Text("Width: \(Int(verticalHUDWidth))px"), value: $verticalHUDWidth, in: 24...80, step: 2)
-            dimensionSlider(Text("Height: \(Int(verticalHUDHeight))px"), value: $verticalHUDHeight, in: 100...500, step: 10)
+            dimensionSlider("Width", value: $verticalHUDWidth, in: 24...80, step: 2)
+            dimensionSlider("Height", value: $verticalHUDHeight, in: 100...500, step: 10)
             SettingsActionRow {
                 Button("Reset to Default") {
                     verticalHUDWidth = 36
@@ -532,8 +532,8 @@ struct HUDAndOSDSettingsView: View {
         }
 
         SettingsSection {
-            dimensionSlider(Text("Size: \(Int(circularHUDSize))px"), value: $circularHUDSize, in: 40...200, step: 5)
-            dimensionSlider(Text("Line Width: \(Int(circularHUDStrokeWidth))px"), value: $circularHUDStrokeWidth, in: 2...16, step: 1)
+            dimensionSlider("Size", value: $circularHUDSize, in: 40...200, step: 5)
+            dimensionSlider("Line width", value: $circularHUDStrokeWidth, in: 2...16, step: 1)
             SettingsActionRow {
                 Button("Reset to Default") {
                     circularHUDSize = 65
@@ -545,12 +545,11 @@ struct HUDAndOSDSettingsView: View {
         }
     }
 
-    /// A size or position slider: the title (which carries the value, "Width: 36px") on the leading
-    /// side, the slider trailing. The readout column stays reserved, so the bar is the same length
-    /// as on a row whose value sits trailing.
-    private func dimensionSlider<V: BinaryFloatingPoint>(_ title: Text, value: Binding<V>, in range: ClosedRange<V>,
+    /// A size or position slider: its title ("Width") on the leading side, the slider and its value ("36 px") trailing,
+    /// in the readout column every slider uses.
+    private func dimensionSlider<V: BinaryFloatingPoint>(_ title: LocalizedStringKey, value: Binding<V>, in range: ClosedRange<V>,
                                                          step: V.Stride) -> some View where V.Stride: BinaryFloatingPoint {
-        SettingsSliderRow(title: title.monospacedDigit(), value: value, in: range, step: step, valueText: nil)
+        SettingsSliderRow(title, value: value, in: range, step: step, valueText: Text("\(Int(value.wrappedValue)) px"))
     }
 }
 
@@ -733,13 +732,7 @@ private struct HUDSelectionCard<Preview: View>: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(nsColor: .controlBackgroundColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(
-                                    isSelected ? Color.accentColor : Color.clear,
-                                    lineWidth: 2.5
-                                )
-                        )
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
                         .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
 
                     preview
@@ -748,22 +741,10 @@ private struct HUDSelectionCard<Preview: View>: View {
                 .frame(minWidth: 72, maxWidth: 110)
                 .frame(height: 76)
 
-                VStack(spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? .primary : .secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    if isSelected {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 4, height: 4)
-                    } else {
-                        Color.clear
-                            .frame(width: 4, height: 4)
-                    }
-                }
+                Text(title)
+                    .settingsChoiceLabel(isSelected: isSelected)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .contentShape(Rectangle())
         }

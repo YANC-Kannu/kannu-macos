@@ -307,9 +307,7 @@ private struct ExtensionEntryRow: View {
             // Actions
             actionButtons
         }
-        .padding(SettingsMetrics.cardPadding)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .settingsCalloutCard()
     }
     
     private var scopeToggles: some View {
@@ -413,10 +411,10 @@ private struct ExtensionEntryRow: View {
         HStack(spacing: SettingsMetrics.rowContent) {
             switch entry.status {
             case .pending:
+                // The standard style: a card's buttons are never `.primary` (docs/SETTINGS.md).
                 Button("Authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
                 
                 Button("Deny") {
@@ -434,7 +432,6 @@ private struct ExtensionEntryRow: View {
                 Button("Re-authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
             }
             

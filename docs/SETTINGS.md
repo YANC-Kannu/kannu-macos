@@ -41,8 +41,8 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A read-only trailing value (path, date, count) | `SettingsValueText(value)` |
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
-| One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below). |
-| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
+| One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below). A row of buttons alone in its card takes a title and a caption too (below, "Section rules") |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›", a finding's "Details ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
 | A badge beside a title ("Beta", "Alpha", "Built-in") | `SettingsBadge`, through `customBadge(text:)` and `alphaBadge()`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius. Never a capsule of a colour of its own. The sidebar's BETA pill is Stage 6's |
 | A choice drawn as cards (a HUD style, an idle animation, a skin, an icon) | `.settingsChoiceRing(shape, isSelected:)` on the tile and `.settingsChoiceLabel(isSelected:)` on its name (below, "Choices") |
 | A callout, or a row's expanded details, inside a section | `SettingsPermissionCallout`, or `.settingsCalloutCard()`: the card's own colour inside a 1-pt line border, never a darker slab, and its buttons the standard style |
@@ -157,22 +157,22 @@ numbers, and this table only says why.
 | `AgentStatusSettings.swift` | 1 | 0 | Status green (Detected Editors' green and caption left with it, Stage 4 child 2) |
 | `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
 | `AnimationEditorView.swift` | 8 | 22 | The editor's own dense scale and previews |
-| `AppearanceSettings.swift` | 10 | 3 | Style cards and previews of notch content |
+| `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
 | `ClipboardSettings.swift` | 4 | 1 | Status colours |
 | `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
-| `DevicesSettings.swift` | 3 | 4 | Device cards |
-| `DownloadsSettings.swift` | 5 | 2 | Download style cards |
+| `DevicesSettings.swift` | 1 | 2 | The icon style cards' resting fill and glyphs |
+| `DownloadsSettings.swift` | 3 | 0 | The style cards' resting fill and the progress tint |
 | `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
 | `ExtensionsSettings.swift` | 3 | 12 | Status colours; the legend and detail cards |
 | `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
-| `HUDAndOSDSettings.swift` | 17 | 7 | HUD style cards and previews |
-| `IdleAnimationsSettingsSection.swift` | 6 | 10 | Animation cards |
+| `HUDAndOSDSettings.swift` | 15 | 6 | HUD style previews and the cards' resting fill |
+| `IdleAnimationsSettingsSection.swift` | 3 | 5 | The cards' resting fill, the Add card and the delete glyph |
 | `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
 | `LockScreenSettings.swift` | 18 | 6 | Lock screen previews |
 | `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
 | `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
-| `SecurityFindingRow.swift` | 4 | 3 | Severity badges |
+| `SecurityFindingRow.swift` | 3 | 1 | Severity badges |
 | `SettingsColorPicker.swift` | 2 | 2 | The user's colours (presets, sampler) |
 | `SettingsHelpers.swift` | 3 | 2 | The unused "Upgrade to Pro" and "Coming soon" capsules |
 | `SettingsPermissionCallout.swift` | 0 | 1 | The callout's title |
@@ -239,6 +239,8 @@ which draw the title and the readout. SwiftUI on macOS 14 has no custom slider o
 own views. `Slider` and `Stepper` are banned under Settings, and `SettingsLayoutRulesTests` pins the few of ours
 drawn by hand outside a row.
 
+- **A slider's value is its readout**, `valueText` ("Width" and "36 px"), never part of its title, where it left the
+  readout column empty and the bar 40 pt short of its neighbours'. `valueText: nil` is for a row with no number.
 - **The slider** is a track filled with the accent up to a knob. A click on the track jumps the knob there and a
   drag moves it: Brain moves by its title row only, so the drag is the slider's. A step snaps from the lower
   bound; with none, a key moves it by 5 % of its range. No animation: the knob follows the value. Right to left it
@@ -455,7 +457,10 @@ arrow keys and hover take a real window.
   macOS. `BrainAppearanceRulesTests` holds this.
 
 A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
-enter full screen: `shellWide`, at 1440×900, stands in for it. Every page renders at 612 pt, the narrowest panel
+enter full screen: `shellWide`, at 1440×900, stands in for it. A board renders the layer tree, which draws no
+video and no liquid glass: Devices' 3D icon, a looping movie in the app, shows the movie's first frame on a board
+(`DevicesSettingsView.snapshotDrawsStill`), and a glass panel would come out white.
+Every page renders at 612 pt, the narrowest panel
 the window can have: a `SettingsPage` insets itself, in a tab or on its own. `shellSearch` and `shellSearchList`
 render at the smallest window, where the sidebar has the least room.
 
@@ -491,6 +496,11 @@ section describes it, it does not define it.
 - **A card's title is `cardTitle`, 17 pt,** the step between the page's 24 and a row's 13: the hero's state, an empty
   state's status (Agents, Extensions) and a status cell's headline figure. An empty state's one line is `body` on
   `inkSecondary`, not a description: it teaches, so it reads as text.
+- **No card inside a card.** Paper, panel and card are three surfaces already; a darker slab inside a section's card
+  makes a fourth. An entry of a list is a row of the card, `sectionRowGap` from the next, as General's Permissions
+  are (`LaunchPermissionRow(asRow: true)`; onboarding keeps its own card). Only a callout, or a row's expanded
+  details (an extension's), keeps a card of its own: `.settingsCalloutCard()`, the card's colour inside a 1-pt
+  `line` border, so it is a boundary, not another surface.
 - **A colour swatch is ringed:** a 1-pt `knob` ring inside a 1-pt `line` ring (`KannuColorPickerButton`), so it never
   reads as a status dot, which stays a bare `statusDot` (7 pt).
 
@@ -512,8 +522,9 @@ section describes it, it does not define it.
   only says something.
 - **A slider or a stepper is never hand-built in a row.** `SettingsSliderRow` and `SettingsStepperRow`
   are the only row shapes; `SettingsSlider` and `SettingsStepper` by hand only outside a row, pinned.
-  A row whose value reads in its own title passes `valueText: nil` and the readout column stays
-  reserved, so the bar is the same length everywhere.
+  The value goes in the readout (`valueText`), never in the title ("Width: 36px" was); a row with no
+  number passes `valueText: nil`, and the readout column stays reserved, so the bar is the same length
+  everywhere.
 - **An error line is a sibling of the row it belongs to**, so it takes that row's inset — including
   inside an Advanced disclosure.
 - **`SettingsValueText` is for a trailing value, never for a leading line.** It is one line with
@@ -618,6 +629,11 @@ section describes it, it does not define it.
   with labels inside tappable cards. A new exception is added to that pin with a reason, not
   slipped past it. A page's badge is `SettingsBadge` ("Beta", "Alpha", "Built-in"), one look for one
   fact; `customBadge` and `alphaBadge` draw it.
+- A row of buttons alone in its card takes a title and a caption on the left, as every row does
+  (Lock screen's Preview widgets, the Actions of Clipboard and Screen Assistant), and the footer
+  that explained the buttons goes into the caption. Buttons on one theme share one
+  `SettingsActionRow` (About's Report a Problem… and Copy Latest Report), each keeping its own
+  highlight id.
 - User-facing strings use `String(localized:)`; the shared components take `LocalizedStringKey`
   so literals localize on their own.
 
