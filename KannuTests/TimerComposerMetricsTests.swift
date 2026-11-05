@@ -18,6 +18,7 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 
+import AppKit
 import XCTest
 
 /// The timer tab's composer fits the notch as it is: the notch must not grow for the timer tab (it
@@ -177,6 +178,21 @@ final class TimerComposerMetricsTests: XCTestCase {
 
     func testTheSideRowsStayReadable() {
         XCTAssertGreaterThanOrEqual(M.sideTaskRowHeight, 32, "two lines of text and a ▶ need the room")
+    }
+
+    /// Tags beside the caption keep the row 36 pt: a tag chip (`SideChip`: a 10 pt semibold line, 2 pt
+    /// above and below) and the caption (11 pt medium) fit the caption line, and the 12 pt semibold
+    /// title, the 1 pt between and that line fit the row. Measured with the fonts the row draws;
+    /// `NotchTagFilterRulesTests` pins those sizes in the sources.
+    func testATagChipKeepsTheTaskRow36Points() {
+        func line(_ size: CGFloat, _ weight: NSFont.Weight) -> CGFloat {
+            ceil(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: size, weight: weight)))
+        }
+        XCTAssertEqual(M.sideTaskRowHeight, 36)
+        XCTAssertLessThanOrEqual(line(10, .semibold) + 2 * 2, M.sideTaskCaptionHeight, "a chip is taller than the caption line")
+        XCTAssertLessThanOrEqual(line(11, .medium), M.sideTaskCaptionHeight)
+        XCTAssertLessThanOrEqual(line(12, .semibold) + 1 + M.sideTaskCaptionHeight, M.sideTaskRowHeight,
+                                 "the title and the caption line overflow the row")
     }
 
     /// With a single task, the list still has room under the row for its ▶ tooltip, which opens
