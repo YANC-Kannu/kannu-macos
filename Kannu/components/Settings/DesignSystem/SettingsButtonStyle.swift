@@ -21,26 +21,37 @@ import SwiftUI
 /// Brain's button. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a sheet's default
 /// action asks for `.primary` itself; `SettingsDesignSystemRulesTests` holds every site to that. `.quiet` is
 /// bare at rest and fills only under the pointer: a glyph on a row, a back row, a menu's ⋯.
+///
+/// `flush` is for a lone quiet button, such as a back row or "Open ›". Bare at rest, its inset cannot be seen, so its
+/// label would look 8 pt off the text above it. Flush, the label sits on the column and the fill under the pointer
+/// reaches left by the inset instead.
 struct SettingsButtonStyle: ButtonStyle {
     enum Prominence { case standard, primary, quiet }
     private let prominence: Prominence
+    private let flush: Bool
 
-    init(_ prominence: Prominence = .standard) { self.prominence = prominence }
+    init(_ prominence: Prominence = .standard, flush: Bool = false) {
+        self.prominence = prominence
+        self.flush = flush
+    }
 
     func makeBody(configuration: Configuration) -> some View {
-        Chrome(configuration: configuration, prominence: prominence)
+        Chrome(configuration: configuration, prominence: prominence, flush: flush)
     }
 
     // Not `Body`: a type of that name inside a style collides with the protocol's associated type.
     private struct Chrome: View {
         let configuration: ButtonStyleConfiguration
         let prominence: Prominence
+        let flush: Bool
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.controlSize) private var controlSize
         @State private var isHovering = false
 
         /// docs/SETTINGS.md reserves the small size for controls inside a card.
         private var isSmall: Bool { controlSize == .small || controlSize == .mini }
+
+        private var inset: EdgeInsets { isSmall || prominence == .quiet ? SettingsTheme.buttonInsetSmall : SettingsTheme.buttonInset }
 
         private var labelColor: Color {
             if prominence == .primary { return SettingsTheme.onPrimary }
@@ -64,7 +75,7 @@ struct SettingsButtonStyle: ButtonStyle {
                 .fixedSize(horizontal: true, vertical: false)
                 .font(isSmall ? SettingsTheme.description : SettingsTheme.bodyStrong)
                 .foregroundStyle(labelColor)
-                .padding(isSmall || prominence == .quiet ? SettingsTheme.buttonInsetSmall : SettingsTheme.buttonInset)
+                .padding(inset)
                 .background {
                     if let chromeColor { shape.fill(chromeColor) }
                 }
@@ -75,6 +86,9 @@ struct SettingsButtonStyle: ButtonStyle {
                 // A mouse hovers before it presses, so the hover fill alone would show no press.
                 .opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)
                 .onHover { isHovering = $0 }
+                // Flush: the button's frame starts at its label, so the label sits on the column; the chrome and the
+                // pointer's area reach past it to the left.
+                .padding(.leading, flush ? -inset.leading : .zero)
         }
     }
 }

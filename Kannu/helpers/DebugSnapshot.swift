@@ -605,7 +605,8 @@ enum DebugSnapshots {
     ]
 
     private static let designSystemFonts: [(name: String, font: Font)] = [
-        ("pageTitle", SettingsTheme.pageTitle), ("sheetTitle", SettingsTheme.sheetTitle), ("body", SettingsTheme.body),
+        ("pageTitle", SettingsTheme.pageTitle), ("cardTitle", SettingsTheme.cardTitle), ("sheetTitle", SettingsTheme.sheetTitle),
+        ("body", SettingsTheme.body),
         ("bodyStrong", SettingsTheme.bodyStrong),
         ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
         ("mono", SettingsTheme.mono),

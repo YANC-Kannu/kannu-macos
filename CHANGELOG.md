@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's cards share one inset and a card title
+- **Developer label:** Brain redesign plan: Stage 4, the design review's theme values
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 5, 9 and 8 as theme values and a button option
+- **Changes:**
+  - One inset for text inside and beside a card: a section's sides and the hero's padding are 12 pt, so a row, a
+    section's header and a card's title start on one edge. Only the page's title and the settings rule sit at 0.
+  - `cardTitle`, 17 pt semibold Geist, the step between the page's title and a row. "No extensions yet" uses it, with its
+    line in the body's size on the secondary ink.
+  - `SettingsButtonStyle(.quiet, flush: true)` puts a lone quiet button's label on its column, and the fill under the
+    pointer reaches left by the inset. Tasks' back rows use it, their chevron 4 pt from the title.
+  - The design-system board names `cardTitle`; the layout pins move with the button's padding and Extensions' font;
+    docs/SETTINGS.md gains the inset, the card title and flush buttons.
+
 ### 2026-11-05 - Answer the review of Brain's Agents page
 - **Developer label:** Brain redesign plan: Stage 4, the Agents product page
 - **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks
