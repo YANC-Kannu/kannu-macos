@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-05 - Brain's live views stop while it is off screen
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the visibility signal the live-data contract stands on
+- **Changes:**
+  - `BrainVisibility` says whether any of Brain's window is on screen. `SettingsWindowController` sets it from the
+    window's occlusion state, which goes false when Brain is closed, minimised, hidden, fully covered or in another
+    Space, where a full-screen Brain keeps `isVisible` true. It starts false, so nothing live runs before the first
+    open.
+  - The Agents style preview follows only the light, and only while Brain is on screen. It observed the whole agent
+    monitor, Brain open or not, so every hook write re-ran it. Nothing under Settings observes the monitor now, and
+    `ClosedNotchObservationTests` drops its entry.
+
 ### 2026-11-05 - One answer to which agent tools are on this Mac
 - **Developer label:** Brain redesign plan: Stage 4, the Agents product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the tool detector Brain and the notch share
