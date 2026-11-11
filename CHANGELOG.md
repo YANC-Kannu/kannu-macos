@@ -386,6 +386,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
     `SettingsLayoutRulesTests` pins their padding.
 
+### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
+- **Developer label:** "Yes, request it"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's review of Super 3; the rest answered on the PR
+- **Changes:**
+  - Segments: the arrows step from the focused segment, which Full Keyboard Access can leave on one that is not
+    the choice.
+  - `SettingsSlider` keeps its upper bound: End and a drag past the end reach it when the step does not divide the
+    range.
+  - `SettingsStepper` steps from a value inside its range and measures before stepping, so a stored value near the
+    type's limit cannot overflow.
+  - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
+    with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
+  - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
+
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"
 - **Agent label:** Claude Code (Opus 5.5) — the review's confirmed findings on child 3; the Mac-only ones go to David's checks

@@ -719,6 +719,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         // Ours, by hand, count once each: only a row is not hand-built.
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider(value: $x, in: 0...1)").count, 1)
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider<Double>(value: $x, in: 0...1) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Stepper (value: $v, in: 0...9) { Text(\"a\") }").count, 1)
 
         XCTAssertEqual(Self.paddingLines(in: ".padding(.vertical, 8)").count, 1)
         XCTAssertEqual(Self.paddingLines(in: "// .padding(12)").count, 0)
@@ -851,7 +853,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// `SettingsSlider(value:`, `Stepper(value:` and `SettingsStepper(value:`, never a row.
     private static func handBuiltValueControlLines(in text: String) -> [String] {
         matchingLines(in: text) {
-            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\(value:"#, options: .regularExpression) != nil
+            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\s*(?:<[^>]*>)?\s*\(\s*value:"#, options: .regularExpression) != nil
         }
     }
 

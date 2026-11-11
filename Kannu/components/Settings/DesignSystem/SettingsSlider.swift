@@ -107,12 +107,13 @@ struct SettingsSlider<Value: BinaryFloatingPoint>: View where Value.Stride: Bina
         set(Double(value) + Double(direction) * size)
     }
 
-    /// Clamped to the range and snapped to the step, counted from the lower bound. Only a change is written, so a
+    /// Clamped to the range and snapped to the step, counted from the lower bound; the upper bound itself is kept,
+    /// so End and a drag past the end reach it when the step does not divide the range. Only a change is written, so a
     /// drag that stays on one step does not write the same setting again and again.
     private func set(_ raw: Double) {
         let lower = Double(range.lowerBound), upper = Double(range.upperBound)
         var next = min(max(raw, lower), upper)
-        if let step, step > 0 {
+        if let step, step > 0, next < upper {
             let size = Double(step)
             next = min(lower + ((next - lower) / size).rounded() * size, upper)
         }

@@ -147,7 +147,7 @@ every file under Settings but the theme, with comments and strings blanked, and 
 - **A native button style:** `.bordered`, `.borderless` and `.borderedProminent`. A button is ours:
   `.primary` for a main action, `.quiet` for a glyph or a back row. The tag chip's capsule is the one left.
 
-The survivors are pinned per file and can only shrink. After Stage 3 they are 127 colour lines and 106 font
+The survivors are pinned per file and can only shrink. After Stage 3 they are 126 colour lines and 106 font
 lines, in previews of notch content, status and severity colours, cards with a compact scale of their own,
 and the user's own colours. Stage 4 gives each a token and empties both tables; the test's pins are the
 numbers, and this table only says why.
@@ -156,7 +156,7 @@ numbers, and this table only says why.
 |---|---|---|---|
 | `AgentStatusSettings.swift` | 1 | 0 | Status green (Detected Editors' green and caption left with it, Stage 4 child 2) |
 | `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
-| `AnimationEditorView.swift` | 8 | 22 | The editor's own dense scale and previews |
+| `AnimationEditorView.swift` | 7 | 22 | The editor's own dense scale and previews |
 | `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
 | `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
