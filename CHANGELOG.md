@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-06 - Brain's Security page leads with its findings
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own
+- **Changes:**
+  - Brain › Security opens on its product, above "Security settings": a count strip (to review, high and
+    acknowledged, with "Show acknowledged and snoozed again"), the findings in their lazy list, a status row of the
+    newest scan result, Scan this Mac and Policy rules, and Recent analyses while session analysis is on.
+  - With no finding waiting, an empty state in the list's place: "No findings yet" or "No open findings", one line,
+    and the page's verb. While Agent Status is off, one card with Turn On.
+  - The header holds the gear, which goes to the first settings row, then Scan now, off while a scan runs, or Connect
+    ADR while ADR Discovery is not found, which goes to ADR Discovery's row. Both act on a press only, through the
+    settings' own paths.
+  - The page no longer observes the findings store, which republishes on every hook write while a session runs with
+    permission checks off: it holds one copy, followed at most twice a second while Brain is on screen. It starts no
+    scan, ADR check, policy read or analysis of its own. `SecurityPageLiveDataRulesTests` holds each clause against
+    planted offenders.
+  - The settings keep every row, id, search entry and deep link: "High-severity alerts in the notch" heads them as
+    Alerts, and the findings, the newest scan result and Recent analyses moved up.
+  - 5 new strings in the catalog's 17 languages. Boards `security0`, `security1` and `security3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 10 and 22) gain their lines.
+
 ### 2026-11-06 - Answer the review of Brain's consistency pass
 - **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5
