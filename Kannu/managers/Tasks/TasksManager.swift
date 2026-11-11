@@ -279,6 +279,11 @@ final class TasksManager: ObservableObject, TaskSourceHost {
 
     /// Segments left open by a quit or a crash, newest first, with their task.
     var interruptedSessions: [InterruptedSession] {
+        Self.interruptedSessions(in: tasks)
+    }
+
+    /// The same for any list of tasks: Brain's first page works it out from its copy of the list (`TasksPageData`).
+    static func interruptedSessions(in tasks: [TaskItem]) -> [InterruptedSession] {
         tasks.flatMap { task in
             task.segments.filter(\.isInterrupted).map { segment in
                 InterruptedSession(

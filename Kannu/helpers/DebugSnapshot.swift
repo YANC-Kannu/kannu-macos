@@ -82,12 +82,6 @@ enum DebugSnapshots {
         let clipboard = DebugSnapshotFixtures.clipboardOverview(pinned: 0, history: 4, now: Date())
         ClipboardOverview.snapshotFixture = clipboard
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
-        if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "Tasks")) {} }
-                AllTasksPage(query: .constant(""), context: tasksBoardContext())
-            })))
-        }
         if request.tabs == nil || request.tabs?.contains("newTaskSheet") == true {
             // New Task half typed: "pl" offers #planning in its colour and "+ pl"; a reminder
             // tomorrow at 10:00 with Notify on.
@@ -123,17 +117,13 @@ enum DebugSnapshots {
             boards.append(("timerPresetSheet", AnyView(TimerPresetSheet(target: .edit(DebugSnapshotFixtures.timerPresets[0])))))
         }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
-            boards.append(("taskPage", AnyView(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("taskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID,
+                                                                             context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("localTaskPage") == true {
             // A local task: its title typed in place, a reminder with Notify off.
-            boards.append(("localTaskPage", AnyView(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("localTaskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID,
+                                                                                  context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("findings") == true {
             boards.append(("findings", AgentSecuritySettings.snapshotFindingRows(DebugSnapshotFixtures.findings)))
@@ -273,6 +263,30 @@ enum DebugSnapshots {
             }
         }
         ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Tasks at the window's first size and at a 14-inch full screen (1,512 × 982), the two widths of its list
+        // (layout-proposal D1): the list, a task opened from it, in the list's place or beside it, and the Done and
+        // Archived tabs. Fixture tasks only (`TasksManager.snapshotFile`).
+        let window = NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        let fullScreen14 = NSSize(width: 1512, height: 982)
+        let tasksBoards: [(name: String, size: NSSize, path: [TasksPage], tab: TasksListTab)] = [
+            ("tasksWindow", window, [], .active),
+            ("tasksWide", fullScreen14, [], .active),
+            ("tasksTask", window, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksWideTask", fullScreen14, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksDone", window, [], .done),
+            ("tasksArchived", window, [], .archived),
+        ]
+        for board in tasksBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            TasksSettings.snapshotPath = board.path
+            TasksSettings.snapshotTab = board.tab
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .tasks).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
+            }
+        }
+        TasksSettings.snapshotPath = []
+        TasksSettings.snapshotTab = .active
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -863,6 +877,18 @@ enum DebugSnapshots {
                 }
             }
         }
+    }
+
+    /// A page below Brain › Tasks' first, as the tab draws it: the back row bare on the panel, the page under it.
+    private static func tasksPageBelowTheFirst(_ page: some View) -> AnyView {
+        AnyView(SettingsPage {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                TasksBackRow(parent: String(localized: "Tasks")) {}
+                VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+                    page
+                }
+            }
+        })
     }
 
     /// What the Tasks boards' pages need from the tab: sheets and navigation go nowhere.

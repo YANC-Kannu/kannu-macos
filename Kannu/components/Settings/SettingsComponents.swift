@@ -540,8 +540,8 @@ struct SettingsTagChip: View {
     private let isHighlighted: Bool
     private let action: () -> Void
 
-    /// The wash under the bezel: enough to read as the colour, still the bezel's glass.
-    private static let tintOpacity: Double = 0.2
+    /// The wash under the bezel: enough to read as the colour, still the bezel's glass. A task row's chips wear it too.
+    static let tintOpacity: Double = 0.2
 
     init(_ name: String, tint: Color? = nil, remove: @escaping () -> Void) {
         self.name = name

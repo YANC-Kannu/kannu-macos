@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Brain's Tasks page leads with the list, with a task's page beside it at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, with D1's list-detail
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: Tasks as a product page (tabs, Find with #tag, a Tag filter, rows as soft cards, New task in the header) under Agents' live-data contract, and D1's list-detail by one tested width function
+- **Changes:**
+  - Brain › Tasks opens on its product, above "Tasks settings": interrupted sessions and Time to log while they hold
+    something, then the list. Its tabs, Active, Done and Archived, replace All tasks' page and its three native
+    disclosures (the design review's finding 13); Find takes `#tag` (`TaskSearch`), and the Tag filter is a
+    `SettingsSelect` of every tag and label. The Source, Project and Status filters leave the list: a source and a
+    project have their own pages.
+  - Each task is a soft card with its tags as chips (the first in its colour and "+N" for the rest, never cutting the
+    caption), ✓, ▶ and ›; a closed one has Reopen, Archive or Restore and its ›; everything else stays in the
+    right-click menu, which opens with Show Details. Source and project pages draw the same cards.
+  - New task, ⌘N, is the page header's one verb, beside the gear, which goes to Enable tasks. It replaces Add a task's
+    row and the hidden ⌘N button; a new task the list on screen would hide opens on its own page.
+  - D1 (David, 2026-11-06): once the panel holds the list and a 720-pt page (`ListDetailLayout`, 1,224 pt with the
+    wide inset, tested in `ListDetailLayoutTests`), a task opened from the list shows beside it, selected; narrower it
+    takes the list's place. One path drawn two ways, from one `onGeometryChange`: no `minWidth:`, `ViewThatFits` or
+    `.inspector`. Search and deep links return to the first page at both widths.
+  - Back rows are bare quiet buttons on the panel, with no card (the design review's finding 24).
+  - Live data as on Agents: the first page reads `TasksManager` through one copy, `TasksPageData`, throttled to 500 ms,
+    assigned only on a change and followed only while Brain is on screen; a press reads it again at once. The timed
+    row's and a task page's minute clocks stop while Brain is not on screen. `TasksPageLiveDataRulesTests` holds each
+    clause and D1's rules against planted offenders.
+  - Tag colours moves to the settings, folded in our disclosure. 12 new catalog keys in 17 languages; the tab titles
+    take keys of their own, so "Done" can differ from a sheet's Done button.
+  - Tests: the list, path, filter and pin rules follow the new page (`TaskListRulesTests`, `SettingsLayoutRulesTests`,
+    `SettingsDesignSystemRulesTests`, `SettingsHighlightInventoryTests` 274 and 268, `BrainShellRulesTests`,
+    `IntegrationSecretRulesTests`).
+  - docs/SETTINGS.md describes the page, its live data and list-detail; docs/REGRESSIONS.md entry 22 has a dated
+    addendum.
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
