@@ -188,6 +188,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
         "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
+        "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
     ]
 
     func testNoRowPadsItself() {
@@ -492,6 +493,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
         // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
         "SecurityOverview.swift": 1,
+        "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {
