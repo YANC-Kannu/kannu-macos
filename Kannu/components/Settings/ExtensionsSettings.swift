@@ -40,7 +40,7 @@ struct ExtensionsSettingsView: View {
     }
     
     var body: some View {
-        Form {
+        SettingsPage {
             globalTogglesSection
             
             if authManager.isExtensionsFeatureEnabled {
@@ -60,7 +60,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var globalTogglesSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(String(localized:"Enable third-party extensions"), key: .enableThirdPartyExtensions)
                 .settingsHighlight(id: highlightID("Enable third-party extensions"))
             
@@ -96,7 +96,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var authorizedAppsSection: some View {
-        Section {
+        SettingsSection {
             if authManager.entries.isEmpty {
                 // An empty state is a card, not a row: it is the one place in this section that
                 // may pad and centre itself.
@@ -106,13 +106,17 @@ struct ExtensionsSettingsView: View {
                         .foregroundStyle(.secondary.opacity(0.5))
                         .accessibilityHidden(true)
 
+                    // An empty state's type, as on Agents: its title a card title, its line the body's size.
                     Text("No extensions yet")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(SettingsTheme.cardTitle)
+                        .foregroundStyle(SettingsTheme.ink)
                         .textSelection(.enabled)
 
                     Text("Apps using Extension Kit will appear here once they request permission")
-                        .settingsDescriptionStyle()
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
@@ -303,9 +307,7 @@ private struct ExtensionEntryRow: View {
             // Actions
             actionButtons
         }
-        .padding(SettingsMetrics.cardPadding)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .settingsCalloutCard()
     }
     
     private var scopeToggles: some View {
@@ -409,10 +411,10 @@ private struct ExtensionEntryRow: View {
         HStack(spacing: SettingsMetrics.rowContent) {
             switch entry.status {
             case .pending:
+                // The standard style: a card's buttons are never `.primary` (docs/SETTINGS.md).
                 Button("Authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
                 
                 Button("Deny") {
@@ -430,7 +432,6 @@ private struct ExtensionEntryRow: View {
                 Button("Re-authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(SettingsButtonStyle(.primary))
                 .controlSize(.small)
             }
             
@@ -524,8 +525,8 @@ extension ExtensionsSettingsView {
                                         status: .denied, grantedAt: granted,
                                         lastDeniedReason: "Asked for lock screen widgets 40 times in five minutes."),
         ]
-        return AnyView(Form {
-            Section {
+        return AnyView(SettingsPage {
+            SettingsSection {
                 ForEach(entries) { entry in
                     ExtensionEntryRow(entry: entry, onRemove: {}, initiallyExpanded: entry.status == .denied)
                 }

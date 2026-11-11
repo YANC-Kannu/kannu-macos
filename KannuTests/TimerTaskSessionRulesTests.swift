@@ -59,6 +59,7 @@ final class TimerTaskSessionRulesTests: XCTestCase {
         "Kannu/components/Timer/TimerControlOverlay.swift",
         "Kannu/components/LockScreen/LockScreenTimerWidget.swift",
         "Kannu/components/Timer/TimerPopover.swift",
+        "Kannu/components/Settings/TimerOverview.swift",
     ]
 
     // MARK: - The rules, on the real sources

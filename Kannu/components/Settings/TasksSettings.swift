@@ -42,7 +42,8 @@ struct TasksSettings: View {
     @Default(.enableTasks) private var enableTasks
     @Default(.tasksDefaultSessionMinutes) private var defaultSessionMinutes
 
-    // On the Form, not on a row: rows of a long, lazy Form may not exist when these change.
+    // On the tab, not on a row: a row goes with its page when the path changes, and the task rows
+    // are lazy, built only while in view, so a row may not exist when these change.
     @State private var sheet: TaskSheet?
     @State private var pendingDelete: TaskItem?
     /// New Task's draft, kept between sheets so Cancel loses nothing. A box in `@State`, deliberately
@@ -63,10 +64,9 @@ struct TasksSettings: View {
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
-    /// ⌘N, New Task, on the Form rather than on Add a task's button: that row scrolls out of a long,
-    /// lazy Form and would take a shortcut on its button with it. Only on the pages that have the
-    /// row. The filter is read when pressed, so this tab observes neither the filters nor the
-    /// manager (with Tasks off, nothing here touches `TasksManager`).
+    /// ⌘N, New Task, on the tab rather than on Add a task's button: one shortcut for both pages
+    /// that have that row, and only on them. The filter is read when pressed, so this tab observes
+    /// neither the filters nor the manager (with Tasks off, nothing here touches `TasksManager`).
     @ViewBuilder
     private var newTaskShortcut: some View {
         if enableTasks, let page = path.last, page == .allTasks || page == .source(.local) {
@@ -94,9 +94,9 @@ struct TasksSettings: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            Form {
+            SettingsPage {
                 if enableTasks, let page = path.last {
-                    Section {
+                    SettingsSection {
                         backRow(from: page)
                     }
                     pageContent(page)
@@ -238,7 +238,7 @@ struct TasksSettings: View {
             TaskOverviewSections(sheet: $sheet, openAllTasks: { path.append(.allTasks) })
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("Enable tasks", description: "Plan your work and time it.") {
                 Defaults.Toggle(key: .enableTasks) {
                     Text("Enable tasks")
@@ -311,8 +311,8 @@ enum TasksPage: Hashable {
 }
 
 /// What a page needs from the tab. The sheets (New Task's draft with them) and the alerts live on
-/// the outer Form, because rows of a long, lazy Form may not exist when they change; `open` goes
-/// one level in.
+/// the tab, because a row goes with its page when the path changes and the task rows are lazy;
+/// `open` goes one level in.
 struct TasksPageContext {
     let sheet: Binding<TaskSheet?>
     let pendingDelete: Binding<TaskItem?>
@@ -324,20 +324,19 @@ struct TasksPageContext {
 
 /// Atop every page, alone in its own Section: up one level, naming where it goes ("‹ GitLab"). The
 /// one sanctioned lone leading button in Brain (docs/SETTINGS.md): it is navigation, not an action
-/// on a row.
+/// on a row. Flush, so its chevron starts on the rows' text column.
 struct TasksBackRow: View {
     let parent: String
     let back: () -> Void
 
     var body: some View {
         Button(action: back) {
-            Label {
-                Text(verbatim: parent)
-            } icon: {
+            HStack(spacing: SettingsMetrics.iconGap) {
                 Image(systemName: "chevron.left")
+                Text(verbatim: parent)
             }
         }
-        .buttonStyle(SettingsButtonStyle(.quiet))
+        .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
         .accessibilityLabel(Text(verbatim: String(localized: "Back to \(parent)")))
     }
 }
@@ -379,7 +378,7 @@ private struct TaskSourcesSection: View {
         let sources = manager.syncs.map(\.source)
         let connected = sources.filter(\.isConnected)
         let addable = sources.filter { !$0.isConnected }
-        Section {
+        SettingsSection {
             LabeledContent {
                 openButton(count: counts[.local] ?? 0, page: .source(.local))
             } label: {
@@ -499,7 +498,7 @@ private struct TaskOverviewSections: View {
     /// the way in.
     private var allTasksSection: some View {
         let counts = TaskFacets.counts(manager.activeTasks)
-        return Section {
+        return SettingsSection {
             if case .failed(let reason) = manager.loadState {
                 SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }
@@ -527,7 +526,7 @@ private struct TaskOverviewSections: View {
     private var interruptedSection: some View {
         let interrupted = manager.interruptedSessions
         if !interrupted.isEmpty {
-            Section {
+            SettingsSection {
                 ForEach(interrupted) { entry in
                     LabeledContent {
                         HStack(spacing: SettingsMetrics.rowContent) {

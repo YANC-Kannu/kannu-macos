@@ -175,6 +175,19 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Security's first settings row, built whenever Agent Status is on: where Security's gear lands.
+    static let securityAlertsHighlightID = SettingsTab.agentSecurity.highlightID(for: "High-severity alerts in the notch")
+    /// Brain › Security › ADR scans, ADR Discovery's row, with its install command and Check again: where Connect ADR
+    /// lands.
+    static let securityConnectADRHighlightID = SettingsTab.agentSecurity.highlightID(for: "Connect ADR")
+    /// Brain › Usage's switch, its first row and always built: where Usage's gear lands, and its empty state's
+    /// "Turn on a provider" while the monitor is off.
+    static let usageMonitorHighlightID = SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")
+    /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
+    /// is on.
+    static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
+    /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
+    static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -300,6 +313,10 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
+    /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
+    /// gear and Refresh, Timer's gear and Start timer, and Clipboard's "…" and Open history panel. Each reads its own
+    /// store.
+    var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
@@ -319,7 +336,7 @@ private struct SettingsForm<Content: View>: View {
     var body: some View {
         ScrollViewReader { proxy in
             VStack(spacing: 0) {
-                SettingsPageHeader(title: pageTitle ?? tab.title)
+                SettingsPageHeader(title: pageTitle ?? tab.title, actions: actions)
                 content()
                     .onReceive(highlightCoordinator.$pendingScrollRequest.compactMap { request -> SettingsHighlightCoordinator.ScrollRequest? in
                         guard let request, request.tab == tab else { return nil }
@@ -331,12 +348,12 @@ private struct SettingsForm<Content: View>: View {
                         highlightCoordinator.consumeScrollRequest(request)
                     }
             }
-            // Capped, then held the page inset from the panel's leading edge, never centred, so a
-            // full-screen panel's spare width gathers on the right. The `Form` adds its own margin to the
-            // padding. Its scrollbar sits at the page's edge, not the panel's, until Stage 4.
-            .frame(maxWidth: SettingsTheme.pageMaxWidth)
-            .padding(.horizontal, (isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset) - SettingsTheme.formMargin)
+            // The page is one scroll view across the panel, so its scrollbar sits at the panel's edge. It caps
+            // its own column and starts it the inset from the panel's leading edge, never centred, so a
+            // full-screen panel's spare width gathers on the right; the title starts there too. Measured here,
+            // at the panel's width, and handed to both.
             .frame(maxWidth: .infinity, alignment: .leading)
+            .environment(\.settingsPageInset, isWidePanel ? SettingsTheme.pageInsetWide : SettingsTheme.pageInset)
             .onGeometryChange(for: Bool.self) { $0.size.width >= SettingsTheme.widePanelWidth } action: { isWidePanel = $0 }
         }
         .onPreferenceChange(SettingsPageTitleKey.self) { pageTitle = $0 }
@@ -574,6 +591,8 @@ struct SettingsView: View {
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: SettingsTheme.quickAnimation), value: showSuggestions)
+            // New matches sit at new heights: the old rows' measures say nothing about them.
+            .onChange(of: suggestions.map(\.id)) { _, _ in rowBottoms = [:] }
         }
 
         private var showSuggestions: Bool {
@@ -614,17 +633,54 @@ struct SettingsView: View {
             )
         }
 
-        /// Past this many matches the list scrolls rather than growing down the sidebar.
-        private static let visibleSuggestionRows = 8
-        /// One suggestion with its divider: 28 pt icon, 7 pt padding above and below, 1 pt divider.
-        private static let suggestionRowHeight: CGFloat = 43
+        /// The list's tallest: past it the list scrolls rather than growing down the sidebar.
+        private static let maxListHeight: CGFloat = 344
+        /// One-line rows are about 47 pt, so seven fill `maxListHeight`, and more matches than this always scroll.
+        private static let rowsThatFit = 7
+        /// The rows' own space, where each measures its bottom edge.
+        private static let rowSpace = "suggestionRows"
+        /// The scroll view's own space, where the rows' foot shows whether more rows sit below.
+        private static let scrollSpace = "suggestionScroll"
+        /// Each row's bottom edge in the list, measured, since a title takes one line or two.
+        @State private var rowBottoms: [SettingsSearchEntry.ID: CGFloat] = [:]
+        /// Where the rows end, below the top of the scroll view as it is scrolled.
+        @State private var rowsFoot: CGFloat = 0
+
+        /// Decided from what is known now, so an unmeasured list is never taller than `maxListHeight`: more matches than
+        /// fit, or a last row not yet measured, scroll; otherwise the list scrolls only if its measured rows run past it.
+        private var listScrolls: Bool {
+            guard suggestions.count <= Self.rowsThatFit, let last = suggestions.last,
+                  let bottom = rowBottoms[last.id] else { return true }
+            return bottom > Self.maxListHeight
+        }
+
+        /// Whole rows only: the measured bottoms trim the scroll view to the lowest one under `maxListHeight`, so the last
+        /// row it shows is never cut; `maxListHeight` while nothing is measured.
+        private var listHeight: CGFloat {
+            suggestions.compactMap { rowBottoms[$0.id] }.filter { $0 <= Self.maxListHeight }.max() ?? Self.maxListHeight
+        }
 
         private var suggestionList: some View {
             Group {
-                if suggestions.count > Self.visibleSuggestionRows {
-                    // Half a row more than fits shows there is more to scroll to.
-                    ScrollView { suggestionRows }
-                        .frame(height: (CGFloat(Self.visibleSuggestionRows) + 0.5) * Self.suggestionRowHeight)
+                if listScrolls {
+                    ScrollView {
+                        suggestionRows
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).maxY } action: {
+                                rowsFoot = $0
+                            }
+                    }
+                    .coordinateSpace(.named(Self.scrollSpace))
+                    .frame(height: listHeight)
+                    // While rows sit below the foot, a short fade says there is more; it goes once the last row is in.
+                    .overlay(alignment: .bottom) {
+                        if rowsFoot > listHeight + SettingsTheme.hairline {
+                            LinearGradient(colors: [SettingsTheme.card.opacity(0), SettingsTheme.card],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: SettingsTheme.suggestionFade)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 } else {
                     suggestionRows
                 }
@@ -659,10 +715,11 @@ struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(suggestion.title)
-                                    .font(SettingsTheme.bodyStrong)
+                                    .font(SettingsTheme.body)
                                     .foregroundStyle(SettingsTheme.ink)
+                                    .lineLimit(2)
                                 Text(suggestion.tab.title)
-                                    .font(SettingsTheme.caption)
+                                    .font(SettingsTheme.description)
                                     .foregroundStyle(SettingsTheme.inkSecondary)
                             }
 
@@ -677,6 +734,9 @@ struct SettingsView: View {
                     .onHover { hovering in
                         hoveredSuggestionID = hovering ? suggestion.id : (hoveredSuggestionID == suggestion.id ? nil : hoveredSuggestionID)
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.rowSpace)).maxY } action: {
+                        rowBottoms[suggestion.id] = $0
+                    }
 
                     if suggestion.id != suggestions.last?.id {
                         Divider()
@@ -684,6 +744,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .coordinateSpace(.named(Self.rowSpace))
         }
 
         private func rowBackground(for suggestion: SettingsSearchEntry) -> some View {
@@ -910,7 +971,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Timer tint", keywords: ["timer colour", "preset"], highlightID: SettingsTab.timer.highlightID(for: "Timer tint")),
             SettingsSearchEntry(tab: .timer, title: "Solid colour", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
-            SettingsSearchEntry(tab: .timer, title: "Accent colour", keywords: ["accent", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Accent colour")),
+            SettingsSearchEntry(tab: .timer, title: "Timer Presets", keywords: ["preset", "accent colour", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Timer Presets")),
 
             // Tasks. A source page's rows exist only while it is open, so their entries land on the
             // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
@@ -1056,7 +1117,7 @@ struct SettingsView: View {
                 ExtensionsSettingsView()
             }
         case .timer:
-            SettingsForm(tab: .timer) {
+            SettingsForm(tab: .timer, actions: AnyView(TimerHeaderActions())) {
                 TimerSettings()
             }
         case .hudAndOSD:
@@ -1072,7 +1133,7 @@ struct SettingsView: View {
                 StatsSettings()
             }
         case .clipboard:
-            SettingsForm(tab: .clipboard) {
+            SettingsForm(tab: .clipboard, actions: AnyView(ClipboardHeaderActions())) {
                 ClipboardSettings()
             }
         case .screenAssistant:
@@ -1080,11 +1141,11 @@ struct SettingsView: View {
                 ScreenAssistantSettings()
             }
         case .agentStatus:
-            SettingsForm(tab: .agentStatus) {
+            SettingsForm(tab: .agentStatus, actions: AnyView(AgentsHeaderActions())) {
                 AgentStatusSettings()
             }
         case .agentSecurity:
-            SettingsForm(tab: .agentSecurity) {
+            SettingsForm(tab: .agentSecurity, actions: AnyView(SecurityHeaderActions())) {
                 AgentSecuritySettings()
             }
         case .downloads:
@@ -1108,7 +1169,7 @@ struct SettingsView: View {
                 TasksSettings()
             }
         case .llmUsage:
-            SettingsForm(tab: .llmUsage) {
+            SettingsForm(tab: .llmUsage, actions: AnyView(UsageHeaderActions())) {
                 UsageSettings()
             }
         case .about:
@@ -1148,14 +1209,14 @@ extension SettingsView {
 
     /// DEBUG snapshot harness: the shortcut recorder rows, shown only once global shortcuts are on.
     static func snapshotShortcutRows() -> AnyView {
-        AnyView(Form { Shortcuts().shortcutsSection })
+        AnyView(SettingsPage { Shortcuts().shortcutsSection })
     }
 
     /// DEBUG snapshot harness: the Controls tab's Custom OSD, Vertical Bar and Circular sections, which
     /// show only when that style's card is selected (the harness must not change the user's choice).
     static func snapshotControlsStyles() -> AnyView {
         let controls = HUDAndOSDSettingsView()
-        return AnyView(Form {
+        return AnyView(SettingsPage {
             if #available(macOS 15.0, *) {
                 CustomOSDSettings()
             }

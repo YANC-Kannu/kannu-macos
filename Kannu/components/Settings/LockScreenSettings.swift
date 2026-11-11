@@ -90,8 +90,8 @@ struct LockScreenSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenLiveActivity) {
                     Text("Enable lock screen live activity")
                 }
@@ -102,8 +102,8 @@ struct LockScreenSettings: View {
                 SettingsFooter("Controls whether Kannu mirrors lock/unlock events with its own live activity.")
             }
 
-            Section {
-                SettingsActionRow {
+            SettingsSection {
+                SettingsActionRow("Preview widgets", description: "Opens a transparent window with mock data.") {
                     Button(previewManager.isPreviewVisible ? "Hide lock screen preview" : "Preview lock screen widgets") {
                         previewManager.togglePreview()
                     }
@@ -111,11 +111,9 @@ struct LockScreenSettings: View {
                 .settingsHighlight(id: highlightID("Preview lock screen widgets"))
             } header: {
                 SettingsSectionHeader("Preview")
-            } footer: {
-                SettingsFooter("Opens a transparent preview window with mock data that mirrors the current lock screen widget configuration.")
             }
 
-            Section {
+            SettingsSection {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Material", description: lockScreenGlassStyle == .liquid
                                 ? nil : Text("Custom Liquid settings require the Liquid Glass material.")) {
@@ -147,7 +145,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Choose the global material mode for lock screen widgets. Custom Liquid unlocks per-widget variant sliders while Standard sticks to the classic frosted/liquid options.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenMediaWidget) {
                     Text("Show lock screen media panel")
                 }
@@ -224,7 +222,7 @@ struct LockScreenSettings: View {
             }
             .disabled(!showStandardMediaControls)
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenTimerWidget) {
                     Text("Show lock screen timer")
                 }
@@ -276,7 +274,7 @@ struct LockScreenSettings: View {
                 SettingsFooter("Controls the optional timer widget that floats above the media panel, including its classic, frosted, or liquid glass surface independent of the global material setting.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenWeatherWidget) {
                     Text("Show lock screen weather")
                 }
@@ -347,7 +345,7 @@ struct LockScreenSettings: View {
 
 
             if BatteryActivityManager.shared.hasBattery() {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .lockScreenBatteryShowsBatteryGauge) {
                         Text("Show battery indicator")
                     }
@@ -383,7 +381,7 @@ struct LockScreenSettings: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenFocusWidget) {
                     Text("Show focus widget")
                 }
@@ -441,56 +439,6 @@ extension LockScreenSettings {
     }
 }
 
-struct LockScreenGlassVariantPreviewCell: View {
-    @Binding var variant: LiquidGlassVariant
-
-    private let cornerRadius: CGFloat = 16
-    private let previewCornerRadius: CGFloat = 14
-    private let previewSize = CGSize(width: 190, height: 96)
-
-    var body: some View {
-        ZStack {
-            Image("glassdesktop")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-
-            liquidGlassPreview
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 120)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .padding(.vertical, 6)
-        .allowsHitTesting(false)
-        .onAppear {
-            Logger.log("Lock screen glass preview appeared (variant v\(variant.rawValue))", category: .performance)
-        }
-        .onDisappear {
-            Logger.log("Lock screen glass preview disappeared", category: .performance)
-        }
-        .onChange(of: variant) { _, newValue in
-            Logger.log("Lock screen glass preview variant changed to v\(newValue.rawValue)", category: .performance)
-        }
-    }
-
-    private var liquidGlassPreview: some View {
-        LiquidGlassBackground(
-            variant: variant,
-            cornerRadius: previewCornerRadius
-        ) {
-            Color.white.opacity(0.04)
-        }
-        .frame(width: previewSize.width, height: previewSize.height)
-        .shadow(color: Color.black.opacity(0.2), radius: 10, x: 0, y: 6)
-    }
-}
-
 private struct LockScreenPositioningControls: View {
     @Default(.lockScreenWeatherVerticalOffset) private var weatherOffset
     @Default(.lockScreenMusicVerticalOffset) private var musicOffset
@@ -502,7 +450,7 @@ private struct LockScreenPositioningControls: View {
     private let timerWidthRange: ClosedRange<Double> = 320...LockScreenTimerWidget.defaultWidth
 
     var body: some View {
-        Section {
+        SettingsSection {
             let weatherBinding = Binding<Double>(
                 get: { weatherOffset },
                 set: { newValue in
@@ -571,7 +519,7 @@ private struct LockScreenPositioningControls: View {
                 .textCase(nil)
         }
 
-        Section {
+        SettingsSection {
             widthRow(
                 title: String(localized: "Media Panel Width"),
                 value: musicWidthBinding,

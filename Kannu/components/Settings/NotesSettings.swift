@@ -55,8 +55,8 @@ struct NotesSettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableNotes) {
                     Text("Enable Notes")
                 }
@@ -84,7 +84,7 @@ struct NotesSettingsView: View {
             }
 
             if enableNotes {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .enableAppleNotesSync) {
                         Text("Sync with Apple Notes")
                     }
