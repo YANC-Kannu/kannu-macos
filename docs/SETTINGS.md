@@ -304,8 +304,8 @@ either closure left out when there is none.
 
 ## Product pages
 
-A product page opens on what it is about, then its settings. Brain › Agents is the one so far; the redesign plan
-gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+A product page opens on what it is about, then its settings. Brain › Agents and Brain › Usage are the ones so far; the
+redesign plan gives Security, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -346,6 +346,26 @@ gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks 
   shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
   `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
   caffeinate link landing below the product.
+- **Usage** leads with the notch's provider cards in Brain's style, built from the usage store's readings and outlooks
+  (`UsageAlertManager`): a card for each provider that is on, among those whose limits the store keeps (Claude, Codex,
+  Cursor). The card's title is the provider's icon and name; then each window is a row, its name over "Resets … · As
+  of …" and the forecast when it says something, with the bar and the percentage in a trailing column of
+  `listTrailingWidth`. The bar is the slider's track, filled with the accent, and near the limit, as the alerts count it,
+  the bar and the figure are `destructive`; a warning forecast is too. A provider with no reading yet is one quiet line.
+  Then "Models this week", from each provider's last read (`UsageSnapshot.models`), in Recent chats' rows: the provider
+  over the model, the tokens in and out trailing, and the cost only where the provider bills per token (Cursor); hidden
+  when empty. Antigravity's quotas are not among the store's readings, so it has no card; the notch shows them.
+- **Usage's empty state**, with no such provider on: "No limits to show", one line, and "Turn on a provider" (the
+  standard style), which goes to the Providers switches, or to the monitor's while it is off.
+- **Usage's header** holds the gear, which goes to the monitor's switch, then **Refresh**, the page's one primary verb,
+  off while a refresh runs or no provider is on. It runs on a press only, through the notch's own paths, unchanged:
+  its Refresh usage (`LLMUsageManager.refreshRequestedByUser`), and Claude's `/usage` as the automatic refresh runs it
+  (`refreshClaudeUsageFromCLI(manual: false)`), so a press here never starts a browser sign-in; that stays a press of
+  the notch's Claude ↻, beside the status line and Cancel it needs (docs/REGRESSIONS.md, entry 8).
+- **Boards**: `usage0`, `usage1` and `usage3` draw Usage at the window's first size with no provider on, Claude alone,
+  and Claude, Codex (no reading yet) and Cursor (near its limit), from fixtures (`UsageOverview.snapshotFixture`), never
+  this Mac's readings; the settings rows below still read its switches, as Agents' do. `llmUsage` draws the page whole
+  at the narrowest panel.
 
 ## Live data
 
@@ -380,6 +400,16 @@ which `AgentsPageLiveDataRulesTests` reads from the source, each checked against
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
 walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
 screen in another Space during a busy agent. It needs a real window, so it is David's check before install.
+
+**Usage** keeps the same three, and `UsagePageLiveDataRulesTests` holds them against planted offenders. Its readings,
+outlooks and models come through one subscription to `UsageAlertManager`'s `$readings` and `$outlooks` and
+`LLMUsageManager`'s `$results`, throttled to 500 ms and assigned only on a change; the header's "a refresh is running"
+through one to the two refresh flags that drops repeats; each a `.task(id: visibility.isOnScreen)`, and the stores are
+read once as the page appears. It keeps no clock and no animation: a reset and a reading are told by the time of day,
+and the store drops a window itself when it resets, so off screen the copy simply stays. **It never reads usage of
+its own** (docs/REGRESSIONS.md, entry 8): Claude's limits come from the agent monitor's reads, Codex's and Cursor's from
+the notch's Usage tab, the opt-in background check or Refresh, so a reading can be hours old and each says when it was
+taken. Refresh's press is the one way in, and the rule test pins its two calls to it.
 
 ## The shell and navigation
 

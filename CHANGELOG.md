@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-06 - Brain's Usage page leads with the limits and the models
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: Usage as a product page built from the usage store's readings, under Agents' live-data contract, with no read of its own
+- **Changes:**
+  - Brain › Usage opens on its product, above "Usage settings": a card for each provider that is on (Claude, Codex,
+    Cursor), and in it each window as a row, its name over "Resets … · As of …" and the forecast when it says
+    something, with its bar and percentage in a fixed trailing column. Near the limit, as the alerts count it, the bar
+    and the figure turn red. A provider with no reading yet says so in one line.
+  - "Models this week" lists the models each provider ran in Recent chats' rows: the tokens in and out, and the cost
+    only where the provider bills per token. Nothing showed `UsageSnapshot.models` before.
+  - With no provider on, an empty state: "No limits to show", one line, and "Turn on a provider", which goes to the
+    switches below.
+  - The header holds the gear and Refresh. Refresh runs on a press only, through the notch's own paths, unchanged: its
+    Refresh usage, and Claude's `/usage` as the automatic refresh runs it, so a press here never starts a browser
+    sign-in. It is off while a refresh runs or no provider is on.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock; the
+    page never reads usage of its own. `UsagePageLiveDataRulesTests` holds each clause against planted offenders.
+  - Antigravity has no card: its quotas are not among the usage store's readings. The notch still shows them.
+  - 7 new strings, each in the catalog's 17 languages. Boards `usage0`, `usage1` and `usage3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 8 and 22) gain their lines.
+
 ### 2026-11-05 - Answer the review of Brain's theme values and Agents page
 - **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count

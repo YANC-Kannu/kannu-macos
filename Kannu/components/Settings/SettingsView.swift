@@ -175,6 +175,12 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Usage's switch, its first row and always built: where Usage's gear lands, and its empty state's
+    /// "Turn on a provider" while the monitor is off.
+    static let usageMonitorHighlightID = SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")
+    /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
+    /// is on.
+    static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -300,7 +306,7 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear, and Usage's gear and Refresh. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1110,7 +1116,7 @@ struct SettingsView: View {
                 TasksSettings()
             }
         case .llmUsage:
-            SettingsForm(tab: .llmUsage) {
+            SettingsForm(tab: .llmUsage, actions: AnyView(UsageHeaderActions())) {
                 UsageSettings()
             }
         case .about:
