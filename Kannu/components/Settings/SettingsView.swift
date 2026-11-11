@@ -186,6 +186,8 @@ enum SettingsDeepLink {
     /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
     /// is on.
     static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
+    /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
+    static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -311,8 +313,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, and
-    /// Usage's gear and Refresh. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
+    /// gear and Refresh, and Timer's gear and Start timer. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -968,7 +970,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Timer tint", keywords: ["timer colour", "preset"], highlightID: SettingsTab.timer.highlightID(for: "Timer tint")),
             SettingsSearchEntry(tab: .timer, title: "Solid colour", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
-            SettingsSearchEntry(tab: .timer, title: "Accent colour", keywords: ["accent", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Accent colour")),
+            SettingsSearchEntry(tab: .timer, title: "Timer Presets", keywords: ["preset", "accent colour", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Timer Presets")),
 
             // Tasks. A source page's rows exist only while it is open, so their entries land on the
             // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
@@ -1114,7 +1116,7 @@ struct SettingsView: View {
                 ExtensionsSettingsView()
             }
         case .timer:
-            SettingsForm(tab: .timer) {
+            SettingsForm(tab: .timer, actions: AnyView(TimerHeaderActions())) {
                 TimerSettings()
             }
         case .hudAndOSD:
