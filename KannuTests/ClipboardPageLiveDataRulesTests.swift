@@ -286,10 +286,10 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
         let overview = try Self.source(Self.overviewPath)
         XCTAssertEqual(Self.workProblems(settings: settings, overview: overview), [])
         SettingsDesignSystemRulesTests.assertCaught([
-            ("        .onAppear {\n            #if DEBUG\n            if let fixture = Self.snapshotFixture",
-             "        .onAppear {\n            ClipboardManager.shared.startMonitoring()\n            #if DEBUG\n            if let fixture = Self.snapshotFixture"),
-            ("        .onAppear {\n            #if DEBUG\n            if let fixture = Self.snapshotFixture",
-             "        .onAppear {\n            ClipboardManager.shared.clearHistory()\n            #if DEBUG\n            if let fixture = Self.snapshotFixture"),
+            ("            showsHistory = false\n            #if DEBUG\n",
+             "            showsHistory = false\n            ClipboardManager.shared.startMonitoring()\n            #if DEBUG\n"),
+            ("            showsHistory = false\n            #if DEBUG\n",
+             "            showsHistory = false\n            ClipboardManager.shared.clearHistory()\n            #if DEBUG\n"),
             ("                .buttonStyle(SettingsButtonStyle(.primary))\n",
              "                .buttonStyle(SettingsButtonStyle(.primary))\n                .onAppear { ClipboardPanelManager.shared.showClipboardPanel(trigger: \"visit\") }\n"),
             ("ClipboardManager.shared.deleteItem(item)", "ClipboardManager.shared.togglePin(for: item)"),
@@ -361,7 +361,8 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
     // MARK: - The page and its header
 
     /// Clipboard leads with its overview and its settings follow; its header carries "…" and the verb; and History starts
-    /// folded, so a copy shows only once History is opened.
+    /// folded and folds again each time the page appears, Brain's reopening included (Brain's content outlives its
+    /// window), so a copy shows only once History is opened on this visit. A board's fixture may open it after that.
     static func wiringProblems(settings: String, view: String, overview: String) -> [String] {
         var problems: [String] = []
         if !SettingsDesignSystemRulesTests.code(settings).contains(
@@ -375,6 +376,12 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
         if !overviewCode.contains("@State private var showsHistory = false")
             || !overviewCode.contains("DisclosureGroup(isExpanded: $showsHistory) {") {
             problems.append("History does not start folded")
+        }
+        let appear = body(after: ".onAppear", in: overviewCode)
+        let fold = appear.range(of: "showsHistory = false")
+        let fixture = appear.range(of: "#if DEBUG")
+        if fold == nil || fixture == nil || fold!.lowerBound > fixture!.lowerBound {
+            problems.append("History does not fold again each time the page appears")
         }
         return problems
     }
@@ -392,6 +399,8 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
         }
         SettingsDesignSystemRulesTests.assertCaught([
             ("@State private var showsHistory = false", "@State private var showsHistory = true"),
+            // Opened once, History would stay open on every later visit, a reopened Brain on a shared screen included.
+            ("            showsHistory = false\n            #if DEBUG\n", "            #if DEBUG\n"),
         ], in: overview) { Self.wiringProblems(settings: settings, view: view, overview: $0) }
     }
 
