@@ -181,6 +181,8 @@ enum SettingsDeepLink {
     /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
     /// is on.
     static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
+    /// Brain › Notes' switch, its first settings row and always built: where Notes' gear lands.
+    static let notesEnableHighlightID = SettingsTab.notes.highlightID(for: "Enable Notes")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -306,7 +308,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear, and Usage's gear and Refresh. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear, Usage's gear and Refresh, and Notes' gear. Each reads
+    /// its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1152,7 +1155,7 @@ struct SettingsView: View {
                 Shortcuts()
             }
         case .notes:
-            SettingsForm(tab: .notes) {
+            SettingsForm(tab: .notes, actions: AnyView(NotesHeaderActions())) {
                 NotesSettingsView()
             }
         case .tasks:

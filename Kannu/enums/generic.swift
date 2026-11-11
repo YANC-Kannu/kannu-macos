@@ -109,12 +109,13 @@ enum AppleNotesSyncScope: String, CaseIterable, Defaults.Serializable, Identifia
         }
     }
 
+    /// Brain › Notes' caption for the choice, about 8 words: the two-way Kannu folder is the section's footer.
     var description: String {
         switch self {
         case .kannuFolder:
-            return String(localized: "Two-way sync with the Kannu folder in Notes. Your other notes are never read or changed.")
+            return String(localized: "Your other notes are never read or changed.")
         case .wholeAccount:
-            return String(localized: "Also shows every other note in your default Notes account, read-only: edit those in Notes.")
+            return String(localized: "Your other notes show here, read-only.")
         }
     }
 }

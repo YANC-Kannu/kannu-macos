@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Brain's Notes page leads with the notes
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, its in-tab swap first
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: Notes as a product page with a note's own page as an in-tab swap, under Agents' live-data contract, starting no sync of its own
+- **Changes:**
+  - Brain › Notes opens on its notes, above "Notes settings": pinned first, then the latest edit first, as the notch's
+    Notes tab lists them, in a lazy list. A row is the note's colour (a pin in that colour when it is pinned), its
+    title, and when it was last edited and how its text starts; then a › to its own page. Its right-click menu holds
+    Open note, Pin or Unpin, Copy, Open in Notes for a note made there, and Delete.
+  - While Apple Notes sync is on, one status line above the notes: a sync running, the last one's time, or its error.
+  - A note's own page opens in the tab under "‹ Notes": the note whole and read-only, its text selectable and its image
+    as a preview, with Pin, Copy and Delete, and Open in Notes for a note made there. Delete asks first for a note made
+    in Apple Notes, as the notch's rows do. Each visit, and a Notes search or deep link, opens on the list. `NotePage`
+    takes only the note: the seam for Stage 5's list-detail.
+  - The header holds the gear, which goes to Enable Notes, then New note (David's "Yes, add the sheet"): a sheet with the
+    title, the text and the colour, saved on Add through the notch's own write path, never as it is typed. With no
+    note, "No notes yet", one line and New note; while Notes is off, "Notes is off" with Turn On and no New note.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock. The
+    page no longer observes the sync manager, the notch's coordinator or its view model, and starts no sync of its own.
+    `NotesPageLiveDataRulesTests` holds each clause against planted offenders.
+  - Notes' copy by 4-3c's rules, which skip Notes: the switches in sentence case, the General footer dropped, Last
+    synced by the time of day with no spinner, the Apple Notes footer as two facts, and the scope captions about 8 words.
+  - 35 new strings, each in the catalog's 17 languages (the five note colours the notch named in English among them),
+    7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
+    `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
 ### 2026-11-06 - Answer the review of Brain's Usage page
 - **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds

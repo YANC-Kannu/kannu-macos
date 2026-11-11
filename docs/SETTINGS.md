@@ -295,11 +295,12 @@ either closure left out when there is none.
   the page opens, not as the row scrolls into view, and `onDisappear` as the page goes or Brain closes, not as
   the row scrolls away. A row that animates keeps animating while its page is open, in view or not; a closed
   Brain still costs nothing (docs/REGRESSIONS.md, entry 22).
-- **Except three long lists, which are lazy inside the page:** the task rows (`TaskRowList`: All tasks, Local
-  tasks, a source, a project), the Archive once expanded, and Security's findings. Each can hold hundreds of
-  rows, and a plain stack would build them all as the page opens. No search or deep link lands on one of their
-  rows: Tasks' rows carry no highlight id, and the findings' link lands on their section's header. Going back to
-  a task scrolls to its row by the `ForEach`'s own id, which a lazy stack reaches before the row is built. The
+- **Except four long lists, which are lazy inside the page:** the task rows (`TaskRowList`: All tasks, Local
+  tasks, a source, a project), the Archive once expanded, Security's findings, and Notes' notes. Each can hold
+  hundreds of rows (Notes' do with Apple Notes' whole account synced), and a plain stack would build them all as the
+  page opens. No search or deep link lands on one of their rows: Tasks' and Notes' rows carry no highlight id, and the
+  findings' link lands on their section's header. Going back to a task or a note scrolls to its row by the `ForEach`'s
+  own id, which a lazy stack reaches before the row is built. The
   lazy stack holds only the list's rows, spaced as they were (`sectionRowGap` in a card, the disclosure's default
   in the Archive), and is left out while the list is empty, since an empty one still takes a row's gap. Anything
   a search can reach stays outside it.
@@ -321,8 +322,8 @@ either closure left out when there is none.
 
 ## Product pages
 
-A product page opens on what it is about, then its settings. Brain › Agents and Brain › Usage are the ones so far; the
-redesign plan gives Security, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage and Brain › Notes are the
+ones so far; the redesign plan gives Security, Timer and Clipboard theirs in Stage 4b, and Tasks in Stage 5.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -389,6 +390,49 @@ redesign plan gives Security, Timer, Clipboard and Notes theirs in Stage 4b, and
   and Claude, Codex (no reading yet) and Cursor (near its limit), and `usageOff` the three with Agent Status off, from
   fixtures (`UsageOverview.snapshotFixture`), never this Mac's readings or its Agent Status; the settings rows below
   still read its switches, as Agents' do. `llmUsage` draws the page whole at the narrowest panel.
+- **Notes** leads with the notes in one card, pinned first and then the latest edit first, as the notch's Notes tab
+  lists them, in a lazy list (above, "Pages and sections"). A row is the note's colour (a pin in that colour when it is
+  pinned, as the notch marks one, in a column a list row's icon wide, so the titles share an edge), its title and a
+  caption: when it was last edited, by the time of day or the date, so the page keeps no clock, then its text's first
+  line. Then a › to its own page; its right-click menu holds Open note, Pin or Unpin (while pinning is on, as in the
+  notch), Copy, Open in Notes for a note made there, and Delete. While Apple Notes sync is on, one status line above the
+  notes says that a sync runs, when the last one ran, or its error; it reads the page's copy and starts nothing. With no
+  note, "No notes yet", "Write your first note here or in the notch." and New note in the standard style, the header's
+  verb again, as Security's empty state draws its own. While Notes is off, one card, "Notes is off", with Turn On.
+- **A note's own page** is an in-tab swap (below, "Section rules"): the › opens it under a "‹ Notes" back row, with the
+  note's title as the page's title, at its top; going back scrolls to the note's row. It shows the note whole and
+  read-only: when it was edited ("Made in Apple Notes" after it for a note shown read-only), the text, selectable, and
+  its image as a preview at most the prose width and a hero card's height, read from its file once, off the main
+  thread. Then Pin or Unpin, Copy and Delete, and Open in Notes for a note made there: the notch edits notes, and Apple
+  Notes the ones made there. `NotePage` is handed the note and nothing else, so the list-detail layout
+  (layout-proposal.md, D1) can stand it beside the list from the same selection. Each visit opens on the list, since a
+  note left open would come back whole on a reopened Brain, which can be on a shared screen; a Notes search or deep link
+  takes the tab back to the list too, where its row is.
+- **Notes' presses:** Delete asks first for a note made in Apple Notes, since it moves to Recently Deleted there too, as
+  the notch's rows ask; any other goes at once, as there. **The page starts no work of its own:** no sync and no
+  AppleScript as it appears or follows, though the notch's Notes tab syncs as it appears. Pin, Copy, Open in Notes
+  (AppleScript, behind the sync manager's gate) and Delete act on a press only, through `NotesManager`, the notes' one
+  write path, and a note's image file is read only by Copy. The settings keep their three syncs, each on a press: the
+  scope's choice, the narrowing question's Sync Kannu folder, and Sync now.
+- **Notes' header** holds the gear, which goes to the first settings row, Enable Notes, then **New note**, the page's one
+  primary verb, which opens New note's sheet on a press. No New note while Notes is off.
+- **New note's sheet** (`NewNoteSheet`; layout-proposal.md §5 item 7, David's "Yes, add the sheet"): the title and the
+  text, each with a prompt that says what to type, and the colour, a `SettingsSelect` of the notch's six with each
+  colour's dot. Add, or Return in either field, saves the note through `NotesManager.save`, as a note made in the notch
+  is, and never one with no title and no text; nothing is saved as it is typed, so Cancel leaves nothing. One id for the
+  sheet, so Return reaching both a field and Add saves once. A note's own page stays read-only.
+- **What changed** in Notes' settings, by the copy pass's rules (4-3c skips Notes): the switches in sentence case; the
+  General footer, which said no fact, dropped; Last synced by the time of day, with no spinner and no relative date,
+  since the status line above says when a sync runs; the Apple Notes footer as two facts, a line each; the two scope
+  choices' captions about 8 words. Every row keeps its id and search entry, and Enable Notes registers one, the gear's
+  landing.
+- **Boards**: `notes0` and `notes4` draw Notes at the window's first size with no note and four (a pinned one, one with
+  an image, one made in Apple Notes and one with no text), `notePage` the page of the one with the image and
+  `notePageMirror` the one made in Apple Notes, from fixtures (`NotesOverview.snapshotFixture`), never this Mac's notes,
+  sync state or image files. `notes` draws the page at the narrowest panel, and `newNoteSheet` the sheet half typed,
+  never saved. The switches drawn under the product are this Mac's, so the boards run with `-enableNotes '<true/>'`,
+  the sync's with `-enableAppleNotesSync '<true/>'` and `notePageMirror` with `-appleNotesSyncScope 'Whole account'`
+  too: the argument domain, nothing saved. A bare `YES` reaches Defaults as text, which reads as the switch's default.
 
 ## Live data
 
@@ -434,6 +478,18 @@ while it runs, which is while Agent Status is on; off screen the copy simply sta
 (docs/REGRESSIONS.md, entry 8): Claude's limits come from the agent monitor's reads, Codex's and Cursor's from the
 notch's Usage tab, the opt-in background check or Refresh, so a reading can be hours old and each says when it was
 taken. Refresh's press is the one way in, and the rule test pins its two calls, and the hold Claude's run checks, to it.
+
+**Notes** keeps the same three, and `NotesPageLiveDataRulesTests` holds them against planted offenders. The notch
+autosaves a note every 1.5 s while one is typed, and a sync rewrites the notes, so the page never observes them: what the
+list, a note's page and the settings show is copied into one value, `NotesPageData`, from one subscription, the notes
+and the sync's switch, scope and date through `Defaults.publisher(keys:options: [])` merged with the sync manager's
+`objectWillChange`, throttled to 500 ms and assigned only on a change, in a `.task(id: visibility.isOnScreen)`. The
+copy is read once as the page appears and again each time Brain comes back. Nothing on the page observes the sync
+manager or holds the notes in a `@Default`, and nor do the notch's coordinator and view model, which the page before
+observed whole and never used. It keeps no clock: a note's edit and the last sync are told by the time of day or the
+date. A note's page has one hook, which reads its image from its file once, off the main thread. **It starts no sync:**
+the notch's Notes tab syncs, and so runs Notes' AppleScript, as it appears; Brain's page syncs only on a press of the
+settings' three. **Not measured:** the CPU of Notes open while a note is typed in the notch; it needs a real window.
 
 ## The shell and navigation
 
