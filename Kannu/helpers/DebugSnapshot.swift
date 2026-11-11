@@ -1088,7 +1088,6 @@ enum DebugSnapshotFixtures {
         let snoozes = several ? [SecurityFindingSnooze(id: all[3].groupID, until: now.addingTimeInterval(86_400))] : []
         data.groups = SecurityFindingsStore.buildGroupRanking(findings: several ? all : [all[0]], acknowledgedGroups: [:],
                                                              legacyAcknowledged: [], snoozes: snoozes, now: now)
-        data.hasAcknowledgements = !snoozes.isEmpty
         let scanned = now.addingTimeInterval(-3 * 3600)
         data.lastScan = ADRScanRecord(date: scanned, origin: .kannu, fileName: "snapshot-fixture.json", assetCount: 27,
                                       findingCount: 1, reviewCount: several ? 2 : 0, coverageComplete: !several,
