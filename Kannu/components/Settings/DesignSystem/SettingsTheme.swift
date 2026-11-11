@@ -141,6 +141,8 @@ enum SettingsTheme {
     static let listRowIcon: CGFloat = 20
     /// A row's trailing column, its state, metrics and light, so the eye travels a bounded distance.
     static let listTrailingWidth: CGFloat = 200
+    /// A start tile, side by side with the others and wrapping: Timer's presets, four to a row at the window's first size.
+    static let tileWidth: CGFloat = 180
 
     // MARK: - Controls
 

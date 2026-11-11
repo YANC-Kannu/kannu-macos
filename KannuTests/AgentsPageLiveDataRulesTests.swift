@@ -378,8 +378,10 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
     }
 
-    /// The braces' contents that start at `opener`'s own `{`: the first one after where `opener` begins.
-    private static func body(after opener: String, in code: String) -> String? {
+    /// The braces' contents that start at `opener`'s own `{`: the first one after where `opener` begins. Usage's,
+    /// Security's and Timer's rules read their pages with it too (`UsagePageLiveDataRulesTests`,
+    /// `SecurityPageLiveDataRulesTests`, `TimerPageLiveDataRulesTests`).
+    static func body(after opener: String, in code: String) -> String? {
         guard let start = opener.isEmpty ? code.startIndex..<code.startIndex : code.range(of: opener),
               let open = code[start.lowerBound...].firstIndex(of: "{") else { return nil }
         var depth = 0

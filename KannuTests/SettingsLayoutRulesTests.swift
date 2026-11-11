@@ -124,7 +124,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "HUDAndOSDSettings.swift": 5,        // HUD style previews
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
     ]
 
@@ -141,7 +140,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 2,      // the editor sheet: the preview's zoom, and ParameterSliderRow's
         "SettingsComponents.swift": 2,       // SettingsSliderRow and SettingsStepperRow themselves
         "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
-        "TimerSettings.swift": 1,            // a preset's hours, minutes and seconds, one control for the three
     ]
 
     func testNoValueControlIsBuiltByHandInARow() {
@@ -168,6 +166,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
         "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
+        "TimerOverview.swift": 6,            // the running timer's, the empty state's, a preset tile's and Add Preset's cards, a tile's ⋯ in its corner, and the presets' heading in line with the tiles
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
         "CustomOSDSettings.swift": 1,        // the OSD preview
@@ -184,9 +183,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsField.swift": 1,            // the field inside its chrome
         "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
         "SettingsDateField.swift": 1,        // the date popover's content
-        "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
+        "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
     ]
 
     func testNoRowPadsItself() {
@@ -352,6 +352,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
         "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityOverview.swift": 1,         // a partial scan's orange, moved up with the newest scan's line
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
         "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
@@ -360,7 +361,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
         "TaskRowList.swift": 2,              // the same orange
         "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
-        "TimerSettings.swift": 1,            // the preset editor
     ]
 
     /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
@@ -384,7 +384,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPermissionCallout.swift": 1,  // the callout's title
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
         "StatsSettings.swift": 1,            // a graph caption
-        "TimerSettings.swift": 5,            // the preset editor
+        "TimerSettings.swift": 1,            // the custom timer's length, its mono readout at medium weight
     ]
 
     /// The theme makes the colours and holds the system font as Geist's fallback.
@@ -484,7 +484,13 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskConnectSheets.swift": 3,        // the three Connect sheets' Connect
         "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
+        "TimerPresetSheet.swift": 1,         // the preset sheet's Add or Save
+        "TimerOverview.swift": 1,            // Start timer: the Timer page header's one verb
         "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
+        // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
+        "SecurityOverview.swift": 1,
+        "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
         "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
     ]
 

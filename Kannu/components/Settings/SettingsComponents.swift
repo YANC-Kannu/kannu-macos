@@ -487,7 +487,7 @@ struct SettingsActionRow<Buttons: View>: View {
 
 /// The "…" button that holds a row's less frequent actions. Never inside a `SettingsRow`
 /// control slot — the row's `.labelsHidden()` environment erases the menu's label and its
-/// items' titles; use a raw `LabeledContent` (the `analysisRow` shape) instead.
+/// items' titles; use a raw `LabeledContent` (the `SecurityAnalysisRow` shape) instead.
 struct SettingsMoreMenu<Items: View>: View {
     private let accessibilityLabel: Text
     private let items: Items

@@ -35,6 +35,122 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     another string's, about the Dynamic Island, and is fixed. Boards `clipboard0`, `clipboard1` and `clipboard3` draw the
     page from made-up copies; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
 
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
+### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own
+- **Changes:**
+  - Brain › Timer opens on its product, above "Timer settings": the running timer in the hero's three bands (its
+    state, its name, then the time left, large, over its length, with Pause or Resume and Stop and a bar of how much
+    has run), then the presets as start tiles. A click on a tile starts its preset, as the notch's preset list does,
+    and the running preset's tile wears the selected ring.
+  - With no timer running, an empty state: "No timer running" and one line pointing at the tiles. While the timer is
+    off, "Timer is off" with Turn On stands in place of the timer and the tiles. A timer mirrored from the Clock app
+    shows without buttons, as in the notch: the Clock app pauses and stops it.
+  - The header holds the gear and Start timer, which starts the custom timer at its stored length, as the popover's
+    Start Custom Timer does: on a press only, and off while a timer runs, while the timer is off, or at 0:00.
+  - The presets are edited in a sheet (the design review's finding 25): a tile's ⋯ and its right-click menu hold
+    Edit…, Move Up, Move Down and Delete, Add Preset is the last tile, and Restore Defaults, which asks first, sits in
+    the presets' ⋯. The sheet refuses a blank name and a 0:00 length. The inline editor in the settings, with its mini
+    steppers under small labels, is gone, and its layout pins shrink with it.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock of
+    its own: the time moves with the timer's own one-second tick, so it shows what the notch shows. A press reads the
+    timer as it is then. `TimerPageLiveDataRulesTests` holds each clause against planted offenders, and the page joins
+    the timer surfaces that read `sessionAccent` and offer Resume while paused in overtime.
+  - 9 new strings, each in the catalog's 17 languages, and one theme value, `tileWidth`. Boards `timer0`, `timer1`,
+    `timerOver`, `timerClock`, `timerOff` and `timerPresetSheet` draw the page from fixtures; docs/SETTINGS.md and
+    docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Security page
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
+- **Changes:**
+  - The count strip is gone while to review, high and acknowledged are all zero. "Show acknowledged and snoozed again"
+    shows only while a finding is acknowledged or snoozed, not for an acknowledgement whose finding is gone.
+  - `SecurityPageLiveDataRulesTests` holds each loop to its job: the page's takes a fresh copy, the header's passes
+    the scan flag on. It also allows only the store's press methods and the two subscriptions by name, so a value the
+    store gains later cannot be read past the copy. Each rule has a planted offender.
+  - docs/SETTINGS.md: the settings row's Scan now can turn off up to 500 ms after the header's, and `runScanNow`
+    refuses a second scan; "Live data" names Agents' Security cell where it read as the page; the strip's rule.
+
+### 2026-11-06 - Brain's Security page leads with its findings
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own
+- **Changes:**
+  - Brain › Security opens on its product, above "Security settings": a count strip (to review, high and
+    acknowledged, with "Show acknowledged and snoozed again"), the findings in their lazy list, a status row of the
+    newest scan result, Scan this Mac and Policy rules, and Recent analyses while session analysis is on.
+  - With no finding waiting, an empty state in the list's place: "No findings yet" or "No open findings", one line,
+    and the page's verb. While Agent Status is off, one card with Turn On.
+  - The header holds the gear, which goes to the first settings row, then Scan now, off while a scan runs, or Connect
+    ADR while ADR Discovery is not found, which goes to ADR Discovery's row. Both act on a press only, through the
+    settings' own paths.
+  - The page no longer observes the findings store, which republishes on every hook write while a session runs with
+    permission checks off: it holds one copy, followed at most twice a second while Brain is on screen. It starts no
+    scan, ADR check, policy read or analysis of its own. `SecurityPageLiveDataRulesTests` holds each clause against
+    planted offenders.
+  - The settings keep every row, id, search entry and deep link: "High-severity alerts in the notch" heads them as
+    Alerts, and the findings, the newest scan result and Recent analyses moved up.
+  - 5 new strings in the catalog's 17 languages. Boards `security0`, `security1` and `security3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 10 and 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Usage page
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds
+- **Changes:**
+  - Refresh skips Claude's `/usage` while the notch's Claude card shows a status that holds the automatic refresh (a
+    sign-in to start or finish), read at the press, never followed. The press then runs as the automatic refresh does,
+    and no longer clears that line before you act on it.
+  - A window past its reset or expiry never shows: each card keeps the live ones only, by the rule the notch's bars and
+    the alerts use. The usage store drops them too, but only while it runs.
+  - While Agent Status is off, which stops the usage store, the page shows Agents' "Agent Status is off" with Turn On
+    in place of the cards, and Refresh is off: a refresh could change nothing it shows.
+  - Each Claude organization's windows stay together, its own first. A model's cost with unpriced events reads "$4.80+",
+    as the notch writes it. VoiceOver hears a model's tokens in words. Percentages round half away from zero, as the
+    notch's bars, so 12.5 reads 13.
+  - `UsagePageLiveDataRulesTests` gains the hold, the live filter, the off state, a counting `Text` and the settings
+    file's two refresh calls, each with planted offenders. Board `usageOff` draws the off state.
+  - docs/REGRESSIONS.md entry 8 and docs/SETTINGS.md say what the press really runs (`claude auth status` too, and
+    neither the pace nor the hold flag) and what the rule test checks.
+
+### 2026-11-06 - Brain's Usage page leads with the limits and the models
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: Usage as a product page built from the usage store's readings, under Agents' live-data contract, with no read of its own
+- **Changes:**
+  - Brain › Usage opens on its product, above "Usage settings": a card for each provider that is on (Claude, Codex,
+    Cursor), and in it each window as a row, its name over "Resets … · As of …" and the forecast when it says
+    something, with its bar and percentage in a fixed trailing column. Near the limit, as the alerts count it, the bar
+    and the figure turn red. A provider with no reading yet says so in one line.
+  - "Models this week" lists the models each provider ran in Recent chats' rows: the tokens in and out, and the cost
+    only where the provider bills per token. Nothing showed `UsageSnapshot.models` before.
+  - With no provider on, an empty state: "No limits to show", one line, and "Turn on a provider", which goes to the
+    switches below.
+  - The header holds the gear and Refresh. Refresh runs on a press only, through the notch's own paths, unchanged: its
+    Refresh usage, and Claude's `/usage` as the automatic refresh runs it, so a press here never starts a browser
+    sign-in. It is off while a refresh runs or no provider is on.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock; the
+    page never reads usage of its own. `UsagePageLiveDataRulesTests` holds each clause against planted offenders.
+  - Antigravity has no card: its quotas are not among the usage store's readings. The notch still shows them.
+  - 7 new strings, each in the catalog's 17 languages. Boards `usage0`, `usage1` and `usage3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 8 and 22) gain their lines.
+
 ### 2026-11-06 - Answer the review of Brain's consistency pass
 - **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5

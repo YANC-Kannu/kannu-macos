@@ -690,6 +690,22 @@ organization the cache does not contradict. The same organization contradicted s
 week moved, and only that run can learn the new one. Guard:
 `testAContradictedProfileWithNoMatchingWeekYieldsToTheLastKnownOrganization`.
 
+**2026-11-06 addendum — Brain's Refresh is a new press, not a new spawn.** Brain › Usage's Refresh calls
+the paths the notch already uses, unchanged: `LLMUsageManager.refreshRequestedByUser()`, and
+`refreshClaudeUsageFromCLI(manual: false)`, the automatic refresh's own run: the probe, then
+`claude auth status` when the probe finds no claude.ai sign-in, and never the typed pty fallback or a
+browser sign-in, which stay a press of the notch's Claude ↻, beside the status line and Cancel they need.
+So a Claude Code older than 2.1.263 gets no fetch from Brain's press, as from the automatic refresh.
+Called directly, the run skips the automatic refresh's pace (a press means now) and its private hold
+flag, so the press reads the hold's public face itself: while the notch's Claude card shows a status
+that holds the automatic refresh (`holdsAutomaticRefresh`: a sign-in to start or finish, an unchecked
+or other sign-in), the press skips Claude's run, which would otherwise clear that line before the user
+acted on it. A failed fetch's line, which holds nothing, a press clears, as the automatic refresh would.
+No argument or variable of the spawn changed, and no file in this entry's danger zones did. Guard:
+`UsagePageLiveDataRulesTests` pins both calls and the hold check to Refresh's action, and fails on a
+fixed list of other reads (`refreshAll`, `refreshClaudeUsageIfStale`, the quota clients, `Process`, the
+sign-in's cancel and Terminal route, among others) in the page and its settings file.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -804,6 +820,18 @@ the reveal.** Two behaviours were tightened together, and both are deliberate:
 Guard: `TrafficLightPersistenceGateTests` (the pure rule), `TrafficLightGateRulesTests` (the
 wiring: gate consulted, hold rescans instead of publishing, stop resets, reveal re-arms only on
 a published change).
+
+---
+
+**Addendum (2026-11-06) — Brain's Security page no longer observes the findings store whole.** The
+findings store republishes on every hook write while a session runs with permission checks off (each
+write restamps that session's finding), and Brain › Security observed it whole
+(`AgentSecuritySettings`, older than the redesign; Agents' Security cell stopped on 2026-11-05). So
+Brain left on Security redrew at hook rate, open or closed. The page now copies what it shows into
+one value, `SecurityPageData`, through `objectWillChange` throttled to 500 ms, assigned only on a
+change and only while Brain is on screen (entry 22's 2026-11-06 addendum). Guard:
+`SecurityPageLiveDataRulesTests`, each clause against planted offenders. **Not measured:** the CPU
+before and after; it needs a real window and a session with permission checks off.
 
 ## 11. A passive source never does its I/O on the main actor
 
@@ -1675,6 +1703,44 @@ only while Brain is open, and read how far their rows reach from `onGeometryChan
 list scrolls in at most 344 pt rather than grow. `LockScreenGlassVariantPreviewCell`, unused since the last addendum,
 is deleted with its log hooks and its image. So the rest of this entry holds.
 
+**2026-11-06 addendum: Usage's live data runs only while Brain is on screen, and the page reads nothing of its own.**
+Brain › Usage is a product page too (`UsageOverview`). Its readings, outlooks and models come through one subscription
+throttled to 500 ms, and its header's refresh state through one that drops repeats, each in a `.task(id:)` on
+`BrainVisibility.isOnScreen`, as Agents'. It keeps no clock and no animation, so off screen its copy simply stays, and
+nothing on it observes a usage store whole. New hooks: the overview's `onAppear` (one read of the two stores) and its
+`.task`, and the header's `.task`; none loads a field. `UsagePageLiveDataRulesTests` holds each clause against planted
+offenders, and pins Refresh's press as the page's one way to a read (entry 8), so the rest of this entry holds.
+
+**2026-11-06 addendum: Security's live data runs only while Brain is on screen, and its product starts no work.**
+Brain › Security is a product page now (`SecurityOverview` above its settings). It observed the whole findings store,
+closed or not (entry 10's 2026-11-06 addendum). Now the page holds one copy, `SecurityPageData`, read as the page
+appears and again as Brain comes back on screen, then followed through `objectWillChange` at most twice a second, in a
+`.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while it is false. Back on screen it reads first
+because `objectWillChange` does not send again what changed while Brain was away. The header follows `$isScanning` the
+same way, dropping repeats. Off screen the copy stays as it was, and nothing on the page keeps a clock. New hooks: the
+page's `onAppear` reads the copy beside the stored secrets it read before, and the page and its header each have a
+`.task`; none loads a field. The ADR and Detection checks' `onAppear` moved from the findings' section, which went up
+into the product, to ADR scans', so they still run once a visit, as the page opens; the policy's is unchanged. The
+product starts no scan, ADR check, policy read or analysis: Scan now and Connect ADR act on a press.
+**Not measured:** CPU with Security open, closed after being opened on it, and parked full screen in another Space,
+during a session with permission checks off. `SecurityPageLiveDataRulesTests` holds each clause against planted
+
+**2026-11-11 addendum: Timer's live data runs only while Brain is on screen, and its time keeps no clock of its own.**
+Brain › Timer is a product page too (`TimerOverview`), and it shows the one value on Brain that changes every second: a
+running timer publishes three changes a tick. What the page shows comes through one subscription to the manager's
+`objectWillChange`, throttled to 500 ms and copied into `TimerPageData`, and its header's "a timer runs" through one to
+`$isTimerActive` that drops repeats, each in a `.task(id:)` on `BrainVisibility.isOnScreen`, as Agents'. Its time moves
+only with the manager's own tick: no `TimelineView`, no `Timer` and no counting `Text`, so nothing on the page moves
+while a timer is paused or idle, or while Brain is off screen, and a closed Brain still costs nothing. New hooks: the
+overview's `onAppear` (one read of the manager), its `.task`, and its `onChange` of the presets (one read, so a paused
+timer's colour follows an edit of its preset; it runs only while Brain is open), the header's `.task`, and the preset
+sheet's `onAppear`, which focuses a new preset's name, as New Task's does; none loads a field that writes through. A
+press reads the manager again at once, outside the throttle, so a second click never acts against a card half a
+second old. The inline
+preset editor left the settings with its `withAnimation`s, and nothing on the page animates. **Not measured:** the CPU of
+Timer open while a timer runs; it needs a real window. `TimerPageLiveDataRulesTests` holds each clause against planted
+offenders, so the rest of this entry holds.
+
 **2026-11-11 addendum: Clipboard's live data runs only while Brain is on screen, and its boards never touch the
 clipboard manager.** Brain › Clipboard is a product page now (`ClipboardOverview` above its settings). It observed the
 clipboard manager whole, closed or not, so every copy the manager recorded redrew it. Now the page holds one copy,
@@ -1778,7 +1844,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in three long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor, or on Agents the findings store, whole (entry 22's last 2026-11-05 addendum, docs/SETTINGS.md "Live data"). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in three long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor or the findings store whole: Agents' Security cell and the Security page follow that store through a throttle (entry 22's last 2026-11-05 addendum and its 2026-11-06 Security addendum, docs/SETTINGS.md "Live data"). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
