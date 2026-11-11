@@ -81,7 +81,10 @@ struct SettingsStepper<Value: Strideable>: View {
     /// them, as its buttons do a click.
     private func nudge(_ direction: Int) {
         guard isEnabled else { return }
-        let next = min(max(value.advanced(by: direction > 0 ? step : -step), range.lowerBound), range.upperBound)
+        // From a value inside the range, measured before stepping: `advanced(by:)` near the type's limit would trap.
+        let current = min(max(value, range.lowerBound), range.upperBound)
+        let bound = direction > 0 ? range.upperBound : range.lowerBound
+        let next = abs(current.distance(to: bound)) <= step ? bound : current.advanced(by: direction > 0 ? step : -step)
         if next != value { value = next }
     }
 
