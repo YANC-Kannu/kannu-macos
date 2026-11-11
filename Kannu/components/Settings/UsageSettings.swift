@@ -30,8 +30,11 @@ struct UsageSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        // The product first, then its settings (docs/SETTINGS.md, "Product pages").
+        SettingsProductPage(settingsTitle: String(localized: "Usage settings")) {
+            UsageOverview()
+        } settings: {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLLMUsageFeature) {
                     Text("Enable LLM Usage Monitor")
                 }
@@ -43,7 +46,7 @@ struct UsageSettings: View {
             }
 
             if enableLLMUsageFeature {
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .enableClaudeProvider) {
                         Text("Claude")
                     }
@@ -69,7 +72,7 @@ struct UsageSettings: View {
                     SettingsFooter("Choose which AI providers appear in the Usage tab. Claude reads its usage from local files; while the Usage tab is open and the limits it has are more than 15 minutes old, Kannu runs Claude Code's /usage to refresh them, and the ↻ on its card fetches them now and, if Claude Code is not signed in to claude.ai, starts that sign-in in your browser. Codex and Cursor need each CLI signed in locally. Antigravity shows its model quotas when the Antigravity CLI (agy) is installed and signed in; Kannu asks it for /usage while the Usage tab is open, at most every 3 minutes unless you press Refresh. Full Disk Access is not required.")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsRow("Check Codex and Cursor limits in the background", description: "While a Codex or Cursor agent is working, Kannu asks for your usage every 5 minutes — the same request the Usage tab makes when it is open. Off: they update only while the Usage tab is open.") {
                         Defaults.Toggle(key: .checkQuotaInBackground) {
                             Text("Check Codex and Cursor limits in the background")

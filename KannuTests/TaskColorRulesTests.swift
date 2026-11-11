@@ -295,6 +295,7 @@ extension TaskColorRulesTests {
         "Kannu/components/Timer/TimerIconAnimation.swift",
         "Kannu/components/Timer/TimerPopover.swift",
         "Kannu/components/LockScreen/LockScreenTimerWidget.swift",
+        "Kannu/components/Settings/TimerOverview.swift",
     ]
     static let presetColorReads = ["activePreset?.color", "activePreset!.color", "activePresetColor", "$0.id == presetId"]
 

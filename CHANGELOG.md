@@ -4,6 +4,402 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Clipboard page
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
+- **Changes:**
+  - History folds again each time the page appears, Brain's reopening included. Brain's content outlives its window, so
+    History opened once stayed open on every later visit, a reopened Brain on a shared screen included.
+  - `ClipboardPageLiveDataRulesTests` holds the fold, with a planted offender.
+  - docs/SETTINGS.md says when History folds, and that Pinned Items always show, a pin being the user's own choice;
+    docs/REGRESSIONS.md entry 22's addendum names the fold among the page's hooks.
+
+### 2026-11-11 - Brain's Clipboard page leads with the pinned items and History
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: Clipboard as a product page built from the clipboard manager's copies, under Agents' live-data contract, its boards from made-up copies only
+- **Changes:**
+  - Brain › Clipboard opens on its product, above "Clipboard settings": Pinned Items with their count, then History,
+    folded until it is opened, with its count. A row is the copy's preview over its kind and date, with Copy, Pin or
+    Unpin, and Delete; a pinned row has no Delete, which only unpins in the panel and the popover.
+  - With nothing copied, an empty state, "No clipboard history", with its one line and no action; while the clipboard
+    manager is off, "Clipboard Manager is off" with Turn On.
+  - The header holds "…", with Clear History and Clear Pinned Items, which replace the Actions buttons and still clear
+    at once, and the page's one verb, Open history panel, which shows the floating clipboard panel on a press.
+  - Live data as on Agents: one copy of the manager's pins, History and status, throttled to 500 ms, assigned only on a
+    change and followed only while Brain is on screen; the page no longer observes the manager whole.
+    `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, and that a board never touches the
+    manager, whose first touch deletes image files the installed app shares with a debug build.
+  - Current Items, Pinned Items, Actions and Current History left the settings. Monitoring Status is a status line with
+    its dot, so the page has no raw colour or system font left, and both pins for it go.
+  - 7 new strings, each in the catalog's 17 languages. The Russian for "Pin items from history to save them here" was
+    another string's, about the Dynamic Island, and is fixed. Boards `clipboard0`, `clipboard1` and `clipboard3` draw the
+    page from made-up copies; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
+### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own
+- **Changes:**
+  - Brain › Timer opens on its product, above "Timer settings": the running timer in the hero's three bands (its
+    state, its name, then the time left, large, over its length, with Pause or Resume and Stop and a bar of how much
+    has run), then the presets as start tiles. A click on a tile starts its preset, as the notch's preset list does,
+    and the running preset's tile wears the selected ring.
+  - With no timer running, an empty state: "No timer running" and one line pointing at the tiles. While the timer is
+    off, "Timer is off" with Turn On stands in place of the timer and the tiles. A timer mirrored from the Clock app
+    shows without buttons, as in the notch: the Clock app pauses and stops it.
+  - The header holds the gear and Start timer, which starts the custom timer at its stored length, as the popover's
+    Start Custom Timer does: on a press only, and off while a timer runs, while the timer is off, or at 0:00.
+  - The presets are edited in a sheet (the design review's finding 25): a tile's ⋯ and its right-click menu hold
+    Edit…, Move Up, Move Down and Delete, Add Preset is the last tile, and Restore Defaults, which asks first, sits in
+    the presets' ⋯. The sheet refuses a blank name and a 0:00 length. The inline editor in the settings, with its mini
+    steppers under small labels, is gone, and its layout pins shrink with it.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock of
+    its own: the time moves with the timer's own one-second tick, so it shows what the notch shows. A press reads the
+    timer as it is then. `TimerPageLiveDataRulesTests` holds each clause against planted offenders, and the page joins
+    the timer surfaces that read `sessionAccent` and offer Resume while paused in overtime.
+  - 9 new strings, each in the catalog's 17 languages, and one theme value, `tileWidth`. Boards `timer0`, `timer1`,
+    `timerOver`, `timerClock`, `timerOff` and `timerPresetSheet` draw the page from fixtures; docs/SETTINGS.md and
+    docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Security page
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
+- **Changes:**
+  - The count strip is gone while to review, high and acknowledged are all zero. "Show acknowledged and snoozed again"
+    shows only while a finding is acknowledged or snoozed, not for an acknowledgement whose finding is gone.
+  - `SecurityPageLiveDataRulesTests` holds each loop to its job: the page's takes a fresh copy, the header's passes
+    the scan flag on. It also allows only the store's press methods and the two subscriptions by name, so a value the
+    store gains later cannot be read past the copy. Each rule has a planted offender.
+  - docs/SETTINGS.md: the settings row's Scan now can turn off up to 500 ms after the header's, and `runScanNow`
+    refuses a second scan; "Live data" names Agents' Security cell where it read as the page; the strip's rule.
+
+### 2026-11-06 - Brain's Security page leads with its findings
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own
+- **Changes:**
+  - Brain › Security opens on its product, above "Security settings": a count strip (to review, high and
+    acknowledged, with "Show acknowledged and snoozed again"), the findings in their lazy list, a status row of the
+    newest scan result, Scan this Mac and Policy rules, and Recent analyses while session analysis is on.
+  - With no finding waiting, an empty state in the list's place: "No findings yet" or "No open findings", one line,
+    and the page's verb. While Agent Status is off, one card with Turn On.
+  - The header holds the gear, which goes to the first settings row, then Scan now, off while a scan runs, or Connect
+    ADR while ADR Discovery is not found, which goes to ADR Discovery's row. Both act on a press only, through the
+    settings' own paths.
+  - The page no longer observes the findings store, which republishes on every hook write while a session runs with
+    permission checks off: it holds one copy, followed at most twice a second while Brain is on screen. It starts no
+    scan, ADR check, policy read or analysis of its own. `SecurityPageLiveDataRulesTests` holds each clause against
+    planted offenders.
+  - The settings keep every row, id, search entry and deep link: "High-severity alerts in the notch" heads them as
+    Alerts, and the findings, the newest scan result and Recent analyses moved up.
+  - 5 new strings in the catalog's 17 languages. Boards `security0`, `security1` and `security3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 10 and 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Usage page
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds
+- **Changes:**
+  - Refresh skips Claude's `/usage` while the notch's Claude card shows a status that holds the automatic refresh (a
+    sign-in to start or finish), read at the press, never followed. The press then runs as the automatic refresh does,
+    and no longer clears that line before you act on it.
+  - A window past its reset or expiry never shows: each card keeps the live ones only, by the rule the notch's bars and
+    the alerts use. The usage store drops them too, but only while it runs.
+  - While Agent Status is off, which stops the usage store, the page shows Agents' "Agent Status is off" with Turn On
+    in place of the cards, and Refresh is off: a refresh could change nothing it shows.
+  - Each Claude organization's windows stay together, its own first. A model's cost with unpriced events reads "$4.80+",
+    as the notch writes it. VoiceOver hears a model's tokens in words. Percentages round half away from zero, as the
+    notch's bars, so 12.5 reads 13.
+  - `UsagePageLiveDataRulesTests` gains the hold, the live filter, the off state, a counting `Text` and the settings
+    file's two refresh calls, each with planted offenders. Board `usageOff` draws the off state.
+  - docs/REGRESSIONS.md entry 8 and docs/SETTINGS.md say what the press really runs (`claude auth status` too, and
+    neither the pace nor the hold flag) and what the rule test checks.
+
+### 2026-11-06 - Brain's Usage page leads with the limits and the models
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: Usage as a product page built from the usage store's readings, under Agents' live-data contract, with no read of its own
+- **Changes:**
+  - Brain › Usage opens on its product, above "Usage settings": a card for each provider that is on (Claude, Codex,
+    Cursor), and in it each window as a row, its name over "Resets … · As of …" and the forecast when it says
+    something, with its bar and percentage in a fixed trailing column. Near the limit, as the alerts count it, the bar
+    and the figure turn red. A provider with no reading yet says so in one line.
+  - "Models this week" lists the models each provider ran in Recent chats' rows: the tokens in and out, and the cost
+    only where the provider bills per token. Nothing showed `UsageSnapshot.models` before.
+  - With no provider on, an empty state: "No limits to show", one line, and "Turn on a provider", which goes to the
+    switches below.
+  - The header holds the gear and Refresh. Refresh runs on a press only, through the notch's own paths, unchanged: its
+    Refresh usage, and Claude's `/usage` as the automatic refresh runs it, so a press here never starts a browser
+    sign-in. It is off while a refresh runs or no provider is on.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock; the
+    page never reads usage of its own. `UsagePageLiveDataRulesTests` holds each clause against planted offenders.
+  - Antigravity has no card: its quotas are not among the usage store's readings. The notch still shows them.
+  - 7 new strings, each in the catalog's 17 languages. Boards `usage0`, `usage1` and `usage3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 8 and 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's consistency pass
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5
+- **Changes:**
+  - Every choice card is a plain button that carries "selected" itself, so the keyboard reaches it and VoiceOver
+    hears which one is chosen; three were tap gestures. The idle animation's delete glyph sits over its card's
+    button, never inside it, and the card's name is no longer selectable text inside a button.
+  - The search suggestions decide whether to scroll from what is known at once: more than seven matches, or a last
+    row not yet measured, scroll in at most 344 pt, so an unmeasured list is never taller. The row measures, cleared
+    when the matches change, only trim the list to whole rows, and a short fade at its foot says more rows sit below.
+  - The secondary ink is a touch darker in light (#66625A), 4.5:1 on the line colour a badge sits on as well as on
+    every surface; the readability rule holds it there, with the old grey as its plant.
+  - Shelf's Full Disk Access callout and the ADR callout take the offer's blue, as Focus's did.
+  - The Lock Screen glass preview's view, unused since the last change, goes with its `glassdesktop` image.
+  - "Clear History" gains the nine languages it lacked.
+  - A rule now allows `.primary` only on the sheets' default actions and on Tasks' New Task, with a planted offender.
+  - docs/SETTINGS.md: the cards as buttons, the suggestions, the callout colours, Lock screen's counts;
+    docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-05 - Brain's pages say each thing one way
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the pages
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 10, 11, 13, 16, 17, 18 and 21 on the pages, and the comments that explained a placement by a lazy Form
+- **Changes:**
+  - Card buttons take the standard style: Appearance's Upload skin and Add icon, an extension's Authorize and
+    Re-authorize, and Agents' Turn On and Install hook. `.primary` stays on sheets' default actions and on Tasks' New
+    Task, the page's one verb until Stage 5 gives it a header.
+  - Every choice card says "selected" with the one ring, and its name in ink: the HUD style's dot, the idle animation's
+    "Selected" pill and the skin's and icon's blue name pills go, with the tinted fill on the download and Bluetooth
+    cards. An idle animation's "Built-in" is the badge.
+  - General's Permissions are rows of their card, their buttons trailing, not cards inside it; onboarding keeps its
+    cards. An extension's expanded details are a bordered card, not a darker one.
+  - A finding's "Details" is a flush quiet button in ink, its chevron after the word.
+  - Slider values move from titles into the readout: HUD's Width, Height, Size, Screen padding and Line width, and
+    General's two custom notch sizes.
+  - Lock screen's Preview and the Actions of Clipboard and Screen Assistant get a title and a caption, their footers
+    moved into the caption; About's two report buttons share one row, each keeping its search landing.
+  - The Focus callout takes the offer's blue. Appearance drops the Lock Screen glass preview, an empty panel; the Lock
+    screen page's Preview shows the real widgets. A board draws Devices' 3D icon from its movie's first frame, since
+    boards draw no video; the app plays the movie as before.
+  - Comments that explained a placement by "a lazy Form" give today's reason (Tasks, Timer, General, HUD and OSD).
+  - Strings: 11 new keys in all 17 languages; 10 keys this change left unused leave the catalog.
+  - Pins follow the counts that moved; docs/SETTINGS.md and docs/REGRESSIONS.md entry 22 gain their lines.
+
+### 2026-11-05 - Brain's shared pieces get one look each
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the shared components
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 11, 12, 14, 19 and 20 where a shared component carries them, and the looks the pages take next
+- **Changes:**
+  - A callout keeps its card as a boundary, the card's colour inside a 1-pt line border instead of a darker slab, and
+    its buttons take the standard style (`settingsCalloutCard`, `SettingsPermissionCallout`).
+  - One badge, `SettingsBadge`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius.
+    "Beta" and "Built-in" use it, and "ALPHA" becomes "Alpha" in the same badge.
+  - One selected look for a choice card, a 2-pt accent ring and the name in ink, medium when chosen
+    (`settingsChoiceRing`, `settingsChoiceLabel`).
+  - A colour swatch carries a white ring inside a hairline, so it never reads as a status dot.
+  - A page's scroll view starts 12 pt under the title, so a scrolled page is never cut against it; at rest a page
+    starts where it did.
+  - The search suggestions show whole rows only, each title in the body's size over two lines at most, its tab under
+    it in the description's.
+  - "Alpha" in all 17 languages; the pins follow the badge, the callout and the page.
+
+### 2026-11-05 - Answer the review of Brain's theme values and Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count
+- **Changes:**
+  - Editors & hooks counts only tools that have a hook. Warp and Claude Desktop have none and counted as hooked, so
+    Cursor missing its hook beside them read "2 of 3 hooked" with nothing installed; it now reads "0 of 1 hooked",
+    and a Mac with only those two reads "2 tools watched".
+  - Each missing hook is offered once: while the empty state offers the first, the cell offers the rest. It hid them
+    all, so a second missing hook was offered nowhere above Editor Hooks.
+  - The hero's figure reads "Tool calls": it counts calls, beside the cell's "tools watched", which counts editors.
+  - `flush` works for a quiet button only, after its fill and its hover, so a filled button never draws outside its
+    frame and the inset left of a flush label still takes clicks. A pin and two plants hold both.
+  - `AgentsPageLiveDataRulesTests` also reads `AgentTurnMetricsView.figureRow`, the hero's off-screen path, for a
+    clock or a follower, and holds the overview to one tool check a visit, each with plants.
+  - docs/SETTINGS.md: a flush button goes under text, never beside it; the empty state's line runs to two lines at
+    most; the count and the offer as above. Strings: "1 tool watched", "%lld tools watched" and "Tool calls" in all
+    17 languages, sorted; "Tools", added two commits ago and now unused, leaves the catalog.
+
+### 2026-11-05 - Brain's Agents hero reads in three bands, and offers the install once
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes for the Agents page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 1, 3 and 6, with 9's and 8's Agents call sites; the live-data contract held unchanged
+- **Changes:**
+  - The hero is three bands: its state as the title in a 17-pt card title and its light's colour, with the light at
+    the right; the session as before; and, pinned to the bottom, the run's figures (run time, tools, tokens in · out),
+    each over a small label from the text column, with "Open chat ›" at the right. It is at least 200 pt tall, not
+    240. The whole card stays the one button: "Open chat ›" is a label drawn like a quiet button.
+  - The install offer shows once: in the empty state when that is shown, otherwise in Editors & hooks. Agents' header
+    keeps the gear alone, so Brain checks the tools once a visit, not twice.
+  - Editors & hooks is one status line: "5 tools watched · hooks installed", or "4 of 5 hooked" and then only the tools
+    missing a hook, each with Install. Every hook keeps its icon in Editor Hooks below.
+  - The status cells' headline figures and the empty state's title use the card title; the empty state's line is the
+    body's size. Usage's percentage stands over what it measures, so the narrowest window does not break "5-hour".
+    Security's "Open ›" is a flush quiet button.
+  - `AgentTurnMetricsView` gains a `figures` option for the hero; the notch's column is unchanged.
+  - 7 new strings, each in the catalog's 17 languages.
+  - Boards: `agents1` now has every hook in, so it shows the cell's quiet line; docs/SETTINGS.md and docs/REGRESSIONS.md
+    entry 22 gain their lines.
+
+### 2026-11-05 - Brain's cards share one inset and a card title
+- **Developer label:** Brain redesign plan: Stage 4, the design review's theme values
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 5, 9 and 8 as theme values and a button option
+- **Changes:**
+  - One inset for text inside and beside a card: a section's sides and the hero's padding are 12 pt, so a row, a
+    section's header and a card's title start on one edge. Only the page's title and the settings rule sit at 0.
+  - `cardTitle`, 17 pt semibold Geist, the step between the page's title and a row. "No extensions yet" uses it, with its
+    line in the body's size on the secondary ink.
+  - `SettingsButtonStyle(.quiet, flush: true)` puts a lone quiet button's label on its column, and the fill under the
+    pointer reaches left by the inset. Tasks' back rows use it, their chevron 4 pt from the title.
+  - The design-system board names `cardTitle`; the layout pins move with the button's padding and Extensions' font;
+    docs/SETTINGS.md gains the inset, the card title and flush buttons.
+
+### 2026-11-05 - Answer the review of Brain's Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks
+- **Changes:**
+  - Security's cell follows the findings store at most twice a second and redraws only when its summary changes. It
+    observed the whole store, which republishes on every hook write while a session runs with permission checks off,
+    so Agents could redraw up to about 20 times a second.
+  - Opening and closing Brain set `BrainVisibility` themselves rather than wait for AppKit's occlusion change. A late
+    one could keep the live leaves running after a close; a missing one could leave the first open frozen.
+  - The notch checks the tools as its empty state appears, not on every hover-open while an agent works.
+  - `AgentsPageLiveDataRulesTests` also holds the hero and the rows to `drawsLive`, bans a `Task` inside a live
+    `.task`, and pins the flag's one assignment, its two new writers, Security's throttle and the notch's check, each
+    against plants.
+  - docs/SETTINGS.md and docs/REGRESSIONS.md: Security's rate, the new writers, Brain's two tool checks a visit and the
+    token follower's 50 ms catch-up.
+
+### 2026-11-05 - Brain's Agents page leads with your agents
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the product first, then its settings; fixtures on every board; the live-data contract held clause by clause
+- **Changes:**
+  - Brain › Agents opens on its agents. A hero titled by its state ("Needs you", "Working", "Finished") shows the
+    session the notch ranks first, with its chat, its state in words and colour, its run's metrics and its light.
+    Recent chats follow as rows, and a status row of three cells: Editors & hooks (the tools on this Mac, with Install
+    for each one missing its hook), Usage (readings near their limit, each with its reset and when it was read) and
+    Security (only while findings wait for review). A click on the hero or a row opens its chat.
+  - With no session the hero's place says "No agents running", one line on how to start, and offers the first
+    missing hook; with Agent Status off it says so, with Turn On. The header has a gear to the settings and the same
+    install offer.
+  - `SettingsProductPage` lays a product page out: the product in a column up to 1,200 pt, then a full-width "Agent
+    settings" rule and the settings in their 720-pt column. Every row keeps its id, search entry and deep link.
+    Detected Editors became the Editors & hooks cell; Editor Hooks stays a section, where a hook can be removed. The
+    terminal-tab and Smart caffeinate descriptions are cut to about eight words.
+  - Live data: the sessions come through one subscription throttled to 500 ms, only while Brain is on screen, and
+    the page reads them once as it opens. While Brain is off screen the metrics and the status row give way to a
+    static copy, so neither the token follower, nor a 1 Hz clock, nor the usage and findings stores run for it. A
+    click resolves its target in the action, never while drawing.
+  - 19 new strings, each in the catalog's 17 languages.
+  - Boards: `agents0`, `agents1` and `agents3` at the window's first size, `shellWide` on Agents, `shellWidest` at
+    2,560 pt and `shellDeepLinkAgents`, all from fixtures: no session, tool, reading or finding of this Mac.
+  - `AgentsPageLiveDataRulesTests` holds each clause of the contract, the click, the tool checks and the product
+    page's frame against planted offenders; `BrainShellRulesTests` lets `SettingsForm` take actions.
+  - docs/SETTINGS.md gains "Product pages" and "Live data"; docs/REGRESSIONS.md entry 22 and its Danger zones row
+    gain their dated lines.
+
+### 2026-11-05 - Brain's live views stop while it is off screen
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the visibility signal the live-data contract stands on
+- **Changes:**
+  - `BrainVisibility` says whether any of Brain's window is on screen. `SettingsWindowController` sets it from the
+    window's occlusion state, which goes false when Brain is closed, minimised, hidden, fully covered or in another
+    Space, where a full-screen Brain keeps `isVisible` true. It starts false, so nothing live runs before the first
+    open.
+  - The Agents style preview follows only the light, and only while Brain is on screen. It observed the whole agent
+    monitor, Brain open or not, so every hook write re-ran it. Nothing under Settings observes the monitor now, and
+    `ClosedNotchObservationTests` drops its entry.
+
+### 2026-11-05 - One answer to which agent tools are on this Mac
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the tool detector Brain and the notch share
+- **Changes:**
+  - `AgentToolDetector` says which of Cursor, Claude Code, Codex, Antigravity, Warp and Claude Desktop have run on
+    this Mac, by file checks and Launch Services, never Warp's container. `AgentHookLayout.toolIsPresent` answers yes
+    for five of them whatever is installed, so it could not say which hook to offer.
+  - The notch's empty state asks it once per visit, from `onAppear`, where it checked six paths on every render.
+  - `FirstLaunchRulesTests` reads the detector for the Warp gate.
+
+### 2026-11-05 - Answer the review of Brain's pages
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks
+- **Changes:**
+  - The first open after launch no longer focuses a page's first text field. It had nothing to put back, so ordering
+    in focused that field with its text selected, and with every row built it could be one deep in Agents that writes
+    straight through, such as the ntfy topic or a Pushover key. `SettingsWindowController` now records the page just
+    before the first order-in, nothing focused, and puts it back as it does on a reopening.
+  - The task rows (All tasks, Local tasks, a source, a project), the Archive and Security's findings sit in a
+    `LazyVStack` inside their page, so a long list is no longer built whole as the page opens. No search or deep link
+    lands on one of their rows, and going back to a task still scrolls to it by the list's own id.
+  - VoiceOver: only `SettingsSectionHeader` is a heading, so a Beta badge or a count beside it no longer reads as
+    one. A section and a permission callout are each one group, so Shelf's two "Open Privacy & Security" buttons are
+    heard with their callouts.
+  - `SettingsAnimationRulesTests` pins the first open beside the reopening, with five plants;
+    `SettingsDesignSystemRulesTests` moves the heading's pin to `SettingsSectionHeader` and holds the section's group.
+  - docs/SETTINGS.md names the three lazy lists and why; docs/REGRESSIONS.md entry 22 gains its dated line.
+
+### 2026-11-05 - Brain's pages leave Form
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — a scripted edit, 31 `Form`s and 145 `Section`s by script and one by hand; every page scrolls across the panel; a bare `Form` or `Section` now fails a test
+- **Changes:**
+  - Every `Form` under Settings is a `SettingsPage` and every `Section` a `SettingsSection`, Agents included. A one-off
+    script changed one word per site and refused what it could not rewrite: Media's
+    `Section(header: Text("Lock Screen Media"))`, done by hand, now has a `SettingsSectionHeader`.
+  - Every page scrolls across the whole panel, so its scrollbar sits at the panel's edge. `SettingsForm` measures the
+    panel and hands the inset to the page and its large title; `formMargin`, the `Form`'s own margin, is gone. At the
+    default window size the cards are 720 pt wide, the cap, where the `Form` left 680.
+  - Sections are soft cards with no row dividers. A page builds every row as it appears, so a search can scroll to any
+    of them, and a row's `onAppear` runs as the page opens, not as the row scrolls into view.
+  - A titled `SettingsActionRow` takes the root's labelled row, so its buttons stay trailing: outside a `Form` the
+    automatic style set them straight after the title.
+  - The boards' `Form`s and `Section`s are pages and sections too, and every page board renders at the narrowest panel,
+    612 pt.
+  - `SettingsLayoutRulesTests` bans `Form` and `Section` under Settings, `SwiftUI.Form` and `Section(header:)`
+    included, with plants, a floor, two real pages put back and an empty pin table. `BrainShellRulesTests` holds the
+    page's column, capped and leading inside one scroll view, and the inset's one measurement; the boards' pins follow
+    the new width.
+  - docs/SETTINGS.md gains "Pages and sections" and updates the component table, the window, the boards and the
+    section rules. docs/REGRESSIONS.md entry 22 notes that a page builds every row as it appears.
+
+### 2026-11-05 - Brain gets its own page and section
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsPage` and `SettingsSection`, called as `Form` and `Section` are, so the next change renames one word per site
+- **Changes:**
+  - `SettingsPage`: one scroll view across the panel, its sections in one plain `VStack` column, capped at
+    `pageMaxWidth` and started `settingsPageInset` from the panel's leading edge. Not lazy: a search scrolls to a
+    row's id, and a lazy stack cannot scroll to a row it has not built.
+  - `SettingsSection`: the rows in a soft card, apart by space and never by a divider; the header above the card as a
+    heading for VoiceOver and the footer under it in the secondary ink, both in line with the rows' text. `header:`
+    and `footer:` are optional, as on `Section`.
+  - `SettingsPageInsetKey`: the inset a page and its title start at, `pageInset` unless the window says otherwise.
+  - Theme tokens "Pages and sections": `sectionGap`, `sectionPadding`, `sectionRowGap`, `sectionLabelGap` and
+    `sectionRadius`.
+  - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
+    and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
+    `SettingsLayoutRulesTests` pins their padding.
+
+### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
+- **Developer label:** "Yes, request it"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's review of Super 3; the rest answered on the PR
+- **Changes:**
+  - Segments: the arrows step from the focused segment, which Full Keyboard Access can leave on one that is not
+    the choice.
+  - `SettingsSlider` keeps its upper bound: End and a drag past the end reach it when the step does not divide the
+    range.
+  - `SettingsStepper` steps from a value inside its range and measures before stepping, so a stored value near the
+    type's limit cannot overflow.
+  - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
+    with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
+  - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
+
 ### 2026-11-05 - Answer the review of the notch's tag chips and the Tags sheet
 - **Developer label:** Brain redesign plan: Stage 5, the design review's notch fixes, and David's picks on their review ("Yes, take them")
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 3: the independent reviewer's findings, and a tinted "+N" while it hides a searched tag

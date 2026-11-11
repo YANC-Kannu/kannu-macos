@@ -118,22 +118,32 @@ struct PermissionsStepView: View {
 }
 
 /// One permission: why Kannu wants it, where it stands, and Allow / Not now. Shared by the
-/// onboarding step and Brain › Settings › General › Permissions.
+/// onboarding step, as a card of its own, and Brain › Settings › General › Permissions, as a row.
 struct LaunchPermissionRow: View {
     let permission: LaunchPermission
     let musicSource: MediaControllerType
+    /// Brain's Permissions section: a row of its card in Brain's type, the buttons trailing, never a
+    /// card inside the card (docs/SETTINGS.md). Onboarding keeps its card.
+    var asRow = false
 
     @ObservedObject private var permissions = LaunchPermissionManager.shared
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PermissionRowLabel(symbol: symbol, title: title, reason: reason)
+        if asRow {
             HStack(spacing: 8) {
-                Spacer(minLength: 0)
+                PermissionRowLabel(symbol: symbol, title: title, reason: reason, asRow: true)
                 controls
             }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                PermissionRowLabel(symbol: symbol, title: title, reason: reason)
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    controls
+                }
+            }
+            .permissionCard()
         }
-        .permissionCard()
     }
 
     private var status: LaunchPermissionStatus { permissions.statuses[permission] ?? .notAsked }
@@ -217,6 +227,8 @@ private struct PermissionRowLabel: View {
     let symbol: String
     let title: String
     let reason: String
+    /// Brain's row type, as every other row of its section; onboarding keeps its own.
+    var asRow = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -225,12 +237,16 @@ private struct PermissionRowLabel: View {
                 .foregroundColor(.accentColor)
                 .frame(width: 28, height: 28)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.accentColor.opacity(0.15)))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.headline)
-                Text(reason)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            if asRow {
+                SettingsRowLabel(verbatim: title, description: reason)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.headline)
+                    Text(reason)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Spacer(minLength: 0)
         }

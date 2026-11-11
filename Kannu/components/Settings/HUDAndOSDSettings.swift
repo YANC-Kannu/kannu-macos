@@ -167,8 +167,8 @@ struct HUDAndOSDSettingsView: View {
     var body: some View {
         // One Form for the whole tab. The style cards used to sit above two stacked Forms (the
         // style's settings, then the display integrations), each scrolling on its own.
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 HStack(spacing: 10) {
                     HUDSelectionCard(
                         title: String(localized: "Dynamic Island"),
@@ -336,7 +336,7 @@ struct HUDAndOSDSettingsView: View {
                 if #available(macOS 15.0, *) {
                     CustomOSDSettings()
                 } else {
-                    Section {
+                    SettingsSection {
                         VStack(spacing: 8) {
                             Image(systemName: "exclamationmark.triangle.fill")
                                 .font(.system(size: 32))
@@ -373,8 +373,8 @@ struct HUDAndOSDSettingsView: View {
             }
         }
         // These lived on the Dynamic Island and Custom OSD sub-views' own Forms, live only while that
-        // style was selected. Rows of a lazy Form cannot host them reliably, so they sit here, keyed
-        // by the selected style exactly as before.
+        // style was selected. A style's sections are built only while it is selected, and these must see
+        // the switch away from it too, so they sit here, keyed by the selected style exactly as before.
         .onChange(of: selectedTab) { _, _ in
             accessibilityPermission.refreshStatus()
         }
@@ -408,7 +408,7 @@ struct HUDAndOSDSettingsView: View {
     @ViewBuilder
     private func controlsSections(permissionMessage: String) -> some View {
         if !accessibilityPermission.isAuthorized && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: permissionMessage,
                     requestAction: {
@@ -424,7 +424,7 @@ struct HUDAndOSDSettingsView: View {
         }
 
         if accessibilityPermission.isAuthorized || enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
                 SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
@@ -444,7 +444,7 @@ struct HUDAndOSDSettingsView: View {
     var verticalHUDSections: some View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Vertical HUD.")
 
-        Section {
+        SettingsSection {
             Toggle("Show Percentage", isOn: $verticalHUDShowValue)
             Toggle("Use Accent Color", isOn: $verticalHUDUseAccentColor)
             Toggle("Interactive (Drag to Change)", isOn: $verticalHUDInteractive)
@@ -482,7 +482,7 @@ struct HUDAndOSDSettingsView: View {
             SettingsSectionHeader("Behavior & Style")
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("HUD Position") {
                 SettingsSelect("HUD Position", selection: $verticalHUDPosition, choices: [
                     "left": String(localized: "Left"),
@@ -490,16 +490,16 @@ struct HUDAndOSDSettingsView: View {
                 ])
             }
 
-            dimensionSlider(Text("Screen Padding: \(Int(verticalHUDPadding))px"), value: $verticalHUDPadding, in: 0...100, step: 4)
+            dimensionSlider("Screen padding", value: $verticalHUDPadding, in: 0...100, step: 4)
         } header: {
             SettingsSectionHeader("Position")
         } footer: {
             SettingsFooter("Choose directly on which side of the screen the vertical bar appears.")
         }
 
-        Section {
-            dimensionSlider(Text("Width: \(Int(verticalHUDWidth))px"), value: $verticalHUDWidth, in: 24...80, step: 2)
-            dimensionSlider(Text("Height: \(Int(verticalHUDHeight))px"), value: $verticalHUDHeight, in: 100...500, step: 10)
+        SettingsSection {
+            dimensionSlider("Width", value: $verticalHUDWidth, in: 24...80, step: 2)
+            dimensionSlider("Height", value: $verticalHUDHeight, in: 100...500, step: 10)
             SettingsActionRow {
                 Button("Reset to Default") {
                     verticalHUDWidth = 36
@@ -516,7 +516,7 @@ struct HUDAndOSDSettingsView: View {
     var circularHUDSections: some View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Circular HUD.")
 
-        Section {
+        SettingsSection {
             Toggle("Show Percentage", isOn: $circularHUDShowValue)
             Toggle("Use Accent Color", isOn: $circularHUDUseAccentColor)
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
@@ -531,9 +531,9 @@ struct HUDAndOSDSettingsView: View {
             SettingsSectionHeader("Style")
         }
 
-        Section {
-            dimensionSlider(Text("Size: \(Int(circularHUDSize))px"), value: $circularHUDSize, in: 40...200, step: 5)
-            dimensionSlider(Text("Line Width: \(Int(circularHUDStrokeWidth))px"), value: $circularHUDStrokeWidth, in: 2...16, step: 1)
+        SettingsSection {
+            dimensionSlider("Size", value: $circularHUDSize, in: 40...200, step: 5)
+            dimensionSlider("Line width", value: $circularHUDStrokeWidth, in: 2...16, step: 1)
             SettingsActionRow {
                 Button("Reset to Default") {
                     circularHUDSize = 65
@@ -545,12 +545,11 @@ struct HUDAndOSDSettingsView: View {
         }
     }
 
-    /// A size or position slider: the title (which carries the value, "Width: 36px") on the leading
-    /// side, the slider trailing. The readout column stays reserved, so the bar is the same length
-    /// as on a row whose value sits trailing.
-    private func dimensionSlider<V: BinaryFloatingPoint>(_ title: Text, value: Binding<V>, in range: ClosedRange<V>,
+    /// A size or position slider: its title ("Width") on the leading side, the slider and its value ("36 px") trailing,
+    /// in the readout column every slider uses.
+    private func dimensionSlider<V: BinaryFloatingPoint>(_ title: LocalizedStringKey, value: Binding<V>, in range: ClosedRange<V>,
                                                          step: V.Stride) -> some View where V.Stride: BinaryFloatingPoint {
-        SettingsSliderRow(title: title.monospacedDigit(), value: value, in: range, step: step, valueText: nil)
+        SettingsSliderRow(title, value: value, in: range, step: step, valueText: Text("\(Int(value.wrappedValue)) px"))
     }
 }
 
@@ -634,7 +633,7 @@ private struct ExternalDisplayIntegrationsSection: View {
 
     /// Step size and display-app integration sections, drawn inside the Controls tab's Form.
     var body: some View {
-        Section {
+        SettingsSection {
             stepRow(Text("Volume step"), value: $volumeStepPercent)
                 .settingsHighlight(id: highlightID("Volume step"))
                 .disabled(enableThirdPartyDDCIntegration && enableExternalVolumeControlListener)
@@ -661,7 +660,7 @@ private struct ExternalDisplayIntegrationsSection: View {
             }
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("Enable third-party DDC app integration", description: enableThirdPartyDDCIntegration
                         ? nil : Text("Enable to route BetterDisplay or Lunar display adjustments through Kannu's active HUD style.")) {
                 Toggle("Enable third-party DDC app integration", isOn: $enableThirdPartyDDCIntegration)
@@ -733,13 +732,7 @@ private struct HUDSelectionCard<Preview: View>: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(nsColor: .controlBackgroundColor))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(
-                                    isSelected ? Color.accentColor : Color.clear,
-                                    lineWidth: 2.5
-                                )
-                        )
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
                         .shadow(color: .black.opacity(0.05), radius: 2, y: 1)
 
                     preview
@@ -748,26 +741,15 @@ private struct HUDSelectionCard<Preview: View>: View {
                 .frame(minWidth: 72, maxWidth: 110)
                 .frame(height: 76)
 
-                VStack(spacing: 4) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(isSelected ? .primary : .secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-
-                    if isSelected {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 4, height: 4)
-                    } else {
-                        Color.clear
-                            .frame(width: 4, height: 4)
-                    }
-                }
+                Text(title)
+                    .settingsChoiceLabel(isSelected: isSelected)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
                 isHovering = hovering

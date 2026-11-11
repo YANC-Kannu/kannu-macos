@@ -41,8 +41,8 @@ struct LiveActivitiesSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableScreenRecordingDetection) {
                     Text("Enable Screen Recording Detection")
                 }
@@ -78,13 +78,14 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Uses event-driven private API for real-time screen recording detection")
             }
 
-            Section {
+            SettingsSection {
                 if !fullDiskAccessPermission.isAuthorized {
                     SettingsPermissionCallout(
                         title: String(localized: "Custom Focus metadata"),
                         message: String(localized: "Full Disk Access unlocks custom Focus icons, colors, and labels. Standard Focus detection works without it, so grant access only if you want personalized indicators."),
                         icon: "externaldrive.fill",
-                        iconColor: .purple,
+                        // An offer, so the offer's blue: orange is for a permission something needs.
+                        iconColor: SettingsTheme.accentStrong,
                         requestButtonTitle: String(localized: "Request Full Disk Access"),
                         openSettingsButtonTitle: String(localized: "Open Privacy & Security"),
                         requestAction: { fullDiskAccessPermission.requestAccessPrompt() },
@@ -153,7 +154,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Listens for Focus session changes via distributed notifications")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableCapsLockIndicator) {
                     Text("Show Caps Lock Indicator")
                 }
@@ -178,7 +179,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Adds a notch HUD when Caps Lock is enabled, with optional label and tint controls.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableCameraDetection) {
                     Text("Enable Camera Detection")
                 }
@@ -231,7 +232,7 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Shows green camera icon and yellow microphone icon when in use. Uses event-driven CoreAudio and CoreMediaIO APIs.")
             }
 
-            Section {
+            SettingsSection {
                 Toggle(
                     "Enable music live activity",
                     isOn: $coordinator.musicLiveActivityEnabled.animation()

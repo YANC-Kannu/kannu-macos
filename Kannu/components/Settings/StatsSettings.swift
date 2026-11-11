@@ -59,8 +59,8 @@ struct StatsSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableStatsFeature) {
                     Text("Enable system stats monitoring")
                 }
@@ -79,7 +79,7 @@ struct StatsSettings: View {
             }
 
             if enableStatsFeature {
-                Section {
+                SettingsSection {
                     SettingsRow("Stop monitoring after closing the notch", description: "When enabled, stats monitoring stops a few seconds after the notch closes.") {
                         Defaults.Toggle(key: .statsStopWhenNotchCloses) {
                             Text("Stop monitoring after closing the notch")
@@ -108,7 +108,7 @@ struct StatsSettings: View {
                     SettingsFooter("Sampling can continue while the notch is closed when the timeout is disabled.")
                 }
 
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showCpuGraph) {
                         Text("CPU Usage")
                     }
@@ -148,7 +148,7 @@ struct StatsSettings: View {
                     }
                 }
 
-                Section {
+                SettingsSection {
                     HStack {
                         Text("Monitoring Status")
                             .textSelection(.enabled)
@@ -250,7 +250,7 @@ struct StatsSettings: View {
                     SettingsSectionHeader("Live Performance Data")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsActionRow {
                         Button("Clear Data") {
                             statsManager.clearHistory()

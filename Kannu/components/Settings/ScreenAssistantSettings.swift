@@ -37,8 +37,8 @@ struct ScreenAssistantSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableScreenAssistant) {
                     Text("Enable Screen Assistant")
                 }
@@ -50,7 +50,7 @@ struct ScreenAssistantSettings: View {
             }
 
             if enableScreenAssistant {
-                Section {
+                SettingsSection {
                     LabeledContent {
                         HStack(spacing: 8) {
                             if geminiApiKey.isEmpty {
@@ -132,8 +132,8 @@ struct ScreenAssistantSettings: View {
                     }
                 }
 
-                Section {
-                    SettingsActionRow {
+                SettingsSection {
+                    SettingsActionRow("Clear files", description: "Permanently removes attached files and recordings.") {
                         Button("Clear All Files", role: .destructive) {
                             screenAssistantManager.clearAllFiles()
                         }
@@ -142,12 +142,10 @@ struct ScreenAssistantSettings: View {
                     }
                 } header: {
                     SettingsSectionHeader("Actions")
-                } footer: {
-                    SettingsFooter("Clear all files removes all attached files and audio recordings. This action is permanent.")
                 }
 
                 if !screenAssistantManager.attachedFiles.isEmpty {
-                    Section {
+                    SettingsSection {
                         ForEach(screenAssistantManager.attachedFiles) { file in
                             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                                 HStack(spacing: SettingsMetrics.rowContent) {

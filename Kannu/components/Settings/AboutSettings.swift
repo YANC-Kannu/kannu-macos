@@ -52,8 +52,8 @@ struct About: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 LabeledContent("Release name") {
                     Text(ReleaseInfo.codename)
                         .foregroundStyle(.secondary)
@@ -76,7 +76,7 @@ struct About: View {
                 SettingsSectionHeader("Version info")
             }
 
-            Section {
+            SettingsSection {
                 SettingsActionRow("Terms of Use", description: termsAcceptanceText) {
                     Button("View") { LegalDocuments.open(.terms) { legalDocumentMissing = !$0 } }
                 }
@@ -96,7 +96,7 @@ struct About: View {
                 SettingsSectionHeader("Legal")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow(
                     "Watch for freezes",
                     description: "If Kannu's interface stops responding for five seconds, it writes down what it was doing to ~/Library/Logs/Kannu and offers you the note next time it starts. Nothing is shown while it is stuck, and nothing is sent anywhere. On by default for the Developer profile."
@@ -104,14 +104,13 @@ struct About: View {
                     Toggle("Watch for freezes", isOn: $hangWatchdogEnabled)
                 }
                 .settingsHighlight(id: highlightID("Watch for freezes"))
+                // One row for the two, each button keeping its own search landing.
                 SettingsActionRow {
                     Button("Report a Problem…") {
                         CrashReporter.shared.reportAProblem()
                     }
-                }
-                .settingsHighlight(id: highlightID("Report a Problem"))
+                    .settingsHighlight(id: highlightID("Report a Problem"))
 
-                SettingsActionRow {
                     Button(copiedReport ? "Copied" : "Copy Latest Report") {
                         copiedReport = false
                         reportCopyFailed = false
@@ -126,8 +125,8 @@ struct About: View {
                             copiedReport = false
                         }
                     }
+                    .settingsHighlight(id: highlightID("Copy Latest Report"))
                 }
-                .settingsHighlight(id: highlightID("Copy Latest Report"))
 
                 if reportCopyFailed {
                     SettingsErrorText("macOS has written no report about Kannu on this Mac.")

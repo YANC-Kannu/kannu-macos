@@ -70,13 +70,12 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 2,   // "Add" / "Add New" — labels of a tappable card
         "MusicSlotConfigurationView.swift": 1,      // palette item label — draggable/tappable chip
         "SecurityFindingRow.swift": 1,              // severity badge chip, accessibility-hidden
-        // Badges and tappable style cards: a selectable label swallows the card's click.
-        "AppearanceSettings.swift": 2,
-        "DevicesSettings.swift": 1,
-        "DownloadsSettings.swift": 1,
-        "SettingsHelpers.swift": 2,
+        // Badges: decorative chips. A choice card's name takes `settingsChoiceLabel`, so the scan no longer counts it.
+        "SettingsBadge.swift": 1,                   // the one badge on a page
+        "SettingsHelpers.swift": 1,                 // the "Coming soon" tag, unused
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
         "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
+        "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -114,20 +113,17 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedAdHocFontCounts: [String: Int] = [
         "AnimationEditorView.swift": 11,     // the animation editor sheet: its own dense scale
         "ExtensionsSettings.swift": 1,       // the empty state's 48-pt glyph
-        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and their chips
+        "IdleAnimationsSettingsSection.swift": 4,  // the Add card and the delete glyph; a card's name is `settingsChoiceLabel`
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
-        "SecurityFindingRow.swift": 2,       // the severity badge chips
-        "SettingsView.swift": 1,             // a search suggestion's tab name
+        "SecurityFindingRow.swift": 1,       // the severity badge chip
         "SettingsSidebarRow.swift": 1,       // the BETA capsule
-        "AppearanceSettings.swift": 3,       // style cards and previews
+        "SettingsBadge.swift": 1,            // the one badge, in the caption's size
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "CustomOSDSettings.swift": 1,        // the OSD preview
-        "DevicesSettings.swift": 3,          // device cards
-        "DownloadsSettings.swift": 1,        // a badge
-        "HUDAndOSDSettings.swift": 6,        // HUD style cards and previews
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
+        "HUDAndOSDSettings.swift": 5,        // HUD style previews
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "SettingsHelpers.swift": 1,          // badge capsules
-        "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
     ]
 
@@ -144,7 +140,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 2,      // the editor sheet: the preview's zoom, and ParameterSliderRow's
         "SettingsComponents.swift": 2,       // SettingsSliderRow and SettingsStepperRow themselves
         "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
-        "TimerSettings.swift": 1,            // a preset's hours, minutes and seconds, one control for the three
     ]
 
     func testNoValueControlIsBuiltByHandInARow() {
@@ -153,45 +148,51 @@ final class SettingsLayoutRulesTests: XCTestCase {
                            cure: "a slider row is SettingsSliderRow and a stepper row SettingsStepperRow — one width, one readout column")
     }
 
-    /// Lines adding padding. A grouped `Form` pads its own rows, so padding here belongs to a
+    /// Lines adding padding. A section pads its own rows, so padding here belongs to a
     /// card, a chip, a popover, a preview or an empty state — never to a row, which would make
     /// that one row taller than its neighbours.
     private static let pinnedRowPaddingCounts: [String: Int] = [
         "AnimationEditorView.swift": 8,      // the editor sheet
         "EditPanelView.swift": 1,            // a panel, not a Form
-        "ExtensionsSettings.swift": 5,       // the empty state and the expanded detail card
-        "IdleAnimationsSettingsSection.swift": 7,  // animation cards and chips
+        "ExtensionsSettings.swift": 4,       // the empty state, the expanded details' gap, and the status chip
+        "IdleAnimationsSettingsSection.swift": 5,  // the cards' scrolling strip, the delete glyph, and the Add menu's two items
         "MusicSlotConfigurationView.swift": 5,     // the slot canvas
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 7,             // the highlight's ring, the search field and its suggestions,
-                                             // and the page's inset from the panel's edge
+        "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
         "BrainShell.swift": 4,               // the shell's own insets
         "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
-        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page's Form
+        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
+        "SettingsPage.swift": 4,             // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
+        "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
+        "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
+        "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
+        "TimerOverview.swift": 6,            // the running timer's, the empty state's, a preset tile's and Add Preset's cards, a tile's ⋯ in its corner, and the presets' heading in line with the tiles
         "AgentStatusSettings.swift": 1,      // a preview
-        "AppearanceSettings.swift": 6,       // style cards and previews
+        "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
         "CustomOSDSettings.swift": 1,        // the OSD preview
         "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
-        "LockScreenSettings.swift": 4,       // lock screen previews
+        "LockScreenSettings.swift": 3,       // lock screen previews (the glass sample went with its view)
         "SettingsColorPicker.swift": 1,      // the colour popover
-        "SettingsHelpers.swift": 8,          // badge capsules
-        "SettingsPermissionCallout.swift": 1,  // the callout's own card
+        "SettingsHelpers.swift": 4,          // the unused "Upgrade to Pro" and "Coming soon" capsules
+        "SettingsBadge.swift": 1,            // the one badge's own inset
+        "SettingsCalloutCard.swift": 1,      // a callout's own card, and a row's expanded details
         "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
-        "SettingsButtonStyle.swift": 1,      // the button's own chrome
+        "SettingsButtonStyle.swift": 2,      // the button's own chrome, and a flush button pulled back onto its column
         "SettingsSelect.swift": 2,           // a segment, and the track it sits in
         "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
         "SettingsField.swift": 1,            // the field inside its chrome
         "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
         "SettingsDateField.swift": 1,        // the date popover's content
-        "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
+        "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
     ]
 
     func testNoRowPadsItself() {
         assertPinnedCounts(Self.pinnedRowPaddingCounts, scanner: Self.paddingLines,
                            rule: "a padding",
-                           cure: "a row in a grouped Form adds none — the Form pads it")
+                           cure: "a row in a section adds none — the section pads it")
     }
 
     // MARK: - Rule 6: a choice, a slider and a stepper are ours
@@ -253,13 +254,58 @@ final class SettingsLayoutRulesTests: XCTestCase {
                                                names: Self.nativeControlNames).count, 1)
     }
 
+    // MARK: - Rule 8: a page and a section are ours
+
+    /// Lines building a native `Form` or `Section`. macOS 14 has no API for a custom form style to take a section
+    /// apart, so under Settings a page is `SettingsPage` and a group of rows `SettingsSection`, called the same way
+    /// (docs/SETTINGS.md, "Pages and sections"). These are the ones that cannot be: none, so a pin needs a reason.
+    private static let pinnedNativeContainerCounts: [String: Int] = [:]
+
+    private static let nativeContainerNames = ["Form", "Section"]
+
+    private static func nativeContainerLines(in text: String, names: [String] = SettingsLayoutRulesTests.nativeContainerNames) -> [String] {
+        nativeControlLines(in: text, names: names, opening: #"[({]"#)
+    }
+
+    func testNoNativeFormOrSectionIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeContainerCounts, scanner: { Self.nativeContainerLines(in: $0) },
+                           rule: "a native Form or Section",
+                           cure: "a page is SettingsPage and a group of rows SettingsSection: the rows, then header: and footer:")
+        // A floor: the same scan, pointed at ours, finds the pages and their sections, so a pattern gone blind fails here.
+        let sources = Self.settingsSources()
+        let pages = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsPage"]).count }
+        let sections = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsSection"]).count }
+        XCTAssertGreaterThan(pages, 0, "the scan found no page: the pattern went blind")
+        XCTAssertGreaterThan(sections, 0, "the scan found no section: the pattern went blind")
+
+        for planted in ["Form {}", "Form{\n}", "SwiftUI.Form {}", "Form (\n) {}", "Section {}", "Section(\"a\") {}",
+                        "Section(header: Text(\"a\")) {}", "SwiftUI.Section {}", "return Section {",
+                        "Section {\n    row\n} header: {\n    SettingsSectionHeader(\"a\")\n}", "Section<Text, Text, EmptyView> {"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: planted).count, 1, planted)
+        }
+        for clean in ["SettingsPage {}", "SettingsSection {}", "SettingsSectionHeader(\"a\")", "IdleAnimationsSettingsSection()",
+                      "TimeToLogSection(draft: d)", "Shortcuts().shortcutsSection", "private var tasksSection: some View {",
+                      "TaskForm(draft: d)", ".formStyle(.grouped)", "// Form {", "/* Section { */", "Text(\"Form {\")",
+                      "SettingsFooter(\"Section {\")"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: clean), [], clean)
+        }
+
+        // Real pages, one section and one page put back.
+        let general = try XCTUnwrap(sources["GeneralSettings.swift"])
+        let section = try XCTUnwrap(general.range(of: "SettingsSection {"), "the General page has no section to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: general.replacingCharacters(in: section, with: "Section {")).count, 1)
+        let downloads = try XCTUnwrap(sources["DownloadsSettings.swift"])
+        let page = try XCTUnwrap(downloads.range(of: "SettingsPage {"), "the Downloads page has no page to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: downloads.replacingCharacters(in: page, with: "SwiftUI.Form {")).count, 1)
+    }
+
     /// One entry per line holding a call of one of `names`, read with comments and strings blanked:
     /// `Picker(`, `Picker (`, `SwiftUI.Picker(` and `Picker<…>(`, never `ColorPicker(`, `.pickerStyle(`
     /// or a title such as "Device Picker Style". Not the `openers` lookbehind of the design-system rules,
-    /// which misses `SwiftUI.Picker(`.
-    static func nativeControlLines(in text: String, names: [String]) -> [String] {
+    /// which misses `SwiftUI.Picker(`. `opening` is what starts the call; a container opens with a brace too.
+    static func nativeControlLines(in text: String, names: [String], opening: String = #"\("#) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
-        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*\("#
+        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*"# + opening
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             XCTFail("bad pattern for \(names)")
             return []
@@ -293,59 +339,55 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// of its own or the user's own colours. Only Stage 4 lowers these, by giving each a theme token; until then a
     /// pin can only shrink. The theme is excepted: it is where the colours are made.
     private static let pinnedRawColourCounts: [String: Int] = [
-        "AgentStatusSettings.swift": 2,      // status green; a preview caption
+        "AgentStatusSettings.swift": 1,      // status green
         "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
-        "AppearanceSettings.swift": 10,      // style cards and previews of notch content
-        "ClipboardSettings.swift": 4,        // status colours
-        "DevicesSettings.swift": 3,          // device cards
-        "DownloadsSettings.swift": 5,        // download style cards
+        "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
+        "DevicesSettings.swift": 1,          // the icon style card's resting fill
+        "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
         "ExtensionsSettings.swift": 3,       // status colours
         "GeneralSettings.swift": 1,          // .tint(.accentColor) around LaunchPermissionRow, shared with onboarding
-        "HUDAndOSDSettings.swift": 17,       // HUD style cards and previews
-        "IdleAnimationsSettingsSection.swift": 6,  // animation cards
+        "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
+        "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
         "LiveActivitiesSettings.swift": 10,  // each activity's own colour
-        "LockScreenSettings.swift": 18,      // lock screen previews
+        "LockScreenSettings.swift": 15,      // lock screen previews (the glass sample went with its view)
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
-        "SecurityFindingRow.swift": 4,       // severity badges
+        "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityOverview.swift": 1,         // a partial scan's orange, moved up with the newest scan's line
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
-        "SettingsHelpers.swift": 6,          // badge capsules
+        "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
         "SpotifyAuthSettingsSection.swift": 1,     // the status dot
         "StatsSettings.swift": 2,            // graph colours
         "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
         "TaskRowList.swift": 2,              // the same orange
         "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
-        "TimerSettings.swift": 1,            // the preset editor
     ]
 
     /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
     /// way. Separate from the ad-hoc font rule above, which is about size, so `.font(.caption)` counts in both.
     private static let pinnedSystemFontCounts: [String: Int] = [
-        "AgentStatusSettings.swift": 1,      // a preview caption
         "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
-        "AppearanceSettings.swift": 3,       // style cards and previews
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "BatterySettings.swift": 2,          // battery previews
-        "ClipboardSettings.swift": 1,        // a status line
         "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
-        "DevicesSettings.swift": 4,          // device cards
-        "DownloadsSettings.swift": 2,        // download style cards
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
         "EditPanelView.swift": 1,            // dead code but its #Preview
-        "ExtensionsSettings.swift": 13,      // the legend and the detail cards
-        "HUDAndOSDSettings.swift": 7,        // HUD style cards and previews
-        "IdleAnimationsSettingsSection.swift": 10, // animation cards
+        "ExtensionsSettings.swift": 12,      // the legend and the detail cards
+        "HUDAndOSDSettings.swift": 6,        // HUD style previews
+        "IdleAnimationsSettingsSection.swift": 5,  // the Add card and the delete glyph
         "LockScreenSettings.swift": 6,       // lock screen previews
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 1,  // a status line
-        "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityFindingRow.swift": 1,       // the severity badge
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "SettingsHelpers.swift": 4,          // badge capsules
+        "SettingsHelpers.swift": 2,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsPermissionCallout.swift": 1,  // the callout's title
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
         "StatsSettings.swift": 1,            // a graph caption
-        "TimerSettings.swift": 5,            // the preset editor
+        "TimerSettings.swift": 1,            // the custom timer's length, its mono readout at medium weight
     ]
 
     /// The theme makes the colours and holds the system font as Geist's fallback.
@@ -432,6 +474,56 @@ final class SettingsLayoutRulesTests: XCTestCase {
         let rows = try XCTUnwrap(Self.settingsSources()["TaskRowList.swift"])
         let quiet = try XCTUnwrap(rows.range(of: ".buttonStyle(SettingsButtonStyle(.quiet))"), "the task rows have no quiet button to plant on")
         XCTAssertEqual(Self.nativeButtonStyleLines(in: rows.replacingCharacters(in: quiet, with: ".buttonStyle(.borderless)")).count, 1)
+    }
+
+    /// `.primary` means the one thing to do here, so it is a sheet's default action or a page header's one verb, never a
+    /// callout's or a card's button (2026-11-05, the design review's finding 4; docs/SETTINGS.md). An exact list: a new
+    /// primary anywhere else, or one gone from here, fails.
+    private static let pinnedPrimaryButtonCounts: [String: Int] = [
+        "AnimationEditorView.swift": 1,      // the animation editor sheet's Save or Import
+        "IdleAnimationsSettingsSection.swift": 1,  // the URL sheet's Add
+        "NewTaskSheet.swift": 1,             // the New Task sheet's Add
+        "PolicyRulesEditor.swift": 1,        // the rules editor sheet's Save
+        "TaskConnectSheets.swift": 3,        // the three Connect sheets' Connect
+        "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
+        "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
+        "TimerPresetSheet.swift": 1,         // the preset sheet's Add or Save
+        "TimerOverview.swift": 1,            // Start timer: the Timer page header's one verb
+        "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
+        // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
+        "SecurityOverview.swift": 1,
+        "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
+        "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
+    ]
+
+    func testOnlySheetsAndNewTaskArePrimary() throws {
+        assertPinnedCounts(Self.pinnedPrimaryButtonCounts, scanner: Self.primaryButtonLines,
+                           rule: "a primary button",
+                           cure: "a callout's or a card's button takes the standard style; .primary is a sheet's default action or a page header's one verb")
+        for planted in [".buttonStyle(SettingsButtonStyle(.primary))", ".buttonStyle(SettingsButtonStyle( .primary ))",
+                        "let style = SettingsButtonStyle(.primary)", "SettingsButtonStyle(\n    .primary)"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1, planted)
+        }
+        for clean in [".buttonStyle(SettingsButtonStyle())", ".buttonStyle(SettingsButtonStyle(.quiet, flush: true))",
+                      "// .buttonStyle(SettingsButtonStyle(.primary))", "Text(\"SettingsButtonStyle(.primary)\")",
+                      "if prominence == .primary { return SettingsTheme.onPrimary }"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: clean), [], clean)
+        }
+
+        // A real page: Appearance's Upload skin, a card's button, given back the primary style.
+        let appearance = try XCTUnwrap(Self.settingsSources()["AppearanceSettings.swift"])
+        let upload = try XCTUnwrap(appearance.range(of: "isSkinImporterPresented = true\n                    }"), "Appearance has no Upload skin to plant on")
+        let planted = appearance.replacingCharacters(in: upload, with: "isSkinImporterPresented = true\n                    }\n                    .buttonStyle(SettingsButtonStyle(.primary))")
+        XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1)
+        XCTAssertEqual(Self.primaryButtonLines(in: appearance), [])
+    }
+
+    /// One entry per line naming `SettingsButtonStyle(.primary)`, its spacing and wrapping aside, read with comments and
+    /// strings blanked.
+    static func primaryButtonLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        return lines(at: matchOffsets(of: #"\bSettingsButtonStyle\s*\(\s*\.primary\b"#, in: code), in: code, text: text)
     }
 
     /// The shorthand colours a style or a colour argument can be handed.
@@ -630,6 +722,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         // Ours, by hand, count once each: only a row is not hand-built.
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider(value: $x, in: 0...1)").count, 1)
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider<Double>(value: $x, in: 0...1) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Stepper (value: $v, in: 0...9) { Text(\"a\") }").count, 1)
 
         XCTAssertEqual(Self.paddingLines(in: ".padding(.vertical, 8)").count, 1)
         XCTAssertEqual(Self.paddingLines(in: "// .padding(12)").count, 0)
@@ -762,7 +856,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// `SettingsSlider(value:`, `Stepper(value:` and `SettingsStepper(value:`, never a row.
     private static func handBuiltValueControlLines(in text: String) -> [String] {
         matchingLines(in: text) {
-            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\(value:"#, options: .regularExpression) != nil
+            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\s*(?:<[^>]*>)?\s*\(\s*value:"#, options: .regularExpression) != nil
         }
     }
 

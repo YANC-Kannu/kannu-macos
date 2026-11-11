@@ -108,8 +108,8 @@ struct Appearance: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 // The moon only picks the opposite of what is on screen, so this is the one way back
                 // to Match macOS.
                 SettingsRow("Brain appearance", description: brainAppearance.description) {
@@ -140,7 +140,7 @@ struct Appearance: View {
 
             // Show display style picker only on non-notch Macs (main screen has no physical notch)
             if !mainScreenHasPhysicalNotch {
-                Section {
+                SettingsSection {
                     SettingsRow("Main screen style", description: externalDisplayStyle.description) {
                         SettingsSelect("Main screen style", selection: $externalDisplayStyle,
                                        options: ExternalDisplayStyle.allCases, optionTitle: \.localizedName)
@@ -156,7 +156,7 @@ struct Appearance: View {
 
             notchWidthControls()
 
-            Section {
+            SettingsSection {
                 SettingsColorPickerRow(title: "Notch fill color",
                                        description: String(localized: "Fill color is used when no custom notch skin is selected."),
                                        selection: $notchFillColor)
@@ -165,7 +165,7 @@ struct Appearance: View {
                 SettingsSectionHeader("Notch appearance")
             }
 
-            Section {
+            SettingsSection {
                 if #available(macOS 26.0, *) {
                     SettingsRow("Material", description: lockScreenGlassStyle == .liquid
                                 ? nil : Text("Custom Liquid settings require the Liquid Glass material.")) {
@@ -192,12 +192,8 @@ struct Appearance: View {
                     .settingsHighlight(id: highlightID("Lock screen glass mode"))
 
                     if lockScreenGlassCustomizationMode == .customLiquid {
-                        VStack(alignment: .leading, spacing: SettingsMetrics.footerStack) {
-                            variantSliderRow(value: appearanceMusicVariantBinding, current: lockScreenMusicLiquidGlassVariant.rawValue,
-                                             range: liquidVariantRange, title: String(localized: "Music panel variant"))
-
-                            LockScreenGlassVariantPreviewCell(variant: $lockScreenMusicLiquidGlassVariant)
-                        }
+                        variantSliderRow(value: appearanceMusicVariantBinding, current: lockScreenMusicLiquidGlassVariant.rawValue,
+                                         range: liquidVariantRange, title: String(localized: "Music panel variant"))
                         .settingsHighlight(id: highlightID("Music panel variant (appearance)"))
                         .disabled(!enableLockScreenMediaWidget)
                         .opacity(enableLockScreenMediaWidget ? 1 : 0.4)
@@ -215,7 +211,7 @@ struct Appearance: View {
                 SettingsFooter("Configure lock screen materials from the Appearance tab. Custom Liquid unlocks variant sliders for both widgets whenever Liquid Glass is selected.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .coloredSpectrogram) {
                     Text("Enable colored spectrograms")
                 }
@@ -236,7 +232,7 @@ struct Appearance: View {
                 SettingsSectionHeader("Media")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .showNotHumanFace) {
                     Text("Idle Animation")
                 }
@@ -250,7 +246,7 @@ struct Appearance: View {
             // MARK: - Custom Idle Animations Section
             IdleAnimationsSettingsSection()
 
-            Section {
+            SettingsSection {
                 VStack(alignment: .leading, spacing: 12) {
                     let columns = [GridItem(.adaptive(minimum: 120), spacing: 12)]
                     LazyVGrid(columns: columns, spacing: 12) {
@@ -323,7 +319,6 @@ struct Appearance: View {
                         notchSkinManager.importError = nil
                         isSkinImporterPresented = true
                     }
-                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
 
                 SettingsSliderRow("Scrim opacity", value: $notchSkinScrimOpacity, in: 0...0.6, step: 0.05,
@@ -342,7 +337,7 @@ struct Appearance: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 VStack(alignment: .leading, spacing: 12) {
                     let columns = [GridItem(.adaptive(minimum: 90), spacing: 12)]
                     LazyVGrid(columns: columns, spacing: 12) {
@@ -399,7 +394,6 @@ struct Appearance: View {
                         iconImportError = nil
                         isIconImporterPresented = true
                     }
-                    .buttonStyle(SettingsButtonStyle(.primary))
                 }
             } header: {
                 SettingsSectionHeader("App icon")
@@ -468,24 +462,16 @@ struct Appearance: View {
                         .fill(Color.black.opacity(0.08))
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 2)
-                )
+                .settingsChoiceRing(RoundedRectangle(cornerRadius: 16, style: .continuous), isSelected: isSelected)
 
                 Text(title)
-                    .font(.caption)
+                    .settingsChoiceLabel(isSelected: isSelected)
                     .lineLimit(1)
-                    .foregroundStyle(isSelected ? .white : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(isSelected ? Color.accentColor : .clear)
-                    )
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func notchSkinCard(title: String, image: NSImage?, isSelected: Bool, action: @escaping () -> Void) -> some View {
@@ -504,22 +490,18 @@ struct Appearance: View {
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
-                        .strokeBorder(isSelected ? Color.accentColor : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
                 )
+                .settingsChoiceRing(Capsule(), isSelected: isSelected)
 
                 Text(title)
-                    .font(.caption)
+                    .settingsChoiceLabel(isSelected: isSelected)
                     .lineLimit(1)
-                    .foregroundStyle(isSelected ? .white : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(
-                        Capsule().fill(isSelected ? Color.accentColor : .clear)
-                    )
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func handleSkinDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -601,7 +583,7 @@ struct Appearance: View {
 
     @ViewBuilder
     private func notchWidthControls() -> some View {
-        Section {
+        SettingsSection {
             let recommendedMin = currentRecommendedMinimumNotchWidth()
             let tabCount = enabledStandardTabCount()
             let dynamicRange = Double(recommendedMin)...900

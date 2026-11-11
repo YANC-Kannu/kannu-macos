@@ -27,7 +27,6 @@ import SwiftUI
 struct TimerSettings: View {
     @ObservedObject private var coordinator = KannuViewCoordinator.shared
     @Default(.enableTimerFeature) var enableTimerFeature
-    @Default(.timerPresets) private var timerPresets
     @Default(.timerIconColorMode) private var colorMode
     @Default(.timerSolidColor) private var solidColor
     @Default(.timerShowsCountdown) private var showsCountdown
@@ -50,7 +49,6 @@ struct TimerSettings: View {
     @State private var customHours: Int = 0
     @State private var customMinutes: Int = 10
     @State private var customSeconds: Int = 0
-    @State private var showingResetConfirmation = false
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.timer.highlightID(for: title)
@@ -78,7 +76,10 @@ struct TimerSettings: View {
     }
 
     var body: some View {
-        Form {
+        // The product first, then its settings (docs/SETTINGS.md, "Product pages"). The presets moved up into its tiles.
+        SettingsProductPage(settingsTitle: String(localized: "Timer settings")) {
+            TimerOverview()
+        } settings: {
             timerFeatureSection
 
             if enableTimerFeature {
@@ -88,7 +89,7 @@ struct TimerSettings: View {
         .navigationTitle("Timer")
         .onAppear { syncCustomDuration() }
         .onChange(of: customTimerDuration) { _, newValue in syncCustomDuration(newValue) }
-        // On the Form, not the stepper rows: rows of a lazy Form may not exist when these change.
+        // On the page, which owns the three values the stepper rows edit.
         .onChange(of: customHours) { _, _ in updateCustomDuration() }
         .onChange(of: customMinutes) { _, _ in updateCustomDuration() }
         .onChange(of: customSeconds) { _, _ in updateCustomDuration() }
@@ -96,7 +97,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var timerFeatureSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableTimerFeature) {
                 Text("Enable timer feature")
             }
@@ -142,7 +143,6 @@ struct TimerSettings: View {
             lockScreenIntegrationSection
             customTimerSection
             appearanceSection
-            timerPresetsSection
             timerSoundSection
         }
         .onAppear {
@@ -159,7 +159,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var lockScreenIntegrationSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableLockScreenTimerWidget) {
                 Text("Show lock screen timer widget")
             }
@@ -211,7 +211,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var customTimerSection: some View {
-        Section {
+        SettingsSection {
             LabeledContent("Default Custom Timer") {
                 Text(customDurationDisplay)
                     .font(SettingsTheme.mono)
@@ -231,7 +231,7 @@ struct TimerSettings: View {
 
     @ViewBuilder
     private var appearanceSection: some View {
-        Section {
+        SettingsSection {
             SettingsRow("Timer tint") {
                 SettingsSelect("Timer tint", selection: $colorMode,
                                options: TimerIconColorMode.allCases, optionTitle: \.displayName, style: .segmented)
@@ -274,43 +274,8 @@ struct TimerSettings: View {
     }
 
     @ViewBuilder
-    private var timerPresetsSection: some View {
-        Section {
-            if timerPresets.isEmpty {
-                Text("No presets configured. Add a preset to make it appear in the timer popover.")
-                    .settingsDescriptionStyle()
-            } else {
-                TimerPresetListView(
-                    presets: $timerPresets,
-                    highlightProvider: highlightID,
-                    moveUp: movePresetUp,
-                    moveDown: movePresetDown,
-                    remove: removePreset
-                )
-            }
-
-            SettingsActionRow {
-                Button(role: .destructive, action: { showingResetConfirmation = true }) {
-                    Label("Restore Defaults", systemImage: "arrow.counterclockwise")
-                }
-                .confirmationDialog("Restore default timer presets?", isPresented: $showingResetConfirmation, titleVisibility: .visible) {
-                    Button("Restore", role: .destructive, action: resetPresets)
-                }
-
-                Button(action: addPreset) {
-                    Label("Add Preset", systemImage: "plus")
-                }
-            }
-        } header: {
-            SettingsSectionHeader("Timer Presets")
-        } footer: {
-            SettingsFooter("Presets show up inside the timer popover with the configured name, duration, and accent colour. Reorder them to change the display order.")
-        }
-    }
-
-    @ViewBuilder
     private var timerSoundSection: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 HStack(spacing: 8) {
                     Button("Reset to Default") {
@@ -359,42 +324,6 @@ struct TimerSettings: View {
         customTimerDuration = duration
     }
 
-    private func addPreset() {
-        let nextIndex = timerPresets.count + 1
-        let defaultColor = Defaults[.accentColor]
-        let newPreset = TimerPreset(name: "Preset \(nextIndex)", duration: 5 * 60, color: defaultColor)
-        withAnimation(.smooth) {
-            timerPresets.append(newPreset)
-        }
-    }
-
-    private func movePresetUp(_ index: Int) {
-        guard index > timerPresets.startIndex else { return }
-        withAnimation(.smooth) {
-            timerPresets.swapAt(index, index - 1)
-        }
-    }
-
-    private func movePresetDown(_ index: Int) {
-        guard index < timerPresets.index(before: timerPresets.endIndex) else { return }
-        withAnimation(.smooth) {
-            timerPresets.swapAt(index, index + 1)
-        }
-    }
-
-    private func removePreset(_ index: Int) {
-        guard timerPresets.indices.contains(index) else { return }
-        withAnimation(.smooth) {
-            _ = timerPresets.remove(at: index)
-        }
-    }
-
-    private func resetPresets() {
-        withAnimation(.smooth) {
-            timerPresets = TimerPreset.defaultPresets
-        }
-    }
-
     private func selectCustomTimerSound() {
         let panel = NSOpenPanel()
         panel.title = "Select Timer Sound"
@@ -417,186 +346,5 @@ private struct TimerDurationStepperRow: View {
 
     var body: some View {
         SettingsStepperRow(verbatim: title, value: $value, in: range, valueText: Text("\(value)"))
-    }
-}
-
-private struct TimerPresetListView: View {
-    @Binding var presets: [TimerPreset]
-    let highlightProvider: (String) -> String
-    let moveUp: (Int) -> Void
-    let moveDown: (Int) -> Void
-    let remove: (Int) -> Void
-
-    var body: some View {
-        ForEach(presets.indices, id: \.self) { index in
-            presetRow(at: index)
-        }
-    }
-
-    @ViewBuilder
-    private func presetRow(at index: Int) -> some View {
-        TimerPresetEditorRow(
-            preset: $presets[index],
-            isFirst: index == presets.startIndex,
-            isLast: index == presets.index(before: presets.endIndex),
-            highlightID: highlightID(for: index),
-            moveUp: { moveUp(index) },
-            moveDown: { moveDown(index) },
-            remove: { remove(index) }
-        )
-    }
-
-    private func highlightID(for index: Int) -> String? {
-        index == presets.startIndex ? highlightProvider("Accent colour") : nil
-    }
-}
-
-private struct TimerPresetEditorRow: View {
-    @Binding var preset: TimerPreset
-    let isFirst: Bool
-    let isLast: Bool
-    let moveUp: () -> Void
-    let moveDown: () -> Void
-    let remove: () -> Void
-    let highlightID: String?
-
-    init(
-        preset: Binding<TimerPreset>,
-        isFirst: Bool,
-        isLast: Bool,
-        highlightID: String? = nil,
-        moveUp: @escaping () -> Void,
-        moveDown: @escaping () -> Void,
-        remove: @escaping () -> Void
-    ) {
-        _preset = preset
-        self.isFirst = isFirst
-        self.isLast = isLast
-        self.highlightID = highlightID
-        self.moveUp = moveUp
-        self.moveDown = moveDown
-        self.remove = remove
-    }
-
-    private var components: TimerPreset.DurationComponents {
-        TimerPreset.components(for: preset.duration)
-    }
-
-    private var hoursBinding: Binding<Int> {
-        Binding(
-            get: { components.hours },
-            set: { updateDuration(hours: $0) }
-        )
-    }
-
-    private var minutesBinding: Binding<Int> {
-        Binding(
-            get: { components.minutes },
-            set: { updateDuration(minutes: $0) }
-        )
-    }
-
-    private var secondsBinding: Binding<Int> {
-        Binding(
-            get: { components.seconds },
-            set: { updateDuration(seconds: $0) }
-        )
-    }
-
-    private var colorBinding: Binding<Color> {
-        Binding(
-            get: { preset.color },
-            set: { preset.updateColor($0) }
-        )
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                Circle()
-                    .fill(preset.color.gradient)
-                    .frame(width: 20, height: 20)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                    )
-
-                TextField("Preset name", text: $preset.name, prompt: Text("Preset name"))
-                    .settingsField()
-
-                Spacer()
-
-                Text(preset.formattedDuration)
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            HStack(spacing: 16) {
-                TimerPresetComponentControl(title: String(localized: "Hours"), value: hoursBinding, range: 0...23)
-                TimerPresetComponentControl(title: String(localized: "Minutes"), value: minutesBinding, range: 0...59)
-                TimerPresetComponentControl(title: String(localized: "Seconds"), value: secondsBinding, range: 0...59)
-            }
-
-            SettingsColorPickerRow(title: "Accent colour", selection: colorBinding)
-                .frame(maxWidth: 240, alignment: .leading)
-
-            HStack(spacing: 12) {
-                Button(action: moveUp) {
-                    Label("Move Up", systemImage: "chevron.up")
-                }
-                .disabled(isFirst)
-
-                Button(action: moveDown) {
-                    Label("Move Down", systemImage: "chevron.down")
-                }
-                .disabled(isLast)
-
-                Spacer()
-
-                Button(role: .destructive, action: remove) {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-            .font(.system(size: 12, weight: .medium))
-        }
-        .padding(.vertical, 6)
-        .settingsHighlightIfPresent(highlightID)
-    }
-
-    private func updateDuration(hours: Int? = nil, minutes: Int? = nil, seconds: Int? = nil) {
-        var values = components
-        if let hours { values.hours = hours }
-        if let minutes { values.minutes = minutes }
-        if let seconds { values.seconds = seconds }
-        // Never 0:00: a zero preset would ring a second after it starts, and the custom
-        // timer's Start refuses zero too.
-        let duration = TimerPreset.duration(from: values)
-        guard duration > 0 else { return }
-        preset.duration = duration
-    }
-}
-
-private struct TimerPresetComponentControl: View {
-    let title: String
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        // The texts sit beside the stepper, not inside its label, so they stay selectable —
-        // a selectable Text inside a control label swallows the control's click.
-        HStack(alignment: .center, spacing: 6) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                Text("\(value)")
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .textSelection(.enabled)
-            }
-            SettingsStepper(value: $value, in: range, valueDescription: Text("\(value)")) { Text(title) }
-        }
-        .frame(width: 110, alignment: .leading)
     }
 }
