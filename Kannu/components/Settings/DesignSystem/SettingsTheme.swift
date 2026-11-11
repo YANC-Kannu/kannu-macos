@@ -33,7 +33,8 @@ enum SettingsTheme {
     static let hover = color(light: 0xEEEAE1, dark: 0x1E1F23)
     static let line = color(light: 0xE2DED4, dark: 0x2D2E34)
     static let ink = color(light: 0x1C1A16, dark: 0xECEAE4)
-    static let inkSecondary = color(light: 0x6B675E, dark: 0xA3A199)
+    /// 4.5:1 on the line colour too, where a badge's text sits.
+    static let inkSecondary = color(light: 0x66625A, dark: 0xA3A199)
     static let accent = color(light: 0x4DA3FF, dark: 0x4DA3FF)
     /// The accent where it must be read: text and thin marks. 2.54:1 on paper is too faint for that.
     static let accentStrong = color(light: 0x1D69C9, dark: 0x4DA3FF)
@@ -103,11 +104,17 @@ enum SettingsTheme {
     static let pageHeaderTop: CGFloat = 37
     /// The search field and its suggestions.
     static let fieldRadius: CGFloat = 8
+    /// The fade at the foot of the suggestions while more rows sit below, so a list of whole rows still says "more". The
+    /// list ends on a row's bottom edge, and a row's tab line sits 7 to 20 pt above it, so the fade reaches that line.
+    static let suggestionFade: CGFloat = 20
 
     // MARK: - Pages and sections
 
     /// Between two sections, and above the first and below the last.
     static let sectionGap: CGFloat = 24
+    /// From the title's row to the page's scroll view, so a scrolled page is cut this far under the title, never against
+    /// it. The page's own top padding gives up as much, so a page at rest starts where it did.
+    static let pageScrollInset: CGFloat = 12
     /// A section's card around its rows. Twelve at the sides too: one inset for text inside and beside a card, so a row,
     /// a section's header and a card's title start on one edge.
     static let sectionPadding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
@@ -164,6 +171,14 @@ enum SettingsTheme {
     static let selectListHeight: CGFloat = 294
     static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
     static let focusRingWidth: CGFloat = 2
+    /// A choice card's one selected look: an accent ring this wide around its tile.
+    static let choiceRingWidth: CGFloat = 2
+
+    // MARK: - Badges
+
+    /// A badge beside a title on a page ("Beta", "Alpha", "Built-in"): quiet, on the line colour.
+    static let badgeInset = EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6)
+    static let badgeRadius: CGFloat = 4
 
     // MARK: - Values
 

@@ -582,6 +582,8 @@ struct SettingsView: View {
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: SettingsTheme.quickAnimation), value: showSuggestions)
+            // New matches sit at new heights: the old rows' measures say nothing about them.
+            .onChange(of: suggestions.map(\.id)) { _, _ in rowBottoms = [:] }
         }
 
         private var showSuggestions: Bool {
@@ -622,17 +624,54 @@ struct SettingsView: View {
             )
         }
 
-        /// Past this many matches the list scrolls rather than growing down the sidebar.
-        private static let visibleSuggestionRows = 8
-        /// One suggestion with its divider: 28 pt icon, 7 pt padding above and below, 1 pt divider.
-        private static let suggestionRowHeight: CGFloat = 43
+        /// The list's tallest: past it the list scrolls rather than growing down the sidebar.
+        private static let maxListHeight: CGFloat = 344
+        /// One-line rows are about 47 pt, so seven fill `maxListHeight`, and more matches than this always scroll.
+        private static let rowsThatFit = 7
+        /// The rows' own space, where each measures its bottom edge.
+        private static let rowSpace = "suggestionRows"
+        /// The scroll view's own space, where the rows' foot shows whether more rows sit below.
+        private static let scrollSpace = "suggestionScroll"
+        /// Each row's bottom edge in the list, measured, since a title takes one line or two.
+        @State private var rowBottoms: [SettingsSearchEntry.ID: CGFloat] = [:]
+        /// Where the rows end, below the top of the scroll view as it is scrolled.
+        @State private var rowsFoot: CGFloat = 0
+
+        /// Decided from what is known now, so an unmeasured list is never taller than `maxListHeight`: more matches than
+        /// fit, or a last row not yet measured, scroll; otherwise the list scrolls only if its measured rows run past it.
+        private var listScrolls: Bool {
+            guard suggestions.count <= Self.rowsThatFit, let last = suggestions.last,
+                  let bottom = rowBottoms[last.id] else { return true }
+            return bottom > Self.maxListHeight
+        }
+
+        /// Whole rows only: the measured bottoms trim the scroll view to the lowest one under `maxListHeight`, so the last
+        /// row it shows is never cut; `maxListHeight` while nothing is measured.
+        private var listHeight: CGFloat {
+            suggestions.compactMap { rowBottoms[$0.id] }.filter { $0 <= Self.maxListHeight }.max() ?? Self.maxListHeight
+        }
 
         private var suggestionList: some View {
             Group {
-                if suggestions.count > Self.visibleSuggestionRows {
-                    // Half a row more than fits shows there is more to scroll to.
-                    ScrollView { suggestionRows }
-                        .frame(height: (CGFloat(Self.visibleSuggestionRows) + 0.5) * Self.suggestionRowHeight)
+                if listScrolls {
+                    ScrollView {
+                        suggestionRows
+                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).maxY } action: {
+                                rowsFoot = $0
+                            }
+                    }
+                    .coordinateSpace(.named(Self.scrollSpace))
+                    .frame(height: listHeight)
+                    // While rows sit below the foot, a short fade says there is more; it goes once the last row is in.
+                    .overlay(alignment: .bottom) {
+                        if rowsFoot > listHeight + SettingsTheme.hairline {
+                            LinearGradient(colors: [SettingsTheme.card.opacity(0), SettingsTheme.card],
+                                           startPoint: .top, endPoint: .bottom)
+                                .frame(height: SettingsTheme.suggestionFade)
+                                .allowsHitTesting(false)
+                                .accessibilityHidden(true)
+                        }
+                    }
                 } else {
                     suggestionRows
                 }
@@ -667,10 +706,11 @@ struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(suggestion.title)
-                                    .font(SettingsTheme.bodyStrong)
+                                    .font(SettingsTheme.body)
                                     .foregroundStyle(SettingsTheme.ink)
+                                    .lineLimit(2)
                                 Text(suggestion.tab.title)
-                                    .font(SettingsTheme.caption)
+                                    .font(SettingsTheme.description)
                                     .foregroundStyle(SettingsTheme.inkSecondary)
                             }
 
@@ -685,6 +725,9 @@ struct SettingsView: View {
                     .onHover { hovering in
                         hoveredSuggestionID = hovering ? suggestion.id : (hoveredSuggestionID == suggestion.id ? nil : hoveredSuggestionID)
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.rowSpace)).maxY } action: {
+                        rowBottoms[suggestion.id] = $0
+                    }
 
                     if suggestion.id != suggestions.last?.id {
                         Divider()
@@ -692,6 +735,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .coordinateSpace(.named(Self.rowSpace))
         }
 
         private func rowBackground(for suggestion: SettingsSearchEntry) -> some View {

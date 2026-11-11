@@ -186,9 +186,9 @@ struct TaskDetailPage: View {
                 guard (note.object as? NSWindow)?.identifier == SettingsWindowController.windowIdentifier else { return }
                 applyEstimate(typedEstimate, to: task)
             }
-            // The page's clock, on one row only: on a group of Sections it may run once a row. A
-            // lazy Form drops the row once it scrolls away, and the clock pauses with it; it catches
-            // up the moment the row is back.
+            // The page's clock, on one row only: on a group of sections it would run once a section.
+            // The page builds every row as it opens, so the clock runs while the page is open,
+            // scrolled or not, and stops when the page goes or Brain closes.
             .task {
                 while !Task.isCancelled {
                     let now = Date()
