@@ -182,7 +182,7 @@ numbers, and this table only says why.
 | `TaskDetailPage.swift` | 3 | 0 | The unreadable-estimate orange |
 | `TaskRowList.swift` | 2 | 0 | The same orange |
 | `TasksSettings.swift` | 1 | 0 | `ReminderPermissionNote`'s orange |
-| `TimerSettings.swift` | 1 | 5 | The preset editor |
+| `TimerSettings.swift` | 0 | 1 | The custom timer's length, its mono readout at medium weight (the preset editor left for Timer's sheet, Stage 4b) |
 
 `SettingsDesignSystemRulesTests` holds `DesignSystem/`'s animations to Reduce Motion the same way: every
 `withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
@@ -321,8 +321,8 @@ either closure left out when there is none.
 
 ## Product pages
 
-A product page opens on what it is about, then its settings. Brain › Agents is the one so far; the redesign plan
-gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+A product page opens on what it is about, then its settings. Brain › Agents and Brain › Timer are the ones so far; the
+redesign plan gives Security, Usage, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -363,6 +363,33 @@ gives Security, Usage, Timer, Clipboard and Notes theirs in Stage 4b, and Tasks 
   shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
   `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
   caffeinate link landing below the product.
+- **Timer** leads with the running timer, in the hero's three bands. Top: its state as the title ("Running", "Paused",
+  "Overtime", which is `destructive`), with the session's colour as a dot at the right. Middle: its name, with a timed
+  task's key or "Mirrored from the Clock app". Bottom, pinned: the time left in `pageTitle` with digits of one width,
+  as the notch writes it, over "of" its length, with Pause or Resume and Stop at the right, then a bar of how much has
+  run, in the session's colour, full and `destructive` in overtime. Pause or Resume shows unless the timer runs in
+  overtime; paused there, it still offers Resume, as every timer surface does. A timer mirrored from the Clock app has
+  no buttons, as in the notch: the Clock app pauses and stops it. Then **Presets**: a start tile each, `tileWidth` wide
+  and wrapping, its colour and name over its length. A click starts the preset through the popover's own call,
+  replacing a timer that runs, as the notch's preset list does; the running preset's tile wears the selected ring, and
+  a 0:00 preset, which only an older version could save, does not start. A tile's ⋯ and its right-click menu hold
+  Edit…, Move Up, Move Down and Delete; Add Preset is the last tile, and the heading's ⋯ holds Restore Defaults, which
+  asks first. Search's "Accent colour" lands on the heading, which is built whenever the timer is on.
+- **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom Timer's
+  stepper rows, and the colour, written on Add or Save and never as typed, so Cancel leaves the preset as it was. It
+  refuses a blank name, a blank row in the notch's list, and a 0:00 length, which would ring a second after it
+  started. It replaced the inline editor in the settings, which drew its own steppers under 9-pt labels.
+- **Timer's empty state**: "No timer running" and "Click a preset below to start a timer.", whose action is the tiles
+  under it. **While the timer is off**, "Timer is off" with Turn On stands in place of the timer and the tiles: the
+  notch shows no timer then.
+- **Timer's header** holds the gear, which goes to the timer switch, then **Start timer**, the page's one primary verb:
+  the custom timer at its stored length (Custom Timer, below), named "Custom Timer", as the popover's Start Custom Timer
+  starts it. It acts on a press only, and is off while a timer runs, as the popover hides its own start then, while the
+  timer is off, and at 0:00.
+- **Boards**: `timer0` (no timer), `timer1` (Focus running from its preset), `timerOver` (a task's timer paused in
+  overtime), `timerClock` (a Clock-app timer) and `timerOff` draw Timer at the window's first size from fixtures
+  (`TimerOverview.snapshotFixture`), never this Mac's timer or presets; the settings rows below still read its switches.
+  `timer` draws the page whole at the narrowest panel, two tiles to a row, and `timerPresetSheet` the sheet on Focus.
 
 ## Live data
 
@@ -397,6 +424,19 @@ which `AgentsPageLiveDataRulesTests` reads from the source, each checked against
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
 walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
 screen in another Space during a busy agent. It needs a real window, so it is David's check before install.
+
+**Timer** keeps the same three, and `TimerPageLiveDataRulesTests` holds them against planted offenders. A running timer
+publishes three changes a second (`remainingTime`, `elapsedTime` and `lastUpdated` on every tick), so the page never
+observes the manager: what it shows is copied into one value, `TimerPageData`, from one subscription to the manager's
+`objectWillChange`, throttled to 500 ms and assigned only on a change; the header's "a timer runs" comes through one to
+`$isTimerActive` that drops repeats; each is a `.task(id: visibility.isOnScreen)`, and the manager is read once as the
+page appears and again each time Brain comes back. **Its time keeps no clock of its own.** It moves with the manager's
+one-second tick, which the throttle lets through, so it shows what the notch shows, at most half a second later. The
+manager keeps no deadline (it counts `remainingTime` down, and a pause stops the count), so a `TimelineView`, a `Timer`
+or a counting `Text` here would be a second clock that could disagree with the notch, and would tick on while a timer
+stood paused. Off screen the copy stays as it was; an idle or paused timer publishes nothing, so the page then does no
+work at all. Its buttons act only on a press, through the popover's own calls, and Pause or Resume reads the timer as
+it is at the press, never the copy. **Not measured:** the CPU of Timer open while a timer runs; it needs a real window.
 
 ## The shell and navigation
 

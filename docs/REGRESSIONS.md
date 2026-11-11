@@ -1675,6 +1675,19 @@ only while Brain is open, and read how far their rows reach from `onGeometryChan
 list scrolls in at most 344 pt rather than grow. `LockScreenGlassVariantPreviewCell`, unused since the last addendum,
 is deleted with its log hooks and its image. So the rest of this entry holds.
 
+**2026-11-11 addendum: Timer's live data runs only while Brain is on screen, and its time keeps no clock of its own.**
+Brain › Timer is a product page too (`TimerOverview`), and it shows the one value on Brain that changes every second: a
+running timer publishes three changes a tick. What the page shows comes through one subscription to the manager's
+`objectWillChange`, throttled to 500 ms and copied into `TimerPageData`, and its header's "a timer runs" through one to
+`$isTimerActive` that drops repeats, each in a `.task(id:)` on `BrainVisibility.isOnScreen`, as Agents'. Its time moves
+only with the manager's own tick: no `TimelineView`, no `Timer` and no counting `Text`, so nothing on the page moves
+while a timer is paused or idle, or while Brain is off screen, and a closed Brain still costs nothing. New hooks: the
+overview's `onAppear` (one read of the manager) and its `.task`, the header's `.task`, and the preset sheet's
+`onAppear`, which focuses a new preset's name, as New Task's does; none loads a field that writes through. The inline
+preset editor left the settings with its `withAnimation`s, and nothing on the page animates. **Not measured:** the CPU of
+Timer open while a timer runs; it needs a real window. `TimerPageLiveDataRulesTests` holds each clause against planted
+offenders, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

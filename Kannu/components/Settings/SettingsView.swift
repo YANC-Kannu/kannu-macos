@@ -175,6 +175,8 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
+    static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -300,7 +302,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear, and Timer's gear and Start timer. Each reads its own
+    /// store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1102,7 +1105,7 @@ struct SettingsView: View {
                 ExtensionsSettingsView()
             }
         case .timer:
-            SettingsForm(tab: .timer) {
+            SettingsForm(tab: .timer, actions: AnyView(TimerHeaderActions())) {
                 TimerSettings()
             }
         case .hudAndOSD:
