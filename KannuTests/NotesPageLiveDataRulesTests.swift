@@ -251,7 +251,7 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
     static func clockProblems(in source: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(source)
         return ["TimelineView", "Timer.", ".repeatForever", "ProgressView", "withAnimation", ".animation(", "asyncAfter",
-                "style: .relative", ".relative("]
+                "style: .relative", ".relative(", "Task.sleep", ".sleep("]
             .filter { code.contains($0) }
             .map { "the page keeps a clock or a motion of its own: \($0)" }
     }
@@ -272,6 +272,11 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             ("            if data.syncOn {\n", "            TimelineView(.everyMinute) { _ in EmptyView() }\n            if data.syncOn {\n"),
         ], in: overview, by: Self.clockProblems)
+        // A minute's sleep in the subscription's own task, to keep a "5 minutes ago" fresh: a clock all the same.
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("            guard visibility.isOnScreen else { return }\n",
+             "            guard visibility.isOnScreen else { return }\n            try? await Task.sleep(for: .seconds(60))\n"),
+        ], in: settings, by: Self.clockProblems)
         SettingsDesignSystemRulesTests.assertCaught([
             ("                NotesOverview.copy(note)\n",
              "                NotesOverview.copy(note)\n                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {}\n"),
@@ -288,7 +293,8 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
     /// The page starts no sync and no AppleScript as it appears or follows: no press call in a hook. Each call is pinned
     /// to its count, so a new one anywhere fails here: the settings sync three times (the scope's choice, the narrowing
     /// question's Sync Kannu folder, Sync now), the list and the note's page pin and open in Notes from their buttons,
-    /// and a note's image file is read only by Copy.
+    /// and a note's image file is read only by Copy's press and by a note's page, once, off the main thread: never by a
+    /// row or the settings, where it would be read as each one draws.
     static func workProblems(settings: String, overview: String, page: String) -> [String] {
         var problems: [String] = []
         let settingsCode = SettingsDesignSystemRulesTests.code(settings)
@@ -310,6 +316,11 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             ("the overview", "togglePin", 2), ("the note's page", "togglePin", 1),
             ("the overview", "openInNotes", 1), ("the note's page", "openInNotes", 1), ("the settings", "openInNotes", 0),
             ("the settings", "NotesManager.shared.delete(", 1), ("the overview", "getImageData(", 1), ("the note's page", "getImageData(", 0),
+            ("the settings", "getImageData(", 0),
+            ("the note's page", "noteImageDataDirectory", 1), ("the overview", "noteImageDataDirectory", 0),
+            ("the settings", "noteImageDataDirectory", 0),
+            ("the note's page", "Data(contentsOf:", 1), ("the overview", "Data(contentsOf:", 0), ("the settings", "Data(contentsOf:", 0),
+            ("the note's page", "NSImage(contentsOf", 0), ("the overview", "NSImage(contentsOf", 0), ("the settings", "NSImage(contentsOf", 0),
         ]
         let codes = ["the settings": settingsCode, "the overview": overviewCode, "the note's page": pageCode]
         for (name, call, expected) in pinned {
@@ -339,6 +350,9 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             ("            if data.syncOn {\n", "            if data.syncOn {\n                EmptyView().onAppear { NotesManager.shared.syncWithAppleNotes() }\n"),
             ("Button(\"Open in Notes\") { NotesManager.shared.openInNotes(note) }",
              "Button(\"Open in Notes\") { NotesManager.shared.openInNotes(note); NotesManager.shared.openInNotes(note) }"),
+            // A thumbnail on every row, read from its file as the row draws.
+            ("                NoteColorDot(note: note)\n                SettingsRowLabel(",
+             "                NoteColorDot(note: note)\n                Image(nsImage: NSImage(contentsOf: NoteItem.noteImageDataDirectory) ?? NSImage())\n                SettingsRowLabel("),
         ], in: overview) { Self.workProblems(settings: settings, overview: $0, page: page) }
         SettingsDesignSystemRulesTests.assertCaught([
             ("            guard let fileName = note.imageFileName else {\n",
@@ -470,9 +484,9 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
 
     private static let sheetPath = "Kannu/components/Settings/NewNoteSheet.swift"
 
-    /// New note (layout-proposal.md §5 item 7) writes one thing, a new note, and only on Add (or Return, which is Add):
-    /// through `NotesManager.save`, the notes' one write path, never with no title and no text, and under one id for
-    /// the sheet, so Return reaching both a field and Add saves it once. It observes nothing, keeps no clock, and its one
+    /// New note (layout-proposal.md §5 item 7) writes one thing, a new note, and only on Add (Return in the title, ⌘Return
+    /// in the text, whose Return is its own): through `NotesManager.save`, the notes' one write path, never with no
+    /// title and no text, and under one id for the sheet, so Return reaching both the title and Add saves it once. It observes nothing, keeps no clock, and its one
     /// hook focuses the title. The sheet opens only on a press of New note, the header's while Notes is on, or the empty
     /// state's.
     static func sheetProblems(sheet: String, overview: String) -> [String] {
@@ -494,9 +508,14 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
         if !code.contains("@State private var noteID = UUID()") {
             problems.append("the sheet saves under a new id each time, so one Return can save twice")
         }
-        if count("add", in: code.replacingOccurrences(of: "private func add()", with: "")) != 3
-            || !code.contains("Button(\"Add\", action: add)") || count(".onSubmit(add)", in: code) != 2 {
-            problems.append("the sheet saves other than from Add and Return")
+        if count("add", in: code.replacingOccurrences(of: "private func add()", with: "")) != 2
+            || !code.contains("Button(\"Add\", action: add)") || count(".onSubmit(add)", in: code) != 1
+            || !code.contains(".focused($focused, equals: .title)\n                .onSubmit(add)") {
+            problems.append("the sheet saves other than from Add and the title's Return")
+        }
+        // The text runs to several lines: a Return there must not save it half typed (the review's second pass, S1).
+        if !code.contains(".keyboardShortcut(focused == .text ? KeyboardShortcut(.return, modifiers: .command) : .defaultAction)") {
+            problems.append("Return in the text can save the note")
         }
         if count(".onAppear", in: code) != 1 || body(after: ".onAppear", in: code).trimmingCharacters(in: .whitespaces) != "focused = .title"
             || code.contains(".task") {
@@ -522,8 +541,12 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             ("        guard !isEmpty else { return }\n", ""),
             ("Draft(id: noteID,", "Draft(id: UUID(),"),
             (".onAppear { focused = .title }", ".onAppear { focused = .title; add() }"),
-            ("                .onSubmit(add)\n                .settingsField(isFocused: focused == .text)",
-             "                .onChange(of: text) { _, _ in add() }\n                .settingsField(isFocused: focused == .text)"),
+            ("                .focused($focused, equals: .text)\n",
+             "                .focused($focused, equals: .text)\n                .onChange(of: text) { _, _ in add() }\n"),
+            // The text's Return saving the note again, through its submit or through Add's default action.
+            ("                .focused($focused, equals: .text)\n", "                .focused($focused, equals: .text)\n                .onSubmit(add)\n"),
+            (".keyboardShortcut(focused == .text ? KeyboardShortcut(.return, modifiers: .command) : .defaultAction)",
+             ".keyboardShortcut(.defaultAction)"),
             ("    @State private var noteID = UUID()\n", "    @State private var noteID = UUID()\n    @ObservedObject private var sync = AppleNotesSyncManager.shared\n"),
             ("        dismiss()\n    }\n}", "        NotesManager.shared.syncWithAppleNotes()\n        dismiss()\n    }\n}"),
             (".lineLimit(4...12)", ".lineLimit(4...12)\n                .animation(.default, value: text)"),

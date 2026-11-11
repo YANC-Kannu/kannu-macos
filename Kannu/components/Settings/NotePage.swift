@@ -88,6 +88,8 @@ struct NotePage: View {
             }
             let url = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
             let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
+            // A newer read has started (the note was saved again) or the page has gone: this one's image is old.
+            guard !Task.isCancelled else { return }
             image = data.flatMap { NSImage(data: $0) }
         }
     }

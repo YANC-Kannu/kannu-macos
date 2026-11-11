@@ -267,8 +267,11 @@ struct NotesSettingsView: View {
         }
     }
 
+    /// Reads the notes again at once, one read on the press: the throttle could hold the next copy for up to half a
+    /// second, and the deleted note's row with it, a click on which would open a note no longer saved.
     private func remove(_ note: NoteItem) {
         if openNoteID == note.id { openNoteID = nil }
         NotesManager.shared.delete(note)
+        copyFromStores()
     }
 }
