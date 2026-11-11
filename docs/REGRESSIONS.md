@@ -1682,14 +1682,15 @@ clipboard manager whole, closed or not, so every copy the manager recorded redre
 `objectWillChange` at most twice a second, in a `.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while
 it is false; the header follows whether there is anything to clear the same way, dropping repeats. Off screen the copy
 stays as it was, and nothing on the page keeps a clock: a row says when it was copied by its date. New hooks: the
-page's `onAppear` reads the copy after the start of the manager it already made; the overview's `onAppear` only opens
-History on a board; and the page and its header each have a `.task`. None loads a field. History's disclosure animates
-as every disclosure under Settings does, a bounded ease, nil under Reduce Motion. With a board's fixture set, the page
-never touches the manager: `ClipboardManager.shared`'s first touch loads the saved history and deletes the image files
-it does not name in Application Support's `Kannu/ClipboardData`, a folder the installed app shares with a debug build,
-and its start reads the real pasteboard twice a second. **Not measured:** CPU with Clipboard open while copies arrive,
-and parked full screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders,
-so the rest of this entry holds.
+page's `onAppear` reads the copy after the start of the manager it already made; the overview's `onAppear` folds
+History, so History opened once is folded again on every reopening (a board's fixture may open it after); and the page
+and its header each have a `.task`. None loads a field. History's disclosure animates as every disclosure under
+Settings does, a bounded ease, nil under Reduce Motion. With a board's fixture set, the page never touches the manager:
+`ClipboardManager.shared`'s first touch loads the saved history and deletes the image files it does not name in
+Application Support's `Kannu/ClipboardData`, a folder the installed app shares with a debug build, and its start reads
+the real pasteboard twice a second. **Not measured:** CPU with Clipboard open while copies arrive, and parked full
+screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of
+this entry holds.
 
 ---
 

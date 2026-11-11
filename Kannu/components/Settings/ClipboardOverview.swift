@@ -35,7 +35,7 @@ struct ClipboardOverview: View {
     @Default(.enableClipboardManager) private var enabled
     /// History starts folded: a copy can be anything, a password typed in a plain app included (the capture policy skips
     /// only concealed, transient and token-shaped copies), and a full-screen Brain can be on a shared screen. Brain's
-    /// content is kept for the app's life, so History opened stays open until Kannu quits.
+    /// content is kept for the app's life, so the page folds it again each time it appears, Brain's reopening included.
     @State private var showsHistory = false
 
     #if DEBUG
@@ -69,6 +69,8 @@ struct ClipboardOverview: View {
             }
         }
         .onAppear {
+            // Folded on every visit: `onAppear` runs again each time Brain reopens (docs/REGRESSIONS.md, entry 22).
+            showsHistory = false
             #if DEBUG
             if let fixture = Self.snapshotFixture { showsHistory = fixture.showsHistory }
             #endif

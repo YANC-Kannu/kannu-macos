@@ -362,14 +362,15 @@ the redesign plan gives Security, Usage, Timer and Notes theirs in Stage 4b, and
   shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
   `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
   caffeinate link landing below the product.
-- **Clipboard** leads with Pinned Items, their count beside the header, then History, folded until it is opened, its
-  count beside its title: a copy can be anything, a password typed in a plain app included (the capture policy skips
-  only concealed, transient and token-shaped copies), and a full-screen Brain can be on a shared screen. A row is the
-  copy's preview over its kind and when it was copied, by its date, so the page keeps no clock; then its glyphs, Copy,
-  Pin or Unpin, and Delete. A pinned row has no Delete: there, the panel's and the popover's Delete only unpin. With
-  nothing pinned, Pinned Items says so in one row. With nothing at all, an empty state, "No clipboard history", with
-  its one line and no action, since history fills itself. While the clipboard manager is off, one card, "Clipboard
-  Manager is off", with Turn On.
+- **Clipboard** leads with Pinned Items, their count beside the header, then History, its count beside its title, folded
+  each time the page appears, Brain's reopening included, since its content outlives the window: a copy can be anything,
+  a password typed in a plain app included (the capture policy skips only concealed, transient and token-shaped copies),
+  and a full-screen Brain can be on a shared screen. Pinned Items always show: a pin is the user's own choice. A row is
+  the copy's preview over its kind and when it was copied, by its date, so the page keeps no clock; then its glyphs,
+  Copy, Pin or Unpin, and Delete. A pinned row has no Delete: there, the panel's and the popover's Delete only unpin.
+  With nothing pinned, Pinned Items says so in one row. With nothing at all, an empty state, "No clipboard history",
+  with its one line and no action, since history fills itself. While the clipboard manager is off, one card,
+  "Clipboard Manager is off", with Turn On.
 - **Clipboard's header** holds "…", with Clear History and Clear Pinned Items, each off while there is nothing to clear
   and each clearing at once, as the Actions buttons it replaces did; then the page's one primary verb, Open history
   panel, the notch's floating clipboard panel, whatever the display mode. Nothing while the manager is off. **The page

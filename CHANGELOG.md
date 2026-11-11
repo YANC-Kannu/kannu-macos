@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Clipboard page
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
+- **Changes:**
+  - History folds again each time the page appears, Brain's reopening included. Brain's content outlives its window, so
+    History opened once stayed open on every later visit, a reopened Brain on a shared screen included.
+  - `ClipboardPageLiveDataRulesTests` holds the fold, with a planted offender.
+  - docs/SETTINGS.md says when History folds, and that Pinned Items always show, a pin being the user's own choice;
+    docs/REGRESSIONS.md entry 22's addendum names the fold among the page's hooks.
+
 ### 2026-11-11 - Brain's Clipboard page leads with the pinned items and History
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: Clipboard as a product page built from the clipboard manager's copies, under Agents' live-data contract, its boards from made-up copies only
