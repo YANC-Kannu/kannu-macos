@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
 ### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
 - **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own

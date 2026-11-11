@@ -1682,8 +1682,11 @@ running timer publishes three changes a tick. What the page shows comes through 
 `$isTimerActive` that drops repeats, each in a `.task(id:)` on `BrainVisibility.isOnScreen`, as Agents'. Its time moves
 only with the manager's own tick: no `TimelineView`, no `Timer` and no counting `Text`, so nothing on the page moves
 while a timer is paused or idle, or while Brain is off screen, and a closed Brain still costs nothing. New hooks: the
-overview's `onAppear` (one read of the manager) and its `.task`, the header's `.task`, and the preset sheet's
-`onAppear`, which focuses a new preset's name, as New Task's does; none loads a field that writes through. The inline
+overview's `onAppear` (one read of the manager), its `.task`, and its `onChange` of the presets (one read, so a paused
+timer's colour follows an edit of its preset; it runs only while Brain is open), the header's `.task`, and the preset
+sheet's `onAppear`, which focuses a new preset's name, as New Task's does; none loads a field that writes through. A
+press reads the manager again at once, outside the throttle, so a second click never acts against a card half a
+second old. The inline
 preset editor left the settings with its `withAnimation`s, and nothing on the page animates. **Not measured:** the CPU of
 Timer open while a timer runs; it needs a real window. `TimerPageLiveDataRulesTests` holds each clause against planted
 offenders, so the rest of this entry holds.
