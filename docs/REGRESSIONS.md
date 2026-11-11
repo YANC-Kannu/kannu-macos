@@ -692,12 +692,19 @@ week moved, and only that run can learn the new one. Guard:
 
 **2026-11-06 addendum — Brain's Refresh is a new press, not a new spawn.** Brain › Usage's Refresh calls
 the paths the notch already uses, unchanged: `LLMUsageManager.refreshRequestedByUser()`, and
-`refreshClaudeUsageFromCLI(manual: false)`, the automatic refresh's own run, which is the probe only:
-never the typed pty fallback and never a browser sign-in, which stay a press of the notch's Claude ↻,
-beside the status line and Cancel they need. So a Claude Code older than 2.1.263 gets no fetch from
-Brain's press, as from the automatic refresh. No argument or variable of the spawn changed, and no file
-in this entry's danger zones did. Guard: `UsagePageLiveDataRulesTests` pins both calls to Refresh's
-action, and fails on any other read from the page.
+`refreshClaudeUsageFromCLI(manual: false)`, the automatic refresh's own run: the probe, then
+`claude auth status` when the probe finds no claude.ai sign-in, and never the typed pty fallback or a
+browser sign-in, which stay a press of the notch's Claude ↻, beside the status line and Cancel they need.
+So a Claude Code older than 2.1.263 gets no fetch from Brain's press, as from the automatic refresh.
+Called directly, the run skips the automatic refresh's pace (a press means now) and its private hold
+flag, so the press reads the hold's public face itself: while the notch's Claude card shows a status
+that holds the automatic refresh (`holdsAutomaticRefresh`: a sign-in to start or finish, an unchecked
+or other sign-in), the press skips Claude's run, which would otherwise clear that line before the user
+acted on it. A failed fetch's line, which holds nothing, a press clears, as the automatic refresh would.
+No argument or variable of the spawn changed, and no file in this entry's danger zones did. Guard:
+`UsagePageLiveDataRulesTests` pins both calls and the hold check to Refresh's action, and fails on a
+fixed list of other reads (`refreshAll`, `refreshClaudeUsageIfStale`, the quota clients, `Process`, the
+sign-in's cancel and Terminal route, among others) in the page and its settings file.
 
 ---
 

@@ -200,13 +200,18 @@ enum DebugSnapshots {
             }
         }
         AgentsOverview.snapshotFixture = agents
-        // Brain › Usage with no provider on, one and three, the same way. The settings rows below the product still
-        // read this Mac's switches, as Agents' do.
-        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("usage\(count)") == true {
-            UsageOverview.snapshotFixture = DebugSnapshotFixtures.usageOverview(providers: count, now: Date())
+        // Brain › Usage with no provider on, one and three, the same way, and three with Agent Status off, which stops the
+        // usage store. The settings rows below the product still read this Mac's switches, as Agents' do.
+        let usageBoards: [(name: String, providers: Int, agentStatusOn: Bool)] = [
+            ("usage0", 0, true), ("usage1", 1, true), ("usage3", 3, true), ("usageOff", 3, false),
+        ]
+        for board in usageBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            var fixture = DebugSnapshotFixtures.usageOverview(providers: board.providers, now: Date())
+            fixture.agentStatusOn = board.agentStatusOn
+            UsageOverview.snapshotFixture = fixture
             for dark in [false, true] {
                 await render(AnyView(SettingsView(snapshotTab: .llmUsage).environmentObject(viewModel)),
-                             name: "usage\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark,
                              width: SettingsTheme.windowDefaultWidth, into: request.directory,
                              fixedHeight: SettingsTheme.windowDefaultHeight)
             }
@@ -1075,7 +1080,8 @@ enum DebugSnapshotFixtures {
     /// Brain › Usage's product with no provider on, one or three. One is Claude alone, with the notch board's readings:
     /// a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the week heading for 95 %, and three
     /// per-model weeks; and the models it ran. Three adds Codex with no reading yet, and Cursor's billing cycle near its
-    /// limit with its models' cost. The readings are labelled as the usage store labels them.
+    /// limit with its models' cost, one of them partly unpriced. The readings are labelled as the usage store labels
+    /// them. Agent Status is on; the `usageOff` board turns it off on the fixture, never in Defaults.
     static func usageOverview(providers count: Int, now: Date) -> UsageOverviewFixture {
         let observed = now.addingTimeInterval(-120)
         let fiveHourReset = now.addingTimeInterval(4 * 3600 + 15 * 60)
@@ -1098,8 +1104,9 @@ enum DebugSnapshotFixtures {
         cursor.models = [
             ModelUsage(model: "gpt-5", totals: UsageTotals(uncachedInputTokens: 1_300_000, cacheReadTokens: 9_800_000,
                                                            outputTokens: 96_000, costUSD: 9.1)),
+            // Some of its events had no price, so its cost reads "$4.80+".
             ModelUsage(model: "claude-4.5-sonnet", totals: UsageTotals(uncachedInputTokens: 640_000, cacheReadTokens: 4_100_000,
-                                                                       outputTokens: 52_000, costUSD: 4.8)),
+                                                                       outputTokens: 52_000, costUSD: 4.8, hasUnpricedModel: true)),
         ]
         var readings = [
             reading("claude", "five_hour", "Max 5-hour", 13, fiveHourReset),
