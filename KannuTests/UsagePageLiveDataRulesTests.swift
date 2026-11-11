@@ -128,13 +128,18 @@ final class UsagePageLiveDataRulesTests: XCTestCase {
 
     // MARK: - Clause 3: no work while nothing is on screen
 
-    /// The page keeps no clock and nothing that moves on its own: resets and readings are told by the time of day, and
-    /// the usage store drops a window itself when it resets. Off screen, the copy simply stays as it was.
+    /// The page keeps no clock and nothing that moves on its own: resets and readings are told by the time of day, and a
+    /// window past its reset is left out as the page draws. A `Text` with a relative or timer style is a clock too: it
+    /// redraws every second. Off screen, the copy simply stays as it was.
     static func clockProblems(in overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
-        return ["TimelineView", "Timer.", ".repeatForever", "ClaudeTurnTokenFollower", "ProgressView", "withAnimation", ".animation("]
+        var problems = ["TimelineView", "Timer.", ".repeatForever", "ClaudeTurnTokenFollower", "ProgressView", "withAnimation", ".animation("]
             .filter { code.contains($0) }
             .map { "the page keeps a clock or a motion of its own: \($0)" }
+        if code.range(of: #"style:\s*\.(?:relative|timer|offset)\b"#, options: .regularExpression) != nil {
+            problems.append("the page keeps a clock of its own: a Text that counts")
+        }
+        return problems
     }
 
     func testThePageKeepsNoClock() throws {
@@ -142,30 +147,86 @@ final class UsagePageLiveDataRulesTests: XCTestCase {
         XCTAssertEqual(Self.clockProblems(in: overview), [])
         SettingsDesignSystemRulesTests.assertCaught([
             ("            if providers.isEmpty {", "            TimelineView(.periodic(from: .now, by: 60)) { _ in EmptyView() }\n            if providers.isEmpty {"),
-            ("            .disabled(refreshing || providers.isEmpty)", "            .disabled(refreshing || providers.isEmpty)\n            if refreshing { ProgressView() }"),
+            ("            .disabled(refreshing || providers.isEmpty || !usageStoreRuns)",
+             "            .disabled(refreshing || providers.isEmpty || !usageStoreRuns)\n            if refreshing { ProgressView() }"),
+            ("            if providers.isEmpty {", "            Text(Date(), style: .relative)\n            if providers.isEmpty {"),
+            ("            if providers.isEmpty {", "            Text(Date(), style: .timer)\n            if providers.isEmpty {"),
         ], in: overview, by: Self.clockProblems)
+    }
+
+    // MARK: - Nothing stale on the page
+
+    /// A window past its reset or expiry never shows: each card keeps the live ones only (`isLive`, the rule the notch's
+    /// bars and the alerts use), since the store drops them only while it runs. While Agent Status is off, which stops
+    /// the store, its off state stands in place of the cards and Refresh is off: nothing a refresh read would show.
+    static func staleProblems(in overview: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(overview)
+        var problems: [String] = []
+        if !code.contains("let live = readings.filter { $0.isLive(now: now) }") || !code.contains("ForEach(live, id: \\.id)")
+            || code.contains("ForEach(readings,") {
+            problems.append("a card can show a window past its reset")
+        }
+        if SettingsDesignSystemRulesTests.matches(of: #"if usageStoreRuns \{\s*VStack"#, in: code).count != 1
+            || !code.contains("UsageMessageCard(title: \"Agent Status is off\", message: nil)") {
+            problems.append("the cards show while Agent Status is off")
+        }
+        if !code.contains(".disabled(refreshing || providers.isEmpty || !usageStoreRuns)") {
+            problems.append("Refresh runs while Agent Status is off")
+        }
+        if code.components(separatedBy: "return agentStatusOn").count - 1 != 2 {
+            problems.append("the page and its header do not both follow Agent Status")
+        }
+        return problems
+    }
+
+    func testNothingStaleShows() throws {
+        let overview = try Self.source(Self.overviewPath)
+        XCTAssertEqual(Self.staleProblems(in: overview), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("ForEach(live, id: \\.id)", "ForEach(readings, id: \\.id)"),
+            ("let live = readings.filter { $0.isLive(now: now) }", "let live = readings"),
+            ("                if usageStoreRuns {", "                if true {"),
+            ("|| !usageStoreRuns)", ")"),
+            ("        return agentStatusOn\n", "        return true\n"),
+        ], in: overview, by: Self.staleProblems)
     }
 
     // MARK: - No read of its own
 
     /// The page shows what the stores hold and starts no read, spawn or sign-in of its own (docs/REGRESSIONS.md,
-    /// entry 8). Refresh, on a press, is the one way in, through the notch's paths unchanged: its Refresh usage, and
-    /// Claude's `/usage` as the automatic refresh runs it, never the press that may start a browser sign-in.
+    /// entry 8). Refresh, on a press, is the one way in, through the notch's paths unchanged: its Refresh usage, and,
+    /// while Claude is on and no status holds the automatic refresh, Claude's `/usage` as that refresh runs it, never the
+    /// ↻'s press that may start a browser sign-in. The status is read at the press, never followed. A fixed list of
+    /// other reads is banned from the page and its settings, and the settings may not make Refresh's two calls either.
     static func readProblems(overview: String, settings: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
         var problems: [String] = []
         let refresh = AgentsPageLiveDataRulesTests.body(after: #"Button("Refresh") {"#, in: code) ?? ""
-        for call in ["LLMUsageManager.shared.refreshRequestedByUser()", "CursorAgentStatusMonitor.shared.refreshClaudeUsageFromCLI(manual: false)"]
-            where code.components(separatedBy: call).count - 1 != 1 || !refresh.contains(call) {
+        let calls = ["LLMUsageManager.shared.refreshRequestedByUser()", "CursorAgentStatusMonitor.shared.refreshClaudeUsageFromCLI(manual: false)"]
+        for call in calls where code.components(separatedBy: call).count - 1 != 1 || !refresh.contains(call) {
             problems.append("\(call) runs somewhere other than once, on Refresh's press")
         }
         if code.components(separatedBy: "refreshClaudeUsageFromCLI(").count - 1 != 1 {
             problems.append("Claude's /usage runs another way")
         }
-        for (name, source) in [("the page", code), ("its settings", SettingsDesignSystemRulesTests.code(settings))] {
-            for read in ["refreshAll(", "refreshClaudeUsageIfStale(", "resolveQuotaAction(", "fetchSnapshot(", "fetchLimits(",
-                         "QuotaClient", "ClaudeUsageRefresh", "Process(", "cancelClaudeSignIn(", "openClaudeSignInInTerminal("]
-                where source.contains(read) {
+        // Claude's run sits in one `if` with both conditions: Claude is on, and no status holds the automatic refresh.
+        let guarded = "if providers.contains(.claude), CursorAgentStatusMonitor.shared.claudeRefreshStatus?.holdsAutomaticRefresh != true {"
+        if let condition = refresh.range(of: guarded),
+           let call = refresh.range(of: calls[1], range: condition.upperBound..<refresh.endIndex) {
+            if refresh[condition.upperBound..<call.lowerBound].firstIndex(of: "}") != nil {
+                problems.append("Claude's /usage runs outside its guard")
+            }
+        } else {
+            problems.append("Claude's /usage is not guarded by Claude being on and by the automatic refresh's hold")
+        }
+        if code.components(separatedBy: "claudeRefreshStatus").count - 1 != 1 {
+            problems.append("Claude's status is read somewhere other than once, at the press")
+        }
+        let banned = ["refreshAll(", "refreshClaudeUsageIfStale(", "resolveQuotaAction(", "fetchSnapshot(", "fetchLimits(",
+                      "QuotaClient", "ClaudeUsageRefresh", "Process(", "cancelClaudeSignIn(", "openClaudeSignInInTerminal("]
+        let settingsBanned = banned + ["refreshRequestedByUser(", "refreshClaudeUsageFromCLI("]
+        for (name, source, reads) in [("the page", code, banned), ("its settings", SettingsDesignSystemRulesTests.code(settings), settingsBanned)] {
+            for read in reads where source.contains(read) {
                 problems.append("\(name) starts a read of its own: \(read)")
             }
         }
@@ -182,9 +243,18 @@ final class UsagePageLiveDataRulesTests: XCTestCase {
             (appearRead, "            LLMUsageManager.shared.refreshAll()\n" + appearRead),
             (appearRead, "            CursorAgentStatusMonitor.shared.refreshClaudeUsageIfStale()\n" + appearRead),
             ("refreshClaudeUsageFromCLI(manual: false)", "refreshClaudeUsageFromCLI()"),
+            // A press that would clear the notch's sign-in line, or the status followed instead of read at the press.
+            (", CursorAgentStatusMonitor.shared.claudeRefreshStatus?.holdsAutomaticRefresh != true {", " {"),
+            ("    @State private var data = UsageOverviewData()",
+             "    @State private var data = UsageOverviewData()\n    @State private var claudeStatus = CursorAgentStatusMonitor.shared.claudeRefreshStatus"),
+            // Claude's run while Claude is off.
+            ("if providers.contains(.claude), CursorAgentStatusMonitor", "if CursorAgentStatusMonitor"),
         ], in: overview) { Self.readProblems(overview: $0, settings: settings) }
         SettingsDesignSystemRulesTests.assertCaught([
             ("        .navigationTitle(\"Usage\")", "        .onAppear { LLMUsageManager.shared.refreshAll() }\n        .navigationTitle(\"Usage\")"),
+            ("        .navigationTitle(\"Usage\")", "        .onAppear { LLMUsageManager.shared.refreshRequestedByUser() }\n        .navigationTitle(\"Usage\")"),
+            ("        .navigationTitle(\"Usage\")",
+             "        .onAppear { CursorAgentStatusMonitor.shared.refreshClaudeUsageFromCLI(manual: false) }\n        .navigationTitle(\"Usage\")"),
         ], in: settings) { Self.readProblems(overview: overview, settings: $0) }
     }
 

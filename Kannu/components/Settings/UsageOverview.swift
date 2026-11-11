@@ -26,20 +26,23 @@ import SwiftUI
 ///
 /// The page never reads usage of its own (docs/REGRESSIONS.md, entry 8). Claude's limits come from the agent monitor's
 /// reads, Codex's and Cursor's from the notch's Usage tab, the opt-in background check or Refresh, so a reading can be
-/// hours old, and each says when it was taken. Brain's content is built once and kept for the app's life, so the page
+/// hours old, and each says when it was taken. The usage store runs with Agent Status, so while that is off the page
+/// says so in place of the cards, as Agents does. Brain's content is built once and kept for the app's life, so the page
 /// follows the live-data contract (docs/SETTINGS.md, "Live data"):
 /// 1. **Throttled and scoped.** The readings, their outlooks and the models are copied into `@State` from one
 ///    subscription, at most twice a second, and assigned only when they changed. Nothing here observes a store whole.
 /// 2. **Stopped while Brain is not on screen.** That subscription is a `.task(id:)` on `BrainVisibility.isOnScreen`, so
 ///    it ends when Brain is closed, minimised, hidden, covered or in another Space, and starts again on its return.
 /// 3. **No work while nothing is on screen.** The page keeps no clock: a reset and a reading are told by the time of
-///    day, and the usage store drops a window itself when it resets. Off screen, the copy simply stays as it was.
+///    day, and a window past its reset or expiry is left out as the page draws (`isLive`, the rule the notch's bars and
+///    the alerts use). The store drops it too, but only while it runs. Off screen, the copy simply stays as it was.
 struct UsageOverview: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @Default(.enableLLMUsageFeature) private var usageOn
     @Default(.enableClaudeProvider) private var claudeOn
     @Default(.enableCodexProvider) private var codexOn
     @Default(.enableCursorProvider) private var cursorOn
+    @Default(.enableAgentStatusFeature) private var agentStatusOn
     @State private var data = UsageOverviewData()
 
     #if DEBUG
@@ -57,17 +60,42 @@ struct UsageOverview: View {
         return Self.providersOn(usage: usageOn, claude: claudeOn, codex: codexOn, cursor: cursorOn)
     }
 
+    /// The usage store runs with Agent Status (`KannuApp` starts and stops it with that switch): off, it reads nothing.
+    private var usageStoreRuns: Bool {
+        #if DEBUG
+        if let fixture = Self.snapshotFixture { return fixture.agentStatusOn }
+        #endif
+        return agentStatusOn
+    }
+
     var body: some View {
         let providers = shownProviders
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
             if providers.isEmpty {
-                emptyState
+                UsageMessageCard(title: "No limits to show", message: "Turn on Claude, Codex or Cursor and its limits show here.") {
+                    Button("Turn on a provider") {
+                        // To the switches below: the providers' first row, or the monitor's while it is off, which hides
+                        // them.
+                        SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
+                            highlightID: usageOn ? SettingsDeepLink.usageProvidersHighlightID : SettingsDeepLink.usageMonitorHighlightID)
+                    }
+                    .buttonStyle(SettingsButtonStyle())
+                }
             } else {
-                VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
-                    ForEach(providers) { provider in
-                        UsageProviderCard(provider: provider,
-                                          readings: Self.ordered(data.readings.filter { $0.provider == provider.rawValue }),
-                                          outlooks: data.outlooks)
+                if usageStoreRuns {
+                    VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
+                        ForEach(providers) { provider in
+                            UsageProviderCard(provider: provider,
+                                              readings: Self.ordered(data.readings.filter { $0.provider == provider.rawValue }),
+                                              outlooks: data.outlooks)
+                        }
+                    }
+                } else {
+                    // The store reads nothing and holds what it had, so cards would show nothing new: Agents' own off
+                    // state stands in their place, in its words.
+                    UsageMessageCard(title: "Agent Status is off", message: nil) {
+                        Button("Turn On") { agentStatusOn = true }
+                            .buttonStyle(SettingsButtonStyle())
                     }
                 }
                 let models = data.models.filter { providers.contains($0.provider) }
@@ -103,38 +131,6 @@ struct UsageOverview: View {
         }
     }
 
-    /// No provider on whose limits the page can show: the status, one line that teaches, and the way to the switches.
-    private var emptyState: some View {
-        VStack(spacing: SettingsMetrics.cardPadding) {
-            Image(systemName: SettingsTab.llmUsage.systemImage)
-                .font(SettingsTheme.pageTitle)
-                .foregroundStyle(SettingsTheme.inkSecondary)
-                .accessibilityHidden(true)
-            Text("No limits to show")
-                .font(SettingsTheme.cardTitle)
-                .foregroundStyle(SettingsTheme.ink)
-                .textSelection(.enabled)
-            // The body's size on the secondary ink: an empty state's one line teaches, so it reads as text.
-            Text("Turn on Claude, Codex or Cursor and its limits show here.")
-                .font(SettingsTheme.body)
-                .foregroundStyle(SettingsTheme.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: SettingsTheme.proseMaxWidth)
-            Button("Turn on a provider") {
-                // To the switches below: the providers' first row, or the monitor's while it is off, which hides them.
-                SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
-                    highlightID: usageOn ? SettingsDeepLink.usageProvidersHighlightID : SettingsDeepLink.usageMonitorHighlightID)
-            }
-            .buttonStyle(SettingsButtonStyle())
-        }
-        .padding(SettingsTheme.heroPadding)
-        .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight)
-        .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
-        .accessibilityElement(children: .contain)
-    }
-
     /// Which of the providers the usage store reads are on: none while the monitor is off.
     static func providersOn(usage: Bool, claude: Bool, codex: Bool, cursor: Bool) -> [ProviderID] {
         guard usage else { return [] }
@@ -145,18 +141,22 @@ struct UsageOverview: View {
         return on
     }
 
-    /// The 5-hour window first, then the whole week, then each other window, as the notch orders its bars. The store
-    /// sorts by id, which would put "Fable weekly" before "weekly".
+    /// Each organization's windows together, its own first: a reading's id starts with its provider, and with the
+    /// organization when it is scoped ("claude", "claude@team"), up to the first colon. In each, the 5-hour window
+    /// first, then the whole week, then each other window, as the notch orders its bars. The store sorts by id alone,
+    /// which would put "Fable weekly" before "weekly".
     static func ordered(_ readings: [UsageWindowReading]) -> [UsageWindowReading] {
+        func scope(_ id: String) -> Substring { id.prefix { $0 != ":" } }
         func rank(_ key: String) -> Int {
             if UsageForecast.isShortWindow(key) { return 0 }
             return key == ClaudeUsageSnapshot.sevenDayKey || key == "week" ? 1 : 2
         }
-        return readings.sorted { (rank($0.key), $0.id) < (rank($1.key), $1.id) }
+        return readings.sorted { (scope($0.id), rank($0.key), $0.id) < (scope($1.id), rank($1.key), $1.id) }
     }
 
     /// The models of each provider's last read, the busiest first. A model that took no new tokens says nothing. Its
-    /// cost shows only where the provider bills per token (Cursor): Claude's and Codex's are plans, not prices.
+    /// cost shows only where the provider bills per token (Cursor): Claude's and Codex's are plans, not prices. A "+"
+    /// follows a cost that some unpriced events leave short, as the notch writes it.
     static func modelRows(_ results: [ProviderID: UsageResult]) -> [UsageModelRow] {
         ProviderID.allCases.flatMap { provider -> [UsageModelRow] in
             guard case .success(let snapshot)? = results[provider] else { return [] }
@@ -166,10 +166,11 @@ struct UsageOverview: View {
                 .map { usage in
                     let totals = usage.totals
                     let billed = !snapshot.billedCostOnly && totals.costUSD > 0
+                    let cost = totals.costUSD.formatted(.currency(code: "USD")) + (totals.hasUnpricedModel ? "+" : "")
                     return UsageModelRow(provider: provider, model: usage.model,
                                          tokensIn: totals.uncachedInputTokens + totals.cacheWriteTokens,
                                          tokensOut: totals.outputTokens,
-                                         cost: billed ? totals.costUSD.formatted(.currency(code: "USD")) : nil)
+                                         cost: billed ? cost : nil)
                 }
         }
     }
@@ -183,6 +184,7 @@ struct UsageHeaderActions: View {
     @Default(.enableClaudeProvider) private var claudeOn
     @Default(.enableCodexProvider) private var codexOn
     @Default(.enableCursorProvider) private var cursorOn
+    @Default(.enableAgentStatusFeature) private var agentStatusOn
     /// Whether the providers' refresh or Claude's `/usage` is running, followed only while Brain is on screen.
     @State private var refreshing = false
 
@@ -191,6 +193,14 @@ struct UsageHeaderActions: View {
         if let fixture = UsageOverview.snapshotFixture { return fixture.providers }
         #endif
         return UsageOverview.providersOn(usage: usageOn, claude: claudeOn, codex: codexOn, cursor: cursorOn)
+    }
+
+    /// As the page's: while Agent Status is off the usage store reads nothing, so a refresh would change nothing on it.
+    private var usageStoreRuns: Bool {
+        #if DEBUG
+        if let fixture = UsageOverview.snapshotFixture { return fixture.agentStatusOn }
+        #endif
+        return agentStatusOn
     }
 
     var body: some View {
@@ -207,14 +217,16 @@ struct UsageHeaderActions: View {
             Button("Refresh") {
                 // On a press only, through the notch's own paths, unchanged (docs/REGRESSIONS.md, entry 8): its Refresh
                 // usage, then Claude's `/usage` as its automatic refresh runs it, so a press here never starts a browser
-                // sign-in. That stays a press of the notch's Claude ↻, beside the status line and Cancel it needs.
+                // sign-in; that stays a press of the notch's Claude ↻. Nor does Claude's run while the notch's Claude
+                // card shows a status that holds the automatic refresh (a sign-in to start or finish): read here, at the
+                // press, never observed, so the run cannot clear that line before the user acts on it there.
                 LLMUsageManager.shared.refreshRequestedByUser()
-                if providers.contains(.claude) {
+                if providers.contains(.claude), CursorAgentStatusMonitor.shared.claudeRefreshStatus?.holdsAutomaticRefresh != true {
                     CursorAgentStatusMonitor.shared.refreshClaudeUsageFromCLI(manual: false)
                 }
             }
             .buttonStyle(SettingsButtonStyle(.primary))
-            .disabled(refreshing || providers.isEmpty)
+            .disabled(refreshing || providers.isEmpty || !usageStoreRuns)
         }
         // `combineLatest`'s closure goes in its parentheses: a `for` statement takes a trailing brace as its body.
         .task(id: visibility.isOnScreen) {
@@ -240,6 +252,9 @@ private struct UsageProviderCard: View {
 
     var body: some View {
         let now = Date()
+        // A window past its reset or its expiry is over, by the rule the notch's bars and the alerts use: the store drops
+        // it too, but only while it runs, and this copy may have outlived it.
+        let live = readings.filter { $0.isLive(now: now) }
         VStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
             HStack(spacing: SettingsMetrics.cardPadding) {
                 AgentProviderIconView(source: .init(providerID: provider), size: SettingsTheme.listRowIcon)
@@ -250,11 +265,11 @@ private struct UsageProviderCard: View {
                     .textSelection(.enabled)
                     .accessibilityAddTraits(.isHeader)
             }
-            if readings.isEmpty {
+            if live.isEmpty {
                 Text("No reading yet")
                     .settingsDescriptionStyle()
             } else {
-                ForEach(readings, id: \.id) { reading in
+                ForEach(live, id: \.id) { reading in
                     UsageReadingRow(reading: reading, outlook: outlooks[reading.id], now: now)
                 }
             }
@@ -293,7 +308,8 @@ private struct UsageReadingRow: View {
             Spacer(minLength: SettingsMetrics.rowContent)
             HStack(spacing: SettingsMetrics.rowContent) {
                 UsageBar(fraction: reading.percent / 100, tint: nearLimit ? SettingsTheme.destructive : SettingsTheme.accent)
-                Text(verbatim: (reading.percent / 100).formatted(.percent.precision(.fractionLength(0))))
+                // Rounded half away from zero, as the notch rounds its bars, so the two never differ: 12.5 reads 13.
+                Text(verbatim: (reading.percent.rounded() / 100).formatted(.percent.precision(.fractionLength(0))))
                     .font(SettingsTheme.bodyStrong)
                     .monospacedDigit()
                     .foregroundStyle(nearLimit ? SettingsTheme.destructive : SettingsTheme.ink)
@@ -387,10 +403,19 @@ private struct UsageModelList: View {
                 .padding(.horizontal, SettingsMetrics.cardPadding)
                 .frame(maxWidth: .infinity, minHeight: SettingsTheme.listRowHeight)
                 .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: row.provider.displayName + ", " + row.model))
+                .accessibilityValue(Text(verbatim: Self.spoken(row)))
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// The counts in words, as Agents' rows speak a turn's tokens ("2.1 million tokens in, 412 thousand out"), then the
+    /// cost: "2.1M" read aloud is a letter, not a number.
+    private static func spoken(_ row: UsageModelRow) -> String {
+        let tokens = String(localized: "\(AgentTurnFormat.spokenCount(row.tokensIn)) tokens in, \(AgentTurnFormat.spokenCount(row.tokensOut)) out")
+        return row.cost.map { tokens + ", " + $0 } ?? tokens
     }
 }
 
@@ -417,10 +442,51 @@ struct UsageModelRow: Equatable, Identifiable {
     var id: String { provider.rawValue + "/" + model }
 }
 
+// MARK: - The cards' place
+
+/// What stands where the cards would be when there are none to show: the page's glyph, the status, at most one line
+/// that teaches, and one action (docs/SETTINGS.md, "Product pages"), as Agents' message card. No provider on, or Agent
+/// Status off, which stops the usage store.
+private struct UsageMessageCard<Action: View>: View {
+    let title: LocalizedStringKey
+    let message: LocalizedStringKey?
+    @ViewBuilder let action: () -> Action
+
+    var body: some View {
+        VStack(spacing: SettingsMetrics.cardPadding) {
+            Image(systemName: SettingsTab.llmUsage.systemImage)
+                .font(SettingsTheme.pageTitle)
+                .foregroundStyle(SettingsTheme.inkSecondary)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(SettingsTheme.cardTitle)
+                .foregroundStyle(SettingsTheme.ink)
+                .textSelection(.enabled)
+            if let message {
+                // The body's size on the secondary ink: an empty state's one line teaches, so it reads as text.
+                Text(message)
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: SettingsTheme.proseMaxWidth)
+            }
+            action()
+        }
+        .padding(SettingsTheme.heroPadding)
+        .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight)
+        .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+}
+
 #if DEBUG
 /// DEBUG snapshot boards only: what `UsageOverview` and its header show in place of this Mac's switches and readings.
 struct UsageOverviewFixture {
     var providers: [ProviderID]
     var data: UsageOverviewData
+    /// Agent Status, which runs the usage store: off, the page shows its off state in place of the cards.
+    var agentStatusOn = true
 }
 #endif

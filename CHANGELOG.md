@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-06 - Answer the review of Brain's Usage page
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds
+- **Changes:**
+  - Refresh skips Claude's `/usage` while the notch's Claude card shows a status that holds the automatic refresh (a
+    sign-in to start or finish), read at the press, never followed. The press then runs as the automatic refresh does,
+    and no longer clears that line before you act on it.
+  - A window past its reset or expiry never shows: each card keeps the live ones only, by the rule the notch's bars and
+    the alerts use. The usage store drops them too, but only while it runs.
+  - While Agent Status is off, which stops the usage store, the page shows Agents' "Agent Status is off" with Turn On
+    in place of the cards, and Refresh is off: a refresh could change nothing it shows.
+  - Each Claude organization's windows stay together, its own first. A model's cost with unpriced events reads "$4.80+",
+    as the notch writes it. VoiceOver hears a model's tokens in words. Percentages round half away from zero, as the
+    notch's bars, so 12.5 reads 13.
+  - `UsagePageLiveDataRulesTests` gains the hold, the live filter, the off state, a counting `Text` and the settings
+    file's two refresh calls, each with planted offenders. Board `usageOff` draws the off state.
+  - docs/REGRESSIONS.md entry 8 and docs/SETTINGS.md say what the press really runs (`claude auth status` too, and
+    neither the pace nor the hold flag) and what the rule test checks.
+
 ### 2026-11-06 - Brain's Usage page leads with the limits and the models
 - **Developer label:** Brain redesign plan: Stage 4b, the Usage product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: Usage as a product page built from the usage store's readings, under Agents' live-data contract, with no read of its own
