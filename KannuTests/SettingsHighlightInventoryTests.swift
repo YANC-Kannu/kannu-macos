@@ -104,9 +104,12 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
     }
 
+    /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,
+    /// now "Timer Presets" (found by "accent colour" too), lands on their heading, which names its tab, instead of the
+    /// first row of the old inline editor.
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
         let unattributed = try Self.inventory().registrations.keys.filter { $0.tab == nil }.map(\.title)
-        XCTAssertEqual(Set(unattributed), ["Accent colour", "Device Picker Style"])
+        XCTAssertEqual(Set(unattributed), ["Device Picker Style"])
     }
 
     func testQuitIsFindableBySearch() throws {

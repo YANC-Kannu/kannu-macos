@@ -161,6 +161,11 @@ final class TaskTimeMathTests: XCTestCase {
         let picker = try XCTUnwrap(settings.split(separator: "\n").first { $0.contains("SettingsDateField(") }, "the end-time picker is gone?")
         XCTAssertTrue(picker.contains("nextSessionStart"), "the end-time picker's range must stop at the next session: \(picker)")
         XCTAssertTrue(picker.contains("Date()"), "the picker must cap at its own now, or a Brain window left open forbids the latest stretch: \(picker)")
+        // The field hands its range to the calendar and the time field inside its popover.
+        let field = try Self.source("Kannu/components/Settings/DesignSystem/SettingsDateField.swift")
+        let inner = field.split(separator: "\n").filter { $0.contains("DatePicker(") }
+        XCTAssertEqual(inner.count, 2, "SettingsDateField holds a calendar and a time field")
+        XCTAssertTrue(inner.allSatisfy { $0.contains("in: range") }, "a picker inside SettingsDateField dropped its range: \(inner)")
     }
 
     private static let repoRoot = URL(fileURLWithPath: #filePath)

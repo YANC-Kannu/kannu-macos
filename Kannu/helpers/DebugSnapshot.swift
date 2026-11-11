@@ -66,9 +66,22 @@ enum DebugSnapshots {
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
         AgentsOverview.snapshotFixture = agents
         ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
+        // Brain › Security's product and what its settings read from the findings store, the same way: none of this
+        // Mac's findings, scans, policy or analyses.
+        let security = DebugSnapshotFixtures.securityOverview(findings: 3, now: Date())
+        SecurityOverview.snapshotFixture = security
         // Brain › Usage's product likewise: fixture switches, readings and models, never this Mac's.
         let usagePage = DebugSnapshotFixtures.usageOverview(providers: 3, now: Date())
         UsageOverview.snapshotFixture = usagePage
+        // Brain › Timer's product likewise: a fixture timer, running from its preset, and the fixture presets, never this
+        // Mac's.
+        let timerPage = DebugSnapshotFixtures.timerOverview(.running)
+        TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard's product and what its settings read from the clipboard manager, the same way: none of this
+        // Mac's copies or pins. The page never touches the manager then, which would load the saved history and start
+        // reading the real pasteboard.
+        let clipboard = DebugSnapshotFixtures.clipboardOverview(pinned: 0, history: 4, now: Date())
+        ClipboardOverview.snapshotFixture = clipboard
         // Brain › Notes likewise: fixture notes, never this Mac's, and no note's image read from its file.
         let notesPage = DebugSnapshotFixtures.notesOverview(notes: 4, now: Date())
         NotesOverview.snapshotFixture = notesPage
@@ -112,6 +125,10 @@ enum DebugSnapshots {
             // A URL typed and no name yet, so Add is off.
             boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
                                                                    nameInput: .constant(""), onImport: {}, onCancel: {}))))
+        }
+        if request.tabs == nil || request.tabs?.contains("timerPresetSheet") == true {
+            // A preset's edit, from its tile: the fixture's Focus, 25 minutes in orange.
+            boards.append(("timerPresetSheet", AnyView(TimerPresetSheet(target: .edit(DebugSnapshotFixtures.timerPresets[0])))))
         }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
             boards.append(("taskPage", AnyView(SettingsPage {
@@ -210,6 +227,17 @@ enum DebugSnapshots {
             }
         }
         AgentsOverview.snapshotFixture = agents
+        // Brain › Security with no finding, one and several, at the window's first size, as Agents' boards. Fixtures only.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("security\(count)") == true {
+            SecurityOverview.snapshotFixture = DebugSnapshotFixtures.securityOverview(findings: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentSecurity).environmentObject(viewModel)),
+                             name: "security\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        SecurityOverview.snapshotFixture = security
         // Brain › Usage with no provider on, one and three, the same way, and three with Agent Status off, which stops the
         // usage store. The settings rows below the product still read this Mac's switches, as Agents' do.
         let usageBoards: [(name: String, providers: Int, agentStatusOn: Bool)] = [
@@ -227,6 +255,32 @@ enum DebugSnapshots {
             }
         }
         UsageOverview.snapshotFixture = usagePage
+        // Brain › Timer with no timer, one running from its preset, a task's paused in overtime, a Clock-app timer and the
+        // timer off, at the window's first size, as Agents' boards. Fixtures only: the settings rows below still read this
+        // Mac's switches.
+        for board in DebugSnapshotFixtures.TimerBoard.allCases where request.tabs == nil || request.tabs?.contains(board.rawValue) == true {
+            TimerOverview.snapshotFixture = DebugSnapshotFixtures.timerOverview(board)
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .timer).environmentObject(viewModel)),
+                             name: board.rawValue + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard with nothing copied, one pin and two copies, and three pins and five copies, at the window's
+        // first size, as Agents' boards; the last with History drawn open. Fixtures only.
+        for (count, copies) in [(0, 0), (1, 2), (3, 5)] where request.tabs == nil || request.tabs?.contains("clipboard\(count)") == true {
+            ClipboardOverview.snapshotFixture = DebugSnapshotFixtures.clipboardOverview(pinned: count, history: copies,
+                                                                                         showsHistory: count == 3, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .clipboard).environmentObject(viewModel)),
+                             name: "clipboard\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        ClipboardOverview.snapshotFixture = clipboard
         // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
         // and one made in Apple Notes. The switches drawn under the product are this Mac's, so the boards are run with
         // `-enableNotes YES`, and the sync's with `-enableAppleNotesSync YES` (`notePageMirror` with
@@ -344,7 +398,7 @@ enum DebugSnapshots {
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
                                                        "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
-                                                       "valueSheet", "newNoteSheet"]
+                                                       "valueSheet", "timerPresetSheet", "newNoteSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -1107,6 +1161,51 @@ enum DebugSnapshotFixtures {
         )
     }
 
+    /// Brain › Security's product with no finding, one and several. None: ADR Discovery not found, so the page offers
+    /// Connect ADR, with no scan and no policy yet. One: the high unpinned server from a full scan, the next automatic
+    /// scan, and the rules board's policy. Several: all four findings with the `.env` read snoozed, so three wait and
+    /// one is acknowledged; a partial scan with two uncatalogued tools whose last Kannu run failed; and, with session
+    /// analysis on, two analyses, one of them malicious. On the main actor, as the store's grouping is.
+    @MainActor
+    static func securityOverview(findings count: Int, now: Date) -> SecurityOverviewFixture {
+        var data = SecurityPageData()
+        guard count > 0 else { return SecurityOverviewFixture(data: data, adrConnected: false, detectionEnabled: false) }
+        let all = self.findings
+        let several = count > 1
+        let snoozes = several ? [SecurityFindingSnooze(id: all[3].groupID, until: now.addingTimeInterval(86_400))] : []
+        data.groups = SecurityFindingsStore.buildGroupRanking(findings: several ? all : [all[0]], acknowledgedGroups: [:],
+                                                             legacyAcknowledged: [], snoozes: snoozes, now: now)
+        let scanned = now.addingTimeInterval(-3 * 3600)
+        data.lastScan = ADRScanRecord(date: scanned, origin: .kannu, fileName: "snapshot-fixture.json", assetCount: 27,
+                                      findingCount: 1, reviewCount: several ? 2 : 0, coverageComplete: !several,
+                                      coverageGaps: several ? 4 : 0, catalogVersion: "2026.08.22", schemaVersion: "1.0")
+        data.reviewCount = several ? 2 : 0
+        data.lastKannuScanAt = scanned
+        data.automaticScansActive = true
+        // A failed run brings the next one forward, an hour out; otherwise a day after the last.
+        data.nextAutomaticScanAt = several ? now.addingTimeInterval(3600) : scanned.addingTimeInterval(24 * 3600)
+        data.consecutiveScanFailures = several ? 1 : 0
+        data.policyStatus = .success(agentPolicy)
+        if several {
+            data.analyses = [
+                ADRSessionAnalysis(conversationID: "fixture-analysis-1", chatName: "Research the API",
+                                   date: now.addingTimeInterval(-5400), isMalicious: true, confidence: 0.91,
+                                   tactic: "permission_abuse", explanation: "A fetched page told the agent to upload ~/.ssh.",
+                                   threatMessages: 3, totalMessages: 48, method: "reasoning", modelUsed: "claude-sonnet",
+                                   inputTokens: 41_200, outputTokens: 2_300, costUSD: 0.042, analysisSeconds: 74,
+                                   messagesAnalyzed: 48, inputCharacters: 118_000, transcriptBytes: 240_000,
+                                   triageEnabled: false, reportPath: nil),
+                ADRSessionAnalysis(conversationID: "fixture-analysis-2", chatName: "Fix the login flow",
+                                   date: now.addingTimeInterval(-26 * 3600), isMalicious: false, confidence: 0.08,
+                                   tactic: nil, explanation: "", threatMessages: 0, totalMessages: 112, method: "reasoning",
+                                   modelUsed: "claude-sonnet", inputTokens: 88_000, outputTokens: 1_900, costUSD: 0.061,
+                                   analysisSeconds: 96, messagesAnalyzed: 112, inputCharacters: 240_000,
+                                   transcriptBytes: 410_000, triageEnabled: false, reportPath: nil),
+            ]
+        }
+        return SecurityOverviewFixture(data: data, adrConnected: true, detectionEnabled: several)
+    }
+
     /// Brain › Usage's product with no provider on, one or three. One is Claude alone, with the notch board's readings:
     /// a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the week heading for 95 %, and three
     /// per-model weeks; and the models it ran. Three adds Codex with no reading yet, and Cursor's billing cycle near its
@@ -1160,6 +1259,89 @@ enum DebugSnapshotFixtures {
         return UsageOverviewFixture(providers: providers,
                                     data: UsageOverviewData(readings: readings, outlooks: usageOutlooks(now: now),
                                                             models: UsageOverview.modelRows(results)))
+    }
+
+    /// Brain › Timer's boards: no timer, Focus running from its preset with 18:42 left, the fixture task's timer paused
+    /// 2:15 into overtime, a Clock-app timer the manager mirrors, and the timer off.
+    enum TimerBoard: String, CaseIterable {
+        case idle = "timer0", running = "timer1", overtime = "timerOver", clock = "timerClock", off = "timerOff"
+    }
+
+    /// The default presets' names, lengths and colours, with fixed ids, so the running tile is the same on every run.
+    static let timerPresets = [
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000001") ?? UUID(), name: "Focus", duration: 25 * 60, color: .orange),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000002") ?? UUID(), name: "Break", duration: 5 * 60, color: .green),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000003") ?? UUID(), name: "Deep Work", duration: 45 * 60, color: .purple),
+    ]
+
+    /// What `TimerOverview` shows on one of `TimerBoard`'s boards, built as the manager's copy would be.
+    static func timerOverview(_ board: TimerBoard) -> TimerOverviewFixture {
+        var data = TimerPageData()
+        switch board {
+        case .idle:
+            break
+        case .running:
+            let focus = timerPresets[0]
+            data.isActive = true
+            data.name = focus.name
+            data.time = "18:42"
+            data.length = "25:00"
+            data.remaining = 18 * 60 + 42
+            data.fraction = (focus.duration - data.remaining) / focus.duration
+            data.accent = focus.color
+            data.presetID = focus.id
+        case .overtime:
+            data.isActive = true
+            data.name = "Fix the flaky timer test"
+            data.time = "-2:15"
+            data.length = "30:00"
+            data.remaining = -135
+            data.fraction = 1
+            data.isPaused = true
+            data.isOvertime = true
+            data.accent = .pink
+            data.taskKey = "ds-vendors #4264"
+        case .clock:
+            data.isActive = true
+            data.name = "Tea"
+            data.time = "3:20"
+            data.length = "5:00"
+            data.remaining = 200
+            data.fraction = 100.0 / 300
+            data.isMirrored = true
+        case .off:
+            return TimerOverviewFixture(data: data, presets: timerPresets, timerOn: false)
+        }
+        return TimerOverviewFixture(data: data, presets: timerPresets)
+    }
+
+    /// Brain › Clipboard's product, from made-up copies, none of this Mac's: up to three pins (an ssh line, a link, a
+    /// file), oldest pin first, and up to five copies in History, newest first (text, a link, an image, rich text, and a
+    /// long line cut as the manager cuts it). The manager is monitoring.
+    static func clipboardOverview(pinned: Int, history: Int, showsHistory: Bool = false, now: Date) -> ClipboardOverviewFixture {
+        let pins: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "ssh deploy@staging.example.com", 9 * 86_400),
+            (.url, "https://developer.apple.com/documentation/swiftui", 5 * 86_400),
+            (.file, "file:///Users/example/Documents/Release%20notes.pdf", 2 * 86_400),
+        ]
+        let copies: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "Thanks, that fixes it. I'll merge it after lunch.", 180),
+            (.url, "https://example.com/docs/getting-started", 1_500),
+            (.image, "Image (48 KB)", 3_600),
+            (.rtf, "Agenda: the release checklist, then the notch review", 10_800),
+            (.text, "SELECT count(*) FROM sessions WHERE ended_at IS NULL;", 93_600),
+        ]
+        var data = ClipboardPageData()
+        data.pinned = pins.prefix(pinned).map { type, content, ago in
+            var item = ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+            item.isPinned = true
+            return item
+        }
+        data.history = copies.prefix(history).map { type, content, ago in
+            ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+        }
+        data.isMonitoring = true
+        return ClipboardOverviewFixture(data: data, showsHistory: showsHistory)
     }
 
     /// The note `notesOverview` gives an image, drawn here, never read from a file.
@@ -1237,6 +1419,37 @@ enum DebugSnapshotFixtures {
                          chatName: "A chat with a very long title that goes on and on to test wrapping in the row",
                          projectName: "app", cwd: "/Users/example/code/app"),
         ]
+    }
+}
+
+extension ClipboardItem {
+    /// DEBUG snapshot boards only: a made-up copy as the history would hold it, copied at `copiedAt`, its preview made as
+    /// the manager makes it. It writes no file, where the manager saves an image's: a board shows an image's line, never
+    /// its picture.
+    init(snapshot content: String, type: ClipboardItemType, copiedAt: Date) {
+        id = UUID()
+        self.type = type
+        timestamp = copiedAt
+        imageFileName = nil
+        rtfData = nil
+        switch type {
+        case .file:
+            stringData = nil
+            fileURLs = [content]
+            preview = URL(string: content)?.lastPathComponent ?? content
+        case .image:
+            stringData = nil
+            fileURLs = nil
+            preview = content
+        case .rtf:
+            stringData = content
+            fileURLs = nil
+            preview = String(content.prefix(50))
+        case .text, .url, .unknown:
+            stringData = content
+            fileURLs = nil
+            preview = ClipboardItem.generatePreview(stringData: content, type: type)
+        }
     }
 }
 #endif

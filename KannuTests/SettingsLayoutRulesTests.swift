@@ -124,7 +124,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "HUDAndOSDSettings.swift": 5,        // HUD style previews
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
-        "TimerSettings.swift": 4,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
     ]
 
@@ -141,7 +140,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 2,      // the editor sheet: the preview's zoom, and ParameterSliderRow's
         "SettingsComponents.swift": 2,       // SettingsSliderRow and SettingsStepperRow themselves
         "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
-        "TimerSettings.swift": 1,            // a preset's hours, minutes and seconds, one control for the three
     ]
 
     func testNoValueControlIsBuiltByHandInARow() {
@@ -168,6 +166,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
         "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
+        "TimerOverview.swift": 6,            // the running timer's, the empty state's, a preset tile's and Add Preset's cards, a tile's ⋯ in its corner, and the presets' heading in line with the tiles
         "AgentStatusSettings.swift": 1,      // a preview
         "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
         "CustomOSDSettings.swift": 1,        // the OSD preview
@@ -184,9 +183,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsField.swift": 1,            // the field inside its chrome
         "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
         "SettingsDateField.swift": 1,        // the date popover's content
-        "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
         "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
         "NotesOverview.swift": 1,            // the sync's status line in line with the cards' text
         "NotePage.swift": 1,                 // the note's own card
@@ -343,7 +342,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
         "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
-        "ClipboardSettings.swift": 4,        // status colours
         "DevicesSettings.swift": 1,          // the icon style card's resting fill
         "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
@@ -356,6 +354,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
         "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityOverview.swift": 1,         // a partial scan's orange, moved up with the newest scan's line
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
         "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
@@ -364,7 +363,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
         "TaskRowList.swift": 2,              // the same orange
         "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
-        "TimerSettings.swift": 1,            // the preset editor
     ]
 
     /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
@@ -373,7 +371,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
         "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "BatterySettings.swift": 2,          // battery previews
-        "ClipboardSettings.swift": 1,        // a status line
         "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
         "DevicesSettings.swift": 2,          // the icon style cards' glyphs
         "EditPanelView.swift": 1,            // dead code but its #Preview
@@ -389,7 +386,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsPermissionCallout.swift": 1,  // the callout's title
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
         "StatsSettings.swift": 1,            // a graph caption
-        "TimerSettings.swift": 5,            // the preset editor
+        "TimerSettings.swift": 1,            // the custom timer's length, its mono readout at medium weight
     ]
 
     /// The theme makes the colours and holds the system font as Geist's fallback.
@@ -489,8 +486,14 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskConnectSheets.swift": 3,        // the three Connect sheets' Connect
         "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
+        "TimerPresetSheet.swift": 1,         // the preset sheet's Add or Save
+        "TimerOverview.swift": 1,            // Start timer: the Timer page header's one verb
         "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
+        // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
+        "SecurityOverview.swift": 1,
         "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
+        "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
         "NotesOverview.swift": 1,            // New note: the Notes page header's one verb
         "NewNoteSheet.swift": 1,             // the New note sheet's Add
     ]
@@ -720,6 +723,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         // Ours, by hand, count once each: only a row is not hand-built.
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider(value: $x, in: 0...1)").count, 1)
         XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider<Double>(value: $x, in: 0...1) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Stepper (value: $v, in: 0...9) { Text(\"a\") }").count, 1)
 
         XCTAssertEqual(Self.paddingLines(in: ".padding(.vertical, 8)").count, 1)
         XCTAssertEqual(Self.paddingLines(in: "// .padding(12)").count, 0)
@@ -852,7 +857,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// `SettingsSlider(value:`, `Stepper(value:` and `SettingsStepper(value:`, never a row.
     private static func handBuiltValueControlLines(in text: String) -> [String] {
         matchingLines(in: text) {
-            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\(value:"#, options: .regularExpression) != nil
+            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\s*(?:<[^>]*>)?\s*\(\s*value:"#, options: .regularExpression) != nil
         }
     }
 

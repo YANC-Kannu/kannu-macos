@@ -143,16 +143,16 @@ struct SettingsSelect<Value: Hashable, Icon: View>: View {
         // Focus goes with the choice, so Space on the focused segment keeps it. Right to left the segments are
         // drawn mirrored, so → steps back.
         .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
-            step((press.key == .rightArrow) == (layoutDirection == .leftToRight) ? 1 : -1)
+            step((press.key == .rightArrow) == (layoutDirection == .leftToRight) ? 1 : -1, from: focusedOption)
             focusedOption = selection
             return .handled
         }
     }
 
     /// Arrows and VoiceOver's adjust land here; a disabled select ignores them, as its button does a click.
-    private func step(_ offset: Int) {
+    private func step(_ offset: Int, from start: Value? = nil) {
         guard isEnabled else { return }
-        let index = options.firstIndex(of: selection)
+        let index = options.firstIndex(of: start ?? selection)
         guard let next = SettingsSelectNavigation.moved(from: index, by: offset, count: options.count) else { return }
         selection = options[next]
     }
