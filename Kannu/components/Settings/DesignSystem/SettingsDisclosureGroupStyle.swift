@@ -18,8 +18,8 @@
 
 import SwiftUI
 
-/// A title row that opens and closes the rows under it. All of them sit in one view, so a long list
-/// keeps the native style for now (`AllTasksPage`).
+/// A title row that opens and closes the rows under it. All of them sit in one view, so a long list does not
+/// fold: Brain › Tasks shows its closed and archived tasks as the list's own tabs, lazy (`TasksOverview`).
 struct SettingsDisclosureGroupStyle: DisclosureGroupStyle {
     func makeBody(configuration: Configuration) -> some View {
         Control(configuration: configuration)

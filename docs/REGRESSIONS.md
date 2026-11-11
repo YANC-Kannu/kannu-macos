@@ -1762,6 +1762,23 @@ the real pasteboard twice a second. **Not measured:** CPU with Clipboard open wh
 screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of
 this entry holds.
 
+**2026-11-11 addendum: Tasks' first page runs its live data only while Brain is on screen, and a task's two minute
+clocks stop there too.** Brain › Tasks is a product page now (`TasksOverview` above its settings). Its overview, list
+and Sources observed `TasksManager` whole, closed or not: the manager publishes only on an edit, a timer's start or
+stop, or a sync, but each publish redrew a closed Brain left on Tasks. Now the first page holds one copy,
+`TasksPageData`, read as the page appears and again as Brain comes back on screen, then followed through
+`objectWillChange` at most twice a second, in a `.task(id:)` on `BrainVisibility.isOnScreen` and the Tasks switch that
+returns at once while either is false; the header follows `$loadState` the same way, dropping repeats. A press reads
+the manager again at once. Time to log's cards, the notch popover's own `WorklogDraftCard`, are built only while an
+entry waits, and the pages below the first follow the manager as before. The timed row's `TimelineView(.everyMinute)`
+and a task page's minute loop now run only while Brain is on screen; both used to run on in a full-screen Brain parked
+in another Space. New hooks: the page's `onAppear` (the reminder permission check and the archive, which All tasks ran
+as it opened, then one read of the copy) and its `.task`; the header's `onAppear` (one read) and `.task`; and an
+`onReceive` of New task's request, which opens a sheet only on a press. D1's list-detail adds one `onGeometryChange`
+that sets a flag when the panel crosses 1,224 pt, and no animation: the switch is a redraw. The back row lost its card.
+None loads a field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
+Space. `TasksPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

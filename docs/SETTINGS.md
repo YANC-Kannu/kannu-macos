@@ -94,10 +94,9 @@ A call-site style beats the root, so these stay on purpose:
 | Site | Why |
 |---|---|
 | `SettingsToggleStyle(showsLabel: false)` | A row that draws the title itself. A custom style ignores `.labelsHidden()`, so it is told |
-| `SettingsButtonStyle(.primary)` | A sheet's default action, or a page header's one verb; Tasks' New Task row stands in for that verb until Stage 5 gives the page its header. Never a callout's or a card's button, which take the standard style, or a page shows three to five primaries and none of them ranks. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
+| `SettingsButtonStyle(.primary)` | A sheet's default action, or a page header's one verb (Tasks' New task among them). Never a callout's or a card's button, which take the standard style, or a page shows three to five primaries and none of them ranks. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
-| `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | Kept until Stage 5 rebuilds the page. A grouped `Form` built its rows lazily; on a page, the native disclosure builds them at once, as ours does |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
 | `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
 
@@ -111,8 +110,7 @@ What stays native, and why:
 | The calendar grid and time field inside `SettingsDateField` | They cannot be restyled; the popover around them is ours |
 | A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
 | Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
-| All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
-| The Tags sheet's Colour picker | A ticked submenu of a tag pill's right-click menu, a native menu, which no popover can join. It replaced the swatch beside the pill, so the tag's colour shows once, as the pill's wash. Without VoiceOver a right-click menu has no key, so a keyboard-only user colours tags in All tasks › Tag colours, whose swatches take focus |
+| The Tags sheet's Colour picker | A ticked submenu of a tag pill's right-click menu, a native menu, which no popover can join. It replaced the swatch beside the pill, so the tag's colour shows once, as the pill's wash. Without VoiceOver a right-click menu has no key, so a keyboard-only user colours tags in Tasks settings › Tag colours, whose swatches take focus |
 | New Task's two checkboxes | Stage 5 rebuilds the task form |
 | `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
 | The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
@@ -156,7 +154,6 @@ numbers, and this table only says why.
 | File | Colours | Fonts | Why they remain |
 |---|---|---|---|
 | `AgentStatusSettings.swift` | 1 | 0 | Status green (Detected Editors' green and caption left with it, Stage 4 child 2) |
-| `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
 | `AnimationEditorView.swift` | 7 | 22 | The editor's own dense scale and previews |
 | `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
@@ -182,6 +179,7 @@ numbers, and this table only says why.
 | `StatsSettings.swift` | 2 | 1 | Graph colours |
 | `TaskDetailPage.swift` | 3 | 0 | The unreadable-estimate orange |
 | `TaskRowList.swift` | 2 | 0 | The same orange |
+| `TasksOverview.swift` | 1 | 0 | The moved-aside task file's orange, moved up with the list |
 | `TasksSettings.swift` | 1 | 0 | `ReminderPermissionNote`'s orange |
 | `TimerSettings.swift` | 0 | 1 | The custom timer's length, its mono readout at medium weight (the preset editor left for Timer's sheet, Stage 4b) |
 
@@ -194,8 +192,8 @@ spring or the default. Pages keep their own until Stage 4.
 A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
 macOS 14 has no custom picker style, and a custom view cannot read `.tag()`s, so the options are data:
 `options:` with an `optionTitle:` (`\.localizedName`), or `choices: [value: String(localized: "…")]` for
-literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the four
-All tasks keeps and the Tags sheet's Colour submenu.
+literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the one the
+Tags sheet's Colour submenu keeps.
 
 - **The trigger** is a button in our style showing the value and a chevron. A short list keeps its widest
   title's width, so the row does not move when the choice changes. A saved value no longer among the options
@@ -296,14 +294,14 @@ either closure left out when there is none.
   the page opens, not as the row scrolls into view, and `onDisappear` as the page goes or Brain closes, not as
   the row scrolls away. A row that animates keeps animating while its page is open, in view or not; a closed
   Brain still costs nothing (docs/REGRESSIONS.md, entry 22).
-- **Except three long lists, which are lazy inside the page:** the task rows (`TaskRowList`: All tasks, Local
-  tasks, a source, a project), the Archive once expanded, and Security's findings. Each can hold hundreds of
-  rows, and a plain stack would build them all as the page opens. No search or deep link lands on one of their
-  rows: Tasks' rows carry no highlight id, and the findings' link lands on their section's header. Going back to
-  a task scrolls to its row by the `ForEach`'s own id, which a lazy stack reaches before the row is built. The
-  lazy stack holds only the list's rows, spaced as they were (`sectionRowGap` in a card, the disclosure's default
-  in the Archive), and is left out while the list is empty, since an empty one still takes a row's gap. Anything
-  a search can reach stays outside it.
+- **Except the long lists, which are lazy inside the page:** the task rows (Brain › Tasks' list on each of its
+  tabs, Active, Done and Archived; Local tasks, a source and a project, `TaskRowCards`) and Security's findings.
+  Each can hold hundreds of rows, and a plain stack would build them all as the page opens. No search or deep link
+  lands on one of their rows: Tasks' rows carry no highlight id, and the findings' link lands on their section's
+  header. Going back to a task scrolls to its row by the `ForEach`'s own id, which a lazy stack reaches before the
+  row is built. The lazy stack holds only the list's rows, spaced as they were (a task row is a card of its own,
+  `listRowGap` apart; a finding `sectionRowGap` apart in its card), and is left out while the list is empty, since
+  an empty one still takes a row's gap. Anything a search can reach stays outside it.
 - **A section is its rows in a soft card** (`card`, `sectionRadius`), `sectionRowGap` apart: space, never a
   divider. Its header and footer sit outside the card, in line with the rows' text, as the grouped `Form` placed
   them. `SettingsSectionHeader` is the heading for VoiceOver, not the whole header, so a Beta badge or a count
@@ -323,8 +321,8 @@ either closure left out when there is none.
 ## Product pages
 
 A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage, Brain › Security,
-Brain › Timer and Brain › Clipboard are the ones so far; the redesign plan gives Notes its own in Stage 4b, and Tasks
-in Stage 5.
+Brain › Timer, Brain › Clipboard and Brain › Tasks are the ones so far; the redesign plan gives Notes its own in
+Stage 4b.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -468,6 +466,34 @@ in Stage 5.
   the image files that history does not name, in a folder the installed app shares, and its start reads the real
   pasteboard. The switches still come from this Mac's settings, so the off state is drawn with the
   `-enableClipboardManager NO` launch argument, which changes nothing saved.
+- **Tasks** leads with what needs you, each only while it holds something: the sessions Kannu stopped while timing
+  (Interrupted sessions, with Set End Time and Discard) and Time to log's cards. Then the list (`TasksOverview`): its
+  three tabs, Active (the open tasks of every connected source, in the task order), Done (closed lately: done here,
+  or no longer listed by their source) and Archived (`SettingsSelect`, segmented); under them Find, where a word
+  typed with `#` finds a tag or a label as a whole (`TaskSearch`), and the Tag filter (`SettingsSelect`, every tag
+  and label on any task, `TaskFacets.filterTags`). The Source, Project and Status filters All tasks had are gone: a
+  source and a project have their own pages, and the tabs split what is open from what is closed. Each task is a
+  soft card, `listRowGap` apart: its colour dot, its title over one caption with its tags as chips (the first tag in
+  its colour and "+N" for the rest, or one "+N" when the caption leaves no room, so the caption, which carries the
+  time and any overtime, is never cut for a chip; a tag Find found comes first), then a local task's ✓, ▶ or ■, and a
+  › to its page. A closed card has its one action, Reopen, Archive or Restore, then its ›. The rest is each card's
+  right-click menu, which opens with Show Details. Lazy, as before, and lists only.
+- **Tasks' empty states:** "No open tasks" with one line and the page's verb in the standard style; Done's and
+  Archived's say what lands there; "No tasks match" while Find or the Tag filter hides everything. While tasks are
+  off, "Tasks is off" with Turn On stands in place of the list, and the page touches no task file.
+- **Tasks' header** holds the gear, which goes to the first settings row (Enable tasks), then **New task**, ⌘N, the
+  page's one primary verb, while tasks are on and the task list has been read. It opens New Task on any page of the
+  tab; a new task the list on screen would hide opens on its own page. The hidden ⌘N button the page used to carry
+  is gone.
+- **Tasks' settings**, under a "Tasks settings" rule: the Tasks switches first, where the gear lands, then Sources
+  (Local tasks and each source with how many tasks it holds and a › to its page) and Tag colours, folded.
+- **A task's page, wide** (layout-proposal D1; above, "Section rules"): from 1,224 pt of panel a task opened from the
+  list shows beside it, and its card wears the selected ring; narrower it takes the list's place under "‹ Tasks".
+- **Boards**: `tasksWindow`, `tasksTask`, `tasksDone` and `tasksArchived` draw Tasks at the window's first size: the
+  list, a task opened from it in the list's place, and the Done and Archived tabs; `tasksWide` and `tasksWideTask` at
+  a 14-inch full screen (1,512 × 982): the list with no task open, and with one beside it. Fixture tasks only
+  (`TasksManager.snapshotFile`), never this Mac's; the switches come from this Mac's settings, so the boards run with
+  `-enableTasks '<true/>'`. `tasks` draws the page whole at the narrowest panel.
 
 ## Live data
 
@@ -550,6 +576,22 @@ it is at the press, never the copy. Each press, and each edit of the presets, th
 read and never a subscription, so the card never shows the old state for the throttle's half second, and a paused
 timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it needs a
 real window.
+
+**Tasks** keeps the same three for its first page, and `TasksPageLiveDataRulesTests` holds them against planted
+offenders. What the list, what needs you above it and the settings below show from `TasksManager` is copied into one
+value, `TasksPageData`, read as the page appears and again as Brain comes back on screen, then followed through the
+manager's `objectWillChange`, throttled to 500 ms and assigned only on a change, in a `.task(id:)` on
+`BrainVisibility.isOnScreen` and the Tasks switch, so with tasks off nothing reads the task file; the header's "the
+list has been read" comes through one subscription to `$loadState` that drops repeats. A press calls the manager, then
+the page reads it again at once, outside the throttle, so a second click never waits behind the first. Two parts
+follow the manager as they always did, and say so: Time to log's cards are the notch popover's own
+(`WorklogDraftCard`), built only while an entry waits, which the copy says; and the pages below the first (a source's,
+a project's, a task's, also beside the list) edit what they show in place. The manager publishes only on an edit, a
+timer's start or stop, or a sync, which runs only when asked (`SourceSync`: a page appearing, Refresh, Connect; no
+timer, no polling), so none of this ticks. **The two clocks a task has run only while Brain is on screen:** the timed
+row's minute (`TaskRowCards`' `live`) and a task's page's (`TaskDetailPage`, a `.task(id:)` on Brain's visibility,
+which catches up at once when Brain comes back). The list keeps no clock of its own: a closed task's days are read as
+it draws. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another Space.
 
 ## The shell and navigation
 
@@ -715,11 +757,10 @@ section describes it, it does not define it.
 
 - One concern per `SettingsSection`; separate concerns get separate sections, never a `Divider` inside one.
 - A Section earns its gap: a one-row Section spends a whole section gap on one row, so a row that
-  serves a Section joins it. A row that only narrows a list (a Find field) is that list's first
-  row, not a Section of its own, and a page's folded extras (All tasks' Recently closed, Archive
-  and Tag colours) are rows of one Section at its end — the one exception to "one concern per
-  Section". A row that is a concern of its own still stands alone: a sub-page's back row (below),
-  or a page's one setting (Local tasks' colour).
+  serves a Section joins it. A row that only narrows a list (a Find field) sits with that list, at
+  its head, not in a Section of its own. A row that is a concern of its own still stands alone: a
+  page's one setting (Local tasks' colour), or a group folded on its own (Tasks settings › Tag
+  colours).
 - A section that mixes everyday controls with rarely-needed ones may tuck the rare rows into one
   `DisclosureGroup` labelled **Advanced** (collapsed by default), keeping the section glanceable.
   Rows inside it carry no highlight ids; their search entries point at the disclosure's own id,
@@ -738,17 +779,31 @@ section describes it, it does not define it.
     standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
   - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet, flush: true)`), its
-    chevron `iconGap` before its title, alone in its own `Section` — the one sanctioned lone
+    chevron `iconGap` before its title, bare on the panel and `sectionLabelGap` above the page's first
+    card, never in a card of its own (the design review's finding 24) — the one sanctioned lone
     left-hanging button, because it is navigation, not an action on a row. Nothing else on a page
     takes this shape. The sidebar's Back row is shell chrome, not a row of a page.
-  - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
-    a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
-    opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the
-    opening row.
-  - All tasks' filters are view-only: they narrow that page and nothing else. While a filter or its
-    Find field is set, a "Filtered" row above the rows says so ("3 of 12 tasks"), with a Show All
-    that resets the filters and empties Find. The page shows no total otherwise: that row is its
-    one count.
+  - A caller that means a part of the first page itself (a notch "Show all" link, a notification
+    click) uses a deep link of its own, registered there (`SettingsDeepLink.tasksListOpenID`, on
+    the list's tabs, which shows the open tasks); search entries keep pointing at their own rows.
+  - **A list may show its item's page beside it** (layout-proposal D1, David 2026-11-06): once the
+    panel holds the page inset, the list (360 pt), the inset, a settings column's 720 pt and a last
+    inset (`ListDetailLayout`, 1,224 pt with the wide inset), an item opened from the list shows
+    beside it instead of in its place, and the list stays. Brain › Tasks is the model: the same
+    path, `[.task(id)]`, is drawn either way, so a resize converts nothing; the page decides from
+    one `onGeometryChange` into a flag, never `minWidth:` (the size bridge would clamp the window),
+    `ViewThatFits` (it builds every layout) or `.inspector`. The list keeps the first page whole,
+    its settings under it, in a column of the list's width with the inset on each side; the item's
+    page is a `SettingsPage` with no inset of its own, so the list's trailing inset is the gap, and
+    its scroll view runs to the panel's edge. The item opened shows selected in the list (the one
+    selected look, a 2-pt ring, and `isSelected` for VoiceOver); with none open, its place says so.
+    Pages below the first (a source's, a project's, a task opened from them) are the in-tab swap
+    at every width. A search or deep link returns to the first page at both widths, closing the
+    page beside the list.
+  - The list's filters are view-only: they narrow it and nothing else. While its Tag filter or its
+    Find field is set, a "Filtered" row above the rows says so ("3 of 12 tasks", of the tab's own
+    tasks), with a Show All that resets the filter and empties Find. The list shows no total
+    otherwise: that row is its one count.
 - A long list of similar rows (tasks) keeps each row to its title, one short caption and at most
   two trailing controls: the row's main action (▶) and a › to the item's own page, where everything
   about it lives. Its other actions go in a `.contextMenu` that opens with "Show Details" — never a
@@ -758,10 +813,11 @@ section describes it, it does not define it.
   is typed in place on its page (a task's estimate in its Time row, `TaskEstimateField`; a local
   task's title in its title row, a plain field in the body font, so it still reads as the row's
   title).
-- A list's Add is one row (Brain › Tasks' Add a task), whose prominent New Task button opens a
-  sheet holding every field the item takes — never fields inline in the list (David, 2026-10-24:
-  "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's page, never on the
-  row's button, which the lazy `Form` dropped, shortcut and all, once it scrolled away.
+- A list's Add is its page header's one verb (Brain › Tasks' New task, ⌘N), which opens a sheet
+  holding every field the item takes — never fields inline in the list (David, 2026-10-24: "a add
+  task button maybe giving popup"). The shortcut is on that button, which every page of the tab
+  shows, so it works wherever the tab is; the page holds the sheet and its draft, and the verb asks
+  it to open (`.tasksNewTaskRequested`), since the header and the page are siblings.
 - A sheet is a `SettingsSheet`, never a `Form`: its title (and a secondary line under it), the
   fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for what it does
   ("Add", "Schedule", "Done"; `.defaultAction`). A `Spacer` of the sheet's own spreads them only
@@ -779,8 +835,9 @@ section describes it, it does not define it.
   The Sources rows' "Connect…" and "Disconnect…" are row buttons, not menu items, and keep theirs.
 - Footers carry privacy or trust facts only ("Tasks and their time stay on this Mac."), one short
   line each. The one exception: a list whose rows keep their other actions in a `.contextMenu`, and
-  has no row left to say so, may name it once under the list (All tasks' "Right-click a task for
-  more, such as Move to Top.").
+  has no row left to say so, may name it once under the list (Tasks' "Right-click a task for
+  more, such as Move to Top."), and a list's tab may say once what becomes of its rows (Done's
+  "Moved to the archive after 3 days.").
 - Error and recovery text is specific but short: what failed, and the one thing to do next.
 - Badges (`customBadge`, `comingSoonTag`, `alphaBadge`, `proFeatureBadge`) are decorative chips
   and stay unselectable — they are the pinned exceptions in `SettingsLayoutRulesTests`, along
