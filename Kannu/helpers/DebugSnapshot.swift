@@ -65,6 +65,10 @@ enum DebugSnapshots {
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
         AgentsOverview.snapshotFixture = agents
         ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
+        // Brain › Timer's product likewise: a fixture timer, running from its preset, and the fixture presets, never this
+        // Mac's.
+        let timerPage = DebugSnapshotFixtures.timerOverview(.running)
+        TimerOverview.snapshotFixture = timerPage
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
             boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
@@ -101,6 +105,10 @@ enum DebugSnapshots {
             // A URL typed and no name yet, so Add is off.
             boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
                                                                    nameInput: .constant(""), onImport: {}, onCancel: {}))))
+        }
+        if request.tabs == nil || request.tabs?.contains("timerPresetSheet") == true {
+            // A preset's edit, from its tile: the fixture's Focus, 25 minutes in orange.
+            boards.append(("timerPresetSheet", AnyView(TimerPresetSheet(target: .edit(DebugSnapshotFixtures.timerPresets[0])))))
         }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
             boards.append(("taskPage", AnyView(SettingsPage {
@@ -199,6 +207,19 @@ enum DebugSnapshots {
             }
         }
         AgentsOverview.snapshotFixture = agents
+        // Brain › Timer with no timer, one running from its preset, a task's paused in overtime, a Clock-app timer and the
+        // timer off, at the window's first size, as Agents' boards. Fixtures only: the settings rows below still read this
+        // Mac's switches.
+        for board in DebugSnapshotFixtures.TimerBoard.allCases where request.tabs == nil || request.tabs?.contains(board.rawValue) == true {
+            TimerOverview.snapshotFixture = DebugSnapshotFixtures.timerOverview(board)
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .timer).environmentObject(viewModel)),
+                             name: board.rawValue + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        TimerOverview.snapshotFixture = timerPage
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -296,7 +317,7 @@ enum DebugSnapshots {
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
                                                        "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
-                                                       "valueSheet"]
+                                                       "valueSheet", "timerPresetSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -1057,6 +1078,60 @@ enum DebugSnapshotFixtures {
             nearLimit: [reading],
             security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
         )
+    }
+
+    /// Brain › Timer's boards: no timer, Focus running from its preset with 18:42 left, the fixture task's timer paused
+    /// 2:15 into overtime, a Clock-app timer the manager mirrors, and the timer off.
+    enum TimerBoard: String, CaseIterable {
+        case idle = "timer0", running = "timer1", overtime = "timerOver", clock = "timerClock", off = "timerOff"
+    }
+
+    /// The default presets' names, lengths and colours, with fixed ids, so the running tile is the same on every run.
+    static let timerPresets = [
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000001") ?? UUID(), name: "Focus", duration: 25 * 60, color: .orange),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000002") ?? UUID(), name: "Break", duration: 5 * 60, color: .green),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000003") ?? UUID(), name: "Deep Work", duration: 45 * 60, color: .purple),
+    ]
+
+    /// What `TimerOverview` shows on one of `TimerBoard`'s boards, built as the manager's copy would be.
+    static func timerOverview(_ board: TimerBoard) -> TimerOverviewFixture {
+        var data = TimerPageData()
+        switch board {
+        case .idle:
+            break
+        case .running:
+            let focus = timerPresets[0]
+            data.isActive = true
+            data.name = focus.name
+            data.time = "18:42"
+            data.length = "25:00"
+            data.remaining = 18 * 60 + 42
+            data.fraction = (focus.duration - data.remaining) / focus.duration
+            data.accent = focus.color
+            data.presetID = focus.id
+        case .overtime:
+            data.isActive = true
+            data.name = "Fix the flaky timer test"
+            data.time = "-2:15"
+            data.length = "30:00"
+            data.remaining = -135
+            data.fraction = 1
+            data.isPaused = true
+            data.isOvertime = true
+            data.accent = .pink
+            data.taskKey = "ds-vendors #4264"
+        case .clock:
+            data.isActive = true
+            data.name = "Tea"
+            data.time = "3:20"
+            data.length = "5:00"
+            data.remaining = 200
+            data.fraction = 100.0 / 300
+            data.isMirrored = true
+        case .off:
+            return TimerOverviewFixture(data: data, presets: timerPresets, timerOn: false)
+        }
+        return TimerOverviewFixture(data: data, presets: timerPresets)
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
