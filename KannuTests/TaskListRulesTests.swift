@@ -153,7 +153,12 @@ final class TaskListRulesTests: XCTestCase {
                       "the back row does not name the page it goes back to")
         XCTAssertTrue(settings.contains(".id(path)"), "a page no longer opens at its top")
         XCTAssertTrue(settings.contains("proxy.scrollTo(target, anchor: .center)"), "going back loses the row it came from")
-        XCTAssertTrue(settings.contains("if rebuildsFirstPage { returnTo = id }"), "a search from a page lands on a rebuilt page unscrolled")
+        // Inside `.id(path)`: applied after it, the scroll back ran once and never again as the path changed between two
+        // pages below the first (measured in a scratch harness, 2026-11-11).
+        XCTAssertTrue(settings.contains(".onAppear { scrollToReturnTarget(proxy) }\n                .id(path)"),
+                      "going back between two pages below the first does not scroll to the row it came from")
+        XCTAssertTrue(settings.contains("guard pageInPlace != nil else { return }\n            path = []\n            returnTo = id"),
+                      "a search from a page lands on a rebuilt page unscrolled")
         XCTAssertTrue(settings.contains("path.removeAll { $0 == .task(task.id) }"), "a deleted task's page stays open")
         XCTAssertTrue(try Self.read(Self.overviewPath).contains(".settingsHighlight(id: SettingsDeepLink.tasksListOpenID)"),
                       "the list's tabs no longer carry its deep link")
@@ -267,7 +272,7 @@ final class TaskListRulesTests: XCTestCase {
         XCTAssertTrue(menu.contains("case .taskList: return SettingsDeepLink.tasksListOpenID"),
                       "Show all in Brain lands on the row, not the Task list")
         let landing = try XCTUnwrap(Self.block(after: ".onChange(of: highlights.activeHighlightID, initial: true)", in: settings))
-        XCTAssertTrue(landing.contains("path = []\n            if id == SettingsDeepLink.tasksListOpenID { listTab = .active }"),
+        XCTAssertTrue(landing.contains("if id == SettingsDeepLink.tasksListOpenID { listTab = .active }\n            guard pageInPlace != nil else { return }\n            path = []"),
                       "a link does not return to the first page, or the list's own does not show the open tasks")
         XCTAssertTrue(reminders.contains("otherwise: { TasksBrainDestination.taskList.open() },"),
                       "a Start that cannot start is a silent no-op")

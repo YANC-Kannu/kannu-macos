@@ -583,7 +583,10 @@ value, `TasksPageData`, read as the page appears and again as Brain comes back o
 manager's `objectWillChange`, throttled to 500 ms and assigned only on a change, in a `.task(id:)` on
 `BrainVisibility.isOnScreen` and the Tasks switch, so with tasks off nothing reads the task file; the header's "the
 list has been read" comes through one subscription to `$loadState` that drops repeats. A press calls the manager, then
-the page reads it again at once, outside the throttle, so a second click never waits behind the first. Two parts
+the page reads it again at once, outside the throttle, so a second click never waits behind the first; so does a
+sheet's close and the delete alert. What the page works out from every task (the interrupted sessions, the Tag filter's
+choices, the source counts) is worked out in the copy, once a change, not in `body` once a keystroke in Find, and the
+Sources rows' Defaults display copies are in it too, since the page redraws only when the copy changed. Two parts
 follow the manager as they always did, and say so: Time to log's cards are the notch popover's own
 (`WorklogDraftCard`), built only while an entry waits, which the copy says; and the pages below the first (a source's,
 a project's, a task's, also beside the list) edit what they show in place. The manager publishes only on an edit, a
@@ -795,11 +798,16 @@ section describes it, it does not define it.
     `ViewThatFits` (it builds every layout) or `.inspector`. The list keeps the first page whole,
     its settings under it, in a column of the list's width with the inset on each side; the item's
     page is a `SettingsPage` with no inset of its own, so the list's trailing inset is the gap, and
-    its scroll view runs to the panel's edge. The item opened shows selected in the list (the one
-    selected look, a 2-pt ring, and `isSelected` for VoiceOver); with none open, its place says so.
-    Pages below the first (a source's, a project's, a task opened from them) are the in-tab swap
-    at every width. A search or deep link returns to the first page at both widths, closing the
-    page beside the list.
+    its scroll view runs to the panel's edge. The first page is one stack's first child at both
+    widths, so crossing the width keeps it, scrolled where it was. The item opened shows selected in
+    the list (the one selected look, a 2-pt ring, and `isSelected` for VoiceOver, on a card named for
+    its task); with none open, its place says so. Pages below the first (a source's, a project's, a
+    task opened from them) are the in-tab swap at every width. A search or deep link lands on the
+    first page's row at both widths: a page in the list's place closes, and a task's page beside the
+    list stays, the list being on screen.
+  - Going back scrolls by an `onAppear` inside the page's `.id(path)`: applied after it, it runs
+    once and never again as the path moves between two pages below the first (measured,
+    2026-11-11).
   - The list's filters are view-only: they narrow it and nothing else. While its Tag filter or its
     Find field is set, a "Filtered" row above the rows says so ("3 of 12 tasks", of the tab's own
     tasks), with a Show All that resets the filter and empties Find. The list shows no total

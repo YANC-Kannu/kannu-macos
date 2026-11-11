@@ -116,7 +116,7 @@ struct TasksOverview: View {
     /// Every tag and label on any task Kannu holds, not what the list shows, so a choice never vanishes from its own
     /// list; a saved choice no task has any more still shows, so the button is never blank.
     private var tagChoices: [String] {
-        var choices = [TaskFacets.anyTag] + TaskFacets.filterTags(in: data.tasks)
+        var choices = [TaskFacets.anyTag] + data.filterTags
         if tagFilter != TaskFacets.anyTag, !choices.contains(where: { $0.lowercased() == tagFilter.lowercased() }) {
             choices.append(tagFilter)
         }
@@ -231,7 +231,7 @@ struct TasksOverview: View {
     /// Segments Kannu left open by a quit or a crash: an end time to set, or the session to discard.
     @ViewBuilder
     private var interruptedSection: some View {
-        let interrupted = TasksManager.interruptedSessions(in: data.tasks)
+        let interrupted = data.interrupted
         if !interrupted.isEmpty {
             SettingsSection {
                 ForEach(interrupted) { entry in
@@ -377,7 +377,7 @@ private struct TaskClosedCard: View {
             SettingsRowLabel(Text(verbatim: task.title), description: Text(verbatim: line))
                 .lineLimit(2)
         }
-        .taskCard(selected: isSelected)
+        .taskCard(selected: isSelected, label: task.title)
         .contextMenu {
             Button("Show Details") { context.open(.task(task.id)) }
             Divider()
@@ -469,7 +469,7 @@ struct TasksMessage<Action: View>: View {
 /// the settings below all read it; nothing on the first page reads the manager's state another way, but Time to log's
 /// cards (`TasksOverview`).
 struct TasksPageData: Equatable {
-    /// Every task Kannu holds, in the user's order: the Tag filter's choices, Tag colours and the interrupted sessions.
+    /// Every task Kannu holds, in the user's order.
     var tasks: [TaskItem] = []
     /// What each tab starts from: the open tasks of every connected source in the task order (`activeTasks`), the ones
     /// closed lately and the archive.
@@ -493,6 +493,18 @@ struct TasksPageData: Equatable {
     var sources: [TaskSource] = []
     var syncStates: [TaskSource: SourceSyncState] = [:]
     var tokenRemovalFailed: Set<TaskSource> = []
+    /// The connected sources, what each one's row says and which sync: the Defaults display copies, read with the rest.
+    /// A change there publishes through the manager, and the page redraws only when the copy changed, so they are in it.
+    var connected: [TaskSource] = []
+    var sourceStatus: [TaskSource: String] = [:]
+    var syncOn: Set<TaskSource> = []
+    /// What the page works out from every task, here once a copy rather than in `body` once a keystroke in Find: the
+    /// interrupted sessions, the Tag filter's choices (tags and labels), Tag colours' tags (the user's own) and each
+    /// source's open count.
+    var interrupted: [TasksManager.InterruptedSession] = []
+    var filterTags: [String] = []
+    var ownTags: [String] = []
+    var sourceCounts: [TaskSource: Int] = [:]
 
     init() {}
 
@@ -516,6 +528,13 @@ struct TasksPageData: Equatable {
         sources = manager.syncs.map { $0.source }
         syncStates = Dictionary(uniqueKeysWithValues: sources.map { ($0, manager.syncState($0)) })
         tokenRemovalFailed = Set(sources.filter { manager.tokenRemovalFailed($0) })
+        connected = sources.filter { $0.isConnected }
+        sourceStatus = Dictionary(uniqueKeysWithValues: connected.map { ($0, TaskSourceStatus.text(for: $0)) })
+        syncOn = Set(connected.filter { $0.isSyncOn })
+        interrupted = manager.interruptedSessions
+        filterTags = TaskFacets.filterTags(in: tasks)
+        ownTags = TaskFacets.tags(in: tasks)
+        sourceCounts = TaskFacets.sourceCounts(active)
     }
 
     /// The tasks a tab starts from, before Find and the Tag filter.

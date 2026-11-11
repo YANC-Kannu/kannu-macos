@@ -142,7 +142,7 @@ struct TaskRowCards: View {
                 taskLabel(row, now: Date())
             }
         }
-        .taskCard(selected: selected == task.id)
+        .taskCard(selected: selected == task.id, label: task.title)
         .contextMenu {
             Button("Show Details") { context.open(.task(task.id)) }
             Divider()
@@ -306,8 +306,9 @@ private struct TaskRowTagChip: View {
 extension View {
     /// A list's row as a soft card, its rows `listRowGap` apart: the card's colour and radius, the hero's inset, at
     /// least `listRowHeight` tall. Selected, the one selected look, a 2-pt ring (docs/SETTINGS.md, "The design
-    /// system"), told to VoiceOver.
-    func taskCard(selected: Bool) -> some View {
+    /// system"), told to VoiceOver. For VoiceOver the card is one group named for its task (`label`), so its ✓, ▶ and
+    /// › say whose they are.
+    func taskCard(selected: Bool, label: String) -> some View {
         let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
         return padding(.horizontal, SettingsMetrics.cardPadding)
             .padding(.vertical, SettingsMetrics.rowContent)
@@ -319,6 +320,7 @@ extension View {
                 }
             }
             .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(verbatim: label))
             .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

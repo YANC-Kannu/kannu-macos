@@ -117,32 +117,25 @@ struct TasksSettings: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            Group {
-                if let page = pageInPlace {
-                    SettingsPage {
-                        // The back row bare on the panel, a gap above the page's first card (the design review's
-                        // finding 24).
-                        VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
-                            backRow(from: page)
-                            VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
-                                pageContent(page)
-                            }
+            if let page = pageInPlace {
+                SettingsPage {
+                    // The back row bare on the panel, a gap above the page's first card (the design review's
+                    // finding 24).
+                    VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                        backRow(from: page)
+                        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+                            pageContent(page)
                         }
                     }
-                    // A page opens at its top.
-                    .id(path)
-                } else if enableTasks && showsPageBeside {
-                    listAndPage
-                } else {
-                    firstPage
                 }
-            }
-            // The page just built has appeared: the row it should show, in view. After this
-            // update, so the row exists.
-            .onAppear {
-                guard let target = returnTo else { return }
-                returnTo = nil
-                DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
+                // The page just built has appeared: the row it should show, in view. Inside `.id(path)`, so it runs
+                // again for each page, also between two pages below the first.
+                .onAppear { scrollToReturnTarget(proxy) }
+                // A page opens at its top.
+                .id(path)
+            } else {
+                firstPageAndTask
+                    .onAppear { scrollToReturnTarget(proxy) }
             }
         }
         // D1: the panel's width decides where a task's page goes, from this one measurement (`ListDetailLayout`).
@@ -182,15 +175,17 @@ struct TasksSettings: View {
                 copyFromStore()
             }
         }
-        // Search and deep links land on the first page's rows, never inside a page below it. Settings scrolled before
-        // the page changed, so a first page built anew scrolls to the row again. `initial`: the link may arrive before
-        // this tab is built. The list's own link (the notch's "Show all in Brain", a reminder's click) shows Active.
+        // Search and deep links land on the first page's rows, never inside a page below it. `initial`: the link may
+        // arrive before this tab is built. The list's own link (the notch's "Show all in Brain", a reminder's click)
+        // shows Active. A page in the list's place closes, and the first page, built anew, scrolls to the row again,
+        // since Settings scrolled before it existed; a task's page beside the list stays, the first page being on
+        // screen beside it (the header's gear among such links).
         .onChange(of: highlights.activeHighlightID, initial: true) { _, id in
             guard let id, id.hasPrefix(highlightID("")) else { return }
-            let rebuildsFirstPage = pageInPlace != nil
-            path = []
             if id == SettingsDeepLink.tasksListOpenID { listTab = .active }
-            if rebuildsFirstPage { returnTo = id }
+            guard pageInPlace != nil else { return }
+            path = []
+            returnTo = id
         }
         // Tasks off: every reminder, waiting or on screen, is taken back, and the tree closes.
         // `TaskReminders` only — this never builds `TasksManager`.
@@ -198,7 +193,8 @@ struct TasksSettings: View {
             path = []
             if !isOn { TaskReminders.withdrawAll() }
         }
-        .sheet(item: $sheet) { sheet in
+        // A sheet writes through the manager; as it closes, the page reads it again at once, as after a press.
+        .sheet(item: $sheet, onDismiss: copyFromStore) { sheet in
             switch sheet {
             case .connect(.jira):
                 JiraConnectSheet()
@@ -221,6 +217,7 @@ struct TasksSettings: View {
         ) { task in
             Button("Delete", role: .destructive) {
                 TasksManager.shared.delete(task.id)
+                copyFromStore()
                 // Its page, if open, has nothing left to show.
                 path.removeAll { $0 == .task(task.id) }
             }
@@ -244,8 +241,18 @@ struct TasksSettings: View {
         }
     }
 
-    /// The one place the first page reads the manager's state: a fresh copy, assigned only when it changed.
+    /// After the page just built has appeared: the row it should show, in view, the one that opened the page left or the
+    /// one a search names. After this update, so the row exists.
+    private func scrollToReturnTarget(_ proxy: ScrollViewProxy) {
+        guard let target = returnTo else { return }
+        returnTo = nil
+        DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
+    }
+
+    /// The one place the first page reads the manager's state: a fresh copy, assigned only when it changed. Never with
+    /// tasks off, which would build the task list.
     private func copyFromStore() {
+        guard enableTasks else { return }
         let latest = TasksPageData(TasksManager.shared)
         if latest != tasks { tasks = latest }
     }
@@ -288,34 +295,46 @@ struct TasksSettings: View {
         }
     }
 
-    /// The first page with a task's page beside it (layout-proposal D1): the list in its own column, the page an inset
-    /// after it, as wide as a settings column. Two scroll views, so the page stays put while the list scrolls, and the
-    /// page's runs to the panel's edge. With no task open, the page's place says so.
-    private var listAndPage: some View {
+    /// The first page, and while the panel holds both (layout-proposal D1) a task's page beside it: the list in its own
+    /// column, the page an inset after it, as wide as a settings column. Two scroll views, so the page stays put while
+    /// the list scrolls, and the page's runs to the panel's edge. The first page is the stack's first child either way,
+    /// so crossing the width keeps it, scrolled where it was.
+    private var firstPageAndTask: some View {
         HStack(alignment: .top, spacing: 0) {
             firstPage
-                .frame(width: inset + ListDetailLayout.listWidth + inset)
-            Group {
-                if let id = taskBeside {
-                    SettingsPage {
-                        TaskDetailPage(taskID: id, context: firstPageContext)
-                    }
-                    // A task's page opens at its top.
-                    .id(id)
-                } else {
-                    SettingsPage {
-                        SettingsSection {
-                            TasksMessage(title: String(localized: "No task selected"),
-                                         message: String(localized: "Click › on a task to see it here.")) {
-                                EmptyView()
-                            }
-                        }
+                .frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)
+            if showsListAndPage {
+                taskPageBeside
+                    // The list's own trailing inset is the space between the two.
+                    .environment(\.settingsPageInset, 0)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// Wide enough for a task's page beside the list, with tasks on.
+    private var showsListAndPage: Bool {
+        enableTasks && showsPageBeside
+    }
+
+    /// The task's page beside the list, or, while none is open, what its place says.
+    @ViewBuilder
+    private var taskPageBeside: some View {
+        if let id = taskBeside {
+            SettingsPage {
+                TaskDetailPage(taskID: id, context: firstPageContext)
+            }
+            // A task's page opens at its top.
+            .id(id)
+        } else {
+            SettingsPage {
+                SettingsSection {
+                    TasksMessage(title: String(localized: "No task selected"),
+                                 message: String(localized: "Click › on a task to see it here.")) {
+                        EmptyView()
                     }
                 }
             }
-            // The list's own trailing inset is the space between the two.
-            .environment(\.settingsPageInset, 0)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -421,6 +440,7 @@ struct TasksSettings: View {
         default:
             break
         }
+        copyFromStore()
     }
 }
 
@@ -499,9 +519,9 @@ private struct TaskSourcesSection: View {
     let context: TasksPageContext
 
     var body: some View {
-        let counts = TaskFacets.sourceCounts(data.active)
-        let connected = data.sources.filter(\.isConnected)
-        let addable = data.sources.filter { !$0.isConnected }
+        let counts = data.sourceCounts
+        let connected = data.connected
+        let addable = data.sources.filter { !connected.contains($0) }
         SettingsSection {
             LabeledContent {
                 openButton(count: counts[.local] ?? 0, page: .source(.local))
@@ -573,13 +593,13 @@ private struct TaskSourcesSection: View {
         let problem = TaskSourceStatus.problem(state, source: source)
         let status = problem != nil || state == .needsKeychainApproval
             ? String(localized: "Needs attention")
-            : TaskSourceStatus.text(for: source)
+            : data.sourceStatus[source] ?? ""
         return LabeledContent {
             openButton(count: count, page: .source(source))
         } label: {
             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                 Text(verbatim: source.title)
-                SettingsStatusText(status, isReady: source.isSyncOn && problem == nil)
+                SettingsStatusText(status, isReady: data.syncOn.contains(source) && problem == nil)
             }
         }
         // A sync of its own only when the last is stale, as the page opens: never on a scroll, which a plain page has
@@ -612,7 +632,7 @@ private struct TaskTagColorsSection: View {
     @State private var showsTagColors = false
 
     var body: some View {
-        let tags = TaskFacets.tags(in: data.tasks)
+        let tags = data.ownTags
         SettingsSection {
             DisclosureGroup(isExpanded: $showsTagColors) {
                 if tags.isEmpty {
