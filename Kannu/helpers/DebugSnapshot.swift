@@ -65,6 +65,10 @@ enum DebugSnapshots {
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
         AgentsOverview.snapshotFixture = agents
         ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
+        // Brain › Security's product and what its settings read from the findings store, the same way: none of this
+        // Mac's findings, scans, policy or analyses.
+        let security = DebugSnapshotFixtures.securityOverview(findings: 3, now: Date())
+        SecurityOverview.snapshotFixture = security
         // Brain › Usage's product likewise: fixture switches, readings and models, never this Mac's.
         let usagePage = DebugSnapshotFixtures.usageOverview(providers: 3, now: Date())
         UsageOverview.snapshotFixture = usagePage
@@ -202,6 +206,17 @@ enum DebugSnapshots {
             }
         }
         AgentsOverview.snapshotFixture = agents
+        // Brain › Security with no finding, one and several, at the window's first size, as Agents' boards. Fixtures only.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("security\(count)") == true {
+            SecurityOverview.snapshotFixture = DebugSnapshotFixtures.securityOverview(findings: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentSecurity).environmentObject(viewModel)),
+                             name: "security\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        SecurityOverview.snapshotFixture = security
         // Brain › Usage with no provider on, one and three, the same way, and three with Agent Status off, which stops the
         // usage store. The settings rows below the product still read this Mac's switches, as Agents' do.
         let usageBoards: [(name: String, providers: Int, agentStatusOn: Bool)] = [
@@ -1077,6 +1092,51 @@ enum DebugSnapshotFixtures {
             nearLimit: [reading],
             security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
         )
+    }
+
+    /// Brain › Security's product with no finding, one and several. None: ADR Discovery not found, so the page offers
+    /// Connect ADR, with no scan and no policy yet. One: the high unpinned server from a full scan, the next automatic
+    /// scan, and the rules board's policy. Several: all four findings with the `.env` read snoozed, so three wait and
+    /// one is acknowledged; a partial scan with two uncatalogued tools whose last Kannu run failed; and, with session
+    /// analysis on, two analyses, one of them malicious. On the main actor, as the store's grouping is.
+    @MainActor
+    static func securityOverview(findings count: Int, now: Date) -> SecurityOverviewFixture {
+        var data = SecurityPageData()
+        guard count > 0 else { return SecurityOverviewFixture(data: data, adrConnected: false, detectionEnabled: false) }
+        let all = self.findings
+        let several = count > 1
+        let snoozes = several ? [SecurityFindingSnooze(id: all[3].groupID, until: now.addingTimeInterval(86_400))] : []
+        data.groups = SecurityFindingsStore.buildGroupRanking(findings: several ? all : [all[0]], acknowledgedGroups: [:],
+                                                             legacyAcknowledged: [], snoozes: snoozes, now: now)
+        let scanned = now.addingTimeInterval(-3 * 3600)
+        data.lastScan = ADRScanRecord(date: scanned, origin: .kannu, fileName: "snapshot-fixture.json", assetCount: 27,
+                                      findingCount: 1, reviewCount: several ? 2 : 0, coverageComplete: !several,
+                                      coverageGaps: several ? 4 : 0, catalogVersion: "2026.08.22", schemaVersion: "1.0")
+        data.reviewCount = several ? 2 : 0
+        data.lastKannuScanAt = scanned
+        data.automaticScansActive = true
+        // A failed run brings the next one forward, an hour out; otherwise a day after the last.
+        data.nextAutomaticScanAt = several ? now.addingTimeInterval(3600) : scanned.addingTimeInterval(24 * 3600)
+        data.consecutiveScanFailures = several ? 1 : 0
+        data.policyStatus = .success(agentPolicy)
+        if several {
+            data.analyses = [
+                ADRSessionAnalysis(conversationID: "fixture-analysis-1", chatName: "Research the API",
+                                   date: now.addingTimeInterval(-5400), isMalicious: true, confidence: 0.91,
+                                   tactic: "permission_abuse", explanation: "A fetched page told the agent to upload ~/.ssh.",
+                                   threatMessages: 3, totalMessages: 48, method: "reasoning", modelUsed: "claude-sonnet",
+                                   inputTokens: 41_200, outputTokens: 2_300, costUSD: 0.042, analysisSeconds: 74,
+                                   messagesAnalyzed: 48, inputCharacters: 118_000, transcriptBytes: 240_000,
+                                   triageEnabled: false, reportPath: nil),
+                ADRSessionAnalysis(conversationID: "fixture-analysis-2", chatName: "Fix the login flow",
+                                   date: now.addingTimeInterval(-26 * 3600), isMalicious: false, confidence: 0.08,
+                                   tactic: nil, explanation: "", threatMessages: 0, totalMessages: 112, method: "reasoning",
+                                   modelUsed: "claude-sonnet", inputTokens: 88_000, outputTokens: 1_900, costUSD: 0.061,
+                                   analysisSeconds: 96, messagesAnalyzed: 112, inputCharacters: 240_000,
+                                   transcriptBytes: 410_000, triageEnabled: false, reportPath: nil),
+            ]
+        }
+        return SecurityOverviewFixture(data: data, adrConnected: true, detectionEnabled: several)
     }
 
     /// Brain › Usage's product with no provider on, one or three. One is Claude alone, with the notch board's readings:
