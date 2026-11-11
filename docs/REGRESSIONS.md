@@ -1699,6 +1699,25 @@ nothing on it observes a usage store whole. New hooks: the overview's `onAppear`
 `.task`, and the header's `.task`; none loads a field. `UsagePageLiveDataRulesTests` holds each clause against planted
 offenders, and pins Refresh's press as the page's one way to a read (entry 8), so the rest of this entry holds.
 
+**2026-11-11 addendum: Notes' live data runs only while Brain is on screen, and the page starts no sync.** Brain › Notes
+is a product page now (`NotesOverview` above its settings, and a note's own page, `NotePage`, as an in-tab swap). The
+page before observed the sync manager, the notch's coordinator and its view model whole, and used neither of the last
+two, so a sync, a sneak peek or a change in the notch redrew it, Brain open or closed. Now the page holds one copy,
+`NotesPageData`, read as the page appears and again as Brain comes back on screen, then followed through
+`Defaults.publisher(keys:options: [])` for the notes and the sync's switch, scope and date, merged with the sync
+manager's `objectWillChange`, at most twice a second, in a `.task(id:)` on `BrainVisibility.isOnScreen` that returns at
+once while it is false. Off screen the copy stays as it was, and nothing on the page keeps a clock: a note's edit and the
+last sync are told by the time of day or the date, and the settings' Last synced row lost its relative date and its
+spinner. The notes are a fourth lazy list, and their rows have no hook. New hooks: the page's `onAppear`, which opens
+each visit on the list (a note left open would come back whole on a reopened Brain) and reads the copy; the list's
+`onAppear`, which scrolls back to the note just left; the page's `.task`; and a note's page's `.task(id:)`, which reads
+its image from its file once, off the main thread, as the notch's rows read their thumbnails; and New note's sheet's
+`onAppear`, which focuses its title, as New Task's does. None loads a field, and the sheet saves only on Add, through
+`NotesManager.save`. **It starts no sync**, unlike the notch's Notes tab, which syncs as it appears and so runs Notes'
+AppleScript: here a sync and Open in Notes are each a press. With a board's fixture set, the page reads no note, no sync state and no image file.
+**Not measured:** CPU with Notes open while a note is typed in the notch, and parked full screen in another Space.
+`NotesPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
@@ -1785,7 +1804,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in three long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor, or on Agents the findings store, whole (entry 22's last 2026-11-05 addendum, docs/SETTINGS.md "Live data"). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in four long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor, or on Agents the findings store, whole (entry 22's last 2026-11-05 addendum, docs/SETTINGS.md "Live data"). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

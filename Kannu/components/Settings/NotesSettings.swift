@@ -20,18 +20,34 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import Combine
 import Defaults
 import SwiftUI
 
+/// Brain › Notes, a product page: the notes lead (`NotesOverview`), and these settings follow. A note's › opens its own
+/// page in the tab (`NotePage`), an in-tab swap under a "‹ Notes" back row, as Brain › Tasks opens a task's page
+/// (docs/SETTINGS.md, "Section rules"). Search and deep links land on the settings below, so a Notes search or deep link
+/// returns the tab to the list first. Each visit opens on the list.
 struct NotesSettingsView: View {
-    @EnvironmentObject var vm: KannuViewModel
-    @ObservedObject var coordinator = KannuViewCoordinator.shared
-    @ObservedObject private var appleNotesSync = AppleNotesSyncManager.shared
+    @ObservedObject private var visibility = BrainVisibility.shared
+    @ObservedObject private var highlights = SettingsHighlightCoordinator.shared
     @Default(.enableNotes) private var enableNotes
     @Default(.enableAppleNotesSync) private var enableAppleNotesSync
-    @Default(.appleNotesLastSyncDate) private var appleNotesLastSyncDate
     @Default(.appleNotesSyncScope) private var appleNotesSyncScope
     @State private var confirmNarrowingScope = false
+    /// What the page shows from the saved notes and the sync, the list, a note's page and these settings alike: a copy,
+    /// never the notes or the sync manager themselves, which the page used to observe whole. Read as the page appears
+    /// and as Brain comes back on screen, then followed at most twice a second while it is on screen, and assigned only
+    /// when it changed. Off screen it stays as it was (docs/SETTINGS.md, "Live data").
+    @State private var data = NotesPageData()
+    /// The note whose page is open in the tab; nil is the list. Only the selection: the list-detail layout
+    /// (layout-proposal.md, D1) can show the same note beside the list.
+    @State private var openNoteID: UUID?
+    /// A note made in Apple Notes whose Delete waits for the question. On the tab, not on a row: the rows are lazy.
+    @State private var pendingDelete: NoteItem?
+    /// The row to bring back into view once the list has appeared: the note whose page was left, or the row a search
+    /// or a deep link names.
+    @State private var returnTo: AnyHashable?
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.notes.highlightID(for: title)
@@ -54,100 +70,205 @@ struct NotesSettingsView: View {
         )
     }
 
+    /// The open note, while Notes is on and the note is still saved.
+    private var openNote: NoteItem? {
+        guard enableNotes, let id = openNoteID else { return nil }
+        return data.notes.first { $0.id == id }
+    }
+
     var body: some View {
-        SettingsPage {
-            SettingsSection {
-                Defaults.Toggle(key: .enableNotes) {
-                    Text("Enable Notes")
+        ScrollViewReader { proxy in
+            Group {
+                if let note = openNote {
+                    SettingsPage {
+                        SettingsSection {
+                            TasksBackRow(parent: SettingsTab.notes.title) {
+                                returnTo = note.id
+                                openNoteID = nil
+                            }
+                        }
+                        NotePage(note: note, isReadOnly: data.isReadOnly(note), delete: delete)
+                    }
+                    .settingsPageTitle(note.title)
+                } else {
+                    // The product first, then its settings (docs/SETTINGS.md, "Product pages").
+                    SettingsProductPage(settingsTitle: String(localized: "Notes settings")) {
+                        NotesOverview(data: data, open: { openNoteID = $0.id }, delete: delete)
+                    } settings: {
+                        settingsSections
+                    }
+                    .settingsPageTitle(SettingsTab.notes.title)
+                    // The list has appeared: the row it should show, in view. After this update, so the row exists.
+                    .onAppear {
+                        guard let target = returnTo else { return }
+                        returnTo = nil
+                        DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
+                    }
                 }
-                if enableNotes {
-                    Defaults.Toggle(key: .enableNotePinning) {
-                        Text("Enable Note Pinning")
+            }
+            // A page opens at its top.
+            .id(openNoteID)
+        }
+        .navigationTitle("Notes")
+        // Search and deep links land on the settings below the list, never on a note's page. Settings scrolled before
+        // the list came back, so the list scrolls to the row again. `initial`: the link may arrive before this tab is
+        // built.
+        .onChange(of: highlights.activeHighlightID, initial: true) { _, id in
+            guard let id, id.hasPrefix(highlightID("")), openNoteID != nil else { return }
+            openNoteID = nil
+            returnTo = id
+        }
+        .onChange(of: enableNotes) { _, _ in
+            openNoteID = nil
+        }
+        .alert("Delete this note?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
+               presenting: pendingDelete) { note in
+            Button("Delete", role: .destructive) { remove(note) }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("It was made in Apple Notes, and it also moves to Recently Deleted there.")
+        }
+        .onAppear {
+            // Each visit opens on the list: `onAppear` runs again on every reopening (docs/REGRESSIONS.md, entry 22),
+            // and a note left open would come back whole on a Brain that can be on a shared screen.
+            openNoteID = nil
+            returnTo = nil
+            #if DEBUG
+            if let fixture = NotesOverview.snapshotFixture {
+                data = fixture.data
+                openNoteID = fixture.openNoteID
+                return
+            }
+            #endif
+            // One read, not a subscription: the page opens on what is saved, and the subscription below takes over once
+            // Brain is on screen.
+            copyFromStores()
+        }
+        .task(id: visibility.isOnScreen) {
+            #if DEBUG
+            if NotesOverview.snapshotFixture != nil { return }
+            #endif
+            guard visibility.isOnScreen else { return }
+            // Back on screen: what changed while Brain was not, which neither feed will send again.
+            copyFromStores()
+            // The notes and the sync's switch, scope and date tell through Defaults after a change; the sync's own state
+            // through `objectWillChange` before one. Read through the run loop, the copy comes after both.
+            for await _ in Defaults.publisher(keys: .savedNotes, .enableAppleNotesSync, .appleNotesSyncScope, .appleNotesLastSyncDate,
+                                              options: [])
+                .merge(with: AppleNotesSyncManager.shared.objectWillChange)
+                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+                .values {
+                copyFromStores()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var settingsSections: some View {
+        SettingsSection {
+            Defaults.Toggle(key: .enableNotes) {
+                Text("Enable Notes")
+            }
+            .settingsHighlight(id: highlightID("Enable Notes"))
+            if enableNotes {
+                Defaults.Toggle(key: .enableNotePinning) {
+                    Text("Enable note pinning")
+                }
+                Defaults.Toggle(key: .enableNoteSearch) {
+                    Text("Enable note search")
+                }
+                Defaults.Toggle(key: .enableNoteColorFiltering) {
+                    Text("Enable color filtering")
+                }
+                Defaults.Toggle(key: .enableCreateFromClipboard) {
+                    Text("Create notes from the clipboard")
+                }
+                Defaults.Toggle(key: .enableNoteCharCount) {
+                    Text("Show character count")
+                }
+            }
+        } header: {
+            SettingsSectionHeader("General")
+        }
+
+        if enableNotes {
+            SettingsSection {
+                Defaults.Toggle(key: .enableAppleNotesSync) {
+                    Text("Sync with Apple Notes")
+                }
+                .settingsHighlight(id: highlightID("Sync with Apple Notes"))
+                .onChange(of: enableAppleNotesSync) { _, isOn in
+                    // Turning it on is a click on the feature's own switch: after a Not now on
+                    // "Control Notes", this is where macOS is asked again.
+                    if isOn, LaunchPermissionManager.answer(for: .notesAutomation) == .deferred {
+                        LaunchPermissionManager.shared.request(.notesAutomation, musicSource: Defaults[.mediaController])
                     }
-                    Defaults.Toggle(key: .enableNoteSearch) {
-                        Text("Enable Note Search")
+                }
+
+                if enableAppleNotesSync {
+                    SettingsRow("Notes to sync", description: appleNotesSyncScope.description) {
+                        SettingsSelect("Notes to sync", selection: scopeSelection, options: AppleNotesSyncScope.allCases,
+                                       optionTitle: \.localizedName)
                     }
-                    Defaults.Toggle(key: .enableNoteColorFiltering) {
-                        Text("Enable Color Filtering")
+                    .settingsHighlight(id: highlightID("Notes to sync"))
+                    .alert("Sync only the Kannu folder?", isPresented: $confirmNarrowingScope) {
+                        Button("Sync Kannu folder") {
+                            appleNotesSyncScope = .kannuFolder
+                            NotesManager.shared.syncWithAppleNotes()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Notes made in Apple Notes outside the Kannu folder leave the notch. They stay in Apple Notes.")
                     }
-                    Defaults.Toggle(key: .enableCreateFromClipboard) {
-                        Text("Enable Create from Clipboard")
+
+                    // When it last synced, by the time of day, and Sync now, off while a sync runs. The list above says
+                    // when one is running.
+                    SettingsActionRow("Last synced", description: data.lastSync.map { NotesOverview.when($0, now: Date()) }
+                                      ?? String(localized: "Not synced yet")) {
+                        Button("Sync now") {
+                            NotesManager.shared.syncWithAppleNotes()
+                        }
+                        .disabled(data.isSyncing)
                     }
-                    Defaults.Toggle(key: .enableNoteCharCount) {
-                        Text("Show Character Count")
+                    .settingsHighlight(id: highlightID("Sync Now"))
+
+                    if let error = data.lastError {
+                        SettingsErrorText(error)
                     }
                 }
             } header: {
-                SettingsSectionHeader("General")
+                SettingsSectionHeader("Apple Notes")
             } footer: {
-                SettingsFooter("Customize how you organize and create notes. Enabling color filtering and search helps manage large lists.")
-            }
-
-            if enableNotes {
-                SettingsSection {
-                    Defaults.Toggle(key: .enableAppleNotesSync) {
-                        Text("Sync with Apple Notes")
-                    }
-                    .settingsHighlight(id: highlightID("Sync with Apple Notes"))
-                    .onChange(of: enableAppleNotesSync) { _, isOn in
-                        // Turning it on is a click on the feature's own switch: after a Not now on
-                        // "Control Notes", this is where macOS is asked again.
-                        if isOn, LaunchPermissionManager.answer(for: .notesAutomation) == .deferred {
-                            LaunchPermissionManager.shared.request(.notesAutomation, musicSource: Defaults[.mediaController])
-                        }
-                    }
-
-                    if enableAppleNotesSync {
-                        SettingsRow("Notes to sync", description: appleNotesSyncScope.description) {
-                            SettingsSelect("Notes to sync", selection: scopeSelection, options: AppleNotesSyncScope.allCases,
-                                           optionTitle: \.localizedName)
-                        }
-                        .settingsHighlight(id: highlightID("Notes to sync"))
-                        .alert("Sync Only the Kannu Folder?", isPresented: $confirmNarrowingScope) {
-                            Button("Sync Kannu Folder") {
-                                appleNotesSyncScope = .kannuFolder
-                                NotesManager.shared.syncWithAppleNotes()
-                            }
-                            Button("Cancel", role: .cancel) {}
-                        } message: {
-                            Text("Notes made in Apple Notes outside the Kannu folder leave the notch. They stay in Apple Notes.")
-                        }
-
-                        LabeledContent {
-                            HStack(spacing: 8) {
-                                if appleNotesSync.isSyncing {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                }
-                                Button("Sync Now") {
-                                    NotesManager.shared.syncWithAppleNotes()
-                                }
-                                .disabled(appleNotesSync.isSyncing)
-                            }
-                        } label: {
-                            if let lastSync = appleNotesLastSyncDate {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Last synced")
-                                    Text(lastSync, style: .relative)
-                                        .settingsDescriptionStyle()
-                                }
-                            } else {
-                                Text("Not synced yet")
-                            }
-                        }
-                        .settingsHighlight(id: highlightID("Sync Now"))
-
-                        if let error = appleNotesSync.lastError {
-                            SettingsErrorText(error)
-                        }
-                    }
-                } header: {
-                    SettingsSectionHeader("Apple Notes")
-                } footer: {
-                    SettingsFooter("Two-way sync with the macOS Notes app. Notes made in Kannu go to the Kannu folder in Notes. Kannu asks macOS to let it control Notes the first time it syncs, or on the Permissions row in Brain › Settings › General.")
+                SettingsFooterStack {
+                    SettingsFooter("Notes made in Kannu go to the Kannu folder in Notes.")
+                    SettingsFooter("macOS asks once before Kannu can control Notes.")
                 }
             }
         }
-        .navigationTitle("Notes")
+    }
+
+    /// The one place the page reads the notes and the sync: a fresh copy, assigned only when it changed. A note no longer
+    /// saved, deleted here, in the notch or by a sync, closes its page.
+    private func copyFromStores() {
+        let latest = NotesPageData(AppleNotesSyncManager.shared)
+        if latest != data { data = latest }
+        if let id = openNoteID, !data.notes.contains(where: { $0.id == id }) {
+            openNoteID = nil
+        }
+    }
+
+    /// Delete, from a row's menu or a note's page. A note made in Apple Notes asks first, since it goes to Recently
+    /// Deleted there too, as the notch's rows ask; any other goes at once, as there.
+    private func delete(_ note: NoteItem) {
+        if data.isReadOnly(note) {
+            pendingDelete = note
+        } else {
+            remove(note)
+        }
+    }
+
+    private func remove(_ note: NoteItem) {
+        if openNoteID == note.id { openNoteID = nil }
+        NotesManager.shared.delete(note)
     }
 }
