@@ -187,6 +187,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
     ]
 
     func testNoRowPadsItself() {
@@ -487,6 +488,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
         "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {
