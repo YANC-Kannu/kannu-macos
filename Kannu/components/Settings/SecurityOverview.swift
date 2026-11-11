@@ -70,8 +70,10 @@ struct SecurityOverview: View {
                     }
                 }
             } else {
-                if !data.groups.isEmpty || data.hasAcknowledgements {
-                    SecurityCountStrip(groups: data.groups, showsAgain: data.hasAcknowledgements)
+                // Gone while all three counts are zero: every group is to review or acknowledged, and High is a part of
+                // To review.
+                if !data.groups.isEmpty {
+                    SecurityCountStrip(groups: data.groups)
                 }
                 findings
                 SecurityStatusRow(data: data, connected: Self.adrConnected(adr))
@@ -203,10 +205,9 @@ private struct SecurityVerb: View {
 // MARK: - The count strip
 
 /// How many findings wait for review, how many of them are high, and how many are acknowledged or snoozed, with the way to
-/// show those again. Each count over its label, as the hero's figures read.
+/// show those again while there are any. Each count over its label, as the hero's figures read.
 private struct SecurityCountStrip: View {
     let groups: SecurityFindingGroups
-    let showsAgain: Bool
 
     var body: some View {
         HStack(spacing: SettingsTheme.sectionGap) {
@@ -214,7 +215,8 @@ private struct SecurityCountStrip: View {
             count(groups.pendingHighCount, label: AgentSecurityFinding.Severity.high.label)
             count(groups.acknowledged.count, label: String(localized: "Acknowledged"))
             Spacer(minLength: SettingsMetrics.rowContent)
-            if showsAgain {
+            // Only while a group is acknowledged or snoozed: an acknowledgement whose finding is gone brings nothing back.
+            if !groups.acknowledged.isEmpty {
                 Button("Show acknowledged and snoozed again") { SecurityFindingsStore.shared.clearAcknowledgements() }
                     .controlSize(.small)
             }
@@ -408,8 +410,6 @@ struct SecurityPageData: Equatable {
     var groups = SecurityFindingGroups(rows: [])
     /// Chats that have a card now, for a finding's Open Chat.
     var chatIDs: Set<String> = []
-    /// Anything acknowledged or snoozed, so "Show acknowledged and snoozed again" has something to bring back.
-    var hasAcknowledgements = false
     var snapshotError: String?
     /// Uncatalogued AI tools in the newest snapshot.
     var reviewCount = 0
@@ -432,7 +432,6 @@ struct SecurityPageData: Equatable {
     init(_ store: SecurityFindingsStore) {
         groups = store.groupRanking
         chatIDs = store.chatConversationIDs
-        hasAcknowledgements = !store.acknowledgedIDs.isEmpty || !store.acknowledgedGroups.isEmpty || !store.snoozes.isEmpty
         snapshotError = store.snapshotError
         reviewCount = store.reviewQueue.count
         lastScan = store.lastScan

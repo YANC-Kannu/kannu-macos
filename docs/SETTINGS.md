@@ -365,7 +365,8 @@ the redesign plan gives Usage, Timer, Clipboard and Notes theirs in Stage 4b, an
   `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
   caffeinate link landing below the product.
 - **Security** leads with a count strip: how many findings wait for review, how many of them are high, and how many are
-  acknowledged or snoozed, with "Show acknowledged and snoozed again"; it shows while there is anything to count. Then
+  acknowledged or snoozed, with "Show acknowledged and snoozed again" while any are; it is gone while all three are
+  zero. Then
   "Security findings": the findings, worst first, in their lazy list (above, "Pages and sections"), or in their place
   the empty state, "No findings yet" before any scan and "No open findings" after, with its one line and the page's
   verb. Then a status row of three equal cells, in the settings' own words: the newest scan result (orange when its
@@ -406,13 +407,15 @@ checked against planted offenders:
    on a long turn, as it does for the notch. **Brain › Security** follows that store the same way for its whole page:
    `AgentSecuritySettings` copies what the product and the settings show into one value, `SecurityPageData`, through
    `objectWillChange` on the same throttle, assigned only on a change, and hands it to `SecurityOverview`; its header
-   follows `$isScanning` through `removeDuplicates()`. Nothing on the page observes the store, keeps a reference to it
+   follows `$isScanning` through `removeDuplicates()`. So the settings row's Scan now, which reads the copy, can turn
+   off up to 500 ms after the header's; `runScanNow` returns at once while a scan runs, so a press in that gap starts no
+   second scan. Nothing on the page observes the store, keeps a reference to it
    or reads its state past that copy; a press calls its methods. `ADRConnection`, which publishes only around a check
    of ADR's tools, is observed directly.
 2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
-   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Security's
-   is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps its loop in a
-   `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
+   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Agents'
+   Security cell's is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps
+   its loop in a `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
    (`windowDidChangeOcclusionState`): false while Brain is closed, minimised, hidden with the app, fully covered or in
    another Space, where a full-screen Brain keeps `isVisible` true. Opening and closing set it too, rather than wait
    for that change, which can come late, or not at all for a window never shown. It starts false, so nothing live

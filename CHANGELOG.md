@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-06 - Answer the review of Brain's Security page
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
+- **Changes:**
+  - The count strip is gone while to review, high and acknowledged are all zero. "Show acknowledged and snoozed again"
+    shows only while a finding is acknowledged or snoozed, not for an acknowledgement whose finding is gone.
+  - `SecurityPageLiveDataRulesTests` holds each loop to its job: the page's takes a fresh copy, the header's passes
+    the scan flag on. It also allows only the store's press methods and the two subscriptions by name, so a value the
+    store gains later cannot be read past the copy. Each rule has a planted offender.
+  - docs/SETTINGS.md: the settings row's Scan now can turn off up to 500 ms after the header's, and `runScanNow`
+    refuses a second scan; "Live data" names Agents' Security cell where it read as the page; the strip's rule.
+
 ### 2026-11-06 - Brain's Security page leads with its findings
 - **Developer label:** Brain redesign plan: Stage 4b, the Security product page
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own

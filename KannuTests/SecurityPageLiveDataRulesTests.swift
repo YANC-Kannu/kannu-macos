@@ -36,9 +36,27 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
     private static let findingsFeed = #"SecurityFindingsStore\.shared\.objectWillChange\s*\.throttle\(for: \.milliseconds\(500\), scheduler: RunLoop\.main, latest: true\)\s*\.values"#
     /// The header's: whether a scan runs, passed on only when that changes.
     private static let scanningFeed = #"SecurityFindingsStore\.shared\.\$isScanning\s*\.removeDuplicates\(\)\s*\.values"#
-    /// The store's state, which only the copy may read: its published values, what is built from them, and the methods
-    /// that read them.
-    private static let storeState = #"SecurityFindingsStore\.shared\.(?:findings|reviewQueue|lastScan|snapshotError|acknowledgedIDs|acknowledgedGroups|snoozes|isScanning|lastKannuScanAt|lastScanError|nextAutomaticScanAt|automaticScansActive|consecutiveScanFailures|analyses|analyzingConversationIDs|chatConversationIDs|lastAnalysisError|agentPolicyStatus|groupRanking|ranking|hasChat|isAnalyzing|analysis)\b"#
+    /// All the page may name on the store: the methods a press calls, and the two subscriptions. Anything else there is
+    /// state, which only the copy reads, so a value the store gains later is caught too. `agentPolicyImportError` may
+    /// only be reset, as the policy's visit does.
+    private static let allowedStoreNames: Set<String> = [
+        "runScanNow", "copyAgentPrompt", "acknowledgeGroup", "snooze", "openChat", "clearAcknowledgements", "forgetAnalysis",
+        "checkAgentPolicy", "importPolicyFile", "openAgentPolicyDraft", "copyPolicyDraftingPrompt", "copyADRPolicyDraftingPrompt",
+        "directoryChanged", "objectWillChange", "$isScanning",
+    ]
+
+    /// Each name used on `SecurityFindingsStore.shared` that is not on that list, read with comments blanked.
+    static func storeNamesPastTheCopy(in code: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"SecurityFindingsStore\.shared\.(\$?\w+)(\s*=\s*nil\b)?"#) else {
+            return ["the store's names cannot be read"]
+        }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).compactMap { match in
+            let name = text.substring(with: match.range(at: 1))
+            if name == "agentPolicyImportError", match.range(at: 2).location != NSNotFound { return nil }
+            return Self.allowedStoreNames.contains(name) ? nil : name
+        }
+    }
 
     /// Two subscriptions, the page's and the header's, and nothing else of the store: no observer, no `onReceive`, no
     /// sink, no kept reference, and its state read in one place, a copy assigned only when it changed.
@@ -68,9 +86,9 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
             if code.range(of: #"=\s*SecurityFindingsStore\.shared\s*\n"#, options: .regularExpression) != nil {
                 problems.append("\(name) keep a reference to the store, which reads past the copy")
             }
-            if !SettingsDesignSystemRulesTests.matches(of: storeState, in: code).isEmpty
-                || code.range(of: #"SecurityFindingsStore\.shared\.agentPolicyImportError(?!\s*=\s*nil)"#, options: .regularExpression) != nil {
-                problems.append("\(name) read the store's state past the copy")
+            let pastTheCopy = Self.storeNamesPastTheCopy(in: code)
+            if !pastTheCopy.isEmpty {
+                problems.append("\(name) read the store's state past the copy: \(pastTheCopy.joined(separator: ", "))")
             }
         }
         let reader = AgentsPageLiveDataRulesTests.body(after: "private func copyFromStore() {", in: settingsCode) ?? ""
@@ -94,6 +112,8 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
              "    @ObservedObject private var findingsStore = SecurityFindingsStore.shared\n    @ObservedObject private var visibility = BrainVisibility.shared"),
             ("Button(security.isScanning ? \"Scanning…\" : \"Scan now\")", "Button(SecurityFindingsStore.shared.isScanning ? \"Scanning…\" : \"Scan now\")"),
             ("if let importError = security.policyImportError {", "if let importError = SecurityFindingsStore.shared.agentPolicyImportError {"),
+            // A value the store does not have yet, read past the copy: the allowlist catches what a list of names would miss.
+            ("if let error = security.lastScanError {", "if let error = SecurityFindingsStore.shared.lastScanWarning {"),
             ("SecurityOverview(data: security)", "SecurityOverview(data: SecurityPageData(SecurityFindingsStore.shared))"),
             ("if latest != security { security = latest }", "security = latest"),
             ("        .navigationTitle(\"Security\")",
@@ -102,7 +122,7 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             ("SecurityFindingsStore.shared.$isScanning\n                .removeDuplicates()\n                .values", "SecurityFindingsStore.shared.$isScanning.values"),
             ("openChat: data.hasChat(for: finding)", "openChat: SecurityFindingsStore.shared.hasChat(for: finding)"),
-            ("SecurityCountStrip(groups: data.groups,", "SecurityCountStrip(groups: SecurityFindingsStore.shared.groupRanking,"),
+            ("SecurityCountStrip(groups: data.groups)", "SecurityCountStrip(groups: SecurityFindingsStore.shared.groupRanking)"),
             ("    @Default(.adrDetectionEnabled) private var detectionEnabled",
              "    @Default(.adrDetectionEnabled) private var detectionEnabled\n    @StateObject private var store = SecurityFindingsStore.shared"),
         ], in: overview) { Self.followProblems(settings: settings, overview: $0) }
@@ -114,14 +134,14 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
     private static let unstructuredTask = #"\bTask\s*(?:\{|\(|\.detached)"#
 
     /// Both subscriptions are the one `.task` of their file, keyed on Brain's visibility, each returning at once while it
-    /// is false, with no `Task` inside. Back on screen, the page reads the store once before it follows it, because
-    /// `objectWillChange` will not send again what changed while Brain was away. `AgentsPageLiveDataRulesTests` holds the
-    /// flag itself.
+    /// is false, with no `Task` inside, and each loop doing its one job: the page's takes a fresh copy, the header's passes
+    /// the flag on. Back on screen, the page reads the store once before it follows it, because `objectWillChange` will
+    /// not send again what changed while Brain was away. `AgentsPageLiveDataRulesTests` holds the flag itself.
     static func offScreenProblems(settings: String, overview: String) -> [String] {
         var problems: [String] = []
         let opener = ".task(id: visibility.isOnScreen) {"
-        for (name, source, feed) in [("the page", settings, "SecurityFindingsStore.shared.objectWillChange"),
-                                     ("the header", overview, "SecurityFindingsStore.shared.$isScanning")] {
+        for (name, source, feed, job) in [("the page", settings, "SecurityFindingsStore.shared.objectWillChange", "copyFromStore()"),
+                                          ("the header", overview, "SecurityFindingsStore.shared.$isScanning", "scanning = busy")] {
             let code = SettingsDesignSystemRulesTests.code(source)
             guard code.components(separatedBy: ".task").count - 1 == 1, code.components(separatedBy: opener).count - 1 == 1,
                   let task = AgentsPageLiveDataRulesTests.body(after: opener, in: code) else {
@@ -135,6 +155,9 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
             }
             if task.range(of: unstructuredTask, options: .regularExpression) != nil {
                 problems.append("\(name) subscribes in a Task its .task cannot cancel")
+            }
+            if !(AgentsPageLiveDataRulesTests.body(after: ".values {", in: task) ?? "").contains(job) {
+                problems.append("\(name)'s loop does not do its job: \(job)")
             }
             if name == "the page" {
                 guard let read = task.range(of: "copyFromStore()"),
@@ -159,10 +182,13 @@ final class SecurityPageLiveDataRulesTests: XCTestCase {
             ("            guard visibility.isOnScreen else { return }\n            // Back on screen", "            // Back on screen"),
             ("            copyFromStore()\n            // `objectWillChange` comes before", "            // `objectWillChange` comes before"),
             (loop, "            Task {\n" + loop + "            }\n"),
+            // A loop that follows and does nothing: the copy would never change after Brain comes back.
+            ("                .values {\n                copyFromStore()\n            }", "                .values {\n            }"),
         ], in: settings) { Self.offScreenProblems(settings: $0, overview: overview) }
         SettingsDesignSystemRulesTests.assertCaught([
             (".task(id: visibility.isOnScreen) {", ".task {"),
             ("            guard visibility.isOnScreen else { return }\n            for await busy", "            for await busy"),
+            ("                .values {\n                scanning = busy\n            }", "                .values {\n            }"),
         ], in: overview) { Self.offScreenProblems(settings: settings, overview: $0) }
     }
 
