@@ -4,6 +4,49 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
+### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own
+- **Changes:**
+  - Brain › Timer opens on its product, above "Timer settings": the running timer in the hero's three bands (its
+    state, its name, then the time left, large, over its length, with Pause or Resume and Stop and a bar of how much
+    has run), then the presets as start tiles. A click on a tile starts its preset, as the notch's preset list does,
+    and the running preset's tile wears the selected ring.
+  - With no timer running, an empty state: "No timer running" and one line pointing at the tiles. While the timer is
+    off, "Timer is off" with Turn On stands in place of the timer and the tiles. A timer mirrored from the Clock app
+    shows without buttons, as in the notch: the Clock app pauses and stops it.
+  - The header holds the gear and Start timer, which starts the custom timer at its stored length, as the popover's
+    Start Custom Timer does: on a press only, and off while a timer runs, while the timer is off, or at 0:00.
+  - The presets are edited in a sheet (the design review's finding 25): a tile's ⋯ and its right-click menu hold
+    Edit…, Move Up, Move Down and Delete, Add Preset is the last tile, and Restore Defaults, which asks first, sits in
+    the presets' ⋯. The sheet refuses a blank name and a 0:00 length. The inline editor in the settings, with its mini
+    steppers under small labels, is gone, and its layout pins shrink with it.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock of
+    its own: the time moves with the timer's own one-second tick, so it shows what the notch shows. A press reads the
+    timer as it is then. `TimerPageLiveDataRulesTests` holds each clause against planted offenders, and the page joins
+    the timer surfaces that read `sessionAccent` and offer Resume while paused in overtime.
+  - 9 new strings, each in the catalog's 17 languages, and one theme value, `tileWidth`. Boards `timer0`, `timer1`,
+    `timerOver`, `timerClock`, `timerOff` and `timerPresetSheet` draw the page from fixtures; docs/SETTINGS.md and
+    docs/REGRESSIONS.md (entry 22) gain their lines.
+
 ### 2026-11-06 - Answer the review of Brain's Security page
 - **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
