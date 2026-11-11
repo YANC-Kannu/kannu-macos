@@ -21,8 +21,9 @@ import SwiftUI
 /// New note, Brain › Notes' one primary verb (layout-proposal.md §5 item 7, David's "Yes, add the sheet", 2026-11-11): a
 /// note's title, its text and its colour, saved on Add through `NotesManager.save`, the notes' one write path, as a note
 /// made in the notch is (and pushed to Apple Notes while sync is on). Nothing is saved as it is typed, so Cancel leaves
-/// nothing behind. Return is Add in either field (docs/SETTINGS.md, "Section rules": a sheet). A note's own page stays
-/// read-only; the notch edits notes.
+/// nothing behind. Return is Add in the title (docs/SETTINGS.md, "Section rules": a sheet); in the text, which runs to
+/// several lines, Return is the text's own and ⌘Return is Add, so a list typed line by line is never saved half done. A
+/// note's own page stays read-only; the notch edits notes.
 struct NewNoteSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
@@ -56,7 +57,6 @@ struct NewNoteSheet: View {
             TextField("Text", text: $text, prompt: Text("Milk, eggs and bread"), axis: .vertical)
                 .lineLimit(4...12)
                 .focused($focused, equals: .text)
-                .onSubmit(add)
                 .settingsField(isFocused: focused == .text)
             SettingsRow("Color") {
                 SettingsSelect("Color", selection: $colorIndex, options: Array(NoteItem.colors.indices),
@@ -71,7 +71,8 @@ struct NewNoteSheet: View {
                 .keyboardShortcut(.cancelAction)
             Button("Add", action: add)
                 .buttonStyle(SettingsButtonStyle(.primary))
-                .keyboardShortcut(.defaultAction)
+                // Not Return while the text has focus: there Return belongs to the text, and ⌘Return adds.
+                .keyboardShortcut(focused == .text ? KeyboardShortcut(.return, modifiers: .command) : .defaultAction)
                 .disabled(isEmpty)
         }
         // The title first, as New Task's sheet focuses its own.
@@ -81,8 +82,9 @@ struct NewNoteSheet: View {
     /// The one write: a new note, at once, through the notes' own path; then the sheet closes.
     private func add() {
         guard !isEmpty else { return }
-        NotesManager.shared.save(NotesManager.Draft(id: noteID, title: title, content: text, imageData: nil,
-                                                    colorIndex: colorIndex))
+        // A title of spaces is no title: `save` names it "Untitled Note", as an empty one.
+        NotesManager.shared.save(NotesManager.Draft(id: noteID, title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                                    content: text, imageData: nil, colorIndex: colorIndex))
         dismiss()
     }
 }

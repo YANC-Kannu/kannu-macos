@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Notes page
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: the review's two passes answered; a list typed in New note is never saved half done, and the rule test closes its gaps
+- **Changes:**
+  - New note: Return in the text no longer saves the note (Return is the text's own there, and ⌘Return adds), so a
+    list typed line by line is never saved half done; Return in the title still adds. A title of spaces is saved as no
+    title.
+  - Deleting a note reads the notes again at once, so its row never lingers for the throttle's half second.
+  - A note's page drops an image read that a newer one, or the page closing, has overtaken.
+  - `NotesPageLiveDataRulesTests` now counts `Task.sleep` as a clock and pins every read of a note's image file to the
+    note's page and Copy, each with planted offenders; its sheet clause holds the text's Return to the text.
+  - Translations: the Notes page's own strings that had none ("Notes to sync", its two choices, "Sync with Apple Notes",
+    "Last synced", "Apple Notes" and the narrowing question's message), Arabic and Hungarian "Add", and three fixes
+    (Czech, Spanish, Russian).
+  - docs/SETTINGS.md says when a note's image file is read, and the sheet's keys.
+
 ### 2026-11-11 - Brain's Notes page leads with the notes
 - **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, its in-tab swap first
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: Notes as a product page with a note's own page as an in-tab swap, under Agents' live-data contract, starting no sync of its own

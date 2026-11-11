@@ -412,15 +412,18 @@ ones so far; the redesign plan gives Security, Timer and Clipboard theirs in Sta
   the notch's rows ask; any other goes at once, as there. **The page starts no work of its own:** no sync and no
   AppleScript as it appears or follows, though the notch's Notes tab syncs as it appears. Pin, Copy, Open in Notes
   (AppleScript, behind the sync manager's gate) and Delete act on a press only, through `NotesManager`, the notes' one
-  write path, and a note's image file is read only by Copy. The settings keep their three syncs, each on a press: the
-  scope's choice, the narrowing question's Sync Kannu folder, and Sync now.
+  write path; Delete then reads the notes again at once, so the row goes with the note. A note's image file is read
+  only by Copy's press and by a note's page, once, off the main thread, never by a row. The settings keep their three
+  syncs, each on a press: the scope's choice, the narrowing question's Sync Kannu folder, and Sync now.
 - **Notes' header** holds the gear, which goes to the first settings row, Enable Notes, then **New note**, the page's one
   primary verb, which opens New note's sheet on a press. No New note while Notes is off.
 - **New note's sheet** (`NewNoteSheet`; layout-proposal.md §5 item 7, David's "Yes, add the sheet"): the title and the
   text, each with a prompt that says what to type, and the colour, a `SettingsSelect` of the notch's six with each
-  colour's dot. Add, or Return in either field, saves the note through `NotesManager.save`, as a note made in the notch
-  is, and never one with no title and no text; nothing is saved as it is typed, so Cancel leaves nothing. One id for the
-  sheet, so Return reaching both a field and Add saves once. A note's own page stays read-only.
+  colour's dot. Add saves the note through `NotesManager.save`, as a note made in the notch is, and never one with no
+  title and no text (a title of spaces is none); nothing is saved as it is typed, so Cancel leaves nothing. Return is
+  Add in the title; in the text, which runs to several lines, Return is the text's own and ⌘Return is Add, so a list
+  typed line by line is never saved half done. One id for the sheet, so Return reaching both the title and Add saves
+  once. A note's own page stays read-only.
 - **What changed** in Notes' settings, by the copy pass's rules (4-3c skips Notes): the switches in sentence case; the
   General footer, which said no fact, dropped; Last synced by the time of day, with no spinner and no relative date,
   since the status line above says when a sync runs; the Apple Notes footer as two facts, a line each; the two scope
