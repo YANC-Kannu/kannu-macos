@@ -159,7 +159,6 @@ numbers, and this table only says why.
 | `AnimationEditorView.swift` | 8 | 22 | The editor's own dense scale and previews |
 | `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
-| `ClipboardSettings.swift` | 4 | 1 | Status colours |
 | `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
 | `DevicesSettings.swift` | 1 | 2 | The icon style cards' resting fill and glyphs |
 | `DownloadsSettings.swift` | 3 | 0 | The style cards' resting fill and the progress tint |
@@ -322,8 +321,9 @@ either closure left out when there is none.
 
 ## Product pages
 
-A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage, Brain › Security and
-Brain › Timer are the ones so far; the redesign plan gives Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage, Brain › Security,
+Brain › Timer and Brain › Clipboard are the ones so far; the redesign plan gives Notes its own in Stage 4b, and Tasks
+in Stage 5.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -443,13 +443,38 @@ Brain › Timer are the ones so far; the redesign plan gives Clipboard and Notes
   overtime), `timerClock` (a Clock-app timer) and `timerOff` draw Timer at the window's first size from fixtures
   (`TimerOverview.snapshotFixture`), never this Mac's timer or presets; the settings rows below still read its switches.
   `timer` draws the page whole at the narrowest panel, two tiles to a row, and `timerPresetSheet` the sheet on Focus.
+- **Clipboard** leads with Pinned Items, their count beside the header, then History, its count beside its title, folded
+  each time the page appears, Brain's reopening included, since its content outlives the window: a copy can be anything,
+  a password typed in a plain app included (the capture policy skips only concealed, transient and token-shaped copies),
+  and a full-screen Brain can be on a shared screen. Pinned Items always show: a pin is the user's own choice. A row is
+  the copy's preview over its kind and when it was copied, by its date, so the page keeps no clock; then its glyphs,
+  Copy, Pin or Unpin, and Delete. A pinned row has no Delete: there, the panel's and the popover's Delete only unpin.
+  With nothing pinned, Pinned Items says so in one row. With nothing at all, an empty state, "No clipboard history",
+  with its one line and no action, since history fills itself. While the clipboard manager is off, one card,
+  "Clipboard Manager is off", with Turn On.
+- **Clipboard's header** holds "…", with Clear History and Clear Pinned Items, each off while there is nothing to clear
+  and each clearing at once, as the Actions buttons it replaces did; then the page's one primary verb, Open history
+  panel, the notch's floating clipboard panel, whatever the display mode. Nothing while the manager is off. **The page
+  starts no work of its own:** no capture and no poll. A glyph, a clear and the verb act on a press only, through the
+  manager's own calls; the settings keep their calls, the switch's start and stop and the start as the page appears
+  while the manager is on.
+- **What moved up** from Clipboard's settings: Current Items and Pinned Items, now the counts; Actions, now "…"; and
+  Current History, now History. None had a highlight id. Monitoring Status stays, as a status line with its dot.
+- **Boards**: `clipboard0`, `clipboard1` and `clipboard3` draw Clipboard at the window's first size with nothing copied,
+  one pin and two copies, and three pins and five copies with History open, from fixtures
+  (`ClipboardOverview.snapshotFixture`), never this Mac's clipboard. The `clipboard` board draws four copies and no pin.
+  With a fixture set the page never touches the clipboard manager: its first touch loads the saved history and deletes
+  the image files that history does not name, in a folder the installed app shares, and its start reads the real
+  pasteboard. The switches still come from this Mac's settings, so the off state is drawn with the
+  `-enableClipboardManager NO` launch argument, which changes nothing saved.
 
 ## Live data
 
 Brain's content is built once and kept for the app's life. Closing takes it out of the window, and a change published
 while it is out still re-runs `body` (docs/REGRESSIONS.md, entry 22). The agent monitor publishes on every hook write,
 up to about 20 times a second, and Agents is the page Brain opens on. So a page that shows live data keeps three rules,
-which `AgentsPageLiveDataRulesTests` reads from the source, and `SecurityPageLiveDataRulesTests` for Security, each
+which `AgentsPageLiveDataRulesTests` reads from the source, `SecurityPageLiveDataRulesTests` for Security and
+`ClipboardPageLiveDataRulesTests` for Clipboard, each
 checked against planted offenders:
 
 1. **Throttled and scoped.** The page copies what it shows into `@State` from one subscription to the one value it
@@ -466,7 +491,12 @@ checked against planted offenders:
    off up to 500 ms after the header's; `runScanNow` returns at once while a scan runs, so a press in that gap starts no
    second scan. Nothing on the page observes the store, keeps a reference to it
    or reads its state past that copy; a press calls its methods. `ADRConnection`, which publishes only around a check
-   of ADR's tools, is observed directly.
+   of ADR's tools, is observed directly. **Brain › Clipboard** follows the clipboard manager, which publishes on
+   every copy it records, the same way: `ClipboardSettings` copies the pins, History and whether the manager runs into
+   one value, `ClipboardPageData`, through `objectWillChange` on the same throttle, assigned only on a change, and hands
+   it to `ClipboardOverview`; a copy never changes once captured, so the value compares them by id. Its header follows
+   whether there is anything to clear through `removeDuplicates`. Nothing on the page observes the manager, keeps a
+   reference to it or reads its state past that copy; a press calls its methods.
 2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
    once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Agents'
    Security cell's is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps
@@ -478,7 +508,9 @@ checked against planted offenders:
    an empty state. Brain › Security's two subscriptions are its page's and its header's own
    `.task(id: visibility.isOnScreen)`. Back on screen the page reads the store once before it follows it, since
    `objectWillChange` does not send again what changed while Brain was away; a `@Published` value's publisher sends
-   its current value as it subscribes, so Agents' and the header's need no such read.
+   its current value as it subscribes, so Agents' and the header's need no such read. Brain › Clipboard's two
+   subscriptions are its page's and its header's own `.task(id: visibility.isOnScreen)`; back on screen the page reads
+   the manager once before it follows it, for the same reason.
 3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
    observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
    tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The

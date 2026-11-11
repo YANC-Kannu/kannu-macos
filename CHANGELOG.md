@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Clipboard page
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
+- **Changes:**
+  - History folds again each time the page appears, Brain's reopening included. Brain's content outlives its window, so
+    History opened once stayed open on every later visit, a reopened Brain on a shared screen included.
+  - `ClipboardPageLiveDataRulesTests` holds the fold, with a planted offender.
+  - docs/SETTINGS.md says when History folds, and that Pinned Items always show, a pin being the user's own choice;
+    docs/REGRESSIONS.md entry 22's addendum names the fold among the page's hooks.
+
+### 2026-11-11 - Brain's Clipboard page leads with the pinned items and History
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: Clipboard as a product page built from the clipboard manager's copies, under Agents' live-data contract, its boards from made-up copies only
+- **Changes:**
+  - Brain › Clipboard opens on its product, above "Clipboard settings": Pinned Items with their count, then History,
+    folded until it is opened, with its count. A row is the copy's preview over its kind and date, with Copy, Pin or
+    Unpin, and Delete; a pinned row has no Delete, which only unpins in the panel and the popover.
+  - With nothing copied, an empty state, "No clipboard history", with its one line and no action; while the clipboard
+    manager is off, "Clipboard Manager is off" with Turn On.
+  - The header holds "…", with Clear History and Clear Pinned Items, which replace the Actions buttons and still clear
+    at once, and the page's one verb, Open history panel, which shows the floating clipboard panel on a press.
+  - Live data as on Agents: one copy of the manager's pins, History and status, throttled to 500 ms, assigned only on a
+    change and followed only while Brain is on screen; the page no longer observes the manager whole.
+    `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, and that a board never touches the
+    manager, whose first touch deletes image files the installed app shares with a debug build.
+  - Current Items, Pinned Items, Actions and Current History left the settings. Monitoring Status is a status line with
+    its dot, so the page has no raw colour or system font left, and both pins for it go.
+  - 7 new strings, each in the catalog's 17 languages. The Russian for "Pin items from history to save them here" was
+    another string's, about the Dynamic Island, and is fixed. Boards `clipboard0`, `clipboard1` and `clipboard3` draw the
+    page from made-up copies; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
 ### 2026-11-11 - Answer the review of Brain's Timer page
 - **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps

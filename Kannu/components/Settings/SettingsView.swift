@@ -314,7 +314,8 @@ extension View {
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
     /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
-    /// gear and Refresh, and Timer's gear and Start timer. Each reads its own store.
+    /// gear and Refresh, Timer's gear and Start timer, and Clipboard's "…" and Open history panel. Each reads its own
+    /// store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1132,7 +1133,7 @@ struct SettingsView: View {
                 StatsSettings()
             }
         case .clipboard:
-            SettingsForm(tab: .clipboard) {
+            SettingsForm(tab: .clipboard, actions: AnyView(ClipboardHeaderActions())) {
                 ClipboardSettings()
             }
         case .screenAssistant:
