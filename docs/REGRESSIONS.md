@@ -690,6 +690,15 @@ organization the cache does not contradict. The same organization contradicted s
 week moved, and only that run can learn the new one. Guard:
 `testAContradictedProfileWithNoMatchingWeekYieldsToTheLastKnownOrganization`.
 
+**2026-11-06 addendum — Brain's Refresh is a new press, not a new spawn.** Brain › Usage's Refresh calls
+the paths the notch already uses, unchanged: `LLMUsageManager.refreshRequestedByUser()`, and
+`refreshClaudeUsageFromCLI(manual: false)`, the automatic refresh's own run, which is the probe only:
+never the typed pty fallback and never a browser sign-in, which stay a press of the notch's Claude ↻,
+beside the status line and Cancel they need. So a Claude Code older than 2.1.263 gets no fetch from
+Brain's press, as from the automatic refresh. No argument or variable of the spawn changed, and no file
+in this entry's danger zones did. Guard: `UsagePageLiveDataRulesTests` pins both calls to Refresh's
+action, and fails on any other read from the page.
+
 ---
 
 ## 9. Notch tooltips are custom; `.help()` is dead there
@@ -1656,6 +1665,14 @@ only under `if live`, with the same 1 Hz `TimelineView` and token follower; its 
 through the same `figureRow`, with no clock. "Open chat ›" is a label inside the hero's button, not a second button. The
 flush quiet button and the 12-pt insets add no `onAppear`, no `.task` and no animator. `AgentsPageLiveDataRulesTests`
 passes with its clauses and plants unchanged, so the rest of this entry holds.
+
+**2026-11-06 addendum: Usage's live data runs only while Brain is on screen, and the page reads nothing of its own.**
+Brain › Usage is a product page too (`UsageOverview`). Its readings, outlooks and models come through one subscription
+throttled to 500 ms, and its header's refresh state through one that drops repeats, each in a `.task(id:)` on
+`BrainVisibility.isOnScreen`, as Agents'. It keeps no clock and no animation, so off screen its copy simply stays, and
+nothing on it observes a usage store whole. New hooks: the overview's `onAppear` (one read of the two stores) and its
+`.task`, and the header's `.task`; none loads a field. `UsagePageLiveDataRulesTests` holds each clause against planted
+offenders, and pins Refresh's press as the page's one way to a read (entry 8), so the rest of this entry holds.
 
 ---
 

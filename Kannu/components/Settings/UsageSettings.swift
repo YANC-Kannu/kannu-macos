@@ -30,7 +30,10 @@ struct UsageSettings: View {
     }
 
     var body: some View {
-        SettingsPage {
+        // The product first, then its settings (docs/SETTINGS.md, "Product pages").
+        SettingsProductPage(settingsTitle: String(localized: "Usage settings")) {
+            UsageOverview()
+        } settings: {
             SettingsSection {
                 Defaults.Toggle(key: .enableLLMUsageFeature) {
                     Text("Enable LLM Usage Monitor")

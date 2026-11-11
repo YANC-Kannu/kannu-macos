@@ -63,6 +63,9 @@ enum DebugSnapshots {
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
         AgentsOverview.snapshotFixture = agents
         ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
+        // Brain › Usage's product likewise: fixture switches, readings and models, never this Mac's.
+        let usagePage = DebugSnapshotFixtures.usageOverview(providers: 3, now: Date())
+        UsageOverview.snapshotFixture = usagePage
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
             boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
@@ -197,6 +200,18 @@ enum DebugSnapshots {
             }
         }
         AgentsOverview.snapshotFixture = agents
+        // Brain › Usage with no provider on, one and three, the same way. The settings rows below the product still
+        // read this Mac's switches, as Agents' do.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("usage\(count)") == true {
+            UsageOverview.snapshotFixture = DebugSnapshotFixtures.usageOverview(providers: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .llmUsage).environmentObject(viewModel)),
+                             name: "usage\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        UsageOverview.snapshotFixture = usagePage
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -1055,6 +1070,59 @@ enum DebugSnapshotFixtures {
             nearLimit: [reading],
             security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
         )
+    }
+
+    /// Brain › Usage's product with no provider on, one or three. One is Claude alone, with the notch board's readings:
+    /// a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the week heading for 95 %, and three
+    /// per-model weeks; and the models it ran. Three adds Codex with no reading yet, and Cursor's billing cycle near its
+    /// limit with its models' cost. The readings are labelled as the usage store labels them.
+    static func usageOverview(providers count: Int, now: Date) -> UsageOverviewFixture {
+        let observed = now.addingTimeInterval(-120)
+        let fiveHourReset = now.addingTimeInterval(4 * 3600 + 15 * 60)
+        let weekReset = now.addingTimeInterval(86_400 + 8 * 3600 + 5 * 60)
+        func reading(_ provider: String, _ key: String, _ label: String, _ percent: Double, _ reset: Date) -> UsageWindowReading {
+            UsageWindowReading(provider: provider, key: key, label: label, percent: percent, resetsAt: reset, severity: nil,
+                               observedAt: observed)
+        }
+        var claude = UsageSnapshot()
+        claude.billedCostOnly = true
+        claude.models = [
+            ModelUsage(model: "claude-opus-4-1", totals: UsageTotals(uncachedInputTokens: 180_000, cacheWriteTokens: 1_960_000,
+                                                                     cacheReadTokens: 48_000_000, outputTokens: 412_000, costUSD: 61.2)),
+            ModelUsage(model: "claude-sonnet-4-5", totals: UsageTotals(uncachedInputTokens: 90_000, cacheWriteTokens: 730_000,
+                                                                       cacheReadTokens: 21_000_000, outputTokens: 160_000, costUSD: 9.4)),
+            ModelUsage(model: "claude-haiku-4-5", totals: UsageTotals(uncachedInputTokens: 21_000, cacheWriteTokens: 75_000,
+                                                                      cacheReadTokens: 1_400_000, outputTokens: 12_400, costUSD: 0.3)),
+        ]
+        var cursor = UsageSnapshot()
+        cursor.models = [
+            ModelUsage(model: "gpt-5", totals: UsageTotals(uncachedInputTokens: 1_300_000, cacheReadTokens: 9_800_000,
+                                                           outputTokens: 96_000, costUSD: 9.1)),
+            ModelUsage(model: "claude-4.5-sonnet", totals: UsageTotals(uncachedInputTokens: 640_000, cacheReadTokens: 4_100_000,
+                                                                       outputTokens: 52_000, costUSD: 4.8)),
+        ]
+        var readings = [
+            reading("claude", "five_hour", "Max 5-hour", 13, fiveHourReset),
+            reading("claude", "seven_day", "Max weekly", 83, weekReset),
+            reading("claude", "model_scoped:Fable", "Max Fable weekly", 41, weekReset),
+            reading("claude", "model_scoped:Opus", "Max Opus weekly", 12, weekReset),
+            reading("claude", "model_scoped:Sonnet", "Max Sonnet weekly", 5, weekReset),
+        ]
+        var results: [ProviderID: UsageResult] = [.claude: .success(claude)]
+        let providers: [ProviderID]
+        switch count {
+        case 0:
+            return UsageOverviewFixture(providers: [], data: UsageOverviewData())
+        case 1:
+            providers = [.claude]
+        default:
+            providers = [.claude, .codex, .cursor]
+            readings.append(reading("cursor", "week", "billing-cycle", 96, now.addingTimeInterval(9 * 86_400)))
+            results[.cursor] = .success(cursor)
+        }
+        return UsageOverviewFixture(providers: providers,
+                                    data: UsageOverviewData(readings: readings, outlooks: usageOutlooks(now: now),
+                                                            models: UsageOverview.modelRows(results)))
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
