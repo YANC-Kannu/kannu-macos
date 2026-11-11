@@ -187,6 +187,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TimerSettings.swift": 1,            // the timer-preset editor
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
         "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
     ]
 
@@ -354,6 +355,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "MusicSlotConfigurationView.swift": 10,    // the slot canvas
         "ScreenAssistantSettings.swift": 5,  // status colours
         "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityOverview.swift": 1,         // a partial scan's orange, moved up with the newest scan's line
         "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
         "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
         "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
@@ -488,6 +490,9 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
         "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
+        // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
+        "SecurityOverview.swift": 1,
         "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
     ]
 
