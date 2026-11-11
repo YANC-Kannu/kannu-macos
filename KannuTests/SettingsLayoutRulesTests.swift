@@ -340,7 +340,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
         "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
-        "ClipboardSettings.swift": 4,        // status colours
         "DevicesSettings.swift": 1,          // the icon style card's resting fill
         "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
@@ -370,7 +369,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
         "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "BatterySettings.swift": 2,          // battery previews
-        "ClipboardSettings.swift": 1,        // a status line
         "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
         "DevicesSettings.swift": 2,          // the icon style cards' glyphs
         "EditPanelView.swift": 1,            // dead code but its #Preview
@@ -487,6 +485,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
         "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {
