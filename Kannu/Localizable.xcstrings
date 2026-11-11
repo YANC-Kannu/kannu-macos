@@ -24571,7 +24571,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Voorinstelling wijzigen"
+            "value" : "Voorinstelling bewerken"
           }
         },
         "pl" : {
@@ -24786,7 +24786,7 @@
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wijzig…"
+            "value" : "Bewerk…"
           }
         },
         "pl" : {

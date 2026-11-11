@@ -374,11 +374,13 @@ redesign plan gives Security, Usage, Clipboard and Notes theirs in Stage 4b, and
   replacing a timer that runs, as the notch's preset list does; the running preset's tile wears the selected ring, and
   a 0:00 preset, which only an older version could save, does not start. A tile's ⋯ and its right-click menu hold
   Edit…, Move Up, Move Down and Delete; Add Preset is the last tile, and the heading's ⋯ holds Restore Defaults, which
-  asks first. Search's "Accent colour" lands on the heading, which is built whenever the timer is on.
+  asks first. Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"). Search's "Timer
+  Presets", found by "accent colour" too, lands on the heading, which is built whenever the timer is on.
 - **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom Timer's
   stepper rows, and the colour, written on Add or Save and never as typed, so Cancel leaves the preset as it was. It
   refuses a blank name, a blank row in the notch's list, and a 0:00 length, which would ring a second after it
-  started. It replaced the inline editor in the settings, which drew its own steppers under 9-pt labels.
+  started; a length the steppers cannot show, over 23:59:59, is kept unless they are moved. It replaced the inline
+  editor in the settings, which drew its own steppers under 9-pt labels.
 - **Timer's empty state**: "No timer running" and "Click a preset below to start a timer.", whose action is the tiles
   under it. **While the timer is off**, "Timer is off" with Turn On stands in place of the timer and the tiles: the
   notch shows no timer then.
@@ -436,7 +438,10 @@ manager keeps no deadline (it counts `remainingTime` down, and a pause stops the
 or a counting `Text` here would be a second clock that could disagree with the notch, and would tick on while a timer
 stood paused. Off screen the copy stays as it was; an idle or paused timer publishes nothing, so the page then does no
 work at all. Its buttons act only on a press, through the popover's own calls, and Pause or Resume reads the timer as
-it is at the press, never the copy. **Not measured:** the CPU of Timer open while a timer runs; it needs a real window.
+it is at the press, never the copy. Each press, and each edit of the presets, then reads the timer again at once, one
+read and never a subscription, so the card never shows the old state for the throttle's half second, and a paused
+timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it needs a
+real window.
 
 ## The shell and navigation
 

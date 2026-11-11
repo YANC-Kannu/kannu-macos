@@ -22,7 +22,8 @@ import SwiftUI
 /// Add Preset, or a preset's edit, from Brain › Timer's tiles (the design review's finding 25: the presets as tiles,
 /// editing in a sheet). Its name, its length in the stepper rows Custom Timer uses, and its colour, saved on Add or Save,
 /// never as typed, so Cancel leaves the preset as it was. A preset needs a name and a length over 0:00: a blank name is a
-/// blank row in the notch's preset list, and a 0:00 preset would ring a second after it started.
+/// blank row in the notch's preset list, and a 0:00 preset would ring a second after it started. A length the steppers
+/// cannot show, over 23:59:59, which only an older version could save, is kept unless the steppers are moved.
 struct TimerPresetSheet: View {
     enum Target: Identifiable {
         case add
@@ -37,12 +38,16 @@ struct TimerPresetSheet: View {
     }
 
     let target: Target
+    /// The length the steppers opened on, so an edit that leaves them writes no length of its own.
+    private let openedLength: TimeInterval
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var hours: Int
     @State private var minutes: Int
     @State private var seconds: Int
     @State private var color: Color
+    /// Set by the first save: Return in the name field and the default button are one save, never two.
+    @State private var saved = false
     @FocusState private var nameFocused: Bool
 
     init(target: Target) {
@@ -54,8 +59,11 @@ struct TimerPresetSheet: View {
         case .edit(let existing): preset = existing
         }
         let parts = TimerPreset.components(for: preset.duration)
+        let hours = min(parts.hours, 23)
+        openedLength = TimerPreset.duration(from: TimerPreset.DurationComponents(hours: hours, minutes: parts.minutes,
+                                                                               seconds: parts.seconds))
         _name = State(initialValue: preset.name)
-        _hours = State(initialValue: min(parts.hours, 23))
+        _hours = State(initialValue: hours)
         _minutes = State(initialValue: parts.minutes)
         _seconds = State(initialValue: parts.seconds)
         _color = State(initialValue: preset.color)
@@ -97,7 +105,8 @@ struct TimerPresetSheet: View {
     }
 
     private func save() {
-        guard canSave else { return }
+        guard canSave, !saved else { return }
+        saved = true
         switch target {
         case .add:
             Defaults[.timerPresets].append(TimerPreset(name: trimmedName, duration: duration, color: color))
@@ -106,7 +115,7 @@ struct TimerPresetSheet: View {
             // Gone since the sheet opened: nothing to save into.
             guard let index = presets.firstIndex(where: { $0.id == original.id }) else { break }
             presets[index].name = trimmedName
-            presets[index].duration = duration
+            if duration != openedLength { presets[index].duration = duration }
             // Only a colour picked here: converting an untouched one could move its stored value.
             if color != original.color { presets[index].updateColor(color) }
             Defaults[.timerPresets] = presets

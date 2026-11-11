@@ -75,7 +75,7 @@ struct TimerOverview: View {
                 }
             } else {
                 if data.isActive {
-                    TimerRunningCard(data: data)
+                    TimerRunningCard(data: data, refresh: { copyFromManager() })
                 } else {
                     // Its one action is the tiles right under it.
                     TimerMessageCard(title: String(localized: "No timer running"),
@@ -111,6 +111,9 @@ struct TimerOverview: View {
                 copyFromManager()
             }
         }
+        // An edit of the presets shows on the running timer at once (its colour, its tile's ring), even while it stands
+        // paused and the manager publishes nothing. A read, not a subscription; it runs only while Brain is open.
+        .onChange(of: storedPresets) { _, _ in copyFromManager() }
         .sheet(item: $editing) { target in
             TimerPresetSheet(target: target)
         }
@@ -119,24 +122,29 @@ struct TimerOverview: View {
         }
     }
 
-    /// The one place the page reads the manager's state: a fresh copy, assigned only when it changed.
+    /// The one place the page reads the manager's state: a fresh copy, assigned only when it changed. Also called right
+    /// after a press, so the card never shows the old state for the throttle's half second.
     private func copyFromManager() {
+        #if DEBUG
+        if Self.snapshotFixture != nil { return }
+        #endif
         let latest = TimerPageData(TimerManager.shared)
         if latest != data { data = latest }
     }
 
     // MARK: - The presets
 
-    /// The presets as start tiles, in their order, then Add Preset. Search's "Accent colour" lands on the heading, which
-    /// is built whenever the timer is on: a preset's colour is set in its sheet.
+    /// The presets as start tiles, in their order, then Add Preset. Search's "Timer Presets", found by "accent colour"
+    /// too, lands on the heading, which is built whenever the timer is on: a preset's colour is set in its sheet.
     private var presetTiles: some View {
         let shown = presets
         return VStack(alignment: .leading, spacing: SettingsTheme.listRowGap) {
             HStack(spacing: SettingsMetrics.rowContent) {
                 SettingsSectionHeader("Presets")
-                    .settingsHighlight(id: SettingsTab.timer.highlightID(for: "Accent colour"))
+                    .settingsHighlight(id: SettingsTab.timer.highlightID(for: "Timer Presets"))
                 Spacer(minLength: SettingsMetrics.rowContent)
-                SettingsMoreMenu {
+                // Named for what it belongs to, as each tile's is: VoiceOver would otherwise hear "More" alone.
+                SettingsMoreMenu(accessibilityLabel: Text(verbatim: String(localized: "Presets") + ", " + String(localized: "More"))) {
                     Button("Restore Defaults") { confirmingRestore = true }
                 }
             }
@@ -147,6 +155,7 @@ struct TimerOverview: View {
                                     isRunning: data.isActive && data.presetID == preset.id,
                                     isFirst: index == 0,
                                     isLast: index == shown.count - 1,
+                                    refresh: { copyFromManager() },
                                     edit: { editing = .edit(preset) },
                                     move: { move(preset, by: $0) },
                                     delete: { storedPresets.removeAll { $0.id == preset.id } })
@@ -231,6 +240,9 @@ struct TimerHeaderActions: View {
 /// the Clock app is paused and stopped there, so it has no buttons here, as in the notch.
 private struct TimerRunningCard: View {
     let data: TimerPageData
+    /// Reads the manager again right after a press, so Pause never stays on screen for the throttle's half second after
+    /// a click, where a second click would act against what the card shows.
+    let refresh: () -> Void
 
     private var stateTitle: String {
         if data.isOvertime { return String(localized: "Overtime") }
@@ -277,6 +289,7 @@ private struct TimerRunningCard: View {
                         .accessibilityLabel(Text(verbatim: TimerPageData.spoken(data.remaining)))
                     Text("of \(data.length)")
                         .settingsDescriptionStyle()
+                        .accessibilityLabel(Text("of \(TimerPageData.spoken(data.total))"))
                 }
                 Spacer(minLength: SettingsMetrics.rowContent)
                 if !data.isMirrored {
@@ -284,12 +297,14 @@ private struct TimerRunningCard: View {
                     if data.offersPause {
                         Button {
                             Self.togglePause()
+                            refresh()
                         } label: {
                             Text(verbatim: data.isPaused ? String(localized: "Resume") : String(localized: "Pause"))
                         }
                     }
                     Button {
                         Self.stop()
+                        refresh()
                     } label: {
                         Text(verbatim: String(localized: "Stop"))
                     }
@@ -302,6 +317,7 @@ private struct TimerRunningCard: View {
         .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight, alignment: .topLeading)
         .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text("Timer"))
     }
 
     /// The notch's own toggle, read at the press, never from the copy, which can be half a second old.
@@ -359,14 +375,22 @@ private struct TimerPresetTile: View {
     let isRunning: Bool
     let isFirst: Bool
     let isLast: Bool
+    /// Reads the manager again right after the start, as the running card's buttons do.
+    let refresh: () -> Void
     let edit: () -> Void
     let move: (Int) -> Void
     let delete: () -> Void
+
+    /// The ⋯'s name for VoiceOver, with the preset's, so a row of tiles is not a row of "More"s.
+    private var menuLabel: String {
+        [preset.name, String(localized: "More")].filter { !$0.isEmpty }.joined(separator: ", ")
+    }
 
     var body: some View {
         Button {
             TimerManager.shared.startTimer(duration: preset.duration, name: preset.name, preset: preset,
                                            fallbackName: preset.name)
+            refresh()
         } label: {
             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                 HStack(spacing: SettingsMetrics.rowContent) {
@@ -396,7 +420,7 @@ private struct TimerPresetTile: View {
         .accessibilityValue(Text(verbatim: TimerPageData.spoken(preset.duration)))
         .accessibilityAddTraits(isRunning ? .isSelected : [])
         .overlay(alignment: .bottomTrailing) {
-            SettingsMoreMenu {
+            SettingsMoreMenu(accessibilityLabel: Text(verbatim: menuLabel)) {
                 menuItems
             }
             .padding(SettingsMetrics.rowContent)
@@ -492,8 +516,9 @@ struct TimerPageData: Equatable {
     /// The time left as the notch writes it ("18:42", "-2:15" in overtime), and the whole length ("25:00").
     var time = ""
     var length = ""
-    /// The seconds left, below zero in overtime, for VoiceOver.
+    /// The seconds left, below zero in overtime, and the whole length's, for VoiceOver.
     var remaining: TimeInterval = 0
+    var total: TimeInterval = 0
     /// How much of the length has run, 0 to 1: full in overtime.
     var fraction = 0.0
     var isPaused = false
@@ -520,6 +545,7 @@ struct TimerPageData: Equatable {
         time = timerManager.formattedRemainingTime()
         length = timerManager.formattedTotalDuration()
         remaining = timerManager.remainingTime
+        total = timerManager.totalDuration
         fraction = min(1, max(0, timerManager.progress))
         isPaused = timerManager.isPaused
         isOvertime = timerManager.isOvertime

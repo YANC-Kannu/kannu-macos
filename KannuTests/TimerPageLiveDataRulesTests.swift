@@ -26,6 +26,7 @@ import XCTest
 final class TimerPageLiveDataRulesTests: XCTestCase {
 
     private static let overviewPath = "Kannu/components/Settings/TimerOverview.swift"
+    private static let sheetPath = "Kannu/components/Settings/TimerPresetSheet.swift"
     private static let settingsPath = "Kannu/components/Settings/TimerSettings.swift"
     private static let viewPath = "Kannu/components/Settings/SettingsView.swift"
 
@@ -37,12 +38,15 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
     private static let headerFeed = #"TimerManager\.shared\.\$isTimerActive\s*\.removeDuplicates\(\)\s*\.values"#
     /// What the manager knows about the running timer, read through the shared manager or a local name for it.
     private static let stateRead = #"(?<![\w.])(?:TimerManager\.shared|manager|timerManager)\.(?:isTimerActive|timerName|totalDuration|remainingTime|elapsedTime|isPaused|isFinished|isOvertime|lastUpdated|activePresetId|activePreset|sessionTint|sessionTaskKey|sessionTaskID|activeSource|progress|sessionAccent|formattedRemainingTime|formattedElapsedTime|formattedTotalDuration|isExternalTimerActive|hasManualTimerRunning|allowsManualInteraction|isRunning|statusText|timerColor|currentColor|timerNSColor)\b"#
+    /// The manager reached any way but the two feeds, the one copy or a start: a local name for it, a sink, a read.
+    private static let otherReach = #"TimerManager\.shared(?!\.objectWillChange\b|\.\$isTimerActive\b|\.startTimer\(|\))"#
     /// The places that may read it: the copy's `init`, and the two presses, which read it at the press.
     private static let readers = ["init(_ timerManager: TimerManager) {", "private static func togglePause() {",
                                   "private static func stop() {"]
 
-    /// Two subscriptions, each to what it needs, and nothing else of the manager: no observer, no `onReceive`, no sink.
-    /// The manager's state is read in one copy, `TimerPageData`'s `init`, and at a press, never in `body`.
+    /// Two subscriptions, each to what it needs, and nothing else of the manager: no observer, no `onReceive`, no sink,
+    /// no local name for it. Its state is read in one copy, `TimerPageData`'s `init`, assigned only when it changed, and
+    /// at a press, never in `body`.
     static func followProblems(in overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
         var problems: [String] = []
@@ -65,6 +69,11 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
         if code.components(separatedBy: "TimerPageData(TimerManager.shared)").count - 1 != 1 {
             problems.append("the page copies the manager in more than one place")
         }
+        // Assigned only on a change: a copy that always assigns redraws on every trailing emission of the throttle.
+        let copy = AgentsPageLiveDataRulesTests.body(after: "private func copyFromManager() {", in: code) ?? ""
+        if !copy.contains("if latest != data { data = latest }") || code.components(separatedBy: "data = latest").count - 1 != 1 {
+            problems.append("the copy is assigned whether or not it changed")
+        }
         var outside = code
         for reader in readers {
             guard let inside = AgentsPageLiveDataRulesTests.body(after: reader, in: outside),
@@ -76,6 +85,9 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
         }
         for read in SettingsDesignSystemRulesTests.matches(of: stateRead, in: outside) {
             problems.append("the page reads \(read) outside its copy and its presses")
+        }
+        if !SettingsDesignSystemRulesTests.matches(of: otherReach, in: outside).isEmpty {
+            problems.append("the page reaches the manager outside its feeds, its copy and its starts")
         }
         return problems
     }
@@ -93,9 +105,15 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
             ("Text(verbatim: data.time)", "Text(verbatim: TimerManager.shared.formattedRemainingTime())"),
             ("isRunning: data.isActive && data.presetID == preset.id", "isRunning: TimerManager.shared.activePresetId == preset.id"),
             // A second copy, made in `body`, and a local name for the manager read there.
-            ("                    TimerRunningCard(data: data)", "                    TimerRunningCard(data: TimerPageData(TimerManager.shared))"),
+            ("                    TimerRunningCard(data: data, refresh: { copyFromManager() })",
+             "                    TimerRunningCard(data: TimerPageData(TimerManager.shared), refresh: { copyFromManager() })"),
             ("        Button {\n            TimerManager.shared.startTimer(",
              "        let manager = TimerManager.shared\n        let _ = manager.remainingTime\n        Button {\n            TimerManager.shared.startTimer("),
+            // A name the state list does not know, and a sink through it.
+            ("    var body: some View {\n        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {",
+             "    var body: some View {\n        let m = TimerManager.shared\n        let _ = m.objectWillChange.sink { _ in }\n        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {"),
+            // A copy assigned every time.
+            ("if latest != data { data = latest }", "data = latest"),
         ], in: overview, by: Self.followProblems)
     }
 
@@ -149,31 +167,50 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
 
     // MARK: - Clause 3: no clock of its own
 
-    /// The time moves with the manager's own one-second tick, through the subscription above, and nothing on the page
-    /// moves by itself: a clock here would be a second one that could disagree with the notch's, and would tick on while
-    /// a timer stood paused. A `Text` with a relative or timer style, or a `timerInterval`, is a clock too.
-    static func clockProblems(in overview: String) -> [String] {
-        let code = SettingsDesignSystemRulesTests.code(overview)
-        var problems = ["TimelineView", "Timer.scheduledTimer", "Timer.publish", ".repeatForever", "withAnimation", ".animation(",
-                        "ProgressView", ".contentTransition(", "timerInterval:", "asyncAfter", "Task.sleep", "ClaudeTurnTokenFollower"]
-            .filter { code.contains($0) }
-            .map { "the page keeps a clock or a motion of its own: \($0)" }
-        if code.range(of: #"style:\s*\.(?:relative|timer|offset)\b"#, options: .regularExpression) != nil {
-            problems.append("the page keeps a clock of its own: a Text that counts")
+    /// What keeps time by itself, on the page, in its sheet or in its settings: a clock here would be a second one that
+    /// could disagree with the notch's, and would tick on while a timer stood paused. A `Text` with a relative or timer
+    /// style, or a `timerInterval`, is a clock too.
+    private static let clocks = ["TimelineView", "Timer.scheduledTimer", "Timer.publish", "Timer(timeInterval:", "Timer(fire:",
+                                 "Timer.init(", ".repeatForever", "phaseAnimator", "keyframeAnimator", ".symbolEffect(", "DispatchSource",
+                                 "asyncAfter", "Task.sleep", "ClaudeTurnTokenFollower", "timerInterval:"]
+    /// What moves by itself on the page and in its sheet. The settings keep the one bounded ease they had.
+    private static let motions = ["withAnimation", ".animation(", ".contentTransition(", "ProgressView"]
+
+    static func clockProblems(overview: String, sheet: String, settings: String) -> [String] {
+        var problems: [String] = []
+        for (name, source, banned) in [("the page", overview, clocks + motions), ("its sheet", sheet, clocks + motions),
+                                       ("its settings", settings, clocks)] {
+            let code = SettingsDesignSystemRulesTests.code(source)
+            problems += banned.filter { code.contains($0) }.map { "\(name) keeps a clock or a motion of its own: \($0)" }
+            if code.range(of: #"style:\s*\.(?:relative|timer|offset)\b"#, options: .regularExpression) != nil {
+                problems.append("\(name) keeps a clock of its own: a Text that counts")
+            }
         }
         return problems
     }
 
     func testThePageKeepsNoClockOfItsOwn() throws {
         let overview = try Self.source(Self.overviewPath)
-        XCTAssertEqual(Self.clockProblems(in: overview), [])
+        let sheet = try Self.source(Self.sheetPath)
+        let settings = try Self.source(Self.settingsPath)
+        XCTAssertEqual(Self.clockProblems(overview: overview, sheet: sheet, settings: settings), [])
         SettingsDesignSystemRulesTests.assertCaught([
             ("            if !isOn {", "            TimelineView(.periodic(from: .now, by: 1)) { _ in EmptyView() }\n            if !isOn {"),
             ("            if !isOn {", "            Text(Date(), style: .timer)\n            if !isOn {"),
             ("            if !isOn {", "            Text(timerInterval: Date()...Date())\n            if !isOn {"),
             ("                        .monospacedDigit()", "                        .monospacedDigit()\n                        .contentTransition(.numericText())"),
             ("    private func copyFromManager() {", "    private func copyFromManager() {\n        withAnimation {}"),
-        ], in: overview, by: Self.clockProblems)
+            ("                Circle()\n                    .fill(data.accent ?? SettingsTheme.accent)",
+             "                Circle()\n                    .phaseAnimator([0, 1]) { dot, _ in dot }\n                    .fill(data.accent ?? SettingsTheme.accent)"),
+        ], in: overview) { Self.clockProblems(overview: $0, sheet: sheet, settings: settings) }
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("            SettingsColorPickerRow(", "            TimelineView(.periodic(from: .now, by: 1)) { _ in EmptyView() }\n            SettingsColorPickerRow("),
+            ("if isNew { nameFocused = true }", "if isNew { withAnimation { nameFocused = true } }"),
+        ], in: sheet) { Self.clockProblems(overview: overview, sheet: $0, settings: settings) }
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("            timerFeatureSection\n", "            timerFeatureSection\n            Text(Date(), style: .relative)\n"),
+            ("        .navigationTitle(\"Timer\")", "        .onAppear { _ = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in } }\n        .navigationTitle(\"Timer\")"),
+        ], in: settings) { Self.clockProblems(overview: overview, sheet: sheet, settings: $0) }
     }
 
     // MARK: - Clause 4: only on a press
@@ -182,10 +219,13 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
     private static let mutators = ["startTimer(", "pauseTimer(", "resumeTimer(", "stopTimer(", "togglePause(", "stop("]
     private static let banned = ["forceStopTimer(", "startDemoTimer(", "adoptExternalTimer(", "endExternalTimer(", "updateSessionLength(",
                                  "updateSessionName(", "updateSessionTint(", "completeExternalTimer("]
+    /// Every hook that runs without a press.
+    private static let hooks = [".onAppear {", ".onDisappear {", ".task(id: visibility.isOnScreen) {", ".onChange(of:", ".onReceive("]
 
     /// Start timer and a tile start a timer, Pause or Resume and Stop act on it, each in its own button's action and
-    /// nowhere else: never as the page appears or follows the manager. Start timer is off while a timer runs, as the
-    /// popover hides its own start then, and a 0:00 preset does not start.
+    /// nowhere else: never as the page appears or goes, follows the manager or sees a change. Each press reads the timer
+    /// again at once. Start timer is off while a timer runs, as the popover hides its own start then; a 0:00 preset does
+    /// not start; Pause or Resume shows unless the timer runs in overtime.
     static func pressProblems(in overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
         var problems: [String] = []
@@ -197,7 +237,8 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
             problems.append("Start timer's press does not start the timer")
         }
         let tile = AgentsPageLiveDataRulesTests.body(after: "private struct TimerPresetTile: View {", in: code) ?? ""
-        if !(AgentsPageLiveDataRulesTests.body(after: "Button {", in: tile) ?? "").contains(start) {
+        let tilePress = AgentsPageLiveDataRulesTests.body(after: "Button {", in: tile) ?? ""
+        if !tilePress.contains(start) {
             problems.append("a tile's press does not start its preset")
         }
         for (call, count) in [("Self.togglePause()", 1), ("Self.stop()", 1), ("pauseTimer()", 1), ("resumeTimer()", 1), ("stopTimer()", 1)]
@@ -208,15 +249,17 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
         if !toggle.contains("manager.isPaused ? manager.resumeTimer() : manager.pauseTimer()") {
             problems.append("Pause or Resume does not act on the manager as it is at the press")
         }
-        var hooks: [String] = []
-        for opener in [".onAppear {", ".task(id: visibility.isOnScreen) {"] {
-            var rest = Substring(code)
-            while let range = rest.range(of: opener) {
-                hooks.append(AgentsPageLiveDataRulesTests.body(after: opener, in: String(rest[range.lowerBound...])) ?? "")
-                rest = rest[range.upperBound...]
-            }
+        // Each press reads the timer again at once, so the card never shows the old state for the throttle's half second.
+        let card = AgentsPageLiveDataRulesTests.body(after: "private struct TimerRunningCard: View {", in: code) ?? ""
+        let cardPresses = bodies(after: "Button {", in: card)
+        if cardPresses.count != 2 || cardPresses.contains(where: { !$0.contains("refresh()") }) || !tilePress.contains("refresh()")
+            || code.components(separatedBy: "refresh: { copyFromManager() }").count - 1 != 2 {
+            problems.append("a press does not read the timer again at once")
         }
-        for hook in hooks {
+        if !(AgentsPageLiveDataRulesTests.body(after: "if data.offersPause {", in: card) ?? "").contains("Self.togglePause()") {
+            problems.append("Pause or Resume does not follow offersPause, which keeps Resume while paused in overtime")
+        }
+        for hook in hooks.flatMap({ bodies(after: $0, in: code) }) {
             for mutator in mutators where hook.contains(mutator) {
                 problems.append("the page calls \(mutator) without a press")
             }
@@ -224,10 +267,16 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
         for call in banned where code.contains(call) {
             problems.append("the page calls \(call), which the popover's buttons never do")
         }
-        if !code.contains(".disabled(isRunning || !isOn || customTimerDuration <= 0)") {
-            problems.append("Start timer is on while a timer runs, while the timer is off, or at 0:00")
+        // Start timer's own chain, from its button to the header's task: never moved onto the gear.
+        if let button = code.range(of: #"Button("Start timer") {"#),
+           let task = code.range(of: ".task(id: visibility.isOnScreen)", range: button.upperBound..<code.endIndex) {
+            if !code[button.lowerBound..<task.lowerBound].contains(".disabled(isRunning || !isOn || customTimerDuration <= 0)") {
+                problems.append("Start timer is on while a timer runs, while the timer is off, or at 0:00")
+            }
+        } else {
+            problems.append("Start timer is gone")
         }
-        if !code.contains(".disabled(preset.duration <= 0)") {
+        if !tile.contains(".disabled(preset.duration <= 0)") {
             problems.append("a 0:00 preset starts")
         }
         return problems
@@ -240,12 +289,26 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
             ("            // One read, not a subscription", "            TimerManager.shared.startTimer(duration: 60)\n            // One read, not a subscription"),
             ("            // Back on screen", "            TimerManager.shared.stopTimer()\n            // Back on screen"),
             ("            // Back on screen", "            Self.togglePause()\n            // Back on screen"),
+            (".onChange(of: storedPresets) { _, _ in copyFromManager() }", ".onChange(of: storedPresets) { _, _ in TimerManager.shared.stopTimer() }"),
             ("        manager.stopTimer()", "        manager.forceStopTimer()"),
             ("        manager.isPaused ? manager.resumeTimer() : manager.pauseTimer()", "        manager.pauseTimer()"),
             (".disabled(isRunning || !isOn || customTimerDuration <= 0)", ".disabled(!isOn || customTimerDuration <= 0)"),
             (".disabled(preset.duration <= 0)", ".disabled(false)"),
             ("                TimerManager.shared.startTimer(duration: length, name: name, fallbackName: name)", ""),
+            ("                            Self.togglePause()\n                            refresh()\n", "                            Self.togglePause()\n"),
+            ("                        Self.stop()\n                        refresh()\n", "                        Self.stop()\n"),
+            ("fallbackName: preset.name)\n            refresh()", "fallbackName: preset.name)"),
+            ("if data.offersPause {", "if true {"),
         ], in: overview, by: Self.pressProblems)
+        // Start timer's off switch moved onto the gear: gone from its own chain, though still in the file.
+        let off = ".disabled(isRunning || !isOn || customTimerDuration <= 0)\n"
+        let moved = overview
+            .replacingOccurrences(of: "            .buttonStyle(SettingsButtonStyle(.primary))\n            " + off,
+                                  with: "            .buttonStyle(SettingsButtonStyle(.primary))\n")
+            .replacingOccurrences(of: "            .accessibilityLabel(String(localized: \"Timer settings\"))\n",
+                                  with: "            .accessibilityLabel(String(localized: \"Timer settings\"))\n            " + off)
+        XCTAssertEqual(moved.components(separatedBy: off).count - 1, 1, "the plant must move the switch, not drop or copy it")
+        XCTAssertFalse(Self.pressProblems(in: moved).isEmpty, "the rule misses Start timer's off switch moved onto the gear")
     }
 
     // MARK: - The page, its header and its presets' sheet
@@ -290,6 +353,17 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
     }
 
     // MARK: - Plumbing
+
+    /// The braces' contents after every `opener` in `code`, in order.
+    private static func bodies(after opener: String, in code: String) -> [String] {
+        var found: [String] = []
+        var rest = Substring(code)
+        while let range = rest.range(of: opener) {
+            found.append(AgentsPageLiveDataRulesTests.body(after: opener, in: String(rest[range.lowerBound...])) ?? "")
+            rest = rest[range.upperBound...]
+        }
+        return found
+    }
 
     private static func source(_ path: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
