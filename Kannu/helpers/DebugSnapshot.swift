@@ -76,6 +76,11 @@ enum DebugSnapshots {
         // Mac's.
         let timerPage = DebugSnapshotFixtures.timerOverview(.running)
         TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard's product and what its settings read from the clipboard manager, the same way: none of this
+        // Mac's copies or pins. The page never touches the manager then, which would load the saved history and start
+        // reading the real pasteboard.
+        let clipboard = DebugSnapshotFixtures.clipboardOverview(pinned: 0, history: 4, now: Date())
+        ClipboardOverview.snapshotFixture = clipboard
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
             boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
@@ -255,6 +260,19 @@ enum DebugSnapshots {
             }
         }
         TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard with nothing copied, one pin and two copies, and three pins and five copies, at the window's
+        // first size, as Agents' boards; the last with History drawn open. Fixtures only.
+        for (count, copies) in [(0, 0), (1, 2), (3, 5)] where request.tabs == nil || request.tabs?.contains("clipboard\(count)") == true {
+            ClipboardOverview.snapshotFixture = DebugSnapshotFixtures.clipboardOverview(pinned: count, history: copies,
+                                                                                         showsHistory: count == 3, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .clipboard).environmentObject(viewModel)),
+                             name: "clipboard\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        ClipboardOverview.snapshotFixture = clipboard
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -1269,6 +1287,35 @@ enum DebugSnapshotFixtures {
         return TimerOverviewFixture(data: data, presets: timerPresets)
     }
 
+    /// Brain › Clipboard's product, from made-up copies, none of this Mac's: up to three pins (an ssh line, a link, a
+    /// file), oldest pin first, and up to five copies in History, newest first (text, a link, an image, rich text, and a
+    /// long line cut as the manager cuts it). The manager is monitoring.
+    static func clipboardOverview(pinned: Int, history: Int, showsHistory: Bool = false, now: Date) -> ClipboardOverviewFixture {
+        let pins: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "ssh deploy@staging.example.com", 9 * 86_400),
+            (.url, "https://developer.apple.com/documentation/swiftui", 5 * 86_400),
+            (.file, "file:///Users/example/Documents/Release%20notes.pdf", 2 * 86_400),
+        ]
+        let copies: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "Thanks, that fixes it. I'll merge it after lunch.", 180),
+            (.url, "https://example.com/docs/getting-started", 1_500),
+            (.image, "Image (48 KB)", 3_600),
+            (.rtf, "Agenda: the release checklist, then the notch review", 10_800),
+            (.text, "SELECT count(*) FROM sessions WHERE ended_at IS NULL;", 93_600),
+        ]
+        var data = ClipboardPageData()
+        data.pinned = pins.prefix(pinned).map { type, content, ago in
+            var item = ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+            item.isPinned = true
+            return item
+        }
+        data.history = copies.prefix(history).map { type, content, ago in
+            ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+        }
+        data.isMonitoring = true
+        return ClipboardOverviewFixture(data: data, showsHistory: showsHistory)
+    }
+
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
         let totals: [String: (newInput: Int, output: Int, context: Int)] = ["live": (83_000, 40_000, 458_000),
                                                                             "ended": (21_400, 22_300, 96_000)]
@@ -1303,6 +1350,37 @@ enum DebugSnapshotFixtures {
                          chatName: "A chat with a very long title that goes on and on to test wrapping in the row",
                          projectName: "app", cwd: "/Users/example/code/app"),
         ]
+    }
+}
+
+extension ClipboardItem {
+    /// DEBUG snapshot boards only: a made-up copy as the history would hold it, copied at `copiedAt`, its preview made as
+    /// the manager makes it. It writes no file, where the manager saves an image's: a board shows an image's line, never
+    /// its picture.
+    init(snapshot content: String, type: ClipboardItemType, copiedAt: Date) {
+        id = UUID()
+        self.type = type
+        timestamp = copiedAt
+        imageFileName = nil
+        rtfData = nil
+        switch type {
+        case .file:
+            stringData = nil
+            fileURLs = [content]
+            preview = URL(string: content)?.lastPathComponent ?? content
+        case .image:
+            stringData = nil
+            fileURLs = nil
+            preview = content
+        case .rtf:
+            stringData = content
+            fileURLs = nil
+            preview = String(content.prefix(50))
+        case .text, .url, .unknown:
+            stringData = content
+            fileURLs = nil
+            preview = ClipboardItem.generatePreview(stringData: content, type: type)
+        }
     }
 }
 #endif
