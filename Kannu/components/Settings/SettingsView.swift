@@ -175,6 +175,11 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Security's first settings row, built whenever Agent Status is on: where Security's gear lands.
+    static let securityAlertsHighlightID = SettingsTab.agentSecurity.highlightID(for: "High-severity alerts in the notch")
+    /// Brain › Security › ADR scans, ADR Discovery's row, with its install command and Check again: where Connect ADR
+    /// lands.
+    static let securityConnectADRHighlightID = SettingsTab.agentSecurity.highlightID(for: "Connect ADR")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -300,7 +305,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear. Each reads its own store.
+    /// A product page's actions, on its title's row: Agents' gear, and Security's gear and Scan now or Connect ADR. Each
+    /// reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1130,7 +1136,7 @@ struct SettingsView: View {
                 AgentStatusSettings()
             }
         case .agentSecurity:
-            SettingsForm(tab: .agentSecurity) {
+            SettingsForm(tab: .agentSecurity, actions: AnyView(SecurityHeaderActions())) {
                 AgentSecuritySettings()
             }
         case .downloads:
