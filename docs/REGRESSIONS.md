@@ -1775,8 +1775,10 @@ and a task page's minute loop now run only while Brain is on screen; both used t
 in another Space. New hooks: the page's `onAppear` (the reminder permission check and the archive, which All tasks ran
 as it opened, then one read of the copy) and its `.task`; the header's `onAppear` (one read) and `.task`; and an
 `onReceive` of New task's request, which opens a sheet only on a press. D1's list-detail adds one `onGeometryChange`
-that sets a flag when the panel crosses 1,224 pt, and no animation: the switch is a redraw. The back row lost its card.
-None loads a field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
+that sets a flag when the panel crosses 1,224 pt, and no animation: the switch is a redraw, and the first page keeps
+its place in the tree across it. The back row lost its card. A sheet's close reads the copy again (`onDismiss`), and
+going back still scrolls by an `onAppear` inside the page's `.id(path)`, where it runs for each page. None loads a
+field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
 Space. `TasksPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
 ---

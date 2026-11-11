@@ -103,6 +103,10 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
             }
         }
         let reader = body(after: "private func copyFromStore()", in: page)
+        // `body(after:)` gives what is inside the braces.
+        if !reader.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("guard enableTasks else { return }\n") {
+            problems.append("the copy can be read with tasks off, which builds the task list")
+        }
         if page.components(separatedBy: "TasksPageData(TasksManager.shared)").count - 1 != 1
             || overviewCode.contains("TasksPageData(TasksManager.shared)")
             || !reader.contains("TasksPageData(TasksManager.shared)")
@@ -139,7 +143,8 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
             ("if latest != tasks { tasks = latest }", "tasks = latest"),
             ("TasksOverview(data: tasks,", "TasksOverview(data: TasksPageData(TasksManager.shared),"),
             // A value the manager does not show yet, read past the copy: the allowlist catches what a list of names would miss.
-            ("let counts = TaskFacets.sourceCounts(data.active)", "let counts = TaskFacets.sourceCounts(TasksManager.shared.activeTasks)"),
+            ("let counts = data.sourceCounts", "let counts = TaskFacets.sourceCounts(TasksManager.shared.activeTasks)"),
+            ("        guard enableTasks else { return }\n        let latest = TasksPageData", "        let latest = TasksPageData"),
             ("let state = data.syncStates[source] ?? .idle", "let state = TasksManager.shared.syncState(source)"),
             ("        .settingsPageTitle(", "        .onReceive(TasksManager.shared.objectWillChange) { _ in }\n        .settingsPageTitle("),
         ], in: settings) { Self.followProblems(settings: $0, overview: overview, rows: rows) }
@@ -291,21 +296,31 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
         if !page.contains("guard enableTasks, showsPageBeside, path.count == 1, case .task(let id)? = path.first else { return nil }") {
             problems.append("a page other than a task opened from the list shows beside it")
         }
-        if !page.contains(".frame(width: inset + ListDetailLayout.listWidth + inset)")
+        if !page.contains(".frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)")
             || !page.contains(".environment(\\.settingsPageInset, 0)") {
             problems.append("the list and the task's page are not laid out by the function's widths")
+        }
+        // Built in one place, the first child of one stack at both widths, so crossing the width keeps it, scrolled
+        // where it was, and a wide first open does not build it twice (the review's S1).
+        if SettingsDesignSystemRulesTests.matches(of: #"\bfirstPage\b(?!Context|AndTask)"#, in: page).count != 2
+            || SettingsDesignSystemRulesTests.matches(of: #"HStack\(alignment: \.top, spacing: 0\) \{\s*firstPage\s*\.frame"#, in: page).count != 1 {
+            problems.append("the first page is built in more than one place, so crossing the width rebuilds it")
+        }
+        // Inside `.id(path)`, so it runs again for each page below the first; outside, it ran once (measured,
+        // docs/SETTINGS.md "Section rules").
+        if SettingsDesignSystemRulesTests.matches(of: #"\.onAppear \{ scrollToReturnTarget\(proxy\) \}\s*\.id\(path\)"#, in: page).count != 1 {
+            problems.append("going back between two pages below the first does not scroll to the row it came from")
         }
         for (name, code) in [("the page", page), ("the overview", SettingsDesignSystemRulesTests.code(overview))] {
             for banned in ["minWidth:", "ViewThatFits", ".inspector("] where code.contains(banned) {
                 problems.append("\(name) lays out with \(banned), which D1 rules out")
             }
         }
+        // A page in the list's place closes and the rebuilt first page scrolls to the row; a task's page beside the list
+        // stays, the list being on screen (the review's M5).
         let landing = body(after: ".onChange(of: highlights.activeHighlightID, initial: true)", in: page)
-        guard let rebuilt = landing.range(of: "let rebuildsFirstPage = pageInPlace != nil"),
-              let cleared = landing.range(of: "path = []"), rebuilt.lowerBound < cleared.lowerBound,
-              landing.contains("if rebuildsFirstPage { returnTo = id }") else {
+        if SettingsDesignSystemRulesTests.matches(of: #"guard pageInPlace != nil else \{ return \}\s*path = \[\]\s*returnTo = id"#, in: landing).count != 1 {
             problems.append("a search or deep link does not return to the first page at both widths")
-            return problems
         }
         return problems
     }
@@ -317,12 +332,18 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             ("pageWidth: SettingsTheme.pageMaxWidth)", "pageWidth: 600)"),
             ("guard enableTasks, showsPageBeside, path.count == 1,", "guard enableTasks, showsPageBeside,"),
-            (".frame(width: inset + ListDetailLayout.listWidth + inset)", ".frame(minWidth: inset + ListDetailLayout.listWidth + inset)"),
-            ("            .environment(\\.settingsPageInset, 0)\n", ""),
-            ("                } else if enableTasks && showsPageBeside {\n                    listAndPage\n",
-             "                } else if enableTasks && showsPageBeside {\n                    ViewThatFits { listAndPage; firstPage }\n"),
-            ("            path = []\n            if id == SettingsDeepLink.tasksListOpenID", "            if id == SettingsDeepLink.tasksListOpenID"),
-            ("            if rebuildsFirstPage { returnTo = id }\n", "            returnTo = id\n"),
+            (".frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)",
+             ".frame(minWidth: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : 0)"),
+            ("                    .environment(\\.settingsPageInset, 0)\n", ""),
+            ("    private var firstPageAndTask: some View {\n        HStack(",
+             "    private var firstPageAndTask: some View {\n        ViewThatFits {\n        HStack("),
+            // The first page built a second time, for the wide case, as commit 1 had it.
+            ("            } else {\n                firstPageAndTask\n",
+             "            } else if showsListAndPage {\n                HStack { firstPage; taskPageBeside }\n            } else {\n                firstPageAndTask\n"),
+            ("                .onAppear { scrollToReturnTarget(proxy) }\n                // A page opens at its top.\n                .id(path)",
+             "                // A page opens at its top.\n                .id(path)\n                .onAppear { scrollToReturnTarget(proxy) }"),
+            ("            guard pageInPlace != nil else { return }\n", ""),
+            ("            returnTo = id\n", ""),
         ], in: settings) { Self.layoutProblems(settings: $0, overview: overview) }
     }
 

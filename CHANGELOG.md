@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Tasks page
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: the review's S1 and M2 to M6, and the back row's scroll back
+- **Changes:**
+  - The first page keeps one place in the tree at both widths, so crossing 1,224 pt, or a wide first open, keeps the
+    list scrolled where it was, Find's caret and Tag colours' fold (S1).
+  - Going back between two pages below the first scrolls to the row again: its `onAppear` is back inside `.id(path)`.
+    Applied after it, it ran once and never again (measured in a harness).
+  - A sheet's close, the delete alert and the value sheets read the copy at once, as a press does (M2).
+  - The Sources rows' connection, status and sync flag are in the copy, so a change to them alone redraws the page
+    (M3); the interrupted sessions, the Tag filter's choices, Tag colours' tags and the source counts are worked out in
+    the copy, not on every keystroke in Find (M4). `TasksManager` keeps its own property, now `Equatable`.
+  - A search or deep link keeps a task's page beside the list, the list being on screen, so the header's gear no longer
+    closes it (M5).
+  - Each card is one VoiceOver group named for its task, so its ✓, ▶ and › say whose they are (M6).
+  - `TasksPageLiveDataRulesTests` and `TaskListRulesTests` hold each answer against planted offenders; docs/SETTINGS.md
+    and docs/REGRESSIONS.md entry 22's addendum say so.
+
 ### 2026-11-11 - Brain's Tasks page leads with the list, with a task's page beside it at wide windows
 - **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, with D1's list-detail
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: Tasks as a product page (tabs, Find with #tag, a Tag filter, rows as soft cards, New task in the header) under Agents' live-data contract, and D1's list-detail by one tested width function
