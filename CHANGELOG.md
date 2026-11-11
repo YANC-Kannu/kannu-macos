@@ -44,6 +44,66 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - 7 new strings, each in the catalog's 17 languages. Boards `usage0`, `usage1` and `usage3` draw the page from
     fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 8 and 22) gain their lines.
 
+### 2026-11-06 - Answer the review of Brain's consistency pass
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5
+- **Changes:**
+  - Every choice card is a plain button that carries "selected" itself, so the keyboard reaches it and VoiceOver
+    hears which one is chosen; three were tap gestures. The idle animation's delete glyph sits over its card's
+    button, never inside it, and the card's name is no longer selectable text inside a button.
+  - The search suggestions decide whether to scroll from what is known at once: more than seven matches, or a last
+    row not yet measured, scroll in at most 344 pt, so an unmeasured list is never taller. The row measures, cleared
+    when the matches change, only trim the list to whole rows, and a short fade at its foot says more rows sit below.
+  - The secondary ink is a touch darker in light (#66625A), 4.5:1 on the line colour a badge sits on as well as on
+    every surface; the readability rule holds it there, with the old grey as its plant.
+  - Shelf's Full Disk Access callout and the ADR callout take the offer's blue, as Focus's did.
+  - The Lock Screen glass preview's view, unused since the last change, goes with its `glassdesktop` image.
+  - "Clear History" gains the nine languages it lacked.
+  - A rule now allows `.primary` only on the sheets' default actions and on Tasks' New Task, with a planted offender.
+  - docs/SETTINGS.md: the cards as buttons, the suggestions, the callout colours, Lock screen's counts;
+    docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-05 - Brain's pages say each thing one way
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the pages
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 10, 11, 13, 16, 17, 18 and 21 on the pages, and the comments that explained a placement by a lazy Form
+- **Changes:**
+  - Card buttons take the standard style: Appearance's Upload skin and Add icon, an extension's Authorize and
+    Re-authorize, and Agents' Turn On and Install hook. `.primary` stays on sheets' default actions and on Tasks' New
+    Task, the page's one verb until Stage 5 gives it a header.
+  - Every choice card says "selected" with the one ring, and its name in ink: the HUD style's dot, the idle animation's
+    "Selected" pill and the skin's and icon's blue name pills go, with the tinted fill on the download and Bluetooth
+    cards. An idle animation's "Built-in" is the badge.
+  - General's Permissions are rows of their card, their buttons trailing, not cards inside it; onboarding keeps its
+    cards. An extension's expanded details are a bordered card, not a darker one.
+  - A finding's "Details" is a flush quiet button in ink, its chevron after the word.
+  - Slider values move from titles into the readout: HUD's Width, Height, Size, Screen padding and Line width, and
+    General's two custom notch sizes.
+  - Lock screen's Preview and the Actions of Clipboard and Screen Assistant get a title and a caption, their footers
+    moved into the caption; About's two report buttons share one row, each keeping its search landing.
+  - The Focus callout takes the offer's blue. Appearance drops the Lock Screen glass preview, an empty panel; the Lock
+    screen page's Preview shows the real widgets. A board draws Devices' 3D icon from its movie's first frame, since
+    boards draw no video; the app plays the movie as before.
+  - Comments that explained a placement by "a lazy Form" give today's reason (Tasks, Timer, General, HUD and OSD).
+  - Strings: 11 new keys in all 17 languages; 10 keys this change left unused leave the catalog.
+  - Pins follow the counts that moved; docs/SETTINGS.md and docs/REGRESSIONS.md entry 22 gain their lines.
+
+### 2026-11-05 - Brain's shared pieces get one look each
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the shared components
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 11, 12, 14, 19 and 20 where a shared component carries them, and the looks the pages take next
+- **Changes:**
+  - A callout keeps its card as a boundary, the card's colour inside a 1-pt line border instead of a darker slab, and
+    its buttons take the standard style (`settingsCalloutCard`, `SettingsPermissionCallout`).
+  - One badge, `SettingsBadge`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius.
+    "Beta" and "Built-in" use it, and "ALPHA" becomes "Alpha" in the same badge.
+  - One selected look for a choice card, a 2-pt accent ring and the name in ink, medium when chosen
+    (`settingsChoiceRing`, `settingsChoiceLabel`).
+  - A colour swatch carries a white ring inside a hairline, so it never reads as a status dot.
+  - A page's scroll view starts 12 pt under the title, so a scrolled page is never cut against it; at rest a page
+    starts where it did.
+  - The search suggestions show whole rows only, each title in the body's size over two lines at most, its tab under
+    it in the description's.
+  - "Alpha" in all 17 languages; the pins follow the badge, the callout and the page.
+
 ### 2026-11-05 - Answer the review of Brain's theme values and Agents page
 - **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count

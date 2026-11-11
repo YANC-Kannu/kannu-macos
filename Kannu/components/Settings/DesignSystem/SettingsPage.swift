@@ -41,8 +41,12 @@ struct SettingsPage<Content: View>: View {
             // Capped first, then inset, so the inset never comes out of the column's width.
             .frame(maxWidth: SettingsTheme.pageMaxWidth, alignment: .leading)
             .padding(.horizontal, inset)
-            .padding(.vertical, SettingsTheme.sectionGap)
+            // Less the scroll view's own inset below, so a page at rest starts where it did.
+            .padding(.top, SettingsTheme.sectionGap - SettingsTheme.pageScrollInset)
+            .padding(.bottom, SettingsTheme.sectionGap)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // A scrolled page is cut this far under the title, never against it.
+        .padding(.top, SettingsTheme.pageScrollInset)
     }
 }

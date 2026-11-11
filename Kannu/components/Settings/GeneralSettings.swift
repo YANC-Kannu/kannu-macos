@@ -139,11 +139,11 @@ struct GeneralSettings: View {
 
             SettingsSection {
                 // Onboarding's Permissions rows: what a Not now there held back is allowed here,
-                // one macOS dialog at a time.
-                VStack(spacing: 10) {
+                // one macOS dialog at a time. Rows of this card, not cards inside it.
+                VStack(spacing: SettingsTheme.sectionRowGap) {
                     // The current music source decides whether a "Control …" row shows.
                     ForEach(LaunchPermissionManager.rows(musicSource: Defaults[.mediaController])) { permission in
-                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController])
+                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController], asRow: true)
                     }
                 }
                 // Shared with onboarding, so Allow stays `.borderedProminent`, and its white label
@@ -177,8 +177,8 @@ struct GeneralSettings: View {
                         }
                         .settingsHighlight(id: highlightID("Notch display height"))
                 if notchHeightMode == .custom {
-                    SettingsSliderRow(title: Text("Custom notch size - \(notchHeight, specifier: "%.0f")"),
-                                      value: $notchHeight, in: 15...45, step: 1, valueText: nil)
+                    SettingsSliderRow("Custom notch size", value: $notchHeight, in: 15...45, step: 1,
+                                      valueText: Text("\(Int(notchHeight)) px"))
                     .onChange(of: notchHeight) {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
@@ -202,8 +202,8 @@ struct GeneralSettings: View {
                     NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                 }
                 if nonNotchHeightMode == .custom {
-                    SettingsSliderRow(title: Text("Custom notch size - \(nonNotchHeight, specifier: "%.0f")"),
-                                      value: $nonNotchHeight, in: 0...40, step: 1, valueText: nil)
+                    SettingsSliderRow("Custom notch size", value: $nonNotchHeight, in: 0...40, step: 1,
+                                      valueText: Text("\(Int(nonNotchHeight)) px"))
                     .onChange(of: nonNotchHeight) {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
@@ -220,7 +220,7 @@ struct GeneralSettings: View {
         // `NSScreen.screens` is not observable: an `onChange(of:)` of it ran only when something
         // else redrew the page, and a display coming or going need not. A new `screens` redraws
         // the page, and with it the per-display overrides, which read `NSScreen.screens` too.
-        // On the Form, not the Display row: rows of a lazy Form may not exist when it fires.
+        // On the page, which owns `screens`: the Display row and the per-display overrides both read it.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             screens = NSScreen.screens.compactMap { $0.localizedName }
         }

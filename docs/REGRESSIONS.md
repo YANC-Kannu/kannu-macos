@@ -1673,6 +1673,24 @@ through the same `figureRow`, with no clock. "Open chat ›" is a label inside t
 flush quiet button and the 12-pt insets add no `onAppear`, no `.task` and no animator. `AgentsPageLiveDataRulesTests`
 passes with its clauses and plants unchanged, so the rest of this entry holds.
 
+**2026-11-05 addendum: one look for each shared piece adds no `onAppear`, no `.task` and no animator.** The design
+review's consistency fixes (findings 4 and 10 to 21) give the badge, a choice card's selected look, a callout and a colour
+swatch one look each, and none of them has a hook. Four changes touch what this entry is about. Appearance no longer
+builds the Lock Screen glass preview, so its `NSGlassEffectView` and its two log hooks (`onAppear`, `onDisappear`)
+leave that page. The search suggestions measure each row with `onGeometryChange`, which runs when a row's frame
+changes, never on a clock. A board makes no player for Devices' 3D icon and draws the movie's first frame instead
+(`snapshotDrawsStill`, DEBUG only); in the app the player still pauses from `viewDidMoveToWindow`. General's
+Permissions draw `LaunchPermissionRow` as rows (`asRow`), a layout only: what each button does and when macOS asks are
+unchanged, and `FirstLaunchRulesTests` holds its gates. A page's scroll view now starts 12 pt under the title, a
+padding. So the rest of this entry holds.
+
+**2026-11-06 addendum: the review of that pass adds no `onAppear`, no `.task` and no animator.** The choice cards are
+plain buttons now, so the keyboard reaches them; the idle animation card's hover covers its delete glyph, which sits
+over the card's button. The search suggestions clear their row measures in an `onChange` of the matches, which runs
+only while Brain is open, and read how far their rows reach from `onGeometryChange`, never on a clock; an unmeasured
+list scrolls in at most 344 pt rather than grow. `LockScreenGlassVariantPreviewCell`, unused since the last addendum,
+is deleted with its log hooks and its image. So the rest of this entry holds.
+
 **2026-11-06 addendum: Usage's live data runs only while Brain is on screen, and the page reads nothing of its own.**
 Brain › Usage is a product page too (`UsageOverview`). Its readings, outlooks and models come through one subscription
 throttled to 500 ms, and its header's refresh state through one that drops repeats, each in a `.task(id:)` on

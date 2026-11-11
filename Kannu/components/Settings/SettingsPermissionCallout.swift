@@ -61,11 +61,11 @@ struct SettingsPermissionCallout: View {
             Text(verbatim: message)
                 .settingsDescriptionStyle()
 
+            // The standard style: `.primary` is a page header's one verb or a sheet's default action, never a callout's.
             HStack(spacing: SettingsMetrics.rowContent) {
                 Button(requestButtonTitle) {
                     requestAction()
                 }
-                .buttonStyle(SettingsButtonStyle(.primary))
 
                 Button(openSettingsButtonTitle) {
                     openSettingsAction()
@@ -74,9 +74,7 @@ struct SettingsPermissionCallout: View {
             .controlSize(.small)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(SettingsMetrics.cardPadding)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: SettingsMetrics.cardCornerRadius, style: .continuous))
+        .settingsCalloutCard()
         // One group for VoiceOver: Shelf shows two callouts, each with an "Open Privacy & Security".
         .accessibilityElement(children: .contain)
     }

@@ -162,8 +162,8 @@ struct AllTasksPage: View {
             if case .failed(let reason) = manager.loadState {
                 SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }
-            // On the one row, not the Section, so it runs as the page opens and not again as task
-            // rows scroll in and out of the lazy Form.
+            // On the one row, so it runs as the page opens and not again as the task rows, a lazy
+            // list, scroll in and out.
             findRow
                 .onAppear {
                     manager.checkReminderPermission()

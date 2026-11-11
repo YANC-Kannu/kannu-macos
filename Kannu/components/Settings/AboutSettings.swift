@@ -104,14 +104,13 @@ struct About: View {
                     Toggle("Watch for freezes", isOn: $hangWatchdogEnabled)
                 }
                 .settingsHighlight(id: highlightID("Watch for freezes"))
+                // One row for the two, each button keeping its own search landing.
                 SettingsActionRow {
                     Button("Report a Problem…") {
                         CrashReporter.shared.reportAProblem()
                     }
-                }
-                .settingsHighlight(id: highlightID("Report a Problem"))
+                    .settingsHighlight(id: highlightID("Report a Problem"))
 
-                SettingsActionRow {
                     Button(copiedReport ? "Copied" : "Copy Latest Report") {
                         copiedReport = false
                         reportCopyFailed = false
@@ -126,8 +125,8 @@ struct About: View {
                             copiedReport = false
                         }
                     }
+                    .settingsHighlight(id: highlightID("Copy Latest Report"))
                 }
-                .settingsHighlight(id: highlightID("Copy Latest Report"))
 
                 if reportCopyFailed {
                     SettingsErrorText("macOS has written no report about Kannu on this Mac.")
