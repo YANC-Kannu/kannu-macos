@@ -821,6 +821,18 @@ Guard: `TrafficLightPersistenceGateTests` (the pure rule), `TrafficLightGateRule
 wiring: gate consulted, hold rescans instead of publishing, stop resets, reveal re-arms only on
 a published change).
 
+---
+
+**Addendum (2026-11-06) — Brain's Security page no longer observes the findings store whole.** The
+findings store republishes on every hook write while a session runs with permission checks off (each
+write restamps that session's finding), and Brain › Security observed it whole
+(`AgentSecuritySettings`, older than the redesign; Agents' Security cell stopped on 2026-11-05). So
+Brain left on Security redrew at hook rate, open or closed. The page now copies what it shows into
+one value, `SecurityPageData`, through `objectWillChange` throttled to 500 ms, assigned only on a
+change and only while Brain is on screen (entry 22's 2026-11-06 addendum). Guard:
+`SecurityPageLiveDataRulesTests`, each clause against planted offenders. **Not measured:** the CPU
+before and after; it needs a real window and a session with permission checks off.
+
 ## 11. A passive source never does its I/O on the main actor
 
 **What happened (2026-09-09).** `WarpAgentStore.sessions` opened `warp.sqlite` synchronously
@@ -1699,6 +1711,53 @@ nothing on it observes a usage store whole. New hooks: the overview's `onAppear`
 `.task`, and the header's `.task`; none loads a field. `UsagePageLiveDataRulesTests` holds each clause against planted
 offenders, and pins Refresh's press as the page's one way to a read (entry 8), so the rest of this entry holds.
 
+**2026-11-06 addendum: Security's live data runs only while Brain is on screen, and its product starts no work.**
+Brain › Security is a product page now (`SecurityOverview` above its settings). It observed the whole findings store,
+closed or not (entry 10's 2026-11-06 addendum). Now the page holds one copy, `SecurityPageData`, read as the page
+appears and again as Brain comes back on screen, then followed through `objectWillChange` at most twice a second, in a
+`.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while it is false. Back on screen it reads first
+because `objectWillChange` does not send again what changed while Brain was away. The header follows `$isScanning` the
+same way, dropping repeats. Off screen the copy stays as it was, and nothing on the page keeps a clock. New hooks: the
+page's `onAppear` reads the copy beside the stored secrets it read before, and the page and its header each have a
+`.task`; none loads a field. The ADR and Detection checks' `onAppear` moved from the findings' section, which went up
+into the product, to ADR scans', so they still run once a visit, as the page opens; the policy's is unchanged. The
+product starts no scan, ADR check, policy read or analysis: Scan now and Connect ADR act on a press.
+**Not measured:** CPU with Security open, closed after being opened on it, and parked full screen in another Space,
+during a session with permission checks off. `SecurityPageLiveDataRulesTests` holds each clause against planted
+
+**2026-11-11 addendum: Timer's live data runs only while Brain is on screen, and its time keeps no clock of its own.**
+Brain › Timer is a product page too (`TimerOverview`), and it shows the one value on Brain that changes every second: a
+running timer publishes three changes a tick. What the page shows comes through one subscription to the manager's
+`objectWillChange`, throttled to 500 ms and copied into `TimerPageData`, and its header's "a timer runs" through one to
+`$isTimerActive` that drops repeats, each in a `.task(id:)` on `BrainVisibility.isOnScreen`, as Agents'. Its time moves
+only with the manager's own tick: no `TimelineView`, no `Timer` and no counting `Text`, so nothing on the page moves
+while a timer is paused or idle, or while Brain is off screen, and a closed Brain still costs nothing. New hooks: the
+overview's `onAppear` (one read of the manager), its `.task`, and its `onChange` of the presets (one read, so a paused
+timer's colour follows an edit of its preset; it runs only while Brain is open), the header's `.task`, and the preset
+sheet's `onAppear`, which focuses a new preset's name, as New Task's does; none loads a field that writes through. A
+press reads the manager again at once, outside the throttle, so a second click never acts against a card half a
+second old. The inline
+preset editor left the settings with its `withAnimation`s, and nothing on the page animates. **Not measured:** the CPU of
+Timer open while a timer runs; it needs a real window. `TimerPageLiveDataRulesTests` holds each clause against planted
+offenders, so the rest of this entry holds.
+
+**2026-11-11 addendum: Clipboard's live data runs only while Brain is on screen, and its boards never touch the
+clipboard manager.** Brain › Clipboard is a product page now (`ClipboardOverview` above its settings). It observed the
+clipboard manager whole, closed or not, so every copy the manager recorded redrew it. Now the page holds one copy,
+`ClipboardPageData`, read as the page appears and again as Brain comes back on screen, then followed through
+`objectWillChange` at most twice a second, in a `.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while
+it is false; the header follows whether there is anything to clear the same way, dropping repeats. Off screen the copy
+stays as it was, and nothing on the page keeps a clock: a row says when it was copied by its date. New hooks: the
+page's `onAppear` reads the copy after the start of the manager it already made; the overview's `onAppear` folds
+History, so History opened once is folded again on every reopening (a board's fixture may open it after); and the page
+and its header each have a `.task`. None loads a field. History's disclosure animates as every disclosure under
+Settings does, a bounded ease, nil under Reduce Motion. With a board's fixture set, the page never touches the manager:
+`ClipboardManager.shared`'s first touch loads the saved history and deletes the image files it does not name in
+Application Support's `Kannu/ClipboardData`, a folder the installed app shares with a debug build, and its start reads
+the real pasteboard twice a second. **Not measured:** CPU with Clipboard open while copies arrive, and parked full
+screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of
+this entry holds.
+
 **2026-11-11 addendum: Notes' live data runs only while Brain is on screen, and the page starts no sync.** Brain › Notes
 is a product page now (`NotesOverview` above its settings, and a note's own page, `NotePage`, as an in-tab swap). The
 page before observed the sync manager, the notch's coordinator and its view model whole, and used neither of the last
@@ -1804,7 +1863,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 
 | File | Commits | What edits here have historically broken |
 |---|---|---|
-| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in four long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor, or on Agents the findings store, whole (entry 22's last 2026-11-05 addendum, docs/SETTINGS.md "Live data"). |
+| `SettingsWindowController.swift`, `SettingsView.swift`, anything else under `Kannu/components/Settings/` | — | Closing Brain takes its content out of the window, because an ordered-out window keeps animating. So `onAppear` runs again on every reopening, a player must stop itself, and a Lottie must restart (entry 22 and its 2026-11-01 addendum). A page builds every row as it appears, so a row's `onAppear` runs as the page opens, never on a scroll, except in four long lists that are lazy, where the one hook, "Copy for agent" clearing its "Copied", also runs on a scroll (its 2026-11-05 addenda). Opening restores focus and scroll, the first open after launch included, because ordering in focuses the page's first text field (the same addenda). A close in full screen waits for the exit, through `deferCloseUntilWindowed`, so the window is never ordered out inside a full-screen Space (the same entry). The root's frame stays unbounded, because the size bridge clamps a full-screen window to it (entry 17's 2026-11-01 addendum). Live data on a page runs only while Brain is on screen: throttled subscriptions in `.task`s that end with it (`BrainVisibility`, which follows the window's occlusion state and is set on opening and closing), and nothing observes the agent monitor or the findings store whole: Agents' Security cell and the Security page follow that store through a throttle (entry 22's last 2026-11-05 addendum and its 2026-11-06 Security addendum, docs/SETTINGS.md "Live data"). |
 | `CursorAgentStatusMonitor.swift` | 18 | The merge/reconcile seam. **Every** edit is chat-name resolution, hook-vs-transcript precedence, or session deletion/ageing. Entries 5, 6 and 15 live here. |
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |

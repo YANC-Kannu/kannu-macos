@@ -45,6 +45,113 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
     `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
 
+### 2026-11-11 - Answer the review of Brain's Clipboard page
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
+- **Changes:**
+  - History folds again each time the page appears, Brain's reopening included. Brain's content outlives its window, so
+    History opened once stayed open on every later visit, a reopened Brain on a shared screen included.
+  - `ClipboardPageLiveDataRulesTests` holds the fold, with a planted offender.
+  - docs/SETTINGS.md says when History folds, and that Pinned Items always show, a pin being the user's own choice;
+    docs/REGRESSIONS.md entry 22's addendum names the fold among the page's hooks.
+
+### 2026-11-11 - Brain's Clipboard page leads with the pinned items and History
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: Clipboard as a product page built from the clipboard manager's copies, under Agents' live-data contract, its boards from made-up copies only
+- **Changes:**
+  - Brain › Clipboard opens on its product, above "Clipboard settings": Pinned Items with their count, then History,
+    folded until it is opened, with its count. A row is the copy's preview over its kind and date, with Copy, Pin or
+    Unpin, and Delete; a pinned row has no Delete, which only unpins in the panel and the popover.
+  - With nothing copied, an empty state, "No clipboard history", with its one line and no action; while the clipboard
+    manager is off, "Clipboard Manager is off" with Turn On.
+  - The header holds "…", with Clear History and Clear Pinned Items, which replace the Actions buttons and still clear
+    at once, and the page's one verb, Open history panel, which shows the floating clipboard panel on a press.
+  - Live data as on Agents: one copy of the manager's pins, History and status, throttled to 500 ms, assigned only on a
+    change and followed only while Brain is on screen; the page no longer observes the manager whole.
+    `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, and that a board never touches the
+    manager, whose first touch deletes image files the installed app shares with a debug build.
+  - Current Items, Pinned Items, Actions and Current History left the settings. Monitoring Status is a status line with
+    its dot, so the page has no raw colour or system font left, and both pins for it go.
+  - 7 new strings, each in the catalog's 17 languages. The Russian for "Pin items from history to save them here" was
+    another string's, about the Dynamic Island, and is fixed. Boards `clipboard0`, `clipboard1` and `clipboard3` draw the
+    page from made-up copies; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
+### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own
+- **Changes:**
+  - Brain › Timer opens on its product, above "Timer settings": the running timer in the hero's three bands (its
+    state, its name, then the time left, large, over its length, with Pause or Resume and Stop and a bar of how much
+    has run), then the presets as start tiles. A click on a tile starts its preset, as the notch's preset list does,
+    and the running preset's tile wears the selected ring.
+  - With no timer running, an empty state: "No timer running" and one line pointing at the tiles. While the timer is
+    off, "Timer is off" with Turn On stands in place of the timer and the tiles. A timer mirrored from the Clock app
+    shows without buttons, as in the notch: the Clock app pauses and stops it.
+  - The header holds the gear and Start timer, which starts the custom timer at its stored length, as the popover's
+    Start Custom Timer does: on a press only, and off while a timer runs, while the timer is off, or at 0:00.
+  - The presets are edited in a sheet (the design review's finding 25): a tile's ⋯ and its right-click menu hold
+    Edit…, Move Up, Move Down and Delete, Add Preset is the last tile, and Restore Defaults, which asks first, sits in
+    the presets' ⋯. The sheet refuses a blank name and a 0:00 length. The inline editor in the settings, with its mini
+    steppers under small labels, is gone, and its layout pins shrink with it.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock of
+    its own: the time moves with the timer's own one-second tick, so it shows what the notch shows. A press reads the
+    timer as it is then. `TimerPageLiveDataRulesTests` holds each clause against planted offenders, and the page joins
+    the timer surfaces that read `sessionAccent` and offer Resume while paused in overtime.
+  - 9 new strings, each in the catalog's 17 languages, and one theme value, `tileWidth`. Boards `timer0`, `timer1`,
+    `timerOver`, `timerClock`, `timerOff` and `timerPresetSheet` draw the page from fixtures; docs/SETTINGS.md and
+    docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Security page
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
+- **Changes:**
+  - The count strip is gone while to review, high and acknowledged are all zero. "Show acknowledged and snoozed again"
+    shows only while a finding is acknowledged or snoozed, not for an acknowledgement whose finding is gone.
+  - `SecurityPageLiveDataRulesTests` holds each loop to its job: the page's takes a fresh copy, the header's passes
+    the scan flag on. It also allows only the store's press methods and the two subscriptions by name, so a value the
+    store gains later cannot be read past the copy. Each rule has a planted offender.
+  - docs/SETTINGS.md: the settings row's Scan now can turn off up to 500 ms after the header's, and `runScanNow`
+    refuses a second scan; "Live data" names Agents' Security cell where it read as the page; the strip's rule.
+
+### 2026-11-06 - Brain's Security page leads with its findings
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own
+- **Changes:**
+  - Brain › Security opens on its product, above "Security settings": a count strip (to review, high and
+    acknowledged, with "Show acknowledged and snoozed again"), the findings in their lazy list, a status row of the
+    newest scan result, Scan this Mac and Policy rules, and Recent analyses while session analysis is on.
+  - With no finding waiting, an empty state in the list's place: "No findings yet" or "No open findings", one line,
+    and the page's verb. While Agent Status is off, one card with Turn On.
+  - The header holds the gear, which goes to the first settings row, then Scan now, off while a scan runs, or Connect
+    ADR while ADR Discovery is not found, which goes to ADR Discovery's row. Both act on a press only, through the
+    settings' own paths.
+  - The page no longer observes the findings store, which republishes on every hook write while a session runs with
+    permission checks off: it holds one copy, followed at most twice a second while Brain is on screen. It starts no
+    scan, ADR check, policy read or analysis of its own. `SecurityPageLiveDataRulesTests` holds each clause against
+    planted offenders.
+  - The settings keep every row, id, search entry and deep link: "High-severity alerts in the notch" heads them as
+    Alerts, and the findings, the newest scan result and Recent analyses moved up.
+  - 5 new strings in the catalog's 17 languages. Boards `security0`, `security1` and `security3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 10 and 22) gain their lines.
+
 ### 2026-11-06 - Answer the review of Brain's Usage page
 - **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds
@@ -319,6 +426,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
     and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
     `SettingsLayoutRulesTests` pins their padding.
+
+### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
+- **Developer label:** "Yes, request it"
+- **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's review of Super 3; the rest answered on the PR
+- **Changes:**
+  - Segments: the arrows step from the focused segment, which Full Keyboard Access can leave on one that is not
+    the choice.
+  - `SettingsSlider` keeps its upper bound: End and a drag past the end reach it when the step does not divide the
+    range.
+  - `SettingsStepper` steps from a value inside its range and measures before stepping, so a stored value near the
+    type's limit cannot overflow.
+  - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
+    with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
+  - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
 
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"

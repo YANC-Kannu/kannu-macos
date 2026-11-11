@@ -1093,7 +1093,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     private static let sheetTypes = ["JiraConnectSheet": "TaskConnectSheets.swift", "GitLabConnectSheet": "TaskConnectSheets.swift",
                                      "SourceConnectSheet": "TaskConnectSheets.swift", "TaskTagsSheet": "TaskTagsSheet.swift",
                                      "NewTaskSheet": "NewTaskSheet.swift", "TaskValueSheet": "TasksSettings.swift",
-                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift"]
+                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift",
+                                     "TimerPresetSheet": "TimerPresetSheet.swift"]
     /// The two large sheets, which keep layouts of their own and take the root and the panel themselves.
     private static let largeSheetFiles = ["AnimationEditorView.swift", "SpotifyLoginSheet.swift"]
 

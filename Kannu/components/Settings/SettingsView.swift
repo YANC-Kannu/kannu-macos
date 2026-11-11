@@ -175,12 +175,19 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Security's first settings row, built whenever Agent Status is on: where Security's gear lands.
+    static let securityAlertsHighlightID = SettingsTab.agentSecurity.highlightID(for: "High-severity alerts in the notch")
+    /// Brain › Security › ADR scans, ADR Discovery's row, with its install command and Check again: where Connect ADR
+    /// lands.
+    static let securityConnectADRHighlightID = SettingsTab.agentSecurity.highlightID(for: "Connect ADR")
     /// Brain › Usage's switch, its first row and always built: where Usage's gear lands, and its empty state's
     /// "Turn on a provider" while the monitor is off.
     static let usageMonitorHighlightID = SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")
     /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
     /// is on.
     static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
+    /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
+    static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
     /// Brain › Notes' switch, its first settings row and always built: where Notes' gear lands.
     static let notesEnableHighlightID = SettingsTab.notes.highlightID(for: "Enable Notes")
 }
@@ -308,8 +315,9 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear, Usage's gear and Refresh, and Notes' gear. Each reads
-    /// its own store.
+    /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
+    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, and Notes' gear and New
+    /// note. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -965,7 +973,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Timer tint", keywords: ["timer colour", "preset"], highlightID: SettingsTab.timer.highlightID(for: "Timer tint")),
             SettingsSearchEntry(tab: .timer, title: "Solid colour", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
-            SettingsSearchEntry(tab: .timer, title: "Accent colour", keywords: ["accent", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Accent colour")),
+            SettingsSearchEntry(tab: .timer, title: "Timer Presets", keywords: ["preset", "accent colour", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Timer Presets")),
 
             // Tasks. A source page's rows exist only while it is open, so their entries land on the
             // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
@@ -1111,7 +1119,7 @@ struct SettingsView: View {
                 ExtensionsSettingsView()
             }
         case .timer:
-            SettingsForm(tab: .timer) {
+            SettingsForm(tab: .timer, actions: AnyView(TimerHeaderActions())) {
                 TimerSettings()
             }
         case .hudAndOSD:
@@ -1127,7 +1135,7 @@ struct SettingsView: View {
                 StatsSettings()
             }
         case .clipboard:
-            SettingsForm(tab: .clipboard) {
+            SettingsForm(tab: .clipboard, actions: AnyView(ClipboardHeaderActions())) {
                 ClipboardSettings()
             }
         case .screenAssistant:
@@ -1139,7 +1147,7 @@ struct SettingsView: View {
                 AgentStatusSettings()
             }
         case .agentSecurity:
-            SettingsForm(tab: .agentSecurity) {
+            SettingsForm(tab: .agentSecurity, actions: AnyView(SecurityHeaderActions())) {
                 AgentSecuritySettings()
             }
         case .downloads:
