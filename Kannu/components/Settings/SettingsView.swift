@@ -175,6 +175,17 @@ enum SettingsDeepLink {
     static let agentMonitoringHighlightID = SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")
     /// Brain › Stats' switch: where search lands for the tab's other rows while stats monitoring is off.
     static let statsMonitoringHighlightID = SettingsTab.stats.highlightID(for: "Enable system stats monitoring")
+    /// Brain › Security's first settings row, built whenever Agent Status is on: where Security's gear lands.
+    static let securityAlertsHighlightID = SettingsTab.agentSecurity.highlightID(for: "High-severity alerts in the notch")
+    /// Brain › Security › ADR scans, ADR Discovery's row, with its install command and Check again: where Connect ADR
+    /// lands.
+    static let securityConnectADRHighlightID = SettingsTab.agentSecurity.highlightID(for: "Connect ADR")
+    /// Brain › Usage's switch, its first row and always built: where Usage's gear lands, and its empty state's
+    /// "Turn on a provider" while the monitor is off.
+    static let usageMonitorHighlightID = SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")
+    /// Brain › Usage › Providers, on its first row: where the empty state's "Turn on a provider" lands while the monitor
+    /// is on.
+    static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
     /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
     static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
 }
@@ -302,8 +313,8 @@ extension View {
 
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
-    /// A product page's actions, on its title's row: Agents' gear, and Timer's gear and Start timer. Each reads its own
-    /// store.
+    /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
+    /// gear and Refresh, and Timer's gear and Start timer. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1133,7 +1144,7 @@ struct SettingsView: View {
                 AgentStatusSettings()
             }
         case .agentSecurity:
-            SettingsForm(tab: .agentSecurity) {
+            SettingsForm(tab: .agentSecurity, actions: AnyView(SecurityHeaderActions())) {
                 AgentSecuritySettings()
             }
         case .downloads:
@@ -1157,7 +1168,7 @@ struct SettingsView: View {
                 TasksSettings()
             }
         case .llmUsage:
-            SettingsForm(tab: .llmUsage) {
+            SettingsForm(tab: .llmUsage, actions: AnyView(UsageHeaderActions())) {
                 UsageSettings()
             }
         case .about:

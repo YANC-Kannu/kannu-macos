@@ -173,6 +173,7 @@ numbers, and this table only says why.
 | `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
 | `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
 | `SecurityFindingRow.swift` | 3 | 1 | Severity badges |
+| `SecurityOverview.swift` | 1 | 0 | A partial scan's orange, moved up with the newest scan's line |
 | `SettingsColorPicker.swift` | 2 | 2 | The user's colours (presets, sampler) |
 | `SettingsHelpers.swift` | 3 | 2 | The unused "Upgrade to Pro" and "Coming soon" capsules |
 | `SettingsPermissionCallout.swift` | 0 | 1 | The callout's title |
@@ -321,8 +322,8 @@ either closure left out when there is none.
 
 ## Product pages
 
-A product page opens on what it is about, then its settings. Brain › Agents and Brain › Timer are the ones so far; the
-redesign plan gives Security, Usage, Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
+A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage, Brain › Security and
+Brain › Timer are the ones so far; the redesign plan gives Clipboard and Notes theirs in Stage 4b, and Tasks in Stage 5.
 
 - **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
   across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
@@ -363,6 +364,56 @@ redesign plan gives Security, Usage, Clipboard and Notes theirs in Stage 4b, and
   shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
   `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
   caffeinate link landing below the product.
+- **Usage** leads with the notch's provider cards in Brain's style, built from the usage store's readings and outlooks
+  (`UsageAlertManager`): a card for each provider that is on, among those whose limits the store keeps (Claude, Codex,
+  Cursor). The card's title is the provider's icon and name; then each live window (`isLive`: not past its reset or
+  its expiry) is a row, its name over "Resets … · As of …" and the forecast when it says something, with the bar and
+  the percentage, rounded half away from zero as the notch's, in a trailing column of `listTrailingWidth`. Each
+  organization's windows stay together, its own first, and in each the 5-hour window, then the week, then the rest. The
+  bar is the slider's track, filled with the accent, and near the limit, as the alerts count it, the bar and the figure
+  are `destructive`; a warning forecast is too. A provider with no live reading is one quiet line. Then "Models this
+  week", from each provider's last read (`UsageSnapshot.models`), in Recent chats' rows: the provider over the model,
+  the tokens in and out trailing, and the cost only where the provider bills per token (Cursor), with a "+" when some
+  of its events had no price, as the notch writes it; VoiceOver hears the counts in words. Hidden when empty.
+  Antigravity's quotas are not among the store's readings, so it has no card; the notch shows them.
+- **Usage's empty state**, with no such provider on: "No limits to show", one line, and "Turn on a provider" (the
+  standard style), which goes to the Providers switches, or to the monitor's while it is off. **While Agent Status is
+  off**, which stops the usage store, Agents' own "Agent Status is off" with Turn On stands in place of the cards.
+- **Usage's header** holds the gear, which goes to the monitor's switch, then **Refresh**, the page's one primary verb,
+  off while a refresh runs, no provider is on or Agent Status is off. It runs on a press only, through the notch's own
+  paths, unchanged: its Refresh usage (`LLMUsageManager.refreshRequestedByUser`), and Claude's `/usage` as the automatic
+  refresh runs it (`refreshClaudeUsageFromCLI(manual: false)`), so a press here never starts a browser sign-in; that
+  stays a press of the notch's Claude ↻, beside the status line and Cancel it needs. Claude's run is skipped while that
+  line shows a status that holds the automatic refresh, read at the press, so the press never clears it
+  (docs/REGRESSIONS.md, entry 8).
+- **Boards**: `usage0`, `usage1` and `usage3` draw Usage at the window's first size with no provider on, Claude alone,
+  and Claude, Codex (no reading yet) and Cursor (near its limit), and `usageOff` the three with Agent Status off, from
+  fixtures (`UsageOverview.snapshotFixture`), never this Mac's readings or its Agent Status; the settings rows below
+  still read its switches, as Agents' do. `llmUsage` draws the page whole at the narrowest panel.
+- **Security** leads with a count strip: how many findings wait for review, how many of them are high, and how many are
+  acknowledged or snoozed, with "Show acknowledged and snoozed again" while any are; it is gone while all three are
+  zero. Then
+  "Security findings": the findings, worst first, in their lazy list (above, "Pages and sections"), or in their place
+  the empty state, "No findings yet" before any scan and "No open findings" after, with its one line and the page's
+  verb. Then a status row of three equal cells, in the settings' own words: the newest scan result (orange when its
+  coverage is partial), Scan this Mac (Kannu's last and next scan), and Policy rules. Then Recent analyses while session
+  analysis is on. While Agent Status is off the product is one card, "Agent Status is off", with Turn On. The notch's
+  link and search's "Security findings" land on the list's header, which is always built.
+- **Security's header** holds the gear, which goes to the first settings row (Alerts' "High-severity alerts in the
+  notch"), then the page's one primary verb: Scan now, off while a scan runs, or Connect ADR while ADR Discovery is not
+  found, which goes to ADR Discovery's row with its install command and Check again. Nothing while Agent Status is off.
+  The empty state draws the same verb in the standard style. **The page starts no work of its own:** no scan, no ADR
+  check (it spawns processes), no policy read and no analysis. Scan now and Connect ADR act on a press only, through the
+  settings' own paths. The settings keep the checks they had, each on a press or once a visit: ADR's tools while never
+  looked for, the Detection checkout while analysis is on and never checked (nothing else checks it at launch, and the
+  notch's Analyze menu waits for it), and the policy.
+- **What moved up** from Security's settings: the findings with their footer, the newest scan result and Recent
+  analyses, none of which had a highlight id. "High-severity alerts in the notch", which sat among the findings, is the
+  settings' first section, Alerts, with its id and search entry. Every other row is where it was.
+- **Boards**: `security0`, `security1` and `security3` draw Security at the window's first size with no finding (ADR
+  Discovery not found, so Connect ADR), one, and several (one snoozed, a partial scan, two analyses), from fixtures
+  (`SecurityOverview.snapshotFixture`), never this Mac's findings store. The `agentSecurity` board draws the page with
+  the several. The settings under them still read this Mac's switches and ADR's status, as Agents' do.
 - **Timer** leads with the running timer, in the hero's three bands. Top: its state as the title ("Running", "Paused",
   "Overtime", which is `destructive`), with the session's colour as a dot at the right. Middle: its name, with a timed
   task's key or "Mirrored from the Clock app". Bottom, pinned: the time left in `pageTitle` with digits of one width,
@@ -398,7 +449,8 @@ redesign plan gives Security, Usage, Clipboard and Notes theirs in Stage 4b, and
 Brain's content is built once and kept for the app's life. Closing takes it out of the window, and a change published
 while it is out still re-runs `body` (docs/REGRESSIONS.md, entry 22). The agent monitor publishes on every hook write,
 up to about 20 times a second, and Agents is the page Brain opens on. So a page that shows live data keeps three rules,
-which `AgentsPageLiveDataRulesTests` reads from the source, each checked against planted offenders:
+which `AgentsPageLiveDataRulesTests` reads from the source, and `SecurityPageLiveDataRulesTests` for Security, each
+checked against planted offenders:
 
 1. **Throttled and scoped.** The page copies what it shows into `@State` from one subscription to the one value it
    needs: Agents' sessions through `$sessions.throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest:
@@ -407,25 +459,48 @@ which `AgentsPageLiveDataRulesTests` reads from the source, each checked against
    findings store's `objectWillChange` on the same throttle and redraws only when its summary changes: while a
    session runs with permission checks off, every hook write restamps its finding and the store republishes. One leaf
    runs faster: `AgentTurnMetricsView` observes the token follower, which republishes every 50 ms while it catches up
-   on a long turn, as it does for the notch.
+   on a long turn, as it does for the notch. **Brain › Security** follows that store the same way for its whole page:
+   `AgentSecuritySettings` copies what the product and the settings show into one value, `SecurityPageData`, through
+   `objectWillChange` on the same throttle, assigned only on a change, and hands it to `SecurityOverview`; its header
+   follows `$isScanning` through `removeDuplicates()`. So the settings row's Scan now, which reads the copy, can turn
+   off up to 500 ms after the header's; `runScanNow` returns at once while a scan runs, so a press in that gap starts no
+   second scan. Nothing on the page observes the store, keeps a reference to it
+   or reads its state past that copy; a press calls its methods. `ADRConnection`, which publishes only around a check
+   of ADR's tools, is observed directly.
 2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
-   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Security's
-   is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps its loop in a
-   `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
+   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Agents'
+   Security cell's is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps
+   its loop in a `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
    (`windowDidChangeOcclusionState`): false while Brain is closed, minimised, hidden with the app, fully covered or in
    another Space, where a full-screen Brain keeps `isVisible` true. Opening and closing set it too, rather than wait
    for that change, which can come late, or not at all for a window never shown. It starts false, so nothing live
    runs before Brain is first on screen. The page reads once as it appears, so it opens on what is happening, not on
-   an empty state.
+   an empty state. Brain › Security's two subscriptions are its page's and its header's own
+   `.task(id: visibility.isOnScreen)`. Back on screen the page reads the store once before it follows it, since
+   `objectWillChange` does not send again what changed while Brain was away; a `@Published` value's publisher sends
+   its current value as it subscribes, so Agents' and the header's need no such read.
 3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
    observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
    tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The
    page, its scroll position and anything typed stay. The hero's figures are the same leaf with its `figures` option
    (nil in the notch and in Brain's rows), and their static copy lays out through the same `figureRow`, with no clock.
+   Security keeps no clock at all: a scan is told by its time, and off screen its copy simply stays as it was.
 
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
 walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
-screen in another Space during a busy agent. It needs a real window, so it is David's check before install.
+screen in another Space during a busy agent, and the same for Security during a session with permission checks off.
+It needs a real window, so it is David's check before install.
+
+**Usage** keeps the same three, and `UsagePageLiveDataRulesTests` holds them against planted offenders. Its readings,
+outlooks and models come through one subscription to `UsageAlertManager`'s `$readings` and `$outlooks` and
+`LLMUsageManager`'s `$results`, throttled to 500 ms and assigned only on a change; the header's "a refresh is running"
+through one to the two refresh flags that drops repeats; each a `.task(id: visibility.isOnScreen)`, and the stores are
+read once as the page appears. It keeps no clock and no animation: a reset and a reading are told by the time of day,
+and the page leaves out a window past its reset or expiry itself as it draws (`isLive`), since the store drops one only
+while it runs, which is while Agent Status is on; off screen the copy simply stays. **It never reads usage of its own**
+(docs/REGRESSIONS.md, entry 8): Claude's limits come from the agent monitor's reads, Codex's and Cursor's from the
+notch's Usage tab, the opt-in background check or Refresh, so a reading can be hours old and each says when it was
+taken. Refresh's press is the one way in, and the rule test pins its two calls, and the hold Claude's run checks, to it.
 
 **Timer** keeps the same three, and `TimerPageLiveDataRulesTests` holds them against planted offenders. A running timer
 publishes three changes a second (`remainingTime`, `elapsedTime` and `lastUpdated` on every tick), so the page never
@@ -595,7 +670,7 @@ section describes it, it does not define it.
 - `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle,
   `SettingsSelect`, a field. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
   `Menu` placed there loses its label and its items' titles and reads as dead (the "Policy rules" "…"
-  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `analysisRow` shape) or
+  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `SecurityAnalysisRow` shape) or
   a `SettingsActionRow`. `SettingsSelect` may sit in the slot, popover and all, because its trigger and
   its list's rows are buttons with plain text, which the modifier leaves alone: the `components` board
   shows its value in a row beside a native picker's. A `Menu` still may not.
