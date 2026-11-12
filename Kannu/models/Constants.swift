@@ -943,6 +943,8 @@ extension Defaults.Keys {
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
     static let brainAppearance = Key<BrainAppearance>("brainAppearance", default: .system)
+    /// View › Hide Sidebar: false takes Brain's sidebar away, and its search with it.
+    static let brainShowsSidebar = Key<Bool>("brainShowsSidebar", default: true)
     /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
     /// while this is off, because its menu is the way back.
     static let showNotch = Key<Bool>("showNotch", default: true)

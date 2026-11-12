@@ -618,11 +618,39 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 - **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
   opposite of what is on screen.
 
+- **View › Hide Sidebar** (`brainShowsSidebar`) takes the sidebar column away, search with it, and the panel keeps the
+  window's inset on both sides. `BrainShell` takes it as a plain flag. It says whether the sidebar shows at all, never
+  which list. Hidden, Go still reaches the product pages; the Settings list, search and About come back with Show
+  Sidebar, which stays on whenever Brain is on screen.
+
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
 draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
 with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
-arrow keys and hover take a real window.
+arrow keys and hover take a real window. `shellNoSidebar` draws the window with its sidebar hidden, and `shellGo` a Go
+item's page.
+
+## The menu bar
+
+Brain's menus are SwiftUI commands in `KannuApp.swift`, beside Brain… (⌘,). The menus Kannu adds after the launch
+(Focus, Accessibility, Permissions, Tools) are unchanged.
+
+- **File › New Task** (⌘N) opens Brain on Tasks with New Task over whichever Tasks page is open, at once, even while the
+  list is still loading: the sheet keeps Add off until it is ready. On All tasks the sheet takes the list's filters, as
+  Add a task does. The menu owns ⌘N, and the item is off while Tasks is off.
+- **View:** Hide or Show Sidebar (⌃⌘S), Appearance (the moon's three choices), then Enter or Exit Full Screen (⌃⌘F). They
+  act on Brain's window, so they are off while it is not on screen, and they read `BrainVisibility`, which builds nothing.
+  AppKit would add an Enter Full Screen of its own, which a SwiftUI command cannot stop, so the app registers
+  `NSFullScreenMenuItemEverywhere` as false before launching ends.
+- **Go:** the product pages in the sidebar's order (`SettingsTab.productPages`), ⌘1 to ⌘7. An item opens its page as its
+  sidebar row does: the request a search pick sends, through the same switch point, for no row, so nothing pulses and a
+  Tasks page keeps its place.
+
+Go and New Task open Brain through one function, `openBrain`, which brings the terms back until they are accepted, as
+Brain… does, and only beeps while a sheet is open over Brain: menu keys still reach the menu bar under a sheet, and a
+page switched under it would close it, with what was typed in it. `MenuBarRulesTests` holds the menus against planted
+offenders. No PNG shows the menu bar, so a snapshot run
+writes it to `menu.txt` as the launch built it: each item's key, action, and whether it is off or checked.
 
 ## The window
 
