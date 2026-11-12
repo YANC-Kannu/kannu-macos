@@ -156,7 +156,7 @@ struct TimerSideColumn: View {
                 .buttonStyle(.plain)
             }
         }
-        .font(.system(size: 11, weight: .semibold))
+        .font(SettingsTheme.font(size: 11, weight: .semibold))
         .frame(height: M.sidePagerHeight)
         .accessibilityRepresentation {
             Picker(String(localized: "Timer column"), selection: pageSelection) {
@@ -194,7 +194,7 @@ struct TimerSideColumn: View {
     private var presetsPage: some View {
         if presets.isEmpty {
             Text("Configure presets in Brain to see them here.")
-                .font(.system(size: 12))
+                .font(SettingsTheme.font(size: 12))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
@@ -586,7 +586,7 @@ private struct TimerTasksPage: View {
                 .foregroundStyle(.secondary)
             TextField(String(localized: "Search tasks"), text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
                 .focused($searchFocused)
                 .onSubmit { searchFocused = false }
                 .onExitCommand(perform: closeSearch)
@@ -666,7 +666,7 @@ private struct TimerTasksPage: View {
                 // both lines slide into view while the row is hovered — one hover for the row.
                 let isHovered = hoveredRowID == task.id
                 VStack(alignment: .leading, spacing: 1) {
-                    HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
+                    HoverRevealText(task.title, font: SettingsTheme.font(size: 12, weight: .semibold), isActive: isHovered)
                     // The caption, then the tags that fit beside it, the one the search found first; the
                     // caption wins (`TaskTagChips`). The line is a chip tall in every row, tags or not,
                     // so every row's title sits on the same line.
@@ -676,11 +676,11 @@ private struct TimerTasksPage: View {
                         HStack(spacing: 0) {
                             HoverRevealText(
                                 Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
-                                    .font(.system(size: 11, weight: .medium)),
+                                    .font(SettingsTheme.font(size: 11, weight: .medium)),
                                 isActive: isHovered
                             )
                             overText(progress.over)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(SettingsTheme.font(size: 11, weight: .medium))
                                 .fixedSize()
                         }
                         .foregroundStyle(.secondary)
@@ -776,7 +776,7 @@ private struct TimerTasksPage: View {
                     .buttonStyle(.link)
             }
         }
-        .font(.system(size: 12, weight: .medium))
+        .font(SettingsTheme.font(size: 12, weight: .medium))
         .lineLimit(1)
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -806,7 +806,7 @@ private struct TimerLogTimePage: View {
         VStack(alignment: .leading, spacing: M.sideToolbarSpacing) {
             HStack(spacing: 6) {
                 Text("Log time?")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(SettingsTheme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
                 Button(action: close) {
                     Image(systemName: "xmark")
@@ -898,7 +898,7 @@ private struct TimerLinkedMRsPage: View {
             .hoverTooltip(String(localized: "Back"), edge: .below)
 
             Text("Linked merge requests")
-                .font(.system(size: 12, weight: .semibold))
+                .font(SettingsTheme.font(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
 
@@ -922,7 +922,7 @@ private struct TimerLinkedMRsPage: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Loading…")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(SettingsTheme.font(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 10)
@@ -944,13 +944,13 @@ private struct TimerLinkedMRsPage: View {
     private func note(_ text: String, retry: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: text)
-                .font(.system(size: 11, weight: .medium))
+                .font(SettingsTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if retry {
                 Button(String(localized: "Try Again")) { attempt += 1 }
                     .buttonStyle(.link)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
             }
         }
         .padding(.horizontal, 10)
@@ -967,7 +967,7 @@ private struct TimerLinkedMRsPage: View {
                         // GitLab has more than one page of them: the issue lists them all.
                         Button(String(localized: "More on GitLab")) { NSWorkspace.shared.open(url) }
                             .buttonStyle(.link)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SettingsTheme.font(size: 11, weight: .medium))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                     }
@@ -997,9 +997,9 @@ private struct TimerLinkedMRsPage: View {
                     .frame(width: 7, height: 7)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    HoverRevealText(item.title, font: .system(size: 12, weight: .semibold), isActive: hoveredID == item.id)
+                    HoverRevealText(item.title, font: SettingsTheme.font(size: 12, weight: .semibold), isActive: hoveredID == item.id)
                     Text(verbatim: caption)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -1184,7 +1184,7 @@ private struct TimerTaskDetail: View {
             // plain glass still took its width and indented the title past the chips.
             HStack(alignment: .top, spacing: 6) {
                 // Two lines; a longer title slides up into view while hovered, then settles.
-                HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)
+                HoverRevealText(summary.title, font: SettingsTheme.font(size: 13, weight: .semibold), lines: 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
@@ -1299,7 +1299,7 @@ private struct TimerTaskDetail: View {
     /// Muted, not an alert: nothing is wrong with a task that has not been started.
     private func noteText(_ note: String) -> some View {
         Text(verbatim: note)
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .foregroundStyle(.tertiary)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -1360,7 +1360,7 @@ private struct TimerTaskDetail: View {
         if confirmsDelete {
             HStack(spacing: 6) {
                 Text("Delete? Its recorded time goes too.")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
                     .lineLimit(2)
                 Spacer(minLength: 0)
                 Button(String(localized: "Keep")) {
@@ -1397,7 +1397,7 @@ private struct TimerTaskDetail: View {
                 // Only once there is something to say: "No estimate" beside every untimed
                 // GitLab issue was noise.
                 if summary.showsTime {
-                    HoverRevealText(timeText(summary).font(.system(size: 11, weight: .medium)))
+                    HoverRevealText(timeText(summary).font(SettingsTheme.font(size: 11, weight: .medium)))
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
@@ -1498,13 +1498,13 @@ private struct FactCell: View {
                 .frame(width: 12)
                 .accessibilityHidden(true)
             if opens {
-                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium), isActive: false)
+                HoverRevealText(fact.text, font: SettingsTheme.font(size: 11, weight: .medium), isActive: false)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
                     .accessibilityHidden(true)
             } else {
                 // Clipped at the column's width, it slides into view while hovered.
-                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium))
+                HoverRevealText(fact.text, font: SettingsTheme.font(size: 11, weight: .medium))
             }
         }
         .foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
@@ -1533,7 +1533,7 @@ private struct TimerPresetCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(preset.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(SettingsTheme.font(size: 14, weight: .semibold))
                         .lineLimit(1)
                     Text(preset.formattedDuration)
                         .font(.caption.monospaced())
