@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
+- **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR
+- **Changes:**
+  - Notch: the filter menu's Tag submenu ticks the saved tag when the tasks now spell it in another case (`docs` saved,
+    `Docs` offered): the matching row carries the saved spelling. Filtering already matched ignoring case.
+  - Brain › Tasks: widening the window past the width with a task open in the list's place scrolls the rebuilt list to
+    the task's row, now selected beside its page, as Notes does. The list used to open at its top.
+  - Brain › Tasks: the Tag filter had the same case mismatch as the notch's Tag submenu, found alongside inline-1: the
+    choice that matches the saved tag ignoring case now carries the saved spelling, so the list ticks it.
+  - docs/SETTINGS.md: a task's page, and widening the window with it open.
+
+### 2026-11-12 - Answer CodeRabbit's second review of Brain's product pages
+- **Developer label:** CodeRabbit's second review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the two fixes from CodeRabbit's second review of Super 4; the other four answered on the PR
+- **Changes:**
+  - Displays: the Standard notch style's stored value is "Standard Notch" again, and its label stays "Standard notch".
+    The copy pass had changed both, so a style saved before it, the global one or a display's own, no longer decoded.
+  - Notes: Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the scope. A
+    narrowing leaves such a note listed until the next sync, and its Delete still reaches Notes; it used to go at once.
+    The notch's rows keep their scope-based question, a separate follow-up.
+  - docs/SETTINGS.md: Notes' Delete question.
+
 ### 2026-11-12 - Answer the review of onboarding
 - **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: the reviewer's M1, M2 and M4; M3 answered in a comment; nothing found in the gates, the permission timing, the keyboard or VoiceOver
@@ -72,6 +95,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     root, and the boards' fixtures, against planted offenders.
   - docs/SETTINGS.md gains "The floating panels"; docs/REGRESSIONS.md entry 17 a 2026-11-12 addendum, since both files
     hold a panel.
+
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
+- **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR
+- **Changes:**
+  - Security: Import reads the findings store into the page's copy again as the file is chosen, so whether it asks
+    before replacing the policy is never decided on a copy up to half a second old.
+  - Downloads: a style card is disabled while download detection is off, so the keyboard and VoiceOver know it is off.
+    `.plain` dims a disabled button by half, so the card's own half dim goes and it looks as it did.
+  - Idle animations: a custom animation's card offers Delete as a named accessibility action, so VoiceOver reaches it
+    without the hover glyph or the right-click menu, which both stay.
+  - Timer: Start timer reads the timer manager at its press and starts nothing while a timer runs, even before the
+    header's copy has first been read; `TimerPageLiveDataRulesTests` lists that read among the page's readers.
+  - Timer's preset sheet opens a preset over 23 hours whole: the Hours stepper reaches its hours, so an edit no longer
+    cuts them to 23.
+  - Boards: the Agents, Security and Clipboard fixtures carry their feature switch, on, as Usage's and Timer's do, so
+    this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
+  - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
+    switch.
 
 ### 2026-11-12 - Answer the review of the sidebar badges
 - **Developer label:** Brain redesign plan: Stage 6, the sidebar badges, and its independent review
@@ -165,6 +207,155 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Every budget keeps its size. `TimerComposerMetricsTests` measures the 36 pt task row with the Geist faces it now
     draws; `NotchTagFilterRulesTests` and `TimerTaskDetailRulesTests` pin the rows' new font calls.
   - docs/SETTINGS.md gains "The notch"; docs/REGRESSIONS.md entry 21 notes that `NotchNotesView` changed only fonts.
+
+### 2026-11-12 - Answer the review of Brain's Notes list-detail
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
+- **Changes:**
+  - Widening the window past 1,224 pt with a note open in the list's place builds the list anew: it now scrolls to the
+    note's row, selected beside the page, instead of opening at its top (M2).
+  - The page beside the list takes an id of its own, not the note's, which its row carries, so a scroll back to the
+    row has one target (M3).
+  - With no note at all, the empty place beside the list says "No note selected" without telling you to click a › that
+    is not there; the layout stays a function of the width alone, as D1 has it, and as Mail keeps its empty pane (M1,
+    taken this way rather than by folding the column away).
+  - `NotesPageLiveDataRulesTests` holds each answer against planted offenders; docs/SETTINGS.md says so.
+
+### 2026-11-12 - Brain's Notes page shows a note beside the list at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail (layout-proposal D1)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: D1's list-detail for Notes, with Tasks' layout moved once into a shared view both pages use
+- **Changes:**
+  - From 1,224 pt of panel (`ListDetailLayout`, as Tasks has it), a note opened from the list shows beside it: its
+    row wears the selected ring and is selected for VoiceOver, and its card names the note over when it was edited,
+    since the tab keeps Notes' title. With none open, its place says "No note selected". Narrower, the in-tab swap
+    stays, its back row now bare on the panel, as Tasks' are (the design review's finding 24).
+  - One selection, drawn either way, so a resize converts nothing. Each visit still opens on the list, at both widths;
+    a Notes search or deep link closes only a page in the list's place.
+  - Tasks' list-detail layout and its measurement moved once into a shared place, `SettingsListDetail` and
+    `settingsListDetailFits(_:)` (two DesignSystem files, one type each), which Tasks and Notes both use. Tasks draws
+    what it drew: its boards match 5-4's but for the fixture's times.
+  - The note's page stays read-only (Pin, Copy, Delete, Open in Notes), and New note's sheet is unchanged.
+  - Tests: `SettingsListDetailRulesTests` (new) holds the shared layout's widths and bans; the D1 clauses of
+    `TasksPageLiveDataRulesTests` and `NotesPageLiveDataRulesTests` hold each page's use of it, against planted
+    offenders; `BrainShellRulesTests` lists the two new files among those that know no page.
+  - Two catalog keys in 17 languages ("No note selected", "Click › on a note to see it here."); boards `notesWide` and
+    `notePageWide`; docs/SETTINGS.md, and docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-11 - Answer the review of Brain's Tasks page
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: the review's S1 and M2 to M6, and the back row's scroll back
+- **Changes:**
+  - The first page keeps one place in the tree at both widths, so crossing 1,224 pt, or a wide first open, keeps the
+    list scrolled where it was, Find's caret and Tag colours' fold (S1).
+  - Going back between two pages below the first scrolls to the row again: its `onAppear` is back inside `.id(path)`.
+    Applied after it, it ran once and never again (measured in a harness).
+  - A sheet's close, the delete alert and the value sheets read the copy at once, as a press does (M2).
+  - The Sources rows' connection, status and sync flag are in the copy, so a change to them alone redraws the page
+    (M3); the interrupted sessions, the Tag filter's choices, Tag colours' tags and the source counts are worked out in
+    the copy, not on every keystroke in Find (M4). `TasksManager` keeps its own property, now `Equatable`.
+  - A search or deep link keeps a task's page beside the list, the list being on screen, so the header's gear no longer
+    closes it (M5).
+  - Each card is one VoiceOver group named for its task, so its ✓, ▶ and › say whose they are (M6).
+  - `TasksPageLiveDataRulesTests` and `TaskListRulesTests` hold each answer against planted offenders; docs/SETTINGS.md
+    and docs/REGRESSIONS.md entry 22's addendum say so.
+
+### 2026-11-11 - Brain's Tasks page leads with the list, with a task's page beside it at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, with D1's list-detail
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: Tasks as a product page (tabs, Find with #tag, a Tag filter, rows as soft cards, New task in the header) under Agents' live-data contract, and D1's list-detail by one tested width function
+- **Changes:**
+  - Brain › Tasks opens on its product, above "Tasks settings": interrupted sessions and Time to log while they hold
+    something, then the list. Its tabs, Active, Done and Archived, replace All tasks' page and its three native
+    disclosures (the design review's finding 13); Find takes `#tag` (`TaskSearch`), and the Tag filter is a
+    `SettingsSelect` of every tag and label. The Source, Project and Status filters leave the list: a source and a
+    project have their own pages.
+  - Each task is a soft card with its tags as chips (the first in its colour and "+N" for the rest, never cutting the
+    caption), ✓, ▶ and ›; a closed one has Reopen, Archive or Restore and its ›; everything else stays in the
+    right-click menu, which opens with Show Details. Source and project pages draw the same cards.
+  - New task, ⌘N, is the page header's one verb, beside the gear, which goes to Enable tasks. It replaces Add a task's
+    row and the hidden ⌘N button; a new task the list on screen would hide opens on its own page.
+  - D1 (David, 2026-11-06): once the panel holds the list and a 720-pt page (`ListDetailLayout`, 1,224 pt with the
+    wide inset, tested in `ListDetailLayoutTests`), a task opened from the list shows beside it, selected; narrower it
+    takes the list's place. One path drawn two ways, from one `onGeometryChange`: no `minWidth:`, `ViewThatFits` or
+    `.inspector`. Search and deep links return to the first page at both widths.
+  - Back rows are bare quiet buttons on the panel, with no card (the design review's finding 24).
+  - Live data as on Agents: the first page reads `TasksManager` through one copy, `TasksPageData`, throttled to 500 ms,
+    assigned only on a change and followed only while Brain is on screen; a press reads it again at once. The timed
+    row's and a task page's minute clocks stop while Brain is not on screen. `TasksPageLiveDataRulesTests` holds each
+    clause and D1's rules against planted offenders.
+  - Tag colours moves to the settings, folded in our disclosure. 12 new catalog keys in 17 languages; the tab titles
+    take keys of their own, so "Done" can differ from a sheet's Done button.
+  - Tests: the list, path, filter and pin rules follow the new page (`TaskListRulesTests`, `SettingsLayoutRulesTests`,
+    `SettingsDesignSystemRulesTests`, `SettingsHighlightInventoryTests` 274 and 268, `BrainShellRulesTests`,
+    `IntegrationSecretRulesTests`).
+  - docs/SETTINGS.md describes the page, its live data and list-detail; docs/REGRESSIONS.md entry 22 has a dated
+    addendum.
+
+### 2026-11-11 - Answer the review of Brain's Notes page
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: the review's two passes answered; a list typed in New note is never saved half done, and the rule test closes its gaps
+- **Changes:**
+  - New note: Return in the text no longer saves the note (Return is the text's own there, and ⌘Return adds), so a
+    list typed line by line is never saved half done; Return in the title still adds. A title of spaces is saved as no
+    title.
+  - Deleting a note reads the notes again at once, so its row never lingers for the throttle's half second.
+  - A note's page drops an image read that a newer one, or the page closing, has overtaken.
+  - `NotesPageLiveDataRulesTests` now counts `Task.sleep` as a clock and pins every read of a note's image file to the
+    note's page and Copy, each with planted offenders; its sheet clause holds the text's Return to the text.
+  - Translations: the Notes page's own strings that had none ("Notes to sync", its two choices, "Sync with Apple Notes",
+    "Last synced", "Apple Notes" and the narrowing question's message), Arabic and Hungarian "Add", and three fixes
+    (Czech, Spanish, Russian).
+  - docs/SETTINGS.md says when a note's image file is read, and the sheet's keys.
+
+### 2026-11-11 - Brain's Notes page leads with the notes
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, its in-tab swap first
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: Notes as a product page with a note's own page as an in-tab swap, under Agents' live-data contract, starting no sync of its own
+- **Changes:**
+  - Brain › Notes opens on its notes, above "Notes settings": pinned first, then the latest edit first, as the notch's
+    Notes tab lists them, in a lazy list. A row is the note's colour (a pin in that colour when it is pinned), its
+    title, and when it was last edited and how its text starts; then a › to its own page. Its right-click menu holds
+    Open note, Pin or Unpin, Copy, Open in Notes for a note made there, and Delete.
+  - While Apple Notes sync is on, one status line above the notes: a sync running, the last one's time, or its error.
+  - A note's own page opens in the tab under "‹ Notes": the note whole and read-only, its text selectable and its image
+    as a preview, with Pin, Copy and Delete, and Open in Notes for a note made there. Delete asks first for a note made
+    in Apple Notes, as the notch's rows do. Each visit, and a Notes search or deep link, opens on the list. `NotePage`
+    takes only the note: the seam for Stage 5's list-detail.
+  - The header holds the gear, which goes to Enable Notes, then New note (David's "Yes, add the sheet"): a sheet with the
+    title, the text and the colour, saved on Add through the notch's own write path, never as it is typed. With no
+    note, "No notes yet", one line and New note; while Notes is off, "Notes is off" with Turn On and no New note.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock. The
+    page no longer observes the sync manager, the notch's coordinator or its view model, and starts no sync of its own.
+    `NotesPageLiveDataRulesTests` holds each clause against planted offenders.
+  - Notes' copy by 4-3c's rules, which skip Notes: the switches in sentence case, the General footer dropped, Last
+    synced by the time of day with no spinner, the Apple Notes footer as two facts, and the scope captions about 8 words.
+  - 35 new strings, each in the catalog's 17 languages (the five note colours the notch named in English among them),
+    7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
+    `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Brain's copy pass: sentence case, captions of about eight words, capped widths
+- **Developer label:** Brain redesign plan: Stage 4 child 3c, the copy pass (the design review's findings 15 and 2), with Usage's labels (4b-1 M1), Security's next-scan wording (4b-2 M1) and Security's older uncatalogued strings (4b-2 M6), which their reviews held for it
+- **Agent label:** Claude Code (Sonnet 5.5) — Stage 4 child 3c: the copy pass, its 17-language catalog entries (translators on Sonnet), the two width caps and the tests that pin them
+- **Changes:**
+  - Sentence case across Brain's settings, product pages and sheets: a capital for the first word and for a name only.
+    "Turn On" is "Turn on" on every "is off" card, "colour" is "color", no title, label or footer ends in a colon, and
+    Mobile notifications' fields show an example ("my-kannu-alerts", "https://ntfy.sh") instead of their own name.
+  - About 70 row captions and footers cut: every caption of 11 or more words is about 8, the enum captions that feed
+    rows too, and seven footers over 40 words are trimmed. A fact a caption needed but a row cannot hold (nothing is
+    sent, a key is never stored, where a transcript goes, what a reminder carries) moved to its section's footer; two
+    footers are new. No "Off: … On: …" caption is left. The screen-capture captions keep "Some capture tools ignore
+    this", which `ScreenCapturePolicyTests` requires.
+  - Caps: `SettingsFooter` wraps at `proseMaxWidth` (380 pt) and a row's caption at the new `descriptionMaxWidth` (440
+    pt). `SettingsDesignSystemRulesTests` holds both components and both numbers, with planted offenders.
+  - Held items: Usage's window labels ("billing cycle"), forecast captions and push sentence are catalogued; Security's
+    next-scan line reads "Next scan …" (the deliberate "the last scan failed" stays); 51 of the Security page's older
+    strings are catalogued.
+  - Catalog: 316 new keys and 7 merged into existing entries, all in 17 languages; 196 old keys retired, each one the
+    compiler's own string extraction no longer finds in the code ("Turn On" stays: Notes' page, in flight, uses it).
+    Highlight ids (490 literals) and search keywords are unchanged; every untouched catalog entry is identical.
+  - Tests: the pins of renamed strings follow them (`ADRDocsTests`, `BrainNamingRulesTests`, whose "Global settings"
+    allowlist entry goes because the literal no longer says "Settings", `ClipboardPageLiveDataRulesTests`,
+    `UsageForecastTests`).
+  - docs/SETTINGS.md holds the caps, the copy rules and the renamed strings; docs/ADR.md names the findings' buttons in
+    sentence case; docs/REGRESSIONS.md entry 22 gets an addendum (no `onAppear`, `.task` or animator added).
 
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
@@ -547,6 +738,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
     and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
     `SettingsLayoutRulesTests` pins their padding.
+
+### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
+- **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
+- **Agent label:** Claude Code (Opus 5.5) — both fixes and their tests; why a Debug folder is in the code's comments
+- **Changes:**
+  - The launch cleanup keeps Pinned Items' files as well as History's. Pinning moves an item out of History, so
+    every pinned image lost its file at each launch. The cleanup is now `ClipboardDataCleanup`, Foundation only,
+    in the logic target.
+  - A Debug build (`com.kannu.app.dev`) keeps its images in `ClipboardData-Debug`, beside the installed app's
+    `ClipboardData`. Its history is in its own defaults, and the cleanup removes every file that history does not
+    name, so any debug launch deleted the installed app's images. A Debug build's older image history loses its
+    pictures once.
+  - A Debug build no longer moves `~/Documents/ClipboardData`, where releases before 1.4.0-beta.3 keep their
+    images: moved into the Debug folder, they would be lost to the installed app and deleted by the Debug cleanup.
+  - `ClipboardDataCleanupTests`: a pinned image keeps its file and only unnamed files go; a source check pins the
+    Debug folder and the Debug build's empty legacy move.
 
 ### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
 - **Developer label:** "Yes, request it"

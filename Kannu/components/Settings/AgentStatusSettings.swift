@@ -115,7 +115,7 @@ struct AgentStatusSettings: View {
                     )
                     stateColorRow(
                         key: .agentAwaitingInputColor,
-                        title: String(localized: "Awaiting Input"),
+                        title: String(localized: "Awaiting input"),
                         detail: String(localized: "The agent needs your approval or a response"),
                         highlightTitle: "Awaiting input color"
                     )
@@ -126,7 +126,7 @@ struct AgentStatusSettings: View {
                         highlightTitle: "Stopped color"
                     )
                     SettingsActionRow {
-                        Button("Reset Colors") {
+                        Button("Reset colors") {
                             Defaults[.agentActiveColor] = .green
                             Defaults[.agentAwaitingInputColor] = .yellow
                             Defaults[.agentStoppedColor] = .red
@@ -139,7 +139,7 @@ struct AgentStatusSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Reset traffic light colors"))
                 } header: {
-                    SettingsSectionHeader("Traffic Light")
+                    SettingsSectionHeader("Traffic light")
                 } footer: {
                     SettingsFooter("The yellow light is most reliable when hooks are installed.")
                 }
@@ -208,7 +208,7 @@ struct AgentStatusSettings: View {
                 } header: {
                     SettingsSectionHeader("Indicator")
                 } footer: {
-                    SettingsFooter("After an agent stops, the red light stays visible for the chosen time, then all lights dim for the inactive duration, then the traffic light disappears entirely. While the red light is kept visible when idle, the hide and dim delays have no effect.")
+                    SettingsFooter("After an agent stops, the red light stays for the chosen time, then the lights dim and hide. Keeping the red light visible when idle overrides the hide and dim delays.")
                 }
 
                 SettingsSection {
@@ -221,9 +221,9 @@ struct AgentStatusSettings: View {
                         SettingsErrorText(error)
                     }
                 } header: {
-                    SettingsSectionHeader("Editor Hooks")
+                    SettingsSectionHeader("Editor hooks")
                 } footer: {
-                    SettingsFooter("Install hooks for Cursor, VS Code and Copilot CLI, Codex CLI, Claude Code, Antigravity, Gemini CLI, Qwen Code or opencode. Each hook writes agent status into ~/.kannu/agent-status for the notch traffic light and Recent chats list. Copilot CLI uses the VS Code hook; opencode gets a small plugin.")
+                    SettingsFooter("Hooks tell the notch what each tool's agents are doing. Copilot CLI uses the VS Code hook; opencode gets a small plugin.")
                 }
 
                 mobileNotificationSections
@@ -254,9 +254,9 @@ struct AgentStatusSettings: View {
                 notificationDeliveryRows
             }
         } header: {
-            SettingsSectionHeader("Mobile Notifications")
+            SettingsSectionHeader("Mobile notifications")
         } footer: {
-            SettingsFooter("Optional push alerts when agent state changes. Uses ntfy (iPhone, Apple Watch, Android), Pushover (iPhone), or a custom webhook. Public ntfy topics can be read by anyone unless you self-host with authentication. Notifications are debounced by 2 seconds to avoid spam.")
+            SettingsFooter("Push alerts through ntfy, Pushover or a webhook. Public ntfy topics can be read by anyone unless you self-host.")
         }
 
         if enableMobileNotifications {
@@ -276,11 +276,11 @@ struct AgentStatusSettings: View {
         switch notificationProvider {
         case .ntfy:
             SettingsRow("Topic") {
-                TextField("Topic", text: $ntfyTopic)
+                TextField("Topic", text: $ntfyTopic, prompt: Text(verbatim: "my-kannu-alerts"))
                     .settingsField()
             }
             SettingsRow("Server URL") {
-                TextField("Server URL", text: $ntfyServerURL)
+                TextField("Server URL", text: $ntfyServerURL, prompt: Text(verbatim: "https://ntfy.sh"))
                     .settingsField()
             }
         case .pushover:
@@ -291,7 +291,7 @@ struct AgentStatusSettings: View {
                         pushoverUserKey = newValue
                         SecureSecretsStore.set(newValue, for: .pushoverUserKey)
                     }
-                ))
+                ), prompt: Text("Paste your user key"))
                     .settingsField()
             }
             SettingsRow("App token") {
@@ -301,7 +301,7 @@ struct AgentStatusSettings: View {
                         pushoverAppToken = newValue
                         SecureSecretsStore.set(newValue, for: .pushoverAppToken)
                     }
-                ))
+                ), prompt: Text("Paste your app token"))
                     .settingsField()
             }
         case .webhook:
@@ -312,7 +312,7 @@ struct AgentStatusSettings: View {
                         webhookURL = newValue
                         SecureSecretsStore.set(newValue, for: .webhookURL)
                     }
-                ))
+                ), prompt: Text(verbatim: "https://example.com/hook"))
                     .settingsField()
             }
         }
@@ -352,7 +352,7 @@ struct AgentStatusSettings: View {
             Defaults.Toggle(key: .agentStatusNotifyOnInactive) {
                 Text("Notify when inactive")
             }
-            SettingsRow("Remind me when an agent is still waiting", description: "One more push if an agent is still waiting for your answer after this long. Only the app's name and how long it has waited are sent.") {
+            SettingsRow("Remind me when an agent is still waiting", description: "One more push if an agent is still waiting.") {
                 SettingsSelect("Remind me when an agent is still waiting", selection: $agentWaitReminderMinutes, choices: [
                     0: String(localized: "Off"),
                     3: String(localized: "After 3 minutes"),
@@ -375,6 +375,8 @@ struct AgentStatusSettings: View {
             .settingsHighlight(id: highlightID("Push when a usage limit is almost reached"))
         } header: {
             SettingsSectionHeader("Notify about")
+        } footer: {
+            SettingsFooter("Reminders send only the app's name and how long it has waited.")
         }
     }
 
@@ -423,7 +425,7 @@ struct AgentStatusSettings: View {
             var taken: [AgentTrafficLightPaletteColor: String] = [:]
             let all: [(Defaults.Key<AgentTrafficLightPaletteColor>, String)] = [
                 (.agentActiveColor, String(localized: "Active")),
-                (.agentAwaitingInputColor, String(localized: "Awaiting Input")),
+                (.agentAwaitingInputColor, String(localized: "Awaiting input")),
                 (.agentStoppedColor, String(localized: "Stopped")),
             ]
             for (otherKey, name) in all where otherKey != key {
@@ -533,7 +535,7 @@ extension AgentStatusSettings {
     static func snapshotNotificationRows() -> AnyView {
         let settings = AgentStatusSettings()
         return AnyView(SettingsPage {
-            SettingsSection { settings.notificationDeliveryRows } header: { SettingsSectionHeader("Mobile Notifications") }
+            SettingsSection { settings.notificationDeliveryRows } header: { SettingsSectionHeader("Mobile notifications") }
             settings.notificationEventsSection
         })
     }

@@ -49,7 +49,7 @@ struct ClipboardSettings: View {
         } settings: {
             SettingsSection {
                 Defaults.Toggle(key: .enableClipboardManager) {
-                    Text("Enable Clipboard Manager")
+                    Text("Enable clipboard manager")
                 }
                 .settingsHighlight(id: highlightID("Enable Clipboard Manager"))
                 .onChange(of: enableClipboardManager) { _, enabled in
@@ -60,7 +60,7 @@ struct ClipboardSettings: View {
                     }
                 }
             } header: {
-                SettingsSectionHeader("Clipboard Manager")
+                SettingsSectionHeader("Clipboard manager")
             } footer: {
                 // The shortcut is the user's (default ⇧⌘C); the old text said Cmd+Shift+V.
                 SettingsFooter("Monitor clipboard changes and keep a history of recent copies. With global keyboard shortcuts on, \(shortcutDescription(for: .clipboardHistoryPanel)) opens the history.")
@@ -69,18 +69,18 @@ struct ClipboardSettings: View {
             if enableClipboardManager {
                 SettingsSection {
                     Defaults.Toggle(key: .showClipboardIcon) {
-                        Text("Show Clipboard Icon")
+                        Text("Show clipboard icon")
                     }
                     .settingsHighlight(id: highlightID("Show Clipboard Icon"))
 
-                    SettingsRow("Display Mode") {
-                        SettingsSelect("Display Mode", selection: $clipboardDisplayMode,
+                    SettingsRow("Display mode") {
+                        SettingsSelect("Display mode", selection: $clipboardDisplayMode,
                                        options: ClipboardDisplayMode.allCases, optionTitle: \.displayName)
                     }
                     .settingsHighlight(id: highlightID("Display Mode"))
 
-                    SettingsRow("History Size") {
-                        SettingsSelect("History Size", selection: $clipboardHistorySize, choices: [
+                    SettingsRow("History size") {
+                        SettingsSelect("History size", selection: $clipboardHistorySize, choices: [
                             3: String(localized: "3 items"),
                             5: String(localized: "5 items"),
                             7: String(localized: "7 items"),
@@ -90,7 +90,7 @@ struct ClipboardSettings: View {
                     .settingsHighlight(id: highlightID("History Size"))
 
                     // The counts moved up, beside Pinned Items and History.
-                    LabeledContent("Monitoring Status") {
+                    LabeledContent("Monitoring status") {
                         SettingsStatusText(clipboard.isMonitoring ? String(localized: "Active") : String(localized: "Stopped"),
                                            isReady: clipboard.isMonitoring)
                     }

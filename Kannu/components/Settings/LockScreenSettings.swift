@@ -97,7 +97,7 @@ struct LockScreenSettings: View {
                 }
                 .settingsHighlight(id: highlightID("Enable lock screen live activity"))
             } header: {
-                SettingsSectionHeader("Live Activity & Feedback")
+                SettingsSectionHeader("Live activity & feedback")
             } footer: {
                 SettingsFooter("Controls whether Kannu mirrors lock/unlock events with its own live activity.")
             }
@@ -132,7 +132,7 @@ struct LockScreenSettings: View {
 
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
-                                ? Text("Use the sliders below to pick unique Apple liquid-glass variants for each widget.") : nil) {
+                                ? Text("Pick a liquid-glass variant for each widget below.") : nil) {
                         SettingsSelect("Glass mode", selection: $lockScreenGlassCustomizationMode,
                                        options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
                                        style: .segmented)
@@ -140,7 +140,7 @@ struct LockScreenSettings: View {
                     .settingsHighlight(id: highlightID("Glass mode"))
                 }
             } header: {
-                SettingsSectionHeader("Lock Screen Glass")
+                SettingsSectionHeader("Lock screen glass")
             } footer: {
                 SettingsFooter("Choose the global material mode for lock screen widgets. Custom Liquid unlocks per-widget variant sliders while Standard sticks to the classic frosted/liquid options.")
             }
@@ -193,7 +193,7 @@ struct LockScreenSettings: View {
                         .opacity(enableLockScreenMediaWidget ? 1 : 0.5)
                         .settingsHighlight(id: highlightID("Enable media panel blur"))
                 }
-                SettingsRow("Fullscreen artwork on right-click", description: "Right-click the lock screen album art to use it as the wallpaper; right-click again to restore.") {
+                SettingsRow("Fullscreen artwork on right-click", description: "Right-click the album art to toggle it as wallpaper.") {
                     Defaults.Toggle(key: .lockScreenMusicFullscreenArtworkEnabled) {
                         Text("Fullscreen artwork on right-click")
                     }
@@ -211,7 +211,7 @@ struct LockScreenSettings: View {
                 .disabled(!enableLockScreenMediaWidget || !lockScreenMusicFullscreenArtworkEnabled)
                 .settingsHighlight(id: highlightID("Keep album art visible during fullscreen artwork"))
             } header: {
-                SettingsSectionHeader("Media Panel")
+                SettingsSectionHeader("Media panel")
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     if !showStandardMediaControls {
@@ -269,7 +269,7 @@ struct LockScreenSettings: View {
                     }
                 }
             } header: {
-                SettingsSectionHeader("Timer Widget")
+                SettingsSectionHeader("Timer widget")
             } footer: {
                 SettingsFooter("Controls the optional timer widget that floats above the media panel, including its classic, frosted, or liquid glass surface independent of the global material setting.")
             }
@@ -338,7 +338,7 @@ struct LockScreenSettings: View {
                     .settingsHighlight(id: highlightID("Use colored gauges"))
                 }
             } header: {
-                SettingsSectionHeader("Weather Widget")
+                SettingsSectionHeader("Weather widget")
             } footer: {
                 SettingsFooter("Enable the weather capsule and configure its layout, provider, units, and optional battery/AQI indicators.")
             }
@@ -375,7 +375,7 @@ struct LockScreenSettings: View {
                         .settingsHighlight(id: highlightID("Show Bluetooth battery"))
                     }
                 } header: {
-                    SettingsSectionHeader("Battery Widget")
+                    SettingsSectionHeader("Battery widget")
                 } footer: {
                     SettingsFooter("Enable the battery capsule and configure its layout.")
                 }
@@ -387,7 +387,7 @@ struct LockScreenSettings: View {
                 }
                 .settingsHighlight(id: highlightID("Show focus widget"))
             } header: {
-                SettingsSectionHeader("Focus Widget")
+                SettingsSectionHeader("Focus widget")
             } footer: {
                 SettingsFooter("Displays the current Focus state above the weather capsule whenever Focus detection is enabled.")
             }
@@ -497,49 +497,49 @@ private struct LockScreenPositioningControls: View {
             offsetRow(
                 title: String(localized: "Weather"),
                 value: weatherOffset,
-                resetTitle: String(localized: "Reset Weather"),
+                resetTitle: String(localized: "Reset weather"),
                 resetAction: resetWeatherOffset
             )
             offsetRow(
                 title: String(localized: "Timer"),
                 value: timerOffset,
-                resetTitle: String(localized: "Reset Timer"),
+                resetTitle: String(localized: "Reset timer"),
                 resetAction: resetTimerOffset
             )
             offsetRow(
                 title: String(localized: "Music"),
                 value: musicOffset,
-                resetTitle: String(localized: "Reset Music"),
+                resetTitle: String(localized: "Reset music"),
                 resetAction: resetMusicOffset
             )
         } header: {
-            SettingsSectionHeader("Lock Screen Positioning")
+            SettingsSectionHeader("Lock screen positioning")
         } footer: {
-            SettingsFooter("Drag the previews to adjust vertical placement. Positive values lift the panel; negative values lower it. Use the width sliders below to narrow the media and timer widgets without exceeding their default size. Changes apply instantly while the widgets are visible.")
+            SettingsFooter("Drag the previews to adjust vertical placement; positive values lift the panel. The width sliders narrow the media and timer widgets, never past their default size.")
                 .textCase(nil)
         }
 
         SettingsSection {
             widthRow(
-                title: String(localized: "Media Panel Width"),
+                title: String(localized: "Media panel width"),
                 value: musicWidthBinding,
                 range: musicWidthRange,
                 helpText: String(localized: "Shrinks the lock screen media panel while keeping the expanded view full width.")
             )
             widthRow(
-                title: String(localized: "Timer Widget Width"),
+                title: String(localized: "Timer widget width"),
                 value: timerWidthBinding,
                 range: timerWidthRange,
                 helpText: String(localized: "Adjusts the lock screen timer widget width without affecting button sizing.")
             )
             SettingsActionRow {
-                Button(String(localized: "Reset Media Width"), action: resetMusicWidth)
+                Button(String(localized: "Reset media width"), action: resetMusicWidth)
                     .disabled(musicWidth == Double(LockScreenMusicPanel.defaultCollapsedWidth))
-                Button(String(localized: "Reset Timer Width"), action: resetTimerWidth)
+                Button(String(localized: "Reset timer width"), action: resetTimerWidth)
                     .disabled(timerWidth == LockScreenTimerWidget.defaultWidth)
             }
         } header: {
-            SettingsSectionHeader("Widget Width")
+            SettingsSectionHeader("Widget width")
         }
     }
 

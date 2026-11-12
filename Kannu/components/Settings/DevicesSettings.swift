@@ -82,7 +82,7 @@ struct DevicesSettingsView: View {
                 }
                 .settingsHighlight(id: highlightID("Use 3D Bluetooth HUD icon"))
             } header: {
-                SettingsSectionHeader("Bluetooth Audio Devices")
+                SettingsSectionHeader("Bluetooth audio devices")
             } footer: {
                 SettingsFooter("Displays a HUD notification when Bluetooth audio devices (headphones, AirPods, speakers) connect, showing device name and battery level.")
             }
@@ -94,7 +94,7 @@ struct DevicesSettingsView: View {
                 .disabled(colorCodingDisabled)
                 .settingsHighlight(id: highlightID("Color-coded battery display"))
             } header: {
-                SettingsSectionHeader("Battery Indicator Styling")
+                SettingsSectionHeader("Battery indicator styling")
             } footer: {
                 if progressBarStyle == .segmented {
                     SettingsFooter("Color-coded fills are unavailable in Segmented mode. Switch to Hierarchical or Gradient inside Controls › Dynamic Island to adjust advanced options.")

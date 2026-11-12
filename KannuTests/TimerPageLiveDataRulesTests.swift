@@ -40,9 +40,10 @@ final class TimerPageLiveDataRulesTests: XCTestCase {
     private static let stateRead = #"(?<![\w.])(?:TimerManager\.shared|manager|timerManager)\.(?:isTimerActive|timerName|totalDuration|remainingTime|elapsedTime|isPaused|isFinished|isOvertime|lastUpdated|activePresetId|activePreset|sessionTint|sessionTaskKey|sessionTaskID|activeSource|progress|sessionAccent|formattedRemainingTime|formattedElapsedTime|formattedTotalDuration|isExternalTimerActive|hasManualTimerRunning|allowsManualInteraction|isRunning|statusText|timerColor|currentColor|timerNSColor)\b"#
     /// The manager reached any way but the two feeds, the one copy or a start: a local name for it, a sink, a read.
     private static let otherReach = #"TimerManager\.shared(?!\.objectWillChange\b|\.\$isTimerActive\b|\.startTimer\(|\))"#
-    /// The places that may read it: the copy's `init`, and the two presses, which read it at the press.
+    /// The places that may read it: the copy's `init`, and what three presses call, which read it at the press: Pause or
+    /// Resume, Stop, and Start timer's check that no timer runs.
     private static let readers = ["init(_ timerManager: TimerManager) {", "private static func togglePause() {",
-                                  "private static func stop() {"]
+                                  "private static func stop() {", "private static func timerRunsNow() -> Bool {"]
 
     /// Two subscriptions, each to what it needs, and nothing else of the manager: no observer, no `onReceive`, no sink,
     /// no local name for it. Its state is read in one copy, `TimerPageData`'s `init`, assigned only when it changed, and

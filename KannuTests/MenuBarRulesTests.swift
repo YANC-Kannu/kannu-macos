@@ -207,7 +207,7 @@ final class MenuBarRulesTests: XCTestCase {
 
     // MARK: - New Task
 
-    /// ⌘N has one owner, the menu, and Tasks takes the request once, with the filter rule its old shortcut had.
+    /// ⌘N has one owner, the menu, and Tasks takes the request once, with the filter of the list on screen.
     static func newTaskProblems(tasks: String, shortcutOwners: [String]) -> [String] {
         var problems: [String] = []
         let code = Self.code(tasks)
@@ -217,7 +217,7 @@ final class MenuBarRulesTests: XCTestCase {
         }
         let open = body(of: "private func openNewTask() {", in: code)
         if !open.contains("guard enableTasks, sheet == nil else { return }")
-            || !open.contains("sheet = .newTask(listFilter: path.last == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)") {
+            || !open.contains("sheet = .newTask(listFilter: newTaskListFilter)") {
             problems.append("New Task no longer opens as its shortcut did")
         }
         // From a Brain whose list is still loading the request would be taken and dropped; the sheet waits instead.

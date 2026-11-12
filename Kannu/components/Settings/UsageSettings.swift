@@ -36,11 +36,11 @@ struct UsageSettings: View {
         } settings: {
             SettingsSection {
                 Defaults.Toggle(key: .enableLLMUsageFeature) {
-                    Text("Enable LLM Usage Monitor")
+                    Text("Enable LLM usage monitor")
                 }
                 .settingsHighlight(id: highlightID("Enable LLM Usage Monitor"))
             } header: {
-                SettingsSectionHeader("Usage Monitor")
+                SettingsSectionHeader("Usage monitor")
             } footer: {
                 SettingsFooter("Adds a Usage tab to the notch that tracks token usage and spend across your configured AI providers.")
             }
@@ -69,11 +69,11 @@ struct UsageSettings: View {
                 } header: {
                     SettingsSectionHeader("Providers")
                 } footer: {
-                    SettingsFooter("Choose which AI providers appear in the Usage tab. Claude reads its usage from local files; while the Usage tab is open and the limits it has are more than 15 minutes old, Kannu runs Claude Code's /usage to refresh them, and the ↻ on its card fetches them now and, if Claude Code is not signed in to claude.ai, starts that sign-in in your browser. Codex and Cursor need each CLI signed in locally. Antigravity shows its model quotas when the Antigravity CLI (agy) is installed and signed in; Kannu asks it for /usage while the Usage tab is open, at most every 3 minutes unless you press Refresh. Full Disk Access is not required.")
+                    SettingsFooter("Claude's limits come from local files, refreshed through Claude Code's /usage while the Usage tab is open. The notch's ↻ on Claude may start a claude.ai sign-in in your browser. Codex, Cursor and Antigravity need their CLIs signed in.")
                 }
 
                 SettingsSection {
-                    SettingsRow("Check Codex and Cursor limits in the background", description: "While a Codex or Cursor agent is working, Kannu asks for your usage every 5 minutes — the same request the Usage tab makes when it is open. Off: they update only while the Usage tab is open.") {
+                    SettingsRow("Check Codex and Cursor limits in the background", description: "Checks every 5 minutes while Codex or Cursor is working.") {
                         Defaults.Toggle(key: .checkQuotaInBackground) {
                             Text("Check Codex and Cursor limits in the background")
                         }

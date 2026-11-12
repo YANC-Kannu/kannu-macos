@@ -191,20 +191,20 @@ struct SecurityFindingRow: View {
                 Divider()
             }
             if let path = finding.revealPath {
-                Button("Reveal File in Finder") {
+                Button("Reveal file in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                 }
             }
             if let folder = finding.projectFolder {
-                Button("Reveal Project Folder") {
+                Button("Reveal project folder") {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder, isDirectory: true)])
                 }
             }
             if let openChat {
-                Button("Open Chat", action: openChat)
+                Button("Open chat", action: openChat)
             }
             Divider()
-            Button("Copy Details") {
+            Button("Copy details") {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(SecurityFindingGuide.detailsText(for: finding), forType: .string)

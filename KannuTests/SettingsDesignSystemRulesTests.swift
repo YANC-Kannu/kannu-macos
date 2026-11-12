@@ -447,8 +447,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
         let components = Self.code(try XCTUnwrap(sources["SettingsComponents.swift"]))
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
-        XCTAssertEqual(Self.code(try XCTUnwrap(sources["AllTasksPage.swift"])).components(separatedBy: ".disclosureGroupStyle(.automatic)").count - 1, 3,
-                       "All tasks' long groups keep the native disclosure")
+        // 2026-11-11: All tasks' three long groups, the last native disclosures, became the Tasks list's Done and Archived
+        // tabs and an ordinary Tag colours group (the design review's finding 13).
+        XCTAssertEqual(Self.filesUsing(".disclosureGroupStyle(.automatic)", in: sources), [], "a disclosure under Settings is ours")
         // 2026-11-04: the segmented picker's opt-out and its plant are gone. Nothing segmented is native any more:
         // the animation editor's Loop Mode is a SettingsSelect (Stage 3, brain/3-1-select).
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
@@ -947,6 +948,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
                         ("SettingsSectionHeader", ".accessibilityAddTraits(.isHeader)"),
                         ("SettingsFooter", ".font(SettingsTheme.description)"),
+                        ("SettingsFooter", ".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)"),
+                        ("SettingsRowLabel", ".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)"),
                         ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
         var problems = required.compactMap { component, modifier -> String? in
             guard let body = region(of: component) else { return "\(component) is gone" }
@@ -965,12 +968,33 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
         Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), (".accessibilityAddTraits(.isHeader)", ""),
                            ("            .font(SettingsTheme.description)\n", ""),
+                           (".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)", ""),
+                           (".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)", ""),
                            ("struct SettingsSectionHeader", "struct RenamedHeader"), ("struct SettingsFooter:", "struct RenamedFooter:")],
                           in: components, by: Self.sharedComponentProblems)
     }
 
-    /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
-    private static let pinnedNativeMenus = ["AllTasksPage.swift": 1]
+    /// Text wraps at a cap, whatever the copy: a footer or an empty state's line at `proseMaxWidth` (380), a row's caption at
+    /// `descriptionMaxWidth` (440), so no line under Settings runs past about 80 characters. The shared components apply them
+    /// (`sharedComponentProblems`); this holds the two numbers.
+    private static func capProblems(in theme: String) -> [String] {
+        [("proseMaxWidth", 380), ("descriptionMaxWidth", 440)].compactMap { name, value in
+            theme.contains("static let \(name): CGFloat = \(value)") ? nil : "\(name) is not \(value)"
+        }
+    }
+
+    func testTheTextCapsHold() throws {
+        let theme = try Self.theme()
+        XCTAssertEqual(Self.capProblems(in: theme), [])
+        Self.assertCaught([("proseMaxWidth: CGFloat = 380", "proseMaxWidth: CGFloat = 400"),
+                           ("descriptionMaxWidth: CGFloat = 440", "descriptionMaxWidth: CGFloat = 520"),
+                           ("static let descriptionMaxWidth", "static let captionMaxWidth")],
+                          in: theme, by: Self.capProblems)
+    }
+
+    /// None since Stage 5's Tasks page: All tasks' filter menu, whose four ticked pickers were native submenus, went with
+    /// it (plan:75). A menu that must keep the native trigger goes here with its reason.
+    private static let pinnedNativeMenus: [String: Int] = [:]
 
     /// Menus whose own chain does not have our button draw the trigger. Each menu says so itself, rather than
     /// leaving it to the root: the button menu style takes the current button style, ours takes the native

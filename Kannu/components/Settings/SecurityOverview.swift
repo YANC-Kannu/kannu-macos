@@ -60,13 +60,22 @@ struct SecurityOverview: View {
         return detectionEnabled
     }
 
+    /// Agent Status, which runs the findings store: off, the page shows its off card and the header nothing. On a board,
+    /// the fixture's, never this Mac's switch.
+    static func agentStatusOn(_ enabled: Bool) -> Bool {
+        #if DEBUG
+        if let fixture = snapshotFixture { return fixture.agentStatusOn }
+        #endif
+        return enabled
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
-            if !enabled {
+            if !Self.agentStatusOn(enabled) {
                 // The store stops with Agent Status, so there is nothing current to show.
                 SettingsSection {
                     SecurityMessage(title: String(localized: "Agent Status is off"), message: nil) {
-                        Button("Turn On") { enabled = true }
+                        Button("Turn on") { enabled = true }
                     }
                 }
             } else {
@@ -122,7 +131,7 @@ struct SecurityOverview: View {
             SettingsSectionHeader("Security findings")
                 .settingsHighlight(id: SettingsDeepLink.securityFindingsHighlightID)
         } footer: {
-            SettingsFooter("Detection is best-effort: Kannu can miss things, and an empty list is not proof that nothing happened. Kannu never changes your agent or MCP settings. Nothing leaves this Mac unless you turn on push notifications or session analysis. Details: docs/ADR.md in the Kannu repository.")
+            SettingsFooter("Detection is best-effort: an empty list is not proof that nothing happened. Kannu never changes your agent or MCP settings, and nothing leaves this Mac unless you turn on push notifications or session analysis.")
         }
     }
 
@@ -154,7 +163,7 @@ struct SecurityHeaderActions: View {
 
     var body: some View {
         HStack(spacing: SettingsMetrics.rowContent) {
-            if enabled {
+            if SecurityOverview.agentStatusOn(enabled) {
                 Button {
                     // The first settings row, which is built whenever Agent Status is on.
                     SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(highlightID: SettingsDeepLink.securityAlertsHighlightID)
@@ -348,7 +357,7 @@ private struct SecurityAnalysisRow: View {
                 }
                 SettingsMoreMenu {
                     if let path = analysis.reportPath {
-                        Button("Reveal Report in Finder") {
+                        Button("Reveal report in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                         }
                     }
@@ -460,14 +469,14 @@ struct SecurityPageData: Equatable {
         return String(localized: "\(scan.date.formatted(date: .abbreviated, time: .shortened)) · \(scan.assetCount) assets · \(scan.findingCount) findings · \(coverage) · catalog \(scan.catalogVersion) · schema \(scan.schemaVersion)")
     }
 
-    /// "Next automatic scan Sep 12, 5:54 AM · the last scan failed" — the sooner-than-daily time is the retry, so the
+    /// "Next scan Sep 12, 5:54 AM · the last scan failed" — the sooner-than-daily time is the retry, so the
     /// line says why rather than naming the mechanism.
     var nextAutomaticScanText: String {
         let when: String
         if let next = nextAutomaticScanAt, next > Date().addingTimeInterval(60) {
-            when = String(localized: "Next automatic scan \(next.formatted(date: .abbreviated, time: .shortened))")
+            when = String(localized: "Next scan \(next.formatted(date: .abbreviated, time: .shortened))")
         } else {
-            when = String(localized: "Next automatic scan within a minute")
+            when = String(localized: "Next scan within a minute")
         }
         guard consecutiveScanFailures > 0 else { return when }
         return when + " · " + String(localized: "the last scan failed")
@@ -510,5 +519,7 @@ struct SecurityOverviewFixture {
     var data: SecurityPageData
     var adrConnected: Bool
     var detectionEnabled: Bool
+    /// Agent Status: off, the page shows its off card in place of the findings, and the header nothing.
+    var agentStatusOn = true
 }
 #endif

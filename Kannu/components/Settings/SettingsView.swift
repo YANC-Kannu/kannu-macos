@@ -197,12 +197,16 @@ enum SettingsDeepLink {
         .linear: tasksLinearSourceHighlightID, .todoist: tasksTodoistSourceHighlightID,
         .appleReminders: tasksAppleRemindersSourceHighlightID,
     ]
-    /// Brain › Tasks › Your tasks, the All tasks row that opens the list: where search lands. The
-    /// id keeps its old "Task list" name, so no link breaks.
+    /// Brain › Tasks' list, on its Find row: where the list's search entries land. The id keeps its old
+    /// "Task list" name, so no link breaks.
     static let tasksListHighlightID = SettingsTab.tasks.highlightID(for: "Task list")
-    /// The All tasks page itself, opened, on its back row: the popover's "Show all in Brain" and a
-    /// click on a task reminder. `TasksSettings` opens the page for this id.
+    /// Brain › Tasks' list itself, on its tabs: the popover's "Show all in Brain" and a click on a task
+    /// reminder. `TasksSettings` shows the open tasks for this id.
     static let tasksListOpenID = SettingsTab.tasks.highlightID(for: "Task list page")
+    /// Brain › Tasks' switch, the settings' first row: where the page header's gear lands.
+    static let tasksEnableHighlightID = SettingsTab.tasks.highlightID(for: "Enable tasks")
+    /// Brain › Tasks › Tag colours, in the settings.
+    static let tasksTagColorsHighlightID = SettingsTab.tasks.highlightID(for: "Tag colours")
     /// Brain › Tasks › Time to log, shown while an entry waits: the popover's "… more in Brain".
     static let tasksTimeToLogHighlightID = SettingsTab.tasks.highlightID(for: "Time to log")
     /// Brain › Agents' switch: where search lands for the tab's other rows while monitoring is off.
@@ -222,6 +226,8 @@ enum SettingsDeepLink {
     static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
     /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
     static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
+    /// Brain › Notes' switch, its first settings row and always built: where Notes' gear lands.
+    static let notesEnableHighlightID = SettingsTab.notes.highlightID(for: "Enable Notes")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -358,14 +364,14 @@ extension View {
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
     /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
-    /// gear and Refresh, Timer's gear and Start timer, and Clipboard's "…" and Open history panel. Each reads its own
-    /// store.
+    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, Tasks' gear and New
+    /// task, and Notes' gear and New note. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// A sub-page's own title (Brain › Tasks' All tasks). Nil is the tab's.
+    /// A sub-page's own title (Brain › Tasks' source and task pages). Nil is the tab's.
     @State private var pageTitle: String?
     /// A flag, not the panel's width, so a resize redraws the page only when it crosses `widePanelWidth`.
     @State private var isWidePanel = false
@@ -840,13 +846,13 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .general, title: "Permissions", keywords: ["permission", "privacy", "allow", "accessibility", "bluetooth", "location", "downloads", "warp", "notes", "automation"], highlightID: SettingsTab.general.highlightID(for: "Permissions")),
 
             // Live Activities
-            SettingsSearchEntry(tab: .liveActivities, title: "Enable Screen Recording Detection", keywords: ["screen recording", "indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Screen Recording Detection")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Show Recording Indicator", keywords: ["recording indicator", "red dot"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Recording Indicator")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Enable Focus Detection", keywords: ["focus", "do not disturb", "dnd"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Focus Detection")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Show Focus Indicator", keywords: ["focus icon", "moon"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Focus Indicator")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Show Focus Label", keywords: ["focus label", "text"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Focus Label")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Enable Camera Detection", keywords: ["camera", "privacy indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Camera Detection")),
-            SettingsSearchEntry(tab: .liveActivities, title: "Enable Microphone Detection", keywords: ["microphone", "privacy"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Microphone Detection")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Enable screen recording detection", keywords: ["screen recording", "indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Screen Recording Detection")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Show recording indicator", keywords: ["recording indicator", "red dot"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Recording Indicator")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Enable Focus detection", keywords: ["focus", "do not disturb", "dnd"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Focus Detection")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Show Focus indicator", keywords: ["focus icon", "moon"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Focus Indicator")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Show Focus label", keywords: ["focus label", "text"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Focus Label")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Enable camera detection", keywords: ["camera", "privacy indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Camera Detection")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Enable microphone detection", keywords: ["microphone", "privacy"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Microphone Detection")),
             SettingsSearchEntry(tab: .liveActivities, title: "Enable music live activity", keywords: ["music", "now playing"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable music live activity")),
 
             // Battery (Charge)
@@ -885,12 +891,12 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .hudAndOSD, title: "Use accent color", keywords: ["accent", "color"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Use accent color")),
 
             // Custom OSD
-            SettingsSearchEntry(tab: .hudAndOSD, title: "Enable Custom OSD", keywords: ["osd", "on-screen display", "custom osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Enable Custom OSD")),
+            SettingsSearchEntry(tab: .hudAndOSD, title: "Enable custom OSD", keywords: ["osd", "on-screen display", "custom osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Enable Custom OSD")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Volume OSD", keywords: ["volume", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Volume OSD")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Brightness OSD", keywords: ["brightness", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Brightness OSD")),
-            SettingsSearchEntry(tab: .hudAndOSD, title: "Keyboard Backlight OSD", keywords: ["keyboard", "backlight", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Keyboard Backlight OSD")),
+            SettingsSearchEntry(tab: .hudAndOSD, title: "Keyboard backlight OSD", keywords: ["keyboard", "backlight", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Keyboard Backlight OSD")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Material", keywords: ["material", "frosted", "liquid", "glass", "solid", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Material")),
-            SettingsSearchEntry(tab: .hudAndOSD, title: "Icon & Progress Color", keywords: ["color", "icon", "white", "black", "gray", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Icon & Progress Color")),
+            SettingsSearchEntry(tab: .hudAndOSD, title: "Icon & progress color", keywords: ["color", "icon", "white", "black", "gray", "osd"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Icon & Progress Color")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Volume step", keywords: ["volume", "step", "percent"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Volume step")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Volume fine step", keywords: ["volume", "fine", "step", "percent"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Volume fine step")),
             SettingsSearchEntry(tab: .hudAndOSD, title: "Brightness step", keywords: ["brightness", "step", "percent"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Brightness step")),
@@ -900,9 +906,9 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .hudAndOSD, title: "Enable external volume control listener", keywords: ["external volume", "ddc volume", "betterdisplay volume", "lunar volume", "disable native volume"], highlightID: SettingsTab.hudAndOSD.highlightID(for: "Enable external volume control listener")),
 
             // Media
-            SettingsSearchEntry(tab: .media, title: "Music Source", keywords: ["media source", "controller"], highlightID: SettingsTab.media.highlightID(for: "Music Source")),
+            SettingsSearchEntry(tab: .media, title: "Music source", keywords: ["media source", "controller"], highlightID: SettingsTab.media.highlightID(for: "Music Source")),
             SettingsSearchEntry(tab: .media, title: "Skip buttons", keywords: ["skip", "controls", "±10"], highlightID: SettingsTab.media.highlightID(for: "Skip buttons")),
-            SettingsSearchEntry(tab: .media, title: "Sneak Peek Style", keywords: ["sneak peek", "preview"], highlightID: SettingsTab.media.highlightID(for: "Sneak Peek Style")),
+            SettingsSearchEntry(tab: .media, title: "Sneak peek style", keywords: ["sneak peek", "preview"], highlightID: SettingsTab.media.highlightID(for: "Sneak Peek Style")),
             SettingsSearchEntry(tab: .media, title: "Enable lyrics", keywords: ["lyrics", "song text"], highlightID: SettingsTab.media.highlightID(for: "Enable lyrics")),
             SettingsSearchEntry(tab: .media, title: "Show live canvas in Dynamic Island", keywords: ["canvas", "live canvas", "album art", "dynamic island", "spotify canvas"], highlightID: SettingsTab.media.highlightID(for: "Show live canvas in Dynamic Island")),
             SettingsSearchEntry(tab: .media, title: "Auto-hide inactive notch media player", keywords: ["auto hide", "inactive", "placeholder", "notch media"], highlightID: SettingsTab.media.highlightID(for: "Auto-hide inactive notch media player")),
@@ -921,8 +927,8 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .shelf, title: "Expanded drag detection area", keywords: ["shelf", "drag"], highlightID: SettingsTab.shelf.highlightID(for: "Expanded drag detection area")),
             SettingsSearchEntry(tab: .shelf, title: "Copy items on drag", keywords: ["shelf", "drag", "copy"], highlightID: SettingsTab.shelf.highlightID(for: "Copy items on drag")),
             SettingsSearchEntry(tab: .shelf, title: "Remove from shelf after dragging", keywords: ["shelf", "drag", "remove"], highlightID: SettingsTab.shelf.highlightID(for: "Remove from shelf after dragging")),
-            SettingsSearchEntry(tab: .shelf, title: "Quick Share Service", keywords: ["shelf", "share", "airdrop", "localsend"], highlightID: SettingsTab.shelf.highlightID(for: "Quick Share Service")),
-            SettingsSearchEntry(tab: .shelf, title: "LocalSend Device Picker Style", keywords: ["localsend", "glass", "picker", "material"], highlightID: SettingsTab.shelf.highlightID(for: "Device Picker Style")),
+            SettingsSearchEntry(tab: .shelf, title: "Quick Share service", keywords: ["shelf", "share", "airdrop", "localsend"], highlightID: SettingsTab.shelf.highlightID(for: "Quick Share Service")),
+            SettingsSearchEntry(tab: .shelf, title: "LocalSend device picker style", keywords: ["localsend", "glass", "picker", "material"], highlightID: SettingsTab.shelf.highlightID(for: "Device Picker Style")),
 
             // Appearance
             SettingsSearchEntry(tab: .appearance, title: "Main screen style", keywords: ["dynamic island", "pill", "non-notch", "display style", "notch style"], highlightID: SettingsTab.appearance.highlightID(for: "Main screen style")),
@@ -930,11 +936,11 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .appearance, title: "Enable window shadow", keywords: ["shadow", "appearance"], highlightID: SettingsTab.appearance.highlightID(for: "Enable window shadow")),
             SettingsSearchEntry(tab: .appearance, title: "Corner radius scaling", keywords: ["corner radius", "shape"], highlightID: SettingsTab.appearance.highlightID(for: "Corner radius scaling")),
             SettingsSearchEntry(tab: .appearance, title: "Use simpler close animation", keywords: ["close animation", "notch"], highlightID: SettingsTab.appearance.highlightID(for: "Use simpler close animation")),
-            SettingsSearchEntry(tab: .appearance, title: "Notch Width", keywords: ["expanded notch", "width", "resize"], highlightID: SettingsTab.appearance.highlightID(for: "Expanded notch width")),
+            SettingsSearchEntry(tab: .appearance, title: "Notch width", keywords: ["expanded notch", "width", "resize"], highlightID: SettingsTab.appearance.highlightID(for: "Expanded notch width")),
             SettingsSearchEntry(tab: .appearance, title: "Enable colored spectrograms", keywords: ["spectrogram", "audio"], highlightID: SettingsTab.appearance.highlightID(for: "Enable colored spectrograms")),
             SettingsSearchEntry(tab: .appearance, title: "Enable blur effect behind album art", keywords: ["blur", "album art"], highlightID: SettingsTab.appearance.highlightID(for: "Enable blur effect behind album art")),
             SettingsSearchEntry(tab: .appearance, title: "Slider color", keywords: ["slider", "accent"], highlightID: SettingsTab.appearance.highlightID(for: "Slider color")),
-            SettingsSearchEntry(tab: .appearance, title: "Idle Animation", keywords: ["face animation", "idle", "cool face"], highlightID: SettingsTab.appearance.highlightID(for: "Idle Animation")),
+            SettingsSearchEntry(tab: .appearance, title: "Idle animation", keywords: ["face animation", "idle", "cool face"], highlightID: SettingsTab.appearance.highlightID(for: "Idle Animation")),
             SettingsSearchEntry(tab: .appearance, title: "App icon", keywords: ["app icon", "custom icon"], highlightID: SettingsTab.appearance.highlightID(for: "App icon")),
             SettingsSearchEntry(tab: .appearance, title: "Notch fill color", keywords: ["notch color", "background", "fill", "appearance"], highlightID: SettingsTab.appearance.highlightID(for: "Notch fill color")),
             SettingsSearchEntry(tab: .appearance, title: "Notch skin", keywords: ["notch skin", "background", "wallpaper", "custom skin"], highlightID: SettingsTab.appearance.highlightID(for: "Notch skin")),
@@ -991,9 +997,9 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .timer, title: "Timer liquid mode", keywords: ["timer", "standard", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Timer liquid mode")),
             SettingsSearchEntry(tab: .timer, title: "Timer widget variant", keywords: ["timer variant", "liquid"], highlightID: SettingsTab.timer.highlightID(for: "Timer widget variant")),
             SettingsSearchEntry(tab: .timer, title: "Timer tint", keywords: ["timer colour", "preset"], highlightID: SettingsTab.timer.highlightID(for: "Timer tint")),
-            SettingsSearchEntry(tab: .timer, title: "Solid colour", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
+            SettingsSearchEntry(tab: .timer, title: "Solid color", keywords: ["timer colour", "custom"], highlightID: SettingsTab.timer.highlightID(for: "Solid colour")),
             SettingsSearchEntry(tab: .timer, title: "Progress style", keywords: ["progress", "bar", "ring"], highlightID: SettingsTab.timer.highlightID(for: "Progress style")),
-            SettingsSearchEntry(tab: .timer, title: "Timer Presets", keywords: ["preset", "accent colour", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Timer Presets")),
+            SettingsSearchEntry(tab: .timer, title: "Timer presets", keywords: ["preset", "accent colour", "timer"], highlightID: SettingsTab.timer.highlightID(for: "Timer Presets")),
 
             // Tasks. A source page's rows exist only while it is open, so their entries land on the
             // source's row on the overview, which opens it (the Advanced precedent, docs/SETTINGS.md).
@@ -1015,53 +1021,53 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .tasks, title: "GitLab colour", keywords: ["gitlab", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Include merge requests", keywords: ["gitlab", "merge requests", "mr", "review", "reviewer", "pull requests"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Refresh GitLab items", keywords: ["gitlab", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsTab.tasks.highlightID(for: "Enable tasks")),
+            SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsDeepLink.tasksEnableHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Default session length", keywords: ["tasks", "session", "length", "minutes", "pomodoro", "timer"], highlightID: SettingsTab.tasks.highlightID(for: "Default session length")),
             SettingsSearchEntry(tab: .tasks, title: "Sound when the estimate is reached", keywords: ["tasks", "sound", "estimate", "alarm", "chime", "overtime"], highlightID: SettingsTab.tasks.highlightID(for: "Sound when the estimate is reached")),
             SettingsSearchEntry(tab: .tasks, title: "Time to log", keywords: ["tasks", "log time", "log work", "worklog", "time tracking", "spent", "timesheet", "jira", "gitlab"], highlightID: SettingsTab.tasks.highlightID(for: "Time to log")),
-            // All tasks' rows, and a task's own page, exist only while open, so their entries land on
-            // the overview's All tasks row, which opens it.
+            // The list's rows, and a task's own page, are not search rows (a task's page exists only while open), so
+            // their entries land on the list's Find row.
             SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks", "order", "priority", "move to top", "up next", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Find a task", keywords: ["tasks", "find", "search", "look up", "key", "title"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate", "tags", "reminder"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task tags", keywords: ["tasks", "tags", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksTagColorsHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Schedule a task", keywords: ["tasks", "schedule", "reminder", "notification", "remind me", "due"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Recently closed tasks", keywords: ["tasks", "done", "finished", "completed", "closed", "reopen"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Archived tasks", keywords: ["tasks", "archive", "archived", "hidden", "restore", "delete", "clear"], highlightID: SettingsDeepLink.tasksListHighlightID),
 
             // Stats
             SettingsSearchEntry(tab: .stats, title: "Enable system stats monitoring", keywords: ["stats", "monitoring"], highlightID: SettingsTab.stats.highlightID(for: "Enable system stats monitoring")),
-            SettingsSearchEntry(tab: .llmUsage, title: "Enable LLM Usage Monitor", keywords: ["llm", "usage", "ai", "monitor"], highlightID: SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")),
-            SettingsSearchEntry(tab: .llmUsage, title: "Claude Provider", keywords: ["llm", "claude", "provider", "toggle", "usage", "rate", "limit", "quota", "5h", "7d", "weekly", "session"], highlightID: SettingsTab.llmUsage.highlightID(for: "Claude Provider")),
-            SettingsSearchEntry(tab: .llmUsage, title: "Codex Provider", keywords: ["llm", "codex", "provider", "toggle"], highlightID: SettingsTab.llmUsage.highlightID(for: "Codex Provider")),
-            SettingsSearchEntry(tab: .llmUsage, title: "Cursor Provider", keywords: ["llm", "cursor", "provider", "toggle"], highlightID: SettingsTab.llmUsage.highlightID(for: "Cursor Provider")),
+            SettingsSearchEntry(tab: .llmUsage, title: "Enable LLM usage monitor", keywords: ["llm", "usage", "ai", "monitor"], highlightID: SettingsTab.llmUsage.highlightID(for: "Enable LLM Usage Monitor")),
+            SettingsSearchEntry(tab: .llmUsage, title: "Claude provider", keywords: ["llm", "claude", "provider", "toggle", "usage", "rate", "limit", "quota", "5h", "7d", "weekly", "session"], highlightID: SettingsTab.llmUsage.highlightID(for: "Claude Provider")),
+            SettingsSearchEntry(tab: .llmUsage, title: "Codex provider", keywords: ["llm", "codex", "provider", "toggle"], highlightID: SettingsTab.llmUsage.highlightID(for: "Codex Provider")),
+            SettingsSearchEntry(tab: .llmUsage, title: "Cursor provider", keywords: ["llm", "cursor", "provider", "toggle"], highlightID: SettingsTab.llmUsage.highlightID(for: "Cursor Provider")),
             SettingsSearchEntry(tab: .llmUsage, title: "Check Codex and Cursor limits in the background", keywords: ["usage", "background", "codex", "cursor", "quota", "limit"], highlightID: SettingsTab.llmUsage.highlightID(for: "Check Codex and Cursor limits in the background")),
             SettingsSearchEntry(tab: .agentStatus, title: "Remind me when an agent is still waiting", keywords: ["remind", "reminder", "waiting", "yellow", "push", "approval", "nudge"], highlightID: SettingsTab.agentStatus.highlightID(for: "Remind me when an agent is still waiting")),
             SettingsSearchEntry(tab: .agentStatus, title: "Open the exact terminal tab", keywords: ["terminal", "iterm", "tmux", "tab", "click", "open", "pane"], highlightID: SettingsTab.agentStatus.highlightID(for: "Open the exact terminal tab")),
             SettingsSearchEntry(tab: .agentStatus, title: "Push when a usage limit is almost reached", keywords: ["push", "usage", "limit", "quota", "mobile", "ntfy", "pushover", "webhook"], highlightID: SettingsTab.agentStatus.highlightID(for: "Push when a usage limit is almost reached")),
-            SettingsSearchEntry(tab: .llmUsage, title: "Antigravity Provider", keywords: ["antigravity", "gemini", "provider", "usage", "sessions"], highlightID: SettingsTab.llmUsage.highlightID(for: "Antigravity Provider")),
+            SettingsSearchEntry(tab: .llmUsage, title: "Antigravity provider", keywords: ["antigravity", "gemini", "provider", "usage", "sessions"], highlightID: SettingsTab.llmUsage.highlightID(for: "Antigravity Provider")),
             SettingsSearchEntry(tab: .stats, title: "Stop monitoring after closing the notch", keywords: ["stats", "auto stop"], highlightID: SettingsTab.stats.highlightID(for: "Stop monitoring after closing the notch")),
-            SettingsSearchEntry(tab: .stats, title: "CPU Usage", keywords: ["cpu", "graph"], highlightID: SettingsTab.stats.highlightID(for: "CPU Usage")),
+            SettingsSearchEntry(tab: .stats, title: "CPU usage", keywords: ["cpu", "graph"], highlightID: SettingsTab.stats.highlightID(for: "CPU Usage")),
             SettingsSearchEntry(tab: .stats, title: "Temperature unit", keywords: ["cpu", "temperature", "celsius", "fahrenheit"], highlightID: SettingsTab.stats.highlightID(for: "Temperature unit")),
-            SettingsSearchEntry(tab: .stats, title: "Memory Usage", keywords: ["memory", "ram"], highlightID: SettingsTab.stats.highlightID(for: "Memory Usage")),
-            SettingsSearchEntry(tab: .stats, title: "GPU Usage", keywords: ["gpu", "graphics"], highlightID: SettingsTab.stats.highlightID(for: "GPU Usage")),
-            SettingsSearchEntry(tab: .stats, title: "Network Activity", keywords: ["network", "graph"], highlightID: SettingsTab.stats.highlightID(for: "Network Activity")),
+            SettingsSearchEntry(tab: .stats, title: "Memory usage", keywords: ["memory", "ram"], highlightID: SettingsTab.stats.highlightID(for: "Memory Usage")),
+            SettingsSearchEntry(tab: .stats, title: "GPU usage", keywords: ["gpu", "graphics"], highlightID: SettingsTab.stats.highlightID(for: "GPU Usage")),
+            SettingsSearchEntry(tab: .stats, title: "Network activity", keywords: ["network", "graph"], highlightID: SettingsTab.stats.highlightID(for: "Network Activity")),
             SettingsSearchEntry(tab: .stats, title: "Disk I/O", keywords: ["disk", "io"], highlightID: SettingsTab.stats.highlightID(for: "Disk I/O")),
 
             // Clipboard
-            SettingsSearchEntry(tab: .clipboard, title: "Enable Clipboard Manager", keywords: ["clipboard", "manager"], highlightID: SettingsTab.clipboard.highlightID(for: "Enable Clipboard Manager")),
-            SettingsSearchEntry(tab: .clipboard, title: "Show Clipboard Icon", keywords: ["icon", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "Show Clipboard Icon")),
-            SettingsSearchEntry(tab: .clipboard, title: "Display Mode", keywords: ["list", "grid", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "Display Mode")),
-            SettingsSearchEntry(tab: .clipboard, title: "History Size", keywords: ["history", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "History Size")),
+            SettingsSearchEntry(tab: .clipboard, title: "Enable clipboard manager", keywords: ["clipboard", "manager"], highlightID: SettingsTab.clipboard.highlightID(for: "Enable Clipboard Manager")),
+            SettingsSearchEntry(tab: .clipboard, title: "Show clipboard icon", keywords: ["icon", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "Show Clipboard Icon")),
+            SettingsSearchEntry(tab: .clipboard, title: "Display mode", keywords: ["list", "grid", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "Display Mode")),
+            SettingsSearchEntry(tab: .clipboard, title: "History size", keywords: ["history", "clipboard"], highlightID: SettingsTab.clipboard.highlightID(for: "History Size")),
 
             // Screen Assistant
             SettingsSearchEntry(tab: .screenAssistant, title: "Enable Screen Assistant", keywords: ["screen assistant", "ai"], highlightID: SettingsTab.screenAssistant.highlightID(for: "Enable Screen Assistant")),
-            SettingsSearchEntry(tab: .screenAssistant, title: "Display Mode", keywords: ["screen assistant", "mode"], highlightID: SettingsTab.screenAssistant.highlightID(for: "Display Mode")),
+            SettingsSearchEntry(tab: .screenAssistant, title: "Display mode", keywords: ["screen assistant", "mode"], highlightID: SettingsTab.screenAssistant.highlightID(for: "Display Mode")),
 
             // Agent Status
-            SettingsSearchEntry(tab: .agentStatus, title: "Enable Agent Monitoring", keywords: ["agent", "cursor", "claude", "codex", "status", "traffic", "light", "ai", "notch", "monitoring"], highlightID: SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")),
+            SettingsSearchEntry(tab: .agentStatus, title: "Enable agent monitoring", keywords: ["agent", "cursor", "claude", "codex", "status", "traffic", "light", "ai", "notch", "monitoring"], highlightID: SettingsTab.agentStatus.highlightID(for: "Enable Agent Monitoring")),
             SettingsSearchEntry(tab: .agentStatus, title: "Smart caffeinate", keywords: ["caffeinate", "awake", "sleep", "smart", "coffee", "keep awake", "assertion", "insomnia"], highlightID: SettingsDeepLink.smartCaffeinateHighlightID),
             SettingsSearchEntry(tab: .agentStatus, title: "Traffic light style", keywords: ["traffic", "light", "style", "classic", "minimal", "dots", "notch", "agent", "indicator"], highlightID: SettingsTab.agentStatus.highlightID(for: "Traffic light style")),
             SettingsSearchEntry(tab: .agentStatus, title: "Active color", keywords: ["active", "green", "color", "traffic", "light", "palette", "agent"], highlightID: SettingsTab.agentStatus.highlightID(for: "Active color")),
@@ -1069,7 +1075,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .agentStatus, title: "Stopped color", keywords: ["stopped", "red", "color", "traffic", "light", "palette", "agent"], highlightID: SettingsTab.agentStatus.highlightID(for: "Stopped color")),
             SettingsSearchEntry(tab: .agentStatus, title: "Show a red light when no agents are running", keywords: ["red", "light", "idle", "no agents", "stopped", "indicator", "always"], highlightID: SettingsTab.agentStatus.highlightID(for: "Show a red light when no agents are running")),
             SettingsSearchEntry(tab: .agentStatus, title: "Reset traffic light colors", keywords: ["reset", "color", "traffic", "light", "default"], highlightID: SettingsTab.agentStatus.highlightID(for: "Reset traffic light colors")),
-            SettingsSearchEntry(tab: .agentStatus, title: "Editor Hooks", keywords: ["agent", "cursor", "vscode", "copilot", "copilot cli", "codex", "claude", "antigravity", "gemini", "gemini cli", "qwen", "opencode", "plugin", "hook", "install", "integration"], highlightID: SettingsTab.agentStatus.highlightID(for: "Cursor Hook")),
+            SettingsSearchEntry(tab: .agentStatus, title: "Editor hooks", keywords: ["agent", "cursor", "vscode", "copilot", "copilot cli", "codex", "claude", "antigravity", "gemini", "gemini cli", "qwen", "opencode", "plugin", "hook", "install", "integration"], highlightID: SettingsTab.agentStatus.highlightID(for: "Cursor Hook")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Connect ADR", keywords: ["adr", "uber", "security", "discovery", "sensor", "connect", "install", "uv", "pipx"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Connect ADR")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Security findings", keywords: ["security", "agent security", "finding", "mcp", "unpinned", "plaintext", "undeclared", "acknowledge", "snooze", "shield"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Security findings")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Snapshot folder", keywords: ["snapshot", "folder", "directory", "adr", "discovery", "output"], highlightID: SettingsTab.agentSecurity.highlightID(for: "ADR advanced")),
@@ -1102,8 +1108,8 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .about, title: "Watch for freezes", keywords: ["freeze", "frozen", "hang", "stuck", "unresponsive", "beachball", "spinning", "crash", "report", "diagnostics", "developer"], highlightID: SettingsTab.about.highlightID(for: "Watch for freezes")),
             SettingsSearchEntry(tab: .about, title: "Terms of Use", keywords: ["terms", "legal", "agreement", "warranty", "liability", "accept"], highlightID: SettingsTab.about.highlightID(for: "Terms of Use")),
             SettingsSearchEntry(tab: .about, title: "License", keywords: ["license", "licence", "gpl", "legal", "warranty", "acknowledgements", "notice"], highlightID: SettingsTab.about.highlightID(for: "License")),
-            SettingsSearchEntry(tab: .about, title: "Report a Problem", keywords: ["report", "problem", "bug", "crash", "issue", "github", "feedback", "diagnostics"], highlightID: SettingsTab.about.highlightID(for: "Report a Problem")),
-            SettingsSearchEntry(tab: .about, title: "Copy Latest Report", keywords: ["copy", "crash", "report", "diagnostics", "clipboard", "paste", "log"], highlightID: SettingsTab.about.highlightID(for: "Copy Latest Report")),
+            SettingsSearchEntry(tab: .about, title: "Report a problem", keywords: ["report", "problem", "bug", "crash", "issue", "github", "feedback", "diagnostics"], highlightID: SettingsTab.about.highlightID(for: "Report a Problem")),
+            SettingsSearchEntry(tab: .about, title: "Copy latest report", keywords: ["copy", "crash", "report", "diagnostics", "clipboard", "paste", "log"], highlightID: SettingsTab.about.highlightID(for: "Copy Latest Report")),
         ]
     }
 
@@ -1183,11 +1189,11 @@ struct SettingsView: View {
                 Shortcuts()
             }
         case .notes:
-            SettingsForm(tab: .notes) {
+            SettingsForm(tab: .notes, actions: AnyView(NotesHeaderActions())) {
                 NotesSettingsView()
             }
         case .tasks:
-            SettingsForm(tab: .tasks) {
+            SettingsForm(tab: .tasks, actions: AnyView(TasksHeaderActions())) {
                 TasksSettings()
             }
         case .llmUsage:
@@ -1224,12 +1230,6 @@ extension SettingsView {
 }
 
 extension SettingsView {
-    /// DEBUG snapshot harness: Brain › Tasks' All tasks under its large title, as the window builds it.
-    /// `SettingsForm` is private to this file.
-    static func snapshotPageTitle(_ page: some View) -> AnyView {
-        AnyView(SettingsForm(tab: .tasks) { page.settingsPageTitle(TasksSettings.title(of: .allTasks)) })
-    }
-
     /// DEBUG snapshot harness: the shortcut recorder rows, shown only once global shortcuts are on.
     static func snapshotShortcutRows() -> AnyView {
         AnyView(SettingsPage { Shortcuts().shortcutsSection })

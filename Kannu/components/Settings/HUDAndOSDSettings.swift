@@ -137,7 +137,7 @@ struct HUDAndOSDSettingsView: View {
     private enum Tab: String, CaseIterable, Identifiable {
         case hud = "Dynamic Island HUD"
         case osd = "Custom OSD"
-        case vertical = "Vertical Bar"
+        case vertical = "Vertical bar"
         case circular = "Circular"
 
         var id: String { rawValue }
@@ -255,7 +255,7 @@ struct HUDAndOSDSettingsView: View {
                     .settingsHighlight(id: SettingsTab.hudAndOSD.highlightID(for: "Enable Custom OSD"))
 
                     HUDSelectionCard(
-                        title: String(localized: "Vertical Bar"),
+                        title: String(localized: "Vertical bar"),
                         isSelected: selectedTab == .vertical,
                         action: {
                             selectedTab = .vertical
@@ -427,9 +427,9 @@ struct HUDAndOSDSettingsView: View {
             SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
-                SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
-                            ? Text("Disabled while external display integration is active. Brightness keys are handled by the external app.") : nil) {
-                    Toggle("Keyboard Backlight HUD", isOn: $enableKeyboardBacklightHUD)
+                SettingsRow("Keyboard backlight HUD", description: enableThirdPartyDDCIntegration
+                            ? Text("Disabled while an external display app handles brightness.") : nil) {
+                    Toggle("Keyboard backlight HUD", isOn: $enableKeyboardBacklightHUD)
                 }
                 .disabled(enableThirdPartyDDCIntegration)
             } header: {
@@ -445,9 +445,9 @@ struct HUDAndOSDSettingsView: View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Vertical HUD.")
 
         SettingsSection {
-            Toggle("Show Percentage", isOn: $verticalHUDShowValue)
-            Toggle("Use Accent Color", isOn: $verticalHUDUseAccentColor)
-            Toggle("Interactive (Drag to Change)", isOn: $verticalHUDInteractive)
+            Toggle("Show percentage", isOn: $verticalHUDShowValue)
+            Toggle("Use accent color", isOn: $verticalHUDUseAccentColor)
+            Toggle("Interactive (drag to change)", isOn: $verticalHUDInteractive)
             SettingsRow("Material") {
                 SettingsSelect("Material", selection: $verticalHUDMaterial,
                                options: availableVerticalMaterials, optionTitle: \.rawValue)
@@ -471,7 +471,7 @@ struct HUDAndOSDSettingsView: View {
                 }
             }
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
-                Text("Color-coded Volume")
+                Text("Color-coded volume")
             }
             if useColorCodedVolumeDisplay {
                 Defaults.Toggle(key: .useSmoothColorGradient) {
@@ -479,12 +479,12 @@ struct HUDAndOSDSettingsView: View {
                 }
             }
         } header: {
-            SettingsSectionHeader("Behavior & Style")
+            SettingsSectionHeader("Behavior & style")
         }
 
         SettingsSection {
-            SettingsRow("HUD Position") {
-                SettingsSelect("HUD Position", selection: $verticalHUDPosition, choices: [
+            SettingsRow("HUD position") {
+                SettingsSelect("HUD position", selection: $verticalHUDPosition, choices: [
                     "left": String(localized: "Left"),
                     "right": String(localized: "Right"),
                 ])
@@ -501,7 +501,7 @@ struct HUDAndOSDSettingsView: View {
             dimensionSlider("Width", value: $verticalHUDWidth, in: 24...80, step: 2)
             dimensionSlider("Height", value: $verticalHUDHeight, in: 100...500, step: 10)
             SettingsActionRow {
-                Button("Reset to Default") {
+                Button("Reset to default") {
                     verticalHUDWidth = 36
                     verticalHUDHeight = 160
                     verticalHUDPadding = 24
@@ -517,10 +517,10 @@ struct HUDAndOSDSettingsView: View {
         controlsSections(permissionMessage: "Accessibility permission is needed to intercept system controls for the Circular HUD.")
 
         SettingsSection {
-            Toggle("Show Percentage", isOn: $circularHUDShowValue)
-            Toggle("Use Accent Color", isOn: $circularHUDUseAccentColor)
+            Toggle("Show percentage", isOn: $circularHUDShowValue)
+            Toggle("Use accent color", isOn: $circularHUDUseAccentColor)
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
-                Text("Color-coded Volume")
+                Text("Color-coded volume")
             }
             if useColorCodedVolumeDisplay {
                 Defaults.Toggle(key: .useSmoothColorGradient) {
@@ -535,7 +535,7 @@ struct HUDAndOSDSettingsView: View {
             dimensionSlider("Size", value: $circularHUDSize, in: 40...200, step: 5)
             dimensionSlider("Line width", value: $circularHUDStrokeWidth, in: 2...16, step: 1)
             SettingsActionRow {
-                Button("Reset to Default") {
+                Button("Reset to default") {
                     circularHUDSize = 65
                     circularHUDStrokeWidth = 4
                 }
@@ -662,7 +662,7 @@ private struct ExternalDisplayIntegrationsSection: View {
 
         SettingsSection {
             SettingsRow("Enable third-party DDC app integration", description: enableThirdPartyDDCIntegration
-                        ? nil : Text("Enable to route BetterDisplay or Lunar display adjustments through Kannu's active HUD style.")) {
+                        ? nil : Text("Shows BetterDisplay and Lunar changes in Kannu's HUD.")) {
                 Toggle("Enable third-party DDC app integration", isOn: $enableThirdPartyDDCIntegration)
             }
             .settingsHighlight(id: highlightID("Third-party DDC app integration"))
@@ -678,8 +678,8 @@ private struct ExternalDisplayIntegrationsSection: View {
 
                 SettingsRow("Enable external volume control listener", description: Text(
                     enableExternalVolumeControlListener
-                    ? "Kannu's built-in volume key interception is disabled while external volume listening is on. Volume HUD/OSD will follow \(thirdPartyDDCProvider.displayName) payloads."
-                    : "Kannu keeps native volume key interception. External provider volume payloads are ignored while this is off."
+                    ? "Volume HUD follows \(thirdPartyDDCProvider.displayName), not the volume keys."
+                    : "Volume HUD follows the volume keys, not the provider."
                 )) {
                     Toggle("Enable external volume control listener", isOn: $enableExternalVolumeControlListener)
                 }
