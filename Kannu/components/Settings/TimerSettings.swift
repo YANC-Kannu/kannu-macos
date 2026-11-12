@@ -131,7 +131,7 @@ struct TimerSettings: View {
                 .settingsHighlight(id: highlightID("Timer controls appear as"))
             }
         } header: {
-            SettingsSectionHeader("Timer Feature")
+            SettingsSectionHeader("Timer feature")
         } footer: {
             SettingsFooter("Control timer availability, live activity behaviour, and whether the app mirrors timers started from the macOS Clock app.")
         }
@@ -203,7 +203,7 @@ struct TimerSettings: View {
                 }
             }
         } header: {
-            SettingsSectionHeader("Lock Screen Integration")
+            SettingsSectionHeader("Lock screen integration")
         } footer: {
             SettingsFooter("Mirrors the toggle found under Lock screen settings so timer-specific workflows can enable or disable the widget without switching tabs.")
         }
@@ -212,7 +212,7 @@ struct TimerSettings: View {
     @ViewBuilder
     private var customTimerSection: some View {
         SettingsSection {
-            LabeledContent("Default Custom Timer") {
+            LabeledContent("Default custom timer") {
                 Text(customDurationDisplay)
                     .font(SettingsTheme.mono)
                     .fontWeight(.medium)
@@ -223,9 +223,9 @@ struct TimerSettings: View {
             TimerDurationStepperRow(title: String(localized: "Minutes"), value: $customMinutes, range: 0...59)
             TimerDurationStepperRow(title: String(localized: "Seconds"), value: $customSeconds, range: 0...59)
         } header: {
-            SettingsSectionHeader("Custom Timer")
+            SettingsSectionHeader("Custom timer")
         } footer: {
-            SettingsFooter("This duration powers the \"Custom\" option inside the timer popover for quick access.")
+            SettingsFooter("Used by Start timer and the Custom option in the timer popover.")
         }
     }
 
@@ -239,7 +239,7 @@ struct TimerSettings: View {
             .settingsHighlight(id: highlightID("Timer tint"))
 
             if colorMode == .solid {
-                SettingsColorPickerRow(title: "Solid colour", selection: $solidColor)
+                SettingsColorPickerRow(title: "Solid color", selection: $solidColor)
                     .settingsHighlight(id: highlightID("Solid colour"))
             }
 
@@ -255,7 +255,7 @@ struct TimerSettings: View {
             Toggle("Show preset list in timer tab", isOn: $showTimerPresetsInNotchTab)
                 .settingsHighlight(id: highlightID("Show preset list in timer tab"))
 
-            SettingsRow("Show floating pause/stop controls", description: "These controls sit beside the notch while a timer runs. They require the timer name to stay hidden for spacing.") {
+            SettingsRow("Show floating pause/stop controls", description: "Beside the notch while timing; the name stays hidden.") {
                 Toggle("Show floating pause/stop controls", isOn: $controlWindowEnabled)
             }
             .disabled(showsLabel)
@@ -278,15 +278,15 @@ struct TimerSettings: View {
         SettingsSection {
             LabeledContent {
                 HStack(spacing: 8) {
-                    Button("Reset to Default") {
+                    Button("Reset to default") {
                         customTimerSoundPath = nil
                     }
                     .disabled(customTimerSoundPath == nil)
-                    Button("Choose File", action: selectCustomTimerSound)
+                    Button("Choose file", action: selectCustomTimerSound)
                 }
             } label: {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Timer Sound")
+                    Text("Timer sound")
                     Group {
                         if let customTimerSoundPath {
                             Text("Custom: \(URL(fileURLWithPath: customTimerSoundPath).lastPathComponent)")
@@ -298,7 +298,7 @@ struct TimerSettings: View {
                 }
             }
         } header: {
-            SettingsSectionHeader("Timer Sound")
+            SettingsSectionHeader("Timer sound")
         } footer: {
             SettingsFooter("Select a custom sound to play when a timer ends. Supported formats include MP3, M4A, WAV, and AIFF.")
         }
@@ -326,7 +326,7 @@ struct TimerSettings: View {
 
     private func selectCustomTimerSound() {
         let panel = NSOpenPanel()
-        panel.title = "Select Timer Sound"
+        panel.title = "Select timer sound"
         panel.allowedContentTypes = [.audio]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false

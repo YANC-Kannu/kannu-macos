@@ -121,6 +121,6 @@ private extension QuickShareProvider {
     }
 
     var symbolFallbackName: String {
-        id == "System Share Menu" ? "square.and.arrow.up.on.square" : "square.and.arrow.up"
+        id == "System share menu" ? "square.and.arrow.up.on.square" : "square.and.arrow.up"
     }
 }

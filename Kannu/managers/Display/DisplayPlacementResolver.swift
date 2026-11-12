@@ -50,13 +50,13 @@ public enum DisplayPlacement: String, CaseIterable, Identifiable, Equatable {
     public var description: String {
         switch self {
         case .externalTakesOver:
-            return String(localized: "Kannu moves to the external display while one is connected, and returns to the built-in one when it is unplugged. With two or more external displays it follows the pointer.")
+            return String(localized: "Moves to the external display; follows the pointer with several.")
         case .allDisplays:
             return String(localized: "One Kannu on every display.")
         case .builtInOnly:
-            return String(localized: "Kannu stays on the built-in display and ignores anything else you plug in.")
+            return String(localized: "Stays on the built-in display, ignoring others.")
         case .chooseDisplay:
-            return String(localized: "Kannu stays on the display you pick. If it is disconnected, Kannu falls back to the main display.")
+            return String(localized: "Stays on your pick; falls back to the main display.")
         }
     }
 }

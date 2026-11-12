@@ -84,7 +84,7 @@ struct AgentSecuritySettings: View {
                 SettingsSection {
                     SettingsFooter("Agent monitoring is off. Turn on Enable Agent Status in the Agents tab and the security checks, findings and scans appear here.")
                 } header: {
-                    SettingsSectionHeader("Agent Security")
+                    SettingsSectionHeader("Agent security")
                 }
             }
         }
@@ -151,7 +151,7 @@ struct AgentSecuritySettings: View {
             }
 
             if adr.discovery.isFound {
-                SettingsRow("Let Kannu run scans", description: "Kannu runs a scan once a day, and again whenever an AI tool's MCP servers change. With this off, it shows only the scans something else runs.") {
+                SettingsRow("Let Kannu run scans", description: "Scans daily and whenever an AI tool's MCP servers change.") {
                     Defaults.Toggle(key: .adrRunScansEnabled) {
                         Text("Let Kannu run scans")
                     }
@@ -205,7 +205,7 @@ struct AgentSecuritySettings: View {
                         }
                     }
                 } label: {
-                    SettingsRowLabel("ADR tools folder", description: "Only if the tools are somewhere else: Kannu already looks in ~/.local/bin, uv's tool folders, /opt/homebrew/bin and /usr/local/bin.")
+                    SettingsRowLabel("ADR tools folder", description: "Only needed if the tools are somewhere else.")
                 }
                 if let protected = ADRToolFolder.protectedFolderName(for: adrToolDirectory, home: NSHomeDirectory()) {
                     SettingsErrorText(String(localized: "This folder is in \(protected). macOS asks for permission whenever Kannu looks for the tools there; a folder outside it avoids the prompt."))
@@ -220,7 +220,7 @@ struct AgentSecuritySettings: View {
                         }
                     }
                 } label: {
-                    SettingsRowLabel("Snapshot folder", description: "Where scan results land. Kannu also reads snapshots something else drops here, like a fleet scheduler's.")
+                    SettingsRowLabel("Snapshot folder", description: "Where scan snapshots are saved and read.")
                 }
 
                 if adr.discovery.isFound {
@@ -233,7 +233,7 @@ struct AgentSecuritySettings: View {
                             }
                         }
                     } label: {
-                        SettingsRowLabel("ADR scan policy", description: "Your organisation's domains and, optionally, what it forbids. ADR flags MCP servers that connect outside those domains and anything the policy names as forbidden.")
+                        SettingsRowLabel("ADR scan policy", description: "Your organization's domains and, optionally, what it forbids.")
                     }
                     // Its own line, so Choose… and Clear do not crowd the caption.
                     SettingsActionRow {
@@ -265,14 +265,14 @@ struct AgentSecuritySettings: View {
 
     private var kannuChecksSection: some View {
         SettingsSection {
-            SettingsRow("Look for hidden text in what agents read", description: "Some characters are invisible to you but readable by the AI, and can hide instructions. Kannu checks prompts and tool results on this Mac. No AI model is used and nothing is sent anywhere.") {
+            SettingsRow("Look for hidden text in what agents read", description: "Flags invisible characters that can hide instructions.") {
                 Defaults.Toggle(key: .detectHiddenText) {
                     Text("Look for hidden text in what agents read")
                 }
             }
             .settingsHighlight(id: highlightID("Look for hidden text in what agents read"))
 
-            SettingsRow("Tell the agent when hidden text is found", description: "Off by default. Adds one short, factual note to the agent's context saying hidden text was found and where — never the hidden text. Claude Code also shows you a one-line notice.") {
+            SettingsRow("Tell the agent when hidden text is found", description: "Gives the agent a short note, never the hidden text.") {
                 Defaults.Toggle(key: .warnAgentAboutHiddenText) {
                     Text("Tell the agent when hidden text is found")
                 }
@@ -280,21 +280,21 @@ struct AgentSecuritySettings: View {
             .disabled(!detectHiddenText)
             .settingsHighlight(id: highlightID("Tell the agent when hidden text is found"))
 
-            SettingsRow("Look for secrets in prompts and tool calls", description: "Flags API keys and private keys in what you send an agent and in what an agent hands a tool. Kannu keeps only the kind of key, its first few letters, its length and a fingerprint — never the key itself.") {
+            SettingsRow("Look for secrets in prompts and tool calls", description: "Flags API keys and private keys.") {
                 Defaults.Toggle(key: .detectSecrets) {
                     Text("Look for secrets in prompts and tool calls")
                 }
             }
             .settingsHighlight(id: highlightID("Look for secrets in prompts and tool calls"))
 
-            SettingsRow("Watch for agents touching sensitive files", description: "Flags when an agent reads keys, passwords, cloud or browser data, or changes files that run programs on their own or set what agents may do. Checked on this Mac. Nothing is sent anywhere.") {
+            SettingsRow("Watch for agents touching sensitive files", description: "Flags agents reading secrets or changing auto-run files.") {
                 Defaults.Toggle(key: .detectSensitivePaths) {
                     Text("Watch for agents touching sensitive files")
                 }
             }
             .settingsHighlight(id: highlightID("Watch for agents touching sensitive files"))
 
-            SettingsRow("Notice new MCP servers", description: "Tells you when an MCP server is added to Claude Code, Claude Desktop, Cursor, VS Code (and Cline in VS Code), Codex, Gemini CLI, Qwen Code or opencode. The first look only learns what is already there. Project folders inside Desktop, Documents and Downloads are skipped, so macOS never asks for access.") {
+            SettingsRow("Notice new MCP servers", description: "Tells you when an AI tool gains an MCP server.") {
                 Defaults.Toggle(key: .watchMCPServers) {
                     Text("Notice new MCP servers")
                 }
@@ -303,7 +303,7 @@ struct AgentSecuritySettings: View {
         } header: {
             SettingsSectionHeader("Kannu's own checks")
         } footer: {
-            SettingsFooter("Kannu also flags sessions started with permission checks turned off; that check has no setting.")
+            SettingsFooter("These checks run on this Mac and send nothing anywhere. A finding about a key never stores the key. Kannu also flags sessions started with permission checks turned off; that check has no setting.")
         }
     }
 
@@ -321,11 +321,11 @@ struct AgentSecuritySettings: View {
                         Button(String(localized: "Edit rules")) { openRuleEditor() }
                     } else {
                         // The editor cannot read a broken file, so the file's own editor is the way in.
-                        Button(String(localized: "Open in Editor")) { openAgentPolicyInEditor() }
+                        Button(String(localized: "Open in editor")) { openAgentPolicyInEditor() }
                     }
                     SettingsMoreMenu {
                         if security.policyIsEditable {
-                            Button("Open in Editor") { openAgentPolicyInEditor() }
+                            Button("Open in editor") { openAgentPolicyInEditor() }
                                 .disabled(!security.policyExists)
                         }
                         Button("Reveal in Finder") {
@@ -351,7 +351,7 @@ struct AgentSecuritySettings: View {
                 // fails closed), so say what that costs rather than only what is wrong.
                 SettingsErrorText(String(localized: "Until this is fixed, none of these rules apply."))
             }
-            SettingsActionRow("Get a policy", description: "Write rules yourself with Edit rules, have your agent draft them, or import a file.") {
+            SettingsActionRow("Get a policy", description: "Write rules, have an agent draft them, or import.") {
                 Button("Import…") { importAgentPolicy() }
                 Button("Copy a prompt that drafts a policy") { SecurityFindingsStore.shared.copyPolicyDraftingPrompt() }
             }
@@ -359,7 +359,7 @@ struct AgentSecuritySettings: View {
             if let importError = security.policyImportError {
                 SettingsErrorText(String(localized: "Not imported — \(importError)"))
             }
-            SettingsRow("Block matching tool calls", description: Text("Off: matches are only flagged.\nOn: Claude Code, Cursor and Antigravity (not yet tested) refuse the call and tell the agent why.\nOther agents are only flagged either way.")) {
+            SettingsRow("Block matching tool calls", description: Text("Claude Code, Cursor and Antigravity (untested) refuse matching calls.")) {
                 Defaults.Toggle(key: .enforceAgentPolicy) {
                     Text("Block matching tool calls")
                 }
@@ -368,7 +368,7 @@ struct AgentSecuritySettings: View {
         } header: {
             SettingsSectionHeader("Agent policy")
         } footer: {
-            SettingsFooter("A command rule matches the command's first word, so \"ssh\" catches \"ssh host\" but not \"sshd\". A tool rule matches the tool's exact name.")
+            SettingsFooter("A command rule matches the command's first word, so \"ssh\" catches \"ssh host\" but not \"sshd\". A tool rule matches the tool's exact name. Other agents are only flagged.")
         }
         .onAppear {
             SecurityFindingsStore.shared.agentPolicyImportError = nil
@@ -426,7 +426,7 @@ struct AgentSecuritySettings: View {
         SettingsSection {
             // Consent is asked through a SwiftUI alert, not a modal inside the binding setter: a
             // nested run loop there fought the toggle's own state update and the switch fell back.
-            SettingsRow("Analyze chats with ADR Detection", description: "Opt-in, per chat. Right-click a finished Claude Code chat in the notch and choose \"Analyze with ADR Detection\". The transcript is sent to the model providers below under your own keys — nothing is ever sent automatically.") {
+            SettingsRow("Analyze chats with ADR Detection", description: "Opt-in: right-click a finished Claude Code chat in the notch.") {
                 Toggle(isOn: Binding(
                     get: { adrDetectionEnabled },
                     set: { newValue in
@@ -459,6 +459,8 @@ struct AgentSecuritySettings: View {
             }
         } header: {
             SettingsSectionHeader("Session analysis")
+        } footer: {
+            SettingsFooter("Each analysis sends one chat's transcript to your model providers under your own keys. Nothing is sent automatically.")
         }
 
         if adrDetectionEnabled {
@@ -519,7 +521,7 @@ struct AgentSecuritySettings: View {
                 adrSecretRow(title: "Anthropic API key", key: .claudeAPIKey, text: $adrAnthropicKeyText)
             }
 
-            SettingsRow("Triage with OpenAI first", description: "Upstream's pipeline: a cheap gpt-4o pass decides whether the Claude reasoning agent runs at all. Off means Claude only — no OpenAI account needed.") {
+            SettingsRow("Triage with OpenAI first", description: "A cheap gpt-4o pass decides whether Claude runs.") {
                 Toggle("Triage with OpenAI first", isOn: $adrDetectionTriageEnabled)
             }
             .settingsHighlight(id: highlightID("Triage with OpenAI first"))
@@ -569,7 +571,7 @@ struct AgentSecuritySettings: View {
         } header: {
             SettingsSectionHeader("Analysis context and limits")
         } footer: {
-            SettingsFooter("The three context options are ADR's local MCP context servers; they read bundled data and this Mac only. Long tool results are trimmed keeping head and tail, and the transcript budget caps what one analysis sends.")
+            SettingsFooter("The context options are ADR's local MCP servers and read only bundled data and this Mac. The transcript budget caps what one analysis sends.")
         }
     }
 

@@ -120,7 +120,7 @@ struct AgentsOverview: View {
     private func lead(primary: AgentSessionStatus?) -> some View {
         if !enabled {
             AgentsMessageCard(title: String(localized: "Agent Status is off"), message: nil) {
-                Button("Turn On") { enabled = true }
+                Button("Turn on") { enabled = true }
             }
         } else if let primary {
             AgentsHeroCard(session: primary, live: drawsLive)

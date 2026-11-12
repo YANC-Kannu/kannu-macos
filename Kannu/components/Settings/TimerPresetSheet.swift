@@ -81,7 +81,7 @@ struct TimerPresetSheet: View {
     }
 
     var body: some View {
-        SettingsSheet(isNew ? Text("Add Preset") : Text("Edit preset")) {
+        SettingsSheet(isNew ? Text("Add preset") : Text("Edit preset")) {
             TextField("Name", text: $name, prompt: Text("Preset name"))
                 .focused($nameFocused)
                 .onSubmit(save)
@@ -89,7 +89,7 @@ struct TimerPresetSheet: View {
             SettingsStepperRow("Hours", value: $hours, in: 0...23, valueText: Text("\(hours)"))
             SettingsStepperRow("Minutes", value: $minutes, in: 0...59, valueText: Text("\(minutes)"))
             SettingsStepperRow("Seconds", value: $seconds, in: 0...59, valueText: Text("\(seconds)"))
-            SettingsColorPickerRow(title: String(localized: "Accent colour"), selection: $color)
+            SettingsColorPickerRow(title: String(localized: "Accent color"), selection: $color)
         } buttons: {
             Button("Cancel", role: .cancel) { dismiss() }
                 .keyboardShortcut(.cancelAction)

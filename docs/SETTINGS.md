@@ -159,7 +159,7 @@ numbers, and this table only says why.
 | `AnimationEditorView.swift` | 7 | 22 | The editor's own dense scale and previews |
 | `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
-| `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
+| `CustomOSDSettings.swift` | 0 | 1 | The "Live preview" caption |
 | `DevicesSettings.swift` | 1 | 2 | The icon style cards' resting fill and glyphs |
 | `DownloadsSettings.swift` | 3 | 0 | The style cards' resting fill and the progress tint |
 | `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
@@ -349,7 +349,7 @@ in Stage 5.
   cell is one line. A click on the hero or a row opens its chat.
 - **An empty state** keeps the hero's place and height: the status in `cardTitle`, one short sentence at most
   `proseMaxWidth` wide (two lines at most) in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
-  first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn On. The status row and the
+  first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn on. The status row and the
   settings show in both.
 - **Agents' header** holds the gear alone, which goes to the first settings row. **Each missing hook is offered once:**
   the empty state, while shown, offers the first and the Editors & hooks cell the rest; otherwise the cell offers them
@@ -378,7 +378,7 @@ in Stage 5.
   Antigravity's quotas are not among the store's readings, so it has no card; the notch shows them.
 - **Usage's empty state**, with no such provider on: "No limits to show", one line, and "Turn on a provider" (the
   standard style), which goes to the Providers switches, or to the monitor's while it is off. **While Agent Status is
-  off**, which stops the usage store, Agents' own "Agent Status is off" with Turn On stands in place of the cards.
+  off**, which stops the usage store, Agents' own "Agent Status is off" with Turn on stands in place of the cards.
 - **Usage's header** holds the gear, which goes to the monitor's switch, then **Refresh**, the page's one primary verb,
   off while a refresh runs, no provider is on or Agent Status is off. It runs on a press only, through the notch's own
   paths, unchanged: its Refresh usage (`LLMUsageManager.refreshRequestedByUser`), and Claude's `/usage` as the automatic
@@ -397,7 +397,7 @@ in Stage 5.
   the empty state, "No findings yet" before any scan and "No open findings" after, with its one line and the page's
   verb. Then a status row of three equal cells, in the settings' own words: the newest scan result (orange when its
   coverage is partial), Scan this Mac (Kannu's last and next scan), and Policy rules. Then Recent analyses while session
-  analysis is on. While Agent Status is off the product is one card, "Agent Status is off", with Turn On. The notch's
+  analysis is on. While Agent Status is off the product is one card, "Agent Status is off", with Turn on. The notch's
   link and search's "Security findings" land on the list's header, which is always built.
 - **Security's header** holds the gear, which goes to the first settings row (Alerts' "High-severity alerts in the
   notch"), then the page's one primary verb: Scan now, off while a scan runs, or Connect ADR while ADR Discovery is not
@@ -424,42 +424,42 @@ in Stage 5.
   and wrapping, its colour and name over its length. A click starts the preset through the popover's own call,
   replacing a timer that runs, as the notch's preset list does; the running preset's tile wears the selected ring, and
   a 0:00 preset, which only an older version could save, does not start. A tile's ⋯ and its right-click menu hold
-  Edit…, Move Up, Move Down and Delete; Add Preset is the last tile, and the heading's ⋯ holds Restore Defaults, which
+  Edit…, Move up, Move down and Delete; Add preset is the last tile, and the heading's ⋯ holds Restore defaults, which
   asks first. Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"). Search's "Timer
   Presets", found by "accent colour" too, lands on the heading, which is built whenever the timer is on.
-- **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom Timer's
+- **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom timer's
   stepper rows, and the colour, written on Add or Save and never as typed, so Cancel leaves the preset as it was. It
   refuses a blank name, a blank row in the notch's list, and a 0:00 length, which would ring a second after it
   started; a length the steppers cannot show, over 23:59:59, is kept unless they are moved. It replaced the inline
   editor in the settings, which drew its own steppers under 9-pt labels.
 - **Timer's empty state**: "No timer running" and "Click a preset below to start a timer.", whose action is the tiles
-  under it. **While the timer is off**, "Timer is off" with Turn On stands in place of the timer and the tiles: the
+  under it. **While the timer is off**, "Timer is off" with Turn on stands in place of the timer and the tiles: the
   notch shows no timer then.
 - **Timer's header** holds the gear, which goes to the timer switch, then **Start timer**, the page's one primary verb:
-  the custom timer at its stored length (Custom Timer, below), named "Custom Timer", as the popover's Start Custom Timer
+  the custom timer at its stored length (Custom timer, below), named "Custom Timer", as the popover's Start Custom Timer
   starts it. It acts on a press only, and is off while a timer runs, as the popover hides its own start then, while the
   timer is off, and at 0:00.
 - **Boards**: `timer0` (no timer), `timer1` (Focus running from its preset), `timerOver` (a task's timer paused in
   overtime), `timerClock` (a Clock-app timer) and `timerOff` draw Timer at the window's first size from fixtures
   (`TimerOverview.snapshotFixture`), never this Mac's timer or presets; the settings rows below still read its switches.
   `timer` draws the page whole at the narrowest panel, two tiles to a row, and `timerPresetSheet` the sheet on Focus.
-- **Clipboard** leads with Pinned Items, their count beside the header, then History, its count beside its title, folded
+- **Clipboard** leads with Pinned items, their count beside the header, then History, its count beside its title, folded
   each time the page appears, Brain's reopening included, since its content outlives the window: a copy can be anything,
   a password typed in a plain app included (the capture policy skips only concealed, transient and token-shaped copies),
-  and a full-screen Brain can be on a shared screen. Pinned Items always show: a pin is the user's own choice. A row is
+  and a full-screen Brain can be on a shared screen. Pinned items always show: a pin is the user's own choice. A row is
   the copy's preview over its kind and when it was copied, by its date, so the page keeps no clock; then its glyphs,
   Copy, Pin or Unpin, and Delete. A pinned row has no Delete: there, the panel's and the popover's Delete only unpin.
-  With nothing pinned, Pinned Items says so in one row. With nothing at all, an empty state, "No clipboard history",
+  With nothing pinned, Pinned items says so in one row. With nothing at all, an empty state, "No clipboard history",
   with its one line and no action, since history fills itself. While the clipboard manager is off, one card,
-  "Clipboard Manager is off", with Turn On.
-- **Clipboard's header** holds "…", with Clear History and Clear Pinned Items, each off while there is nothing to clear
+  "Clipboard manager is off", with Turn on.
+- **Clipboard's header** holds "…", with Clear history and Clear pinned items, each off while there is nothing to clear
   and each clearing at once, as the Actions buttons it replaces did; then the page's one primary verb, Open history
   panel, the notch's floating clipboard panel, whatever the display mode. Nothing while the manager is off. **The page
   starts no work of its own:** no capture and no poll. A glyph, a clear and the verb act on a press only, through the
   manager's own calls; the settings keep their calls, the switch's start and stop and the start as the page appears
   while the manager is on.
 - **What moved up** from Clipboard's settings: Current Items and Pinned Items, now the counts; Actions, now "…"; and
-  Current History, now History. None had a highlight id. Monitoring Status stays, as a status line with its dot.
+  Current History, now History. None had a highlight id. Monitoring status stays, as a status line with its dot.
 - **Boards**: `clipboard0`, `clipboard1` and `clipboard3` draw Clipboard at the window's first size with nothing copied,
   one pin and two copies, and three pins and five copies with History open, from fixtures
   (`ClipboardOverview.snapshotFixture`), never this Mac's clipboard. The `clipboard` board draws four copies and no pin.
@@ -639,6 +639,8 @@ section describes it, it does not define it.
 | Title to description | 2 | `labelStack` |
 | Inside a row's trailing content | 8 | `rowContent` |
 | Between footer lines | 6 | `footerStack` |
+| A row's caption, widest | 440 | `descriptionMaxWidth` |
+| A footer, or an empty state's line, widest | 380 | `proseMaxWidth` |
 | A slider's or stepper's whole trailing column, or a typed value beside its button (a task's Time row) | 220 | `sliderWidth` |
 | Its readout, trailing, monospaced digits | minWidth 40 | `valueColumn` |
 | The ready dot in a status line | 7 | `statusDot` |
@@ -771,7 +773,14 @@ section describes it, it does not define it.
   matches the entry exactly (`SettingsHighlightInventoryTests` pins the pairing and the counts;
   the counts move only as a deliberate edit).
 - A row's description says what the control does, in about 8 words. No "Off: …" sentence, no
-  mechanics, and no repeat of the title.
+  mechanics, and no repeat of the title. A fact it would need but a row cannot hold, a privacy or trust fact, goes in
+  its section's footer. A caption wraps at `descriptionMaxWidth` and a footer at `proseMaxWidth`, so no line of prose
+  runs past about 80 characters.
+- Copy is sentence case everywhere: a capital for the first word and for a name: a product, a name Apple or a vendor
+  owns, an acronym, or one of the few Kannu feature names a string uses as a name (Agent Status, Screen Assistant,
+  Quick Share). Every other feature word is lower case ("Clipboard manager", "Live activities", "Sneak peek"). One
+  spelling, American ("color"). No trailing colon on a title, a label or a footer. A field's `prompt:` says what to
+  type, with an example in `Text(verbatim:)` such as "my-kannu-alerts".
 - A menu item that acts in place, opens a small sheet or asks a confirmation carries no ellipsis
   ("Add Tags", "Set Estimate", "Delete"); a confirmation alone does not earn one. "…" marks only a
   menu item that goes on to a connect flow or another window ("Connect Jira…", "Manage tasks…").
@@ -789,7 +798,7 @@ section describes it, it does not define it.
 - A row of buttons alone in its card takes a title and a caption on the left, as every row does
   (Lock screen's Preview widgets, the Actions of Clipboard and Screen Assistant), and the footer
   that explained the buttons goes into the caption. Buttons on one theme share one
-  `SettingsActionRow` (About's Report a Problem… and Copy Latest Report), each keeping its own
+  `SettingsActionRow` (About's Report a problem… and Copy latest report), each keeping its own
   highlight id.
 - User-facing strings use `String(localized:)`; the shared components take `LocalizedStringKey`
   so literals localize on their own.

@@ -150,7 +150,7 @@ struct Appearance: View {
                     }
                     .settingsHighlight(id: highlightID("Main screen style"))
                 } header: {
-                    SettingsSectionHeader("Display Style")
+                    SettingsSectionHeader("Display style")
                 }
             }
 
@@ -158,7 +158,7 @@ struct Appearance: View {
 
             SettingsSection {
                 SettingsColorPickerRow(title: "Notch fill color",
-                                       description: String(localized: "Fill color is used when no custom notch skin is selected."),
+                                       description: String(localized: "Used when no custom skin is selected."),
                                        selection: $notchFillColor)
                     .settingsHighlight(id: highlightID("Notch fill color"))
             } header: {
@@ -184,7 +184,7 @@ struct Appearance: View {
 
                 if lockScreenGlassStyle == .liquid {
                     SettingsRow("Lock screen glass mode", description: lockScreenGlassCustomizationMode == .customLiquid
-                                ? Text("Pick per-widget liquid-glass variants below. Changes mirror the Lock screen tab.") : nil) {
+                                ? Text("Per-widget variants below, shared with the Lock screen tab.") : nil) {
                         SettingsSelect("Lock screen glass mode", selection: $lockScreenGlassCustomizationMode,
                                        options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.rawValue,
                                        style: .segmented)
@@ -206,7 +206,7 @@ struct Appearance: View {
                     }
                 }
             } header: {
-                SettingsSectionHeader("Lock Screen Glass")
+                SettingsSectionHeader("Lock screen glass")
             } footer: {
                 SettingsFooter("Configure lock screen materials from the Appearance tab. Custom Liquid unlocks variant sliders for both widgets whenever Liquid Glass is selected.")
             }
@@ -234,7 +234,7 @@ struct Appearance: View {
 
             SettingsSection {
                 Defaults.Toggle(key: .showNotHumanFace) {
-                    Text("Idle Animation")
+                    Text("Idle animation")
                 }
                 .settingsHighlight(id: highlightID("Idle Animation"))
             } header: {
@@ -559,7 +559,7 @@ struct Appearance: View {
             return
         }
 
-        let newIcon = CustomAppIcon(id: id, name: name.isEmpty ? "Custom Icon" : name, fileName: fileName)
+        let newIcon = CustomAppIcon(id: id, name: name.isEmpty ? "Custom icon" : name, fileName: fileName)
         if !customAppIcons.contains(newIcon) {
             customAppIcons.append(newIcon)
         }
@@ -637,7 +637,7 @@ struct Appearance: View {
             .settingsHighlight(id: highlightID("Expanded notch width"))
 
             LabeledContent {
-                Button("Reset Width") {
+                Button("Reset width") {
                     openNotchWidth = recommendedMin
                 }
                 .disabled(!customizePhysicalNotchWidth || abs(openNotchWidth - recommendedMin) < 0.5)
@@ -650,7 +650,7 @@ struct Appearance: View {
             }
         } header: {
             HStack {
-                SettingsSectionHeader("Notch Width")
+                SettingsSectionHeader("Notch width")
                 customBadge(text: "Beta")
             }
         } footer: {

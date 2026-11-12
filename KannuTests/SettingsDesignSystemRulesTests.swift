@@ -912,6 +912,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
                         ("SettingsSectionHeader", ".accessibilityAddTraits(.isHeader)"),
                         ("SettingsFooter", ".font(SettingsTheme.description)"),
+                        ("SettingsFooter", ".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)"),
+                        ("SettingsRowLabel", ".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)"),
                         ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
         var problems = required.compactMap { component, modifier -> String? in
             guard let body = region(of: component) else { return "\(component) is gone" }
@@ -930,8 +932,28 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
         Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), (".accessibilityAddTraits(.isHeader)", ""),
                            ("            .font(SettingsTheme.description)\n", ""),
+                           (".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)", ""),
+                           (".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)", ""),
                            ("struct SettingsSectionHeader", "struct RenamedHeader"), ("struct SettingsFooter:", "struct RenamedFooter:")],
                           in: components, by: Self.sharedComponentProblems)
+    }
+
+    /// Text wraps at a cap, whatever the copy: a footer or an empty state's line at `proseMaxWidth` (380), a row's caption at
+    /// `descriptionMaxWidth` (440), so no line under Settings runs past about 80 characters. The shared components apply them
+    /// (`sharedComponentProblems`); this holds the two numbers.
+    private static func capProblems(in theme: String) -> [String] {
+        [("proseMaxWidth", 380), ("descriptionMaxWidth", 440)].compactMap { name, value in
+            theme.contains("static let \(name): CGFloat = \(value)") ? nil : "\(name) is not \(value)"
+        }
+    }
+
+    func testTheTextCapsHold() throws {
+        let theme = try Self.theme()
+        XCTAssertEqual(Self.capProblems(in: theme), [])
+        Self.assertCaught([("proseMaxWidth: CGFloat = 380", "proseMaxWidth: CGFloat = 400"),
+                           ("descriptionMaxWidth: CGFloat = 440", "descriptionMaxWidth: CGFloat = 520"),
+                           ("static let descriptionMaxWidth", "static let captionMaxWidth")],
+                          in: theme, by: Self.capProblems)
     }
 
     /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
