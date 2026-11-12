@@ -49,8 +49,8 @@ struct ClipboardOverview: View {
             if !enabled {
                 // Nothing is captured while it is off, so there is nothing current to show.
                 SettingsSection {
-                    ClipboardMessage(title: String(localized: "Clipboard Manager is off"), message: nil) {
-                        Button("Turn On") { enabled = true }
+                    ClipboardMessage(title: String(localized: "Clipboard manager is off"), message: nil) {
+                        Button("Turn on") { enabled = true }
                     }
                 }
             } else if data.pinned.isEmpty && data.history.isEmpty {
@@ -91,7 +91,7 @@ struct ClipboardOverview: View {
             }
         } header: {
             HStack(spacing: SettingsMetrics.rowContent) {
-                SettingsSectionHeader("Pinned Items")
+                SettingsSectionHeader("Pinned items")
                 if !data.pinned.isEmpty {
                     Text(verbatim: data.pinned.count.formatted())
                         .settingsDescriptionStyle()
@@ -138,11 +138,11 @@ struct ClipboardHeaderActions: View {
                 SettingsMoreMenu {
                     // Both clear at once, as the buttons they replace did. The notch's tab asks first; one rule for
                     // Brain, the popover and the panel is a follow-up (followups.md).
-                    Button("Clear History", role: .destructive) {
+                    Button("Clear history", role: .destructive) {
                         ClipboardManager.shared.clearHistory()
                     }
                     .disabled(!hasHistory)
-                    Button("Clear Pinned Items", role: .destructive) {
+                    Button("Clear pinned items", role: .destructive) {
                         ClipboardManager.shared.pinnedItems.removeAll()
                         ClipboardManager.shared.savePinnedItemsToDefaults()
                     }

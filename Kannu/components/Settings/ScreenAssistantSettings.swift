@@ -44,7 +44,7 @@ struct ScreenAssistantSettings: View {
                 }
                 .settingsHighlight(id: highlightID("Enable Screen Assistant"))
             } header: {
-                SettingsSectionHeader("AI Assistant")
+                SettingsSectionHeader("AI assistant")
             } footer: {
                 SettingsFooter("AI-powered assistant that can analyze files, images, and provide conversational help. With global keyboard shortcuts on, \(shortcutDescription(for: .screenAssistantPanel)) opens the assistant.")
             }
@@ -54,7 +54,7 @@ struct ScreenAssistantSettings: View {
                     LabeledContent {
                         HStack(spacing: 8) {
                             if geminiApiKey.isEmpty {
-                                Text("Not Set")
+                                Text("Not set")
                                     .foregroundColor(.red)
                             } else {
                                 Text("••••••••")
@@ -76,12 +76,12 @@ struct ScreenAssistantSettings: View {
                             }
                         }
                     } label: {
-                        Text("Gemini API Key")
+                        Text("Gemini API key")
                     }
 
                     if showingApiKey {
                         VStack(alignment: .leading, spacing: 8) {
-                            SecureField("Enter your Gemini API Key", text: $apiKeyText, prompt: Text("Enter your Gemini API Key"))
+                            SecureField("Enter your Gemini API key", text: $apiKeyText, prompt: Text("Enter your Gemini API key"))
                                 .settingsField()
 
                             Text("Get your free API key from Google AI Studio")
@@ -105,19 +105,19 @@ struct ScreenAssistantSettings: View {
                         }
                     }
 
-                    SettingsRow("Display Mode") {
-                        SettingsSelect("Display Mode", selection: $screenAssistantDisplayMode,
+                    SettingsRow("Display mode") {
+                        SettingsSelect("Display mode", selection: $screenAssistantDisplayMode,
                                        options: ScreenAssistantDisplayMode.allCases, optionTitle: \.displayName)
                     }
                     .settingsHighlight(id: highlightID("Display Mode"))
 
-                    LabeledContent("Attached Files") {
+                    LabeledContent("Attached files") {
                         Text("\(screenAssistantManager.attachedFiles.count)")
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
                     }
 
-                    LabeledContent("Recording Status") {
+                    LabeledContent("Recording status") {
                         Text(screenAssistantManager.isRecording ? "Recording" : "Ready")
                             .foregroundColor(screenAssistantManager.isRecording ? .red : .secondary)
                     }
@@ -134,7 +134,7 @@ struct ScreenAssistantSettings: View {
 
                 SettingsSection {
                     SettingsActionRow("Clear files", description: "Permanently removes attached files and recordings.") {
-                        Button("Clear All Files", role: .destructive) {
+                        Button("Clear all files", role: .destructive) {
                             screenAssistantManager.clearAllFiles()
                         }
                         .foregroundColor(.red)
@@ -167,7 +167,7 @@ struct ScreenAssistantSettings: View {
                             }
                         }
                     } header: {
-                        SettingsSectionHeader("Attached Files")
+                        SettingsSectionHeader("Attached files")
                     }
                 }
             }

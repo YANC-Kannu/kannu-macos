@@ -63,7 +63,7 @@ struct Downloads: View {
                 }
                 .settingsHighlight(id: highlightID("Download indicator style"))
             } header: {
-                SettingsSectionHeader("Download Detection")
+                SettingsSectionHeader("Download detection")
             } footer: {
                 SettingsFooter("Monitor your Downloads folder for Chromium-style downloads (.crdownload files) and show a live activity in the Dynamic Island while downloads are in progress.")
             }

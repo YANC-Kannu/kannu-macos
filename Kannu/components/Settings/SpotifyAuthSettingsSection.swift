@@ -62,11 +62,11 @@ struct SpotifyAuthSettingsSection: View {
             }
 
             SettingsActionRow {
-                Button("Paste from Clipboard") {
+                Button("Paste from clipboard") {
                     pasteCookieFromClipboard()
                 }
 
-                Button(spotifyAuthManager.isAuthorizing ? "Validating..." : "Validate Cookie") {
+                Button(spotifyAuthManager.isAuthorizing ? "Validating..." : "Validate cookie") {
                     let sanitized = SpotifyAuthManager.sanitizeCookie(spotifySPDCCookie)
                     spotifySPDCCookie = sanitized
                     SecureSecretsStore.set(sanitized, for: .spotifySPDCCookie)
@@ -110,7 +110,7 @@ struct SpotifyAuthSettingsSection: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         } header: {
-            SettingsSectionHeader("Spotify Canvas Session")
+            SettingsSectionHeader("Spotify Canvas session")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 SettingsFooter("Sign in to Spotify to capture the `sp_dc` cookie automatically, or paste it in below.")

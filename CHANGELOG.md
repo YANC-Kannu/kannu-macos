@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Brain's copy pass: sentence case, captions of about eight words, capped widths
+- **Developer label:** Brain redesign plan: Stage 4 child 3c, the copy pass (the design review's findings 15 and 2), with Usage's labels (4b-1 M1), Security's next-scan wording (4b-2 M1) and Security's older uncatalogued strings (4b-2 M6), which their reviews held for it
+- **Agent label:** Claude Code (Sonnet 5.5) — Stage 4 child 3c: the copy pass, its 17-language catalog entries (translators on Sonnet), the two width caps and the tests that pin them
+- **Changes:**
+  - Sentence case across Brain's settings, product pages and sheets: a capital for the first word and for a name only.
+    "Turn On" is "Turn on" on every "is off" card, "colour" is "color", no title, label or footer ends in a colon, and
+    Mobile notifications' fields show an example ("my-kannu-alerts", "https://ntfy.sh") instead of their own name.
+  - About 70 row captions and footers cut: every caption of 11 or more words is about 8, the enum captions that feed
+    rows too, and seven footers over 40 words are trimmed. A fact a caption needed but a row cannot hold (nothing is
+    sent, a key is never stored, where a transcript goes, what a reminder carries) moved to its section's footer; two
+    footers are new. No "Off: … On: …" caption is left. The screen-capture captions keep "Some capture tools ignore
+    this", which `ScreenCapturePolicyTests` requires.
+  - Caps: `SettingsFooter` wraps at `proseMaxWidth` (380 pt) and a row's caption at the new `descriptionMaxWidth` (440
+    pt). `SettingsDesignSystemRulesTests` holds both components and both numbers, with planted offenders.
+  - Held items: Usage's window labels ("billing cycle"), forecast captions and push sentence are catalogued; Security's
+    next-scan line reads "Next scan …" (the deliberate "the last scan failed" stays); 51 of the Security page's older
+    strings are catalogued.
+  - Catalog: 316 new keys and 7 merged into existing entries, all in 17 languages; 196 old keys retired, each one the
+    compiler's own string extraction no longer finds in the code ("Turn On" stays: Notes' page, in flight, uses it).
+    Highlight ids (490 literals) and search keywords are unchanged; every untouched catalog entry is identical.
+  - Tests: the pins of renamed strings follow them (`ADRDocsTests`, `BrainNamingRulesTests`, whose "Global settings"
+    allowlist entry goes because the literal no longer says "Settings", `ClipboardPageLiveDataRulesTests`,
+    `UsageForecastTests`).
+  - docs/SETTINGS.md holds the caps, the copy rules and the renamed strings; docs/ADR.md names the findings' buttons in
+    sentence case; docs/REGRESSIONS.md entry 22 gets an addendum (no `onAppear`, `.task` or animator added).
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
