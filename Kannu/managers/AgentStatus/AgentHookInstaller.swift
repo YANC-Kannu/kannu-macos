@@ -1,3 +1,5 @@
+import Combine
+import Defaults
 import Foundation
 import os
 
@@ -28,7 +30,7 @@ final class AgentHookInstaller: ObservableObject {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     static let scriptName = AgentHookLayout.scriptName
-    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=48"
+    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=49"
 
     private static var home: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -75,10 +77,15 @@ final class AgentHookInstaller: ObservableObject {
         migrateCursorHookEventArgumentIfNeeded()
         migrateClaudeStyleHookEventArgumentIfNeeded()
         migrateAntigravityHookShapeIfNeeded()
-        migrateClaudeUsageStatusLineIfNeeded()
+        syncClaudeUsageStatusLine(userToggled: false)
         migrateOpencodePluginIfNeeded()
         refresh()
+        // `options: []`: no event on subscribing, so launch does not count as the user turning it on.
+        statusLineObserver = Defaults.publisher(.claudeStatusLineUsage, options: [])
+            .sink { [weak self] _ in Task { @MainActor in self?.syncClaudeUsageStatusLine(userToggled: true) } }
     }
+
+    private var statusLineObserver: AnyCancellable?
 
     func isInstalled(_ provider: AgentHookProvider) -> Bool {
         installedProviders.contains(provider)
@@ -119,7 +126,11 @@ final class AgentHookInstaller: ObservableObject {
                 // not the RMW — and several migrations in init can each call install().
                 var settings = try Self.readJSONForMerge(at: Self.claudeSettingsURL)
                 Self.mergeClaudeHooks(into: &settings)
-                try Self.setClaudeUsageStatusLine(in: &settings)
+                // v49: the status line only with "Live Claude Code limits" on. Off, install leaves the
+                // key alone; `syncClaudeUsageStatusLine` hands back an earlier Kannu's takeover.
+                if Defaults[.claudeStatusLineUsage] {
+                    try Self.setClaudeUsageStatusLine(in: &settings)
+                }
                 try Self.writeJSON(settings, to: Self.claudeSettingsURL)
             case .antigravity:
                 try Self.writeScript(to: Self.antigravityScriptURL)
@@ -165,6 +176,8 @@ final class AgentHookInstaller: ObservableObject {
             try Self.removeIfExists(files.script)
             if provider == .claude {
                 try Self.stripClaudeUsageStatusLine()
+                // Removing Kannu from Claude Code removes the status line too; the setting says so.
+                Defaults[.claudeStatusLineUsage] = false
             }
         } catch {
             lastError = "\(provider.displayName): \(error.localizedDescription)"
@@ -247,8 +260,13 @@ final class AgentHookInstaller: ObservableObject {
         fi
 
         python3 <<'PY'
-        import fcntl, json, os, re, tempfile, time
+        import fcntl, json, os, re, signal, tempfile, time
         from pathlib import Path
+
+        # v49: Claude Code runs most of Kannu's hooks async, and it enforces no timeout on an async hook, so
+        # the script ends itself. When it started is the event's place in the order: see the stale check.
+        signal.alarm(10)
+        hook_started_ms = int(time.time() * 1000)
 
         def write_status(path, obj):
             # Truncate-then-write leaves the file empty for a moment, and Kannu reads it on
@@ -1497,6 +1515,13 @@ final class AgentHookInstaller: ObservableObject {
                     return "", True
             return stem + str(now_ms), False
 
+        def counted_call(turn, now_ms):
+            # One tool call into the turn, once per call: next_turn's count, and a stale event's (v49).
+            key, seen = turn_call_key(turn, now_ms)
+            if not seen:
+                turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
+                turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
+
         def background_agents():
             # v44: how many in-flight tasks a Claude Stop lists are agents or workflows.
             tasks = data.get("background_tasks")
@@ -1566,10 +1591,7 @@ final class AgentHookInstaller: ObservableObject {
                 turn.pop("turn_ended_ms", None)
                 turn.pop("turn_bg_agents", None)
             if turn and hook_event in TURN_DONE_EVENTS:
-                key, seen = turn_call_key(turn, now_ms)
-                if not seen:
-                    turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
-                    turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
+                counted_call(turn, now_ms)
             if (turn and hook_event in TURN_END_EVENTS and not antigravity_busy_stop
                     and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True)):
                 # The first Stop ends the turn; a Stop after a stop hook's continuation moves the end.
@@ -2017,6 +2039,39 @@ final class AgentHookInstaller: ObservableObject {
             hook_event == "StopFailure" or antigravity_stop_error or cursor_stop_error or existing.get("ended_on_error") is True
         )
 
+        # v49: Claude Code runs most of Kannu's hooks async and keeps no order between them, so an event can
+        # finish after one that started later: a PostToolUse landing after the turn's Stop painted a finished
+        # chat green again. The file keeps when the event behind its state started. An event that started
+        # before that leaves the state, the clock, the turn and the verdict as they are, and adds only what it
+        # found: its sightings, and its tool call to the turn. A needs-you or quota event is never dropped as
+        # stale: it is the one the user must not miss, and the merge below already arbitrates it.
+        _raw_started = existing.get("event_started_ms")
+        existing_started_ms = _raw_started if isinstance(_raw_started, (int, float)) and not isinstance(_raw_started, bool) else 0
+        event_started_ms = max(hook_started_ms, existing_started_ms)
+        if existing_state and existing_started_ms > hook_started_ms and state not in {"awaiting_input", "quota_exceeded"}:
+            for _key, _value in (("hidden_text", hidden_text), ("secrets", secrets), ("sensitive_paths", sensitive_paths),
+                                 ("policy", policy)):
+                if _value:
+                    existing[_key] = _value
+                else:
+                    existing.pop(_key, None)
+            try:
+                _turn = carried_turn(existing, sighting_ms)
+                if _turn and hook_event in TURN_DONE_EVENTS:
+                    counted_call(_turn, sighting_ms)
+                    for _key in TURN_KEYS:
+                        existing.pop(_key, None)
+                    existing.update(_turn)
+            except Exception:
+                pass
+            try:
+                write_status(status_file, existing)
+            except Exception:
+                # A full disk or a path replaced by a directory must not cost the allow line.
+                pass
+            emit(hidden_notes_out)
+            raise SystemExit(0)
+
         # Claude runs the matcher-scoped and generic groups for one event in parallel with no
         # ordering guarantee. If both land within the same instant, keep the more urgent verdict
         # so the winner of the race cannot silently downgrade the light.
@@ -2152,6 +2207,7 @@ final class AgentHookInstaller: ObservableObject {
                     existing.update(turn)
                     if transcript:
                         existing["transcript_path"] = transcript
+                    existing["event_started_ms"] = event_started_ms
                     try:
                         write_status(status_file, existing)
                     except Exception:
@@ -2165,6 +2221,7 @@ final class AgentHookInstaller: ObservableObject {
             "ts": preserved_ts or int(time.time() * 1000),
             "provider": provider,
             "hook_event": hook_event,
+            "event_started_ms": event_started_ms,
         }
         if name:
             payload["name"] = name
@@ -2299,33 +2356,35 @@ final class AgentHookInstaller: ObservableObject {
 
     /// Mutates the caller's copy of settings.json; the caller owns the single read and write.
     private static func mergeClaudeHooks(into config: inout [String: Any]) {
-        var hooks = config["hooks"] as? [String: Any] ?? [:]
-        stripClaudeEntries(from: &hooks)
-
-        for entry in claudeHookEntries {
-            var groups = hooks[entry.event] as? [[String: Any]] ?? []
-            // The matcher is passed to the script too: when a group is matcher-scoped its state
-            // is unambiguous, so the script trusts the argument instead of re-deriving it.
-            let matcherArg = entry.matcher == nil ? "" : " \(entry.matcherKey)"
-            var group: [String: Any] = [
-                "hooks": [[
-                    "type": "command",
-                    "command": "\(claudeScriptURL.path) \(entry.state) claude \(entry.event)\(matcherArg)",
-                    "timeout": 10
-                ]]
-            ]
-            if let matcher = entry.matcher {
-                group["matcher"] = matcher
-            }
-            groups.append(group)
-            hooks[entry.event] = groups
-        }
-
-        config["hooks"] = hooks
+        let modes = claudeHookModes
+        config["hooks"] = AgentHookLayout.mergingClaudeGroups(into: config["hooks"] as? [String: Any] ?? [:],
+                                                             script: claudeScriptURL,
+                                                             enforcePolicy: modes.enforcePolicy, warnAgent: modes.warnAgent)
     }
 
-    private static func stripClaudeEntries(from hooks: inout [String: Any]) {
-        stripCodexEntries(from: &hooks)
+    /// Which of Kannu's Claude groups must make Claude wait (hook v49), read from the marker files
+    /// `SecurityFindingsStore` places for the script: the same files the script checks before it
+    /// denies a tool or tells the agent, so the installer and the script cannot disagree.
+    private static var claudeHookModes: (enforcePolicy: Bool, warnAgent: Bool) {
+        let fileManager = FileManager.default
+        return (fileManager.fileExists(atPath: statusDirectory.appendingPathComponent(AgentPolicy.enforceMarker).path),
+                fileManager.fileExists(atPath: statusDirectory.appendingPathComponent(HiddenTextIncident.warnAgentMarker).path))
+    }
+
+    /// Re-merges Kannu's Claude groups after "Block matching tool calls" or "Tell the agent when hidden
+    /// text is found" changed which of them must block. Only an installed Claude hook, and a write only
+    /// when the groups changed. Called right after the marker files are placed.
+    static func refreshClaudeHookModes() {
+        guard checkInstalled(.claude), var settings = readJSON(at: claudeSettingsURL) else { return }
+        let before = settings["hooks"] as? [String: Any] ?? [:]
+        mergeClaudeHooks(into: &settings)
+        guard let after = settings["hooks"] as? [String: Any],
+              NSDictionary(dictionary: after) != NSDictionary(dictionary: before) else { return }
+        do {
+            try writeJSON(settings, to: claudeSettingsURL)
+        } catch {
+            logger.error("Claude hook modes not updated: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Antigravity (~/.gemini/config/hooks.json, named hooks, hook v46)
@@ -2722,6 +2781,10 @@ final class AgentHookInstaller: ObservableObject {
     /// directory as `claude-usage.json`. Claude supports a single statusLine command, so a
     /// pre-existing user command is preserved: stored base64 inside the script, chained with
     /// the same stdin after the usage write, and restored verbatim on uninstall.
+    ///
+    /// Opt-in since hook v49 ("Live Claude Code limits", `Defaults[.claudeStatusLineUsage]`). Before,
+    /// every Claude install took the status line over and every hook-version bump took it back, in
+    /// front of users who run Claude Code only in Claude Desktop, where a status line never runs.
     static let usageScriptName = "kannu-usage-status.sh"
     static let usageFileName = "claude-usage.json"
     private static let usageScriptVersionMarker = "KANNU_USAGE_SCRIPT_VERSION=4"
@@ -2742,24 +2805,16 @@ final class AgentHookInstaller: ObservableObject {
     static func setClaudeUsageStatusLine(in config: inout [String: Any]) throws {
         try FileManager.default.createDirectory(at: statusDirectory, withIntermediateDirectories: true)
 
-        var chainCommand: String? = nil
-        if let statusLine = config["statusLine"] as? [String: Any],
-           let command = statusLine["command"] as? String,
-           !command.contains(usageScriptName) {
-            chainCommand = command
-        } else if FileManager.default.fileExists(atPath: claudeUsageScriptURL.path),
-                  let existing = try? String(contentsOf: claudeUsageScriptURL, encoding: .utf8) {
+        let takeover = AgentHookLayout.takingOverStatusLine(config["statusLine"], usageScript: claudeUsageScriptURL)
+        var chainCommand = takeover.userCommand
+        if chainCommand == nil, let existing = try? String(contentsOf: claudeUsageScriptURL, encoding: .utf8) {
             // Reinstall over our own script: keep the chain it already carries.
             chainCommand = chainedCommand(fromScript: existing)
         }
 
         try writeUsageScript(to: claudeUsageScriptURL, chainCommand: chainCommand)
 
-        config["statusLine"] = [
-            "type": "command",
-            "command": claudeUsageScriptURL.path,
-            "padding": 0
-        ]
+        config["statusLine"] = takeover.statusLine
     }
 
     static func stripClaudeUsageStatusLine() throws {
@@ -2768,16 +2823,16 @@ final class AgentHookInstaller: ObservableObject {
             return chainedCommand(fromScript: script)
         }()
 
-        if var config = readJSON(at: claudeSettingsURL),
-           let statusLine = config["statusLine"] as? [String: Any],
-           let command = statusLine["command"] as? String,
-           command.contains(usageScriptName) {
-            if let chain {
-                config["statusLine"] = ["type": "command", "command": chain, "padding": 0]
-            } else {
-                config.removeValue(forKey: "statusLine")
+        if FileManager.default.fileExists(atPath: claudeSettingsURL.path) {
+            // A settings.json Kannu cannot parse keeps its status line, and the script that line runs
+            // stays with it: deleting the script under a line that still names it blanks the line.
+            guard var config = readJSON(at: claudeSettingsURL) else { return }
+            let statusLine = config["statusLine"]
+            if ((statusLine as? [String: Any])?["command"] as? String)?.contains(usageScriptName) == true {
+                config["statusLine"] = AgentHookLayout.restoringStatusLine(statusLine, userCommand: chain,
+                                                                          usageScriptName: usageScriptName)
+                try writeJSON(config, to: claudeSettingsURL)
             }
-            try writeJSON(config, to: claudeSettingsURL)
         }
         try removeIfExists(claudeUsageScriptURL)
         try? FileManager.default.removeItem(at: statusDirectory.appendingPathComponent(usageFileName))
@@ -2931,12 +2986,28 @@ final class AgentHookInstaller: ObservableObject {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 
-    /// Installs or refreshes the usage statusline for existing Claude hook installs.
-    private func migrateClaudeUsageStatusLineIfNeeded() {
-        guard FileManager.default.fileExists(atPath: Self.claudeScriptURL.path) else { return }
-        if let content = try? String(contentsOf: Self.claudeUsageScriptURL, encoding: .utf8),
+    /// "Live Claude Code limits" owns the usage status line (hook v49), whether or not the Claude
+    /// hooks are installed. On: Kannu's script runs it at the current version — at launch only when
+    /// the script is missing or behind, so a status line the user changed since stays theirs, and
+    /// always when the user turns the setting on. Off, the default: a status line Kannu took over goes
+    /// back to the user and the script goes, so the first launch of v49 hands back every takeover an
+    /// earlier Kannu made.
+    private func syncClaudeUsageStatusLine(userToggled: Bool) {
+        guard Defaults[.claudeStatusLineUsage] else {
+            do {
+                try Self.stripClaudeUsageStatusLine()
+            } catch {
+                Self.logger.error("usage status line not handed back: \(error.localizedDescription, privacy: .public)")
+            }
+            return
+        }
+        if !userToggled, let content = try? String(contentsOf: Self.claudeUsageScriptURL, encoding: .utf8),
            content.contains(Self.usageScriptVersionMarker) { return }
-        try? Self.installClaudeUsageStatusLine()
+        do {
+            try Self.installClaudeUsageStatusLine()
+        } catch {
+            Self.logger.error("usage status line not installed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func readJSON(at url: URL) -> [String: Any]? {

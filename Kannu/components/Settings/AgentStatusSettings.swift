@@ -223,6 +223,13 @@ struct AgentStatusSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Cursor Hook"))
 
+                    SettingsRow("Live Claude Code limits", description: "For Claude Code in a terminal: shows the live 5-hour and weekly limits by running Kannu as Claude Code's status line. Your own status line still runs after it. Claude Desktop doesn't need this.") {
+                        Defaults.Toggle(key: .claudeStatusLineUsage) {
+                            Text("Live Claude Code limits")
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Live Claude Code limits"))
+
                     if let error = hookInstaller.lastError {
                         SettingsErrorText(error)
                     }

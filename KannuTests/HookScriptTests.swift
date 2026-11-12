@@ -224,6 +224,67 @@ final class HookScriptTests: XCTestCase {
         }
     }
 
+    // MARK: - Out-of-order events (v49: Claude runs most of Kannu's hooks async)
+
+    func testAToolEventThatStartedBeforeTheStopDoesNotRepaintIt() throws {
+        let now = Self.nowMs
+        try writeStatus("o1", state: "stopped", event: "Stop", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "ended_on_error": true,
+                                "turn_started_ms": now - 5_000, "turn_ended_ms": now,
+                                "turn_tool_calls": 1, "turn_tool_ids": ["toolu_a"]])
+        try run(state: "thinking", event: "PostToolUse", conversation: "o1", toolName: "WebFetch",
+                extra: ["tool_use_id": "toolu_b", "tool_response": ["result": "x " + Self.tags("late but real") + " y"]])
+        let json = try XCTUnwrap(try readJSON("o1"))
+        XCTAssertEqual(json["state"] as? String, "stopped", "a late PostToolUse must not paint a finished turn green")
+        XCTAssertEqual(json["hook_event"] as? String, "Stop")
+        XCTAssertEqual((json["ts"] as? NSNumber)?.int64Value, now)
+        XCTAssertEqual(json["ended_on_error"] as? Bool, true)
+        XCTAssertEqual((json["turn_ended_ms"] as? NSNumber)?.int64Value, now, "the turn stays ended")
+        XCTAssertEqual((json["turn_tool_calls"] as? NSNumber)?.intValue, 2, "its tool call still counts")
+        XCTAssertEqual((json["event_started_ms"] as? NSNumber)?.int64Value, now + 60_000)
+        XCTAssertEqual(try hiddenText("o1").first?["preview"] as? String, "late but real", "what it found is still recorded")
+    }
+
+    func testAnUrgentStateOutlivesAToolEventThatStartedBeforeIt() throws {
+        let now = Self.nowMs
+        for (index, state) in ["awaiting_input", "quota_exceeded"].enumerated() {
+            let conversation = "o2\(index)"
+            // Older than the 2 s merge window: only the start times can keep it.
+            try writeStatus(conversation, state: state, event: "PermissionRequest", tsMs: now - 10_000,
+                            extra: ["event_started_ms": now + 60_000])
+            try run(state: "executing", event: "PreToolUse", conversation: conversation)
+            XCTAssertEqual(try readState(conversation), state, "\(state) must outlive a PreToolUse that started before it")
+        }
+    }
+
+    func testANeedsYouEventIsNeverDroppedAsStale() throws {
+        let now = Self.nowMs
+        try writeStatus("o3", state: "executing", event: "PreToolUse", tsMs: now - 10_000,
+                        extra: ["event_started_ms": now + 60_000])
+        try run(state: "awaiting_input", event: "PermissionRequest", conversation: "o3")
+        XCTAssertEqual(try readState("o3"), "awaiting_input", "the one event the user must not miss")
+    }
+
+    func testALaterEventStillWinsAndRecordsWhenItStarted() throws {
+        let before = Self.nowMs
+        try writeStatus("o4", state: "stopped", event: "Stop", tsMs: before - 5_000, extra: ["event_started_ms": before - 5_000])
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "o4", extra: ["prompt": "next"])
+        let json = try XCTUnwrap(try readJSON("o4"))
+        XCTAssertEqual(json["state"] as? String, "thinking")
+        let started = try XCTUnwrap((json["event_started_ms"] as? NSNumber)?.int64Value)
+        XCTAssertGreaterThanOrEqual(started, before)
+        XCTAssertLessThanOrEqual(started, Self.nowMs)
+    }
+
+    func testASessionStartThatLostTheRaceToThePromptKeepsTheTurnRunning() throws {
+        // `claude -p` fires SessionStart and the first prompt together; async, either can land first.
+        let now = Self.nowMs
+        try writeStatus("o5", state: "thinking", event: "UserPromptSubmit", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "turn_started_ms": now])
+        try run(state: "idle", event: "SessionStart", conversation: "o5", extra: ["source": "startup"])
+        XCTAssertEqual(try readState("o5"), "thinking")
+    }
+
     // MARK: - Turn outcome
 
     func testBypassPermissionModeIsRememberedForTheSession() throws {

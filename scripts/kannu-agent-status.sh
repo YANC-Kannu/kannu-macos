@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installed by Kannu: reports AI agent status for the notch traffic light.
-# KANNU_HOOK_SCRIPT_VERSION=48
+# KANNU_HOOK_SCRIPT_VERSION=49
 # Usage: kannu-agent-status.sh <state> <provider> [hook_event] [matcher_key]
 #        (hook JSON arrives on stdin)
 
@@ -50,8 +50,13 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 python3 <<'PY'
-import fcntl, json, os, re, tempfile, time
+import fcntl, json, os, re, signal, tempfile, time
 from pathlib import Path
+
+# v49: Claude Code runs most of Kannu's hooks async, and it enforces no timeout on an async hook, so
+# the script ends itself. When it started is the event's place in the order: see the stale check.
+signal.alarm(10)
+hook_started_ms = int(time.time() * 1000)
 
 def write_status(path, obj):
     # Truncate-then-write leaves the file empty for a moment, and Kannu reads it on
@@ -1300,6 +1305,13 @@ def turn_call_key(turn, now_ms):
             return "", True
     return stem + str(now_ms), False
 
+def counted_call(turn, now_ms):
+    # One tool call into the turn, once per call: next_turn's count, and a stale event's (v49).
+    key, seen = turn_call_key(turn, now_ms)
+    if not seen:
+        turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
+        turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
+
 def background_agents():
     # v44: how many in-flight tasks a Claude Stop lists are agents or workflows.
     tasks = data.get("background_tasks")
@@ -1369,10 +1381,7 @@ def next_turn(existing, now_ms):
         turn.pop("turn_ended_ms", None)
         turn.pop("turn_bg_agents", None)
     if turn and hook_event in TURN_DONE_EVENTS:
-        key, seen = turn_call_key(turn, now_ms)
-        if not seen:
-            turn["turn_tool_calls"] = min(turn["turn_tool_calls"] + 1, TURN_MAX_CALLS)
-            turn["turn_tool_ids"] = (turn["turn_tool_ids"] + [key])[-TURN_MAX_IDS:]
+        counted_call(turn, now_ms)
     if (turn and hook_event in TURN_END_EVENTS and not antigravity_busy_stop
             and ("turn_ended_ms" not in turn or data.get("stop_hook_active") is True)):
         # The first Stop ends the turn; a Stop after a stop hook's continuation moves the end.
@@ -1820,6 +1829,39 @@ ended_on_error = state == "stopped" and (
     hook_event == "StopFailure" or antigravity_stop_error or cursor_stop_error or existing.get("ended_on_error") is True
 )
 
+# v49: Claude Code runs most of Kannu's hooks async and keeps no order between them, so an event can
+# finish after one that started later: a PostToolUse landing after the turn's Stop painted a finished
+# chat green again. The file keeps when the event behind its state started. An event that started
+# before that leaves the state, the clock, the turn and the verdict as they are, and adds only what it
+# found: its sightings, and its tool call to the turn. A needs-you or quota event is never dropped as
+# stale: it is the one the user must not miss, and the merge below already arbitrates it.
+_raw_started = existing.get("event_started_ms")
+existing_started_ms = _raw_started if isinstance(_raw_started, (int, float)) and not isinstance(_raw_started, bool) else 0
+event_started_ms = max(hook_started_ms, existing_started_ms)
+if existing_state and existing_started_ms > hook_started_ms and state not in {"awaiting_input", "quota_exceeded"}:
+    for _key, _value in (("hidden_text", hidden_text), ("secrets", secrets), ("sensitive_paths", sensitive_paths),
+                         ("policy", policy)):
+        if _value:
+            existing[_key] = _value
+        else:
+            existing.pop(_key, None)
+    try:
+        _turn = carried_turn(existing, sighting_ms)
+        if _turn and hook_event in TURN_DONE_EVENTS:
+            counted_call(_turn, sighting_ms)
+            for _key in TURN_KEYS:
+                existing.pop(_key, None)
+            existing.update(_turn)
+    except Exception:
+        pass
+    try:
+        write_status(status_file, existing)
+    except Exception:
+        # A full disk or a path replaced by a directory must not cost the allow line.
+        pass
+    emit(hidden_notes_out)
+    raise SystemExit(0)
+
 # Claude runs the matcher-scoped and generic groups for one event in parallel with no
 # ordering guarantee. If both land within the same instant, keep the more urgent verdict
 # so the winner of the race cannot silently downgrade the light.
@@ -1955,6 +1997,7 @@ if existing_state == "awaiting_input" and state not in {"awaiting_input", "stopp
             existing.update(turn)
             if transcript:
                 existing["transcript_path"] = transcript
+            existing["event_started_ms"] = event_started_ms
             try:
                 write_status(status_file, existing)
             except Exception:
@@ -1968,6 +2011,7 @@ payload = {
     "ts": preserved_ts or int(time.time() * 1000),
     "provider": provider,
     "hook_event": hook_event,
+    "event_started_ms": event_started_ms,
 }
 if name:
     payload["name"] = name

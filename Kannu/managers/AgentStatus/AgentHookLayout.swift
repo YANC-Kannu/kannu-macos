@@ -51,7 +51,8 @@ enum AgentHookProvider: String, CaseIterable, Identifiable {
 /// script). A new provider is one more case here, and the tests hold every list to it.
 ///
 /// Claude's usage status line (`~/.claude/kannu-usage-status.sh`, the `statusLine` key) is a
-/// separate feature with its own install, migration and removal, and is not listed here.
+/// separate feature, opt-in since hook v49, with its own install and removal. Its files are not
+/// listed here; how it takes over and hands back the `statusLine` key is (`takingOverStatusLine`).
 struct AgentHookLayout: Equatable {
     enum Shape: Equatable {
         /// Cursor: `hooks.<event>` is a list of `{"command": …}`.
@@ -255,6 +256,84 @@ struct AgentHookLayout: Equatable {
     /// The subset that defines "Claude hooks are installed". Kept intentionally small so the
     /// table above can grow without invalidating existing installs — see `checkInstalled`.
     static let claudeCoreInstalledEvents = ["SessionStart", "UserPromptSubmit", "PreToolUse", "Stop"]
+
+    // MARK: - Which Claude groups make Claude wait (hook v49)
+
+    /// Claude events whose group always blocks: the end of a turn or of a session must land, and
+    /// `claude -p` kills an async hook still running when it exits. Once per turn, so cheap.
+    static let claudeBlockingEvents: Set<String> = ["Stop", "StopFailure", "SubagentStop", "SessionEnd"]
+
+    /// The Claude events that carry the hidden-text note while "Tell the agent when hidden text is
+    /// found" is on: the script's `HT_NOTE_EVENTS["claude"]`.
+    static let claudeHiddenTextNoteEvents: Set<String> = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"]
+
+    /// Whether Claude Code runs a Kannu group without waiting for it (`"async": true`). Kannu only
+    /// watches, so a group makes Claude wait only where Kannu may have to answer: PreToolUse while
+    /// "Block matching tool calls" can deny a tool, and the note events while "Tell the agent when
+    /// hidden text is found" is on. Claude ignores an async hook's decision and hands its context over
+    /// a turn late (code.claude.com/docs/en/hooks). Before v49 every group blocked, at a measured
+    /// 160–200 ms a run: once per prompt and twice per tool call.
+    static func claudeHookIsAsync(event: String, enforcePolicy: Bool, warnAgent: Bool) -> Bool {
+        if claudeBlockingEvents.contains(event) { return false }
+        if enforcePolicy && event == "PreToolUse" { return false }
+        if warnAgent && claudeHiddenTextNoteEvents.contains(event) { return false }
+        return true
+    }
+
+    /// Kannu's Claude groups merged into settings.json's `hooks`, one per row of `claudeHookEntries`,
+    /// after removing every earlier Kannu group. Every other hook is kept.
+    static func mergingClaudeGroups(into hooks: [String: Any], script: URL,
+                                    enforcePolicy: Bool, warnAgent: Bool) -> [String: Any] {
+        var hooks = strippingKannuGroups(from: hooks)
+        for entry in claudeHookEntries {
+            // The matcher is passed to the script too: when a group is matcher-scoped its state is
+            // unambiguous, so the script trusts the argument instead of re-deriving it.
+            let matcherArg = entry.matcher == nil ? "" : " \(entry.matcherKey)"
+            var handler: [String: Any] = ["type": "command",
+                                          "command": "\(script.path) \(entry.state) claude \(entry.event)\(matcherArg)",
+                                          "timeout": 10]
+            if claudeHookIsAsync(event: entry.event, enforcePolicy: enforcePolicy, warnAgent: warnAgent) {
+                handler["async"] = true
+            }
+            var group: [String: Any] = ["hooks": [handler]]
+            if let matcher = entry.matcher {
+                group["matcher"] = matcher
+            }
+            var groups = hooks[entry.event] as? [[String: Any]] ?? []
+            groups.append(group)
+            hooks[entry.event] = groups
+        }
+        return hooks
+    }
+
+    // MARK: - Claude's usage status line (settings.json `statusLine`, opt-in from hook v49)
+
+    /// The `statusLine` value that runs Kannu's usage script, and the user's own command for that
+    /// script to run after it. The user's other keys (`padding`, `refreshInterval`,
+    /// `hideVimModeIndicator`) stay: writing a fresh object reset their padding and dropped the rest.
+    /// Kannu's own command is never handed back as the user's, so a reinstall cannot chain Kannu to
+    /// itself; the caller keeps the chain its script already carries instead.
+    static func takingOverStatusLine(_ current: Any?, usageScript: URL) -> (statusLine: [String: Any], userCommand: String?) {
+        let existing = current as? [String: Any]
+        let command = existing?["command"] as? String ?? ""
+        var statusLine = existing ?? ["padding": 0]
+        statusLine["type"] = "command"
+        statusLine["command"] = usageScript.path
+        let isKannus = command.contains(usageScript.lastPathComponent)
+        return (statusLine, isKannus || command.isEmpty ? nil : command)
+    }
+
+    /// The `statusLine` value once Kannu's goes: the user's own command back in the same object with
+    /// their other keys, or nil, which removes the key, when Kannu had nothing to chain. A status line
+    /// that does not run Kannu's script is the user's and comes back unchanged.
+    static func restoringStatusLine(_ current: Any?, userCommand: String?, usageScriptName: String) -> Any? {
+        guard var statusLine = current as? [String: Any],
+              (statusLine["command"] as? String)?.contains(usageScriptName) == true else { return current }
+        guard let userCommand, !userCommand.isEmpty else { return nil }
+        statusLine["type"] = "command"
+        statusLine["command"] = userCommand
+        return statusLine
+    }
 
     /// VS Code Copilot and Codex, Claude-compatible PascalCase names. Codex validates strictly,
     /// so it keeps exactly this list.
