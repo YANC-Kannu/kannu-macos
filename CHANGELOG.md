@@ -4,6 +4,39 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of Brain's Notes list-detail
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
+- **Changes:**
+  - Widening the window past 1,224 pt with a note open in the list's place builds the list anew: it now scrolls to the
+    note's row, selected beside the page, instead of opening at its top (M2).
+  - The page beside the list takes an id of its own, not the note's, which its row carries, so a scroll back to the
+    row has one target (M3).
+  - With no note at all, the empty place beside the list says "No note selected" without telling you to click a › that
+    is not there; the layout stays a function of the width alone, as D1 has it, and as Mail keeps its empty pane (M1,
+    taken this way rather than by folding the column away).
+  - `NotesPageLiveDataRulesTests` holds each answer against planted offenders; docs/SETTINGS.md says so.
+
+### 2026-11-12 - Brain's Notes page shows a note beside the list at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail (layout-proposal D1)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: D1's list-detail for Notes, with Tasks' layout moved once into a shared view both pages use
+- **Changes:**
+  - From 1,224 pt of panel (`ListDetailLayout`, as Tasks has it), a note opened from the list shows beside it: its
+    row wears the selected ring and is selected for VoiceOver, and its card names the note over when it was edited,
+    since the tab keeps Notes' title. With none open, its place says "No note selected". Narrower, the in-tab swap
+    stays, its back row now bare on the panel, as Tasks' are (the design review's finding 24).
+  - One selection, drawn either way, so a resize converts nothing. Each visit still opens on the list, at both widths;
+    a Notes search or deep link closes only a page in the list's place.
+  - Tasks' list-detail layout and its measurement moved once into a shared place, `SettingsListDetail` and
+    `settingsListDetailFits(_:)` (two DesignSystem files, one type each), which Tasks and Notes both use. Tasks draws
+    what it drew: its boards match 5-4's but for the fixture's times.
+  - The note's page stays read-only (Pin, Copy, Delete, Open in Notes), and New note's sheet is unchanged.
+  - Tests: `SettingsListDetailRulesTests` (new) holds the shared layout's widths and bans; the D1 clauses of
+    `TasksPageLiveDataRulesTests` and `NotesPageLiveDataRulesTests` hold each page's use of it, against planted
+    offenders; `BrainShellRulesTests` lists the two new files among those that know no page.
+  - Two catalog keys in 17 languages ("No note selected", "Click › on a note to see it here."); boards `notesWide` and
+    `notePageWide`; docs/SETTINGS.md, and docs/REGRESSIONS.md entry 22's addendum.
+
 ### 2026-11-11 - Answer the review of Brain's Tasks page
 - **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: the review's S1 and M2 to M6, and the back row's scroll back
