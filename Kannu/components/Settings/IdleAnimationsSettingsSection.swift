@@ -334,6 +334,12 @@ struct AnimationPreviewCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // VoiceOver's path to Delete, which the glyph below offers only under the pointer.
+        .accessibilityActions {
+            if let onDelete = onDelete {
+                Button("Delete", action: onDelete)
+            }
+        }
         // Delete button (only for custom animations), on the tile's corner: over the card's button, never inside its
         // label, so its click stays its own.
         .overlay(alignment: .topTrailing) {

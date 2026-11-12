@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
+- **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR
+- **Changes:**
+  - Security: Import reads the findings store into the page's copy again as the file is chosen, so whether it asks
+    before replacing the policy is never decided on a copy up to half a second old.
+  - Downloads: a style card is disabled while download detection is off, so the keyboard and VoiceOver know it is off.
+    `.plain` dims a disabled button by half, so the card's own half dim goes and it looks as it did.
+  - Idle animations: a custom animation's card offers Delete as a named accessibility action, so VoiceOver reaches it
+    without the hover glyph or the right-click menu, which both stay.
+  - Timer: Start timer reads the timer manager at its press and starts nothing while a timer runs, even before the
+    header's copy has first been read; `TimerPageLiveDataRulesTests` lists that read among the page's readers.
+  - Timer's preset sheet opens a preset over 23 hours whole: the Hours stepper reaches its hours, so an edit no longer
+    cuts them to 23.
+  - Boards: the Agents, Security and Clipboard fixtures carry their feature switch, on, as Usage's and Timer's do, so
+    this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
+  - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
+    switch.
+
 ### 2026-11-11 - Answer the review of Brain's Notes page
 - **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: the review's two passes answered; a list typed in New note is never saved half done, and the rule test closes its gaps
