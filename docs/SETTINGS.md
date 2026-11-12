@@ -245,8 +245,10 @@ tooltip of its own.
   for light text, so its content is dark whatever the Mac's appearance (`.environment(\.colorScheme, .dark)` on the
   content, not the backdrop, which renders as it always did). A device is a soft card (`card`, `sectionRadius`, a
   `line` border); under the pointer it takes `selection` and an `accentStrong` border, and a device that turned a
-  file down a `destructive` one. Refresh and Close are `.quiet`, Scan Again the standard button. The tile's growth
-  under the pointer takes the theme's bounded ease, none under Reduce Motion, never a spring.
+  file down a `destructive` one. Refresh and Close are `.quiet`, their glyphs in a 22-pt frame so they keep the
+  circles' reach, and each says its name to VoiceOver; neither takes a tooltip, since the style tracks hover itself.
+  Scan Again is the standard button. The tile grows under the pointer on the theme's bounded ease, never a spring,
+  and not at all under Reduce Motion, as the clipboard panel's tab switch does not ease then.
 
 Placement, focus, dismissal, tooltips and what the clipboard captures are as they were: the panels' window code did
 not change. Each panel draws from values its view hands in (`ClipboardPanelContent`, `LocalSendDevicePickerContent`),

@@ -232,6 +232,7 @@ struct ClipboardPanelHeader: View {
     let historyIsEmpty: Bool
     let onClose: () -> Void
     @FocusState private var isSearchFieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(spacing: 8) {
@@ -318,10 +319,10 @@ struct ClipboardPanelHeader: View {
         return count > 0 ? "\(tab.localizedName) \(count.formatted())" : tab.localizedName
     }
 
-    /// The panel switched tabs with this ease before the segments, and still does.
+    /// The panel switched tabs with this ease before the segments, and still does; none under Reduce Motion.
     private var tabSelection: Binding<ClipboardTab> {
         Binding(get: { selectedTab }, set: { tab in
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
                 selectedTab = tab
             }
         })
