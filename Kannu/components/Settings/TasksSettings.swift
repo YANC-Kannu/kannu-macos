@@ -43,7 +43,6 @@ struct TasksSettings: View {
     @Default(.enableTasks) private var enableTasks
     @Default(.tasksDefaultSessionMinutes) private var defaultSessionMinutes
     @ObservedObject private var visibility = BrainVisibility.shared
-    @Environment(\.settingsPageInset) private var inset
 
     // On the tab, not on a row: a row goes with its page when the path changes, and the task rows
     // are lazy, built only while in view, so a row may not exist when these change.
@@ -139,9 +138,7 @@ struct TasksSettings: View {
             }
         }
         // D1: the panel's width decides where a task's page goes, from this one measurement (`ListDetailLayout`).
-        .onGeometryChange(for: Bool.self) { geometry in
-            ListDetailLayout.showsPageBeside(panelWidth: geometry.size.width, inset: inset, pageWidth: SettingsTheme.pageMaxWidth)
-        } action: { showsPageBeside = $0 }
+        .settingsListDetailFits($showsPageBeside)
         .settingsPageTitle(pageInPlace.map(Self.title) ?? Self.overviewTitle)
         .onReceive(NotificationCenter.default.publisher(for: .tasksNewTaskRequested)) { _ in
             // The header's New task, ⌘N, or the empty list's. Read at the press.
@@ -295,20 +292,14 @@ struct TasksSettings: View {
         }
     }
 
-    /// The first page, and while the panel holds both (layout-proposal D1) a task's page beside it: the list in its own
-    /// column, the page an inset after it, as wide as a settings column. Two scroll views, so the page stays put while
-    /// the list scrolls, and the page's runs to the panel's edge. The first page is the stack's first child either way,
-    /// so crossing the width keeps it, scrolled where it was.
+    /// The first page, and while the panel holds both (layout-proposal D1) a task's page beside it, laid out by
+    /// `SettingsListDetail`: the list in its own column, the page an inset after it, as wide as a settings column. The
+    /// first page is that stack's first child either way, so crossing the width keeps it, scrolled where it was.
     private var firstPageAndTask: some View {
-        HStack(alignment: .top, spacing: 0) {
+        SettingsListDetail(showsBeside: showsListAndPage) {
             firstPage
-                .frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)
-            if showsListAndPage {
-                taskPageBeside
-                    // The list's own trailing inset is the space between the two.
-                    .environment(\.settingsPageInset, 0)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        } beside: {
+            taskPageBeside
         }
     }
 

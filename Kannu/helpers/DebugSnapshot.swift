@@ -296,12 +296,15 @@ enum DebugSnapshots {
         TasksSettings.snapshotPath = []
         TasksSettings.snapshotTab = .active
         // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
-        // and one made in Apple Notes. The switches drawn under the product are this Mac's, so the boards are run with
+        // and one made in Apple Notes; at a 14-inch full screen, four with none open and the one with its image beside
+        // the list (layout-proposal D1). The switches drawn under the product are this Mac's, so the boards are run with
         // `-enableNotes YES`, and the sync's with `-enableAppleNotesSync YES` (`notePageMirror` with
         // `-appleNotesSyncScope "Whole account"` too): the argument domain, nothing written.
-        let notesBoards: [(name: String, notes: Int, open: UUID?)] = [
-            ("notes0", 0, nil), ("notes4", 4, nil), ("notePage", 4, DebugSnapshotFixtures.notesImageNoteID),
-            ("notePageMirror", 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+        let notesBoards: [(name: String, size: NSSize, notes: Int, open: UUID?)] = [
+            ("notes0", window, 0, nil), ("notes4", window, 4, nil),
+            ("notePage", window, 4, DebugSnapshotFixtures.notesImageNoteID),
+            ("notePageMirror", window, 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+            ("notesWide", fullScreen14, 4, nil), ("notePageWide", fullScreen14, 4, DebugSnapshotFixtures.notesImageNoteID),
         ]
         for board in notesBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
             var fixture = DebugSnapshotFixtures.notesOverview(notes: board.notes, now: Date())
@@ -309,9 +312,8 @@ enum DebugSnapshots {
             NotesOverview.snapshotFixture = fixture
             for dark in [false, true] {
                 await render(AnyView(SettingsView(snapshotTab: .notes).environmentObject(viewModel)),
-                             name: board.name + (dark ? "-dark" : "-light"), dark: dark,
-                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
-                             fixedHeight: SettingsTheme.windowDefaultHeight)
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
             }
         }
         NotesOverview.snapshotFixture = notesPage
