@@ -120,13 +120,20 @@ final class MenuBarRulesTests: XCTestCase {
         if count("guard appDelegate.launchContinued else {", in: code) != 2 {
             problems.append("an item that opens Brain does not wait for the terms")
         }
-        if count("SettingsWindowController.shared", in: code) != 3 {
+        if count("SettingsWindowController.shared", in: code) != 4 {
             problems.append("a menu builds Brain's window, which must wait for the terms")
         }
         let open = body(of: "private func openBrain(", in: code)
         if !isBefore("guard appDelegate.launchContinued else {", "SettingsWindowController.shared.showWindow()", in: open)
             || !open.contains("TermsGateWindowController.shared.bringToFront()") {
             problems.append("openBrain opens Brain before the terms are accepted")
+        }
+        // Menu keys reach the menu bar under a sheet; a page switched under it would close it and lose its typing. The
+        // window is read only once the terms are accepted.
+        let sheetCheck = "if SettingsWindowController.shared.window?.attachedSheet != nil {"
+        if !isBefore("guard appDelegate.launchContinued else {", sheetCheck, in: open)
+            || !isBefore(sheetCheck, "SettingsWindowController.shared.showWindow()", in: open) {
+            problems.append("a Go item or New Task switches the page under a sheet")
         }
         // The request reaches the content once it is back in the window.
         if !isBefore("SettingsWindowController.shared.showWindow()", "SettingsHighlightCoordinator.shared.requestPage(tab)", in: open)
@@ -139,21 +146,44 @@ final class MenuBarRulesTests: XCTestCase {
     func testEveryItemThatOpensBrainWaitsForTheTerms() throws {
         let commands = Self.commands(in: try Self.read("Kannu/KannuApp.swift"))
         XCTAssertEqual(Self.gateProblems(in: commands), [])
+        // `openBrain`'s guard: the comment after it is its own, so Brain…'s guard is left alone.
         let guarded = """
                 guard appDelegate.launchContinued else {
                     TermsGateWindowController.shared.bringToFront()
                     return
                 }
-                SettingsWindowController.shared.showWindow()
-                SettingsHighlightCoordinator.shared.requestPage(tab)
+                // A sheet over Brain
         """
         SettingsDesignSystemRulesTests.assertCaught([
-            (guarded, "        SettingsWindowController.shared.showWindow()\n        SettingsHighlightCoordinator.shared.requestPage(tab)"),
+            (guarded, "        // A sheet over Brain"),
             ("Button(tab.title) { openBrain(on: tab) }", "Button(tab.title) { SettingsWindowController.shared.showWindow() }"),
             ("visibility.isFullScreen ?", "SettingsWindowController.shared.window?.styleMask.contains(.fullScreen) == true ?"),
             ("        SettingsWindowController.shared.showWindow()\n        SettingsHighlightCoordinator.shared.requestPage(tab)",
              "        SettingsHighlightCoordinator.shared.requestPage(tab)\n        SettingsWindowController.shared.showWindow()"),
+            ("        if SettingsWindowController.shared.window?.attachedSheet != nil {\n            NSSound.beep()\n            return\n        }\n", ""),
         ], in: commands, by: Self.gateProblems)
+    }
+
+    // MARK: - The full-screen item's title
+
+    /// Every way a transition ends updates `BrainVisibility`, so View's item never keeps the wrong title.
+    static func fullScreenTitleProblems(in controller: String) -> [String] {
+        let code = Self.code(controller)
+        return ["func windowDidEnterFullScreen(", "func windowDidExitFullScreen(",
+                "func windowDidFailToEnterFullScreen(", "func windowDidFailToExitFullScreen("]
+            .filter { !body(of: $0, in: code).contains("BrainVisibility.shared.update(for: window)") }
+            .map { "\($0) leaves the full-screen title as it was" }
+    }
+
+    func testEveryFullScreenOutcomeUpdatesTheTitle() throws {
+        let controller = try Self.read("Kannu/components/Settings/SettingsWindowController.swift")
+        XCTAssertEqual(Self.fullScreenTitleProblems(in: controller), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("        finishPendingClose()\n        // An occlusion change during the attempt may have read it as full screen.\n        BrainVisibility.shared.update(for: window)\n",
+             "        finishPendingClose()\n"),
+            ("        finishPendingClose()\n        // View's menu item says Enter Full Screen again.\n        if let window { BrainVisibility.shared.update(for: window) }\n",
+             "        finishPendingClose()\n"),
+        ], in: controller, by: Self.fullScreenTitleProblems)
     }
 
     // MARK: - One full-screen item
@@ -186,9 +216,13 @@ final class MenuBarRulesTests: XCTestCase {
             problems.append("New Task's request is not taken once")
         }
         let open = body(of: "private func openNewTask() {", in: code)
-        if !open.contains("guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }")
+        if !open.contains("guard enableTasks, sheet == nil else { return }")
             || !open.contains("sheet = .newTask(listFilter: path.last == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)") {
             problems.append("New Task no longer opens as its shortcut did")
+        }
+        // From a Brain whose list is still loading the request would be taken and dropped; the sheet waits instead.
+        if open.contains("isReady") {
+            problems.append("New Task waits for the task list, so the first ⌘N after launch opens nothing")
         }
         if shortcutOwners != ["Kannu/KannuApp.swift"] {
             problems.append("⌘N has more than one owner: \(shortcutOwners)")
@@ -216,7 +250,8 @@ final class MenuBarRulesTests: XCTestCase {
         let owners = try Self.shortcutOwners()
         SettingsDesignSystemRulesTests.assertCaught([
             ("            highlights.pendingNewTask = false\n", ""),
-            ("guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }", "guard enableTasks else { return }"),
+            ("guard enableTasks, sheet == nil else { return }", "guard enableTasks else { return }"),
+            ("guard enableTasks, sheet == nil else { return }", "guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }"),
         ], in: tasks) { Self.newTaskProblems(tasks: $0, shortcutOwners: owners) }
         // The old hidden button back: a second owner.
         let hidden = tasks.replacingOccurrences(of: "    private func openNewTask() {",

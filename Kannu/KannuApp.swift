@@ -90,6 +90,12 @@ struct KannuApp: App {
             TermsGateWindowController.shared.bringToFront()
             return
         }
+        // A sheet over Brain keeps its page. Menu keys still reach the menu bar under a sheet, and switching the page
+        // under it would close it, with what was typed in it.
+        if SettingsWindowController.shared.window?.attachedSheet != nil {
+            NSSound.beep()
+            return
+        }
         SettingsWindowController.shared.showWindow()
         SettingsHighlightCoordinator.shared.requestPage(tab)
         if newTask { SettingsHighlightCoordinator.shared.pendingNewTask = true }

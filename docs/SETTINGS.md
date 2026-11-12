@@ -584,7 +584,8 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 
 - **View › Hide Sidebar** (`brainShowsSidebar`) takes the sidebar column away, search with it, and the panel keeps the
   window's inset on both sides. `BrainShell` takes it as a plain flag. It says whether the sidebar shows at all, never
-  which list.
+  which list. Hidden, Go still reaches the product pages; the Settings list, search and About come back with Show
+  Sidebar, which stays on whenever Brain is on screen.
 
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
 draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
@@ -598,8 +599,9 @@ item's page.
 Brain's menus are SwiftUI commands in `KannuApp.swift`, beside Brain… (⌘,). The menus Kannu adds after the launch
 (Focus, Accessibility, Permissions, Tools) are unchanged.
 
-- **File › New Task** (⌘N) opens Brain on Tasks with New Task over the page that is open; on All tasks the sheet takes
-  the list's filters, as Add a task does. The menu owns ⌘N, and the item is off while Tasks is off.
+- **File › New Task** (⌘N) opens Brain on Tasks with New Task over whichever Tasks page is open, at once, even while the
+  list is still loading: the sheet keeps Add off until it is ready. On All tasks the sheet takes the list's filters, as
+  Add a task does. The menu owns ⌘N, and the item is off while Tasks is off.
 - **View:** Hide or Show Sidebar (⌃⌘S), Appearance (the moon's three choices), then Enter or Exit Full Screen (⌃⌘F). They
   act on Brain's window, so they are off while it is not on screen, and they read `BrainVisibility`, which builds nothing.
   AppKit would add an Enter Full Screen of its own, which a SwiftUI command cannot stop, so the app registers
@@ -609,7 +611,9 @@ Brain's menus are SwiftUI commands in `KannuApp.swift`, beside Brain… (⌘,). 
   Tasks page keeps its place.
 
 Go and New Task open Brain through one function, `openBrain`, which brings the terms back until they are accepted, as
-Brain… does. `MenuBarRulesTests` holds the menus against planted offenders. No PNG shows the menu bar, so a snapshot run
+Brain… does, and only beeps while a sheet is open over Brain: menu keys still reach the menu bar under a sheet, and a
+page switched under it would close it, with what was typed in it. `MenuBarRulesTests` holds the menus against planted
+offenders. No PNG shows the menu bar, so a snapshot run
 writes it to `menu.txt` as the launch built it: each item's key, action, and whether it is off or checked.
 
 ## The window
