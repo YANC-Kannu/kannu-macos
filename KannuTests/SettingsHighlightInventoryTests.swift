@@ -101,9 +101,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // list's deep link and its Find row the list's entries, which the All tasks back row and row did,
         // and Tag colours, folded in the settings, registers an id of its own for its entry (one row and
         // one id more).
+        // 2026-11-11: Notes' gear lands on its first settings row, Enable Notes, which registers an id
+        // (one registration, one id; no entry: a search for the tab finds it by name).
         XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

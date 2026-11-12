@@ -192,6 +192,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TaskRowList.swift": 2,              // a task's card, and a tag chip's inset
         "TasksOverview.swift": 1,            // the list's footer in line with the rows, as a section's is
         "TaskSourcePages.swift": 4,          // the task lists' headings and a project's footer in line with the rows, which are cards
+        "NotesOverview.swift": 1,            // the sync's status line in line with the cards' text
+        "NotePage.swift": 1,                 // the note's own card
     ]
 
     func testNoRowPadsItself() {
@@ -499,6 +501,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SecurityOverview.swift": 1,
         "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
         "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
+        "NotesOverview.swift": 1,            // New note: the Notes page header's one verb
+        "NewNoteSheet.swift": 1,             // the New note sheet's Add
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {

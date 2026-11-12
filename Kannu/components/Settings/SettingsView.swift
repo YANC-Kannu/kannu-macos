@@ -192,6 +192,8 @@ enum SettingsDeepLink {
     static let usageProvidersHighlightID = SettingsTab.llmUsage.highlightID(for: "Claude Provider")
     /// Brain › Timer's switch, its first row and always built: where Timer's gear lands.
     static let timerFeatureHighlightID = SettingsTab.timer.highlightID(for: "Enable timer feature")
+    /// Brain › Notes' switch, its first settings row and always built: where Notes' gear lands.
+    static let notesEnableHighlightID = SettingsTab.notes.highlightID(for: "Enable Notes")
 }
 
 final class SettingsHighlightCoordinator: ObservableObject {
@@ -318,8 +320,8 @@ extension View {
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
     /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
-    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, and Tasks' gear and New
-    /// task. Each reads its own store.
+    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, Tasks' gear and New
+    /// task, and Notes' gear and New note. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
@@ -1165,7 +1167,7 @@ struct SettingsView: View {
                 Shortcuts()
             }
         case .notes:
-            SettingsForm(tab: .notes) {
+            SettingsForm(tab: .notes, actions: AnyView(NotesHeaderActions())) {
                 NotesSettingsView()
             }
         case .tasks:
