@@ -60,6 +60,9 @@ enum DebugSnapshots {
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         // The render draws no video, so Devices' 3D icon shows its movie's first frame.
         DevicesSettingsView.snapshotDrawsStill = true
+        // The sidebar's badges, quiet on every board but `shellBadges`: none reads this Mac's agents, findings, usage
+        // or timer.
+        SidebarBadge.snapshotFixture = .quiet
         // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
         // of this Mac lands in a PNG.
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
@@ -206,6 +209,17 @@ enum DebugSnapshots {
                 await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
                              width: size.width, into: request.directory, fixedHeight: size.height)
             }
+        }
+        // Every badge at once, from a fixture: an agent waiting, two high findings, usage near its limit, a timer running.
+        if request.tabs == nil || request.tabs?.contains("shellBadges") == true {
+            SidebarBadge.snapshotFixture = .busy
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "shellBadges" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+            SidebarBadge.snapshotFixture = .quiet
         }
         // Brain › Agents with no session, one and three, at the window's first size: what is above the fold is how
         // full the page looks. Fixtures only.

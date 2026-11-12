@@ -43,7 +43,7 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A red error line under a control | `SettingsErrorText(message)` |
 | One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below). A row of buttons alone in its card takes a title and a caption too (below, "Section rules") |
 | A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›", a finding's "Details ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
-| A badge beside a title ("Beta", "Alpha", "Built-in") | `SettingsBadge`, through `customBadge(text:)` and `alphaBadge()`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius. Never a capsule of a colour of its own. The sidebar's BETA pill is Stage 6's |
+| A badge beside a title ("Beta", "Alpha", "Built-in") | `SettingsBadge`, through `customBadge(text:)` and `alphaBadge()`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius. Never a capsule of a colour of its own. The sidebar's Beta is this badge too; its state badges are not a title's ("The shell and navigation") |
 | A choice drawn as cards (a HUD style, an idle animation, a skin, an icon) | `.settingsChoiceRing(shape, isSelected:)` on the tile and `.settingsChoiceLabel(isSelected:)` on its name (below, "Choices") |
 | A callout, or a row's expanded details, inside a section | `SettingsPermissionCallout`, or `.settingsCalloutCard()`: the card's own colour inside a 1-pt line border, never a darker slab, and its buttons the standard style. A callout's title is orange for a permission something needs and `accentStrong` for an offer (Focus, Shelf's Full Disk Access, ADR), never a colour of its own |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
@@ -621,10 +621,21 @@ read and never a subscription, so the card never shows the old state for the thr
 timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it needs a
 real window.
 
+**The sidebar's badges** keep the same three, and `SidebarBadgeLiveDataRulesTests` holds them against planted
+offenders. Each badge copies its one value from one subscription throttled to 500 ms and assigned only on a change,
+in a `.task(id: visibility.isOnScreen)` that returns at once while the flag is false, and reads its source once as it
+appears. Agents' follows the monitor's projection (the light and whether it shows), never the monitor; Security's
+follows the findings store's `objectWillChange` and reads the store once more as Brain comes back; Usage's follows
+`UsageAlertManager.$nearLimit` and leaves out a window past its reset as it reads; Timer's follows `$isTimerActive`
+and `$isPaused`, never the time, so nothing in the sidebar ticks. Nothing observes a store whole, and a board never
+reads one: every board is quiet but `shellBadges`, which draws all four from a fixture. **Not measured:** the CPU of
+Brain open while an agent works; it needs a real window.
+
 ## The shell and navigation
 
 `BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It
-takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab.
+takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab, and a
+badge as a view its caller builds.
 
 - **Two lists, and no mode flag.** The product list ends at Settings and About; the settings list starts
   with Back. Which one shows is read from the selected tab (`SettingsTab.group`), and `selectedTab` is
@@ -651,6 +662,15 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
   Keyboard Access.
 - **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
   opposite of what is on screen.
+- **A row's badge says a state that needs you** (`SidebarBadges.swift`, layout-proposal.md D2): Agents' dot in the
+  light's own yellow while an agent waits for input, shaded on paper as Agents' state word is; Security's count of
+  high-severity findings to review, on the destructive colour; Usage's destructive dot while a window is at or near
+  its limit (`UsageAlertPolicy.nearLimit`). Timer's static ▶ says a timer runs, overtime included, and not while it
+  is paused. Security's and Usage's show only while Agent Status is on, as their pages do. Agents' is the notch's
+  light, so a finished agent's red outranks another's yellow there and here. Nothing else: no open-task count,
+  which is never zero, and no setup checklist. Each says itself in words too, to VoiceOver and the pointer ("Needs
+  you", "High: 2", "Near its limit", "Running"). A Settings page in beta shows the pages' one badge, "Beta". The
+  badges keep the live-data rules (below); `SettingsView` only places them, so the root observes nothing for them.
 
 - **View › Hide Sidebar** (`brainShowsSidebar`) takes the sidebar column away, search with it, and the panel keeps the
   window's inset on both sides. `BrainShell` takes it as a plain flag. It says whether the sidebar shows at all, never
@@ -661,8 +681,8 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
 with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
-arrow keys and hover take a real window. `shellNoSidebar` draws the window with its sidebar hidden, and `shellGo` a Go
-item's page.
+arrow keys and hover take a real window. `shellNoSidebar` draws the window with its sidebar hidden, `shellGo` a Go
+item's page, and `shellBadges` every badge at once, from a fixture.
 
 ## The menu bar
 

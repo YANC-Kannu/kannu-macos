@@ -1788,6 +1788,16 @@ Full Screen beside View's. `MenuBarRulesTests` holds these against planted offen
 Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
 ⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
 
+**2026-11-12 addendum: the sidebar's badges run only while Brain is on screen, and the root observes nothing for them.**
+The sidebar is on screen beside every page, so its badges (`SidebarBadges.swift`, docs/SETTINGS.md "The shell and
+navigation") are live leaves of their own: each copies one value through a subscription throttled to 500 ms, in a
+`.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while it is false, and reads its source once as it
+appears. Agents' badge follows the monitor's projection, never the monitor (entry 10), and `SettingsView` names none
+of the four stores, so the root, which would redraw all of Brain, observes nothing new. Nothing ticks: the timer's
+glyph follows whether a timer runs, not its time. New hooks: each badge's `onAppear` reads once and its `.task`
+follows; none animates. With a board's fixture set, no badge touches a store. **Not measured:** the CPU of Brain open
+while an agent works. `SidebarBadgeLiveDataRulesTests` holds each clause against planted offenders.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover
