@@ -116,7 +116,7 @@ struct TasksOverview: View {
     /// Every tag and label on any task Kannu holds, not what the list shows, so a choice never vanishes from its own
     /// list; a saved choice no task has any more still shows, so the button is never blank.
     private var tagChoices: [String] {
-        var choices = [TaskFacets.anyTag] + data.filterTags
+        var choices = [TaskFacets.anyTag] + data.filterTags.map { $0.lowercased() == tagFilter.lowercased() ? tagFilter : $0 }
         if tagFilter != TaskFacets.anyTag, !choices.contains(where: { $0.lowercased() == tagFilter.lowercased() }) {
             choices.append(tagFilter)
         }

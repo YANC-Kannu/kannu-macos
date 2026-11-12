@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
+- **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR
+- **Changes:**
+  - Notch: the filter menu's Tag submenu ticks the saved tag when the tasks now spell it in another case (`docs` saved,
+    `Docs` offered): the matching row carries the saved spelling. Filtering already matched ignoring case.
+  - Brain › Tasks: widening the window past the width with a task open in the list's place scrolls the rebuilt list to
+    the task's row, now selected beside its page, as Notes does. The list used to open at its top.
+  - Brain › Tasks: the Tag filter had the same case mismatch as the notch's Tag submenu, found alongside inline-1: the
+    choice that matches the saved tag ignoring case now carries the saved spelling, so the list ticks it.
+  - docs/SETTINGS.md: a task's page, and widening the window with it open.
+
 ### 2026-11-12 - Answer the review of Brain's Notes list-detail
 - **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
