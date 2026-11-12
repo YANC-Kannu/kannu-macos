@@ -94,9 +94,12 @@ final class BrainShellRulesTests: XCTestCase {
         var problems: [String] = []
         let tabs = SettingsDesignSystemRulesTests.matches(of: #"@State private var \w+: SettingsTab ="#, in: navigation)
         if tabs != ["@State private var selectedTab: SettingsTab ="] { problems.append("selectedTab is not the only tab that is set: \(tabs)") }
-        // A mode flag of any type would be a second answer to "which list is on screen".
+        // A mode flag of any type would be a second answer to "which list is on screen". `showsSidebar` is View ›
+        // Hide Sidebar's: whether the sidebar shows at all, never which list.
         let names = SettingsDesignSystemRulesTests.matches(of: stateNames, in: navigation).compactMap { $0.components(separatedBy: " var ").last }
-        if names != ["selectedTab", "searchText", "lastProductTab", "lastSettingsTab"] { problems.append("new state beside the selected tab: \(names)") }
+        if names != ["selectedTab", "searchText", "lastProductTab", "lastSettingsTab", "showsSidebar"] {
+            problems.append("new state beside the selected tab: \(names)")
+        }
         if !navigation.contains("private var showsSettingsList: Bool { resolvedSelection.group == .settings }") {
             problems.append("the list on screen no longer follows the selected tab")
         }

@@ -1762,6 +1762,17 @@ the real pasteboard twice a second. **Not measured:** CPU with Clipboard open wh
 screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of
 this entry holds.
 
+**2026-11-12 addendum: the menu bar opens Brain only after the terms, and adds no hook and no animator.** Go, View and
+File join Brain… (docs/SETTINGS.md, "The menu bar"). Go and New Task open Brain through one function that checks the
+terms first, then send the request a search pick sends, for no row, so nothing pulses. View's items read
+`BrainVisibility`, which builds nothing, and are off while Brain is not on screen; its full-screen item takes its title
+from a new `isFullScreen` there, set as full screen begins and ends, and pages follow only `isOnScreen`. Hide Sidebar
+removes the sidebar column without an animation. Tasks takes New Task's request in an `onChange` and loads nothing. A
+registered `NSFullScreenMenuItemEverywhere` of false, before launching ends, keeps AppKit from adding a second Enter
+Full Screen beside View's. `MenuBarRulesTests` holds these against planted offenders. **Not measured:** the menus with
+Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
+⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

@@ -29,14 +29,20 @@ final class BrainVisibility: ObservableObject {
 
     /// False until the window is first on screen, so nothing live starts at launch.
     @Published private(set) var isOnScreen = false
+    /// Whether the window is in full screen, which View's Enter or Exit Full Screen says. Read here, so the menu never
+    /// builds the window to ask.
+    @Published private(set) var isFullScreen = false
 
     private init() {}
 
     /// From the window's occlusion state, which AppKit changes in every one of the cases above.
     /// `SettingsWindowController` calls it whenever that state changes, and as it opens and closes Brain: the change
-    /// can come late, and may not come at all for a window never shown before.
+    /// can come late, and may not come at all for a window never shown before. It calls it as full screen begins and
+    /// ends, too.
     func update(for window: NSWindow) {
         let onScreen = window.isVisible && window.occlusionState.contains(.visible)
         if onScreen != isOnScreen { isOnScreen = onScreen }
+        let fullScreen = window.styleMask.contains(.fullScreen)
+        if fullScreen != isFullScreen { isFullScreen = fullScreen }
     }
 }
