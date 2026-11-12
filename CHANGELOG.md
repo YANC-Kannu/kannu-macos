@@ -16,6 +16,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     choice that matches the saved tag ignoring case now carries the saved spelling, so the list ticks it.
   - docs/SETTINGS.md: a task's page, and widening the window with it open.
 
+### 2026-11-12 - Answer CodeRabbit's second review of Brain's product pages
+- **Developer label:** CodeRabbit's second review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the two fixes from CodeRabbit's second review of Super 4; the other four answered on the PR
+- **Changes:**
+  - Displays: the Standard notch style's stored value is "Standard Notch" again, and its label stays "Standard notch".
+    The copy pass had changed both, so a style saved before it, the global one or a display's own, no longer decoded.
+  - Notes: Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the scope. A
+    narrowing leaves such a note listed until the next sync, and its Delete still reaches Notes; it used to go at once.
+    The notch's rows keep their scope-based question, a separate follow-up.
+  - docs/SETTINGS.md: Notes' Delete question.
+
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
+- **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR
+- **Changes:**
+  - Security: Import reads the findings store into the page's copy again as the file is chosen, so whether it asks
+    before replacing the policy is never decided on a copy up to half a second old.
+  - Downloads: a style card is disabled while download detection is off, so the keyboard and VoiceOver know it is off.
+    `.plain` dims a disabled button by half, so the card's own half dim goes and it looks as it did.
+  - Idle animations: a custom animation's card offers Delete as a named accessibility action, so VoiceOver reaches it
+    without the hover glyph or the right-click menu, which both stay.
+  - Timer: Start timer reads the timer manager at its press and starts nothing while a timer runs, even before the
+    header's copy has first been read; `TimerPageLiveDataRulesTests` lists that read among the page's readers.
+  - Timer's preset sheet opens a preset over 23 hours whole: the Hours stepper reaches its hours, so an edit no longer
+    cuts them to 23.
+  - Boards: the Agents, Security and Clipboard fixtures carry their feature switch, on, as Usage's and Timer's do, so
+    this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
+  - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
+    switch.
+
 ### 2026-11-12 - Answer the review of Brain's Notes list-detail
 - **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
@@ -138,6 +168,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - 35 new strings, each in the catalog's 17 languages (the five note colours the notch named in English among them),
     7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
     `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Brain's copy pass: sentence case, captions of about eight words, capped widths
+- **Developer label:** Brain redesign plan: Stage 4 child 3c, the copy pass (the design review's findings 15 and 2), with Usage's labels (4b-1 M1), Security's next-scan wording (4b-2 M1) and Security's older uncatalogued strings (4b-2 M6), which their reviews held for it
+- **Agent label:** Claude Code (Sonnet 5.5) — Stage 4 child 3c: the copy pass, its 17-language catalog entries (translators on Sonnet), the two width caps and the tests that pin them
+- **Changes:**
+  - Sentence case across Brain's settings, product pages and sheets: a capital for the first word and for a name only.
+    "Turn On" is "Turn on" on every "is off" card, "colour" is "color", no title, label or footer ends in a colon, and
+    Mobile notifications' fields show an example ("my-kannu-alerts", "https://ntfy.sh") instead of their own name.
+  - About 70 row captions and footers cut: every caption of 11 or more words is about 8, the enum captions that feed
+    rows too, and seven footers over 40 words are trimmed. A fact a caption needed but a row cannot hold (nothing is
+    sent, a key is never stored, where a transcript goes, what a reminder carries) moved to its section's footer; two
+    footers are new. No "Off: … On: …" caption is left. The screen-capture captions keep "Some capture tools ignore
+    this", which `ScreenCapturePolicyTests` requires.
+  - Caps: `SettingsFooter` wraps at `proseMaxWidth` (380 pt) and a row's caption at the new `descriptionMaxWidth` (440
+    pt). `SettingsDesignSystemRulesTests` holds both components and both numbers, with planted offenders.
+  - Held items: Usage's window labels ("billing cycle"), forecast captions and push sentence are catalogued; Security's
+    next-scan line reads "Next scan …" (the deliberate "the last scan failed" stays); 51 of the Security page's older
+    strings are catalogued.
+  - Catalog: 316 new keys and 7 merged into existing entries, all in 17 languages; 196 old keys retired, each one the
+    compiler's own string extraction no longer finds in the code ("Turn On" stays: Notes' page, in flight, uses it).
+    Highlight ids (490 literals) and search keywords are unchanged; every untouched catalog entry is identical.
+  - Tests: the pins of renamed strings follow them (`ADRDocsTests`, `BrainNamingRulesTests`, whose "Global settings"
+    allowlist entry goes because the literal no longer says "Settings", `ClipboardPageLiveDataRulesTests`,
+    `UsageForecastTests`).
+  - docs/SETTINGS.md holds the caps, the copy rules and the renamed strings; docs/ADR.md names the findings' buttons in
+    sentence case; docs/REGRESSIONS.md entry 22 gets an addendum (no `onAppear`, `.task` or animator added).
 
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
@@ -520,6 +576,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
     and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
     `SettingsLayoutRulesTests` pins their padding.
+
+### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
+- **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
+- **Agent label:** Claude Code (Opus 5.5) — both fixes and their tests; why a Debug folder is in the code's comments
+- **Changes:**
+  - The launch cleanup keeps Pinned Items' files as well as History's. Pinning moves an item out of History, so
+    every pinned image lost its file at each launch. The cleanup is now `ClipboardDataCleanup`, Foundation only,
+    in the logic target.
+  - A Debug build (`com.kannu.app.dev`) keeps its images in `ClipboardData-Debug`, beside the installed app's
+    `ClipboardData`. Its history is in its own defaults, and the cleanup removes every file that history does not
+    name, so any debug launch deleted the installed app's images. A Debug build's older image history loses its
+    pictures once.
+  - A Debug build no longer moves `~/Documents/ClipboardData`, where releases before 1.4.0-beta.3 keep their
+    images: moved into the Debug folder, they would be lost to the installed app and deleted by the Debug cleanup.
+  - `ClipboardDataCleanupTests`: a pinned image keeps its file and only unnamed files go; a source check pins the
+    Debug folder and the Debug build's empty legacy move.
 
 ### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
 - **Developer label:** "Yes, request it"
