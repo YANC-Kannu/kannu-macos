@@ -544,8 +544,9 @@ struct SettingsView: View {
     }
 
     private func tabRow(_ tab: SettingsTab) -> some View {
+        // The badge reads its own state, throttled and only while Brain is on screen; this view observes nothing new.
         SettingsSidebarRow(tab.title, systemImage: tab.systemImage, isSelected: tab == resolvedSelection,
-                           badge: tab.isBeta ? String(localized: "BETA") : nil) {
+                           badge: SidebarBadge(tab)) {
             selectedTab = tab
             sidebarHasFocus = true
         }
