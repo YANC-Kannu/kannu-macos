@@ -33,6 +33,70 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - docs/SETTINGS.md ("The shell and navigation", "Live data", the badge row); docs/REGRESSIONS.md entry 22's
     2026-11-12 addendum.
 
+### 2026-11-12 - Answer the review of the menu bar
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
+- **Changes:**
+  - Go and New Task only beep while a sheet is open over Brain. Menu keys still reach the menu bar under a sheet, so
+    ⌘1 in New Task or a connect sheet switched the page underneath and closed the sheet, with what was typed in it.
+  - New Task opens while the task list is still loading: the menu can ask from a cold Brain, and Tasks dropped the
+    request until the list was ready. The sheet already keeps Add off until then.
+  - A failed entry into or exit from full screen updates `BrainVisibility` too, so View's item keeps the right title.
+  - `MenuBarRulesTests` holds the sheet check, the failed transitions' updates and the request's guard against planted
+    offenders.
+  - docs/SETTINGS.md says New Task opens over any Tasks page and what Hide Sidebar leaves reachable; docs/REGRESSIONS.md
+    entry 22's 2026-11-12 addendum names the sheet check.
+
+### 2026-11-12 - The menu bar gets Go, View and File around Brain
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate
+- **Changes:**
+  - Go lists Brain's product pages in the sidebar's order, ⌘1 to ⌘7, and opens each as its sidebar row does, through
+    the switch point a search pick uses, with no row pulsing. The order lives once, in `SettingsTab.sidebarOrder`.
+  - View: Hide or Show Sidebar (⌃⌘S, a new `brainShowsSidebar` key that `BrainShell` takes as a plain flag),
+    Appearance with the moon's three choices, and Enter or Exit Full Screen (⌃⌘F), titled from a new
+    `BrainVisibility.isFullScreen`. Each is off while Brain is not on screen.
+  - File › New Task (⌘N) opens Brain on Tasks with New Task, through a request Tasks takes once; on All tasks it takes
+    the list's filters, as before. The hidden ⌘N button on Tasks is gone, so the menu owns the shortcut; the item is
+    off while Tasks is off.
+  - Go and New Task open Brain through one function that brings the terms back until they are accepted, as Brain…
+    does. A registered `NSFullScreenMenuItemEverywhere` of false keeps AppKit from adding a second Enter Full Screen.
+  - The snapshot run writes the menu bar to `menu.txt`, and two boards draw the window with no sidebar and a Go item's
+    page. `MenuBarRulesTests` holds the menus against planted offenders; `BrainAppearanceRulesTests` names View ›
+    Appearance among the key's writers, and `BrainShellRulesTests` names `showsSidebar` beside the navigation state.
+  - Five catalog keys in all 17 languages: Go, Hide Sidebar, Show Sidebar, Enter Full Screen, Exit Full Screen.
+  - docs/SETTINGS.md gains "The menu bar" and the Hide Sidebar line; docs/REGRESSIONS.md entry 22 a 2026-11-12
+    addendum.
+
+### 2026-11-12 - Answer the review of Geist in the notch
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
+- **Changes:**
+  - The running timer's name and its rename field keep the system font: 20 pt in a 24 pt line, which Geist's 26 pt
+    line overfills.
+  - A symbol beside medium text keeps the system's medium: Geist Medium draws SF Symbols regular (measured, about a
+    fifth less ink), so Notes' back chevron, Open in Notes' and Add a reminder's symbols take their own font.
+  - `NotchFontRulesTests` pins the six lines; docs/SETTINGS.md "The notch" says why, with the dropped rounded design
+    and why the Agents tab's names take Geist when the music title does not.
+
+### 2026-11-12 - The notch's text in Geist, through one theme token
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: a shared font token in place of `.system` across the notch
+- **Changes:**
+  - `SettingsTheme.font(size:weight:)`: Geist at the size and weight `.system` took, the notch's sizes being its own
+    (`UsageCardMetrics`, `TimerComposerMetrics`). Bold and heavier draw Geist SemiBold, the heaviest face bundled;
+    with no Geist bundled it is the system font, as every token is.
+  - The open notch's text uses it: 124 lines in 12 files of `Notch/` and the Agents tab (the header's tooltip, Home,
+    Usage, Timer and its Tasks column, task form and suggestions, Notes, Stats, the Tasks and Clipboard popovers).
+    Text styles became their macOS sizes.
+  - Kept on the system font, pinned per file with why by `NotchFontRulesTests`: symbols, which `.system` sizes;
+    monospaced text, since Geist Mono ships Regular only (the timer's black readouts among it); the tag chip, whose
+    16 pt caption line Geist's 10 pt line overfills by AppKit's ruler; the music title, artist and lyrics, whose title
+    measures with an AppKit text style; the header's button symbols.
+  - Every budget keeps its size. `TimerComposerMetricsTests` measures the 36 pt task row with the Geist faces it now
+    draws; `NotchTagFilterRulesTests` and `TimerTaskDetailRulesTests` pin the rows' new font calls.
+  - docs/SETTINGS.md gains "The notch"; docs/REGRESSIONS.md entry 21 notes that `NotchNotesView` changed only fonts.
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit

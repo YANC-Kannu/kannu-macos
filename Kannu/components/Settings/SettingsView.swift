@@ -68,6 +68,40 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 
     var isBeta: Bool { self == .downloads || self == .extensions }
 
+    /// The sidebar's order: the product list, then the Settings list, then About. Search jumps to the first match in
+    /// this order, so it follows the sidebar's, and the menu bar's Go menu lists the product pages in it.
+    static var sidebarOrder: [SettingsTab] {
+        let ordered: [SettingsTab] = [
+            .agentStatus,
+            .agentSecurity,
+            .llmUsage,
+            .tasks,
+            .timer,
+            .notes,
+            .clipboard,
+            .general,
+            .appearance,
+            .liveActivities,
+            .lockScreen,
+            .media,
+            .devices,
+            .hudAndOSD,
+            .battery,
+            .stats,
+            .shelf,
+            .downloads,
+            .screenAssistant,
+            .shortcuts,
+            .extensions,
+            .about
+        ]
+
+        return ordered
+    }
+
+    /// The product list, in the sidebar's order: the Go menu's pages, ⌘1 to ⌘7.
+    static var productPages: [SettingsTab] { sidebarOrder.filter { $0.group == .product } }
+
     var title: String {
         switch self {
         case .general: return String(localized: "General")
@@ -231,6 +265,16 @@ final class SettingsHighlightCoordinator: ObservableObject {
         activateHighlight(id: highlightID)
     }
 
+    /// The menu bar's Go and File menus: a page, as its sidebar row opens it. The request a search pick sends, through
+    /// the same switch point, but for no row: nothing pulses, and `SettingsForm` finds nothing to scroll to.
+    func requestPage(_ tab: SettingsTab) {
+        pendingScrollRequest = ScrollRequest(id: tab.rawValue, tab: tab)
+    }
+
+    /// File › New Task: Brain › Tasks opens New Task as soon as it can. Taken once, so the tab built again later
+    /// never opens it a second time.
+    @Published var pendingNewTask = false
+
     func consumeScrollRequest(_ request: ScrollRequest) {
         guard pendingScrollRequest?.id == request.id else { return }
         pendingScrollRequest = nil
@@ -370,11 +414,15 @@ struct SettingsView: View {
     @State private var lastSettingsTab: SettingsTab?
     @FocusState private var sidebarHasFocus: Bool
     @StateObject private var highlightCoordinator = SettingsHighlightCoordinator.shared
+    /// View › Hide Sidebar: whether the sidebar shows at all, never which list it shows.
+    @Default(.brainShowsSidebar) private var showsSidebar
     /// A snapshot's window can never take focus, so its board asks for the suggestions outright.
     private var snapshotShowsSuggestions = false
+    /// A snapshot's board with no sidebar, which leaves the setting alone.
+    private var snapshotHidesSidebar = false
 
     var body: some View {
-        BrainShell {
+        BrainShell(showsSidebar: showsSidebar && !snapshotHidesSidebar) {
             sidebar
         } headerAccessory: {
             SettingsAppearanceToggle()
@@ -517,34 +565,7 @@ struct SettingsView: View {
     }
 
     private var availableTabs: [SettingsTab] {
-        // The sidebar's order: the product list, then the Settings list, then About. Search jumps to
-        // the first match in this order, so it follows the sidebar's.
-        let ordered: [SettingsTab] = [
-            .agentStatus,
-            .agentSecurity,
-            .llmUsage,
-            .tasks,
-            .timer,
-            .notes,
-            .clipboard,
-            .general,
-            .appearance,
-            .liveActivities,
-            .lockScreen,
-            .media,
-            .devices,
-            .hudAndOSD,
-            .battery,
-            .stats,
-            .shelf,
-            .downloads,
-            .screenAssistant,
-            .shortcuts,
-            .extensions,
-            .about
-        ]
-
-        return ordered
+        SettingsTab.sidebarOrder
     }
 
     private func tabsMatchingSearch(_ query: String) -> [SettingsTab] {
@@ -1193,11 +1214,12 @@ extension SettingsView {
 
 extension SettingsView {
     /// DEBUG snapshot harness: the whole window on a given tab, with a query typed if there is one.
-    init(snapshotTab: SettingsTab, search: String = "", showsSuggestions: Bool = false) {
+    init(snapshotTab: SettingsTab, search: String = "", showsSuggestions: Bool = false, hidesSidebar: Bool = false) {
         self.init()
         _selectedTab = State(initialValue: snapshotTab)
         _searchText = State(initialValue: search)
         snapshotShowsSuggestions = showsSuggestions
+        snapshotHidesSidebar = hidesSidebar
     }
 }
 

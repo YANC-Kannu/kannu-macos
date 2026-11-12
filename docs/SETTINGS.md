@@ -189,6 +189,42 @@ numbers, and this table only says why.
 `withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
 spring or the default. Pages keep their own until Stage 4.
 
+### The notch
+
+The open notch draws its text in Geist too, through one token: `SettingsTheme.font(size:weight:)`. It takes the
+size and weight `.system` took, because the notch's sizes are its own, set by its height budgets
+(`UsageCardMetrics`, `TimerComposerMetrics`). Geist ships Regular, Medium and SemiBold, so bold and heavier draw
+SemiBold, and lighter draws Regular. With no Geist bundled it is the system font at the same size and weight, as
+every token is. A text style became its macOS size (`.caption` 10, `.subheadline` 11, `.callout` 12, `.body` and
+`.headline` 13, `.title2` 17), and a `.fontWeight` over the token picks Geist's face of that weight. Notes and the
+timer's titles drew SF Rounded; Geist has no rounded cut, so with no Geist bundled they fall back to the plain system
+font, not the rounded one.
+
+Geist's line is taller than the system's at most sizes (measured with SwiftUI's own layout: the same at 7, 8, 10,
+11 and 15 pt, a point taller at 9 and 12 to 14, two at 16 to 20), and its text is a little narrower. Every budget keeps its size:
+the Usage cards' rows are fixed and hold their text, and a task row is still 36 pt (`TimerComposerMetricsTests`
+measures it with the Geist faces it draws).
+
+What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
+
+- **Symbols.** `.system` sizes an SF Symbol; it is not type. A symbol inside text under the token takes its weight
+  from Geist's face, and reads Medium as regular (measured: SemiBold draws semibold), so a symbol beside medium text
+  has its own `.system` font: Notes' back chevron, Open in Notes and Add a reminder.
+- **Monospaced text:** the timer's three readouts (black), a task's key and tracked clock, a preset's length, the
+  note's character count and the digit field. Geist Mono ships Regular only.
+- **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line, and by AppKit's ruler Geist's 10 pt line is
+  13 against the system's 12, so a chip would be 17. SwiftUI lays out both faces' 10 pt line at 13.
+- **The music player's title, artist and lyrics.** The title decides whether to scroll by measuring its width with
+  an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font. The Agents tab's
+  names scroll through the same `MarqueeText` but decide by length, and the marquee measures the drawn text's width,
+  so they take Geist.
+- **The running timer's name and its rename field:** 20 pt in a 24 pt line, which the system's 20 pt line fills and
+  Geist's, 26 pt, overfills.
+- **The header's buttons**, whose symbols scale from their font (`.imageScale`), and two AppKit measures.
+
+The closed notch (its live activities and HUDs), the timer's ruler, the Timer and Stats popovers built outside
+`Notch/`, and the floating panels are not in this pass.
+
 ## Choices
 
 A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
@@ -602,11 +638,39 @@ badge as a view its caller builds.
   you", "High: 2", "Near its limit", "Running"). A Settings page in beta shows the pages' one badge, "Beta". The
   badges keep the live-data rules (below); `SettingsView` only places them, so the root observes nothing for them.
 
+- **View › Hide Sidebar** (`brainShowsSidebar`) takes the sidebar column away, search with it, and the panel keeps the
+  window's inset on both sides. `BrainShell` takes it as a plain flag. It says whether the sidebar shows at all, never
+  which list. Hidden, Go still reaches the product pages; the Settings list, search and About come back with Show
+  Sidebar, which stays on whenever Brain is on screen.
+
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
 draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
 with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
-arrow keys and hover take a real window. `shellBadges` draws every badge at once, from a fixture.
+arrow keys and hover take a real window. `shellNoSidebar` draws the window with its sidebar hidden, `shellGo` a Go
+item's page, and `shellBadges` every badge at once, from a fixture.
+
+## The menu bar
+
+Brain's menus are SwiftUI commands in `KannuApp.swift`, beside Brain… (⌘,). The menus Kannu adds after the launch
+(Focus, Accessibility, Permissions, Tools) are unchanged.
+
+- **File › New Task** (⌘N) opens Brain on Tasks with New Task over whichever Tasks page is open, at once, even while the
+  list is still loading: the sheet keeps Add off until it is ready. On All tasks the sheet takes the list's filters, as
+  Add a task does. The menu owns ⌘N, and the item is off while Tasks is off.
+- **View:** Hide or Show Sidebar (⌃⌘S), Appearance (the moon's three choices), then Enter or Exit Full Screen (⌃⌘F). They
+  act on Brain's window, so they are off while it is not on screen, and they read `BrainVisibility`, which builds nothing.
+  AppKit would add an Enter Full Screen of its own, which a SwiftUI command cannot stop, so the app registers
+  `NSFullScreenMenuItemEverywhere` as false before launching ends.
+- **Go:** the product pages in the sidebar's order (`SettingsTab.productPages`), ⌘1 to ⌘7. An item opens its page as its
+  sidebar row does: the request a search pick sends, through the same switch point, for no row, so nothing pulses and a
+  Tasks page keeps its place.
+
+Go and New Task open Brain through one function, `openBrain`, which brings the terms back until they are accepted, as
+Brain… does, and only beeps while a sheet is open over Brain: menu keys still reach the menu bar under a sheet, and a
+page switched under it would close it, with what was typed in it. `MenuBarRulesTests` holds the menus against planted
+offenders. No PNG shows the menu bar, so a snapshot run
+writes it to `menu.txt` as the launch built it: each item's key, action, and whether it is off or checked.
 
 ## The window
 

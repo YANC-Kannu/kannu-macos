@@ -59,6 +59,86 @@ struct KannuApp: App {
             }
             .keyboardShortcut(",", modifiers: .command)
         }
+        // File: New Task, over Brain's Tasks.
+        CommandGroup(replacing: .newItem) {
+            NewTaskCommand { openBrain(on: .tasks, newTask: true) }
+        }
+        // View: Brain's sidebar, its appearance and full screen. Brain is an AppKit window, so neither
+        // SwiftUI nor AppKit puts full screen in this menu for it (measured: `menu.txt`).
+        CommandGroup(replacing: .sidebar) {
+            BrainViewCommands()
+        }
+        // Go: the product pages, in the sidebar's order.
+        CommandMenu(String(localized: "Go")) {
+            ForEach(Array(SettingsTab.productPages.enumerated()), id: \.element) { index, tab in
+                Button(tab.title) { openBrain(on: tab) }
+                    .keyboardShortcut(Self.goShortcut(index))
+            }
+        }
+    }
+
+    /// ⌘1 for the first page and so on, while a digit is left.
+    static func goShortcut(_ index: Int) -> KeyboardShortcut? {
+        guard (0..<9).contains(index) else { return nil }
+        return KeyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+    }
+
+    /// Brain on a page, as its sidebar row opens it, with New Task over it when asked. Before the terms
+    /// are accepted it brings them back instead, as Brain… does: nothing runs first.
+    private func openBrain(on tab: SettingsTab, newTask: Bool = false) {
+        guard appDelegate.launchContinued else {
+            TermsGateWindowController.shared.bringToFront()
+            return
+        }
+        // A sheet over Brain keeps its page. Menu keys still reach the menu bar under a sheet, and switching the page
+        // under it would close it, with what was typed in it.
+        if SettingsWindowController.shared.window?.attachedSheet != nil {
+            NSSound.beep()
+            return
+        }
+        SettingsWindowController.shared.showWindow()
+        SettingsHighlightCoordinator.shared.requestPage(tab)
+        if newTask { SettingsHighlightCoordinator.shared.pendingNewTask = true }
+    }
+}
+
+/// File › New Task: off while Tasks is off, since there is no list to add to.
+private struct NewTaskCommand: View {
+    @Default(.enableTasks) private var enableTasks
+    let action: () -> Void
+
+    var body: some View {
+        Button(String(localized: "New Task"), action: action)
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(!enableTasks)
+    }
+}
+
+/// View's items act on Brain's window, so they are off while it is not on screen. Reading `BrainVisibility`
+/// builds nothing: the window and its pages stay unbuilt until the terms are accepted.
+private struct BrainViewCommands: View {
+    @Default(.brainShowsSidebar) private var showsSidebar
+    @Default(.brainAppearance) private var appearance
+    @ObservedObject private var visibility = BrainVisibility.shared
+
+    var body: some View {
+        Button(showsSidebar ? String(localized: "Hide Sidebar") : String(localized: "Show Sidebar")) {
+            showsSidebar.toggle()
+        }
+        .keyboardShortcut("s", modifiers: [.control, .command])
+        .disabled(!visibility.isOnScreen)
+        // The moon's three choices.
+        Picker(String(localized: "Appearance"), selection: $appearance) {
+            ForEach(BrainAppearance.allCases) { Text($0.localizedName).tag($0) }
+        }
+        .disabled(!visibility.isOnScreen)
+        Divider()
+        Button(visibility.isFullScreen ? String(localized: "Exit Full Screen") : String(localized: "Enter Full Screen")) {
+            // Brain is on screen, so its window exists and the terms were accepted.
+            SettingsWindowController.shared.window?.toggleFullScreen(nil)
+        }
+        .keyboardShortcut("f", modifiers: [.control, .command])
+        .disabled(!visibility.isOnScreen)
     }
 }
 
@@ -955,6 +1035,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func statusMenuQuit() {
         NSApplication.shared.terminate(self)
+    }
+
+    /// AppKit adds an Enter Full Screen of its own once launching ends, unless a menu item already sends
+    /// `toggleFullScreen:`. View's is a SwiftUI command, which it cannot see, so its own would be a second one.
+    /// Registered, not written: it holds for this run only, and starts or asks nothing before the terms.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {

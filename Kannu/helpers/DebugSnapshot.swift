@@ -402,6 +402,8 @@ enum DebugSnapshots {
                 }
             }
         }
+        // Last, so SwiftUI has long built the menu bar.
+        writeMenuReport(into: request.directory)
     }
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
@@ -458,6 +460,15 @@ enum DebugSnapshots {
             ("shellSearch", AnyView(SettingsView(snapshotTab: .hudAndOSD, search: "color", showsSuggestions: true))),
             // The same flat list once the field has let go: what is left when a suggestion was picked.
             ("shellSearchList", AnyView(SettingsView(snapshotTab: .general, search: "notch"))),
+            // View › Hide Sidebar: the panel alone, with the window's inset on both sides.
+            ("shellNoSidebar", AnyView(SettingsView(snapshotTab: .agentStatus, hidesSidebar: true))),
+            // Go › Usage from Agents, through the switch point a search pick uses, with no row pulsing. The request
+            // waits a moment, as the deep link's does.
+            ("shellGo", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestPage(.llmUsage)
+                }
+            })),
         ]
     }
 
@@ -469,6 +480,41 @@ enum DebugSnapshots {
 
         """
         try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// The menu bar as this launch built it, since no PNG shows it: each item's title, key, action, and
+    /// whether it is off or checked. Each menu is updated first, as opening it would.
+    private static func writeMenuReport(into directory: URL) {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        var lines: [String] = []
+        func list(_ menu: NSMenu, depth: Int) {
+            menu.delegate?.menuNeedsUpdate?(menu)
+            menu.update()
+            let indent = String(repeating: "    ", count: depth)
+            for item in menu.items {
+                guard !item.isSeparatorItem else {
+                    lines.append(indent + "---")
+                    continue
+                }
+                var line = indent + item.title
+                if !item.keyEquivalent.isEmpty { line += "  " + keyEquivalent(of: item) }
+                if let action = item.action { line += "  → " + NSStringFromSelector(action) }
+                if !item.isEnabled { line += "  (off)" }
+                if item.state == .on { line += "  ✓" }
+                if item.isHidden { line += "  (hidden)" }
+                lines.append(line)
+                if let submenu = item.submenu { list(submenu, depth: depth + 1) }
+            }
+        }
+        list(mainMenu, depth: 0)
+        try? (lines.joined(separator: "\n") + "\n")
+            .write(to: directory.appendingPathComponent("menu.txt"), atomically: true, encoding: .utf8)
+    }
+
+    private static func keyEquivalent(of item: NSMenuItem) -> String {
+        let flags = item.keyEquivalentModifierMask
+        let symbols: [(NSEvent.ModifierFlags, String)] = [(.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
+        return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + item.keyEquivalent
     }
 
     /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
