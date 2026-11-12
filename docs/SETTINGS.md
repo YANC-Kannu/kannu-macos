@@ -196,7 +196,9 @@ size and weight `.system` took, because the notch's sizes are its own, set by it
 (`UsageCardMetrics`, `TimerComposerMetrics`). Geist ships Regular, Medium and SemiBold, so bold and heavier draw
 SemiBold, and lighter draws Regular. With no Geist bundled it is the system font at the same size and weight, as
 every token is. A text style became its macOS size (`.caption` 10, `.subheadline` 11, `.callout` 12, `.body` and
-`.headline` 13, `.title2` 17), and a `.fontWeight` over the token picks Geist's face of that weight.
+`.headline` 13, `.title2` 17), and a `.fontWeight` over the token picks Geist's face of that weight. Notes and the
+timer's titles drew SF Rounded; Geist has no rounded cut, so with no Geist bundled they fall back to the plain system
+font, not the rounded one.
 
 Geist's line is taller than the system's at most sizes (measured with SwiftUI's own layout: the same at 7, 8, 10,
 11 and 15 pt, a point taller at 9 and 12 to 14, two at 16 to 20), and its text is a little narrower. Every budget keeps its size:
@@ -205,13 +207,19 @@ measures it with the Geist faces it draws).
 
 What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
 
-- **Symbols.** `.system` sizes an SF Symbol; it is not type.
+- **Symbols.** `.system` sizes an SF Symbol; it is not type. A symbol inside text under the token takes its weight
+  from Geist's face, and reads Medium as regular (measured: SemiBold draws semibold), so a symbol beside medium text
+  has its own `.system` font: Notes' back chevron, Open in Notes and Add a reminder.
 - **Monospaced text:** the timer's three readouts (black), a task's key and tracked clock, a preset's length, the
   note's character count and the digit field. Geist Mono ships Regular only.
 - **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line, and by AppKit's ruler Geist's 10 pt line is
   13 against the system's 12, so a chip would be 17. SwiftUI lays out both faces' 10 pt line at 13.
 - **The music player's title, artist and lyrics.** The title decides whether to scroll by measuring its width with
-  an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font.
+  an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font. The Agents tab's
+  names scroll through the same `MarqueeText` but decide by length, and the marquee measures the drawn text's width,
+  so they take Geist.
+- **The running timer's name and its rename field:** 20 pt in a 24 pt line, which the system's 20 pt line fills and
+  Geist's, 26 pt, overfills.
 - **The header's buttons**, whose symbols scale from their font (`.imageScale`), and two AppKit measures.
 
 The closed notch (its live activities and HUDs), the timer's ruler, the Timer and Stats popovers built outside

@@ -443,8 +443,13 @@ struct TimerTaskForm: View {
                     Button {
                         draft.reminder = TaskFormDraft.defaultReminder(now: Date(), calendar: .current)
                     } label: {
-                        Label(String(localized: "Add a reminder"), systemImage: "bell")
-                            .font(SettingsTheme.font(size: 12, weight: .medium))
+                        Label {
+                            Text(String(localized: "Add a reminder"))
+                        } icon: {
+                            Image(systemName: "bell")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                             .contentShape(Rectangle())
                     }

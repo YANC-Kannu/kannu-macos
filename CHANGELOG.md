@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of Geist in the notch
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
+- **Changes:**
+  - The running timer's name and its rename field keep the system font: 20 pt in a 24 pt line, which Geist's 26 pt
+    line overfills.
+  - A symbol beside medium text keeps the system's medium: Geist Medium draws SF Symbols regular (measured, about a
+    fifth less ink), so Notes' back chevron, Open in Notes' and Add a reminder's symbols take their own font.
+  - `NotchFontRulesTests` pins the six lines; docs/SETTINGS.md "The notch" says why, with the dropped rounded design
+    and why the Agents tab's names take Geist when the music title does not.
+
 ### 2026-11-12 - The notch's text in Geist, through one theme token
 - **Developer label:** Brain redesign plan: Stage 6, Geist in the notch
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: a shared font token in place of `.system` across the notch
