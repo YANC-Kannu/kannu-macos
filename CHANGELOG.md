@@ -4,6 +4,47 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-11 - Answer the review of Brain's Notes page
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: the review's two passes answered; a list typed in New note is never saved half done, and the rule test closes its gaps
+- **Changes:**
+  - New note: Return in the text no longer saves the note (Return is the text's own there, and ⌘Return adds), so a
+    list typed line by line is never saved half done; Return in the title still adds. A title of spaces is saved as no
+    title.
+  - Deleting a note reads the notes again at once, so its row never lingers for the throttle's half second.
+  - A note's page drops an image read that a newer one, or the page closing, has overtaken.
+  - `NotesPageLiveDataRulesTests` now counts `Task.sleep` as a clock and pins every read of a note's image file to the
+    note's page and Copy, each with planted offenders; its sheet clause holds the text's Return to the text.
+  - Translations: the Notes page's own strings that had none ("Notes to sync", its two choices, "Sync with Apple Notes",
+    "Last synced", "Apple Notes" and the narrowing question's message), Arabic and Hungarian "Add", and three fixes
+    (Czech, Spanish, Russian).
+  - docs/SETTINGS.md says when a note's image file is read, and the sheet's keys.
+
+### 2026-11-11 - Brain's Notes page leads with the notes
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, its in-tab swap first
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: Notes as a product page with a note's own page as an in-tab swap, under Agents' live-data contract, starting no sync of its own
+- **Changes:**
+  - Brain › Notes opens on its notes, above "Notes settings": pinned first, then the latest edit first, as the notch's
+    Notes tab lists them, in a lazy list. A row is the note's colour (a pin in that colour when it is pinned), its
+    title, and when it was last edited and how its text starts; then a › to its own page. Its right-click menu holds
+    Open note, Pin or Unpin, Copy, Open in Notes for a note made there, and Delete.
+  - While Apple Notes sync is on, one status line above the notes: a sync running, the last one's time, or its error.
+  - A note's own page opens in the tab under "‹ Notes": the note whole and read-only, its text selectable and its image
+    as a preview, with Pin, Copy and Delete, and Open in Notes for a note made there. Delete asks first for a note made
+    in Apple Notes, as the notch's rows do. Each visit, and a Notes search or deep link, opens on the list. `NotePage`
+    takes only the note: the seam for Stage 5's list-detail.
+  - The header holds the gear, which goes to Enable Notes, then New note (David's "Yes, add the sheet"): a sheet with the
+    title, the text and the colour, saved on Add through the notch's own write path, never as it is typed. With no
+    note, "No notes yet", one line and New note; while Notes is off, "Notes is off" with Turn On and no New note.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock. The
+    page no longer observes the sync manager, the notch's coordinator or its view model, and starts no sync of its own.
+    `NotesPageLiveDataRulesTests` holds each clause against planted offenders.
+  - Notes' copy by 4-3c's rules, which skip Notes: the switches in sentence case, the General footer dropped, Last
+    synced by the time of day with no spinner, the Apple Notes footer as two facts, and the scope captions about 8 words.
+  - 35 new strings, each in the catalog's 17 languages (the five note colours the notch named in English among them),
+    7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
+    `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
 ### 2026-11-11 - Brain's copy pass: sentence case, captions of about eight words, capped widths
 - **Developer label:** Brain redesign plan: Stage 4 child 3c, the copy pass (the design review's findings 15 and 2), with Usage's labels (4b-1 M1), Security's next-scan wording (4b-2 M1) and Security's older uncatalogued strings (4b-2 M6), which their reviews held for it
 - **Agent label:** Claude Code (Sonnet 5.5) — Stage 4 child 3c: the copy pass, its 17-language catalog entries (translators on Sonnet), the two width caps and the tests that pin them
