@@ -94,7 +94,7 @@ struct UsageOverview: View {
                     // The store reads nothing and holds what it had, so cards would show nothing new: Agents' own off
                     // state stands in their place, in its words.
                     UsageMessageCard(title: "Agent Status is off", message: nil) {
-                        Button("Turn On") { agentStatusOn = true }
+                        Button("Turn on") { agentStatusOn = true }
                             .buttonStyle(SettingsButtonStyle())
                     }
                 }

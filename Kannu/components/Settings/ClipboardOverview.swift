@@ -44,13 +44,22 @@ struct ClipboardOverview: View {
     static var snapshotFixture: ClipboardOverviewFixture?
     #endif
 
+    /// The clipboard manager's switch: off, the page shows its off card and the header nothing. On a board, the
+    /// fixture's, never this Mac's switch.
+    static func managerOn(_ enabled: Bool) -> Bool {
+        #if DEBUG
+        if let fixture = snapshotFixture { return fixture.clipboardOn }
+        #endif
+        return enabled
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
-            if !enabled {
+            if !Self.managerOn(enabled) {
                 // Nothing is captured while it is off, so there is nothing current to show.
                 SettingsSection {
-                    ClipboardMessage(title: String(localized: "Clipboard Manager is off"), message: nil) {
-                        Button("Turn On") { enabled = true }
+                    ClipboardMessage(title: String(localized: "Clipboard manager is off"), message: nil) {
+                        Button("Turn on") { enabled = true }
                     }
                 }
             } else if data.pinned.isEmpty && data.history.isEmpty {
@@ -91,7 +100,7 @@ struct ClipboardOverview: View {
             }
         } header: {
             HStack(spacing: SettingsMetrics.rowContent) {
-                SettingsSectionHeader("Pinned Items")
+                SettingsSectionHeader("Pinned items")
                 if !data.pinned.isEmpty {
                     Text(verbatim: data.pinned.count.formatted())
                         .settingsDescriptionStyle()
@@ -134,15 +143,15 @@ struct ClipboardHeaderActions: View {
 
     var body: some View {
         HStack(spacing: SettingsMetrics.rowContent) {
-            if enabled {
+            if ClipboardOverview.managerOn(enabled) {
                 SettingsMoreMenu {
                     // Both clear at once, as the buttons they replace did. The notch's tab asks first; one rule for
                     // Brain, the popover and the panel is a follow-up (followups.md).
-                    Button("Clear History", role: .destructive) {
+                    Button("Clear history", role: .destructive) {
                         ClipboardManager.shared.clearHistory()
                     }
                     .disabled(!hasHistory)
-                    Button("Clear Pinned Items", role: .destructive) {
+                    Button("Clear pinned items", role: .destructive) {
                         ClipboardManager.shared.pinnedItems.removeAll()
                         ClipboardManager.shared.savePinnedItemsToDefaults()
                     }
@@ -287,5 +296,7 @@ struct ClipboardPageData: Equatable {
 struct ClipboardOverviewFixture {
     var data: ClipboardPageData
     var showsHistory = false
+    /// The clipboard manager: off, the page shows its off card in place of the pins and History, and the header nothing.
+    var clipboardOn = true
 }
 #endif

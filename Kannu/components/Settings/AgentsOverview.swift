@@ -56,6 +56,14 @@ struct AgentsOverview: View {
         return visibility.isOnScreen
     }
 
+    /// Agent Status: off, the page shows its off card. On a board, the fixture's, never this Mac's switch.
+    private var isOn: Bool {
+        #if DEBUG
+        if let fixture = Self.snapshotFixture { return fixture.agentStatusOn }
+        #endif
+        return enabled
+    }
+
     private var offers: [AgentToolDetector.Tool] {
         AgentToolDetector.hookOffers(in: tools) { isInstalled($0) }
     }
@@ -73,10 +81,10 @@ struct AgentsOverview: View {
         let primary = AgentTrafficLightMapper.primarySession(from: visible)
         let recent = visible.filter { $0.id != primary?.id }.sorted { $0.updatedAt > $1.updatedAt }
         // Each missing hook is offered once: the empty state, when shown, offers the first, and Editors & hooks the rest.
-        let leadShowsInstall = enabled && primary == nil && !offers.isEmpty
+        let leadShowsInstall = isOn && primary == nil && !offers.isEmpty
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
             lead(primary: primary)
-            if enabled, !recent.isEmpty {
+            if isOn, !recent.isEmpty {
                 VStack(alignment: .leading, spacing: SettingsTheme.listRowGap) {
                     SettingsSectionHeader("Recent chats")
                         .padding(.horizontal, SettingsTheme.sectionPadding.leading)
@@ -118,9 +126,9 @@ struct AgentsOverview: View {
 
     @ViewBuilder
     private func lead(primary: AgentSessionStatus?) -> some View {
-        if !enabled {
+        if !isOn {
             AgentsMessageCard(title: String(localized: "Agent Status is off"), message: nil) {
-                Button("Turn On") { enabled = true }
+                Button("Turn on") { enabled = true }
             }
         } else if let primary {
             AgentsHeroCard(session: primary, live: drawsLive)
@@ -621,5 +629,7 @@ struct AgentsOverviewFixture {
     var installedHooks: Set<AgentHookProvider>
     var nearLimit: [UsageWindowReading]
     var security: AgentsSecuritySummary
+    /// Agent Status: off, the page shows its off card in place of the sessions.
+    var agentStatusOn = true
 }
 #endif

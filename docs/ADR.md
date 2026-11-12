@@ -295,7 +295,7 @@ with the same rules as above, so neither can replace a working policy with a bad
 copies a JSON file you chose, byte for byte. **Edit rules** is an editor on the Policy rules row: a
 row per rule, no JSON; Save writes the rules and keeps any other keys the file already had, and if
 the file changed on disk while the editor was open it asks before replacing it. A file Kannu cannot
-read is never opened in the editor (Open in Editor hands it to your own editor instead).
+read is never opened in the editor (Open in editor hands it to your own editor instead).
 **Copy a prompt that drafts a policy** puts a prompt on the clipboard for your own agent — the
 format, the rules above, and "ask me which commands and tools" — the same way Copy install command
 and Copy for agent work. Both sit on the **Get a policy** row, next to the status of the file.
@@ -323,14 +323,14 @@ reads nor writes.
   compact — title, severity and a two-line summary — with its actions on the bottom row: **Details**
   on the left, and on the right a "…" menu, **Acknowledge** and **Copy for agent**. Details opens
   the evidence and, in plain words, what the finding means and what to do, as one block of text
-  that can be selected and copied in one drag. The "…" menu holds Snooze 24h, **Reveal File in
+  that can be selected and copied in one drag. The "…" menu holds Snooze 24h, **Reveal file in
   Finder** (the file the finding is about: the sensitive file itself, the settings file a server was
-  added to, ADR's report or the path Discovery names), **Reveal Project Folder** (for findings about
-  a chat), **Open Chat** (only where the chat already is — its Claude Desktop chat, terminal tab,
-  tmux pane or running app; never a resume, never a cold launch) and **Copy Details**.
+  added to, ADR's report or the path Discovery names), **Reveal project folder** (for findings about
+  a chat), **Open chat** (only where the chat already is — its Claude Desktop chat, terminal tab,
+  tmux pane or running app; never a resume, never a cold launch) and **Copy details**.
   Acknowledgements are per finding: if a finding disappears and later returns with different
   evidence, it is shown again.
-- **Copy Details** copies the finding for a person: title, severity, source, the evidence and the
+- **Copy details** copies the finding for a person: title, severity, source, the evidence and the
   two plain-language paragraphs — with the same care as Copy for agent (no chat name, no decoded
   hidden text, no session id; untrusted text flattened to one line).
 - **Copy for agent** puts a plain-text request on the clipboard, ready to paste into Claude Code,

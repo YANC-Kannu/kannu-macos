@@ -126,7 +126,9 @@ struct SettingsRowLabel: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
             title
             if let description {
-                description.settingsDescriptionStyle(tint: descriptionTint)
+                description
+                    .settingsDescriptionStyle(tint: descriptionTint)
+                    .frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)
             }
         }
     }
@@ -418,6 +420,8 @@ struct SettingsFooter: View {
             // The root's font would otherwise replace the smaller one a grouped Form gives a footer.
             .font(SettingsTheme.description)
             .fixedSize(horizontal: false, vertical: true)
+            // Prose wraps at `proseMaxWidth`; the outer frame keeps it on the section's leading edge.
+            .frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
     }

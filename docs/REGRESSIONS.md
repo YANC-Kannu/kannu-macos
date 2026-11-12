@@ -1800,6 +1800,11 @@ going back still scrolls by an `onAppear` inside the page's `.id(path)`, where i
 field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
 Space. `TasksPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
+**2026-11-11 addendum: the copy pass adds no `onAppear`, no `.task` and no animator.** Stage 4's child 4-3c rewrote
+Settings' strings (sentence case, captions of about eight words, the catalog) and capped two widths, a footer at
+`proseMaxWidth` and a row's caption at `descriptionMaxWidth`. No hook, subscription or animation was added or moved, so
+`SettingsAnimationRulesTests` and the design-system rules hold as they were.
+
 **2026-11-12 addendum: Notes' list-detail adds one measurement, and no animation.** Brain › Notes shows a note's page
 beside the list from 1,224 pt of panel (layout-proposal D1), through the layout Brain › Tasks now shares with it
 (`SettingsListDetail`, `settingsListDetailFits(_:)`): one `onGeometryChange` on the tab that sets a flag when the panel
