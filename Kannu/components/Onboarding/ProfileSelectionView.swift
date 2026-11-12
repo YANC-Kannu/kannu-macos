@@ -122,9 +122,11 @@ struct ProfileCard: View {
         let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
+                // One height for every glyph, so the four names line up: the symbols draw 25 to 32 pt tall at this size.
                 Image(systemName: profile.icon)
                     .font(.system(size: 28))
                     .foregroundStyle(SettingsTheme.accentStrong)
+                    .frame(height: 34, alignment: .leading)
                     .accessibilityHidden(true)
 
                 // A label inside the card's button, so it stays unselectable: selectable text swallows the click.
@@ -142,7 +144,8 @@ struct ProfileCard: View {
             }
             .padding(SettingsMetrics.cardPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 160)
+            // At least this tall, so the grid's rows match; a longer translation grows the card, never spills past it.
+            .frame(minHeight: 160, alignment: .topLeading)
             .background(SettingsTheme.card, in: shape)
             .settingsChoiceRing(shape, isSelected: isSelected)
             .contentShape(shape)
