@@ -133,12 +133,63 @@ struct LocalSendDevicePickerView: View {
     @StateObject private var localSend = LocalSendService.shared
     @Default(.localSendDevicePickerGlassMode) private var glassMode
     @Default(.localSendDevicePickerLiquidGlassVariant) private var liquidGlassVariant
-    
+
     let onDeviceSelected: (LocalSendDeviceInfo) -> Void
     let onDismiss: () -> Void
-    
+
+    var body: some View {
+        LocalSendDevicePickerContent(
+            devices: localSend.devices,
+            rejectedDeviceIDs: localSend.rejectedDeviceIDs,
+            isRefreshing: localSend.isRefreshing,
+            glassMode: glassMode,
+            liquidGlassVariant: liquidGlassVariant,
+            onRefresh: { localSend.refreshDeviceScan() },
+            onDeviceSelected: { device in
+                localSend.clearRejectedStatus(for: device.id)
+                onDeviceSelected(device)
+            },
+            onDismiss: onDismiss
+        )
+        .onAppear {
+            localSend.startDiscovery()
+            localSend.refreshDeviceScan()
+        }
+    }
+}
+
+/// What the picker draws, from the values `LocalSendDevicePickerView` hands it. Nothing here holds the LocalSend service
+/// or reads Defaults: a press calls back. So a DEBUG snapshot board draws this from made-up devices and never builds the
+/// service, whose discovery opens multicast listeners.
+struct LocalSendDevicePickerContent: View {
+    let devices: [LocalSendDeviceInfo]
+    let rejectedDeviceIDs: Set<String>
+    let isRefreshing: Bool
+    /// Shelf › Device Picker Style, the backdrop the user picked.
+    let glassMode: LockScreenGlassCustomizationMode
+    let liquidGlassVariant: LiquidGlassVariant
+    let onRefresh: () -> Void
+    let onDeviceSelected: (LocalSendDeviceInfo) -> Void
+    let onDismiss: () -> Void
+
     @State private var hoveredDeviceID: String?
-    
+
+    /// The picker opens with nothing under the pointer; a board may put a device there.
+    init(devices: [LocalSendDeviceInfo], rejectedDeviceIDs: Set<String>, isRefreshing: Bool,
+         glassMode: LockScreenGlassCustomizationMode, liquidGlassVariant: LiquidGlassVariant,
+         onRefresh: @escaping () -> Void, onDeviceSelected: @escaping (LocalSendDeviceInfo) -> Void,
+         onDismiss: @escaping () -> Void, hoveredDeviceID: String? = nil) {
+        self.devices = devices
+        self.rejectedDeviceIDs = rejectedDeviceIDs
+        self.isRefreshing = isRefreshing
+        self.glassMode = glassMode
+        self.liquidGlassVariant = liquidGlassVariant
+        self.onRefresh = onRefresh
+        self.onDeviceSelected = onDeviceSelected
+        self.onDismiss = onDismiss
+        _hoveredDeviceID = State(initialValue: hoveredDeviceID)
+    }
+
     private let cornerRadius: CGFloat = 24
     
     private var usesCustomLiquidGlass: Bool {
@@ -172,30 +223,27 @@ struct LocalSendDevicePickerView: View {
                         .frame(width: 28, height: 28)
                     
                     Text("Select Device")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
+                        .font(SettingsTheme.sheetTitle)
+                        .foregroundStyle(SettingsTheme.ink)
                     
                     Spacer()
                     
                     // Refresh button
                     Button {
-                        localSend.refreshDeviceScan()
+                        onRefresh()
                     } label: {
                         Image(systemName: "arrow.clockwise")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .rotationEffect(.degrees(localSend.isRefreshing ? 360 : 0))
+                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
                             .animation(
-                                localSend.isRefreshing
+                                isRefreshing
                                     ? .linear(duration: 0.85).repeatForever(autoreverses: false)
                                     : .easeOut(duration: 0.2),
-                                value: localSend.isRefreshing
+                                value: isRefreshing
                             )
-                            .frame(width: 32, height: 32)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
                     }
-                    .buttonStyle(.plain)
-                    .disabled(localSend.isRefreshing)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .disabled(isRefreshing)
                     .help("Refresh devices")
                     
                     // Close button
@@ -204,22 +252,24 @@ struct LocalSendDevicePickerView: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white.opacity(0.6))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
+                .padding(.horizontal, SettingsTheme.sheetInset)
+                .padding(.top, SettingsTheme.sheetInset)
                 
                 // Devices grid
-                if localSend.devices.isEmpty {
+                if devices.isEmpty {
                     emptyStateView
                 } else {
                     devicesGridView
                 }
             }
+            // Brain's root, which a window of its own applies itself, as a sheet does; and dark whatever the Mac's
+            // appearance, as the picker always was: it sits on the backdrop Shelf › Device Picker Style picks, glass made
+            // for light text, which itself renders as it always did.
+            .settingsDesignSystem()
+            .environment(\.colorScheme, .dark)
         }
         .frame(width: 480, height: 400)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
@@ -229,10 +279,6 @@ struct LocalSendDevicePickerView: View {
         }
         .shadow(color: Color.black.opacity(0.4), radius: 30, x: 0, y: 15)
         .compositingGroup()
-        .onAppear {
-            localSend.startDiscovery()
-            localSend.refreshDeviceScan()
-        }
     }
     
     @ViewBuilder
@@ -256,45 +302,37 @@ struct LocalSendDevicePickerView: View {
     }
     
     private var emptyStateView: some View {
-        VStack(spacing: 12) {
+        // Brain's empty state, as Clipboard's page draws its own: the glyph at the page title's size, the status, one
+        // line, and one action in the standard button.
+        VStack(spacing: SettingsMetrics.cardPadding) {
             Spacer()
-            
-            if localSend.isRefreshing {
+
+            if isRefreshing {
                 ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .progressViewStyle(CircularProgressViewStyle(tint: SettingsTheme.ink))
                     .scaleEffect(1.2)
-                
+
                 Text("Scanning for devices...")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .font(SettingsTheme.bodyStrong)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
             } else {
                 Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                    .font(.system(size: 48, weight: .light))
-                    .foregroundColor(.white.opacity(0.4))
-                
+                    .font(SettingsTheme.pageTitle)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+
                 Text("No devices found")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
-                
+                    .font(SettingsTheme.cardTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+
                 Text("Make sure LocalSend is running on other devices")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.5))
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
                     .multilineTextAlignment(.center)
-                
-                Button {
-                    localSend.refreshDeviceScan()
-                } label: {
-                    Text("Scan Again")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule()
-                                .fill(Color.accentColor.opacity(0.8))
-                        )
+
+                Button("Scan Again") {
+                    onRefresh()
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(SettingsButtonStyle())
                 .padding(.top, 8)
             }
             
@@ -313,13 +351,12 @@ struct LocalSendDevicePickerView: View {
                 ],
                 spacing: 16
             ) {
-                ForEach(localSend.devices) { device in
+                ForEach(devices) { device in
                     DeviceGridItem(
                         device: device,
                         isHovered: hoveredDeviceID == device.id,
-                        isRejected: localSend.rejectedDeviceIDs.contains(device.id),
+                        isRejected: rejectedDeviceIDs.contains(device.id),
                         onSelect: {
-                            localSend.clearRejectedStatus(for: device.id)
                             onDeviceSelected(device)
                         }
                     )
@@ -328,8 +365,8 @@ struct LocalSendDevicePickerView: View {
                     }
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.horizontal, SettingsTheme.sheetInset)
+            .padding(.bottom, SettingsTheme.sheetInset)
         }
     }
 }
@@ -341,37 +378,39 @@ private struct DeviceGridItem: View {
     let isHovered: Bool
     let isRejected: Bool
     let onSelect: () -> Void
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         Button(action: onSelect) {
             VStack(spacing: 10) {
                 // Device icon
                 ZStack {
                     Circle()
-                        .fill(isRejected ? Color.red.opacity(0.15) : Color.white.opacity(isHovered ? 0.15 : 0.08))
+                        .fill(isHovered ? SettingsTheme.raised : SettingsTheme.selection)
                         .frame(width: 56, height: 56)
-                    
+
                     Image(systemName: deviceIcon)
                         .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(isRejected ? .red : (isHovered ? .accentColor : .white.opacity(0.8)))
+                        .foregroundStyle(isRejected ? SettingsTheme.destructive
+                                         : (isHovered ? SettingsTheme.accentStrong : SettingsTheme.ink))
                 }
                 
                 // Device name
-                VStack(spacing: 2) {
+                VStack(spacing: SettingsMetrics.labelStack) {
                     Text(device.alias)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(isRejected ? .red : .white)
+                        .font(SettingsTheme.bodyStrong)
+                        .foregroundStyle(isRejected ? SettingsTheme.destructive : SettingsTheme.ink)
                         .lineLimit(1)
                         .truncationMode(.tail)
                     
                     if isRejected {
                         Text("Rejected")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.red.opacity(0.8))
+                            .font(SettingsTheme.description)
+                            .foregroundStyle(SettingsTheme.destructive)
                     } else if let model = device.model, !model.isEmpty {
                         Text(model)
-                            .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.5))
+                            .font(SettingsTheme.description)
+                            .foregroundStyle(SettingsTheme.inkSecondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -380,17 +419,20 @@ private struct DeviceGridItem: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isRejected ? Color.red.opacity(0.08) : Color.white.opacity(isHovered ? 0.12 : 0.06))
+                RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
+                    .fill(isHovered ? SettingsTheme.selection : SettingsTheme.card)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isHovered ? Color.accentColor.opacity(0.6) : Color.white.opacity(0.1), lineWidth: 1)
+                RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
+                    .strokeBorder(isRejected ? SettingsTheme.destructive
+                                  : (isHovered ? SettingsTheme.accentStrong : SettingsTheme.line),
+                                  lineWidth: SettingsTheme.hairline)
             )
         }
         .buttonStyle(.plain)
         .scaleEffect(isHovered ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        // The theme's bounded ease, none under Reduce Motion, never a spring (docs/SETTINGS.md, "The design system").
+        .animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation), value: isHovered)
     }
     
     private var deviceIcon: String {

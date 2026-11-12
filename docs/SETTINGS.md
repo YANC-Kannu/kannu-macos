@@ -223,7 +223,39 @@ What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
 - **The header's buttons**, whose symbols scale from their font (`.imageScale`), and two AppKit measures.
 
 The closed notch (its live activities and HUDs), the timer's ruler, the Timer and Stats popovers built outside
-`Notch/`, and the floating panels are not in this pass.
+`Notch/`, and the floating panels are not in this pass. The floating panels have their own, below.
+
+### The floating panels
+
+Two panels float over other apps on Brain's theme: the clipboard panel (`ClipboardPanel`, Panel display mode, Brain ›
+Clipboard's Open history panel) and the LocalSend picker (`LocalSendDevicePickerWindowManager`, from the Shelf). Each
+is a window of its own, so it applies Brain's root itself, as a sheet does (`settingsDesignSystem()`), and draws with
+the components and tokens a page uses: its title in `sheetTitle`, text in `body` and `description`, `ink` and
+`inkSecondary`, the card inset (`cardPadding`), Brain's empty state (the glyph at `pageTitle`, the status in
+`cardTitle`, one line in `body`, as Clipboard's page draws its own), and `SettingsButtonStyle` where a button has no
+tooltip of its own.
+
+- **The clipboard panel** follows the Mac's appearance, on `panel`. History or Favorites is a segmented
+  `SettingsSelect`, each tab with how many it holds; the search is Brain's field chrome (`settingsField`), what to type
+  in its `prompt:`; a row under the pointer takes the `hover` fill. Its glyph buttons stay plain buttons with their
+  `.hoverTooltip`, because `SettingsButtonStyle` tracks hover itself and a second hover source silences a tooltip
+  (docs/TOOLTIPS.md, rule 3). They draw in `ink`, a favourite's heart in `accentStrong`, a copy just made in `success`,
+  Delete and Clear in `destructive`. The close button stays the window's red traffic light, which Brain keeps native.
+- **The LocalSend picker** keeps the backdrop Shelf › Device Picker Style picks, Standard or Custom Liquid glass, made
+  for light text, so its content is dark whatever the Mac's appearance (`.environment(\.colorScheme, .dark)` on the
+  content, not the backdrop, which renders as it always did). A device is a soft card (`card`, `sectionRadius`, a
+  `line` border); under the pointer it takes `selection` and an `accentStrong` border, and a device that turned a
+  file down a `destructive` one. Refresh and Close are `.quiet`, Scan Again the standard button. The tile's growth
+  under the pointer takes the theme's bounded ease, none under Reduce Motion, never a spring.
+
+Placement, focus, dismissal, tooltips and what the clipboard captures are as they were: the panels' window code did
+not change. Each panel draws from values its view hands in (`ClipboardPanelContent`, `LocalSendDevicePickerContent`),
+so its boards (`clipboardPanel…`, `localSendPicker…`) draw fixtures and never build the clipboard manager or the
+LocalSend service. `FloatingPanelRulesTests` pins the system fonts and raw colours left, each with why (symbols; the
+window's chrome), and the boards' fixtures.
+
+Screen Assistant's chat and model panels, the clipboard's popover (a notch popover), the music and timer controls
+beside the notch, the HUDs and the lock screen's windows are not in this pass.
 
 ## Choices
 
