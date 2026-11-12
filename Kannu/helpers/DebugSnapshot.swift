@@ -18,6 +18,7 @@
 
 #if DEBUG
 import AppKit
+import Defaults
 import SwiftUI
 
 /// DEBUG builds only. `--kannu-snapshots <dir>` renders every Settings tab and a few boards to PNG,
@@ -81,6 +82,9 @@ enum DebugSnapshots {
         // reading the real pasteboard.
         let clipboard = DebugSnapshotFixtures.clipboardOverview(pinned: 0, history: 4, now: Date())
         ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Notes likewise: fixture notes, never this Mac's, and no note's image read from its file.
+        let notesPage = DebugSnapshotFixtures.notesOverview(notes: 4, now: Date())
+        NotesOverview.snapshotFixture = notesPage
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
         if request.tabs == nil || request.tabs?.contains("allTasks") == true {
             boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
@@ -98,6 +102,10 @@ enum DebugSnapshots {
             let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
             typed.draft.reminder = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)
             boards.append(("newTaskSheet", AnyView(NewTaskSheet(newTask: typed, listFilter: .all) { _ in })))
+        }
+        if request.tabs == nil || request.tabs?.contains("newNoteSheet") == true {
+            // New note half typed, in yellow. Nothing saves: Add is a press.
+            boards.append(("newNoteSheet", AnyView(NewNoteSheet(title: "Groceries", text: "Milk, eggs and bread\nCoffee beans"))))
         }
         if request.tabs == nil || request.tabs?.contains("connectSheet") == true {
             // It reads only a Defaults colour, and touches no Keychain until Connect.
@@ -273,6 +281,26 @@ enum DebugSnapshots {
             }
         }
         ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
+        // and one made in Apple Notes. The switches drawn under the product are this Mac's, so the boards are run with
+        // `-enableNotes YES`, and the sync's with `-enableAppleNotesSync YES` (`notePageMirror` with
+        // `-appleNotesSyncScope "Whole account"` too): the argument domain, nothing written.
+        let notesBoards: [(name: String, notes: Int, open: UUID?)] = [
+            ("notes0", 0, nil), ("notes4", 4, nil), ("notePage", 4, DebugSnapshotFixtures.notesImageNoteID),
+            ("notePageMirror", 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+        ]
+        for board in notesBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            var fixture = DebugSnapshotFixtures.notesOverview(notes: board.notes, now: Date())
+            fixture.openNoteID = board.open
+            NotesOverview.snapshotFixture = fixture
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .notes).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        NotesOverview.snapshotFixture = notesPage
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -370,7 +398,7 @@ enum DebugSnapshots {
 
     private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
                                                        "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
-                                                       "valueSheet", "timerPresetSheet"]
+                                                       "valueSheet", "timerPresetSheet", "newNoteSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -1314,6 +1342,47 @@ enum DebugSnapshotFixtures {
         }
         data.isMonitoring = true
         return ClipboardOverviewFixture(data: data, showsHistory: showsHistory)
+    }
+
+    /// The note `notesOverview` gives an image, drawn here, never read from a file.
+    static let notesImageNoteID = UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E02")!
+
+    /// Brain › Notes' product with no note or four, made up and built in memory: no note of this Mac's, no file read or
+    /// written, nothing saved. Four is a pinned release checklist, groceries edited half an hour ago with an image, a
+    /// trip plan made in Apple Notes (read-only while sync reads the whole account) and an older note with no text.
+    /// The sync's switch and scope are this Mac's, read as the board draws (the boards set them through the argument
+    /// domain, nothing written), so the product agrees with the settings drawn under it; it last synced 12 minutes ago.
+    static func notesOverview(notes count: Int, now: Date) -> NotesOverviewFixture {
+        func note(_ id: String, _ title: String, _ content: String, hoursAgo: Double, color: Int, pinned: Bool = false,
+                  madeInAppleNotes: Bool = false) -> NoteItem {
+            NoteItem(id: UUID(uuidString: id)!, title: title, content: content,
+                     creationDate: now.addingTimeInterval(-(hoursAgo + 48) * 3600),
+                     modificationDate: now.addingTimeInterval(-hoursAgo * 3600), colorIndex: color, isPinned: pinned,
+                     appleNotesId: madeInAppleNotes ? "x-coredata://fixture/ICNote/p1" : nil,
+                     madeInAppleNotes: madeInAppleNotes)
+        }
+        let notes = [
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E01", "Release checklist",
+                 "Tag the build\nUpload the disk image\nPost the release notes", hoursAgo: 30, color: 1, pinned: true),
+            note(notesImageNoteID.uuidString, "Groceries", "Milk, eggs and bread\nCoffee beans\nSomething for dinner",
+                 hoursAgo: 0.5, color: 0),
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03", "Trip plan", "Train at 9:40\nHotel near the station",
+                 hoursAgo: 5, color: 3, madeInAppleNotes: true),
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E04", "Ideas for the onboarding", "", hoursAgo: 52, color: 4),
+        ]
+        var data = NotesPageData()
+        data.notes = NotesPageData.ordered(Array(notes.prefix(count)))
+        data.syncOn = Defaults[.enableAppleNotesSync]
+        data.scope = Defaults[.appleNotesSyncScope]
+        data.lastSync = data.syncOn ? now.addingTimeInterval(-12 * 60) : nil
+        let image = NSImage(size: NSSize(width: 480, height: 270), flipped: false) { rect in
+            NSColor.systemTeal.setFill()
+            rect.fill()
+            NSColor.white.withAlphaComponent(0.55).setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 170, dy: 65)).fill()
+            return true
+        }
+        return NotesOverviewFixture(data: data, images: [notesImageNoteID: image])
     }
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
