@@ -1764,7 +1764,8 @@ this entry holds.
 
 **2026-11-12 addendum: the menu bar opens Brain only after the terms, and adds no hook and no animator.** Go, View and
 File join Brain… (docs/SETTINGS.md, "The menu bar"). Go and New Task open Brain through one function that checks the
-terms first, then send the request a search pick sends, for no row, so nothing pulses. View's items read
+terms first, then send the request a search pick sends, for no row, so nothing pulses. While a sheet is open over Brain
+that function only beeps: menu keys reach the menu bar under a sheet, and a page switched under it closes it. View's items read
 `BrainVisibility`, which builds nothing, and are off while Brain is not on screen; its full-screen item takes its title
 from a new `isFullScreen` there, set as full screen begins and ends, and pages follow only `isOnScreen`. Hide Sidebar
 removes the sidebar column without an animation. Tasks takes New Task's request in an `onChange` and loads nothing. A

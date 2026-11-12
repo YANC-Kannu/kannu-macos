@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of the menu bar
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
+- **Changes:**
+  - Go and New Task only beep while a sheet is open over Brain. Menu keys still reach the menu bar under a sheet, so
+    ⌘1 in New Task or a connect sheet switched the page underneath and closed the sheet, with what was typed in it.
+  - New Task opens while the task list is still loading: the menu can ask from a cold Brain, and Tasks dropped the
+    request until the list was ready. The sheet already keeps Add off until then.
+  - A failed entry into or exit from full screen updates `BrainVisibility` too, so View's item keeps the right title.
+  - `MenuBarRulesTests` holds the sheet check, the failed transitions' updates and the request's guard against planted
+    offenders.
+  - docs/SETTINGS.md says New Task opens over any Tasks page and what Hide Sidebar leaves reachable; docs/REGRESSIONS.md
+    entry 22's 2026-11-12 addendum names the sheet check.
+
 ### 2026-11-12 - The menu bar gets Go, View and File around Brain
 - **Developer label:** Brain redesign plan: Stage 6, the menu bar
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate

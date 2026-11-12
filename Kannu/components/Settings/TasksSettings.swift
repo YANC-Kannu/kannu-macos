@@ -69,7 +69,9 @@ struct TasksSettings: View {
     /// filter is read when asked, so this tab observes neither the filters nor the manager (with
     /// Tasks off, nothing here touches `TasksManager`).
     private func openNewTask() {
-        guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }
+        // Not `isReady`: the menu can ask from a Brain whose list is still loading, and the sheet keeps Add off until
+        // the list is ready.
+        guard enableTasks, sheet == nil else { return }
         sheet = .newTask(listFilter: path.last == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)
     }
 

@@ -355,6 +355,8 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as full screen.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowWillExitFullScreen(_ notification: Notification) {
@@ -371,6 +373,8 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as windowed.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
