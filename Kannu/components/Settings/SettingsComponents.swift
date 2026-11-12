@@ -126,7 +126,9 @@ struct SettingsRowLabel: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
             title
             if let description {
-                description.settingsDescriptionStyle(tint: descriptionTint)
+                description
+                    .settingsDescriptionStyle(tint: descriptionTint)
+                    .frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)
             }
         }
     }
@@ -418,6 +420,8 @@ struct SettingsFooter: View {
             // The root's font would otherwise replace the smaller one a grouped Form gives a footer.
             .font(SettingsTheme.description)
             .fixedSize(horizontal: false, vertical: true)
+            // Prose wraps at `proseMaxWidth`; the outer frame keeps it on the section's leading edge.
+            .frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
     }
@@ -540,8 +544,8 @@ struct SettingsTagChip: View {
     private let isHighlighted: Bool
     private let action: () -> Void
 
-    /// The wash under the bezel: enough to read as the colour, still the bezel's glass.
-    private static let tintOpacity: Double = 0.2
+    /// The wash under the bezel: enough to read as the colour, still the bezel's glass. A task row's chips wear it too.
+    static let tintOpacity: Double = 0.2
 
     init(_ name: String, tint: Color? = nil, remove: @escaping () -> Void) {
         self.name = name

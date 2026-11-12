@@ -67,7 +67,7 @@ struct About: View {
                 }
                 if SparkleUpdaterController.shared.isEnabled {
                     SettingsActionRow {
-                        Button("Check for Updates…") {
+                        Button("Check for updates…") {
                             SparkleUpdaterController.shared.checkForUpdates(nil)
                         }
                     }
@@ -83,9 +83,9 @@ struct About: View {
                 .settingsHighlight(id: highlightID("Terms of Use"))
                 SettingsActionRow(
                     "License",
-                    description: "Kannu is free software under the GNU General Public License v3, provided as is, without warranty of any kind."
+                    description: "Free software under the GNU GPL v3, with no warranty."
                 ) {
-                    Button("View License") { LegalDocuments.open(.license) { legalDocumentMissing = !$0 } }
+                    Button("View license") { LegalDocuments.open(.license) { legalDocumentMissing = !$0 } }
                     Button("Acknowledgements") { LegalDocuments.open(.notice) { legalDocumentMissing = !$0 } }
                 }
                 .settingsHighlight(id: highlightID("License"))
@@ -99,19 +99,19 @@ struct About: View {
             SettingsSection {
                 SettingsRow(
                     "Watch for freezes",
-                    description: "If Kannu's interface stops responding for five seconds, it writes down what it was doing to ~/Library/Logs/Kannu and offers you the note next time it starts. Nothing is shown while it is stuck, and nothing is sent anywhere. On by default for the Developer profile."
+                    description: "Logs what Kannu was doing when it freezes."
                 ) {
                     Toggle("Watch for freezes", isOn: $hangWatchdogEnabled)
                 }
                 .settingsHighlight(id: highlightID("Watch for freezes"))
                 // One row for the two, each button keeping its own search landing.
                 SettingsActionRow {
-                    Button("Report a Problem…") {
+                    Button("Report a problem…") {
                         CrashReporter.shared.reportAProblem()
                     }
                     .settingsHighlight(id: highlightID("Report a Problem"))
 
-                    Button(copiedReport ? "Copied" : "Copy Latest Report") {
+                    Button(copiedReport ? "Copied" : "Copy latest report") {
                         copiedReport = false
                         reportCopyFailed = false
                         let copied = CrashReporter.shared.copyNewestReportToPasteboard()
@@ -134,7 +134,7 @@ struct About: View {
             } header: {
                 SettingsSectionHeader("Diagnostics")
             } footer: {
-                SettingsFooter("A freeze leaves no crash report, so without this there is nothing to look at afterwards. The check costs one wake every two seconds. Reporting opens a GitHub issue with the details filled in — no name, nothing identifying your Mac — for you to read and submit; Kannu sends nothing itself.")
+                SettingsFooter("A freeze leaves no crash report, so Kannu notes what it was doing in ~/Library/Logs/Kannu. Reporting opens a GitHub issue with nothing identifying you, for you to review; Kannu sends nothing itself.")
             }
         }
         .navigationTitle("About")

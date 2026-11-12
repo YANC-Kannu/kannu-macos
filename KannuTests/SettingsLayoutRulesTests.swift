@@ -76,6 +76,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
         "SidebarBadges.swift": 1,                   // the high findings' count, a badge inside the row's button
         "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
+        "TaskRowList.swift": 1,                     // a task row's tag chip, decorative as a badge
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -125,6 +126,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "LockScreenSettings.swift": 6,       // lock screen previews
         "SettingsColorPicker.swift": 2,      // the colour popover
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
+        "TaskRowList.swift": 1,              // a task row's tag chip, in the badge's caption size
     ]
 
     func testRowTextUsesTheFormsTypeOrTheSharedStyle() {
@@ -188,6 +190,11 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
         "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
         "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
+        "TaskRowList.swift": 2,              // a task's card, and a tag chip's inset
+        "TasksOverview.swift": 1,            // the list's footer in line with the rows, as a section's is
+        "TaskSourcePages.swift": 4,          // the task lists' headings and a project's footer in line with the rows, which are cards
+        "NotesOverview.swift": 1,            // the sync's status line in line with the cards' text
+        "NotePage.swift": 1,                 // the note's own card
     ]
 
     func testNoRowPadsItself() {
@@ -202,9 +209,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// stepper style, so under Settings a choice is `SettingsSelect` (docs/SETTINGS.md, "Choices") and a value
     /// `SettingsSlider` or `SettingsStepper` ("Values and fields"), and these are the ones that cannot be.
     private static let pinnedNativeControlCounts: [String: Int] = [
-        // The filter menu's ticked submenus: native inside a native Menu; Stage 5 rebuilds the page with
-        // SettingsSelect (plan:75).
-        "AllTasksPage.swift": 4,
+        // 2026-11-11: All tasks' filter menu and its four native pickers went with Stage 5's Tasks page, whose Tag
+        // filter and tabs are `SettingsSelect`s (plan:75).
         // A tag's Colour, a ticked submenu of its pill's right-click menu: native inside a native menu, which
         // no popover can join (design review finding 23 took the swatch beside the pill away).
         "TaskTagsSheet.swift": 1,
@@ -341,7 +347,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
     /// pin can only shrink. The theme is excepted: it is where the colours are made.
     private static let pinnedRawColourCounts: [String: Int] = [
         "AgentStatusSettings.swift": 1,      // status green
-        "AllTasksPage.swift": 1,             // the partial-result orange
         "AnimationEditorView.swift": 7,      // the editor's own previews and cards
         "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
         "DevicesSettings.swift": 1,          // the icon style card's resting fill
@@ -363,6 +368,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "StatsSettings.swift": 2,            // graph colours
         "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
         "TaskRowList.swift": 2,              // the same orange
+        "TasksOverview.swift": 1,            // the moved-aside task file's orange, moved up with the list
         "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
     ]
 
@@ -489,12 +495,14 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
         "TimerPresetSheet.swift": 1,         // the preset sheet's Add or Save
         "TimerOverview.swift": 1,            // Start timer: the Timer page header's one verb
-        "TaskRowList.swift": 1,              // New Task: the Tasks page's one verb until Stage 5 gives the page a header
+        "TasksOverview.swift": 1,            // New task: the Tasks page header's one verb (Stage 5 gave the page a header)
         // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
         // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
         "SecurityOverview.swift": 1,
         "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
         "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
+        "NotesOverview.swift": 1,            // New note: the Notes page header's one verb
+        "NewNoteSheet.swift": 1,             // the New note sheet's Add
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {

@@ -81,7 +81,7 @@ final class ADRDocsTests: XCTestCase {
         let card = try section("## What Kannu does with findings")
             .replacingOccurrences(of: "*", with: "")
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
-        for phrase in ["Reveal File in Finder", "Reveal Project Folder", "Open Chat", "Copy Details", "Acknowledge"] {
+        for phrase in ["Reveal file in Finder", "Reveal project folder", "Open chat", "Copy details", "Acknowledge"] {
             XCTAssertTrue(card.contains(phrase), phrase)
         }
     }

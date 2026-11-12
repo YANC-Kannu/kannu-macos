@@ -70,9 +70,9 @@ enum ScreenCaptureVisibility: String, CaseIterable, Identifiable {
     var description: String {
         switch self {
         case .hideNotch:
-            return String(localized: "Asks macOS to leave the notch, its music and timer controls and the lock-screen widgets out of screenshots and recordings. Some capture tools ignore this. Brain and other windows are captured.")
+            return String(localized: "Asks macOS to hide the notch. Some capture tools ignore this.")
         case .hideEverything:
-            return String(localized: "Asks macOS to leave every Kannu window, Brain included, out of screenshots and recordings. Some capture tools ignore this.")
+            return String(localized: "Asks macOS to hide every Kannu window. Some capture tools ignore this.")
         case .showEverything:
             return String(localized: "Kannu appears in screenshots and recordings.")
         }

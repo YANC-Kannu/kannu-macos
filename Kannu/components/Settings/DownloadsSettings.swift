@@ -63,7 +63,7 @@ struct Downloads: View {
                 }
                 .settingsHighlight(id: highlightID("Download indicator style"))
             } header: {
-                SettingsSectionHeader("Download Detection")
+                SettingsSectionHeader("Download detection")
             } footer: {
                 SettingsFooter("Monitor your Downloads folder for Chromium-style downloads (.crdownload files) and show a live activity in the Dynamic Island while downloads are in progress.")
             }
@@ -80,8 +80,9 @@ struct Downloads: View {
         @State private var isHovering = false
 
         var body: some View {
-            // A button, so the keyboard reaches the card and VoiceOver hears which one is selected. Disabled, it does
-            // nothing, as the click did; `.disabled` would dim `.plain` a second time over the card's own half.
+            // A button, so the keyboard reaches the card and VoiceOver hears which one is selected and, while detection
+            // is off, that it is unavailable. Disabled, it does nothing, as the click did; `.plain` dims it by half, as
+            // the card's own opacity did, so the card no longer adds one.
             Button {
                 if !disabled {
                     action()
@@ -125,7 +126,7 @@ struct Downloads: View {
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .opacity(disabled ? 0.5 : 1.0)
+            .disabled(disabled)
         }
 
         private var backgroundColor: Color {

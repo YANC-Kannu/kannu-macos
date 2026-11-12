@@ -58,10 +58,12 @@ final class BrainShellRulesTests: XCTestCase {
 
     func testTheShellAndItsRowsKnowNoPage() throws {
         // The select, its list, the field, the slider, the stepper, the sheet and the date too: a page hands them their data.
-        // The page, the section and the page's inset too: a page hands them its rows.
+        // The page, the section and the page's inset too: a page hands them its rows. And the list-detail layout and its
+        // measurement: a page hands them its list, its item's page and its flag.
         for name in ["BrainShell.swift", "SettingsSidebarRow.swift", "SettingsSelect.swift", "SettingsSelectList.swift",
                      "SettingsField.swift", "SettingsSlider.swift", "SettingsStepper.swift", "SettingsSheet.swift",
-                     "SettingsDateField.swift", "SettingsPage.swift", "SettingsSection.swift", "SettingsPageInsetKey.swift"] {
+                     "SettingsDateField.swift", "SettingsPage.swift", "SettingsSection.swift", "SettingsPageInsetKey.swift",
+                     "SettingsListDetail.swift", "SettingsListDetailFits.swift"] {
             XCTAssertEqual(Self.pageKnowledge(in: try Self.code("DesignSystem/" + name)), [], name)
         }
 
@@ -295,7 +297,7 @@ final class BrainShellRulesTests: XCTestCase {
 
     private static func titleProblems(form: String, tasks: String) -> [String] {
         var problems = ["SettingsPageHeader(title: pageTitle ?? tab.title, actions: actions)", ".onPreferenceChange(SettingsPageTitleKey.self)"].filter { !form.contains($0) }
-        if !tasks.contains(".settingsPageTitle(enableTasks ? path.last.map(Self.title) ?? Self.overviewTitle : Self.overviewTitle)") {
+        if !tasks.contains(".settingsPageTitle(pageInPlace.map(Self.title) ?? Self.overviewTitle)") {
             problems.append("Tasks no longer names its sub-pages")
         }
         return problems
@@ -309,7 +311,7 @@ final class BrainShellRulesTests: XCTestCase {
 
         Self.assertCaught([("pageTitle ?? tab.title", "tab.title"), (".onPreferenceChange(SettingsPageTitleKey.self)", ".onPreferenceChange(OtherKey.self)")],
                           in: form) { Self.titleProblems(form: $0, tasks: tasks) }
-        Self.assertCaught([("settingsPageTitle(enableTasks", "navigationTitle(enableTasks")], in: tasks) { Self.titleProblems(form: form, tasks: $0) }
+        Self.assertCaught([("settingsPageTitle(pageInPlace", "navigationTitle(pageInPlace")], in: tasks) { Self.titleProblems(form: form, tasks: $0) }
     }
 
     // MARK: - The window's width and title bar
@@ -431,13 +433,15 @@ final class BrainShellRulesTests: XCTestCase {
 
     // MARK: - The boards
 
-    /// Each board is the only headless view of its state. `allTasks` goes through `SettingsForm`, or it
-    /// has no title to show or to clip by. The deep link's row is below the fold, or a dead `scrollTo`
-    /// draws the same picture, and the run scrolls at once, or an animated scroll never moves.
+    /// Each board is the only headless view of its state. Brain › Tasks' are the whole window at its first
+    /// size and at a 14-inch full screen, where a task's page shows beside the list (layout-proposal D1). The
+    /// deep link's row is below the fold, or a dead `scrollTo` draws the same picture, and the run scrolls at
+    /// once, or an animated scroll never moves.
     private static func boardProblems(in snapshots: String) -> [String] {
         ["(\"shell\", AnyView(", "(\"shellSettings\", AnyView(", "(\"shellWide\", AnyView(", "(\"shellDeepLink\", AnyView(",
          "(\"shellSearch\", AnyView(", "(\"shellSearchList\", AnyView(",
-         "SettingsView.snapshotPageTitle(SettingsPage {",
+         "let fullScreen14 = NSSize(width: 1512, height: 982)",
+         "(\"tasksWideTask\", fullScreen14, [.task(DebugSnapshotFixtures.localTaskID)], .active)",
          "SettingsTab.general.highlightID(for: \"Always show on non-notch displays\")",
          "SettingsHighlightCoordinator.snapshotScrollsAtOnce = true",
          "width: size.width, into: request.directory, fixedHeight: size.height",
