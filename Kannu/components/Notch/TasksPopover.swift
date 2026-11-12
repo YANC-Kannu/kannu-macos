@@ -66,12 +66,12 @@ struct TasksPopover: View {
 
             Button("Show all in Brain") { openBrain(.taskList) }
                 .buttonStyle(.link)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
         }
         .padding(16)
         .frame(width: 320)
         // The header's own font and grey reach into a popover's content; start from the defaults.
-        .font(.body)
+        .font(SettingsTheme.font(size: 13))
         .foregroundStyle(.primary)
         .background(
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
@@ -124,10 +124,10 @@ struct TasksPopover: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tasks")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(SettingsTheme.font(size: 14, weight: .semibold))
                     ForEach(syncLines(at: context.date), id: \.self) { line in
                         Text(verbatim: line)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SettingsTheme.font(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -192,14 +192,14 @@ struct TasksPopover: View {
             ProgressView()
                 .controlSize(.small)
             Text("Loading tasks…")
-                .font(.system(size: 12))
+                .font(SettingsTheme.font(size: 12))
                 .foregroundStyle(.secondary)
         }
     }
 
     private func failureRow(_ reason: String) -> some View {
         Text(verbatim: String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
-            .font(.system(size: 11))
+            .font(SettingsTheme.font(size: 11))
             .foregroundStyle(.red)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -232,7 +232,7 @@ struct TasksPopover: View {
 
     private func sectionTitle(_ title: LocalizedStringKey) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(SettingsTheme.font(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -247,7 +247,7 @@ struct TasksPopover: View {
                     .lineLimit(1)
             }
             Text(verbatim: task.title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(SettingsTheme.font(size: 14, weight: .semibold))
                 .lineLimit(2)
         }
     }
@@ -313,7 +313,7 @@ struct TasksPopover: View {
                         .foregroundStyle(.orange)
                 }
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
         }
     }
@@ -336,7 +336,7 @@ struct TasksPopover: View {
                 Spacer(minLength: 0)
                 if total > tasks.count {
                     Text(verbatim: String(localized: "\(tasks.count) of \(total)"))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -346,7 +346,7 @@ struct TasksPopover: View {
             addTaskField
             if !enableTimerFeature && !tasks.isEmpty {
                 Text("Turn on the timer in Brain to time tasks.")
-                    .font(.system(size: 11))
+                    .font(SettingsTheme.font(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -370,7 +370,7 @@ struct TasksPopover: View {
             Button("Show all", action: showAllSources)
                 .buttonStyle(.link)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(SettingsTheme.font(size: 11, weight: .medium))
     }
 
     /// A local task, added at the top of the order. Return adds it; nothing here sends anything.
@@ -412,10 +412,10 @@ struct TasksPopover: View {
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: task.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(SettingsTheme.font(size: 13, weight: .medium))
                     .lineLimit(1)
                 (Text(verbatim: caption) + overText(progress.over))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -460,9 +460,9 @@ struct TasksPopover: View {
         let connected = !preferences.connected.isEmpty
         return VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: emptyTitle(connected: connected))
-                .font(.system(size: 13, weight: .semibold))
+                .font(SettingsTheme.font(size: 13, weight: .semibold))
             Text(emptyMessage(connected: connected))
-                .font(.system(size: 11))
+                .font(SettingsTheme.font(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !connected {

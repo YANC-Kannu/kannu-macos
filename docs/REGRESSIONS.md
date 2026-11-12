@@ -1477,6 +1477,11 @@ registers and unregisters and takes no hits. Each scanner is checked against pla
 Missing: that a scroll over the notes really never closes the notch is checked by eye on the
 installed build, since nothing automated drives a trackpad.
 
+**2026-11-12 addendum: Geist in the notch changes only fonts here.** Stage 6 moves the notch's text to Geist
+(docs/SETTINGS.md, "The notch"), and in `NotchNotesView` that is the `.font` of its text, the editor's included: no
+view gains or loses a `ScrollView`, `TextEditor` or `List`, and every `.ownsVerticalScroll()` stays where it was.
+`NotchScrollOwnershipRulesTests` still reads the file.
+
 ---
 
 ## 22. A repeating animation in Brain must end by itself
@@ -1761,6 +1766,18 @@ Application Support's `Kannu/ClipboardData`, a folder the installed app shares w
 the real pasteboard twice a second. **Not measured:** CPU with Clipboard open while copies arrive, and parked full
 screen in another Space. `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of
 this entry holds.
+
+**2026-11-12 addendum: the menu bar opens Brain only after the terms, and adds no hook and no animator.** Go, View and
+File join Brain… (docs/SETTINGS.md, "The menu bar"). Go and New Task open Brain through one function that checks the
+terms first, then send the request a search pick sends, for no row, so nothing pulses. While a sheet is open over Brain
+that function only beeps: menu keys reach the menu bar under a sheet, and a page switched under it closes it. View's items read
+`BrainVisibility`, which builds nothing, and are off while Brain is not on screen; its full-screen item takes its title
+from a new `isFullScreen` there, set as full screen begins and ends, and pages follow only `isOnScreen`. Hide Sidebar
+removes the sidebar column without an animation. Tasks takes New Task's request in an `onChange` and loads nothing. A
+registered `NSFullScreenMenuItemEverywhere` of false, before launching ends, keeps AppKit from adding a second Enter
+Full Screen beside View's. `MenuBarRulesTests` holds these against planted offenders. **Not measured:** the menus with
+Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
+⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
 
 **2026-11-12 addendum: the sidebar's badges run only while Brain is on screen, and the root observes nothing for them.**
 The sidebar is on screen beside every page, so its badges (`SidebarBadges.swift`, docs/SETTINGS.md "The shell and

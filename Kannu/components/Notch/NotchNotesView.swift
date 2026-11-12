@@ -394,7 +394,7 @@ struct NotchClipboardList: View {
             // Header
             HStack {
                 Text("Clipboard")
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .font(SettingsTheme.font(size: 18, weight: .semibold))
                     .foregroundStyle(notchForeground)
                 
                 Spacer()
@@ -423,10 +423,10 @@ struct NotchClipboardList: View {
                         .font(.system(size: 32))
                         .foregroundStyle(.secondary.opacity(0.3))
                     Text("No copies yet")
-                        .font(.headline)
+                        .font(SettingsTheme.font(size: 13, weight: .bold))
                         .foregroundStyle(.secondary)
                     Text("Copy text to see it here")
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.secondary.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -532,17 +532,17 @@ struct NotchClipboardItemRow: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.preview)
-                    .font(.system(size: 13))
+                    .font(SettingsTheme.font(size: 13))
                     .foregroundStyle(notchForeground)
                     .lineLimit(1)
                 
                 HStack {
                     Text(item.type.displayName)
-                        .font(.system(size: 10))
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Text(timeAgoString(from: item.timestamp))
-                        .font(.system(size: 10))
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -617,7 +617,7 @@ struct NoteListView: View {
             // Header
             HStack {
                 Text("Notes")
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(SettingsTheme.font(size: 16, weight: .semibold))
                     .foregroundStyle(notchForeground)
 
                 if enableAppleNotesSync {
@@ -727,7 +727,7 @@ struct NoteListView: View {
                                 .foregroundStyle(.secondary)
                             TextField("Search notes...", text: $searchText)
                                 .textFieldStyle(.plain)
-                                .font(.system(size: 12))
+                                .font(SettingsTheme.font(size: 12))
                             if !searchText.isEmpty {
                                 Button(action: { searchText = "" }) {
                                     Image(systemName: "xmark.circle.fill")
@@ -751,7 +751,7 @@ struct NoteListView: View {
                             HStack(spacing: 6) { // Reduced from 8
                                 Button(action: { selectedColorFilter = nil }) {
                                     Text("All")
-                                        .font(.system(size: 10, weight: .medium))
+                                        .font(SettingsTheme.font(size: 10, weight: .medium))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 3)
                                         .background(selectedColorFilter == nil ? Color.blue.opacity(0.3) : notchForeground.opacity(0.1))
@@ -798,7 +798,7 @@ struct NoteListView: View {
                             .font(.system(size: 16))
                             .foregroundStyle(.secondary.opacity(0.4))
                         Text(searchText.isEmpty ? "No notes yet" : "No results found")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(.secondary.opacity(0.8))
                     }
                     .padding(.top, 10)
@@ -929,13 +929,13 @@ struct NoteRow: View {
                                 .foregroundStyle(note.color)
                         }
                         Text(note.title)
-                            .font(.system(size: isCompact ? 12 : 14, weight: .semibold, design: .rounded))
+                            .font(SettingsTheme.font(size: isCompact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(notchForeground)
                             .lineLimit(1)
                     }
                     
                     Text(note.content.isEmpty ? "No content" : note.content)
-                        .font(.system(size: isCompact ? 10 : 12))
+                        .font(SettingsTheme.font(size: isCompact ? 10 : 12))
                         .foregroundStyle(notchForeground.opacity(0.7))
                         .lineLimit(isCompact ? 1 : 2)
                         .multilineTextAlignment(.leading)
@@ -1038,7 +1038,7 @@ struct NoteRow: View {
                     .transition(.asymmetric(insertion: .opacity.combined(with: .move(edge: .trailing)), removal: .opacity))
                 } else if !isCompact {
                     Text(timeAgoString(from: note.creationDate))
-                        .font(.system(size: 10))
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.secondary.opacity(0.6))
                 }
                 
@@ -1144,9 +1144,10 @@ struct NoteEditorView: View {
                 Button(action: cancelAction) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .medium))
                         Text("Notes")
                     }
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .font(SettingsTheme.font(size: 15, weight: .medium))
                     .foregroundStyle(editorForeground)
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -1155,8 +1156,13 @@ struct NoteEditorView: View {
 
                 if isReadOnly {
                     Button(action: onOpenInNotes) {
-                        Label("Open in Notes", systemImage: "arrow.up.forward.app")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                        Label {
+                            Text("Open in Notes")
+                        } icon: {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(editorForeground.opacity(0.8))
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -1180,7 +1186,7 @@ struct NoteEditorView: View {
 
                 Button(action: onSave) {
                     Text("Done")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(SettingsTheme.font(size: 15, weight: .bold))
                         .foregroundStyle(NoteItem.color(at: colorIndex))
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -1191,12 +1197,12 @@ struct NoteEditorView: View {
             HStack(alignment: .center, spacing: 12) {
                 if isReadOnly {
                     Text(title)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(SettingsTheme.font(size: 17, weight: .bold))
                         .lineLimit(1)
                         .textSelection(.enabled)
                 } else {
                     TextField("Title", text: $title)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
+                        .font(SettingsTheme.font(size: 17, weight: .bold))
                         .textFieldStyle(.plain)
                 }
                 
@@ -1248,7 +1254,7 @@ struct NoteEditorView: View {
                 if isReadOnly {
                     ScrollView {
                         Text(content)
-                            .font(.system(size: 13, design: .rounded))
+                            .font(SettingsTheme.font(size: 13))
                             .foregroundStyle(editorForeground)
                             .lineSpacing(4)
                             .textSelection(.enabled)
@@ -1261,7 +1267,7 @@ struct NoteEditorView: View {
                 } else {
                     if content.isEmpty { // Placeholder
                         Text("Start typing...")
-                            .font(.system(size: 13, design: .rounded)) // Reduced from 14
+                            .font(SettingsTheme.font(size: 13)) // Reduced from 14
                             .foregroundStyle(.secondary.opacity(0.5))
                             .padding(.top, 10)
                             .padding(.leading, 12)
@@ -1269,7 +1275,7 @@ struct NoteEditorView: View {
                     }
                 
                     TextEditor(text: $content)
-                        .font(.system(size: 13, design: .rounded))
+                        .font(SettingsTheme.font(size: 13))
                         .foregroundStyle(editorForeground)
                         .lineSpacing(4)
                         .scrollContentBackground(.hidden)
