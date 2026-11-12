@@ -87,6 +87,19 @@ final class SidebarBadgeLiveDataRulesTests: XCTestCase {
         if count(".accessibilityLabel(", in: code) != 3 || count(".help(", in: code) != 3 {
             problems.append("a badge's state rests on colour alone")
         }
+        // The light's and the timer's chains drop repeats before the throttle, so a repeat never wakes a badge.
+        if count(".removeDuplicates()\n                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)", in: code) != 2 {
+            problems.append("a badge throttles before it drops repeats")
+        }
+        // Back on screen, Security reads the store before it follows it: `objectWillChange` does not send again what
+        // changed while Brain was away.
+        if !code.contains("high = Self.read()\n            for await _ in SecurityFindingsStore.shared.objectWillChange") {
+            problems.append("Security's badge comes back on screen with the count it left with")
+        }
+        // Security's and Usage's pages show nothing of theirs while Agent Status is off, and neither do their badges.
+        if !code.contains("if agentStatusOn && high > 0 {") || !code.contains("if agentStatusOn && nearLimit {") {
+            problems.append("a badge shows a state its page hides while Agent Status is off")
+        }
         return problems
     }
 
@@ -107,6 +120,11 @@ final class SidebarBadgeLiveDataRulesTests: XCTestCase {
             ("timer.$isPaused", "timer.$remainingTime"),
             ("            if runs {\n", "            TimelineView(.periodic(from: .now, by: 1)) { _ in EmptyView() }\n            if runs {\n"),
             ("                    .accessibilityLabel(String(localized: \"Running\"))\n", ""),
+            ("                .map { active, paused in active && !paused }\n                .removeDuplicates()\n                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)\n",
+             "                .map { active, paused in active && !paused }\n                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)\n                .removeDuplicates()\n"),
+            ("            high = Self.read()\n            for await", "            for await"),
+            ("if agentStatusOn && high > 0 {", "if high > 0 {"),
+            ("if agentStatusOn && nearLimit {", "if nearLimit {"),
         ], in: badges, by: Self.liveProblems)
     }
 

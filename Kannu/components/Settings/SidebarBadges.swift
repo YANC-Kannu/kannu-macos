@@ -66,7 +66,8 @@ struct SidebarBadgeFixture {
 #endif
 
 /// The agents' light, as the notch shows it: yellow while an agent waits for input. It follows the monitor's
-/// projection, which moves only when the light does, never the session list.
+/// projection, which moves only when the light does, never the session list. So, as in the notch, a finished agent's
+/// red outranks another's yellow, and the badge then waits for the red to clear.
 private struct AgentsNeedYouBadge: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @Default(.agentAwaitingInputColor) private var awaiting
@@ -109,12 +110,14 @@ private struct AgentsNeedYouBadge: View {
 /// runs with permission checks off, so it is followed through `objectWillChange`, never observed.
 private struct SecurityHighBadge: View {
     @ObservedObject private var visibility = BrainVisibility.shared
+    /// Off, the Security page shows no findings and the notch no cue, so the badge shows no count.
+    @Default(.enableAgentStatusFeature) private var agentStatusOn
     @State private var high = 0
 
     var body: some View {
         ZStack {
             Color.clear.frame(width: 0, height: 0)
-            if high > 0 {
+            if agentStatusOn && high > 0 {
                 Text(verbatim: "\(high)")
                     .font(SettingsTheme.micro)
                     .foregroundStyle(SettingsTheme.onPrimary)
@@ -153,12 +156,14 @@ private struct SecurityHighBadge: View {
 /// no longer counts, as on the Usage page: the store drops one only while it runs.
 private struct UsageNearLimitBadge: View {
     @ObservedObject private var visibility = BrainVisibility.shared
+    /// Off, the store stops and the Usage page says so instead of showing readings, so the badge shows nothing.
+    @Default(.enableAgentStatusFeature) private var agentStatusOn
     @State private var nearLimit = false
 
     var body: some View {
         ZStack {
             Color.clear.frame(width: 0, height: 0)
-            if nearLimit {
+            if agentStatusOn && nearLimit {
                 SidebarDot(colour: SettingsTheme.destructive, label: String(localized: "Near its limit"))
             }
         }
@@ -187,7 +192,8 @@ private struct UsageNearLimitBadge: View {
     }
 }
 
-/// A static glyph while a timer runs. It follows whether a timer runs and is not paused, never its time, which ticks.
+/// A static glyph while a timer runs, overtime included, and not while it is paused. It follows those two flags, never
+/// the time, which ticks.
 private struct TimerRunsGlyph: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @State private var runs = false

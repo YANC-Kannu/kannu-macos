@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of the sidebar badges
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: the reviewer's S1 and M2–M6; Security's and Usage's badges follow Agent Status as their pages do
+- **Changes:**
+  - Security's count and Usage's dot show only while Agent Status is on: off, their pages show none of it and the
+    notch shows no cue, so the sidebar kept a count nothing else would explain.
+  - docs/SETTINGS.md says the agents' badge is the notch's light (a finished agent's red outranks another's yellow)
+    and that a timer in overtime still runs.
+  - `SidebarBadgeLiveDataRulesTests` holds the gate, the order that drops repeats before the throttle, and Security's
+    read on coming back, against planted offenders.
+
 ### 2026-11-12 - Brain's sidebar badges a state that needs you
 - **Developer label:** Brain redesign plan: Stage 6, the sidebar badges (layout-proposal.md D2, badges only)
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: badges for an agent waiting, high findings and usage near its limit, a static timer glyph, under Brain's live-data rules

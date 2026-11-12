@@ -595,7 +595,9 @@ badge as a view its caller builds.
 - **A row's badge says a state that needs you** (`SidebarBadges.swift`, layout-proposal.md D2): Agents' dot in the
   light's own yellow while an agent waits for input, shaded on paper as Agents' state word is; Security's count of
   high-severity findings to review, on the destructive colour; Usage's destructive dot while a window is at or near
-  its limit (`UsageAlertPolicy.nearLimit`). Timer's static ▶ says a timer runs. Nothing else: no open-task count,
+  its limit (`UsageAlertPolicy.nearLimit`). Timer's static ▶ says a timer runs, overtime included, and not while it
+  is paused. Security's and Usage's show only while Agent Status is on, as their pages do. Agents' is the notch's
+  light, so a finished agent's red outranks another's yellow there and here. Nothing else: no open-task count,
   which is never zero, and no setup checklist. Each says itself in words too, to VoiceOver and the pointer ("Needs
   you", "High: 2", "Near its limit", "Running"). A Settings page in beta shows the pages' one badge, "Beta". The
   badges keep the live-data rules (below); `SettingsView` only places them, so the root observes nothing for them.
