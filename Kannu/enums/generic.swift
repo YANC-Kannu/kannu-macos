@@ -35,7 +35,7 @@ public enum Style {
 ///   inspired by DynamicNotchKit's floating style. Only applies to screens
 ///   that do NOT have a physical notch.
 enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifiable {
-    case notch = "Standard Notch"
+    case notch = "Standard notch"
     case dynamicIsland = "Dynamic Island"
 
     var id: String { rawValue }
@@ -43,7 +43,7 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
     var localizedName: String {
         switch self {
         case .notch:
-            return String(localized: "Standard Notch")
+            return String(localized: "Standard notch")
         case .dynamicIsland:
             return String(localized: "Dynamic Island")
         }
@@ -54,7 +54,7 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
         case .notch:
             return String(localized: "Classic notch shape that blends into the top screen edge")
         case .dynamicIsland:
-            return String(localized: "Pill-shaped island with rounded corners, similar to iPhone's Dynamic Island")
+            return String(localized: "Rounded pill, like the iPhone's Dynamic Island.")
         }
     }
 }

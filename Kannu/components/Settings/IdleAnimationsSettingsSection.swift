@@ -122,12 +122,12 @@ struct IdleAnimationsSettingsSection: View {
                 }
                 .frame(height: 140)
             } else {
-                Text("Enable \"Idle Animation\" to customize animations")
+                Text("Enable \"Idle animation\" to customize animations")
                     .settingsDescriptionStyle()
             }
         } header: {
             HStack {
-                SettingsSectionHeader("Idle Animation Style")
+                SettingsSectionHeader("Idle animation style")
                 Spacer()
                 if showNotHumanFace {
                     Text("\(customIdleAnimations.count) animations")
@@ -198,7 +198,7 @@ struct IdleAnimationsSettingsSection: View {
                 }
             }
         }
-        .alert("Delete Animation", isPresented: $showingDeleteAlert) {
+        .alert("Delete animation", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
                 if let animation = selectedForDeletion {
@@ -210,7 +210,7 @@ struct IdleAnimationsSettingsSection: View {
                 Text("Are you sure you want to delete \"\(animation.name)\"?")
             }
         }
-        .alert("Import Error", isPresented: $showingError) {
+        .alert("Import error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
             Text(importError ?? "Unknown error occurred")
@@ -357,7 +357,7 @@ struct AnimationPreviewCard: View {
         }
         .contextMenu {
             if let onEdit = onEdit {
-                Button("Edit Animation") {
+                Button("Edit animation") {
                     onEdit()
                 }
                 Divider()
@@ -499,7 +499,7 @@ struct AddAnimationCard: View {
             // Closing Brain runs this, while `showingMenu` survives the close (docs/REGRESSIONS.md, entry 22).
             .onDisappear { showingMenu = false }
 
-            Text("Add New")
+            Text("Add new")
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
@@ -516,13 +516,13 @@ struct URLImportSheet: View {
     let onCancel: () -> Void
     
     var body: some View {
-        SettingsSheet("Add Animation from URL") {
+        SettingsSheet("Add animation from URL") {
             LabeledContent("Lottie JSON URL") {
                 TextField("Lottie JSON URL", text: $urlInput, prompt: Text("https://example.com/animation.json"))
                     .settingsField()
             }
-            LabeledContent("Animation Name") {
-                TextField("Animation Name", text: $nameInput, prompt: Text("My Animation"))
+            LabeledContent("Animation name") {
+                TextField("Animation name", text: $nameInput, prompt: Text("My animation"))
                     .settingsField()
             }
         } buttons: {

@@ -1777,6 +1777,11 @@ AppleScript: here a sync and Open in Notes are each a press. With a board's fixt
 **Not measured:** CPU with Notes open while a note is typed in the notch, and parked full screen in another Space.
 `NotesPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
+**2026-11-11 addendum: the copy pass adds no `onAppear`, no `.task` and no animator.** Stage 4's child 4-3c rewrote
+Settings' strings (sentence case, captions of about eight words, the catalog) and capped two widths, a footer at
+`proseMaxWidth` and a row's caption at `descriptionMaxWidth`. No hook, subscription or animation was added or moved, so
+`SettingsAnimationRulesTests` and the design-system rules hold as they were.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

@@ -78,8 +78,6 @@ final class BrainNamingRulesTests: XCTestCase {
                 reason: "the Clipboard section's header: that feature's own group of options inside Brain"),
         Allowed(file: "Kannu/components/Settings/SettingsPermissionCallout.swift", literal: .exactly("Open Settings"),
                 reason: "SettingsPermissionCallout's default button, which opens macOS System Settings"),
-        Allowed(file: "Kannu/components/Settings/ExtensionsSettings.swift", literal: .exactly("Global Settings"),
-                reason: "the section header for options that apply to every extension"),
         Allowed(file: "Kannu/components/Live activities/DynamicIslandBattery.swift", literal: .exactly("Battery Settings"),
                 reason: "opens the macOS Battery settings"),
         Allowed(file: "Kannu/components/ScreenAssistant/ChatPanels.swift", literal: .exactly("Open Model Settings"),

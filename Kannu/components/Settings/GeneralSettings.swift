@@ -68,7 +68,7 @@ struct GeneralSettings: View {
     var body: some View {
         SettingsPage {
             SettingsSection {
-                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
+                SettingsRow("Menubar icon", description: "Click to open the notch; right-click for more.") {
                     Defaults.Toggle(key: .menubarIcon) {
                         Text("Menubar icon")
                     }
@@ -209,7 +209,7 @@ struct GeneralSettings: View {
                     }
                 }
             } header: {
-                SettingsSectionHeader("Notch Height")
+                SettingsSectionHeader("Notch height")
             }
 
             NotchBehaviour()
@@ -301,7 +301,7 @@ struct GeneralSettings: View {
             // hidden island slides in.
             if openNotchOnHover || !alwaysShowOnNonNotchDisplays || alwaysShowOverrides.values.contains(false) {
                 SettingsSliderRow("Minimum hover duration",
-                                  description: "How long the pointer must rest on the notch before it opens. On displays where Kannu hides until hovered, this is also how long the pointer must rest at the top edge before the island slides in.",
+                                  description: "How long the pointer rests before the notch opens.",
                                   value: $minimumHoverDuration, in: 0...2, step: 0.1,
                                   valueText: Text("\(minimumHoverDuration, specifier: "%.1f")s"))
                 .onChange(of: minimumHoverDuration) {
@@ -317,7 +317,7 @@ struct GeneralSettings: View {
                 NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
             }
             .settingsHighlight(id: highlightID("External display style"))
-            SettingsRow("Always show on non-notch displays", description: "By default the notch hides on external displays and appears when you hover near the top. Turn this on to keep it visible.") {
+            SettingsRow("Always show on non-notch displays", description: "Keeps the notch visible instead of hiding until hover.") {
                 Defaults.Toggle(key: .alwaysShowOnNonNotchDisplays) {
                     Text("Always show on non-notch displays")
                 }

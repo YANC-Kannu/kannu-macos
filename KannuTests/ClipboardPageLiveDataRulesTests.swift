@@ -43,7 +43,7 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
     private static let emptinessFeed = #"ClipboardManager\.shared\.\$clipboardHistory\.map\(\\\.isEmpty\)\s*\.combineLatest\(ClipboardManager\.shared\.\$pinnedItems\.map\(\\\.isEmpty\)\)\s*\.removeDuplicates\(by: ==\)\s*\.values"#
     /// All the page may name on the manager: the calls a press or the switch makes, and the two subscriptions. Anything
     /// else there is state, which only the copy reads, so a value the manager gains later is caught too. `pinnedItems`
-    /// may only be emptied, as Clear Pinned Items does.
+    /// may only be emptied, as Clear pinned items does.
     private static let allowedManagerNames: Set<String> = [
         "copyToClipboard", "togglePin", "deleteItem", "clearHistory", "savePinnedItemsToDefaults", "startMonitoring",
         "stopMonitoring", "objectWillChange", "$clipboardHistory", "$pinnedItems",
@@ -245,8 +245,8 @@ final class ClipboardPageLiveDataRulesTests: XCTestCase {
         ("glyph(\"doc.on.doc\", String(localized: \"Copy\"))", "copyToClipboard", "ClipboardManager.shared.copyToClipboard(item)"),
         ("glyph(isPinned ? \"pin.slash\" : \"pin\"", "togglePin", "ClipboardManager.shared.togglePin(for: item)"),
         ("glyph(\"trash\", String(localized: \"Delete\"), role: .destructive)", "deleteItem", "ClipboardManager.shared.deleteItem(item)"),
-        ("Button(\"Clear History\", role: .destructive)", "clearHistory", "ClipboardManager.shared.clearHistory()"),
-        ("Button(\"Clear Pinned Items\", role: .destructive)", "pinnedItems.removeAll()", "ClipboardManager.shared.pinnedItems.removeAll()"),
+        ("Button(\"Clear history\", role: .destructive)", "clearHistory", "ClipboardManager.shared.clearHistory()"),
+        ("Button(\"Clear pinned items\", role: .destructive)", "pinnedItems.removeAll()", "ClipboardManager.shared.pinnedItems.removeAll()"),
         ("Button(\"Open history panel\")", "ClipboardPanelManager", "ClipboardPanelManager.shared.showClipboardPanel(trigger: \"brain\")"),
     ]
 
