@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of Geist in the notch
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
+- **Changes:**
+  - The running timer's name and its rename field keep the system font: 20 pt in a 24 pt line, which Geist's 26 pt
+    line overfills.
+  - A symbol beside medium text keeps the system's medium: Geist Medium draws SF Symbols regular (measured, about a
+    fifth less ink), so Notes' back chevron, Open in Notes' and Add a reminder's symbols take their own font.
+  - `NotchFontRulesTests` pins the six lines; docs/SETTINGS.md "The notch" says why, with the dropped rounded design
+    and why the Agents tab's names take Geist when the music title does not.
+
+### 2026-11-12 - The notch's text in Geist, through one theme token
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: a shared font token in place of `.system` across the notch
+- **Changes:**
+  - `SettingsTheme.font(size:weight:)`: Geist at the size and weight `.system` took, the notch's sizes being its own
+    (`UsageCardMetrics`, `TimerComposerMetrics`). Bold and heavier draw Geist SemiBold, the heaviest face bundled;
+    with no Geist bundled it is the system font, as every token is.
+  - The open notch's text uses it: 124 lines in 12 files of `Notch/` and the Agents tab (the header's tooltip, Home,
+    Usage, Timer and its Tasks column, task form and suggestions, Notes, Stats, the Tasks and Clipboard popovers).
+    Text styles became their macOS sizes.
+  - Kept on the system font, pinned per file with why by `NotchFontRulesTests`: symbols, which `.system` sizes;
+    monospaced text, since Geist Mono ships Regular only (the timer's black readouts among it); the tag chip, whose
+    16 pt caption line Geist's 10 pt line overfills by AppKit's ruler; the music title, artist and lyrics, whose title
+    measures with an AppKit text style; the header's button symbols.
+  - Every budget keeps its size. `TimerComposerMetricsTests` measures the 36 pt task row with the Geist faces it now
+    draws; `NotchTagFilterRulesTests` and `TimerTaskDetailRulesTests` pin the rows' new font calls.
+  - docs/SETTINGS.md gains "The notch"; docs/REGRESSIONS.md entry 21 notes that `NotchNotesView` changed only fonts.
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
