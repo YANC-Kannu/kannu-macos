@@ -190,6 +190,11 @@ struct TasksSettings: View {
             path = []
             if !isOn { TaskReminders.withdrawAll() }
         }
+        // Widening past the width with a task open in the list's place builds the list anew, at its top: it scrolls to
+        // the task's row, now selected beside the page.
+        .onChange(of: showsPageBeside) { _, beside in
+            if beside, let id = taskBeside { returnTo = id }
+        }
         // A sheet writes through the manager; as it closes, the page reads it again at once, as after a press.
         .sheet(item: $sheet, onDismiss: copyFromStore) { sheet in
             switch sheet {

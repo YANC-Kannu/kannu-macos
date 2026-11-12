@@ -488,7 +488,8 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
 - **Tasks' settings**, under a "Tasks settings" rule: the Tasks switches first, where the gear lands, then Sources
   (Local tasks and each source with how many tasks it holds and a › to its page) and Tag colours, folded.
 - **A task's page, wide** (layout-proposal D1; above, "Section rules"): from 1,224 pt of panel a task opened from the
-  list shows beside it, and its card wears the selected ring; narrower it takes the list's place under "‹ Tasks".
+  list shows beside it, and its card wears the selected ring; narrower it takes the list's place under "‹ Tasks", and
+  widening the window past the width with it open scrolls the list to its row.
 - **Boards**: `tasksWindow`, `tasksTask`, `tasksDone` and `tasksArchived` draw Tasks at the window's first size: the
   list, a task opened from it in the list's place, and the Done and Archived tabs; `tasksWide` and `tasksWideTask` at
   a 14-inch full screen (1,512 × 982): the list with no task open, and with one beside it. Fixture tasks only

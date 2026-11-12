@@ -124,7 +124,7 @@ struct TaskSourceMenu: View {
         return Picker("Tag", selection: preferences.tagBinding) {
             Text("All").tag(TaskFacets.anyTag)
             ForEach(tags, id: \.self) { tag in
-                Text(verbatim: "#\(tag)").tag(tag)
+                Text(verbatim: "#\(tag)").tag(tag.lowercased() == picked.lowercased() ? picked : tag)
             }
             if picked != TaskFacets.anyTag, !tags.contains(where: { $0.lowercased() == picked.lowercased() }) {
                 Text(verbatim: "#\(picked)").tag(picked)
