@@ -241,10 +241,15 @@ struct LocalSendDevicePickerContent: View {
                                     : .easeOut(duration: 0.2),
                                 value: isRefreshing
                             )
+                            // The circle it replaced was 32 across; inside the quiet inset this is 38 by 28.
+                            .frame(width: 22, height: 22)
                     }
                     .buttonStyle(SettingsButtonStyle(.quiet))
                     .disabled(isRefreshing)
                     .help("Refresh devices")
+                    // A name for VoiceOver, which read the symbol's. No `.hoverTooltip`: the style tracks hover itself,
+                    // and a second hover source silences a tooltip (docs/TOOLTIPS.md, rule 3).
+                    .accessibilityLabel(String(localized: "Refresh devices"))
                     
                     // Close button
                     Button {
@@ -252,8 +257,10 @@ struct LocalSendDevicePickerContent: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 12, weight: .bold))
+                            .frame(width: 22, height: 22)
                     }
                     .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(String(localized: "Close"))
                 }
                 .padding(.horizontal, SettingsTheme.sheetInset)
                 .padding(.top, SettingsTheme.sheetInset)
@@ -430,7 +437,7 @@ private struct DeviceGridItem: View {
             )
         }
         .buttonStyle(.plain)
-        .scaleEffect(isHovered ? 1.02 : 1.0)
+        .scaleEffect(isHovered && !reduceMotion ? 1.02 : 1.0)
         // The theme's bounded ease, none under Reduce Motion, never a spring (docs/SETTINGS.md, "The design system").
         .animation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation), value: isHovered)
     }

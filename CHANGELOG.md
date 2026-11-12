@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of the floating panels
+- **Developer label:** Brain redesign plan: Stage 6, floating panels, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the reviewer's minors; the picker's Refresh and Close keep their reach and gain names, and both panels' motion honours Reduce Motion
+- **Changes:**
+  - The LocalSend picker's Refresh and Close keep the reach of the circles they replaced: their glyphs sit in a 22-pt
+    frame inside the quiet style's inset, 38 by 28.
+  - Refresh and Close say "Refresh devices" and "Close" to VoiceOver, existing catalog keys; neither takes a tooltip,
+    which would be a second hover source beside the style's own.
+  - The clipboard panel's tab switch keeps its 0.2 s ease but none under Reduce Motion, and the picker's device no
+    longer grows under the pointer with Reduce Motion on.
+  - docs/SETTINGS.md "The floating panels" says so.
+
 ### 2026-11-12 - The floating panels take Brain's theme
 - **Developer label:** Brain redesign plan: Stage 6, floating panels: clipboard, LocalSend picker and similar small panels
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the clipboard panel and the LocalSend picker on Brain's tokens, Geist, cards, buttons and insets, behaviour unchanged
