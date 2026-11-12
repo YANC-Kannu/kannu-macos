@@ -505,9 +505,10 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   verb again, as Security's empty state draws its own. While Notes is off, one card, "Notes is off", with Turn On.
 - **A note's own page** (below, "Section rules"): from 1,224 pt of panel the › shows it beside the list
   (layout-proposal.md, D1), the note's row wearing the selected ring, and its card names the note over when it was
-  edited, since the tab keeps Notes' title; with none open, its place says "No note selected". Narrower it is an
-  in-tab swap: the › opens it under a bare "‹ Notes" back row, with the note's title as the page's title, at its top;
-  going back scrolls to the note's row. Either way it shows the note whole and read-only: when it was edited ("Made in
+  edited, since the tab keeps Notes' title; with none open, its place says "No note selected", and how to open one
+  while there is one. Narrower it is an in-tab swap: the › opens it under a bare "‹ Notes" back row, with the note's
+  title as the page's title, at its top; going back scrolls to the note's row, and so does widening the window past
+  the width with the note open. Either way it shows the note whole and read-only: when it was edited ("Made in
   Apple Notes" after it for a note shown read-only), the text, selectable, and its image as a preview at most the prose
   width and a hero card's height, read from its file once, off the main thread. Then Pin or Unpin, Copy and Delete, and
   Open in Notes for a note made there: the notch edits notes, and Apple Notes the ones made there. `NotePage` is handed

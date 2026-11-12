@@ -148,6 +148,11 @@ struct NotesSettingsView: View {
         .onChange(of: enableNotes) { _, _ in
             openNoteID = nil
         }
+        // Widening past the width with a note open in the list's place builds the list anew, at its top: it scrolls to
+        // the note's row, now selected beside the page.
+        .onChange(of: showsPageBeside) { _, beside in
+            if beside, let id = openNote?.id { returnTo = id }
+        }
         .alert("Delete this note?", isPresented: Binding(get: { pendingDelete != nil }, set: { if !$0 { pendingDelete = nil } }),
                presenting: pendingDelete) { note in
             Button("Delete", role: .destructive) { remove(note) }
@@ -190,21 +195,22 @@ struct NotesSettingsView: View {
         }
     }
 
-    /// The open note's page beside the list, or, while none is open, what its place says. Named in its card, since the
-    /// tab's title stays Notes' while the list is on screen.
+    /// The open note's page beside the list, or, while none is open, what its place says: how to open one, while there
+    /// is one to open. Named in its card, since the tab's title stays Notes' while the list is on screen.
     @ViewBuilder
     private var notePageBeside: some View {
         if let note = noteBeside {
             SettingsPage {
                 NotePage(note: note, isReadOnly: data.isReadOnly(note), showsTitle: true, delete: delete)
             }
-            // A note's page opens at its top.
-            .id(note.id)
+            // A note's page opens at its top. Not the note's own id, which its row carries, so a scroll back to the row
+            // has one target.
+            .id("beside-\(note.id)")
         } else {
             SettingsPage {
                 SettingsSection {
                     NotesMessage(title: String(localized: "No note selected"),
-                                 message: String(localized: "Click › on a note to see it here.")) {
+                                 message: data.notes.isEmpty ? nil : String(localized: "Click › on a note to see it here.")) {
                         EmptyView()
                     }
                 }
