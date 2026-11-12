@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Brain's sidebar badges a state that needs you
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges (layout-proposal.md D2, badges only)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: badges for an agent waiting, high findings and usage near its limit, a static timer glyph, under Brain's live-data rules
+- **Changes:**
+  - Agents shows a dot in the light's yellow while an agent waits for input; Security, the count of high-severity
+    findings to review; Usage, a dot while a window is at or near its limit; Timer, a static ▶ while a timer runs.
+    Nothing else: no open-task count and no setup checklist (David, 2026-11-11, "Badges only").
+  - Each badge says its state in words to VoiceOver and the pointer, so it never rests on colour alone.
+  - Live data as on the pages: one copy per badge, throttled to 500 ms, only while Brain is on screen, read once as it
+    appears; the agents' badge follows the monitor's projection; nothing ticks, and `SettingsView` observes nothing
+    new. `SidebarBadgeLiveDataRulesTests` holds it against planted offenders.
+  - The sidebar's BETA pill becomes the pages' one badge, "Beta" (design review finding 12). `SettingsSidebarRow`
+    takes its badge as a view.
+  - Board `shellBadges` draws every badge from a fixture; every other board is quiet, so none reads this Mac's stores.
+  - Catalog: "Beta" and "Near its limit" in all 17 languages; "BETA" retired.
+  - docs/SETTINGS.md ("The shell and navigation", "Live data", the badge row); docs/REGRESSIONS.md entry 22's
+    2026-11-12 addendum.
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
