@@ -483,6 +483,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
     `SettingsLayoutRulesTests` pins their padding.
 
+### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
+- **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
+- **Agent label:** Claude Code (Opus 5.5) — both fixes and their tests; why a Debug folder is in the code's comments
+- **Changes:**
+  - The launch cleanup keeps Pinned Items' files as well as History's. Pinning moves an item out of History, so
+    every pinned image lost its file at each launch. The cleanup is now `ClipboardDataCleanup`, Foundation only,
+    in the logic target.
+  - A Debug build (`com.kannu.app.dev`) keeps its images in `ClipboardData-Debug`, beside the installed app's
+    `ClipboardData`. Its history is in its own defaults, and the cleanup removes every file that history does not
+    name, so any debug launch deleted the installed app's images. A Debug build's older image history loses its
+    pictures once.
+  - A Debug build no longer moves `~/Documents/ClipboardData`, where releases before 1.4.0-beta.3 keep their
+    images: moved into the Debug folder, they would be lost to the installed app and deleted by the Debug cleanup.
+  - `ClipboardDataCleanupTests`: a pinned image keeps its file and only unnamed files go; a source check pins the
+    Debug folder and the Debug build's empty legacy move.
+
 ### 2026-11-05 - Answer CodeRabbit's review of Brain's controls
 - **Developer label:** "Yes, request it"
 - **Agent label:** Claude Code (Opus 5.5) — the fixes from CodeRabbit's review of Super 3; the rest answered on the PR
