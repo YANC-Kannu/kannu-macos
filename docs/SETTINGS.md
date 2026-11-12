@@ -487,8 +487,9 @@ Stage 5.
   (layout-proposal.md, D1) can stand it beside the list from the same selection. Each visit opens on the list, since a
   note left open would come back whole on a reopened Brain, which can be on a shared screen; a Notes search or deep link
   takes the tab back to the list too, where its row is.
-- **Notes' presses:** Delete asks first for a note made in Apple Notes, since it moves to Recently Deleted there too, as
-  the notch's rows ask; any other goes at once, as there. **The page starts no work of its own:** no sync and no
+- **Notes' presses:** Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the
+  scope, since it moves to Recently Deleted there too: a narrowing leaves such a note listed until the next sync, and
+  its Delete still reaches Notes. Any other goes at once. **The page starts no work of its own:** no sync and no
   AppleScript as it appears or follows, though the notch's Notes tab syncs as it appears. Pin, Copy, Open in Notes
   (AppleScript, behind the sync manager's gate) and Delete act on a press only, through `NotesManager`, the notes' one
   write path; Delete then reads the notes again at once, so the row goes with the note. A note's image file is read

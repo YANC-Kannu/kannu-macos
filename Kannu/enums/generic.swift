@@ -35,7 +35,7 @@ public enum Style {
 ///   inspired by DynamicNotchKit's floating style. Only applies to screens
 ///   that do NOT have a physical notch.
 enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifiable {
-    case notch = "Standard notch"
+    case notch = "Standard Notch"
     case dynamicIsland = "Dynamic Island"
 
     var id: String { rawValue }
