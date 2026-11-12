@@ -1300,6 +1300,10 @@ extension Defaults.Keys {
     /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
     /// and Claude Code's own sign-in with its token's, so it flips between them.
     static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
+    /// "Live Claude Code limits" (hook v49): Kannu's usage script runs as Claude Code's status line, the
+    /// only credential-free source of live 5-hour and weekly limits for Claude Code in a terminal.
+    /// Opt-in: it takes over a setting of the user's own, and Claude Desktop needs nothing from it.
+    static let claudeStatusLineUsage = Key<Bool>("claudeStatusLineUsage", default: false)
     /// Organization id to where its windows reset, from Claude Code's cache at Kannu's last run on
     /// that organization (`ClaudeCachedUsage.OrganizationResets`). Claude Desktop's history has no
     /// resets of its own, and Claude Code may be on another organization by the time it is read.

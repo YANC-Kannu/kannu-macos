@@ -803,6 +803,9 @@ final class SecurityFindingsStore: ObservableObject {
         place(SecretSighting.detectionOffMarker, present: !enabled.secrets)
         place(SensitivePathSighting.detectionOffMarker, present: !enabled.sensitivePaths)
         place(AgentPolicy.enforceMarker, present: Defaults[.enforceAgentPolicy])
+        // Hook v49: Claude runs Kannu's hooks without waiting unless a marker above needs an answer
+        // (a deny, or the note to the agent), so the hooks follow the markers just placed.
+        AgentHookInstaller.refreshClaudeHookModes()
         let kept = sightingRecords.keepingOnly(enabled)
         if kept != sightingRecords { storeSightingRecords(kept) }
     }

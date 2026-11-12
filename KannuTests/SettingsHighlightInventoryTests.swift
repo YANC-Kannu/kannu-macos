@@ -97,9 +97,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // and its two battery rows), one entry, three registrations and three ids fewer.
         // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
         // opposite of what is on screen, so this row is the way back to Match macOS.
-        XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
+        // 2026-11-13: Agents gains "Live Claude Code limits" (one entry, one row): Claude Code's status
+        // line became opt-in with hook v49, and this row is where a terminal user turns it on.
+        XCTAssertEqual(inventory.entries.count, 245, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
     }
 
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
