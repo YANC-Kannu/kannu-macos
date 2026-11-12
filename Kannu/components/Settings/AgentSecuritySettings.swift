@@ -388,6 +388,8 @@ struct AgentSecuritySettings: View {
         panel.allowsMultipleSelection = false
         panel.message = String(localized: "Choose a policy file to import")
         ModalPresenter.present(panel) { response in
+            // A fresh copy first: Replace is asked on what the store holds now, never on a copy half a second old.
+            copyFromStore()
             guard response == .OK, let url = panel.url else { return }
             let proceed = { SecurityFindingsStore.shared.importPolicyFile(from: url) }
             if security.policyExists {

@@ -431,8 +431,9 @@ Stage 5.
 - **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom timer's
   stepper rows, and the colour, written on Add or Save and never as typed, so Cancel leaves the preset as it was. It
   refuses a blank name, a blank row in the notch's list, and a 0:00 length, which would ring a second after it
-  started; a length the steppers cannot show, over 23:59:59, is kept unless they are moved. It replaced the inline
-  editor in the settings, which drew its own steppers under 9-pt labels.
+  started; a length over 23:59:59, which only an older version could save, opens whole, with the Hours stepper reaching
+  its hours, so an edit never cuts them to 23. It replaced the inline editor in the settings, which drew its own
+  steppers under 9-pt labels.
 - **Timer's empty state**: "No timer running" and "Click a preset below to start a timer.", whose action is the tiles
   under it. **While the timer is off**, "Timer is off" with Turn on stands in place of the timer and the tiles: the
   notch shows no timer then.
@@ -466,8 +467,8 @@ Stage 5.
   (`ClipboardOverview.snapshotFixture`), never this Mac's clipboard. The `clipboard` board draws four copies and no pin.
   With a fixture set the page never touches the clipboard manager: its first touch loads the saved history and deletes
   the image files that history does not name, in a folder the installed app shares, and its start reads the real
-  pasteboard. The switches still come from this Mac's settings, so the off state is drawn with the
-  `-enableClipboardManager NO` launch argument, which changes nothing saved.
+  pasteboard. The page and its header take the manager's switch from the fixture, on, as Usage's take Agent Status, so
+  no board draws the page's off card now; the settings rows below still read this Mac's switches.
 - **Notes** leads with the notes in one card, pinned first and then the latest edit first, as the notch's Notes tab
   lists them, in a lazy list (above, "Pages and sections"). A row is the note's colour (a pin in that colour when it is
   pinned, as the notch marks one, in a column a list row's icon wide, so the titles share an edge), its title and a
@@ -592,10 +593,11 @@ manager keeps no deadline (it counts `remainingTime` down, and a pause stops the
 or a counting `Text` here would be a second clock that could disagree with the notch, and would tick on while a timer
 stood paused. Off screen the copy stays as it was; an idle or paused timer publishes nothing, so the page then does no
 work at all. Its buttons act only on a press, through the popover's own calls, and Pause or Resume reads the timer as
-it is at the press, never the copy. Each press, and each edit of the presets, then reads the timer again at once, one
-read and never a subscription, so the card never shows the old state for the throttle's half second, and a paused
-timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it needs a
-real window.
+it is at the press, never the copy, as Start timer does to start nothing over a running timer, which the header's copy
+misses until its task first reads the manager. Each press, and each edit of the presets, then reads the timer again at
+once, one read and never a subscription, so the card never shows the old state for the throttle's half second, and a
+paused timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it
+needs a real window.
 
 **Notes** keeps the same three, and `NotesPageLiveDataRulesTests` holds them against planted offenders. The notch
 autosaves a note every 1.5 s while one is typed, and a sync rewrites the notes, so the page never observes them: what the

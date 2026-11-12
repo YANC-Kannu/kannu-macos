@@ -211,9 +211,9 @@ struct TimerHeaderActions: View {
             .help(String(localized: "Timer settings"))
             .accessibilityLabel(String(localized: "Timer settings"))
             Button("Start timer") {
-                // Read at the press: the popover's own start, with no typed name.
+                // Read at the press: the popover's own start, with no typed name, and never over a running timer.
                 let length = customTimerDuration
-                guard length > 0 else { return }
+                guard length > 0, !Self.timerRunsNow() else { return }
                 let name = String(localized: "Custom Timer")
                 TimerManager.shared.startTimer(duration: length, name: name, fallbackName: name)
             }
@@ -229,6 +229,12 @@ struct TimerHeaderActions: View {
                 running = active
             }
         }
+    }
+
+    /// Whether a timer runs, read from the manager at Start timer's press, never from `running`: that stays false until
+    /// the task above first reads the manager, and a start then would replace the running timer.
+    private static func timerRunsNow() -> Bool {
+        TimerManager.shared.isTimerActive
     }
 }
 

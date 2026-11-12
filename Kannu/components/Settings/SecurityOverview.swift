@@ -60,9 +60,18 @@ struct SecurityOverview: View {
         return detectionEnabled
     }
 
+    /// Agent Status, which runs the findings store: off, the page shows its off card and the header nothing. On a board,
+    /// the fixture's, never this Mac's switch.
+    static func agentStatusOn(_ enabled: Bool) -> Bool {
+        #if DEBUG
+        if let fixture = snapshotFixture { return fixture.agentStatusOn }
+        #endif
+        return enabled
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
-            if !enabled {
+            if !Self.agentStatusOn(enabled) {
                 // The store stops with Agent Status, so there is nothing current to show.
                 SettingsSection {
                     SecurityMessage(title: String(localized: "Agent Status is off"), message: nil) {
@@ -154,7 +163,7 @@ struct SecurityHeaderActions: View {
 
     var body: some View {
         HStack(spacing: SettingsMetrics.rowContent) {
-            if enabled {
+            if SecurityOverview.agentStatusOn(enabled) {
                 Button {
                     // The first settings row, which is built whenever Agent Status is on.
                     SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(highlightID: SettingsDeepLink.securityAlertsHighlightID)
@@ -510,5 +519,7 @@ struct SecurityOverviewFixture {
     var data: SecurityPageData
     var adrConnected: Bool
     var detectionEnabled: Bool
+    /// Agent Status: off, the page shows its off card in place of the findings, and the header nothing.
+    var agentStatusOn = true
 }
 #endif
