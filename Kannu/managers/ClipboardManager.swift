@@ -197,13 +197,27 @@ class ClipboardManager: ObservableObject {
     /// Where clipboard history keeps its image files. Application Support needs no permission;
     /// `~/Documents/ClipboardData`, where they used to live, raised the Documents dialog the first
     /// time the notch opened, whether or not clipboard history was on.
+    ///
+    /// A Debug build (`com.kannu.app.dev`) keeps its own folder. Its history is in its own defaults,
+    /// and the launch cleanup removes every file that history does not name, so in a shared folder
+    /// a debug launch deleted the installed app's images. Beside the installed app's folder, never
+    /// inside it: that app's cleanup would remove the folder with everything else it does not name.
+    #if DEBUG
+    static let clipboardDataDirectory: URL = AppSupportPaths.child("ClipboardData-Debug")
+    #else
     static let clipboardDataDirectory: URL = AppSupportPaths.child("ClipboardData")
+    #endif
 
     /// Moves an older install's files out of `~/Documents/ClipboardData`, once, off the main thread.
     /// Only for an install from before the move (`isUpgrade`): it already answered the Documents
     /// dialog, so this raises none, and a fresh install never touches `~/Documents` at all. Items
     /// store file names, not paths, so history survives the move.
     static func migrateLegacyDataIfNeeded(isUpgrade: Bool) {
+        #if DEBUG
+        // A Debug build leaves the old folder to the installed app, whose images are in it (releases
+        // before 1.4.0-beta.3 still keep them there). Moved into the Debug folder, they would be lost
+        // to that app and then deleted by this build's cleanup, which keeps only what its history names.
+        #else
         guard !Defaults[.clipboardDataMigrated] else { return }
         guard isUpgrade,
               let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
@@ -220,6 +234,7 @@ class ClipboardManager: ObservableObject {
             guard moveLegacyFiles(from: legacy, to: destination) else { return }
             DispatchQueue.main.async { Defaults[.clipboardDataMigrated] = true }
         }
+        #endif
     }
 
     /// True once nothing is left to move: the old folder is gone, or every file in it reached
@@ -563,16 +578,11 @@ class ClipboardManager: ObservableObject {
     
     // Clean up old image files that are no longer referenced
     private func cleanupOldFiles() {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: ClipboardManager.clipboardDataDirectory, includingPropertiesForKeys: nil) else { return }
-        
-        let referencedFiles = Set(clipboardHistory.compactMap { $0.imageFileName })
-        
-        for file in files {
-            let fileName = file.lastPathComponent
-            if !referencedFiles.contains(fileName) {
-                try? FileManager.default.removeItem(at: file)
-            }
-        }
+        ClipboardDataCleanup.removeUnreferencedFiles(
+            in: ClipboardManager.clipboardDataDirectory,
+            history: clipboardHistory.compactMap(\.imageFileName),
+            pinned: pinnedItems.compactMap(\.imageFileName)
+        )
     }
     
     // MARK: - Persistence
