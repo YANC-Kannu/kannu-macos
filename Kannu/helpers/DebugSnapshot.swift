@@ -1253,7 +1253,7 @@ enum DebugSnapshotFixtures {
             providers = [.claude]
         default:
             providers = [.claude, .codex, .cursor]
-            readings.append(reading("cursor", "week", "billing-cycle", 96, now.addingTimeInterval(9 * 86_400)))
+            readings.append(reading("cursor", "week", "billing cycle", 96, now.addingTimeInterval(9 * 86_400)))
             results[.cursor] = .success(cursor)
         }
         return UsageOverviewFixture(providers: providers,

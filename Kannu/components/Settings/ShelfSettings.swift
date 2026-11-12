@@ -64,7 +64,7 @@ struct Shelf: View {
                             message: "Enable Full Disk Access, or grant access to both Documents and Downloads folders to use Shelf.",
                             icon: "folder.badge.questionmark",
                             iconColor: .orange,
-                            requestButtonTitle: "Request Folder Access",
+                            requestButtonTitle: "Request folder access",
                             openSettingsButtonTitle: "Open Privacy & Security",
                             requestAction: { shelfFolderAccessPermission.requestAccessPrompt() },
                             openSettingsAction: { shelfFolderAccessPermission.openSystemSettings() }
@@ -121,10 +121,10 @@ struct Shelf: View {
             }
 
             SettingsSection {
-                SettingsRow("Quick Share Service", description: selectedProvider == nil
-                            ? nil : Text("Files dropped on the shelf will be shared via this service")) {
+                SettingsRow("Quick Share service", description: selectedProvider == nil
+                            ? nil : Text("Dropped files are shared with this service.")) {
                     // The saved id shows before discovery ends: the select draws the selection's own title.
-                    SettingsSelect("Quick Share Service", selection: $quickShareProvider,
+                    SettingsSelect("Quick Share service", selection: $quickShareProvider,
                                    options: quickShareService.availableProviders.map(\.id), optionTitle: { $0 }) { id in
                         if let provider = quickShareService.availableProviders.first(where: { $0.id == id }) {
                             QuickShareProviderIconImage(provider: provider, size: 16)
@@ -173,18 +173,18 @@ private struct LocalSendSettingsSection: View {
 
     var body: some View {
         SettingsSection {
-            SettingsRow("Device Picker Style") {
-                SettingsSelect("Device Picker Style", selection: $glassMode,
+            SettingsRow("Device picker style") {
+                SettingsSelect("Device picker style", selection: $glassMode,
                                options: LockScreenGlassCustomizationMode.allCases, optionTitle: \.localizedName)
             }
             .settingsHighlight(id: highlightID("Device Picker Style"))
 
             if glassMode == .customLiquid {
                 variantSliderRow(value: liquidGlassVariantBinding, current: liquidGlassVariant.rawValue,
-                                 range: liquidVariantRange, title: String(localized: "Liquid Glass Variant"))
+                                 range: liquidVariantRange, title: String(localized: "Liquid Glass variant"))
             }
         } header: {
-            SettingsSectionHeader("LocalSend Device Picker")
+            SettingsSectionHeader("LocalSend device picker")
         } footer: {
             SettingsFooter("Customize the appearance of the LocalSend device selection popup that appears when you drop files.")
         }

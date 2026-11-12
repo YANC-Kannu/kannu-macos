@@ -61,10 +61,10 @@ struct SpotifyLoginSheet: View {
                 Button {
                     NSWorkspace.shared.open(SpotifyLoginConstants.externalLoginURL)
                 } label: {
-                    Label("Open in Browser", systemImage: "safari")
+                    Label("Open in browser", systemImage: "safari")
                 }
                 .help("Spotify often blocks in-app logins. Sign in via your normal browser, then paste sp_dc in Brain.")
-                Button("Reset Session") {
+                Button("Reset session") {
                     NotificationCenter.default.post(name: .spotifyLoginSheetReset, object: nil)
                     statusText = "Session cleared. Sign in again to capture the cookie."
                 }

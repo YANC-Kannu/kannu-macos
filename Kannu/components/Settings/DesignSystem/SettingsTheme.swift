@@ -123,12 +123,16 @@ enum SettingsTheme {
     /// From a section's header to its card, and from the card to its footer.
     static let sectionLabelGap: CGFloat = 8
     static let sectionRadius: CGFloat = 12
+    /// A row's caption stops here, so a label column never runs past about 80 characters at the description's size, however
+    /// long a caption still is.
+    static let descriptionMaxWidth: CGFloat = 440
 
     // MARK: - Product pages: the product first, then its settings
 
     /// A product page's own content stops here. Past it the extra width is right margin, as with `pageMaxWidth`.
     static let productMaxWidth: CGFloat = 1200
-    /// A line of prose, such as an empty state's: about 74 characters at the description's size, 63 at the body's.
+    /// A line of prose, such as an empty state's or a section's footer: about 74 characters at the description's size, 63 at
+    /// the body's.
     static let proseMaxWidth: CGFloat = 380
     /// The hero card, or the empty state in its place.
     static let heroMinHeight: CGFloat = 200

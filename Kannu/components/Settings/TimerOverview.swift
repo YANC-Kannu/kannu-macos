@@ -71,7 +71,7 @@ struct TimerOverview: View {
             if !isOn {
                 // The notch shows no timer while the feature is off, so a start here would show nowhere.
                 TimerMessageCard(title: String(localized: "Timer is off"), message: nil) {
-                    Button("Turn On") { timerOn = true }
+                    Button("Turn on") { timerOn = true }
                 }
             } else {
                 if data.isActive {
@@ -145,7 +145,7 @@ struct TimerOverview: View {
                 Spacer(minLength: SettingsMetrics.rowContent)
                 // Named for what it belongs to, as each tile's is: VoiceOver would otherwise hear "More" alone.
                 SettingsMoreMenu(accessibilityLabel: Text(verbatim: String(localized: "Presets") + ", " + String(localized: "More"))) {
-                    Button("Restore Defaults") { confirmingRestore = true }
+                    Button("Restore defaults") { confirmingRestore = true }
                 }
             }
             .padding(.leading, SettingsTheme.sectionPadding.leading)
@@ -433,9 +433,9 @@ private struct TimerPresetTile: View {
     @ViewBuilder
     private var menuItems: some View {
         Button("Edit…", action: edit)
-        Button("Move Up") { move(-1) }
+        Button("Move up") { move(-1) }
             .disabled(isFirst)
-        Button("Move Down") { move(1) }
+        Button("Move down") { move(1) }
             .disabled(isLast)
         Divider()
         Button("Delete", role: .destructive, action: delete)
@@ -449,7 +449,7 @@ private struct TimerAddTile: View {
     var body: some View {
         Button(action: add) {
             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("Add Preset")
+                Text("Add preset")
                     .font(SettingsTheme.bodyStrong)
                 Image(systemName: "plus")
                     .font(SettingsTheme.cardTitle)

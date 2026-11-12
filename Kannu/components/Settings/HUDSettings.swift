@@ -72,9 +72,9 @@ struct HUD: View {
             SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
-                SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
-                            ? Text("Disabled while external display integration is active. Brightness keys are handled by the external app.") : nil) {
-                    Toggle("Keyboard Backlight HUD", isOn: $enableKeyboardBacklightHUD)
+                SettingsRow("Keyboard backlight HUD", description: enableThirdPartyDDCIntegration
+                            ? Text("Disabled while an external display app handles brightness.") : nil) {
+                    Toggle("Keyboard backlight HUD", isOn: $enableKeyboardBacklightHUD)
                 }
                 .disabled(enableThirdPartyDDCIntegration)
             } header: {
@@ -85,7 +85,7 @@ struct HUD: View {
         }
 
         SettingsSection {
-            SettingsRow("Play feedback when volume is changed", description: "Plays the supplied feedback clip whenever you press the hardware volume keys.") {
+            SettingsRow("Play feedback when volume is changed", description: "Plays a feedback sound on volume key presses.") {
                 Defaults.Toggle(key: .playVolumeChangeFeedback) {
                     Text("Play feedback when volume is changed")
                 }
@@ -116,7 +116,7 @@ struct HUD: View {
             }
             .settingsHighlight(id: highlightID("Show percentages beside progress bars"))
         } header: {
-            SettingsSectionHeader("Dynamic Island Progress Bars")
+            SettingsSectionHeader("Dynamic Island progress bars")
         } footer: {
             if colorCodingDisabled {
                 SettingsFooter("Color-coded fills and smooth gradients are unavailable in Segmented mode. Switch to Hierarchical or Gradient to adjust these options.")
