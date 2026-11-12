@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - The floating panels take Brain's theme
+- **Developer label:** Brain redesign plan: Stage 6, floating panels: clipboard, LocalSend picker and similar small panels
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the clipboard panel and the LocalSend picker on Brain's tokens, Geist, cards, buttons and insets, behaviour unchanged
+- **Changes:**
+  - The clipboard panel draws on `panel` in Geist: its title in `sheetTitle`, History or Favorites as a segmented
+    `SettingsSelect` with each tab's count, the search in Brain's field chrome, rows on the card inset with the `hover`
+    fill, and Brain's empty state. Its glyph buttons keep their plain style and tooltips, in the theme's colours.
+  - The LocalSend picker's content draws in Geist on Brain's dark tokens over the backdrop Shelf › Device Picker Style
+    picks: devices as soft cards, Refresh and Close quiet, Scan Again the standard button, Brain's empty state. Its
+    hover growth takes the theme's bounded ease, none under Reduce Motion.
+  - Each panel's view hands what it observes to a content view (`ClipboardPanelContent`,
+    `LocalSendDevicePickerContent`), so six new boards, light and dark, draw fixtures and never build the clipboard
+    manager or the LocalSend service. Window code, placement, focus, dismissal, tooltips and the capture policy are
+    unchanged.
+  - New `FloatingPanelRulesTests` pins the system fonts and raw colours left in both files, each with why, the panels'
+    root, and the boards' fixtures, against planted offenders.
+  - docs/SETTINGS.md gains "The floating panels"; docs/REGRESSIONS.md entry 17 a 2026-11-12 addendum, since both files
+    hold a panel.
+
 ### 2026-11-12 - Answer the review of the menu bar
 - **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
