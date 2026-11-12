@@ -127,13 +127,43 @@ class ClipboardPanel: NSPanel {
 struct ClipboardPanelView: View {
     let onClose: () -> Void
     @ObservedObject var clipboardManager = ClipboardManager.shared
-    @State private var selectedTab: ClipboardTab = .history
+
+    var body: some View {
+        ClipboardPanelContent(history: clipboardManager.regularHistory, pinned: clipboardManager.pinnedItems,
+                              historyIsEmpty: clipboardManager.clipboardHistory.isEmpty, onClose: onClose)
+    }
+}
+
+/// What the panel draws, from the lists `ClipboardPanelView` hands it. Nothing here holds the clipboard manager: a press
+/// calls it. So a DEBUG snapshot board draws this from made-up copies and never touches the manager, whose first touch
+/// loads the saved history and deletes the image files it does not name (docs/REGRESSIONS.md, entry 22's 2026-11-11
+/// addendum).
+struct ClipboardPanelContent: View {
+    /// The copies that are not pinned, newest first, and the pinned ones.
+    let history: [ClipboardItem]
+    let pinned: [ClipboardItem]
+    /// Whether the manager holds no copy at all, which is what Clear History's button checks.
+    let historyIsEmpty: Bool
+    let onClose: () -> Void
+    @State private var selectedTab: ClipboardTab
     @State private var searchText = ""
     @State private var hoveredItemId: UUID?
-    
+
+    /// The panel opens on History with nothing under the pointer; a board may open Favorites, or put a row under the
+    /// pointer, whose buttons show only then.
+    init(history: [ClipboardItem], pinned: [ClipboardItem], historyIsEmpty: Bool, onClose: @escaping () -> Void,
+         selectedTab: ClipboardTab = .history, hoveredItemId: UUID? = nil) {
+        self.history = history
+        self.pinned = pinned
+        self.historyIsEmpty = historyIsEmpty
+        self.onClose = onClose
+        _selectedTab = State(initialValue: selectedTab)
+        _hoveredItemId = State(initialValue: hoveredItemId)
+    }
+
     var filteredItems: [ClipboardItem] {
-        let allItems = selectedTab == .history ? clipboardManager.regularHistory : clipboardManager.pinnedItems
-        
+        let allItems = selectedTab == .history ? history : pinned
+
         if searchText.isEmpty {
             return allItems
         } else {
@@ -149,13 +179,18 @@ struct ClipboardPanelView: View {
             // Header with tabs
             ClipboardPanelHeader(
                 selectedTab: $selectedTab,
-                searchText: $searchText, 
+                searchText: $searchText,
+                historyCount: history.count,
+                pinnedCount: pinned.count,
+                historyIsEmpty: historyIsEmpty,
                 onClose: onClose
             )
-            
-            Divider()
-                .background(Color.gray.opacity(0.3))
-            
+
+            Rectangle()
+                .fill(SettingsTheme.line)
+                .frame(height: SettingsTheme.hairline)
+                .accessibilityHidden(true)
+
             // Content
             if filteredItems.isEmpty {
                 ClipboardPanelEmptyState(
@@ -169,7 +204,7 @@ struct ClipboardPanelView: View {
                             ClipboardPanelItemRow(
                                 item: item,
                                 isHovered: hoveredItemId == item.id,
-                                isPinned: clipboardManager.pinnedItems.contains(where: { $0.id == item.id })
+                                isPinned: pinned.contains(where: { $0.id == item.id })
                             ) { hoverId in
                                 hoveredItemId = hoverId
                             }
@@ -180,18 +215,24 @@ struct ClipboardPanelView: View {
             }
         }
         .frame(width: 320, height: 400)
-        .background(VisualEffectView(material: .hudWindow, blendingMode: .behindWindow))
+        .background(SettingsTheme.panel)
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.4), radius: 20, x: 0, y: 10)
+        // A window of its own, so it applies Brain's root itself, as a sheet does (docs/SETTINGS.md, "The floating
+        // panels").
+        .settingsDesignSystem()
     }
 }
 
 struct ClipboardPanelHeader: View {
     @Binding var selectedTab: ClipboardTab
     @Binding var searchText: String
+    let historyCount: Int
+    let pinnedCount: Int
+    let historyIsEmpty: Bool
     let onClose: () -> Void
-    @ObservedObject var clipboardManager = ClipboardManager.shared
     @FocusState private var isSearchFieldFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(spacing: 8) {
@@ -201,65 +242,60 @@ struct ClipboardPanelHeader: View {
                 NativeStyleCloseButton(action: onClose)
                 
                 Image(systemName: "doc.on.clipboard")
-                    .foregroundColor(.primary)
+                    .foregroundStyle(SettingsTheme.ink)
                     .font(.system(size: 16, weight: .medium))
-                
+
                 Text("Clipboard Manager")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.primary)
-                
+                    .font(SettingsTheme.sheetTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+
                 Spacer()
                 
                 // Clear button
                 Button(action: {
                     if selectedTab == .history {
-                        clipboardManager.clearHistory()
+                        ClipboardManager.shared.clearHistory()
                     } else {
-                        clipboardManager.pinnedItems.removeAll()
-                        clipboardManager.savePinnedItemsToDefaults()
+                        ClipboardManager.shared.pinnedItems.removeAll()
+                        ClipboardManager.shared.savePinnedItemsToDefaults()
                     }
                 }) {
                     Image(systemName: "trash")
-                        .foregroundColor(.red)
+                        .foregroundStyle(SettingsTheme.destructive)
                         .font(.system(size: 12))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .disabled(selectedTab == .history ? clipboardManager.clipboardHistory.isEmpty : clipboardManager.pinnedItems.isEmpty)
+                .disabled(selectedTab == .history ? historyIsEmpty : pinnedCount == 0)
                 .hoverTooltip(clearTooltip, edge: .below)
                 .accessibilityLabel(clearTooltip)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            
-            // Tab selector
-            HStack(spacing: 0) {
-                ForEach(ClipboardTab.allCases, id: \.self) { tab in
-                    ClipboardTabButton(tab: tab, isSelected: selectedTab == tab) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedTab = tab
-                        }
-                    }
-                }
-                
-                Spacer()
+            .padding(.horizontal, SettingsMetrics.cardPadding)
+            .padding(.top, SettingsMetrics.cardPadding)
+
+            // History or Favorites: Brain's two-option choice, each with how many it holds.
+            SettingsSelect("Clipboard", selection: tabSelection, options: ClipboardTab.allCases,
+                           optionTitle: segmentTitle, style: .segmented) { tab in
+                Image(systemName: tab.icon)
             }
-            .padding(.horizontal, 16)
-            
-            // Search bar (always visible)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, SettingsMetrics.cardPadding)
+
+            // Search bar (always visible), in Brain's field chrome. The chrome hides the field's label, so what to type
+            // is its prompt.
             HStack {
                 Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
                     .font(.system(size: 12))
-                
-                TextField("Search clipboard...", text: $searchText)
+
+                TextField("Search clipboard...", text: $searchText, prompt: Text("Search clipboard..."))
                     .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 12))
+                    .font(SettingsTheme.body)
                     .focused($isSearchFieldFocused)
-                
+
                 if !searchText.isEmpty {
                     Button(action: { searchText = "" }) {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(SettingsTheme.inkSecondary)
                             .font(.system(size: 10))
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -267,19 +303,29 @@ struct ClipboardPanelHeader: View {
                     .accessibilityLabel(String(localized: "Clear Search"))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.gray.opacity(0.1))
-            )
-            .padding(.horizontal, 16)
+            .settingsField(isFocused: isSearchFieldFocused)
+            .padding(.horizontal, SettingsMetrics.cardPadding)
         }
         .padding(.bottom, 8)
     }
 
     private var clearTooltip: String {
         selectedTab == .history ? String(localized: "Clear History") : String(localized: "Clear Favorites")
+    }
+
+    /// A tab's name, then how many it holds when it holds any, as the panel's count capsule said.
+    private func segmentTitle(_ tab: ClipboardTab) -> String {
+        let count = tab == .history ? historyCount : pinnedCount
+        return count > 0 ? "\(tab.localizedName) \(count.formatted())" : tab.localizedName
+    }
+
+    /// The panel switched tabs with this ease before the segments, and still does; none under Reduce Motion.
+    private var tabSelection: Binding<ClipboardTab> {
+        Binding(get: { selectedTab }, set: { tab in
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.2)) {
+                selectedTab = tab
+            }
+        })
     }
 }
 
@@ -288,27 +334,28 @@ struct ClipboardPanelEmptyState: View {
     let isHistoryTab: Bool
     
     var body: some View {
-        VStack(spacing: 12) {
+        // Brain's empty state, as Clipboard's page draws its own: the glyph at the page title's size, the status, one line.
+        VStack(spacing: SettingsMetrics.cardPadding) {
             Image(systemName: hasSearch ? "magnifyingglass" : (isHistoryTab ? "doc.on.clipboard" : "heart.fill"))
-                .font(.system(size: 32))
-                .foregroundColor(.secondary)
+                .font(SettingsTheme.pageTitle)
+                .foregroundStyle(SettingsTheme.inkSecondary)
             
             if hasSearch {
                 Text("No results found")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
-                
+                    .font(SettingsTheme.cardTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+
                 Text("Try adjusting your search terms")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
             } else {
                 Text(isHistoryTab ? "No clipboard history" : "No favorites")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.primary)
-                
+                    .font(SettingsTheme.cardTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+
                 Text(isHistoryTab ? "Copy something to get started" : "Pin items to add them to favorites")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -320,7 +367,6 @@ struct ClipboardPanelItemRow: View {
     let isHovered: Bool
     let isPinned: Bool
     let onHover: (UUID?) -> Void
-    @ObservedObject var clipboardManager = ClipboardManager.shared
     @State private var justCopied = false
     
     var body: some View {
@@ -328,27 +374,27 @@ struct ClipboardPanelItemRow: View {
             // Type icon
             Image(systemName: item.type.icon)
                 .font(.system(size: 14))
-                .foregroundColor(.blue)
-                .frame(width: 20)
+                .foregroundStyle(SettingsTheme.accentStrong)
+                .frame(width: SettingsTheme.listRowIcon)
             
             // Content
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.preview)
-                    .font(.system(size: 12))
-                    .foregroundColor(.primary)
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.ink)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 
                 HStack {
                     Text(item.type.displayName)
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .font(SettingsTheme.description)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
                     
                     Spacer()
                     
                     Text(timeAgoString(from: item.timestamp))
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .font(SettingsTheme.description)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
                 }
             }
             
@@ -360,14 +406,14 @@ struct ClipboardPanelItemRow: View {
                     // Pin/Unpin button
                     Button(action: {
                         if isPinned {
-                            clipboardManager.unpinItem(item)
+                            ClipboardManager.shared.unpinItem(item)
                         } else {
-                            clipboardManager.pinItem(item)
+                            ClipboardManager.shared.pinItem(item)
                         }
                     }) {
                         Image(systemName: isPinned ? "heart.fill" : "heart")
                             .font(.system(size: 11))
-                            .foregroundColor(isPinned ? .red : .gray)
+                            .foregroundStyle(isPinned ? SettingsTheme.accentStrong : SettingsTheme.ink)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .hoverTooltip(favoriteTooltip, edge: .below)
@@ -375,7 +421,7 @@ struct ClipboardPanelItemRow: View {
                     
                     // Copy button
                     Button(action: {
-                        clipboardManager.copyToClipboard(item)
+                        ClipboardManager.shared.copyToClipboard(item)
                         
                         withAnimation(.easeInOut(duration: 0.2)) {
                             justCopied = true
@@ -389,7 +435,7 @@ struct ClipboardPanelItemRow: View {
                     }) {
                         Image(systemName: justCopied ? "checkmark.circle.fill" : "doc.on.doc")
                             .font(.system(size: 11))
-                            .foregroundColor(justCopied ? .green : .green)
+                            .foregroundStyle(justCopied ? SettingsTheme.success : SettingsTheme.ink)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .hoverTooltip(String(localized: "Copy"), edge: .below)
@@ -398,14 +444,14 @@ struct ClipboardPanelItemRow: View {
                     // Delete button
                     Button(action: {
                         if isPinned {
-                            clipboardManager.unpinItem(item)
+                            ClipboardManager.shared.unpinItem(item)
                         } else {
-                            clipboardManager.deleteItem(item)
+                            ClipboardManager.shared.deleteItem(item)
                         }
                     }) {
                         Image(systemName: "trash")
                             .font(.system(size: 11))
-                            .foregroundColor(.red)
+                            .foregroundStyle(SettingsTheme.destructive)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .hoverTooltip(String(localized: "Delete"), edge: .below)
@@ -413,11 +459,11 @@ struct ClipboardPanelItemRow: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, SettingsMetrics.cardPadding)
         .padding(.vertical, 8)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isHovered ? Color.gray.opacity(0.1) : Color.clear)
+            RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                .fill(isHovered ? SettingsTheme.hover : Color.clear)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -425,7 +471,7 @@ struct ClipboardPanelItemRow: View {
             }
         }
         .onTapGesture {
-            clipboardManager.copyToClipboard(item)
+            ClipboardManager.shared.copyToClipboard(item)
         }
     }
     
