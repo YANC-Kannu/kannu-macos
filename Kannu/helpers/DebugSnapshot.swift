@@ -172,20 +172,6 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
-        if request.tabs == nil || request.tabs?.contains("onboardingPermissions") == true {
-            // Every row, in the states this Mac's answers give them; nothing is requested.
-            boards.append(("onboardingPermissions", AnyView(
-                PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
-                                    onLaunchAtLoginChoice: { _ in }, onContinue: {})
-                    .frame(height: 1080)
-            )))
-        }
-        if request.tabs == nil || request.tabs?.contains("onboardingNotes") == true {
-            boards.append(("onboardingNotes", AnyView(
-                NotesSelectionView(onContinue: { _ in })
-                    .frame(width: 400, height: 600)
-            )))
-        }
         for (name, view) in boards {
             for dark in [false, true] {
                 let root = AnyView(view
@@ -440,13 +426,39 @@ enum DebugSnapshots {
                 }
             }
         }
+        // Onboarding as its window hosts it: `OnboardingView` at each step, at the window's size, wearing only what the
+        // view brings, never the root the loop above adds. The Permissions step's rows and states are fixtures, so no board
+        // reads this Mac's answers and nothing is probed or asked; `onboardingPermissionsAll` is that step's whole list,
+        // which the window scrolls, under the root and the panel the window gives it. After every board that reads the
+        // permissions, so none of them shows the fixture. Clearing it does not refresh the manager, which keeps the
+        // fixture's statuses until the run quits: only the menu report follows, and a refresh would read this Mac's answers.
+        LaunchPermissionManager.snapshotStatuses = DebugSnapshotFixtures.launchPermissionStatuses
+        for step in OnboardingStep.allCases {
+            let name = "onboarding" + "\(step)".prefix(1).uppercased() + "\(step)".dropFirst()
+            guard request.tabs == nil || request.tabs?.contains(name) == true else { continue }
+            for dark in [false, true] {
+                await render(AnyView(OnboardingView(snapshotStep: step).environmentObject(viewModel)),
+                             name: name + (dark ? "-dark" : "-light"), dark: dark, width: 400, into: request.directory,
+                             fixedHeight: 600)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("onboardingPermissionsAll") == true {
+            for dark in [false, true] {
+                let list = PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
+                                               onLaunchAtLoginChoice: { _ in }, onContinue: {})
+                    .background(SettingsTheme.panel)
+                    .settingsDesignSystem()
+                await render(AnyView(list), name: "onboardingPermissionsAll" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 400, into: request.directory)
+            }
+        }
+        LaunchPermissionManager.snapshotStatuses = nil
         // Last, so SwiftUI has long built the menu bar.
         writeMenuReport(into: request.directory)
     }
 
-    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
-                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
-                                                       "valueSheet", "timerPresetSheet"]
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "animationEditorControls", "connectSheet",
+                                                       "tagsSheet", "urlImportSheet", "valueSheet", "timerPresetSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -1435,6 +1447,13 @@ enum DebugSnapshotFixtures {
         data.isMonitoring = true
         return ClipboardOverviewFixture(data: data, showsHistory: showsHistory)
     }
+
+    /// Onboarding's Permissions step: the first rows unanswered, as a fresh install meets them, then every other state a
+    /// row can show but `.waiting`, whose request turns every other Allow off.
+    static let launchPermissionStatuses: [LaunchPermission: LaunchPermissionStatus] = [
+        .accessibility: .notAsked, .bluetooth: .notAsked, .downloads: .deferred, .location: .allowed,
+        .musicAutomation: .askedWhenAppOpens, .notesAutomation: .notAllowed, .warp: .notAsked,
+    ]
 
     /// The LocalSend picker's made-up devices, none of this network's, on documentation addresses (192.0.2.0/24): a phone,
     /// a laptop, an Android phone, a Windows desktop and a tablet.

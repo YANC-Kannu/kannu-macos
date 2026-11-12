@@ -348,7 +348,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
         "ExtensionsSettings.swift": 3,       // status colours
-        "GeneralSettings.swift": 1,          // .tint(.accentColor) around LaunchPermissionRow, shared with onboarding
         "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
         "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
         "LiveActivitiesSettings.swift": 10,  // each activity's own colour

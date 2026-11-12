@@ -75,7 +75,7 @@ component already does.
   whether SwiftUI passes the root into a presentation cannot be told from source, so each presented
   window applies it again: `SettingsSheet` for every sheet, and the two large sheets, the animation
   editor and Spotify's sign-in, themselves. A sheet is never a `Form`, so the second root changes
-  nothing in it.
+  nothing in it. Onboarding's window applies it once too (below, "Onboarding").
 - **The root's font reaches a section's header and footer**, so `SettingsSectionHeader` and
   `SettingsFooter` say their own, and anything else inside a footer must too. `SettingsSection` gives the
   footer the secondary ink, as a grouped `Form` did.
@@ -117,7 +117,6 @@ What stays native, and why:
 | `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
 | The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
 | `KeyboardShortcuts.Recorder`, Spotify's `WKWebView` | AppKit views of their own |
-| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding (Stage 6), so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | The menu bar's look | The redesign plan keeps it |
 
 **To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
@@ -165,7 +164,6 @@ numbers, and this table only says why.
 | `DownloadsSettings.swift` | 3 | 0 | The style cards' resting fill and the progress tint |
 | `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
 | `ExtensionsSettings.swift` | 3 | 12 | Status colours; the legend and detail cards |
-| `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
 | `HUDAndOSDSettings.swift` | 15 | 6 | HUD style previews and the cards' resting fill |
 | `IdleAnimationsSettingsSection.swift` | 3 | 5 | The cards' resting fill, the Add card and the delete glyph |
 | `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
@@ -744,6 +742,37 @@ render at the smallest window, where the sidebar has the least room.
 every tab, and the Shelf page touches `~/Documents` and `~/Downloads` through its folder access store, whose
 first touch blocks the main thread on a macOS permission prompt (AGENTS.md, "Nothing runs before the Terms of
 Use are accepted"). Check the Shelf page by hand.
+
+## Onboarding
+
+The first-run window (`OnboardingView`, 400×600) is a window of its own, so it applies the root itself, once, as a
+sheet does, and paints `SettingsTheme.panel` under every step and under the title bar. It follows macOS's appearance:
+`brainAppearance` is Brain's window's alone. Each step is a sheet's shape on a page's insets:
+
+- **Its title and one line under it**, starting at `pageInset`: the title in `pageTitle` (a header), the line in `body`
+  on `inkSecondary`, both selectable. Welcome and Finish centre their hero instead.
+- **Its choices as choice cards** ("Choices"): a `.plain` button that looks like Timer's start tile (`card`,
+  `sectionRadius`, `cardPadding`), with the ring and `.isSelected` when chosen and its name in `settingsChoiceLabel`.
+  The line under the name sits inside the button, so it stays unselectable. A list's cards are `listRowGap` apart, the
+  profiles' grid `cardPadding`. A card's notch preview keeps the notch's black and its own colours. YouTube Music's
+  GitHub link sits over its card, never inside the card's button.
+- **Its buttons trailing**, the verb `.primary`. Finish's are a sheet's: Customize in Brain, then Finish, which Return
+  presses.
+- **The Permissions step keeps one card per permission.** `LaunchPermissionRow` is shared with General's Permissions,
+  where it is a row. In both, Allow is the row's primary and Not now quiet (the design review's finding 4). Our own
+  styles draw alike in a window that is not key, where a native prominent button turns grey, so the rows need no tint
+  of their own. The Focus choice is a segmented `SettingsSelect`, and Open at login our switch.
+
+`SettingsDesignSystemRulesTests` holds the root, the panel, Allow's rank, and no `.borderedProminent` under
+`Onboarding/`. No string changed with the theme: the steps' titles keep their Title Case. Behaviour did not change
+either: when a permission is asked, the welcome music and every gate are `FirstLaunchRulesTests`' and
+`LaunchGateRulesTests`'.
+
+Every step has a board: `OnboardingView(snapshotStep:)` at the window's size, named from `OnboardingStep`'s cases
+(`onboardingWelcome` to `onboardingFinished`), and `onboardingPermissionsAll`, that step's whole list, which the window
+scrolls. The Permissions step's rows and states are fixtures (`DebugSnapshotFixtures.launchPermissionStatuses`, set on
+`LaunchPermissionManager.snapshotStatuses`, DEBUG only), so a board reads none of this Mac's answers and `refresh`
+probes no folder. Its welcome draws no sparkles: a board renders no emitter.
 
 ## The content standard
 
