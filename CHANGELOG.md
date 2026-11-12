@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer CodeRabbit's second review of Brain's product pages
+- **Developer label:** CodeRabbit's second review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the two fixes from CodeRabbit's second review of Super 4; the other four answered on the PR
+- **Changes:**
+  - Displays: the Standard notch style's stored value is "Standard Notch" again, and its label stays "Standard notch".
+    The copy pass had changed both, so a style saved before it, the global one or a display's own, no longer decoded.
+  - Notes: Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the scope. A
+    narrowing leaves such a note listed until the next sync, and its Delete still reaches Notes; it used to go at once.
+    The notch's rows keep their scope-based question, a separate follow-up.
+  - docs/SETTINGS.md: Notes' Delete question.
+
 ### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
 - **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
 - **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR

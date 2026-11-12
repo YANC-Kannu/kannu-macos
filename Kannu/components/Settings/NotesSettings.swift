@@ -257,10 +257,12 @@ struct NotesSettingsView: View {
         }
     }
 
-    /// Delete, from a row's menu or a note's page. A note made in Apple Notes asks first, since it goes to Recently
-    /// Deleted there too, as the notch's rows ask; any other goes at once, as there.
+    /// Delete, from a row's menu or a note's page. A note made in Apple Notes and linked to it asks first while sync is
+    /// on, since `NotesManager.delete` then moves it to Recently Deleted there too. The note decides, not the scope:
+    /// after a narrowing, such a note stays here until the next sync drops it, and its delete still reaches Notes. Any
+    /// other goes at once.
     private func delete(_ note: NoteItem) {
-        if data.isReadOnly(note) {
+        if enableAppleNotesSync, note.madeInAppleNotes != false, note.appleNotesId != nil {
             pendingDelete = note
         } else {
             remove(note)
