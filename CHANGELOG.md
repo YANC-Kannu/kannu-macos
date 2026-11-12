@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - The menu bar gets Go, View and File around Brain
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate
+- **Changes:**
+  - Go lists Brain's product pages in the sidebar's order, ⌘1 to ⌘7, and opens each as its sidebar row does, through
+    the switch point a search pick uses, with no row pulsing. The order lives once, in `SettingsTab.sidebarOrder`.
+  - View: Hide or Show Sidebar (⌃⌘S, a new `brainShowsSidebar` key that `BrainShell` takes as a plain flag),
+    Appearance with the moon's three choices, and Enter or Exit Full Screen (⌃⌘F), titled from a new
+    `BrainVisibility.isFullScreen`. Each is off while Brain is not on screen.
+  - File › New Task (⌘N) opens Brain on Tasks with New Task, through a request Tasks takes once; on All tasks it takes
+    the list's filters, as before. The hidden ⌘N button on Tasks is gone, so the menu owns the shortcut; the item is
+    off while Tasks is off.
+  - Go and New Task open Brain through one function that brings the terms back until they are accepted, as Brain…
+    does. A registered `NSFullScreenMenuItemEverywhere` of false keeps AppKit from adding a second Enter Full Screen.
+  - The snapshot run writes the menu bar to `menu.txt`, and two boards draw the window with no sidebar and a Go item's
+    page. `MenuBarRulesTests` holds the menus against planted offenders; `BrainAppearanceRulesTests` names View ›
+    Appearance among the key's writers, and `BrainShellRulesTests` names `showsSidebar` beside the navigation state.
+  - Five catalog keys in all 17 languages: Go, Hide Sidebar, Show Sidebar, Enter Full Screen, Exit Full Screen.
+  - docs/SETTINGS.md gains "The menu bar" and the Hide Sidebar line; docs/REGRESSIONS.md entry 22 a 2026-11-12
+    addendum.
+
 ### 2026-11-11 - Answer the review of Brain's Clipboard page
 - **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit

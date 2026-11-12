@@ -64,22 +64,13 @@ struct TasksSettings: View {
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
-    /// ⌘N, New Task, on the tab rather than on Add a task's button: one shortcut for both pages
-    /// that have that row, and only on them. The filter is read when pressed, so this tab observes
-    /// neither the filters nor the manager (with Tasks off, nothing here touches `TasksManager`).
-    @ViewBuilder
-    private var newTaskShortcut: some View {
-        if enableTasks, let page = path.last, page == .allTasks || page == .source(.local) {
-            Button("New Task") {
-                guard sheet == nil, TasksManager.shared.isReady else { return }
-                sheet = .newTask(listFilter: page == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)
-            }
-            .keyboardShortcut("n", modifiers: .command)
-            // Invisible but in the hierarchy, so the shortcut still resolves.
-            .opacity(0)
-            .frame(width: 0, height: 0)
-            .accessibilityHidden(true)
-        }
+    /// File › New Task (⌘N), which the menu bar owns: New Task over whatever page is open. On All
+    /// tasks it takes the list's filters, so a task they would hide opens on its own page. The
+    /// filter is read when asked, so this tab observes neither the filters nor the manager (with
+    /// Tasks off, nothing here touches `TasksManager`).
+    private func openNewTask() {
+        guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }
+        sheet = .newTask(listFilter: path.last == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)
     }
 
     private var context: TasksPageContext {
@@ -111,7 +102,6 @@ struct TasksSettings: View {
                 returnTo = nil
                 DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
             }
-            .background { newTaskShortcut }
             // A page opens at its top.
             .id(path)
         }
@@ -124,6 +114,12 @@ struct TasksSettings: View {
             let wasOpen = path
             path = id == SettingsDeepLink.tasksListOpenID ? [.allTasks] : []
             if path != wasOpen { returnTo = id }
+        }
+        // File › New Task, taken once. `initial`: the menu opens this tab, then asks.
+        .onChange(of: highlights.pendingNewTask, initial: true) { _, asked in
+            guard asked else { return }
+            highlights.pendingNewTask = false
+            openNewTask()
         }
         // Tasks off: every reminder, waiting or on screen, is taken back, and the tree closes.
         // `TaskReminders` only — this never builds `TasksManager`.
