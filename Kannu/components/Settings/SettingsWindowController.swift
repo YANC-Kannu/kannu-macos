@@ -339,6 +339,8 @@ extension SettingsWindowController: NSWindowDelegate {
 
     func windowDidEnterFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
+        // View's menu item says Exit Full Screen from here.
+        if let window { BrainVisibility.shared.update(for: window) }
         guard closeAfterFullScreen else { return }
         // A turn later, as in `finishPendingClose`. `showWindow` may clear the flag first.
         DispatchQueue.main.async { [weak self] in
@@ -353,6 +355,8 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as full screen.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowWillExitFullScreen(_ notification: Notification) {
@@ -362,11 +366,15 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidExitFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
         finishPendingClose()
+        // View's menu item says Enter Full Screen again.
+        if let window { BrainVisibility.shared.update(for: window) }
     }
 
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as windowed.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {

@@ -4,6 +4,41 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of the menu bar
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
+- **Changes:**
+  - Go and New Task only beep while a sheet is open over Brain. Menu keys still reach the menu bar under a sheet, so
+    ⌘1 in New Task or a connect sheet switched the page underneath and closed the sheet, with what was typed in it.
+  - New Task opens while the task list is still loading: the menu can ask from a cold Brain, and Tasks dropped the
+    request until the list was ready. The sheet already keeps Add off until then.
+  - A failed entry into or exit from full screen updates `BrainVisibility` too, so View's item keeps the right title.
+  - `MenuBarRulesTests` holds the sheet check, the failed transitions' updates and the request's guard against planted
+    offenders.
+  - docs/SETTINGS.md says New Task opens over any Tasks page and what Hide Sidebar leaves reachable; docs/REGRESSIONS.md
+    entry 22's 2026-11-12 addendum names the sheet check.
+
+### 2026-11-12 - The menu bar gets Go, View and File around Brain
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate
+- **Changes:**
+  - Go lists Brain's product pages in the sidebar's order, ⌘1 to ⌘7, and opens each as its sidebar row does, through
+    the switch point a search pick uses, with no row pulsing. The order lives once, in `SettingsTab.sidebarOrder`.
+  - View: Hide or Show Sidebar (⌃⌘S, a new `brainShowsSidebar` key that `BrainShell` takes as a plain flag),
+    Appearance with the moon's three choices, and Enter or Exit Full Screen (⌃⌘F), titled from a new
+    `BrainVisibility.isFullScreen`. Each is off while Brain is not on screen.
+  - File › New Task (⌘N) opens Brain on Tasks with New Task, through a request Tasks takes once; on All tasks it takes
+    the list's filters, as before. The hidden ⌘N button on Tasks is gone, so the menu owns the shortcut; the item is
+    off while Tasks is off.
+  - Go and New Task open Brain through one function that brings the terms back until they are accepted, as Brain…
+    does. A registered `NSFullScreenMenuItemEverywhere` of false keeps AppKit from adding a second Enter Full Screen.
+  - The snapshot run writes the menu bar to `menu.txt`, and two boards draw the window with no sidebar and a Go item's
+    page. `MenuBarRulesTests` holds the menus against planted offenders; `BrainAppearanceRulesTests` names View ›
+    Appearance among the key's writers, and `BrainShellRulesTests` names `showsSidebar` beside the navigation state.
+  - Five catalog keys in all 17 languages: Go, Hide Sidebar, Show Sidebar, Enter Full Screen, Exit Full Screen.
+  - docs/SETTINGS.md gains "The menu bar" and the Hide Sidebar line; docs/REGRESSIONS.md entry 22 a 2026-11-12
+    addendum.
+
 ### 2026-11-12 - Answer the review of Geist in the notch
 - **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
