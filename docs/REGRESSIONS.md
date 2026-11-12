@@ -1257,6 +1257,15 @@ frame, and this entry's throw or a 700-wide window in a full-screen Space are th
 exact outcome was never run. So `.fullScreenPrimary` and the removal of `.frame(width: 700)` landed in one
 commit, and `WindowFullscreenRulesTests.testBrainsRootHasNoFixedWidth` holds the frame.
 
+**2026-11-12 addendum: the floating panels' theme changed their views, not their windows.** The clipboard panel and the
+LocalSend picker take Brain's theme (docs/SETTINGS.md, "The floating panels"). `LocalSendDevicePickerWindowManager.swift`
+is a panel manager and `ClipboardPanel.swift` holds a panel, so this is where they are read. Nothing above the views
+changed in either: window creation, `setHostedContent`, the corner masks, the sizes (320×400, 480×400), the levels and
+spaces, the picker's click-outside dismissal and the clipboard's placement are the base's. Each view now hands what it
+observes to a content view that draws it, so a board can draw fixtures; the picker's discovery still starts as it
+appears. `FloatingPanelRulesTests` holds the boards and the theme; `HostedContentRulesTests` and
+`ClipboardPanelPlacementTests` are unchanged.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -1778,6 +1787,16 @@ registered `NSFullScreenMenuItemEverywhere` of false, before launching ends, kee
 Full Screen beside View's. `MenuBarRulesTests` holds these against planted offenders. **Not measured:** the menus with
 Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
 ⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
+
+**2026-11-12 addendum: the sidebar's badges run only while Brain is on screen, and the root observes nothing for them.**
+The sidebar is on screen beside every page, so its badges (`SidebarBadges.swift`, docs/SETTINGS.md "The shell and
+navigation") are live leaves of their own: each copies one value through a subscription throttled to 500 ms, in a
+`.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while it is false, and reads its source once as it
+appears. Agents' badge follows the monitor's projection, never the monitor (entry 10), and `SettingsView` names none
+of the four stores, so the root, which would redraw all of Brain, observes nothing new. Nothing ticks: the timer's
+glyph follows whether a timer runs, not its time. New hooks: each badge's `onAppear` reads once and its `.task`
+follows; none animates. With a board's fixture set, no badge touches a store. **Not measured:** the CPU of Brain open
+while an agent works. `SidebarBadgeLiveDataRulesTests` holds each clause against planted offenders.
 
 **2026-11-12 addendum: onboarding takes Brain's look, and General's Permissions rank Allow; no hook and no animator
 added.** Onboarding's window applies the root and paints the panel (docs/SETTINGS.md, "Onboarding"). Its cards are

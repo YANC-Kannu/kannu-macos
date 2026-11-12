@@ -60,6 +60,9 @@ enum DebugSnapshots {
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         // The render draws no video, so Devices' 3D icon shows its movie's first frame.
         DevicesSettingsView.snapshotDrawsStill = true
+        // The sidebar's badges, quiet on every board but `shellBadges`: none reads this Mac's agents, findings, usage
+        // or timer.
+        SidebarBadge.snapshotFixture = .quiet
         // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
         // of this Mac lands in a PNG.
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
@@ -193,6 +196,17 @@ enum DebugSnapshots {
                              width: size.width, into: request.directory, fixedHeight: size.height)
             }
         }
+        // Every badge at once, from a fixture: an agent waiting, two high findings, usage near its limit, a timer running.
+        if request.tabs == nil || request.tabs?.contains("shellBadges") == true {
+            SidebarBadge.snapshotFixture = .busy
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "shellBadges" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+            SidebarBadge.snapshotFixture = .quiet
+        }
         // Brain › Agents with no session, one and three, at the window's first size: what is above the fold is how
         // full the page looks. Fixtures only.
         for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("agents\(count)") == true {
@@ -259,6 +273,44 @@ enum DebugSnapshots {
             }
         }
         ClipboardOverview.snapshotFixture = clipboard
+        // The floating panels at their own sizes (docs/SETTINGS.md, "The floating panels"), from fixtures: each draws
+        // what it is handed, so no board builds the clipboard manager or the LocalSend service. Not through the loop
+        // above, which adds Brain's root: a panel is a window of its own, and applies whatever root it has itself.
+        let panelCopies = DebugSnapshotFixtures.clipboardOverview(pinned: 2, history: 5, now: Date()).data
+        let clipboardPanels: [(name: String, view: ClipboardPanelContent)] = [
+            // History, its first copy under the pointer: a row's Pin, Copy and Delete show only then.
+            ("clipboardPanel", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                     historyIsEmpty: false, onClose: {},
+                                                     hoveredItemId: panelCopies.history.first?.id)),
+            ("clipboardPanelFavorites", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                              historyIsEmpty: false, onClose: {}, selectedTab: .favorites)),
+            ("clipboardPanelEmpty", ClipboardPanelContent(history: [], pinned: [], historyIsEmpty: true, onClose: {})),
+        ]
+        for board in clipboardPanels where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            for dark in [false, true] {
+                await render(AnyView(board.view), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: ClipboardPanel.preferredSize.width, into: request.directory,
+                             fixedHeight: ClipboardPanel.preferredSize.height)
+            }
+        }
+        // The LocalSend picker on its Standard backdrop: five devices, the second under the pointer and the last having
+        // turned a file down; none found; and a scan running with none yet.
+        let devices = DebugSnapshotFixtures.localSendDevices
+        let pickers: [(name: String, devices: [LocalSendDeviceInfo], isRefreshing: Bool, hovered: String?)] = [
+            ("localSendPicker", devices, false, devices[1].id),
+            ("localSendPickerEmpty", [], false, nil),
+            ("localSendPickerScanning", [], true, nil),
+        ]
+        for board in pickers where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            let picker = LocalSendDevicePickerContent(devices: board.devices, rejectedDeviceIDs: [devices[4].id],
+                                                      isRefreshing: board.isRefreshing, glassMode: .standard,
+                                                      liquidGlassVariant: .v11, onRefresh: {}, onDeviceSelected: { _ in },
+                                                      onDismiss: {}, hoveredDeviceID: board.hovered)
+            for dark in [false, true] {
+                await render(AnyView(picker), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 480, into: request.directory, fixedHeight: 400)
+            }
+        }
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -1401,6 +1453,20 @@ enum DebugSnapshotFixtures {
     static let launchPermissionStatuses: [LaunchPermission: LaunchPermissionStatus] = [
         .accessibility: .notAsked, .bluetooth: .notAsked, .downloads: .deferred, .location: .allowed,
         .musicAutomation: .askedWhenAppOpens, .notesAutomation: .notAllowed, .warp: .notAsked,
+    ]
+
+    /// The LocalSend picker's made-up devices, none of this network's, on documentation addresses (192.0.2.0/24): a phone,
+    /// a laptop, an Android phone, a Windows desktop and a tablet.
+    static let localSendDevices: [LocalSendDeviceInfo] = [
+        LocalSendDeviceInfo(id: "fixture-iphone", alias: "Ada's iPhone", ip: "192.0.2.10", port: 53317, https: true,
+                            model: "iPhone 15"),
+        LocalSendDeviceInfo(id: "fixture-macbook", alias: "Studio MacBook", ip: "192.0.2.11", port: 53317, https: true,
+                            model: "MacBook Pro"),
+        LocalSendDeviceInfo(id: "fixture-pixel", alias: "Pixel 8", ip: "192.0.2.12", port: 53317, https: true, model: nil),
+        LocalSendDeviceInfo(id: "fixture-desktop", alias: "Office desktop", ip: "192.0.2.13", port: 53317, https: true,
+                            model: "Windows"),
+        LocalSendDeviceInfo(id: "fixture-ipad", alias: "Living room iPad", ip: "192.0.2.14", port: 53317, https: true,
+                            model: "iPad Air"),
     ]
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
