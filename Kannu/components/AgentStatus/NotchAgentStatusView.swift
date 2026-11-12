@@ -105,11 +105,11 @@ struct NotchAgentStatusView: View {
     private var emptyStateView: some View {
         VStack(spacing: 10) {
             Text("Your agents are taking a coffee break ☕")
-                .font(.subheadline.weight(.medium))
+                .font(SettingsTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
             Text("Fire up Cursor, Claude Code, Codex, Antigravity, Warp, or Claude Desktop and start a session — we'll watch the lights for you.")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
@@ -119,7 +119,7 @@ struct NotchAgentStatusView: View {
                         AgentProviderIconView(source: .init(rawProvider: status.provider), size: 14)
                             .opacity(status.detected ? 1 : 0.3)
                         Text(status.shortName)
-                            .font(.system(size: 10))
+                            .font(SettingsTheme.font(size: 10))
                             .foregroundStyle(status.detected ? .primary : .tertiary)
                             .lineLimit(1)
                         if status.detected {
@@ -165,7 +165,7 @@ struct NotchAgentStatusView: View {
             // a "Recent chats" heading over the coffee-break message would label nothing.
             if !allSessions.isEmpty {
                 Text("Recent chats")
-                    .font(.caption.weight(.semibold))
+                    .font(SettingsTheme.font(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
             // Medium findings never interrupt: one count, one click to Settings.
@@ -179,7 +179,7 @@ struct NotchAgentStatusView: View {
                         Image(systemName: "exclamationmark.shield").font(.system(size: 9))
                         Text(openFindingCount == 1 ? String(localized: "1 finding") : String(localized: "\(openFindingCount) findings"))
                     }
-                    .font(.caption2)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -277,20 +277,20 @@ struct NotchAgentStatusView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(finding.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(SettingsTheme.font(size: 11, weight: .semibold))
                         .lineLimit(1)
                     Text(finding.severity.label)
-                        .font(.caption2.weight(.semibold))
+                        .font(SettingsTheme.font(size: 10, weight: .semibold))
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Capsule().fill(notchForeground.opacity(0.12)))
                 }
                 Text(finding.summary)
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if let evidence = finding.displayedEvidence.first {
                     Text(evidence)
-                        .font(.caption2)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -416,10 +416,10 @@ struct NotchAgentStatusView: View {
     @ViewBuilder
     private func analysisLine(for session: AgentSessionStatus) -> some View {
         if findingsStore.isAnalyzing(session.conversationID) {
-            Text("ADR: analysing…").font(.caption2).foregroundStyle(.secondary)
+            Text("ADR: analysing…").font(SettingsTheme.font(size: 10)).foregroundStyle(.secondary)
         } else if let analysis = findingsStore.analysis(for: session.conversationID) {
             Text("ADR: \(analysis.shortLabel)")
-                .font(.caption2)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundStyle(analysis.isMalicious ? .primary : .secondary)
         }
     }
@@ -469,17 +469,17 @@ struct NotchAgentStatusView: View {
                     text: session.providerLabel,
                     secondarySuffix: session.displayProjectName,
                     maxStaticLength: 18,
-                    font: .headline,
+                    font: SettingsTheme.font(size: 13, weight: .bold),
                     nsFont: .headline,
                     textColor: .primary,
                     secondaryTextColor: .secondary,
                     marqueeWidth: 220
                 )
-                statusText(for: session, font: .subheadline)
+                statusText(for: session, font: SettingsTheme.font(size: 11))
                 analysisLine(for: session)
                 AgentChatNameLabel(
                     text: session.displayChatName,
-                    font: .caption2,
+                    font: SettingsTheme.font(size: 10),
                     textColor: .secondary,
                     marqueeWidth: 180
                 )
@@ -511,14 +511,14 @@ struct NotchAgentStatusView: View {
                         text: session.providerLabel,
                         secondarySuffix: session.displayProjectName,
                         maxStaticLength: 16,
-                        font: .caption.weight(.semibold),
+                        font: SettingsTheme.font(size: 10, weight: .semibold),
                         nsFont: .caption1,
                         textColor: .primary,
                         secondaryTextColor: .secondary,
                         marqueeWidth: 160
                     )
                 }
-                statusText(for: session, font: .caption2)
+                statusText(for: session, font: SettingsTheme.font(size: 10))
                 analysisLine(for: session)
                 AgentChatNameLabel(
                     text: session.displayChatName,

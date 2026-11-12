@@ -1477,6 +1477,11 @@ registers and unregisters and takes no hits. Each scanner is checked against pla
 Missing: that a scroll over the notes really never closes the notch is checked by eye on the
 installed build, since nothing automated drives a trackpad.
 
+**2026-11-12 addendum: Geist in the notch changes only fonts here.** Stage 6 moves the notch's text to Geist
+(docs/SETTINGS.md, "The notch"), and in `NotchNotesView` that is the `.font` of its text, the editor's included: no
+view gains or loses a `ScrollView`, `TextEditor` or `List`, and every `.ownsVerticalScroll()` stays where it was.
+`NotchScrollOwnershipRulesTests` still reads the file.
+
 ---
 
 ## 22. A repeating animation in Brain must end by itself

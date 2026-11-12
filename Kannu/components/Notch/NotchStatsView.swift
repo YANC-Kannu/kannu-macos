@@ -322,11 +322,11 @@ struct NotchStatsView: View {
                         .foregroundColor(.secondary)
                     
                     Text("Stats Disabled")
-                        .font(.headline)
+                        .font(SettingsTheme.font(size: 13, weight: .bold))
                         .foregroundColor(.primary)
                     
                     Text("Enable stats monitoring in Brain to view system performance data.")
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -341,11 +341,11 @@ struct NotchStatsView: View {
                         .foregroundColor(.secondary)
                     
                     Text("No Graphs Enabled")
-                        .font(.headline)
+                        .font(SettingsTheme.font(size: 13, weight: .bold))
                         .foregroundColor(.primary)
                     
                     Text("To view performance data, enable graph visibility in Brain › Settings › Stats.")
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
@@ -437,7 +437,7 @@ struct UnifiedStatsCard: View {
                     .font(.caption) // Match boring.notch font size
                 
                 Text(graphData.title)
-                    .font(.caption) // Match boring.notch font size
+                    .font(SettingsTheme.font(size: 10)) // Match boring.notch font size
                     .fontWeight(.medium)
                     .foregroundStyle(notchForeground.opacity(0.8))
                 
@@ -446,7 +446,7 @@ struct UnifiedStatsCard: View {
                 // Show value on right for single graphs like boring.notch
                 if let singleData = graphData as? SingleGraphData {
                     Text(singleData.value)
-                        .font(.caption) // Match boring.notch font size
+                        .font(SettingsTheme.font(size: 10)) // Match boring.notch font size
                         .fontWeight(.bold)
                         .foregroundStyle(notchForeground)
                 }
@@ -456,16 +456,16 @@ struct UnifiedStatsCard: View {
             if let dualData = graphData as? DualGraphData {
                 HStack(spacing: 6) {
                     Text(dualData.positiveValue)
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .fontWeight(.semibold)
                         .foregroundColor(dualData.positiveColor)
                     
                     Text("•")
-                        .font(.caption2)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(notchForeground.opacity(0.45))
                     
                     Text(dualData.negativeValue)
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .fontWeight(.semibold)
                         .foregroundColor(dualData.negativeColor)
                 }
@@ -490,7 +490,7 @@ struct UnifiedStatsCard: View {
             // Click hint - shown for graphs that open popovers
             if graphData.rankingType != nil {
                 Text("Click for details")
-                    .font(.caption2)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundStyle(notchForeground.opacity(0.75))
                     .opacity(isHovered ? 1.0 : 0.0)
                     .animation(.easeInOut(duration: 0.2), value: isHovered)
