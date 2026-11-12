@@ -35,6 +35,7 @@ import SwiftUI
 /// leaves the page (`TasksSettings`); one gone some other way says so.
 struct TaskDetailPage: View {
     @ObservedObject private var manager = TasksManager.shared
+    @ObservedObject private var visibility = BrainVisibility.shared
     @Default(.enableTimerFeature) private var enableTimerFeature
     let taskID: UUID
     let context: TasksPageContext
@@ -188,8 +189,10 @@ struct TaskDetailPage: View {
             }
             // The page's clock, on one row only: on a group of sections it would run once a section.
             // The page builds every row as it opens, so the clock runs while the page is open,
-            // scrolled or not, and stops when the page goes or Brain closes.
-            .task {
+            // scrolled or not, and stops when the page goes or Brain closes, and while Brain is not
+            // on screen (docs/SETTINGS.md, "Live data"); back on screen it catches up at once.
+            .task(id: visibility.isOnScreen) {
+                guard visibility.isOnScreen else { return }
                 while !Task.isCancelled {
                     let now = Date()
                     minute = now

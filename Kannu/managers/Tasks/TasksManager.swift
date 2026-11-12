@@ -71,7 +71,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     /// A segment left open by a quit or a crash, with its task.
-    struct InterruptedSession: Identifiable {
+    struct InterruptedSession: Identifiable, Equatable {
         let task: TaskItem
         let segment: WorkSegment
         /// When the next session on the task began, if one has: the end may not pass it
