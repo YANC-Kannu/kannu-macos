@@ -1144,6 +1144,7 @@ struct NoteEditorView: View {
                 Button(action: cancelAction) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .medium))
                         Text("Notes")
                     }
                     .font(SettingsTheme.font(size: 15, weight: .medium))
@@ -1155,8 +1156,13 @@ struct NoteEditorView: View {
 
                 if isReadOnly {
                     Button(action: onOpenInNotes) {
-                        Label("Open in Notes", systemImage: "arrow.up.forward.app")
-                            .font(SettingsTheme.font(size: 12, weight: .medium))
+                        Label {
+                            Text("Open in Notes")
+                        } icon: {
+                            Image(systemName: "arrow.up.forward.app")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(editorForeground.opacity(0.8))
                     }
                     .buttonStyle(PlainButtonStyle())

@@ -389,7 +389,7 @@ struct NotchTimerView: View {
                 HStack(alignment: .center, spacing: Self.editTaskButtonSpacing) {
                     if isRenamingSession {
                         TextField(String(localized: "Session name"), text: $renameDraft)
-                            .font(SettingsTheme.font(size: 20, weight: .semibold))
+                            .font(.system(size: 20, weight: .semibold))
                             .textFieldStyle(.plain)
                             .foregroundColor(notchForeground)
                             .tint(notchForeground)
@@ -400,7 +400,7 @@ struct NotchTimerView: View {
                     } else if timerManager.hasManualTimerRunning {
                         MarqueeText(
                             .constant(timerDisplayName),
-                            font: SettingsTheme.font(size: 20, weight: .semibold),
+                            font: .system(size: 20, weight: .semibold),
                             nsFont: .title3,
                             textColor: notchForeground,
                             minDuration: 0.2,
@@ -415,7 +415,7 @@ struct NotchTimerView: View {
                     } else {
                         MarqueeText(
                             .constant(timerDisplayName),
-                            font: SettingsTheme.font(size: 20, weight: .semibold),
+                            font: .system(size: 20, weight: .semibold),
                             nsFont: .title3,
                             textColor: notchForeground,
                             minDuration: 0.2,

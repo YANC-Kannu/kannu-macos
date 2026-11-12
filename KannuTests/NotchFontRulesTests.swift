@@ -39,8 +39,9 @@ final class NotchFontRulesTests: XCTestCase {
         return sources
     }
 
-    /// A symbol's size is not type: `.system` sizes it. Geist Mono ships Regular only, so monospaced text keeps the
-    /// system's. An AppKit field or measure draws in AppKit.
+    /// A symbol's size is not type: `.system` sizes it. A symbol inside text under the token takes Geist's face, which
+    /// it reads as regular for Medium, so one under a medium font has its own. Geist Mono ships Regular only, so
+    /// monospaced text keeps the system's. An AppKit field or measure draws in AppKit.
     private static let pinned: [String: Int] = [
         "ClipboardHistoryPopover.swift": 6,  // symbols
         "DurationDigitField.swift": 1,       // the digit field's AppKit font, monospaced
@@ -50,18 +51,20 @@ final class NotchFontRulesTests: XCTestCase {
         // 8 symbols; the music title, artist and lyrics, whose title measures its width with an AppKit text style
         // (`MusicTitleMarqueeView`); and 2 weights: one on the artist, one over the theme's font on the time labels
         "NotchHomeView.swift": 13,
-        "NotchNotesView.swift": 19,          // 18 symbols; the character count, monospaced
+        // 20 symbols, two of them beside medium text (the back chevron, Open in Notes); the character count, monospaced
+        "NotchNotesView.swift": 21,
         "NotchStatsView.swift": 7,           // 3 symbols; 4 weights over the theme's font, which pick Geist's faces
-        // 6 symbols; the three timer readouts, monospaced black; the status badge's AppKit measure; a weight over the
-        // theme's font
-        "NotchTimerView.swift": 11,
+        // 6 symbols; the three timer readouts, monospaced black; the running timer's name and its rename field, 20 pt
+        // in a 24 pt line that Geist's 26 pt line overfills (three lines); the status badge's AppKit measure; a weight
+        // over the theme's font
+        "NotchTimerView.swift": 14,
         "TaskSourceMenu.swift": 1,           // a symbol
         "TasksPopover.swift": 3,             // a symbol; the key and the tracked clock, monospaced
         "TimerRailIcon.swift": 1,            // a symbol
         // 15 symbols; `SideChip`, a tag chip in a row's 16 pt caption line, where Geist's 10 pt line by AppKit's ruler
         // is 13 against the system's 12 (`TimerComposerMetricsTests`); a preset's length, monospaced
         "TimerSideColumn.swift": 17,
-        "TimerTaskForm.swift": 8,            // symbols
+        "TimerTaskForm.swift": 9,            // symbols, one beside medium text (Add a reminder's bell)
         "TimerTaskSuggestions.swift": 1,     // a symbol
     ]
 
