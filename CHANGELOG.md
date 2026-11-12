@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Claude no longer waits on Kannu's hooks, and the status line is opt-in
+- **Developer label:** "what is an artifact the is getting called to kannu app in every prompt, a user complained about that" — then "can this be avoided"
+- **Agent label:** Claude Code (Opus 5.5) — traced the complaint, made the hooks async with a stale-event guard (hook v49), made the status line opt-in, tests
+- **Changes:**
+  - Claude Code hooks: all 15 Kannu groups used to block, so Claude waited on Kannu once per prompt and twice per
+    tool call. On one Mac that was a median 160–200 ms a run over about 76,000 runs, and 44 runs hit the 10-second
+    timeout. Groups are now `"async": true` except the ones where Kannu may answer: Stop, StopFailure,
+    SubagentStop and SessionEnd always block, PreToolUse blocks while "Block matching tool calls" is on, and the
+    note events block while "Tell the agent when hidden text is found" is on. Which groups block follows the
+    marker files the script reads, and turning either setting on or off re-merges the hooks
+    (`AgentHookInstaller.refreshClaudeHookModes`). The merge is now `AgentHookLayout.mergingClaudeGroups`.
+  - Hook script v49: async hooks keep no order, so a PostToolUse could land after the Stop and turn a finished
+    chat green. Each write records `event_started_ms`. An event that started before the one behind the file's
+    state keeps the state, clock, turn and verdict, and adds only its sightings and its tool call (`counted_call`,
+    now shared with `next_turn`). A needs-you or quota event is never dropped. `signal.alarm(10)` ends the script,
+    because Claude enforces no timeout on async hooks.
+  - Status line: Kannu no longer takes over Claude Code's `statusLine` on every install and every hook-version
+    bump. A new toggle, "Live Claude Code limits" (Agents › Editor Hooks, off by default, `claudeStatusLineUsage`),
+    controls it. While it is off, launch hands back a status line an earlier Kannu took over (the user's chained
+    command, or none) and removes the usage script. When it is on, the takeover keeps the user's `padding`,
+    `refreshInterval` and `hideVimModeIndicator`. Uninstalling the Claude hooks turns it off. A `settings.json`
+    Kannu cannot parse keeps its status line and the script it runs. Claude Desktop users see no change: Desktop
+    never runs a status line, and Kannu reads its own usage history.
+  - The reported "artifact": no Kannu release writes a file per prompt. Hooks write one status file per chat, and
+    the per-chat `.lock` files some Macs still hold were left by hooks older than v30.
+  - Tests: `AgentHookLayoutTests` covers the blocking split for every combination of the two settings, the merge,
+    the blocking sets pinned to the script's own, and the status line takeover and hand-back. `HookScriptTests`
+    covers a late PostToolUse that keeps a finished turn and still counts its call, urgent states that outlive an
+    older tool event, a needs-you event that is never stale, a later event that still wins, and a SessionStart that
+    lost the race to the first prompt. `SettingsHighlightInventoryTests` counts the new row and its search entry.
+
 ### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
 - **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
 - **Agent label:** Claude Code (Opus 5.5) — both fixes and their tests; why a Debug folder is in the code's comments
