@@ -24,7 +24,8 @@ import Foundation
 /// never needs `minWidth:` (SwiftUI's size bridge would clamp the window to it, docs/REGRESSIONS.md entry 17),
 /// `ViewThatFits` (which builds every layout it tries) or `.inspector`. Foundation only, so the test target compiles it.
 enum ListDetailLayout {
-    /// The list's width beside the page: a task's title, its caption with one tag, and the row's three controls.
+    /// The list's width beside the page: a task's title, its caption with one tag, and the row's three controls; a
+    /// note's title, its caption and its ›.
     static let listWidth: CGFloat = 360
 
     /// Whether a panel `panelWidth` wide holds the list and a page `pageWidth` wide side by side, `inset` before the
