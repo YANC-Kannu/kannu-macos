@@ -378,7 +378,8 @@ enum DebugSnapshots {
         // view brings, never the root the loop above adds. The Permissions step's rows and states are fixtures, so no board
         // reads this Mac's answers and nothing is probed or asked; `onboardingPermissionsAll` is that step's whole list,
         // which the window scrolls, under the root and the panel the window gives it. After every board that reads the
-        // permissions, so none of them shows the fixture.
+        // permissions, so none of them shows the fixture. Clearing it does not refresh the manager, which keeps the
+        // fixture's statuses until the run quits: only the menu report follows, and a refresh would read this Mac's answers.
         LaunchPermissionManager.snapshotStatuses = DebugSnapshotFixtures.launchPermissionStatuses
         for step in OnboardingStep.allCases {
             let name = "onboarding" + "\(step)".prefix(1).uppercased() + "\(step)".dropFirst()

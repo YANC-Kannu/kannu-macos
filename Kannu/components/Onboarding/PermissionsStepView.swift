@@ -105,9 +105,17 @@ struct PermissionsStepView: View {
                 .useDevTools: String(localized: "Use DevTools"),
             ], style: .segmented)
             if focusMode == .useDevTools {
-                // A lone quiet button under the card's text, on its column (docs/SETTINGS.md, "Which component for what").
-                Button("Open Developer Tools settings") { DeveloperToolsSettings.open() }
-                    .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
+                // A lone quiet button under the card's text, on its column, with its chevron, as Agents' "Open ›"
+                // (docs/SETTINGS.md, "Which component for what"): bare at rest, the chevron says it goes somewhere.
+                Button {
+                    DeveloperToolsSettings.open()
+                } label: {
+                    HStack(spacing: SettingsMetrics.iconGap) {
+                        Text("Open Developer Tools settings")
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
             }
         }
         .permissionCard()

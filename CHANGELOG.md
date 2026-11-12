@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of onboarding
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: the reviewer's M1, M2 and M4; M3 answered in a comment; nothing found in the gates, the permission timing, the keyboard or VoiceOver
+- **Changes:**
+  - A profile card's glyph sits in a box of one height, so the four names line up: the symbols draw 25 to 32 pt tall
+    at the same size, and Developer's name sat 6 pt above Designer's.
+  - A profile card is at least 160 pt tall rather than exactly, so a longer translation or the system font grows it
+    instead of spilling past it, now that its description is no longer cut at three lines.
+  - Focus detection's Open Developer Tools settings carries its chevron, as Agents' "Open ›" does, so a bare quiet
+    button still says it leads somewhere.
+  - The onboarding boards' comment says why clearing the fixture does not refresh the manager: only the menu report
+    follows, and a refresh would read this Mac's answers.
+
 ### 2026-11-12 - Onboarding takes Brain's look
 - **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: every onboarding step on Brain's tokens, Geist, cards, buttons and insets, and the design review's Allow above Not now
