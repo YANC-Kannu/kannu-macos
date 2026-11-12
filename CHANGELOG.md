@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Onboarding takes Brain's look
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: every onboarding step on Brain's tokens, Geist, cards, buttons and insets, and the design review's Allow above Not now
+- **Changes:**
+  - The onboarding window applies Brain's root and paints the panel under every step. A step's title is the page
+    title, the line under it body text in the secondary ink, both at the page's inset, and its buttons trail, the verb
+    primary. Welcome and Finish keep a centred hero; Finish's buttons are a sheet's, Customize in Brain then Finish.
+  - The choices (music source, profiles, traffic light, staying awake, notes) are choice cards like Timer's start
+    tiles: the card colour, and the ring and VoiceOver's "selected" when chosen. The radio circles, gradients, tinted
+    fills, hover scale and springs went. A music source is a button now, so the keyboard reaches it; YouTube Music's
+    GitHub link sits over its card.
+  - The Permissions step keeps one card per permission, in the theme's card. Focus detection is a segmented
+    `SettingsSelect`, Open at login is our switch, and "Allowed" is a status line with its dot.
+  - Allow is the permission row's primary and Not now its quiet button (the design review's finding 4), in onboarding's
+    cards and General's Permissions rows, which share the row. Our own styles draw alike in a window that is not key,
+    so General's `.tint(.accentColor)` around the rows went, with its colour pin and its docs.
+  - The Profile step's line and the Developer card's description are no longer cut short.
+  - Behaviour is unchanged: no string, no gate and no prompt's timing changed, and the welcome music still plays only at
+    Finish. `FirstLaunchRulesTests` and `LaunchGateRulesTests` pass unchanged.
+  - Every step has a board (`OnboardingView(snapshotStep:)`, DEBUG), and the Permissions step's whole list another, from
+    fixture statuses (`LaunchPermissionManager.snapshotStatuses`, DEBUG), so no board reads this Mac's answers or probes
+    a folder. They replace two boards that wore Brain's root, which the window did not.
+  - `SettingsDesignSystemRulesTests` holds onboarding's root and panel, no `.borderedProminent` under `Onboarding/`, and
+    Allow's rank. docs/SETTINGS.md gains "Onboarding"; docs/REGRESSIONS.md entry 22 a 2026-11-12 addendum.
+
 ### 2026-11-12 - Answer the review of the menu bar
 - **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
