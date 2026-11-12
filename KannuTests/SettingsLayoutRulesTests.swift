@@ -187,6 +187,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
         "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
         "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
+        "NotesOverview.swift": 1,            // the sync's status line in line with the cards' text
+        "NotePage.swift": 1,                 // the note's own card
     ]
 
     func testNoRowPadsItself() {
@@ -492,6 +494,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SecurityOverview.swift": 1,
         "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
         "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
+        "NotesOverview.swift": 1,            // New note: the Notes page header's one verb
+        "NewNoteSheet.swift": 1,             // the New note sheet's Add
     ]
 
     func testOnlySheetsAndNewTaskArePrimary() throws {
