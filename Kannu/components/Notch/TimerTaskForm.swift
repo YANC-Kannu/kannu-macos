@@ -252,7 +252,7 @@ struct TimerTaskForm: View {
                         .accessibilityLabel(Text(verbatim: String(localized: "Task title, \(draft.title)")))
                 }
             }
-            .font(.system(size: 12, weight: .medium))
+            .font(SettingsTheme.font(size: 12, weight: .medium))
             .padding(.horizontal, 10)
             .frame(maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(notchForeground.opacity(0.08)))
@@ -344,7 +344,7 @@ struct TimerTaskForm: View {
         HStack(spacing: 4) {
             TextField(draft.estimatePrompt, text: Binding(get: { draft.estimateText }, set: { draft.typeEstimate($0) }))
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
                 .foregroundColor(draft.estimateReading == .unreadable ? .orange : notchForeground)
                 .tint(notchForeground)
                 .focused($focused, equals: .estimate)
@@ -354,7 +354,7 @@ struct TimerTaskForm: View {
                 .hoverTooltip(String(localized: "Type 45m, 1.5h or 2d 3h"), edge: .below)
             if focused == .estimate, let echo = draft.estimateEcho {
                 Text(verbatim: echo)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .fixedSize()
@@ -382,7 +382,7 @@ struct TimerTaskForm: View {
         HStack(spacing: 4) {
             TextField(String(localized: "Tags, comma separated"), text: $draft.tagsText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
                 .foregroundColor(notchForeground)
                 .tint(notchForeground)
                 .focused($focused, equals: .tags)
@@ -443,8 +443,13 @@ struct TimerTaskForm: View {
                     Button {
                         draft.reminder = TaskFormDraft.defaultReminder(now: Date(), calendar: .current)
                     } label: {
-                        Label(String(localized: "Add a reminder"), systemImage: "bell")
-                            .font(.system(size: 12, weight: .medium))
+                        Label {
+                            Text(String(localized: "Add a reminder"))
+                        } icon: {
+                            Image(systemName: "bell")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(.secondary)
                             .contentShape(Rectangle())
                     }
@@ -464,7 +469,7 @@ struct TimerTaskForm: View {
             }
         } else {
             Text("Reminders are for local tasks.")
-                .font(.system(size: 11, weight: .medium))
+                .font(SettingsTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -545,7 +550,7 @@ struct TimerTaskForm: View {
                     Text(verbatim: tag)
                 }
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .foregroundStyle(notchForeground.opacity(0.9))
             .lineLimit(1)
             .fixedSize()
@@ -583,7 +588,7 @@ struct TimerTaskForm: View {
         let disabled = !manager.isReady || !draft.canSave
         return Button(action: action) {
             Label(title, systemImage: systemImage)
-                .font(.system(size: M.buttonFontSize, weight: .semibold))
+                .font(SettingsTheme.font(size: M.buttonFontSize, weight: .semibold))
                 .foregroundStyle(prominent ? Color.white : notchForeground.opacity(0.9))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)

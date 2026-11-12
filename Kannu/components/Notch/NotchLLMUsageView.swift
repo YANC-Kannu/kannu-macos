@@ -790,7 +790,7 @@ struct NotchLLMUsageView: View {
     }
 
     private static func font(_ size: CGFloat, _ weight: Font.Weight) -> Font {
-        .system(size: size, weight: weight)
+        SettingsTheme.font(size: size, weight: weight)
     }
 
     static func tokens(_ n: Int) -> String {
@@ -839,7 +839,7 @@ private struct UsageChip: View {
 
     var body: some View {
         let chip = Text(verbatim: text)
-            .font(.system(size: M.glyphFontSize, weight: .semibold))
+            .font(SettingsTheme.font(size: M.glyphFontSize, weight: .semibold))
             .foregroundStyle(tint ?? Color.secondary)
             .lineLimit(1)
             .truncationMode(.middle)
