@@ -1257,6 +1257,15 @@ frame, and this entry's throw or a 700-wide window in a full-screen Space are th
 exact outcome was never run. So `.fullScreenPrimary` and the removal of `.frame(width: 700)` landed in one
 commit, and `WindowFullscreenRulesTests.testBrainsRootHasNoFixedWidth` holds the frame.
 
+**2026-11-12 addendum: the floating panels' theme changed their views, not their windows.** The clipboard panel and the
+LocalSend picker take Brain's theme (docs/SETTINGS.md, "The floating panels"). `LocalSendDevicePickerWindowManager.swift`
+is a panel manager and `ClipboardPanel.swift` holds a panel, so this is where they are read. Nothing above the views
+changed in either: window creation, `setHostedContent`, the corner masks, the sizes (320×400, 480×400), the levels and
+spaces, the picker's click-outside dismissal and the clipboard's placement are the base's. Each view now hands what it
+observes to a content view that draws it, so a board can draw fixtures; the picker's discovery still starts as it
+appears. `FloatingPanelRulesTests` holds the boards and the theme; `HostedContentRulesTests` and
+`ClipboardPanelPlacementTests` are unchanged.
+
 ---
 
 ## 18. Another app's click never opens the notch
