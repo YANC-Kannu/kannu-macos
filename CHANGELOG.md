@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of the floating panels
+- **Developer label:** Brain redesign plan: Stage 6, floating panels, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the reviewer's minors; the picker's Refresh and Close keep their reach and gain names, and both panels' motion honours Reduce Motion
+- **Changes:**
+  - The LocalSend picker's Refresh and Close keep the reach of the circles they replaced: their glyphs sit in a 22-pt
+    frame inside the quiet style's inset, 38 by 28.
+  - Refresh and Close say "Refresh devices" and "Close" to VoiceOver, existing catalog keys; neither takes a tooltip,
+    which would be a second hover source beside the style's own.
+  - The clipboard panel's tab switch keeps its 0.2 s ease but none under Reduce Motion, and the picker's device no
+    longer grows under the pointer with Reduce Motion on.
+  - docs/SETTINGS.md "The floating panels" says so.
+
+### 2026-11-12 - The floating panels take Brain's theme
+- **Developer label:** Brain redesign plan: Stage 6, floating panels: clipboard, LocalSend picker and similar small panels
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the clipboard panel and the LocalSend picker on Brain's tokens, Geist, cards, buttons and insets, behaviour unchanged
+- **Changes:**
+  - The clipboard panel draws on `panel` in Geist: its title in `sheetTitle`, History or Favorites as a segmented
+    `SettingsSelect` with each tab's count, the search in Brain's field chrome, rows on the card inset with the `hover`
+    fill, and Brain's empty state. Its glyph buttons keep their plain style and tooltips, in the theme's colours.
+  - The LocalSend picker's content draws in Geist on Brain's dark tokens over the backdrop Shelf › Device Picker Style
+    picks: devices as soft cards, Refresh and Close quiet, Scan Again the standard button, Brain's empty state. Its
+    hover growth takes the theme's bounded ease, none under Reduce Motion.
+  - Each panel's view hands what it observes to a content view (`ClipboardPanelContent`,
+    `LocalSendDevicePickerContent`), so six new boards, light and dark, draw fixtures and never build the clipboard
+    manager or the LocalSend service. Window code, placement, focus, dismissal, tooltips and the capture policy are
+    unchanged.
+  - New `FloatingPanelRulesTests` pins the system fonts and raw colours left in both files, each with why, the panels'
+    root, and the boards' fixtures, against planted offenders.
+  - docs/SETTINGS.md gains "The floating panels"; docs/REGRESSIONS.md entry 17 a 2026-11-12 addendum, since both files
+    hold a panel.
+
 ### 2026-11-12 - Answer the review of the sidebar badges
 - **Developer label:** Brain redesign plan: Stage 6, the sidebar badges, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: the reviewer's S1 and M2–M6; Security's and Usage's badges follow Agent Status as their pages do
