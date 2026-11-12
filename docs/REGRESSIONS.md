@@ -1800,6 +1800,16 @@ going back still scrolls by an `onAppear` inside the page's `.id(path)`, where i
 field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
 Space. `TasksPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
+**2026-11-12 addendum: Notes' list-detail adds one measurement, and no animation.** Brain › Notes shows a note's page
+beside the list from 1,224 pt of panel (layout-proposal D1), through the layout Brain › Tasks now shares with it
+(`SettingsListDetail`, `settingsListDetailFits(_:)`): one `onGeometryChange` on the tab that sets a flag when the panel
+crosses, and no animation, since the switch is a redraw. The list is the layout's first child at both widths and
+carries no id, so opening a note beside it keeps it built and scrolled where it was; each note's page carries its own
+id, so it opens at its top, and its one hook, the image read, runs once per note, as before. The live data is
+unchanged: one copy, followed only while Brain is on screen. Each visit still opens on the list, at both widths.
+**Not measured:** a window dragged across 1,224 pt with a note open; it needs a real window. `NotesPageLiveDataRulesTests`
+and `SettingsListDetailRulesTests` hold each clause against planted offenders.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

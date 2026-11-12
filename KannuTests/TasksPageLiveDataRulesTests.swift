@@ -280,31 +280,26 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
     // MARK: - D1: a task's page beside the list, or in its place
 
     /// One width function decides (`ListDetailLayout`, tested in `ListDetailLayoutTests`), read from one measurement of
-    /// the page into a flag; the page beside the list only for a task opened from it (a path of one task); the list a
-    /// column of the function's width with the inset on each side, and the task's page an inset after it, with no
-    /// inset of its own. None of the ways D1 rules out: `minWidth:` (the size bridge would clamp the window to it),
-    /// `ViewThatFits` (it builds every layout it tries), `.inspector`. A search or deep link returns to the first page at
-    /// either width, and scrolls a first page built anew to its row.
+    /// the page into a flag, through the layout Brain › Notes shares (`SettingsListDetail`, whose widths and bans
+    /// `SettingsListDetailRulesTests` holds), with no width math of the page's own; the page beside the list only for a
+    /// task opened from it (a path of one task). None of the ways D1 rules out on the page either: `minWidth:` (the size
+    /// bridge would clamp the window to it), `ViewThatFits` (it builds every layout it tries), `.inspector`. A search or
+    /// deep link returns to the first page at either width, and scrolls a first page built anew to its row.
     static func layoutProblems(settings: String, overview: String) -> [String] {
         let page = pagePart(of: settings)
         var problems: [String] = []
-        let measure = #"\.onGeometryChange\(for: Bool\.self\) \{ geometry in\s*ListDetailLayout\.showsPageBeside\(panelWidth: geometry\.size\.width, inset: inset, pageWidth: SettingsTheme\.pageMaxWidth\)\s*\} action: \{ showsPageBeside = \$0 \}"#
-        if SettingsDesignSystemRulesTests.matches(of: measure, in: page).count != 1
-            || page.components(separatedBy: "ListDetailLayout.showsPageBeside(").count - 1 != 1 {
+        if page.components(separatedBy: ".settingsListDetailFits($showsPageBeside)").count - 1 != 1
+            || page.contains("onGeometryChange") || page.contains("ListDetailLayout.showsPageBeside(") {
             problems.append("the page does not choose its layout by the width function, from one measurement")
         }
         if !page.contains("guard enableTasks, showsPageBeside, path.count == 1, case .task(let id)? = path.first else { return nil }") {
             problems.append("a page other than a task opened from the list shows beside it")
         }
-        if !page.contains(".frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)")
-            || !page.contains(".environment(\\.settingsPageInset, 0)") {
-            problems.append("the list and the task's page are not laid out by the function's widths")
-        }
-        // Built in one place, the first child of one stack at both widths, so crossing the width keeps it, scrolled
+        // Built in one place, the shared layout's first child at both widths, so crossing the width keeps it, scrolled
         // where it was, and a wide first open does not build it twice (the review's S1).
         if SettingsDesignSystemRulesTests.matches(of: #"\bfirstPage\b(?!Context|AndTask)"#, in: page).count != 2
-            || SettingsDesignSystemRulesTests.matches(of: #"HStack\(alignment: \.top, spacing: 0\) \{\s*firstPage\s*\.frame"#, in: page).count != 1 {
-            problems.append("the first page is built in more than one place, so crossing the width rebuilds it")
+            || SettingsDesignSystemRulesTests.matches(of: #"SettingsListDetail\(showsBeside: showsListAndPage\) \{\s*firstPage\s*\} beside: \{\s*taskPageBeside\s*\}"#, in: page).count != 1 {
+            problems.append("the first page is not built in one place, the shared layout's first child, so crossing the width rebuilds it")
         }
         // Inside `.id(path)`, so it runs again for each page below the first; outside, it ran once (measured,
         // docs/SETTINGS.md "Section rules").
@@ -330,13 +325,16 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
         let overview = try Self.source(Self.overviewPath)
         XCTAssertEqual(Self.layoutProblems(settings: settings, overview: overview), [])
         SettingsDesignSystemRulesTests.assertCaught([
-            ("pageWidth: SettingsTheme.pageMaxWidth)", "pageWidth: 600)"),
+            // A measurement of the page's own, past the shared one.
+            (".settingsListDetailFits($showsPageBeside)",
+             ".onGeometryChange(for: Bool.self) { $0.size.width >= 1200 } action: { showsPageBeside = $0 }"),
             ("guard enableTasks, showsPageBeside, path.count == 1,", "guard enableTasks, showsPageBeside,"),
-            (".frame(width: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : nil)",
-             ".frame(minWidth: showsListAndPage ? inset + ListDetailLayout.listWidth + inset : 0)"),
-            ("                    .environment(\\.settingsPageInset, 0)\n", ""),
-            ("    private var firstPageAndTask: some View {\n        HStack(",
-             "    private var firstPageAndTask: some View {\n        ViewThatFits {\n        HStack("),
+            (".settingsListDetailFits($showsPageBeside)\n", ".settingsListDetailFits($showsPageBeside)\n        .frame(minWidth: 1224)\n"),
+            ("    private var firstPageAndTask: some View {\n        SettingsListDetail(",
+             "    private var firstPageAndTask: some View {\n        ViewThatFits {\n        SettingsListDetail("),
+            // The page's own stack in place of the shared layout.
+            ("        SettingsListDetail(showsBeside: showsListAndPage) {\n            firstPage\n        } beside: {\n            taskPageBeside\n        }",
+             "        HStack(alignment: .top, spacing: 0) {\n            firstPage\n            if showsListAndPage { taskPageBeside }\n        }"),
             // The first page built a second time, for the wide case, as commit 1 had it.
             ("            } else {\n                firstPageAndTask\n",
              "            } else if showsListAndPage {\n                HStack { firstPage; taskPageBeside }\n            } else {\n                firstPageAndTask\n"),

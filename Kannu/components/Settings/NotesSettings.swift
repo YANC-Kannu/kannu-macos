@@ -25,9 +25,11 @@ import Defaults
 import SwiftUI
 
 /// Brain › Notes, a product page: the notes lead (`NotesOverview`), and these settings follow. A note's › opens its own
-/// page in the tab (`NotePage`), an in-tab swap under a "‹ Notes" back row, as Brain › Tasks opens a task's page
-/// (docs/SETTINGS.md, "Section rules"). Search and deep links land on the settings below, so a Notes search or deep link
-/// returns the tab to the list first. Each visit opens on the list.
+/// page (`NotePage`): beside the list while the panel holds both (`SettingsListDetail`, layout-proposal D1), otherwise
+/// in the tab, an in-tab swap under a "‹ Notes" back row, as Brain › Tasks opens a task's page (docs/SETTINGS.md,
+/// "Section rules"). One selection, drawn either way, so a resize converts nothing. Search and deep links land on the
+/// settings below: a Notes search or deep link closes a note's page in the list's place, and beside the list it stays,
+/// the list being on screen. Each visit opens on the list.
 struct NotesSettingsView: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @ObservedObject private var highlights = SettingsHighlightCoordinator.shared
@@ -40,14 +42,17 @@ struct NotesSettingsView: View {
     /// and as Brain comes back on screen, then followed at most twice a second while it is on screen, and assigned only
     /// when it changed. Off screen it stays as it was (docs/SETTINGS.md, "Live data").
     @State private var data = NotesPageData()
-    /// The note whose page is open in the tab; nil is the list. Only the selection: the list-detail layout
-    /// (layout-proposal.md, D1) can show the same note beside the list.
+    /// The note whose page is open; nil is the list alone. Only the selection, drawn beside the list while the panel
+    /// holds both and in the list's place otherwise (layout-proposal.md, D1).
     @State private var openNoteID: UUID?
     /// A note made in Apple Notes whose Delete waits for the question. On the tab, not on a row: the rows are lazy.
     @State private var pendingDelete: NoteItem?
     /// The row to bring back into view once the list has appeared: the note whose page was left, or the row a search
     /// or a deep link names.
     @State private var returnTo: AnyHashable?
+    /// Whether the panel holds the list and a note's page side by side (`ListDetailLayout`). A flag, not the panel's
+    /// width, so a resize redraws the page only when it crosses.
+    @State private var showsPageBeside = false
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.notes.highlightID(for: title)
@@ -76,45 +81,67 @@ struct NotesSettingsView: View {
         return data.notes.first { $0.id == id }
     }
 
+    /// The open note's page in the list's place, the in-tab swap: while the panel does not hold both.
+    private var noteInPlace: NoteItem? {
+        showsPageBeside ? nil : openNote
+    }
+
+    /// Wide enough for a note's page beside the list, with Notes on.
+    private var showsListAndNote: Bool {
+        enableNotes && showsPageBeside
+    }
+
+    /// The open note's page beside the list: while the panel holds both.
+    private var noteBeside: NoteItem? {
+        showsListAndNote ? openNote : nil
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
-            Group {
-                if let note = openNote {
-                    SettingsPage {
-                        SettingsSection {
-                            TasksBackRow(parent: SettingsTab.notes.title) {
-                                returnTo = note.id
-                                openNoteID = nil
-                            }
+            if let note = noteInPlace {
+                SettingsPage {
+                    // The back row bare on the panel, a gap above the note's card (the design review's finding 24), as
+                    // Brain › Tasks' pages have it.
+                    VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                        TasksBackRow(parent: SettingsTab.notes.title) {
+                            returnTo = note.id
+                            openNoteID = nil
                         }
                         NotePage(note: note, isReadOnly: data.isReadOnly(note), delete: delete)
                     }
-                    .settingsPageTitle(note.title)
-                } else {
+                }
+                .settingsPageTitle(note.title)
+                // A page opens at its top.
+                .id(note.id)
+            } else {
+                SettingsListDetail(showsBeside: showsListAndNote) {
                     // The product first, then its settings (docs/SETTINGS.md, "Product pages").
                     SettingsProductPage(settingsTitle: String(localized: "Notes settings")) {
-                        NotesOverview(data: data, open: { openNoteID = $0.id }, delete: delete)
+                        NotesOverview(data: data, selected: noteBeside?.id, open: { openNoteID = $0.id }, delete: delete)
                     } settings: {
                         settingsSections
                     }
-                    .settingsPageTitle(SettingsTab.notes.title)
-                    // The list has appeared: the row it should show, in view. After this update, so the row exists.
-                    .onAppear {
-                        guard let target = returnTo else { return }
-                        returnTo = nil
-                        DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
-                    }
+                } beside: {
+                    notePageBeside
+                }
+                .settingsPageTitle(SettingsTab.notes.title)
+                // The list has appeared: the row it should show, in view. After this update, so the row exists.
+                .onAppear {
+                    guard let target = returnTo else { return }
+                    returnTo = nil
+                    DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
                 }
             }
-            // A page opens at its top.
-            .id(openNoteID)
         }
+        // D1: the panel's width decides where a note's page goes, from this one measurement (`ListDetailLayout`).
+        .settingsListDetailFits($showsPageBeside)
         .navigationTitle("Notes")
-        // Search and deep links land on the settings below the list, never on a note's page. Settings scrolled before
-        // the list came back, so the list scrolls to the row again. `initial`: the link may arrive before this tab is
-        // built.
+        // Search and deep links land on the settings below the list, never on a note's page. A note's page in the list's
+        // place closes, and the list, built anew, scrolls to the row again, since Settings scrolled before it existed; a
+        // note's page beside the list stays, the list being on screen (the header's gear among such links). `initial`:
+        // the link may arrive before this tab is built.
         .onChange(of: highlights.activeHighlightID, initial: true) { _, id in
-            guard let id, id.hasPrefix(highlightID("")), openNoteID != nil else { return }
+            guard let id, id.hasPrefix(highlightID("")), noteInPlace != nil else { return }
             openNoteID = nil
             returnTo = id
         }
@@ -159,6 +186,28 @@ struct NotesSettingsView: View {
                 .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
                 .values {
                 copyFromStores()
+            }
+        }
+    }
+
+    /// The open note's page beside the list, or, while none is open, what its place says. Named in its card, since the
+    /// tab's title stays Notes' while the list is on screen.
+    @ViewBuilder
+    private var notePageBeside: some View {
+        if let note = noteBeside {
+            SettingsPage {
+                NotePage(note: note, isReadOnly: data.isReadOnly(note), showsTitle: true, delete: delete)
+            }
+            // A note's page opens at its top.
+            .id(note.id)
+        } else {
+            SettingsPage {
+                SettingsSection {
+                    NotesMessage(title: String(localized: "No note selected"),
+                                 message: String(localized: "Click › on a note to see it here.")) {
+                        EmptyView()
+                    }
+                }
             }
         }
     }

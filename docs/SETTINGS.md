@@ -503,15 +503,17 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   notes says that a sync runs, when the last one ran, or its error; it reads the page's copy and starts nothing. With no
   note, "No notes yet", "Write your first note here or in the notch." and New note in the standard style, the header's
   verb again, as Security's empty state draws its own. While Notes is off, one card, "Notes is off", with Turn On.
-- **A note's own page** is an in-tab swap (below, "Section rules"): the › opens it under a "‹ Notes" back row, with the
-  note's title as the page's title, at its top; going back scrolls to the note's row. It shows the note whole and
-  read-only: when it was edited ("Made in Apple Notes" after it for a note shown read-only), the text, selectable, and
-  its image as a preview at most the prose width and a hero card's height, read from its file once, off the main
-  thread. Then Pin or Unpin, Copy and Delete, and Open in Notes for a note made there: the notch edits notes, and Apple
-  Notes the ones made there. `NotePage` is handed the note and nothing else, so the list-detail layout
-  (layout-proposal.md, D1) can stand it beside the list from the same selection. Each visit opens on the list, since a
-  note left open would come back whole on a reopened Brain, which can be on a shared screen; a Notes search or deep link
-  takes the tab back to the list too, where its row is.
+- **A note's own page** (below, "Section rules"): from 1,224 pt of panel the › shows it beside the list
+  (layout-proposal.md, D1), the note's row wearing the selected ring, and its card names the note over when it was
+  edited, since the tab keeps Notes' title; with none open, its place says "No note selected". Narrower it is an
+  in-tab swap: the › opens it under a bare "‹ Notes" back row, with the note's title as the page's title, at its top;
+  going back scrolls to the note's row. Either way it shows the note whole and read-only: when it was edited ("Made in
+  Apple Notes" after it for a note shown read-only), the text, selectable, and its image as a preview at most the prose
+  width and a hero card's height, read from its file once, off the main thread. Then Pin or Unpin, Copy and Delete, and
+  Open in Notes for a note made there: the notch edits notes, and Apple Notes the ones made there. `NotePage` is handed
+  the note and nothing else, so both widths draw it from the same selection. Each visit opens on the list, at both
+  widths, since a note left open would come back whole on a reopened Brain, which can be on a shared screen; a Notes
+  search or deep link closes a note's page in the list's place, where its row is, and leaves one beside the list.
 - **Notes' presses:** Delete asks first for a note made in Apple Notes, since it moves to Recently Deleted there too, as
   the notch's rows ask; any other goes at once, as there. **The page starts no work of its own:** no sync and no
   AppleScript as it appears or follows, though the notch's Notes tab syncs as it appears. Pin, Copy, Open in Notes
@@ -535,9 +537,10 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   landing.
 - **Boards**: `notes0` and `notes4` draw Notes at the window's first size with no note and four (a pinned one, one with
   an image, one made in Apple Notes and one with no text), `notePage` the page of the one with the image and
-  `notePageMirror` the one made in Apple Notes, from fixtures (`NotesOverview.snapshotFixture`), never this Mac's notes,
-  sync state or image files. `notes` draws the page at the narrowest panel, and `newNoteSheet` the sheet half typed,
-  never saved. The switches drawn under the product are this Mac's, so the boards run with `-enableNotes '<true/>'`,
+  `notePageMirror` the one made in Apple Notes; `notesWide` and `notePageWide` at a 14-inch full screen (1,512 × 982),
+  the four with none open and with the one with the image beside the list; from fixtures
+  (`NotesOverview.snapshotFixture`), never this Mac's notes, sync state or image files. `notes` draws the page at the
+  narrowest panel, and `newNoteSheet` the sheet half typed, never saved. The switches drawn under the product are this Mac's, so the boards run with `-enableNotes '<true/>'`,
   the sync's with `-enableAppleNotesSync '<true/>'` and `notePageMirror` with `-appleNotesSyncScope 'Whole account'`
   too: the argument domain, nothing saved. A bare `YES` reaches Defaults as text, which reads as the switch's default.
 
@@ -850,19 +853,21 @@ section describes it, it does not define it.
   - **A list may show its item's page beside it** (layout-proposal D1, David 2026-11-06): once the
     panel holds the page inset, the list (360 pt), the inset, a settings column's 720 pt and a last
     inset (`ListDetailLayout`, 1,224 pt with the wide inset), an item opened from the list shows
-    beside it instead of in its place, and the list stays. Brain › Tasks is the model: the same
-    path, `[.task(id)]`, is drawn either way, so a resize converts nothing; the page decides from
-    one `onGeometryChange` into a flag, never `minWidth:` (the size bridge would clamp the window),
-    `ViewThatFits` (it builds every layout) or `.inspector`. The list keeps the first page whole,
-    its settings under it, in a column of the list's width with the inset on each side; the item's
-    page is a `SettingsPage` with no inset of its own, so the list's trailing inset is the gap, and
-    its scroll view runs to the panel's edge. The first page is one stack's first child at both
-    widths, so crossing the width keeps it, scrolled where it was. The item opened shows selected in
-    the list (the one selected look, a 2-pt ring, and `isSelected` for VoiceOver, on a card named for
-    its task); with none open, its place says so. Pages below the first (a source's, a project's, a
+    beside it instead of in its place, and the list stays. Brain › Tasks and Brain › Notes share
+    one layout for it, `SettingsListDetail`, and one measurement, `settingsListDetailFits(_:)`: the
+    same selection (Tasks' path, `[.task(id)]`; Notes' open note) is drawn either way, so a resize
+    converts nothing; the page decides from one `onGeometryChange` into a flag, never `minWidth:`
+    (the size bridge would clamp the window), `ViewThatFits` (it builds every layout) or
+    `.inspector`. The list keeps the first page whole, its settings under it, in a column of the
+    list's width with the inset on each side; the item's page is a `SettingsPage` with no inset of
+    its own, so the list's trailing inset is the gap, and its scroll view runs to the panel's edge.
+    The first page is the layout's first child at both widths, so crossing the width keeps it,
+    scrolled where it was. The item opened shows selected in the list (the one selected look, a 2-pt
+    ring, and `isSelected` for VoiceOver, on a task's card or a note's row, each named for its
+    item); with none open, its place says so. Pages below the first (a source's, a project's, a
     task opened from them) are the in-tab swap at every width. A search or deep link lands on the
-    first page's row at both widths: a page in the list's place closes, and a task's page beside the
-    list stays, the list being on screen.
+    first page's row at both widths: a page in the list's place closes, and an item's page beside
+    the list stays, the list being on screen.
   - Going back scrolls by an `onAppear` inside the page's `.id(path)`: applied after it, it runs
     once and never again as the path moves between two pages below the first (measured,
     2026-11-11).

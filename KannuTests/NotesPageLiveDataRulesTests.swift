@@ -426,13 +426,14 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
     // MARK: - The page, its header and its swap
 
     /// Notes leads with its overview and its settings follow; its header carries the gear, which lands on the first
-    /// settings row; a note's › opens its page in the tab, which opens at its top; each visit opens on the list, and a
-    /// Notes search or deep link takes the tab back to the list, where it lands. A board's fixture may open a note after
-    /// the visit's reset.
+    /// settings row; a note's › opens its page, in the tab under its bare back row (the design review's finding 24) while
+    /// the panel does not hold the list beside it, opening at its top; each visit opens on the list, and a Notes search
+    /// or deep link takes the tab back to the list, where it lands. A board's fixture may open a note after the visit's
+    /// reset.
     static func wiringProblems(settings: String, view: String, overview: String) -> [String] {
         var problems: [String] = []
         let settingsCode = SettingsDesignSystemRulesTests.code(settings)
-        if settingsCode.range(of: #"SettingsProductPage\(settingsTitle: String\(localized: "Notes settings"\)\) \{\s*NotesOverview\(data: data, open: \{ openNoteID = \$0\.id \}, delete: delete\)\s*\} settings: \{"#,
+        if settingsCode.range(of: #"SettingsProductPage\(settingsTitle: String\(localized: "Notes settings"\)\) \{\s*NotesOverview\(data: data, selected: noteBeside\?\.id, open: \{ openNoteID = \$0\.id \}, delete: delete\)\s*\} settings: \{"#,
                               options: .regularExpression) == nil {
             problems.append("Notes does not lead with its overview")
         }
@@ -443,10 +444,9 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             || !settingsCode.contains(".settingsHighlight(id: highlightID(\"Enable Notes\"))") {
             problems.append("the gear does not land on the first settings row")
         }
-        if !settingsCode.contains("NotePage(note: note, isReadOnly: data.isReadOnly(note), delete: delete)")
-            || !settingsCode.contains("TasksBackRow(parent: SettingsTab.notes.title) {")
-            || !settingsCode.contains("            .id(openNoteID)\n") {
-            problems.append("a note's page is not the in-tab swap, under its back row and opening at its top")
+        let swap = #"VStack\(alignment: \.leading, spacing: SettingsTheme\.sectionLabelGap\) \{\s*TasksBackRow\(parent: SettingsTab\.notes\.title\) \{\s*returnTo = note\.id\s*openNoteID = nil\s*\}\s*NotePage\(note: note, isReadOnly: data\.isReadOnly\(note\), delete: delete\)\s*\}\s*\}\s*\.settingsPageTitle\(note\.title\)\s*\.id\(note\.id\)"#
+        if SettingsDesignSystemRulesTests.matches(of: swap, in: settingsCode).count != 1 {
+            problems.append("a note's page is not the in-tab swap, under its bare back row and opening at its top")
         }
         let appear = body(after: ".onAppear", following: ".onChange(of: enableNotes)", in: settingsCode)
         let reset = appear.range(of: "openNoteID = nil")
@@ -467,17 +467,93 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
         let overview = try Self.source(Self.overviewPath)
         XCTAssertEqual(Self.wiringProblems(settings: settings, view: view, overview: overview), [])
         SettingsDesignSystemRulesTests.assertCaught([
-            ("                        NotesOverview(data: data, open: { openNoteID = $0.id }, delete: delete)\n", ""),
-            ("            .id(openNoteID)\n", ""),
+            ("                        NotesOverview(data: data, selected: noteBeside?.id, open: { openNoteID = $0.id }, delete: delete)\n", ""),
+            (".settingsPageTitle(note.title)\n                // A page opens at its top.\n                .id(note.id)\n", ".settingsPageTitle(note.title)\n"),
+            // The back row in a card of its own, as this page first had it.
+            ("VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {\n                        TasksBackRow(",
+             "SettingsSection {\n                        TasksBackRow("),
             // A note left open would come back whole on a reopened Brain, on a screen that can be shared.
             ("            openNoteID = nil\n            returnTo = nil\n            #if DEBUG", "            returnTo = nil\n            #if DEBUG"),
-            ("            guard let id, id.hasPrefix(highlightID(\"\")), openNoteID != nil else { return }\n            openNoteID = nil\n",
-             "            guard let id, id.hasPrefix(highlightID(\"\")), openNoteID != nil else { return }\n"),
+            ("            guard let id, id.hasPrefix(highlightID(\"\")), noteInPlace != nil else { return }\n            openNoteID = nil\n",
+             "            guard let id, id.hasPrefix(highlightID(\"\")), noteInPlace != nil else { return }\n"),
             (".settingsHighlight(id: highlightID(\"Enable Notes\"))", ""),
         ], in: settings) { Self.wiringProblems(settings: $0, view: view, overview: overview) }
         SettingsDesignSystemRulesTests.assertCaught([(", actions: AnyView(NotesHeaderActions())", "")], in: view) {
             Self.wiringProblems(settings: settings, view: $0, overview: overview)
         }
+    }
+
+    // MARK: - D1: a note's page beside the list, or in its place
+
+    /// One width function decides, through the layout Brain › Tasks shares (`SettingsListDetail`, whose widths and bans
+    /// `SettingsListDetailRulesTests` holds): one measurement of the tab into a flag, and no width math of the page's
+    /// own; the open note's page beside the list exactly while the panel holds both, and in its place otherwise, from
+    /// the one selection; the first page built in one place, the shared layout's first child, with no id, so opening a
+    /// note beside it keeps the list where it was; and none of the ways D1 rules out. A search or deep link closes a
+    /// note's page only in the list's place; beside the list it stays, the list being on screen. The note shown beside
+    /// is drawn selected, and its row is one VoiceOver group, selected.
+    static func layoutProblems(settings: String, overview: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(settings)
+        let overviewCode = SettingsDesignSystemRulesTests.code(overview)
+        var problems: [String] = []
+        if count(".settingsListDetailFits($showsPageBeside)", in: code) != 1 || code.contains("onGeometryChange")
+            || code.contains("ListDetailLayout.showsPageBeside(") {
+            problems.append("the page does not choose its layout by the width function, from one measurement")
+        }
+        if !code.contains("showsPageBeside ? nil : openNote") || !code.contains("enableNotes && showsPageBeside")
+            || !code.contains("showsListAndNote ? openNote : nil") {
+            problems.append("a note's page is not beside the list exactly while the panel holds both, and in its place otherwise")
+        }
+        if SettingsDesignSystemRulesTests.matches(of: #"SettingsListDetail\(showsBeside: showsListAndNote\) \{\s*SettingsProductPage\("#, in: code).count != 1
+            || count("SettingsProductPage(", in: code) != 1 || count("notePageBeside", in: code) != 2 {
+            problems.append("the first page is not built in one place, the shared layout's first child")
+        }
+        // An id on each note's page, so it opens at its top, and none on the list, which an id would rebuild, scrolled
+        // back to its top, each time a note opens beside it.
+        if count(".id(", in: code) != 2 || count(".id(note.id)", in: code) != 2 {
+            problems.append("the list is rebuilt as a note opens beside it, or a note's page does not open at its top")
+        }
+        for (name, text) in [("the page", code), ("the overview", overviewCode)] {
+            for banned in ["minWidth:", "ViewThatFits", ".inspector("] where text.contains(banned) {
+                problems.append("\(name) lays out with \(banned), which D1 rules out")
+            }
+        }
+        let landing = body(after: ".onChange(of: highlights.activeHighlightID, initial: true)", in: code)
+        if SettingsDesignSystemRulesTests.matches(of: #"guard let id, id\.hasPrefix\(highlightID\(""\)\), noteInPlace != nil else \{ return \}\s*openNoteID = nil\s*returnTo = id"#,
+                                                   in: landing).count != 1 {
+            problems.append("a search or deep link closes a note's page beside the list, or leaves one in the list's place")
+        }
+        if !overviewCode.contains("isSelected: selected == note.id") || !overviewCode.contains(".settingsChoiceRing(")
+            || !overviewCode.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])") {
+            problems.append("the note shown beside the list is not drawn selected, for the eye and for VoiceOver")
+        }
+        return problems
+    }
+
+    func testANotesPageIsBesideTheListOrInItsPlaceByOneWidthFunction() throws {
+        let settings = try Self.source(Self.settingsPath)
+        let overview = try Self.source(Self.overviewPath)
+        XCTAssertEqual(Self.layoutProblems(settings: settings, overview: overview), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            // A measurement of the page's own, past the shared one.
+            (".settingsListDetailFits($showsPageBeside)",
+             ".onGeometryChange(for: Bool.self) { $0.size.width >= 1200 } action: { showsPageBeside = $0 }"),
+            // The page in the list's place at every width, or beside it at every width.
+            ("showsPageBeside ? nil : openNote", "openNote"),
+            ("showsListAndNote ? openNote : nil", "openNote"),
+            // One id over both, as the in-tab swap had it: opening a note beside the list would rebuild the list.
+            ("        .settingsListDetailFits($showsPageBeside)\n", "        .id(openNoteID)\n        .settingsListDetailFits($showsPageBeside)\n"),
+            // The first page built a second time, for the wide case.
+            ("            } else {\n                SettingsListDetail(",
+             "            } else if showsListAndNote {\n                HStack { SettingsProductPage(settingsTitle: \"\") { EmptyView() } settings: { EmptyView() }; notePageBeside }\n            } else {\n                SettingsListDetail("),
+            ("        .settingsListDetailFits($showsPageBeside)\n", "        .settingsListDetailFits($showsPageBeside)\n        .frame(minWidth: 1224)\n"),
+            // A search or deep link closing the note beside the list, the header's gear among them.
+            ("noteInPlace != nil else { return }", "openNoteID != nil else { return }"),
+        ], in: settings) { Self.layoutProblems(settings: $0, overview: overview) }
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("isSelected: selected == note.id", "isSelected: false"),
+            (".accessibilityAddTraits(isSelected ? .isSelected : [])", ".accessibilityAddTraits([])"),
+        ], in: overview) { Self.layoutProblems(settings: settings, overview: $0) }
     }
 
     // MARK: - New note's sheet
