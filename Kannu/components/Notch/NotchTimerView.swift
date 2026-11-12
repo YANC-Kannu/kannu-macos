@@ -389,7 +389,7 @@ struct NotchTimerView: View {
                 HStack(alignment: .center, spacing: Self.editTaskButtonSpacing) {
                     if isRenamingSession {
                         TextField(String(localized: "Session name"), text: $renameDraft)
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(SettingsTheme.font(size: 20, weight: .semibold))
                             .textFieldStyle(.plain)
                             .foregroundColor(notchForeground)
                             .tint(notchForeground)
@@ -400,7 +400,7 @@ struct NotchTimerView: View {
                     } else if timerManager.hasManualTimerRunning {
                         MarqueeText(
                             .constant(timerDisplayName),
-                            font: .system(size: 20, weight: .semibold),
+                            font: SettingsTheme.font(size: 20, weight: .semibold),
                             nsFont: .title3,
                             textColor: notchForeground,
                             minDuration: 0.2,
@@ -415,7 +415,7 @@ struct NotchTimerView: View {
                     } else {
                         MarqueeText(
                             .constant(timerDisplayName),
-                            font: .system(size: 20, weight: .semibold),
+                            font: SettingsTheme.font(size: 20, weight: .semibold),
                             nsFont: .title3,
                             textColor: notchForeground,
                             minDuration: 0.2,
@@ -483,7 +483,7 @@ struct NotchTimerView: View {
 
                 if timerManager.isOvertime {
                     Text(String(localized: "Overtime"))
-                        .font(.caption)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.red)
                 }
             }
@@ -674,11 +674,11 @@ struct NotchTimerView: View {
                 .foregroundStyle(.secondary)
 
             Text("Timer Disabled")
-                .font(.title2)
+                .font(SettingsTheme.font(size: 17))
                 .fontWeight(.medium)
 
             Text("Enable the timer feature in Brain to access this tab.")
-                .font(.body)
+                .font(SettingsTheme.font(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
@@ -806,7 +806,7 @@ struct NotchTimerView: View {
 
     private func statusBadge(_ text: String) -> some View {
         Text(text)
-            .font(.caption.weight(.semibold))
+            .font(SettingsTheme.font(size: 10, weight: .semibold))
             .foregroundStyle(timerStatusColor)
             .padding(.horizontal, 12)
             .padding(.vertical, 4)
@@ -851,7 +851,7 @@ struct NotchTimerView: View {
     private var startButton: some View {
         Button(action: startCustomTimer) {
             Label(String(localized: "Start"), systemImage: "play.fill")
-                .font(.system(size: TimerComposerMetrics.buttonFontSize, weight: .semibold))
+                .font(SettingsTheme.font(size: TimerComposerMetrics.buttonFontSize, weight: .semibold))
                 .foregroundStyle(Color.white) // on the accent-filled button
                 .frame(maxWidth: .infinity)
                 .frame(height: TimerComposerMetrics.buttonHeight)
@@ -874,7 +874,7 @@ struct NotchTimerView: View {
     private var resetButton: some View {
         Button(action: resetCustomTimerInputs) {
             Label(String(localized: "Reset"), systemImage: "arrow.counterclockwise")
-                .font(.system(size: TimerComposerMetrics.buttonFontSize, weight: .semibold))
+                .font(SettingsTheme.font(size: TimerComposerMetrics.buttonFontSize, weight: .semibold))
                 .foregroundStyle(notchForeground.opacity(0.9))
                 .frame(maxWidth: .infinity)
                 .frame(height: TimerComposerMetrics.buttonHeight)
@@ -953,7 +953,7 @@ struct NotchTimerView: View {
                 }
             }
             TextField(String(localized: "Do you want to name this session?"), text: $pendingSessionName)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
                 .textFieldStyle(.plain)
                 .foregroundColor(notchForeground)
                 .tint(notchForeground)
@@ -1224,7 +1224,7 @@ private struct DurationField: View {
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(notchForeground.opacity(0.08)))
 
             Text(label)
-                .font(.caption2)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundStyle(notchForeground.opacity(0.65))
                 .frame(height: TimerComposerMetrics.captionHeight)
         }

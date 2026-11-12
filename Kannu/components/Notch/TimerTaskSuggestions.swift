@@ -89,7 +89,7 @@ struct TimerTaskSuggestions: View {
             HStack(spacing: 6) {
                 rowContent(row)
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: M.suggestionRowHeight)
@@ -214,7 +214,7 @@ struct TimerTaskPickInfo: View {
                 let tracked = manager.trackedSeconds(of: task)
                 if tracked > 0 || task.effectiveEstimateSeconds != nil {
                     Text(verbatim: TaskTimeMath.progress(tracked: tracked, estimate: task.effectiveEstimateSeconds).text)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .fixedSize()

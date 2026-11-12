@@ -189,6 +189,34 @@ numbers, and this table only says why.
 `withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
 spring or the default. Pages keep their own until Stage 4.
 
+### The notch
+
+The open notch draws its text in Geist too, through one token: `SettingsTheme.font(size:weight:)`. It takes the
+size and weight `.system` took, because the notch's sizes are its own, set by its height budgets
+(`UsageCardMetrics`, `TimerComposerMetrics`). Geist ships Regular, Medium and SemiBold, so bold and heavier draw
+SemiBold, and lighter draws Regular. With no Geist bundled it is the system font at the same size and weight, as
+every token is. A text style became its macOS size (`.caption` 10, `.subheadline` 11, `.callout` 12, `.body` and
+`.headline` 13, `.title2` 17), and a `.fontWeight` over the token picks Geist's face of that weight.
+
+Geist's line is taller than the system's at most sizes (measured with SwiftUI's own layout: the same at 7, 8, 10,
+11 and 15 pt, a point taller at 9 and 12 to 14, two at 16 to 20), and its text is a little narrower. Every budget keeps its size:
+the Usage cards' rows are fixed and hold their text, and a task row is still 36 pt (`TimerComposerMetricsTests`
+measures it with the Geist faces it draws).
+
+What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
+
+- **Symbols.** `.system` sizes an SF Symbol; it is not type.
+- **Monospaced text:** the timer's three readouts (black), a task's key and tracked clock, a preset's length, the
+  note's character count and the digit field. Geist Mono ships Regular only.
+- **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line, and by AppKit's ruler Geist's 10 pt line is
+  13 against the system's 12, so a chip would be 17. SwiftUI lays out both faces' 10 pt line at 13.
+- **The music player's title, artist and lyrics.** The title decides whether to scroll by measuring its width with
+  an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font.
+- **The header's buttons**, whose symbols scale from their font (`.imageScale`), and two AppKit measures.
+
+The closed notch (its live activities and HUDs), the timer's ruler, the Timer and Stats popovers built outside
+`Notch/`, and the floating panels are not in this pass.
+
 ## Choices
 
 A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
