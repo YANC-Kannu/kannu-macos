@@ -1779,6 +1779,19 @@ Full Screen beside View's. `MenuBarRulesTests` holds these against planted offen
 Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
 ⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
 
+**2026-11-12 addendum: onboarding takes Brain's look, and General's Permissions rank Allow; no hook and no animator
+added.** Onboarding's window applies the root and paints the panel (docs/SETTINGS.md, "Onboarding"). Its cards are
+plain buttons with the ring. The hover scale, the springs and the selection fades went with the old look, so the steps
+add no animator, and the steps' cross-fade and the welcome's sparkles are unchanged. `LaunchPermissionRow`, shared with
+General's Permissions, ranks Allow as the row's primary and Not now as quiet (the design review's finding 4) in our own
+styles, so General's `.tint(.accentColor)` around the rows had nothing left to do and went with its pin. What each
+button does and when macOS asks are unchanged: `FirstLaunchRulesTests` and `LaunchGateRulesTests` pass with their
+clauses and plants unchanged. The onboarding boards set `LaunchPermissionManager.snapshotStatuses` (DEBUG only), after
+every board that shows General's rows, and clear it after them, so `refresh` reads none of this Mac's answers and
+probes no folder while they draw. So the rest of this entry holds. **Not measured:** the window itself, which a board
+cannot draw (no title bar, no emitter): the cross-fade, the sparkles, the keyboard and VoiceOver through the cards, and
+a real Allow.
+
 ---
 
 ## 23. The open notch closes on where the pointer is, never on a latched hover

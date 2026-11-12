@@ -52,45 +52,44 @@ struct NotesSelectionView: View {
     @State private var selection: OnboardingNotesChoice = .off
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Notes in the Notch?")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding(.top, 24)
+        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                Text("Notes in the Notch?")
+                    .font(SettingsTheme.pageTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
 
-            Text("Jot something down without leaving your editor. You can change this later in Brain › Notes.")
-                .multilineTextAlignment(.center)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                Text("Jot something down without leaving your editor. You can change this later in Brain › Notes.")
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
 
-            VStack(spacing: 10) {
+            VStack(spacing: SettingsTheme.listRowGap) {
                 ForEach(OnboardingNotesChoice.allCases) { choice in
                     NotesOptionCard(
                         icon: icon(for: choice),
                         title: title(for: choice),
                         subtitle: subtitle(for: choice),
                         isSelected: selection == choice,
-                        onTap: { withAnimation(.easeInOut(duration: 0.2)) { selection = choice } }
+                        onTap: { selection = choice }
                     )
                 }
             }
-            .padding(.horizontal)
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Button("Continue") {
                 onContinue(selection)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.bottom, 24)
+            .buttonStyle(SettingsButtonStyle(.primary))
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        )
+        .padding(.horizontal, SettingsTheme.pageInset)
+        .padding(.vertical, SettingsTheme.sectionGap)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func icon(for choice: OnboardingNotesChoice) -> String {
@@ -125,6 +124,7 @@ struct NotesSelectionView: View {
     }
 }
 
+/// A notes choice as a choice card (docs/SETTINGS.md, "Choices"): its notch glyph, its name and what it keeps.
 private struct NotesOptionCard: View {
     let icon: String
     let title: String
@@ -132,48 +132,36 @@ private struct NotesOptionCard: View {
     let isSelected: Bool
     let onTap: () -> Void
 
-    @State private var isHovering = false
-
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
         Button(action: onTap) {
-            HStack(spacing: 14) {
+            HStack(spacing: SettingsMetrics.cardPadding) {
+                // The notch's own colours: a preview of its Notes tab.
                 Image(systemName: icon)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.yellow)
                     .frame(width: 40, height: 32)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.black))
+                    .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
+                // A label inside the card's button, so it stays unselectable: selectable text swallows the click.
+                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                     Text(title)
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                        .settingsChoiceLabel(isSelected: isSelected)
                     Text(subtitle)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(SettingsTheme.description)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer(minLength: 0)
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.5))
             }
-            .padding(12)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.gray.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: isSelected ? 2 : 0)
-            )
-            .scaleEffect(isHovering ? 1.02 : 1.0)
-            .contentShape(Rectangle())
+            .padding(SettingsMetrics.cardPadding)
+            .background(SettingsTheme.card, in: shape)
+            .settingsChoiceRing(shape, isSelected: isSelected)
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) { isHovering = hovering }
-        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
