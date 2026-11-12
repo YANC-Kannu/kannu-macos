@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer the review of Brain's Notes list-detail
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
+- **Changes:**
+  - Widening the window past 1,224 pt with a note open in the list's place builds the list anew: it now scrolls to the
+    note's row, selected beside the page, instead of opening at its top (M2).
+  - The page beside the list takes an id of its own, not the note's, which its row carries, so a scroll back to the
+    row has one target (M3).
+  - With no note at all, the empty place beside the list says "No note selected" without telling you to click a › that
+    is not there; the layout stays a function of the width alone, as D1 has it, and as Mail keeps its empty pane (M1,
+    taken this way rather than by folding the column away).
+  - `NotesPageLiveDataRulesTests` holds each answer against planted offenders; docs/SETTINGS.md says so.
+
 ### 2026-11-12 - Brain's Notes page shows a note beside the list at wide windows
 - **Developer label:** Brain redesign plan: Stage 5, Notes list-detail (layout-proposal D1)
 - **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: D1's list-detail for Notes, with Tasks' layout moved once into a shared view both pages use

@@ -491,7 +491,9 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
     /// the one selection; the first page built in one place, the shared layout's first child, with no id, so opening a
     /// note beside it keeps the list where it was; and none of the ways D1 rules out. A search or deep link closes a
     /// note's page only in the list's place; beside the list it stays, the list being on screen. The note shown beside
-    /// is drawn selected, and its row is one VoiceOver group, selected.
+    /// is drawn selected, and its row is one VoiceOver group, selected. From the review: widening with a note open in
+    /// the list's place scrolls the list, built anew, to its row (M2), whose id nothing else carries (M3); and the empty
+    /// place says to click a › only while there is a note to click (M1).
     static func layoutProblems(settings: String, overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(settings)
         let overviewCode = SettingsDesignSystemRulesTests.code(overview)
@@ -509,9 +511,16 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             problems.append("the first page is not built in one place, the shared layout's first child")
         }
         // An id on each note's page, so it opens at its top, and none on the list, which an id would rebuild, scrolled
-        // back to its top, each time a note opens beside it.
-        if count(".id(", in: code) != 2 || count(".id(note.id)", in: code) != 2 {
-            problems.append("the list is rebuilt as a note opens beside it, or a note's page does not open at its top")
+        // back to its top, each time a note opens beside it. The page beside the list not under the note's own id, which
+        // its row carries, so a scroll back to the row has one target.
+        if count(".id(", in: code) != 2 || count(".id(note.id)", in: code) != 1 || count(".id(\"beside-\\(note.id)\")", in: code) != 1 {
+            problems.append("the list is rebuilt as a note opens beside it, a note's page does not open at its top, or a row's id has two views")
+        }
+        if !body(after: ".onChange(of: showsPageBeside)", in: code).contains("if beside, let id = openNote?.id { returnTo = id }") {
+            problems.append("widening with a note open in the list's place leaves the list at its top, the note's row out of view")
+        }
+        if !code.contains("message: data.notes.isEmpty ? nil : String(localized: \"Click › on a note to see it here.\")") {
+            problems.append("the empty place says to click a › while there is no note to click")
         }
         for (name, text) in [("the page", code), ("the overview", overviewCode)] {
             for banned in ["minWidth:", "ViewThatFits", ".inspector("] where text.contains(banned) {
@@ -549,6 +558,10 @@ final class NotesPageLiveDataRulesTests: XCTestCase {
             ("        .settingsListDetailFits($showsPageBeside)\n", "        .settingsListDetailFits($showsPageBeside)\n        .frame(minWidth: 1224)\n"),
             // A search or deep link closing the note beside the list, the header's gear among them.
             ("noteInPlace != nil else { return }", "openNoteID != nil else { return }"),
+            // The review's M3, M2 and M1, each undone.
+            (".id(\"beside-\\(note.id)\")", ".id(note.id)"),
+            ("            if beside, let id = openNote?.id { returnTo = id }\n", ""),
+            ("message: data.notes.isEmpty ? nil : String(localized:", "message: String(localized:"),
         ], in: settings) { Self.layoutProblems(settings: $0, overview: overview) }
         SettingsDesignSystemRulesTests.assertCaught([
             ("isSelected: selected == note.id", "isSelected: false"),
