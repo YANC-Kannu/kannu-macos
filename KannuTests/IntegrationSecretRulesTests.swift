@@ -43,7 +43,7 @@ final class IntegrationSecretRulesTests: XCTestCase {
         .deletingLastPathComponent()   // repo root
     /// Brain › Tasks: the overview and every page below it, and the Connect sheets.
     private static let settingsPaths = ["TasksSettings", "TaskSourcePages", "TaskConnectSheets", "TaskRowList",
-                                        "AllTasksPage", "TaskDetailPage", "NewTaskSheet"].map { "Kannu/components/Settings/\($0).swift" }
+                                        "TasksOverview", "TaskDetailPage", "NewTaskSheet"].map { "Kannu/components/Settings/\($0).swift" }
     private static let tasksDirectory = "Kannu/managers/Tasks"
 
     static let keychainAPIs = ["SecureSecretsStore", "KeychainReader", "SecItem", "CredentialStore", "TaskCredentials", "SecretSlot"]
@@ -141,7 +141,7 @@ final class IntegrationSecretRulesTests: XCTestCase {
     func testEachSourceRowSyncsOnAppear() throws {
         let page = try Self.read(Self.settingsPaths[0])
         let lifecycle = Self.lifecycleBlocks(in: page).joined(separator: "\n")
-        XCTAssertTrue(lifecycle.contains("manager.syncIfStale("), "no source row syncs from a lifecycle block")
+        XCTAssertTrue(lifecycle.contains("TasksManager.shared.syncIfStale("), "no source row syncs from a lifecycle block")
     }
 
     /// macOS's Reminders question is asked once, from the user's Connect, and never from a sync, a

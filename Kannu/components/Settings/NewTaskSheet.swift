@@ -27,7 +27,7 @@ final class NewTaskDraft: ObservableObject {
     @Published var draft = TaskFormDraft()
 }
 
-/// New Task, from Add a task on All tasks and Local tasks: everything the notch's task form takes
+/// New Task, from Tasks' header or empty list, or File › New Task (⌘N): everything the notch's task form takes
 /// (David, 2026-10-24: "we want all capabilties that we give for tasks in notch") — a title, a typed
 /// estimate, tags with the ones in use offered as chips, a reminder with its notification on or
 /// off — then Add, or Add & Start while the timer is on. The notch's own rules (`TaskFormDraft`),
@@ -38,8 +38,9 @@ final class NewTaskDraft: ObservableObject {
 /// own content; a Form row never does.
 struct NewTaskSheet: View {
     @ObservedObject var newTask: NewTaskDraft
-    /// All tasks' filters, so a new task they would hide opens on its own page instead of vanishing.
-    let listFilter: TaskFilter
+    /// What the list on screen shows, so a new task it would hide opens on its own page instead of vanishing; nil
+    /// where no list of open tasks shows (Done, Archived, a page below the first), so it opens there too.
+    let listFilter: TaskFilter?
     /// Opens a task's page: the new one when the filters hide it, or the one a typed title repeats.
     let open: (UUID) -> Void
     @ObservedObject private var manager = TasksManager.shared
@@ -52,9 +53,6 @@ struct NewTaskSheet: View {
         case tags
     }
 
-    /// As wide as the Connect sheets: room for the estimate and the tags side by side.
-    private static let width: CGFloat = 420
-
     private var draft: TaskFormDraft { newTask.draft }
     private var canAdd: Bool { manager.isReady && draft.canSave }
     /// A tag half-typed: Return completes it, so Add gives up the Return key meanwhile.
@@ -64,20 +62,23 @@ struct NewTaskSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                Text("New Task")
-                    .font(.headline)
-                Text("A local task, added on top of your list. Cancel keeps what you typed.")
-                    .settingsDescriptionStyle()
-            }
-
+        SettingsSheet("New Task", subtitle: Text("A local task, added on top of your list. Cancel keeps what you typed.")) {
             TextField("Title", text: $newTask.draft.title, prompt: Text("What needs doing?"))
-                .labelsHidden()
-                .textFieldStyle(.roundedBorder)
                 .focused($focused, equals: .title)
                 .onSubmit { add(andStart: false) }
-            if let existing = TaskItem.reusable(titled: draft.title, in: manager.tasks) {
+                // `#tag` and `@time` typed in the title (`TaskQuickAdd`), shown inside its end.
+                .overlay(alignment: .trailing) {
+                    TaskQuickAddChips(text: draft.title, fontSize: 11, trailingInset: 6)
+                        .allowsHitTesting(false)
+                }
+                // Once a space ends them, they move into Tags and the reminder below
+                // (`TaskFormDraft.foldingFinishedQuickAdd`), as the notch's form does.
+                .onChange(of: newTask.draft.title) { _, _ in
+                    let folded = newTask.draft.foldingFinishedQuickAdd(now: Date(), calendar: .current)
+                    if folded != newTask.draft { newTask.draft = folded }
+                }
+                .settingsField(isFocused: focused == .title)
+            if let existing = TaskItem.reusable(titled: TaskQuickAdd.title(of: draft.title), in: manager.tasks) {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     Text(verbatim: String(localized: "“\(existing.title)” is already in your list."))
                         .settingsDescriptionStyle()
@@ -92,44 +93,45 @@ struct NewTaskSheet: View {
             GoldenRow(spacing: SettingsMetrics.rowContent) {
                 TaskEstimateField(draft: $newTask.draft, onSubmit: { add(andStart: false) })
                 TextField("Tags", text: $newTask.draft.tagsText, prompt: Text("Tags, comma separated"))
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
                     .focused($focused, equals: .tags)
                     .onSubmit(submitTags)
                     .help(Text("The first tag sets the task's colour"))
+                    .settingsField(isFocused: focused == .tags)
             }
             if !tagOffers.isEmpty {
                 tagOfferChips
             }
 
             reminder
-
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if draft != TaskFormDraft() {
-                    Button("Clear All") {
-                        newTask.draft = TaskFormDraft()
-                        focused = .title
-                    }
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                if enableTimerFeature {
-                    Button {
-                        add(andStart: true)
-                    } label: {
-                        Label("Add & Start", systemImage: "play.fill")
-                    }
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(!canAdd)
-                }
-                Button("Add") { add(andStart: false) }
-                    .keyboardShortcut(isTypingTag ? nil : .defaultAction)
-                    .disabled(!canAdd)
+            // A list that could not be read is not read again before a relaunch, so Add stays off: say why, in the
+            // Tasks page's own words, beside the buttons, as a Connect sheet shows its problem.
+            if case .failed(let reason) = manager.loadState {
+                SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
             }
+        } buttons: {
+            if draft != TaskFormDraft() {
+                Button("Clear All") {
+                    newTask.draft = TaskFormDraft()
+                    focused = .title
+                }
+            }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            if enableTimerFeature {
+                Button {
+                    add(andStart: true)
+                } label: {
+                    Label("Add & Start", systemImage: "play.fill")
+                }
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(!canAdd)
+            }
+            Button("Add") { add(andStart: false) }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(isTypingTag ? nil : .defaultAction)
+                .disabled(!canAdd)
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: Self.width)
         .onAppear {
             // macOS's answer may have changed since the list last asked: the note follows it.
             manager.checkReminderPermission()
@@ -185,17 +187,18 @@ struct NewTaskSheet: View {
                 set: { newTask.draft.reminder = $0 ? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) : nil }
             ))
             .toggleStyle(.checkbox)
+            .labeledContentStyle(.automatic)
             if draft.reminder != nil {
-                DatePicker("Remind me at", selection: Binding(
+                SettingsDateField("Remind me at", selection: Binding(
                     get: { draft.reminder ?? TaskFormDraft.defaultReminder(now: Date(), calendar: .current) },
                     set: { newTask.draft.reminder = $0 }
-                ), in: Date()..., displayedComponents: [.date, .hourAndMinute])
-                .labelsHidden()
+                ), in: Date()...)
             }
         }
         if draft.reminder != nil {
             Toggle("Notify me when it's due", isOn: $newTask.draft.notifies)
                 .toggleStyle(.checkbox)
+                .labeledContentStyle(.automatic)
             if draft.notifies {
                 ReminderPermissionNote()
             }
@@ -205,7 +208,7 @@ struct NewTaskSheet: View {
     // MARK: - Add
 
     /// The task on top of the list, then, for Add & Start, timed as its ▶ would. The draft empties
-    /// for the next New Task. When All tasks' filters would hide it, its page opens, so it never
+    /// for the next New Task. When the list on screen would hide it, its page opens, so it never
     /// seems to vanish; the filters stay as the user set them.
     private func add(andStart: Bool) {
         // A reminder that passed while the sheet stood open: the next whole hour, as on reopening,
@@ -220,7 +223,7 @@ struct NewTaskSheet: View {
         let hidden = manager.tasks.first { $0.id == id }.map { task in
             var probe = task
             if started { probe.segments = TaskTimeMath.opening(probe.segments, at: Date()) }
-            return !TaskFacets.matches(probe, filter: listFilter)
+            return listFilter.map { !TaskFacets.matches(probe, filter: $0) } ?? true
         } ?? false
         dismiss()
         if hidden { open(id) }

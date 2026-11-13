@@ -22,21 +22,26 @@ import Foundation
 /// the forecast and the alert rules stay testable without the app target's usage models.
 struct UsageWindowReading: Equatable {
     /// "<provider>:<key>", e.g. "claude:five_hour", "codex:week" — the same id the Usage tab uses
-    /// to find a bar's forecast.
+    /// to find a bar's forecast. "claude@<organization>:<key>" for a scoped reading (`id`).
     let id: String
     /// The usage provider: "claude", "codex" or "cursor".
     let provider: String
     let key: String
-    /// Short name for a push or caption: "5-hour", "weekly", "Fable weekly", "billing-cycle".
+    /// Short name for a push or caption: "5-hour", "weekly", "Fable weekly", "billing cycle".
     let label: String
     /// 0–100.
     let percent: Double
     let resetsAt: Date?
     let severity: String?
     let observedAt: Date
+    /// The latest moment the value can still describe a running window, for a value with no
+    /// reported reset (`ClaudeUsageSnapshot.Window.notAfter`). Past it the value is from an
+    /// earlier window, and it stops counting as near the limit or feeding a forecast.
+    let notAfter: Date?
 
-    init(provider: String, key: String, label: String, percent: Double, resetsAt: Date?, severity: String?, observedAt: Date) {
-        self.id = Self.id(provider: provider, key: key)
+    init(provider: String, key: String, label: String, percent: Double, resetsAt: Date?, severity: String?,
+         observedAt: Date, notAfter: Date? = nil, scope: String? = nil) {
+        self.id = Self.id(provider: provider, key: key, scope: scope)
         self.provider = provider
         self.key = key
         self.label = label
@@ -44,21 +49,35 @@ struct UsageWindowReading: Equatable {
         self.resetsAt = resetsAt
         self.severity = severity
         self.observedAt = observedAt
+        self.notAfter = notAfter
     }
 
-    static func id(provider: String, key: String) -> String { provider + ":" + key }
+    /// `scope` keeps one organization's series apart from another's under the same window key
+    /// (`ClaudeUsageSnapshot.readingScope`).
+    static func id(provider: String, key: String, scope: String? = nil) -> String {
+        provider + (scope.map { "@" + $0 } ?? "") + ":" + key
+    }
 
-    func isLive(now: Date) -> Bool { resetsAt.map { $0 > now } ?? true }
+    func isLive(now: Date) -> Bool { Self.isLive(resetsAt: resetsAt, notAfter: notAfter, now: now) }
+
+    /// A value is live until its reset, and until its expiry bound when it has one. One rule for
+    /// the alerts, the forecast and the Usage tab's bars, so a lapsed value leaves all three at once.
+    static func isLive(resetsAt: Date?, notAfter: Date?, now: Date) -> Bool {
+        if let notAfter, now >= notAfter { return false }
+        return resetsAt.map { $0 > now } ?? true
+    }
 
     /// Claude's live windows as readings, keyed as the Usage tab keys its bars.
     static func readings(fromClaude snapshot: ClaudeUsageSnapshot?, now: Date) -> [UsageWindowReading] {
         guard let snapshot else { return [] }
         return snapshot.displayWindows(now: now).map { window in
-            UsageWindowReading(provider: "claude", key: window.key, label: claudeLabel(window),
+            UsageWindowReading(provider: "claude", key: window.key,
+                               label: snapshot.planName.map { "\($0) \(claudeLabel(window))" } ?? claudeLabel(window),
                                percent: window.percent, resetsAt: window.resetsAt, severity: window.severity,
                                // The window's own reading time: a merged snapshot's `observedAt`
                                // is its newest source's, which would date an old weekly sample now.
-                               observedAt: window.observedAt ?? snapshot.observedAt)
+                               observedAt: window.observedAt ?? snapshot.observedAt,
+                               notAfter: window.notAfter, scope: snapshot.readingScope)
         }
     }
 
@@ -76,7 +95,7 @@ struct UsageWindowReading: Equatable {
     static func label(provider: String, key: String) -> String {
         switch key {
         case "session": return String(localized: "5-hour")
-        case "week": return provider == "cursor" ? String(localized: "billing-cycle") : String(localized: "weekly")
+        case "week": return provider == "cursor" ? String(localized: "billing cycle") : String(localized: "weekly")
         default: return key.replacingOccurrences(of: "_", with: " ")
         }
     }
@@ -162,6 +181,8 @@ enum UsageForecast {
             }
             return .hitsLimit(at: eta)
         }
+        // A value with no reset says nothing past its expiry, so no "full by" beyond it.
+        if let notAfter = current.notAfter, eta >= notAfter { return .steady }
         return eta.timeIntervalSince(now) > horizonWithoutReset ? .steady : .hitsLimit(at: eta)
     }
 
@@ -262,8 +283,9 @@ enum UsageAlertPolicy {
         return full.compactMap(\.resetsAt).max()
     }
 
-    /// The earliest future reset among these readings: the moment something must be re-evaluated.
+    /// The earliest future reset or expiry among these readings: the moment something must be
+    /// re-evaluated. Nothing republishes when a value's expiry passes either.
     static func nextReset(_ readings: [UsageWindowReading], now: Date) -> Date? {
-        readings.compactMap(\.resetsAt).filter { $0 > now }.min()
+        (readings.compactMap(\.resetsAt) + readings.compactMap(\.notAfter)).filter { $0 > now }.min()
     }
 }

@@ -62,7 +62,6 @@ struct TabSelectionView: View {
     @Default(.enableExtensionNotchExperiences) private var enableExtensionNotchExperiences
     @Default(.enableExtensionNotchTabs) private var enableExtensionNotchTabs
     @Default(.showStandardMediaControls) private var showStandardMediaControls
-    @Default(.enableMinimalisticUI) private var enableMinimalisticUI
     @Namespace var animation
     @State private var hoverTask: Task<Void, Never>? = nil
     @ObservedObject private var skinManager = NotchSkinManager.shared

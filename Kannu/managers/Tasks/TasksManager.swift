@@ -71,7 +71,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     /// A segment left open by a quit or a crash, with its task.
-    struct InterruptedSession: Identifiable {
+    struct InterruptedSession: Identifiable, Equatable {
         let task: TaskItem
         let segment: WorkSegment
         /// When the next session on the task began, if one has: the end may not pass it
@@ -96,6 +96,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Whether macOS denies Kannu's notifications, whatever the list wants. The task form's bell
     /// turns orange on it: `remindersBlocked` is false while every scheduled task is muted.
     @Published private(set) var notificationsDenied = false
+    /// Local tasks ticked done that are still listed for the undo window (`TaskDoneTicks`).
+    @Published private(set) var doneTicks = TaskDoneTicks()
+    private var doneTickWork: [UUID: DispatchWorkItem] = [:]
 
     private struct Link {
         let session: UUID
@@ -302,6 +305,9 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func start(_ taskID: UUID) -> Bool {
         guard isReady, Defaults[.enableTimerFeature],
               let task = tasks.first(where: { $0.id == taskID }), task.visibility == .active else { return false }
+        // Starting a ticked task undoes the tick: its end would otherwise mark it done and stop
+        // the timer just started.
+        cancelDoneTick(taskID)
         guard timing?.taskID != taskID else { return true }
         let tracked = trackedSeconds(of: task)
         let length = TaskTimeMath.sessionLengthSeconds(
@@ -337,6 +343,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func startBlock(_ taskID: UUID, duration: TimeInterval, preset: TimerPreset?) -> Bool {
         guard isReady, Defaults[.enableTimerFeature], duration > 0,
               let task = tasks.first(where: { $0.id == taskID }), task.visibility == .active else { return false }
+        // As in `start(_:)`: timing a ticked task undoes the tick.
+        cancelDoneTick(taskID)
         let fallback = TimerSessionName.resolved(typed: task.title, fallback: String(localized: "Task"))
         let timer = TimerManager.shared
         timer.startTimer(
@@ -375,16 +383,21 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     private func startTypedNow(_ typed: String, reuse: Bool, duration: TimeInterval, preset: TimerPreset?) -> Bool {
-        guard isReady, Defaults[.enableTimerFeature], duration > 0, TaskItem.cleanedTitle(typed) != nil else { return false }
+        // "Deep work #kannu @noon" names "Deep work"; the tokens tag it and set its reminder.
+        let quick = Self.quickAdd(typed)
+        guard isReady, Defaults[.enableTimerFeature], duration > 0, TaskItem.cleanedTitle(quick.title) != nil else { return false }
         let taskID: UUID?
-        if reuse, let reused = TaskItem.reusable(titled: typed, in: tasks) {
+        if reuse, let reused = TaskItem.reusable(titled: quick.title, in: tasks) {
+            applyQuickAdd(quick, to: reused.id)
             taskID = reused.id
         } else if let kept = keptFormDraft(editing: nil), kept.isTitled(typed), kept.canSave {
             // The bar and the New Task title are one text: the form's estimate, tags and reminder
-            // come with it, and the draft is used up, so no second task is made from it later.
+            // come with it, and the draft is used up, so no second task is made from it later. The
+            // same name with other `#tag` or `@time` words in the bar: the bar's are applied too.
             taskID = addTask(from: kept)
+            if let taskID { applyQuickAdd(quick, to: taskID) }
         } else if let added = addTask(title: typed, estimateSeconds: nil) {
-            showLocalTasks()
+            showInNotch(added)
             taskID = added
         } else {
             taskID = nil
@@ -533,9 +546,17 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     // MARK: - Editing
 
     /// A local task at the top of the order; its id, so a caller can tag, schedule or start it.
-    /// Nil when there is no title or the task list cannot change.
+    /// `#tag` and `@time` typed in the title tag it and set its reminder (`TaskQuickAdd`). Nil when
+    /// there is no title or the task list cannot change.
     @discardableResult
     func addTask(title: String, estimateSeconds: Int?) -> UUID? {
+        let typed = Self.quickAdd(title)
+        guard let id = insertLocal(title: typed.title, estimateSeconds: estimateSeconds) else { return nil }
+        applyQuickAdd(typed, to: id)
+        return id
+    }
+
+    private func insertLocal(title: String, estimateSeconds: Int?) -> UUID? {
         guard isReady, let title = TaskItem.cleanedTitle(title) else { return nil }
         let task = TaskItem(title: title, localEstimateSeconds: estimateSeconds.flatMap { $0 > 0 ? $0 : nil })
         tasks = TaskOrdering.inserting(task, into: tasks)
@@ -543,25 +564,48 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         return task.id
     }
 
-    /// The notch's task form's new task (`insertTask`); then the draft is used up, and a list
-    /// hiding local tasks shows them again so the task does not vanish as it is added. One path for
+    /// The tokens in a typed title, read against now.
+    private static func quickAdd(_ title: String) -> TaskQuickAdd.Parsed {
+        TaskQuickAdd.parse(title, now: Date(), calendar: .current)
+    }
+
+    /// The `#tag` and `@time` words in `typed` applied to a task picked by name from the timer
+    /// bar's typed search, which keeps them after the picked task's title.
+    func applyQuickAdd(typed: String, to id: UUID) {
+        applyQuickAdd(Self.quickAdd(typed), to: id)
+    }
+
+    /// What a typed title's tokens ask of a task: its tags joined by theirs, and their reminder.
+    /// Through `setTags` and `setSchedule`, so a reminder asks for permission where every other does.
+    private func applyQuickAdd(_ typed: TaskQuickAdd.Parsed, to id: UUID) {
+        if !typed.tags.isEmpty, let task = tasks.first(where: { $0.id == id }) {
+            setTags(task.tags + typed.tags, for: id)
+        }
+        if let reminder = typed.reminder { setSchedule(reminder, for: id) }
+    }
+
+    /// The notch's task form's new task (`insertTask`); then the draft is used up, and the notch's
+    /// filters let the task show (`showInNotch`), so it does not vanish as it is added. One path for
     /// Add, Add & Start, a preset clicked with the form open, and a typed name whose title the form
     /// held. Nil when it cannot be saved.
     @discardableResult
     func addTask(from draft: TaskFormDraft) -> UUID? {
         guard let id = insertTask(from: draft) else { return nil }
         forgetFormDraft(editing: nil)
-        showLocalTasks()
+        showInNotch(id)
         return id
     }
 
     /// A new task as a form typed it: a local task at the top with its tags and reminder, the bell
     /// before the schedule so a muted reminder is never sent first. Brain's New Task adds through
-    /// this alone, so a task half-typed in the notch stays kept and the notch's Show local stays as
-    /// the user left it. Nil when it cannot be saved.
+    /// this alone, so a task half-typed in the notch stays kept and the notch's Show local and Tag
+    /// filter stay as the user left them. Nil when it cannot be saved.
+    /// `#tag` and `@time` typed in the title join the form's own fields first
+    /// (`TaskFormDraft.foldingQuickAdd`).
     @discardableResult
     func insertTask(from draft: TaskFormDraft) -> UUID? {
-        guard draft.isNew, draft.canSave, let id = addTask(title: draft.title, estimateSeconds: draft.estimateSeconds) else {
+        let draft = draft.foldingQuickAdd(now: Date(), calendar: .current)
+        guard draft.isNew, draft.canSave, let id = insertLocal(title: draft.title, estimateSeconds: draft.estimateSeconds) else {
             return nil
         }
         let tags = draft.tags
@@ -576,6 +620,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// the task is gone; an edit that changes nothing saves as nothing.
     @discardableResult
     func applyEdits(_ draft: TaskFormDraft, to id: UUID) -> Bool {
+        // `#tag` and `@time` typed in an edited title work as in a new one.
+        let draft = draft.foldingQuickAdd(now: Date(), calendar: .current)
         guard draft.editing == id, draft.canSave, let task = activeTasks.first(where: { $0.id == id }) else { return false }
         for edit in draft.edits(to: task) {
             switch edit {
@@ -590,10 +636,16 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         return true
     }
 
-    /// Local tasks hidden in the notch come back when one is added, so it does not vanish as it
-    /// is made. A reused or picked task is listed while it runs anyway.
-    private func showLocalTasks() {
+    /// A task just added in the notch shows there, so it does not vanish as it is made: hidden local
+    /// tasks come back, and a Tag filter the task does not pass is cleared
+    /// (`TaskOrdering.tagFilter(_:afterAdding:)`). The task form, a typed start and the popover's
+    /// Add a task call it; Brain's New Task never does. A reused or picked task is listed while it
+    /// runs anyway.
+    func showInNotch(_ id: UUID) {
         if !Defaults[.tasksPopoverShowLocal] { Defaults[.tasksPopoverShowLocal] = true }
+        guard let task = tasks.first(where: { $0.id == id }) else { return }
+        let tag = TaskOrdering.tagFilter(Defaults[.tasksNotchTagFilter], afterAdding: task)
+        if tag != Defaults[.tasksNotchTagFilter] { Defaults[.tasksNotchTagFilter] = tag }
     }
 
     /// A local task's new title (`TaskItem.cleanedTitle`). A Jira or GitLab title is the server's,
@@ -601,12 +653,15 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// reminder again under the new title (`syncReminders`).
     @discardableResult
     func renameTask(_ taskID: UUID, to title: String) -> Bool {
-        guard let title = TaskItem.cleanedTitle(title),
+        // Brain's title field: `#tag` and `@time` work as in a new task's name.
+        let typed = Self.quickAdd(title)
+        guard let title = TaskItem.cleanedTitle(typed.title),
               let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return false }
         if title != task.title {
             update(taskID) { $0.title = title }
             refreshTimedName(taskID)
         }
+        applyQuickAdd(typed, to: taskID)
         return true
     }
 
@@ -841,6 +896,8 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Marking the task being timed done stops the timer first, which ends its time. Done tasks
     /// are Recently closed until `TaskArchive` archives them.
     func markDone(_ taskID: UUID) {
+        // A pending tick would otherwise mark it done a second time when its undo window ends.
+        cancelDoneTick(taskID)
         if timing?.taskID == taskID { stopTiming() }
         update(taskID) {
             $0.visibility = .done
@@ -848,10 +905,38 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         }
     }
 
+    /// The done tick (`TaskDoneTick`): the task is marked done once `TaskDoneTicks.undoSeconds` have
+    /// passed, unless ticked again before then. Local tasks only (`TaskDoneTicks.canTick`).
+    func toggleDone(_ taskID: UUID) {
+        if doneTicks.isTicked(taskID) {
+            cancelDoneTick(taskID)
+            return
+        }
+        guard isReady, let task = tasks.first(where: { $0.id == taskID }), TaskDoneTicks.canTick(task),
+              doneTicks.toggle(taskID) else { return }
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.doneTickWork[taskID] = nil
+                if self.doneTicks.commit(taskID) { self.markDone(taskID) }
+            }
+        }
+        doneTickWork[taskID] = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + TaskDoneTicks.undoSeconds, execute: work)
+    }
+
+    /// The undo window ends with nothing marked: the task was ticked again, or went somewhere else
+    /// first, and the end of the window must not mark it done there.
+    private func cancelDoneTick(_ taskID: UUID) {
+        doneTickWork.removeValue(forKey: taskID)?.cancel()
+        if doneTicks.isTicked(taskID) { _ = doneTicks.toggle(taskID) }
+    }
+
     /// Into the archive at once, whatever the source: for a remote task this is its delete, since
     /// a deleted one would only come back on the next sync. Stops the timer first if it is timed.
     /// It stays archived even if its source lists it again; Restore puts it back.
     func archive(_ taskID: UUID) {
+        cancelDoneTick(taskID)
         if timing?.taskID == taskID { stopTiming() }
         update(taskID) {
             $0.visibility = .archived
@@ -863,6 +948,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// Out of the archive or Recently closed, back into the task order where it was. A remote
     /// task its source no longer lists goes back to Recently closed at the next complete sync.
     func reopen(_ taskID: UUID) {
+        cancelDoneTick(taskID)
         update(taskID) {
             $0.visibility = .active
             $0.closedAt = nil
@@ -875,6 +961,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     func delete(_ taskID: UUID) {
         guard isReady, timing?.taskID != taskID, pendingLink?.taskID != taskID,
               let task = tasks.first(where: { $0.id == taskID }), task.source == .local else { return }
+        cancelDoneTick(taskID)
         tasks.removeAll { $0.id == taskID }
         drafts.removeAll { $0.taskID == taskID }
         persist()
@@ -1819,6 +1906,11 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// awaited save could run, so this one small write happens here, on the quit path.
     private func saveBeforeQuit() {
         guard isReady else { return }
+        // A tick still in its undo window stands: the task is done.
+        for taskID in doneTicks.commitAll() {
+            doneTickWork.removeValue(forKey: taskID)?.cancel()
+            markDone(taskID)
+        }
         var changed = false
         if let current = link {
             // Quitting ends the timing, paused or not: its time is offered for logging next launch.

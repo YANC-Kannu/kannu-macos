@@ -137,6 +137,30 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
                       "the second look is for the fallback only; AXFullScreen needs no wait")
     }
 
+    /// MacroVisionKit flags any on-screen window that fills the safe area, and Kannu excludes only
+    /// Finder. Under Hide set to Always, Brain in full screen would hide Kannu's own closed notch,
+    /// traffic light included. By pid: Debug and Release have different bundle ids.
+    private static func skipsItsOwnWindows(_ detector: String) -> Bool {
+        let code = strippingComments(detector)
+        guard let start = code.range(of: "guard app.screen.localizedName == name,"),
+              let end = code.range(of: "else { return false }", range: start.upperBound..<code.endIndex) else { return false }
+        return code[start.upperBound..<end.lowerBound].contains("app.processId != ProcessInfo.processInfo.processIdentifier")
+    }
+
+    func testBrainInFullScreenDoesNotHideItsOwnNotch() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/observers/FullscreenMediaDetection.swift"])
+        XCTAssertTrue(Self.skipsItsOwnWindows(text))
+
+        let filter = "app.processId != ProcessInfo.processInfo.processIdentifier"
+        for (name, broken) in [("removed", ""), ("inverted", "app.processId == ProcessInfo.processInfo.processIdentifier"),
+                               ("by bundle id", #"app.bundleIdentifier != "com.kannu.app""#),
+                               ("commented out", "true,\n                      // " + filter + "\n                      true")] {
+            let edited = text.replacingOccurrences(of: ",\n                      " + filter, with: broken.isEmpty ? "" : ",\n                      " + broken)
+            XCTAssertNotEqual(edited, text, "\(name): the detector changed, this planted offender is stale")
+            XCTAssertFalse(Self.skipsItsOwnWindows(edited), "\(name) was not caught")
+        }
+    }
+
     /// `fullscreenStatus` is main-actor state, but the detector reads screens and windows off the
     /// main thread (an Accessibility read of an unresponsive app can wait). The verdict reaches the
     /// property through one `@MainActor` function, and nothing else assigns it.

@@ -35,7 +35,8 @@ final class ExtensionNotchExperienceManager: ObservableObject {
     private let currentProcessID = ProcessInfo.processInfo.processIdentifier
 
     private init() {
-        activeExperiences = eventBridge.loadPersistedNotchExperiences()
+        // One saved with no tab has nothing to render, and would hold a place against the capacity.
+        activeExperiences = eventBridge.loadPersistedNotchExperiences().filter(\.hasTabConfiguration)
         sortExperiences()
         observerToken = eventBridge.observeNotchExperienceSnapshots { [weak self] payloads, sourcePID in
             self?.applySnapshot(payloads, sourcePID: sourcePID)
@@ -96,10 +97,6 @@ final class ExtensionNotchExperienceManager: ObservableObject {
 
         if let tabConfig = descriptor.tab, Defaults[.enableExtensionNotchTabs] {
             Logger.log("Notch experience tab ready (title: \(tabConfig.title))", category: .extensions)
-        }
-
-        if descriptor.minimalistic != nil && Defaults[.enableExtensionNotchMinimalisticOverrides] {
-            Logger.log("Notch experience minimalistic override available", category: .extensions)
         }
 
         if !isUpdate {
@@ -170,15 +167,6 @@ final class ExtensionNotchExperienceManager: ObservableObject {
         return activeExperiences.first(where: { $0.descriptor.tab != nil })
     }
 
-    func minimalisticReplacementPayload() -> ExtensionNotchExperiencePayload? {
-        guard Defaults[.enableThirdPartyExtensions],
-              Defaults[.enableExtensionNotchExperiences],
-              Defaults[.enableExtensionNotchMinimalisticOverrides] else {
-            return nil
-        }
-        return activeExperiences.first(where: { $0.descriptor.minimalistic != nil })
-    }
-
     func payload(bundleIdentifier: String, experienceID: String) -> ExtensionNotchExperiencePayload? {
         activeExperiences.first { $0.bundleIdentifier == bundleIdentifier && $0.descriptor.id == experienceID }
     }
@@ -209,7 +197,8 @@ final class ExtensionNotchExperienceManager: ObservableObject {
     private func applySnapshot(_ payloads: [ExtensionNotchExperiencePayload], sourcePID: Int32) {
         guard sourcePID != currentProcessID else { return }
         suppressBroadcast = true
-        activeExperiences = payloads.sorted(by: descriptorComparator)
+        // The same filter as `init`: an older Kannu process can still send ones with no tab.
+        activeExperiences = payloads.filter(\.hasTabConfiguration).sorted(by: descriptorComparator)
         suppressBroadcast = false
         logDiagnostics("Applied external notch experience snapshot from PID \(sourcePID) (count: \(payloads.count))")
     }

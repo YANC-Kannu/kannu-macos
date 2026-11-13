@@ -33,12 +33,21 @@ struct KannuColorPickerButton<Content: View>: View {
         Button {
             isPresented.toggle()
         } label: {
+            // A white ring inside a hairline, so a swatch never reads as a status dot (docs/SETTINGS.md, "The content
+            // standard"). Every user is in Brain, so the rings take Brain's theme.
             KannuColorSwatch(color: color, size: swatchSize)
+                .padding(SettingsTheme.hairline)
+                .background(SettingsTheme.knob, in: Circle())
+                .padding(SettingsTheme.hairline)
+                .background(SettingsTheme.line, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibilityLabel))
         .popover(isPresented: $isPresented, arrowEdge: .bottom) {
             content()
         }
+        // Closing Brain takes its content out of the window and runs this, while `isPresented` survives the
+        // close (docs/REGRESSIONS.md, entry 22). In the notch, closing a popover that is going away is harmless.
+        .onDisappear { isPresented = false }
     }
 }

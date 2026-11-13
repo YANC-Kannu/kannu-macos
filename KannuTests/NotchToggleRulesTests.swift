@@ -82,12 +82,14 @@ final class NotchToggleRulesTests: XCTestCase {
         XCTAssertEqual(rawReads, [], "SystemHUDManager reads enableSystemHUD directly; use notchHUDEnabled")
     }
 
-    /// The notch hides itself from its header (open, full UI) and its right-click menu (closed,
-    /// minimalistic). Both only write the setting: the window they live in is torn down by the
-    /// `showNotch` sink a turn later, never from inside their own action.
+    /// The notch hides itself from its header (open) and its right-click menu (closed too). Both
+    /// only write the setting: the window they live in is torn down by the `showNotch` sink a turn
+    /// later, never from inside their own action.
     func testTheNotchOffersItsOwnHideControl() throws {
         let header = NotchTeardownRulesTests.code(try Self.source("Kannu/components/Notch/KannuHeader.swift"))
-        let open = try XCTUnwrap(header.range(of: "if vm.notchState == .open && !enableMinimalisticUI {"),
+        // Looked for inside the trailing row: a layout spacer before it has the same condition.
+        let row = try XCTUnwrap(header.range(of: "HStack(spacing: 4) {"), "the header's trailing row moved — this pin is vacuous")
+        let open = try XCTUnwrap(header.range(of: "if vm.notchState == .open {", range: row.upperBound..<header.endIndex),
                                  "the header's open block moved — this pin is vacuous")
         let battery = try XCTUnwrap(header.range(of: "if vm.notchState == .open && showBatteryIndicator {",
                                                  range: open.upperBound..<header.endIndex))

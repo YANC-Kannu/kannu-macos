@@ -20,8 +20,10 @@ import Foundation
 
 /// One request as the hook recorded it (v39): from the user's prompt to the Stop that answered it.
 /// Work after that Stop without a new prompt — a background task finishing, a stop hook — reopens
-/// the same turn, so its time counts from the user's message. On disk, so it survives a relaunch
-/// (the in-memory `executionStartedAt` restarts on one, and on any gap in the state).
+/// the same turn, so its time counts from the user's message. So does the `<task-notification>`
+/// prompt Claude Code submits when an agent the Stop left running finishes (hook v47). On disk, so
+/// it survives a relaunch (the in-memory `executionStartedAt` restarts on one, and on any gap in the
+/// state).
 ///
 /// A locator-like field of `AgentSessionStatus`, written only by the hook: `carryingExtras` keeps
 /// `self ?? source`, and the subagent fold sets it explicitly (docs/REGRESSIONS.md entry 7).
@@ -183,19 +185,31 @@ enum AgentTurnFormat {
         return count == 1 ? String(localized: "1 tool") : String(localized: "\(count) tools")
     }
 
-    /// "1.4M in · 45k out".
-    static func tokens(_ tokens: TurnTokens) -> String {
-        String(localized: "\(compact(tokens.input)) in · \(compact(tokens.output)) out")
+    /// "83k in · 40k out · 458k context": the new input and the output summed over the request, then
+    /// the chat's context at its latest call. Without the context (none written yet, or `withContext`
+    /// false for a narrow column): "83k in · 40k out".
+    static func tokens(_ tokens: TurnTokens, withContext: Bool = true) -> String {
+        if withContext, let context = tokens.context {
+            return String(localized: "\(compact(tokens.newInput)) in · \(compact(tokens.output)) out · \(compact(context)) context")
+        }
+        return String(localized: "\(compact(tokens.newInput)) in · \(compact(tokens.output)) out")
     }
 
-    /// Line 2 of the column, widest first; nil entries are left out.
-    static func metricsLines(toolCalls: Int, tokens: TurnTokens?) -> (full: String?, tokensOnly: String?, toolsOnly: String?) {
+    /// Line 2 of the column, widest first, for a `ViewThatFits`: tools and tokens with the context,
+    /// tokens with the context, tools and tokens without it, tokens alone, tools alone. Never an empty
+    /// line, never the same line twice.
+    static func metricsLines(toolCalls: Int, tokens: TurnTokens?) -> [String] {
         let toolsText = tools(toolCalls)
-        let tokensText = tokens.map(Self.tokens)
-        let full = [toolsText, tokensText].compactMap { $0 }.joined(separator: " · ")
-        return (full.isEmpty ? nil : full,
-                toolsText != nil ? tokensText : nil,
-                tokensText != nil ? toolsText : nil)
+        let withContext = tokens.map { Self.tokens($0) }
+        let withoutContext = tokens.map { Self.tokens($0, withContext: false) }
+        let candidates: [[String?]] = [[toolsText, withContext], [withContext], [toolsText, withoutContext],
+                                       [withoutContext], [toolsText]]
+        var lines: [String] = []
+        for parts in candidates where parts.allSatisfy({ $0 != nil }) {
+            let line = parts.compactMap { $0 }.joined(separator: " · ")
+            if !lines.contains(line) { lines.append(line) }
+        }
+        return lines
     }
 
     /// 812, 4.5k, 10k, 45k, 1M, 1.4M, 65M, 1.2B — rounding rolls over into the next unit.
@@ -244,7 +258,10 @@ enum AgentTurnFormat {
             parts.append(toolCalls == 1 ? String(localized: "1 tool call") : String(localized: "\(toolCalls) tool calls"))
         }
         if let tokens {
-            parts.append(String(localized: "\(spokenCount(tokens.input)) tokens in, \(spokenCount(tokens.output)) out"))
+            parts.append(String(localized: "\(spokenCount(tokens.newInput)) tokens in, \(spokenCount(tokens.output)) out"))
+            if let context = tokens.context {
+                parts.append(String(localized: "\(spokenCount(context)) tokens of context"))
+            }
         }
         return parts.joined(separator: ", ")
     }

@@ -22,6 +22,7 @@ import Defaults
 
 struct AnimationEditorView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     let sourceURL: URL
     let isRemoteURL: Bool
@@ -93,7 +94,10 @@ struct AnimationEditorView: View {
         .frame(idealWidth: 980, idealHeight: 640)
         .frame(minWidth: 860, minHeight: 620)
         .fixedSize()
-        .alert("Import Error", isPresented: $showingError) {
+        // A sheet is a window of its own, so it takes Brain's root itself; it keeps its own layout.
+        .background(SettingsTheme.panel)
+        .settingsDesignSystem()
+        .alert("Import error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
             Text(errorMessage)
@@ -105,9 +109,10 @@ struct AnimationEditorView: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(existingAnimation != nil ? "Edit Animation" : "Customize Animation")
+                Text(existingAnimation != nil ? "Edit animation" : "Customize animation")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .accessibilityAddTraits(.isHeader)
                 Text(sourceDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -128,10 +133,10 @@ struct AnimationEditorView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button(existingAnimation != nil ? "Save Changes" : "Import") {
+            Button(existingAnimation != nil ? "Save changes" : "Import") {
                 importAnimation()
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SettingsButtonStyle(.primary))
             .keyboardShortcut(.defaultAction)
             .disabled(name.isEmpty || isImporting)
         }
@@ -141,7 +146,7 @@ struct AnimationEditorView: View {
     private var previewPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Live Preview")
+                Text("Live preview")
                     .font(.headline)
                 Text("Dash outline equals the exact notch bounds.")
                     .font(.caption)
@@ -192,7 +197,7 @@ struct AnimationEditorView: View {
     private var previewZoomControls: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Preview Zoom", systemImage: "magnifyingglass")
+                Label("Preview zoom", systemImage: "magnifyingglass")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -204,35 +209,32 @@ struct AnimationEditorView: View {
             }
             HStack(spacing: 10) {
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = max(1, previewScale - 1)
                     }
                 } label: {
                     Image(systemName: "minus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
-                Slider(value: $previewScale, in: 1...10)
+                SettingsSlider(value: $previewScale, in: 1...10, valueDescription: Text("\(Int(previewScale))x")) { Text("Preview zoom") }
                 
                 Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = min(10, previewScale + 1)
                     }
                 } label: {
                     Image(systemName: "plus")
                         .frame(width: 28, height: 28)
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
                 
                 Button("Reset") {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                         previewScale = 10
                     }
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.mini)
             }
         }
@@ -240,7 +242,7 @@ struct AnimationEditorView: View {
     
     private var previewStats: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Current Transform")
+            Text("Current transform")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -255,18 +257,18 @@ struct AnimationEditorView: View {
     private var controlsPanel: some View {
         ScrollView {
             VStack(spacing: 16) {
-                EditorSectionCard(title: "Animation Details", subtitle: "Give it a friendly name and control playback speed.") {
+                EditorSectionCard(title: "Animation details", subtitle: "Give it a friendly name and control playback speed.") {
                     VStack(alignment: .leading, spacing: 12) {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Animation Name")
+                            Text("Animation name")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            TextField("Name", text: $name)
-                                .textFieldStyle(.roundedBorder)
+                            TextField("Name", text: $name, prompt: Text("Name"))
+                                .settingsField()
                         }
                         ParameterSliderRow(
-                            title: "Playback Speed",
+                            title: "Playback speed",
                             value: $speed,
                             range: 0.1...3.0,
                             formatter: { String(format: "%.2fx", $0) },
@@ -275,21 +277,17 @@ struct AnimationEditorView: View {
                             step: 0.05
                         )
                         VStack(alignment: .leading, spacing: 6) {
-                            Text("Loop Mode")
+                            Text("Loop mode")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                                 .textSelection(.enabled)
-                            Picker("Loop Mode", selection: $loopMode) {
-                                ForEach(AnimationLoopMode.allCases, id: \.self) { mode in
-                                    Text(mode.rawValue).tag(mode)
-                                }
-                            }
-                            .pickerStyle(.segmented)
+                            SettingsSelect("Loop mode", selection: $loopMode, options: AnimationLoopMode.allCases,
+                                           optionTitle: \.rawValue, style: .segmented)
                         }
                     }
                 }
                 
-                EditorSectionCard(title: "Size & Crop", subtitle: "Match the notch footprint or intentionally exceed it.") {
+                EditorSectionCard(title: "Size & crop", subtitle: "Match the notch footprint or intentionally exceed it.") {
                     VStack(spacing: 12) {
                         ParameterSliderRow(
                             title: "Scale",
@@ -300,7 +298,7 @@ struct AnimationEditorView: View {
                             resetValue: 1.0
                         )
                         ParameterSliderRow(
-                            title: "Visible Width",
+                            title: "Visible width",
                             value: $cropWidth,
                             range: 5...100,
                             formatter: { "\(Int($0)) px" },
@@ -308,7 +306,7 @@ struct AnimationEditorView: View {
                             resetValue: 30
                         )
                         ParameterSliderRow(
-                            title: "Visible Height",
+                            title: "Visible height",
                             value: $cropHeight,
                             range: 5...100,
                             formatter: { "\(Int($0)) px" },
@@ -318,10 +316,10 @@ struct AnimationEditorView: View {
                     }
                 }
                 
-                EditorSectionCard(title: "Position & Padding", subtitle: "Nudge the animation inside the notch.") {
+                EditorSectionCard(title: "Position & padding", subtitle: "Nudge the animation inside the notch.") {
                     VStack(spacing: 12) {
                         ParameterSliderRow(
-                            title: "Horizontal Offset",
+                            title: "Horizontal offset",
                             value: $offsetX,
                             range: -50...50,
                             formatter: { String(format: "%.1f px", $0) },
@@ -329,7 +327,7 @@ struct AnimationEditorView: View {
                             resetValue: 0
                         )
                         ParameterSliderRow(
-                            title: "Vertical Offset",
+                            title: "Vertical offset",
                             value: $offsetY,
                             range: -50...50,
                             formatter: { String(format: "%.1f px", $0) },
@@ -337,7 +335,7 @@ struct AnimationEditorView: View {
                             resetValue: 0
                         )
                         ParameterSliderRow(
-                            title: "Bottom Padding",
+                            title: "Bottom padding",
                             value: $paddingBottom,
                             range: -20...20,
                             formatter: { String(format: "%.1f px", $0) },
@@ -347,7 +345,7 @@ struct AnimationEditorView: View {
                     }
                 }
                 
-                EditorSectionCard(title: "Transform & Display", subtitle: "Dial in the final polish.") {
+                EditorSectionCard(title: "Transform & display", subtitle: "Dial in the final polish.") {
                     VStack(spacing: 12) {
                         ParameterSliderRow(
                             title: "Rotation",
@@ -384,15 +382,15 @@ struct AnimationEditorView: View {
                                 Text("Expand notch to follow animation width")
                             }
                             .labelsHidden()
-                            .toggleStyle(.switch)
+                            .toggleStyle(SettingsToggleStyle(showsLabel: false))
                         }
                     }
                 }
                 
-                EditorSectionCard(title: "Quick Presets", subtitle: "Start from a popular layout and tweak from there.") {
+                EditorSectionCard(title: "Quick presets", subtitle: "Start from a popular layout and tweak from there.") {
                     let columns = [GridItem(.adaptive(minimum: 160), spacing: 12)]
                     LazyVGrid(columns: columns, spacing: 12) {
-                        Button("Fit to Notch") {
+                        Button("Fit to notch") {
                             withAnimation {
                                 scale = 1.0
                                 cropWidth = 30
@@ -404,9 +402,8 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Fill Notch") {
+                        Button("Fill notch") {
                             withAnimation {
                                 scale = 1.5
                                 cropWidth = 30
@@ -417,24 +414,21 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Scale Up 2x") {
+                        Button("Scale up 2x") {
                             withAnimation {
                                 scale = 2.0
                                 expandWithAnimation = true
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Scale Down") {
+                        Button("Scale down") {
                             withAnimation {
                                 scale = 0.75
                             }
                         }
-                        .buttonStyle(.bordered)
                         
-                        Button("Reset All") {
+                        Button("Reset all", role: .destructive) {
                             withAnimation {
                                 scale = 1.0
                                 cropWidth = 30
@@ -448,8 +442,6 @@ struct AnimationEditorView: View {
                                 expandWithAnimation = false
                             }
                         }
-                        .buttonStyle(.bordered)
-                        .tint(.red)
                     }
                 }
             }
@@ -533,6 +525,17 @@ struct AnimationEditorView: View {
     }
 }
 
+#if DEBUG
+extension AnimationEditorView {
+    /// DEBUG snapshot harness: the editor's controls on their own. A local file that holds no animation, so no
+    /// Lottie loads and nothing touches the network.
+    static func snapshotControls() -> AnyView {
+        AnyView(AnimationEditorView(sourceURL: URL(fileURLWithPath: "/dev/null"), isRemoteURL: false,
+                                    animation: .constant(nil)).controlsPanel)
+    }
+}
+#endif
+
 // MARK: - Supporting Views
 
 private struct EditorSectionCard<Content: View>: View {
@@ -580,6 +583,7 @@ private struct ParameterSliderRow: View {
     var resetLabel: String? = nil
     var resetValue: CGFloat? = nil
     var step: CGFloat? = nil
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -597,11 +601,10 @@ private struct ParameterSliderRow: View {
                 slider
                 if let resetLabel, let resetValue {
                     Button(resetLabel) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: SettingsTheme.quickAnimation)) {
                             value = resetValue
                         }
                     }
-                    .buttonStyle(.bordered)
                     .controlSize(.mini)
                 }
             }
@@ -615,11 +618,8 @@ private struct ParameterSliderRow: View {
             set: { value = CGFloat($0) }
         )
         let bounds = Double(range.lowerBound)...Double(range.upperBound)
-        if let step {
-            Slider(value: binding, in: bounds, step: Double(step))
-        } else {
-            Slider(value: binding, in: bounds)
-        }
+        SettingsSlider(value: binding, in: bounds, step: step.map { Double($0) },
+                       valueDescription: Text(formatter(value))) { Text(title) }
     }
 }
 

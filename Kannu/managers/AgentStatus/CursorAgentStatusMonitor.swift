@@ -42,7 +42,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// hook's `claude-usage.json`, falling back to the desktop app's own history. Refreshed on the
     /// cadence in `refreshClaudeUsage(now:)`, never on demand. Nil until first observation.
     @Published private(set) var claudeUsage: ClaudeUsageSnapshot?
-    /// Why `claudeUsage` may be thinner than expected; the card renders it as one line of text.
+    /// Claude Code's own usage while it is on another organization than Claude Desktop's and both
+    /// have a live reading: the Usage tab's second Claude card. Nil with one organization to show.
+    @Published private(set) var claudeSecondOrganizationUsage: ClaudeUsageSnapshot?
+    /// Whose bars `claudeUsage` holds when the organizations differ, or why it may be thinner than
+    /// expected, which the card renders as one line of text.
     @Published private(set) var claudeUsageHint: ClaudeUsageSnapshot.Hint?
 
     /// Bumped whenever an agent actually does something — a traffic light transition or any
@@ -489,12 +493,17 @@ final class CursorAgentStatusMonitor: ObservableObject {
         emitActivityHeartbeatIfRunning(now: now)
     }
 
-    /// Refreshes the cached Claude usage, at most once per `claudeUsageRefreshInterval`.
+    /// Refreshes the cached Claude usage, at most once per `ClaudeUsageSnapshot.refreshInterval`.
     ///
     /// The statusline hook is authoritative because it reports reset times. The desktop app's own
     /// history is the fallback for the case the hook cannot cover — a user who runs Claude only in
     /// the desktop app, where the statusline command never fires.
+    ///
+    /// This runs in every rescan, so it only decides: the reads run on `claudeUsageReadQueue`
+    /// (`readClaudeUsageSources`), never on the main actor (REGRESSIONS entry 11). The one file
+    /// call left here is the statusline file's modification date — a stat in Kannu's own folder.
     private func refreshClaudeUsage(now: Date) {
+        guard claudeUsageReadsInFlight == 0 else { return }
         let statuslineURL = AgentHookInstaller.statusDirectory.appendingPathComponent(AgentHookInstaller.usageFileName)
         let statuslineModifiedAt = (try? statuslineURL.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
         if ClaudeUsageSnapshot.shouldRefresh(
@@ -506,7 +515,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
             lastClaudeUsageReadAt = now
             lastStatuslineReadAt = now
             lastStatuslineModifiedAt = statuslineModifiedAt
-            apply(Self.loadClaudeUsageSnapshot(now: now))
+            readClaudeUsageSources(statuslineOnly: false, now: now)
             return
         }
         // Between full reads: the statusline file alone, merged with the other sources as they
@@ -519,9 +528,37 @@ final class CursorAgentStatusMonitor: ObservableObject {
         ) else { return }
         lastStatuslineReadAt = now
         lastStatuslineModifiedAt = statuslineModifiedAt
-        let statusline = ClaudeUsageSnapshot.load(from: statuslineURL)
-        apply(Self.mergeClaudeUsage(statusline: statusline, cache: claudeUsageCache, desktop: claudeUsageDesktop,
-                                    organizations: claudeUsageOrganizations, now: now))
+        readClaudeUsageSources(statuslineOnly: true, now: now)
+    }
+
+    /// The usage reads, one at a time and in order: a reload queued behind a rescan's read lands
+    /// after it, so an older read can never overwrite a newer one.
+    private static let claudeUsageReadQueue = DispatchQueue(label: "com.kannu.claude-usage-read", qos: .utility)
+    /// Reads queued or running. A rescan starts none while one is: rescans come several a second.
+    private var claudeUsageReadsInFlight = 0
+
+    /// Reads the usage sources on `claudeUsageReadQueue` (`ClaudeUsageSources.read`) and applies
+    /// the result here, on the main actor; `then` runs after the apply. What the read needs from
+    /// `Defaults` is taken here first.
+    private func readClaudeUsageSources(statuslineOnly: Bool, now: Date, then: (() -> Void)? = nil) {
+        claudeUsageReadsInFlight += 1
+        let request = ClaudeUsageSources.Request(
+            statuslineURL: AgentHookInstaller.statusDirectory.appendingPathComponent(AgentHookInstaller.usageFileName),
+            statuslineOnly: statuslineOnly,
+            now: now,
+            recordedOrganization: Defaults[.claudeCodeUsageOrganization],
+            resets: Defaults[.claudeOrganizationResets])
+        Self.claudeUsageReadQueue.async { [weak self] in
+            let read = ClaudeUsageSources.read(request)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.claudeUsageReadsInFlight -= 1
+                    self.apply(read, recorded: request.recordedOrganization != nil, now: now)
+                    then?()
+                }
+            }
+        }
     }
 
     private struct ClaudeUsageOrganizations {
@@ -532,59 +569,64 @@ final class CursorAgentStatusMonitor: ObservableObject {
         var claudeCodeRecorded = true
         /// Set when Claude Code's sources are held off the card until its organization is known.
         var claudeCodeUnverified = false
-        /// `oauthAccount`'s organization as `~/.claude.json` names it now, before the recorded one
-        /// overrides it: a sign-in elsewhere (Terminal) moves it, and nothing else tells Kannu.
-        var claudeCodeInConfig: String?
+        /// Whose usage the cache holds (`ClaudeCachedUsage.cacheOwner`).
+        var cacheOwner: ClaudeUsageSnapshot.CacheOwner = .claudeCode
     }
 
     private struct ClaudeUsageLoad {
         let snapshot: ClaudeUsageSnapshot?
+        let secondOrganization: ClaudeUsageSnapshot?
         let hint: ClaudeUsageSnapshot.Hint?
-        let cache: ClaudeUsageSnapshot?
-        let desktop: ClaudeUsageSnapshot?
         let organizations: ClaudeUsageOrganizations
     }
 
-    private func apply(_ load: ClaudeUsageLoad) {
-        settleRefreshStatusIfCacheIsFresher(load.cache)
-        claudeUsageCache = load.cache
-        claudeUsageDesktop = load.desktop
+    /// Applies one read. A statusline-only read merges with the other sources as last read; a
+    /// full one replaces them — except a `~/.claude.json` caught mid-write, which keeps the cache
+    /// and the organizations as last read rather than dropping them until the next read.
+    private func apply(_ read: ClaudeUsageSources.Result, recorded: Bool, now: Date) {
+        if let full = read.full {
+            if !full.config.unreadable {
+                claudeUsageCache = full.config.snapshot
+                claudeUsageOrganizations.claudeCode = full.claudeCodeOrganization
+                claudeUsageOrganizations.claudeCodeRecorded = recorded
+                claudeUsageOrganizations.cacheOwner = full.cacheOwner
+                Self.rememberOrganizationType(full.config.context)
+            }
+            claudeUsageDesktop = full.desktop
+            claudeUsageOrganizations.desktop = full.desktopOrganization
+            settleRefreshStatusIfCacheIsFresher(claudeUsageCache)
+        }
+        let load = Self.mergeClaudeUsage(statusline: read.statusline, cache: claudeUsageCache,
+                                         desktop: claudeUsageDesktop, organizations: claudeUsageOrganizations,
+                                         now: now)
         claudeUsageOrganizations = load.organizations
+        // In the order that never publishes one organization's reading on both cards at once: the
+        // alerts would count it twice while it moves from the second card to the first.
+        if load.secondOrganization == nil, claudeSecondOrganizationUsage != nil { claudeSecondOrganizationUsage = nil }
         if load.snapshot != claudeUsage { claudeUsage = load.snapshot }
+        if load.secondOrganization != claudeSecondOrganizationUsage { claudeSecondOrganizationUsage = load.secondOrganization }
         if load.hint != claudeUsageHint { claudeUsageHint = load.hint }
     }
 
-    /// The single source list for Claude usage, best first, merged one window key at a time. The
-    /// statusline hook is freshest but only writes while a session drives it; Claude's own cached
-    /// usage carries real reset times and the per-model weekly windows nothing else has; the
-    /// desktop history is percentages with inferred resets. Merging per key (not falling through
-    /// whole snapshots) means one rolled-over five-hour window in the cache no longer takes the
-    /// still-live per-model bar down with it. One definition, so a fourth source can never be
-    /// added to one caller and forgotten in the other.
-    private static func loadClaudeUsageSnapshot(now: Date) -> ClaudeUsageLoad {
-        let url = AgentHookInstaller.statusDirectory
-            .appendingPathComponent(AgentHookInstaller.usageFileName)
-        // All three are local reads on a 600 s cadence, so reading every one is cheap.
-        let statusline = ClaudeUsageSnapshot.load(from: url)
-        // One read of ~/.claude.json for the cache and for what the desktop history needs from
-        // it: this account's organization and the weekly reset anchor.
-        let claude = ClaudeCachedUsage.read()
-        // Claude Code's organization as recorded at Kannu's own last fetch; `oauthAccount` only
-        // until there is one, because desktop-hosted sessions keep rewriting it.
-        var context = claude.context
+    /// Settles Claude Code's organization after one of Kannu's own fetches
+    /// (`ClaudeCachedUsage.attributeRun`: `oauthAccount` only when fetched during the run, the
+    /// cache's own weekly reset, else the last known one), and remembers that organization's
+    /// resets from the cache the run wrote. Logs the evidence, never an id.
+    private func recordClaudeCodeOrganization(after run: ClaudeCachedUsage.RunRead) {
+        let resets = Defaults[.claudeOrganizationResets]
         let recorded = Defaults[.claudeCodeUsageOrganization]
-        context.organizationUUID = ClaudeCachedUsage.claudeCodeOrganization(
-            recordedAtFetch: recorded, inConfigNow: context.organizationUUID)
-        // Unrecorded, the cache's weekly reset may be another organization's: none is applied.
-        if recorded == nil { context.weeklyResetAnchor = nil }
-        rememberOrganizationType(claude.context)
-        let desktop = ClaudeDesktopUsageHistory.read(now: now, account: context)
-        return mergeClaudeUsage(statusline: statusline, cache: claude.snapshot, desktop: desktop.snapshot,
-                                organizations: .init(desktop: desktop.organizationUUID,
-                                                     claudeCode: context.organizationUUID,
-                                                     claudeCodeRecorded: recorded != nil,
-                                                     claudeCodeInConfig: claude.context.organizationUUID),
-                                now: now)
+        let attribution = ClaudeCachedUsage.attributeRun(run, lastKnown: recorded, resets: resets)
+        if let organization = attribution.organization, organization != recorded {
+            Defaults[.claudeCodeUsageOrganization] = organization
+        }
+        if let organization = attribution.organization, let remembered = attribution.resets,
+           resets[organization] != remembered {
+            var updated = resets
+            updated[organization] = remembered
+            Defaults[.claudeOrganizationResets] = updated
+        }
+        Self.rememberOrganizationType(run.context)
+        ClaudeUsageRefresh.log.notice("Usage refresh organization: \(attribution.evidence.rawValue, privacy: .public)")
     }
 
     /// Learns which plan an organization is on whenever `~/.claude.json` names it — the file flips
@@ -597,44 +639,67 @@ final class CursorAgentStatusMonitor: ObservableObject {
         Defaults[.claudeOrganizationTypes] = types
     }
 
-    /// The plans of the two organizations the card is choosing between, when Kannu has seen them.
+    /// The plans of Claude Code's and Claude Desktop's organizations, when Kannu has seen them.
     var claudeOrganizationPlanNames: (claudeCode: String?, desktop: String?) {
         let types = Defaults[.claudeOrganizationTypes]
         let name = { (id: String?) in id.flatMap { types[$0] }.flatMap(ClaudeCachedUsage.planName) }
         return (name(claudeUsageOrganizations.claudeCode), name(claudeUsageOrganizations.desktop))
     }
 
+    /// The single source list for Claude usage, best first, merged one window key at a time. The
+    /// statusline hook is freshest but only writes while a session drives it; Claude's own cached
+    /// usage carries real reset times and the per-model weekly windows nothing else has; the
+    /// desktop history is percentages with inferred resets. Merging per key (not falling through
+    /// whole snapshots) means one rolled-over five-hour window in the cache no longer takes the
+    /// still-live per-model bar down with it. Which of them one card may combine is
+    /// `ClaudeUsageSnapshot.cardSources`; what is read is `ClaudeUsageSources.read`, one
+    /// definition, so a fourth source can never be added to one caller and forgotten in another.
     private static func mergeClaudeUsage(statusline: ClaudeUsageSnapshot?, cache: ClaudeUsageSnapshot?,
                                          desktop: ClaudeUsageSnapshot?, organizations: ClaudeUsageOrganizations,
                                          now: Date) -> ClaudeUsageLoad {
         let card = ClaudeUsageSnapshot.cardSources(
             statusline: statusline, cache: cache, desktop: desktop,
             desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode,
-            claudeCodeOrganizationRecorded: organizations.claudeCodeRecorded)
+            claudeCodeOrganizationRecorded: organizations.claudeCodeRecorded,
+            cacheOwner: organizations.cacheOwner, now: now)
         var organizations = organizations
         organizations.claudeCodeUnverified = card.claudeCodeOrganizationUnverified
         let sources = card.sources
         // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
-        // shouldRefresh keeps its cadence gate (a nil snapshot re-reads on every rescan tick).
-        let snapshot = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
+        // shouldRefresh treats the sources as read; with nothing at all it retries once a minute
+        // (`emptyRetryInterval`), never on every rescan tick.
+        let first = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
+        let snapshot = card.showsClaudeCodeOrganization ? ofClaudeCode(first, organizations) : first
+        let second = ofClaudeCode(card.secondCardSources.flatMap { ClaudeUsageSnapshot.merged($0, now: now) }, organizations)
         let hint = ClaudeUsageSnapshot.hint(
             hooksInstalled: AgentHookInstaller.shared.isInstalled(.claude),
             statusline: statusline,
             cache: cache,
             claudeCodeOnAnotherOrganization: card.claudeCodeOnAnotherOrganization,
+            showsClaudeCodeOrganization: card.showsClaudeCodeOrganization,
             now: now
         )
-        return ClaudeUsageLoad(snapshot: snapshot, hint: hint, cache: cache, desktop: desktop,
-                               organizations: organizations)
+        return ClaudeUsageLoad(snapshot: snapshot, secondOrganization: second, hint: hint, organizations: organizations)
     }
 
-    /// Re-reads the usage sources immediately, bypassing the cadence gate. For the manual button,
-    /// which wants the freshest on-disk value the instant a fetch completes.
-    private func reloadClaudeUsageNow() {
+    /// A snapshot of Claude Code's own organization while Claude Desktop is on another, saying whose
+    /// it is, so its bars keep their own forecast and alerts and name their plan.
+    private static func ofClaudeCode(_ snapshot: ClaudeUsageSnapshot?,
+                                     _ organizations: ClaudeUsageOrganizations) -> ClaudeUsageSnapshot? {
+        guard var snapshot else { return nil }
+        snapshot.readingScope = organizations.claudeCode
+        snapshot.planName = organizations.claudeCode.flatMap { Defaults[.claudeOrganizationTypes][$0] }
+            .flatMap(ClaudeCachedUsage.planName)
+        return snapshot
+    }
+
+    /// Re-reads the usage sources at once, bypassing the cadence gate, for a refresh that just
+    /// ended; `then` runs once the new numbers are applied. Off the main actor, like every read.
+    private func reloadClaudeUsageNow(then: @escaping () -> Void) {
         let now = Date()
         lastClaudeUsageReadAt = now
         lastStatuslineReadAt = now
-        apply(Self.loadClaudeUsageSnapshot(now: now))
+        readClaudeUsageSources(statuslineOnly: false, now: now, then: then)
     }
 
     /// True while a refresh (and any sign-in it started) is running; drives the button's spinner
@@ -690,20 +755,21 @@ final class CursorAgentStatusMonitor: ObservableObject {
                     if remembered != Defaults[.claudeUsageProbeConversationIDs] {
                         Defaults[.claudeUsageProbeConversationIDs] = remembered
                     }
-                    if let organization = outcome.fetchedOrganization,
-                       organization != Defaults[.claudeCodeUsageOrganization] {
-                        Defaults[.claudeCodeUsageOrganization] = organization
+                    if let run = outcome.fetchRead {
+                        self.recordClaudeCodeOrganization(after: run)
                     }
                     let presented = ClaudeUsageFetchCommand.presentation(of: outcome.status, manual: manual)
                     self.claudeRefreshStatus = presented.shown
                     self.claudeRefreshStatusSetAt = Date()
                     self.claudeAutomaticRefreshHeld = presented.holdsAutomaticRefresh
-                    // Order matters: refresh the cache first, then re-run the providers so the
-                    // card renders the new numbers. The providers' refresh floor would drop this
-                    // one — the card's own poll ran a moment ago — so it bypasses the floor.
-                    self.reloadClaudeUsageNow()
-                    LLMUsageManager.shared.refreshAll(force: true, bypassFloor: true)
-                    self.isRefreshingClaudeUsage = false
+                    // Order matters: the cache is re-read first (off the main actor), then the
+                    // providers re-run so the card renders the new numbers. The providers' refresh
+                    // floor would drop this one — the card's own poll ran a moment ago — so it
+                    // bypasses the floor.
+                    self.reloadClaudeUsageNow {
+                        LLMUsageManager.shared.refreshAll(force: true, bypassFloor: true)
+                        self.isRefreshingClaudeUsage = false
+                    }
                 }
             }
         }
@@ -712,17 +778,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// The card's poll calls this while the Usage tab is on screen. It fetches only when Claude
     /// Code's cache is older than `ClaudeUsageSnapshot.autoFetchInterval` and no fetch ran in that
     /// long, never starts a sign-in, and stands down while the last refresh found something only
-    /// the user can change, or while Claude Code is on another organization than the card's.
+    /// the user can change. Claude Code being on another organization than Claude Desktop's does
+    /// not stop it: its bars have a card of their own, which would lapse without this.
     func refreshClaudeUsageIfStale(now: Date = Date()) {
         guard !isRefreshingClaudeUsage,
               !claudeAutomaticRefreshHeld,
-              // Claude Code is on another organization: what it would fetch is not on the card —
-              // unless `~/.claude.json` has moved off the recorded one since, as a sign-in in
-              // Terminal does; then one paced fetch records where it went.
-              claudeUsageHint != .otherOrganization
-                || ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(
-                    recorded: Defaults[.claudeCodeUsageOrganization],
-                    inConfigNow: claudeUsageOrganizations.claudeCodeInConfig),
               ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: claudeUsageCache?.observedAt,
                                                   lastFetch: lastClaudeUsageFetchAt,
                                                   organizationUnverified: claudeUsageOrganizations.claudeCodeUnverified)

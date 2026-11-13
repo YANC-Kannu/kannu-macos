@@ -24,7 +24,6 @@ struct UserProfile: Identifiable, Hashable {
     let name: String
     let icon: String
     let description: String
-    let gradient: [Color]
 }
 
 struct ProfileSelectionView: View {
@@ -36,55 +35,47 @@ struct ProfileSelectionView: View {
             id: "developer",
             name: String(localized: "Developer"),
             icon: "light.beacon.max",
-            description: String(localized: "Track AI agent activity with traffic-light status, stats monitoring, and editor hooks."),
-            gradient: [Color.blue, Color.purple]
+            description: String(localized: "Track AI agent activity with traffic-light status, stats monitoring, and editor hooks.")
         ),
         UserProfile(
             id: "designer",
             name: String(localized: "Designer"),
             icon: "paintbrush.fill",
-            description: String(localized: "Create and design with custom notch skins and visual effects."),
-            gradient: [Color.pink, Color.orange]
+            description: String(localized: "Create and design with custom notch skins and visual effects.")
         ),
         UserProfile(
             id: "lightuse",
             name: String(localized: "Light Use"),
             icon: "sparkles",
-            description: String(localized: "Simple and minimal interface with just the essentials for everyday tasks."),
-            gradient: [Color.green, Color.mint]
+            description: String(localized: "Just the essentials for everyday tasks, with fewer features switched on.")
         ),
         UserProfile(
             id: "student",
             name: String(localized: "Student"),
             icon: "book.fill",
-            description: String(localized: "Stay organized with timer, battery monitoring, and media controls."),
-            gradient: [Color.indigo, Color.cyan]
+            description: String(localized: "Stay organized with timer, battery monitoring, and media controls.")
         )
     ]
-    
+
     var body: some View {
-        VStack(spacing: 24) {
-            // Header
-            VStack(spacing: 8) {
-                Image(systemName: "person.3.fill")
-                    .font(.system(size: 50))
-                    .foregroundStyle(.linearGradient(colors: [.blue, .purple], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .padding(.bottom, 8)
-                
+        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
                 Text("Choose Your Profile")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                
+                    .font(SettingsTheme.pageTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
+
                 Text("Select one or more profiles to customize your experience")
-                    .font(.body)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 40)
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
-            .padding(.top, 20)
-            
-            // Profile Grid
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
+
+            // Two tiles a row, apart as Timer's start tiles are.
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: SettingsMetrics.cardPadding), GridItem(.flexible())],
+                      spacing: SettingsMetrics.cardPadding) {
                 ForEach(profiles) { profile in
                     ProfileCard(
                         profile: profile,
@@ -95,106 +86,72 @@ struct ProfileSelectionView: View {
                     )
                 }
             }
-            .padding(.horizontal, 24)
-            
-            Spacer()
-            
-            // Continue Button
-            Button(action: {
+
+            Spacer(minLength: 0)
+
+            Button("Continue") {
                 if !selectedProfiles.isEmpty {
                     onContinue(selectedProfiles)
                 }
-            }) {
-                Text("Continue")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(SettingsButtonStyle(.primary))
             .disabled(selectedProfiles.isEmpty)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        )
+        .padding(.horizontal, SettingsTheme.pageInset)
+        .padding(.vertical, SettingsTheme.sectionGap)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
-    
+
     private func toggleProfile(_ profileId: String) {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            if selectedProfiles.contains(profileId) {
-                selectedProfiles.remove(profileId)
-            } else {
-                selectedProfiles.insert(profileId)
-            }
+        if selectedProfiles.contains(profileId) {
+            selectedProfiles.remove(profileId)
+        } else {
+            selectedProfiles.insert(profileId)
         }
     }
 }
 
+/// A profile as a choice card (docs/SETTINGS.md, "Choices"), any number of them chosen: the ring says which.
 struct ProfileCard: View {
     let profile: UserProfile
     let isSelected: Bool
     let onTap: () -> Void
-    
-    @State private var isHovering = false
-    
+
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Image(systemName: profile.icon)
-                        .font(.system(size: 28))
-                        .foregroundStyle(.linearGradient(colors: profile.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                    
-                    Spacer()
-                    
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.linearGradient(colors: profile.gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .transition(.scale.combined(with: .opacity))
-                    }
+            VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
+                // One height for every glyph, so the four names line up: the symbols draw 25 to 32 pt tall at this size.
+                Image(systemName: profile.icon)
+                    .font(.system(size: 28))
+                    .foregroundStyle(SettingsTheme.accentStrong)
+                    .frame(height: 34, alignment: .leading)
+                    .accessibilityHidden(true)
+
+                // A label inside the card's button, so it stays unselectable: selectable text swallows the click.
+                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
+                    Text(profile.name)
+                        .settingsChoiceLabel(isSelected: isSelected)
+
+                    Text(profile.description)
+                        .font(SettingsTheme.description)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                
-                Text(profile.name)
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                
-                Text(profile.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(3)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
             }
-            .padding(16)
-            .frame(height: 160)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? 
-                          LinearGradient(colors: profile.gradient.map { $0.opacity(0.15) }, startPoint: .topLeading, endPoint: .bottomTrailing) :
-                          LinearGradient(colors: [Color.gray.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .strokeBorder(
-                        isSelected ? 
-                        LinearGradient(colors: profile.gradient, startPoint: .topLeading, endPoint: .bottomTrailing) :
-                        LinearGradient(colors: [Color.clear], startPoint: .topLeading, endPoint: .bottomTrailing),
-                        lineWidth: isSelected ? 2 : 0
-                    )
-            )
-            .scaleEffect(isHovering ? 1.02 : 1.0)
-            .shadow(color: isSelected ? profile.gradient[0].opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+            .padding(SettingsMetrics.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // At least this tall, so the grid's rows match; a longer translation grows the card, never spills past it.
+            .frame(minHeight: 160, alignment: .topLeading)
+            .background(SettingsTheme.card, in: shape)
+            .settingsChoiceRing(shape, isSelected: isSelected)
+            .contentShape(shape)
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isHovering = hovering
-            }
-        }
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -215,7 +172,6 @@ func applyProfileSettings(_ profiles: Set<String>) {
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = true
         Defaults[.enableScreenAssistant] = true
-        Defaults[.enableMinimalisticUI] = false
         // Developers and testers are who can act on a freeze report, and who accept the tick.
         Defaults[.hangWatchdogEnabled] = true
     }
@@ -227,14 +183,12 @@ func applyProfileSettings(_ profiles: Set<String>) {
         Defaults[.inlineHUD] = true
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = false
-        Defaults[.enableMinimalisticUI] = false
         Defaults[.enableScreenAssistant] = false
     }
 
     // Light Use Profile Settings
     let isLightUse = profiles.contains("lightuse")
     if isLightUse {
-        Defaults[.enableMinimalisticUI] = true
         Defaults[.enableStatsFeature] = false
         Defaults[.enableTimerFeature] = true
         Defaults[.inlineHUD] = true
@@ -247,13 +201,7 @@ func applyProfileSettings(_ profiles: Set<String>) {
     if isStudent {
         Defaults[.enableTimerFeature] = true
         Defaults[.enableStatsFeature] = false
-        Defaults[.enableMinimalisticUI] = false
         Defaults[.enableScreenAssistant] = false
-    }
-    
-    // If Light Use is NOT selected but others are, ensure minimalistic is OFF
-    if !isLightUse && !profiles.isEmpty {
-        Defaults[.enableMinimalisticUI] = false
     }
     
     // Common settings for all profiles

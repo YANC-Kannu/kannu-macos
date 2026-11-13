@@ -26,22 +26,26 @@ import XCTest
 /// views that genuinely render the session list observe the monitor.
 final class ClosedNotchObservationTests: XCTestCase {
 
-    /// The views allowed to observe the whole monitor: leaves that render session data, and
-    /// surfaces that exist to show live rows.
-    private static let allowedObservers: Set<String> = [
-        "Kannu/components/AgentStatus/AgentTrafficLightLiveActivity.swift",  // AgentTrafficLightIndicator, the leaf
-        "Kannu/components/AgentStatus/NotchAgentStatusView.swift",           // the open panel's list
-        "Kannu/components/Notch/NotchLLMUsageView.swift",                    // usage tab
-        "Kannu/components/Settings/SettingsView.swift",                      // style preview (6d6a826 pattern)
+    /// The views allowed to observe the whole monitor, and how many observers each file holds: leaves
+    /// that render session data, and surfaces that exist to show live rows. The count is exact, so a
+    /// second observer in an allowed file fails too. Nothing under Brain is here: Brain's content outlives its
+    /// window, so a page copies what it shows through a throttled subscription that stops while Brain is off
+    /// screen (docs/SETTINGS.md, "Live data"; `AgentsPageLiveDataRulesTests`). The Agents style preview left
+    /// this list on 2026-11-05.
+    private static let allowedObservers: [String: Int] = [
+        "Kannu/components/AgentStatus/AgentTrafficLightLiveActivity.swift": 1,  // AgentTrafficLightIndicator, the leaf
+        "Kannu/components/AgentStatus/NotchAgentStatusView.swift": 1,           // the open panel's list
+        "Kannu/components/Notch/NotchLLMUsageView.swift": 1,                    // usage tab
     ]
 
     func testOnlyLeafViewsObserveTheWholeMonitor() {
         let sources = Self.appSources()
         XCTAssertGreaterThan(sources.count, 100, "the scan read too few files — fix appSources()")
+        XCTAssertEqual(Set(Self.allowedObservers.keys).subtracting(sources.keys), [], "an allowlisted file is gone — update the allowlist")
         for (path, text) in sources {
             let count = Self.monitorObserverCount(in: text)
-            if Self.allowedObservers.contains(path) {
-                XCTAssertGreaterThan(count, 0, "\(path): pinned as a monitor observer but no longer is — update the allowlist")
+            if let pinned = Self.allowedObservers[path] {
+                XCTAssertEqual(count, pinned, "\(path): pinned at \(pinned) monitor observer(s), has \(count) — update the allowlist")
                 continue
             }
             XCTAssertEqual(count, 0, """

@@ -22,6 +22,7 @@ import SwiftUI
 
 struct SpotifyAuthSettingsSection: View {
     @State private var spotifySPDCCookie = ""
+    @State private var loadedStoredCookie = false
     @ObservedObject private var spotifyAuthManager = SpotifyAuthManager.shared
     @State private var showingLoginSheet = false
 
@@ -30,7 +31,7 @@ struct SpotifyAuthSettingsSection: View {
     }
 
     var body: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 Button {
                     showingLoginSheet = true
@@ -48,22 +49,24 @@ struct SpotifyAuthSettingsSection: View {
                 }
             }
 
-            TextField("sp_dc cookie", text: $spotifySPDCCookie, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .font(.caption.monospaced())
-                .lineLimit(2...4)
-                .textSelection(.enabled)
+            SettingsRow("sp_dc cookie") {
+                TextField("sp_dc cookie", text: $spotifySPDCCookie, axis: .vertical)
+                    .font(.caption.monospaced())
+                    .lineLimit(2...4)
+                    .textSelection(.enabled)
+                    .settingsField()
+            }
 
             if let authErrorMessage = spotifyAuthManager.authErrorMessage, !authErrorMessage.isEmpty {
                 SettingsErrorText(authErrorMessage)
             }
 
             SettingsActionRow {
-                Button("Paste from Clipboard") {
+                Button("Paste from clipboard") {
                     pasteCookieFromClipboard()
                 }
 
-                Button(spotifyAuthManager.isAuthorizing ? "Validating..." : "Validate Cookie") {
+                Button(spotifyAuthManager.isAuthorizing ? "Validating..." : "Validate cookie") {
                     let sanitized = SpotifyAuthManager.sanitizeCookie(spotifySPDCCookie)
                     spotifySPDCCookie = sanitized
                     SecureSecretsStore.set(sanitized, for: .spotifySPDCCookie)
@@ -95,7 +98,9 @@ struct SpotifyAuthSettingsSection: View {
 
                     HStack(spacing: 12) {
                         Link("Open Spotify Web Player", destination: URL(string: "https://open.spotify.com")!)
+                            .buttonStyle(.link)
                         Link("Method source", destination: URL(string: "https://github.com/Paxsenix0/Spotify-Canvas-API")!)
+                            .buttonStyle(.link)
                     }
                     .font(.caption)
                 }
@@ -105,7 +110,7 @@ struct SpotifyAuthSettingsSection: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         } header: {
-            SettingsSectionHeader("Spotify Canvas Session")
+            SettingsSectionHeader("Spotify Canvas session")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 SettingsFooter("Sign in to Spotify to capture the `sp_dc` cookie automatically, or paste it in below.")
@@ -123,6 +128,10 @@ struct SpotifyAuthSettingsSection: View {
             }
         }
         .onAppear {
+            // Once per visit to the page: this runs again on reopening Brain, and a cookie typed but
+            // not yet validated is saved nowhere else.
+            guard !loadedStoredCookie else { return }
+            loadedStoredCookie = true
             spotifySPDCCookie = SecureSecretsStore.value(for: .spotifySPDCCookie)
         }
     }

@@ -62,7 +62,7 @@ extension View {
     /// errors. Pass a `tint` only when the colour carries meaning (red for an error, orange for a
     /// partial result); the default secondary is what the rest of the surface uses.
     func settingsDescriptionStyle(tint: Color? = nil) -> some View {
-        font(.subheadline)
+        font(SettingsTheme.description)
             .foregroundStyle(tint.map { AnyShapeStyle($0) } ?? AnyShapeStyle(.secondary))
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
@@ -126,7 +126,9 @@ struct SettingsRowLabel: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
             title
             if let description {
-                description.settingsDescriptionStyle(tint: descriptionTint)
+                description
+                    .settingsDescriptionStyle(tint: descriptionTint)
+                    .frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)
             }
         }
     }
@@ -208,16 +210,16 @@ struct SettingsRow<Control: View>: View {
 
     var body: some View {
         LabeledContent {
-            // A grouped Form draws a Toggle as a switch only when the Toggle is the row itself;
-            // nested in LabeledContent it would fall back to a checkbox.
+            // The row draws the title itself, so a Toggle here shows only its switch. A custom toggle
+            // style ignores `.labelsHidden()`, so the style is told directly.
             // `.labelsHidden()` is an ENVIRONMENT modifier: it reaches everything in the slot.
-            // Right for a Toggle/Picker/Stepper (the row draws the title itself); wrong for a
-            // Menu or a popover-anchoring button, whose label and item titles it erases — the
-            // "Policy rules" menu read as dead this way. Those controls go in a raw
-            // LabeledContent or a SettingsActionRow instead (docs/SETTINGS.md).
+            // Right for a Toggle, a Stepper or a SettingsSelect (the row draws the title itself, and the
+            // select's trigger and rows are buttons with plain text, as the components board shows);
+            // wrong for a Menu, whose label and item titles it erases — the "Policy rules" menu read as
+            // dead this way. A Menu goes in a raw LabeledContent or a SettingsActionRow (docs/SETTINGS.md).
             control
                 .labelsHidden()
-                .toggleStyle(.switch)
+                .toggleStyle(SettingsToggleStyle(showsLabel: false))
         } label: {
             label
         }
@@ -283,8 +285,7 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
     var body: some View {
         LabeledContent {
             HStack(spacing: SettingsMetrics.rowContent) {
-                slider
-                    .labelsHidden()
+                SettingsSlider(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
                 if let valueText {
                     valueText
                         .monospacedDigit()
@@ -301,15 +302,6 @@ struct SettingsSliderRow<Value: BinaryFloatingPoint>: View where Value.Stride: B
             .frame(width: SettingsMetrics.sliderWidth)
         } label: {
             label
-        }
-    }
-
-    @ViewBuilder
-    private var slider: some View {
-        if let step {
-            Slider(value: $value, in: range, step: step) { accessibilityTitle }
-        } else {
-            Slider(value: $value, in: range) { accessibilityTitle }
         }
     }
 }
@@ -375,8 +367,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
                     .frame(minWidth: SettingsMetrics.valueColumn, alignment: .trailing)
-                Stepper(value: $value, in: range, step: step) { accessibilityTitle }
-                    .labelsHidden()
+                SettingsStepper(value: $value, in: range, step: step, valueDescription: valueText) { accessibilityTitle }
             }
             // The same trailing column a slider row uses, so a section holding both bounds its
             // label column at one width and their descriptions wrap the same way.
@@ -390,7 +381,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
 /// A Section header. Selectable — a header is explanatory text, not a control label — so the
 /// section's name can be copied like everything else around it. Use it for every
 /// `Section { … } header: { … }` in Settings; `SettingsLayoutRulesTests` rejects a raw `Text`
-/// there.
+/// there. It is the section's heading for VoiceOver, so a badge or a count beside it is not.
 struct SettingsSectionHeader: View {
     private let text: Text
 
@@ -405,7 +396,9 @@ struct SettingsSectionHeader: View {
 
     var body: some View {
         text
+            .font(SettingsTheme.sectionTitle)
             .textSelection(.enabled)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -424,7 +417,11 @@ struct SettingsFooter: View {
 
     var body: some View {
         text
+            // The root's font would otherwise replace the smaller one a grouped Form gives a footer.
+            .font(SettingsTheme.description)
             .fixedSize(horizontal: false, vertical: true)
+            // Prose wraps at `proseMaxWidth`; the outer frame keeps it on the section's leading edge.
+            .frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
     }
@@ -481,6 +478,8 @@ struct SettingsActionRow<Buttons: View>: View {
             } label: {
                 label
             }
+            // No style of its own: the root's labelled row puts the buttons trailing. Outside a grouped `Form`,
+            // the automatic style sets them straight after the title (Stage 4, 2026-11-05).
         } else {
             HStack(spacing: SettingsMetrics.rowContent) {
                 Spacer(minLength: 0)
@@ -492,7 +491,7 @@ struct SettingsActionRow<Buttons: View>: View {
 
 /// The "…" button that holds a row's less frequent actions. Never inside a `SettingsRow`
 /// control slot — the row's `.labelsHidden()` environment erases the menu's label and its
-/// items' titles; use a raw `LabeledContent` (the `analysisRow` shape) instead.
+/// items' titles; use a raw `LabeledContent` (the `SecurityAnalysisRow` shape) instead.
 struct SettingsMoreMenu<Items: View>: View {
     private let accessibilityLabel: Text
     private let items: Items
@@ -506,10 +505,12 @@ struct SettingsMoreMenu<Items: View>: View {
         Menu {
             items
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .imageScale(.large)
+            Image(systemName: "ellipsis")
         }
-        .menuStyle(.borderlessButton)
+        // Our button draws the trigger (a button menu style takes the current ButtonStyle); the items stay
+        // a native menu, which keeps its own keyboard, type-to-select and VoiceOver.
+        .menuStyle(.button)
+        .buttonStyle(SettingsButtonStyle(.quiet))
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel(accessibilityLabel)
@@ -543,8 +544,8 @@ struct SettingsTagChip: View {
     private let isHighlighted: Bool
     private let action: () -> Void
 
-    /// The wash under the bezel: enough to read as the colour, still the bezel's glass.
-    private static let tintOpacity: Double = 0.2
+    /// The wash under the bezel: enough to read as the colour, still the bezel's glass. A task row's chips wear it too.
+    static let tintOpacity: Double = 0.2
 
     init(_ name: String, tint: Color? = nil, remove: @escaping () -> Void) {
         self.name = name
@@ -592,7 +593,7 @@ struct SettingsTagChip: View {
         .overlay {
             if isHighlighted {
                 Capsule()
-                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                    .strokeBorder(SettingsTheme.accentStrong, lineWidth: 2)
                     .allowsHitTesting(false)
             }
         }
@@ -691,7 +692,7 @@ struct SettingsStatusText: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.footerStack) {
             Circle()
-                .fill(isReady ? Color.green : Color.secondary.opacity(0.5))
+                .fill(isReady ? SettingsTheme.success : Color.secondary.opacity(0.5))
                 .frame(width: SettingsMetrics.statusDot, height: SettingsMetrics.statusDot)
                 .accessibilityHidden(true)
             Text(verbatim: text)
@@ -713,7 +714,7 @@ struct SettingsErrorText: View {
 
     var body: some View {
         Text(verbatim: text)
-            .settingsDescriptionStyle(tint: .red)
+            .settingsDescriptionStyle(tint: SettingsTheme.destructive)
     }
 }
 
@@ -745,6 +746,9 @@ struct CopyForAgentButton: View {
         }
         .accessibilityLabel(copied ? Text("Copied") : Text("Copy for agent"))
         .help("Copies a request about this finding, ready to paste into your agent. Nothing is sent.")
-        .onDisappear { resetTask?.cancel() }
+        .onDisappear {
+            resetTask?.cancel()
+            copied = false
+        }
     }
 }

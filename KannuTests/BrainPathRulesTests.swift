@@ -22,7 +22,8 @@ import XCTest
 
 /// Text that sends the user to "Brain › <tab> › …" names a tab the sidebar has. CodeRabbit (#87)
 /// found "Brain › Security findings", which is a section, not a tab; the security messages also
-/// said "Brain › Agents ›" for rows that live in the Agent Security tab.
+/// said "Brain › Agents ›" for rows that live in the Security tab. The settings tabs now sit
+/// behind the sidebar's Settings row, so a path to one says "Brain › Settings › <tab>".
 final class BrainPathRulesTests: XCTestCase {
     private static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 
@@ -30,7 +31,7 @@ final class BrainPathRulesTests: XCTestCase {
         try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
     }
 
-    /// The sidebar's tab and section titles, from `SettingsView`'s `title` switches.
+    /// The sidebar's tab titles and the Settings row's, from `SettingsView`'s `title` switches.
     private static func titles() throws -> Set<String> {
         let settings = try source("Kannu/components/Settings/SettingsView.swift")
         let pattern = try NSRegularExpression(pattern: #"case \.\w+:\s+return String\(localized: "([^"]+)"\)"#)
@@ -40,45 +41,122 @@ final class BrainPathRulesTests: XCTestCase {
         })
     }
 
-    /// Every "Brain › <first>" in a string literal of the app's code (comment lines skipped).
-    private static func pathHeads() throws -> [(file: String, head: String)] {
+    /// What a path may start with: the sidebar's product list, its foot, and the Settings row.
+    private static let allowedHeads = ["Agents", "Security", "Usage", "Tasks", "Timer", "Notes", "Clipboard", "About", "Settings"]
+    /// What may follow "Brain › Settings ›": the settings list, as `title` spells it.
+    private static let fourteenTitles = ["General", "Appearance", "Live activities", "Lock screen", "Media", "Devices", "HUD and OSD",
+                                         "Battery", "Stats", "Shelf", "Downloads", "Screen Assistant", "Shortcuts", "Extensions"]
+
+    /// Every "Brain › a › b" in the text, as its segments, with `→` read as `›` because a string written
+    /// that way goes stale the same way. The text is read with its comments blanked
+    /// (`SettingsDesignSystemRulesTests.code`), so a comment names no path, trailing a line of code or not,
+    /// while a string, `https://` and all, is read whole. A segment ends at `›`, `.`, `,`, `)`, `"` or `\`,
+    /// and only `›` lets the path go on.
+    private static func paths(in text: String) -> [[String]] {
+        let enders: Set<Character> = ["›", ".", ",", ")", "\"", "\\"]
+        var found: [[String]] = []
+        let normalized = SettingsDesignSystemRulesTests.code(text).replacingOccurrences(of: "→", with: "›")
+        for line in normalized.split(separator: "\n") where line.contains("Brain › ") {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
+            let string = String(line)
+            var searchFrom = string.startIndex
+            while let start = string.range(of: "Brain › ", range: searchFrom..<string.endIndex) {
+                var path: [String] = []
+                var index = start.upperBound
+                while true {
+                    let end = string[index...].firstIndex(where: { enders.contains($0) }) ?? string.endIndex
+                    path.append(string[index..<end].trimmingCharacters(in: .whitespaces))
+                    guard end < string.endIndex, string[end] == "›" else {
+                        index = end
+                        break
+                    }
+                    index = string.index(after: end)
+                }
+                found.append(path)
+                searchFrom = index
+            }
+        }
+        return found
+    }
+
+    /// The live check first: a head must be a title `SettingsView` has, so renaming a tab fails any
+    /// path naming it. Then the levels, which a live list alone cannot see: "Brain › General" names a
+    /// real title and leads nowhere, since General is behind the Settings row.
+    private static func problems(paths: [[String]], titles: Set<String>) -> [String] {
+        paths.compactMap { path -> String? in
+            let shown = "Brain › " + path.joined(separator: " › ")
+            guard let head = path.first else { return "\(shown) is empty" }
+            if !titles.contains(head) { return "\(shown) names no tab of the sidebar" }
+            if !allowedHeads.contains(head) { return "\(shown) starts at a tab behind the Settings row" }
+            if head == "Settings", path.count > 1, !fourteenTitles.contains(path[1]) {
+                return "\(shown): the settings list has no \(path[1])"
+            }
+            return nil
+        }
+    }
+
+    /// The real tree, through the same pair of functions as the plants.
+    private static func problemsInTheApp(titles: Set<String>) throws -> (paths: Int, problems: [String]) {
         let folder = root.appendingPathComponent("Kannu")
         let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: nil)?
             .compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" } ?? []
-        let pattern = try NSRegularExpression(pattern: #"Brain › ([^›".)\\]+?)\s*(?:›|\.|\)|"|\\)"#)
-        var heads: [(String, String)] = []
+        var count = 0
+        var found: [String] = []
         for file in files {
-            let text = try String(contentsOf: file, encoding: .utf8)
-            for line in text.split(separator: "\n") where line.contains("\"") && line.contains("Brain › ") {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("*") else { continue }
-                let string = String(line)
-                for match in pattern.matches(in: string, range: NSRange(string.startIndex..., in: string)) {
-                    if let range = Range(match.range(at: 1), in: string) {
-                        heads.append((file.lastPathComponent, string[range].trimmingCharacters(in: .whitespaces)))
-                    }
-                }
-            }
+            let inFile = Self.paths(in: try String(contentsOf: file, encoding: .utf8))
+            count += inFile.count
+            found += Self.problems(paths: inFile, titles: titles).map { "\(file.lastPathComponent): \($0)" }
         }
-        return heads
+        return (count, found)
     }
 
-    func testEveryBrainPathStartsAtATabTheSidebarHas() throws {
+    func testEveryBrainPathLeadsToARowTheSidebarHas() throws {
         let titles = try Self.titles()
-        XCTAssertTrue(titles.contains("Agent Security") && titles.contains("Tasks"), "the titles were not read")
-        let heads = try Self.pathHeads()
-        XCTAssertFalse(heads.isEmpty, "no Brain path found: the scan is vacuous")
-        for (file, head) in heads {
-            XCTAssertTrue(titles.contains(head), "\(file): \"Brain › \(head)\" names no tab or section of the sidebar")
-        }
+        XCTAssertTrue(titles.contains("Security") && titles.contains("Tasks"), "the titles were not read")
+        XCTAssertTrue(Set(Self.allowedHeads + Self.fourteenTitles).isSubset(of: titles), "a list here names a title SettingsView no longer has")
+        let scan = try Self.problemsInTheApp(titles: titles)
+        XCTAssertGreaterThan(scan.paths, 0, "no Brain path found: the scan is vacuous")
+        XCTAssertEqual(scan.problems, [])
     }
 
-    func testTheSecurityMessagesNameTheAgentSecurityTab() throws {
+    func testTheScanChecksThePlantedPathsFirstTwoLevels() throws {
+        let titles = try Self.titles()
+        func problems(_ line: String) -> [String] { Self.problems(paths: Self.paths(in: line), titles: titles) }
+
+        // Behind the Settings row, under the wrong list, or no title at all.
+        XCTAssertEqual(problems(#"let a = "Brain › General › Permissions""#).count, 1)
+        XCTAssertEqual(problems(#"let a = "Brain › Settings › Agents""#).count, 1)
+        XCTAssertEqual(problems(#"let a = "Brain › Nowhere › Permissions""#).count, 1)
+        XCTAssertEqual(problems(#"let a = "see Brain › General, then Brain › Media.""#).count, 2)
+
+        // The same path written with arrows. A segment runs to the period, so "Stats to view…" would fail too.
+        XCTAssertEqual(problems(#"let a = "in Brain → Stats.""#).count, 1)
+        XCTAssertEqual(problems(#"let a = "in Brain → Settings → Stats.""#), [])
+
+        // NotesSettings' shape, with its period, and PermissionsStepView's, with what follows.
+        XCTAssertEqual(Self.paths(in: #"let a = "row in Brain › Settings › General.""#), [["Settings", "General"]])
+        XCTAssertEqual(problems(#"let a = "row in Brain › Settings › General.""#), [])
+        XCTAssertEqual(Self.paths(in: #"let a = "Brain › Settings › General › Permissions, or System Settings › Privacy""#),
+                       [["Settings", "General", "Permissions"]])
+        XCTAssertEqual(problems(#"let a = "Brain › Settings › General › Permissions, or System Settings › Privacy""#), [])
+        XCTAssertEqual(problems(#"let a = "(Brain › Security › Analyze chats)""#), [])
+        XCTAssertEqual(problems(#"let a = "Brain › Settings""#), [])
+
+        // A comment line is prose, whatever it names, and so is a comment after code (promised on #21).
+        XCTAssertEqual(Self.paths(in: #"// says "Brain › General""#), [])
+        XCTAssertEqual(Self.paths(in: #"* says "Brain › General""#), [])
+        XCTAssertEqual(Self.paths(in: "let a = true // Brain › General"), [])
+        // A string's `//` starts no comment.
+        XCTAssertEqual(Self.paths(in: #"let a = "https://kannu.app, then Brain › Settings › General.""#), [["Settings", "General"]])
+    }
+
+    func testTheSecurityMessagesNameTheSecurityTab() throws {
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/SecurityFindingsStore.swift")
-            .contains("Session analysis is off (Brain › Agent Security › Analyze chats with ADR Detection)."))
+            .contains("Session analysis is off (Brain › Security › Analyze chats with ADR Detection)."))
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/AgentSecurityFinding.swift")
-            .contains("Details are in Brain › Agent Security › Security findings."))
+            .contains("Details are in Brain › Security › Security findings."))
         XCTAssertTrue(try Self.source("Kannu/managers/AgentStatus/SecurityFindingGuide.swift")
-            .contains("turn blocking off in Brain › Agent Security › Agent policy."))
+            .contains("turn blocking off in Brain › Security › Agent policy."))
     }
 }

@@ -26,14 +26,17 @@ import Foundation
 /// name, or "Custom Timer".
 enum TimerSessionName {
     static let maxLength = 40
+    /// What the timer tab's bar may hold: a name, plus room for the `#tag` and `@time` words a new
+    /// task's name can carry (`TaskQuickAdd`). The name itself is still `maxLength`.
+    static let maxTypedLength = 80
 
-    /// The typed name made safe to show, or nil when nothing is left of it.
-    static func cleaned(_ text: String) -> String? {
+    /// The typed name made safe to show, at most `limit` characters, or nil when nothing is left.
+    static func cleaned(_ text: String, limit: Int = maxLength) -> String? {
         let words = text.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
         guard !words.isEmpty else { return nil }
         let joined = words.joined(separator: " ")
-        guard joined.count > maxLength else { return joined }
-        return String(joined.prefix(maxLength)).trimmingCharacters(in: .whitespaces)
+        guard joined.count > limit else { return joined }
+        return String(joined.prefix(limit)).trimmingCharacters(in: .whitespaces)
     }
 
     /// The name a session starts with: what the user typed, or the default.
@@ -69,6 +72,9 @@ struct TimerSessionPick: Equatable {
     let name: String
     /// What the user had typed when they picked; the bar gets it back if the task goes away.
     let typed: String
+    /// The `#tag` and `@time` words typed before the pick (`TaskQuickAdd`), kept after the picked
+    /// task's title in the bar and applied to it when it starts; never words of its own title.
+    var tokens = ""
 
     var isNew: Bool { taskID == nil }
 
@@ -91,7 +97,8 @@ enum TimerTypedStart: Equatable {
     static func route(tasksAvailable: Bool, typed: String, pick: TimerSessionPick?) -> TimerTypedStart {
         guard tasksAvailable else { return .plain }
         if let taskID = pick?.taskID { return .pickedTask(taskID) }
-        guard TimerSessionName.cleaned(typed) != nil else { return .plain }
+        // Only `#tag` and `@time` typed, no name: nothing to make a task of.
+        guard TimerSessionName.cleaned(TaskQuickAdd.title(of: typed)) != nil else { return .plain }
         return .typed(reuse: pick == nil)
     }
 }

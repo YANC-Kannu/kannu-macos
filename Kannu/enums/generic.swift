@@ -43,7 +43,7 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
     var localizedName: String {
         switch self {
         case .notch:
-            return String(localized: "Standard Notch")
+            return String(localized: "Standard notch")
         case .dynamicIsland:
             return String(localized: "Dynamic Island")
         }
@@ -54,7 +54,38 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
         case .notch:
             return String(localized: "Classic notch shape that blends into the top screen edge")
         case .dynamicIsland:
-            return String(localized: "Pill-shaped island with rounded corners, similar to iPhone's Dynamic Island")
+            return String(localized: "Rounded pill, like the iPhone's Dynamic Island.")
+        }
+    }
+}
+
+/// How Brain's window looks. The window alone: the notch stays dark whatever this says.
+enum BrainAppearance: String, CaseIterable, Defaults.Serializable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .system:
+            return String(localized: "Match macOS")
+        case .light:
+            return String(localized: "Light")
+        case .dark:
+            return String(localized: "Dark")
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .system:
+            return String(localized: "Brain follows the appearance set in macOS")
+        case .light:
+            return String(localized: "Brain stays light whatever macOS is set to")
+        case .dark:
+            return String(localized: "Brain stays dark whatever macOS is set to")
         }
     }
 }
@@ -78,12 +109,13 @@ enum AppleNotesSyncScope: String, CaseIterable, Defaults.Serializable, Identifia
         }
     }
 
+    /// Brain › Notes' caption for the choice, about 8 words: the two-way Kannu folder is the section's footer.
     var description: String {
         switch self {
         case .kannuFolder:
-            return String(localized: "Two-way sync with the Kannu folder in Notes. Your other notes are never read or changed.")
+            return String(localized: "Your other notes are never read or changed.")
         case .wholeAccount:
-            return String(localized: "Also shows every other note in your default Notes account, read-only: edit those in Notes.")
+            return String(localized: "Your other notes show here, read-only.")
         }
     }
 }

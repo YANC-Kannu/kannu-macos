@@ -188,8 +188,22 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
     }
 
     func testWindowWithoutResetStaysVisible() {
-        let snapshot = makeSnapshot(fiveHour: (25, nil), observedAt: now)
-        XCTAssertEqual(snapshot.fiveHourDisplayPercent(now: now), 25)
+        // Visible without a reset — but only for as long as the window it was read in can last.
+        // A null reset used to keep the value on the card forever.
+        let snapshot = ClaudeUsageSnapshot.parse(json: makeWindowJSON(tsMs: 1_788_000_000_000, [
+            ["key": "five_hour", "pct": NSNumber(value: 25)],
+            ["key": "seven_day", "pct": NSNumber(value: 40)]
+        ]))
+        XCTAssertEqual(snapshot?.fiveHourDisplayPercent(now: now), 25)
+        XCTAssertEqual(snapshot?.fiveHourDisplayPercent(now: now.addingTimeInterval(5 * 3600 - 1)), 25)
+        XCTAssertNil(snapshot?.fiveHourDisplayPercent(now: now.addingTimeInterval(5 * 3600)))
+        XCTAssertEqual(snapshot?.sevenDayDisplayPercent(now: now.addingTimeInterval(7 * 86_400 - 1)), 40)
+        XCTAssertNil(snapshot?.sevenDayDisplayPercent(now: now.addingTimeInterval(7 * 86_400)))
+        // A reported reset is the bound by itself.
+        let reported = ClaudeUsageSnapshot.parse(json: makeWindowJSON(tsMs: 1_788_000_000_000, [
+            ["key": "five_hour", "pct": NSNumber(value: 25), "resets_at": NSNumber(value: 1_788_000_600)]
+        ]))
+        XCTAssertNil(reported?.window("five_hour")?.notAfter)
     }
 
     // MARK: - Refresh cadence
@@ -200,10 +214,16 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
             now: now, lastRead: nil, state: .inactive, hasSnapshot: false))
     }
 
-    func testRetriesWhileNothingHasBeenParsedYet() {
-        // A read that found no usable file leaves no snapshot; keep trying rather than latching off.
-        XCTAssertTrue(ClaudeUsageSnapshot.shouldRefresh(
+    func testRetriesWhileNothingHasBeenParsedYetButNotOnEveryRescan() {
+        // A read that found no usable file leaves no snapshot; keep trying rather than latching
+        // off — once a minute, not at every rescan: with nothing to show, the monitor re-parsed
+        // ~/.claude.json and the desktop history on the main actor several times a second.
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldRefresh(
             now: now, lastRead: now.addingTimeInterval(-1), state: .inactive, hasSnapshot: false))
+        XCTAssertFalse(ClaudeUsageSnapshot.shouldRefresh(
+            now: now, lastRead: now.addingTimeInterval(-59), state: .executing, hasSnapshot: false))
+        XCTAssertTrue(ClaudeUsageSnapshot.shouldRefresh(
+            now: now, lastRead: now.addingTimeInterval(-60), state: .inactive, hasSnapshot: false))
     }
 
     func testDoesNotRefreshWhileNoAgentIsOnScreen() {
@@ -376,20 +396,6 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
 
     // MARK: - Automatic fetch
 
-    /// CodeRabbit on #96: after "Sign in in Terminal" to the card's organization, nothing recorded
-    /// the new one — the recorded organization wins over `~/.claude.json`, and the automatic refresh
-    /// stood down while the hint said "another organization". It may run once the file names a
-    /// different organization than the recorded one.
-    func testAnotherOrganizationHoldsTheAutoFetchUntilClaudeCodeMoves() {
-        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "team"),
-                       "still on the recorded organization: nothing to fetch for the card")
-        XCTAssertTrue(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: "max"),
-                      "the file moved off the recorded organization: one paced fetch records where it went")
-        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: "team", inConfigNow: nil))
-        XCTAssertFalse(ClaudeUsageSnapshot.otherOrganizationAllowsAutoFetch(recorded: nil, inConfigNow: "max"),
-                       "nothing recorded is not 'another organization'")
-    }
-
     func testAutoFetchRunsWhenTheCacheIsOldOrMissing() {
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(now: now, cacheObservedAt: nil, lastFetch: nil))
         XCTAssertTrue(ClaudeUsageSnapshot.shouldAutoFetch(
@@ -414,11 +420,16 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)],
                                           observedAt: now.addingTimeInterval(-3_000))
         let split = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
-                                                    desktopOrganization: "max", claudeCodeOrganization: "team")
+                                                    desktopOrganization: "max", claudeCodeOrganization: "team",
+                                                    now: now)
         XCTAssertTrue(split.claudeCodeOnAnotherOrganization)
-        XCTAssertEqual(split.sources, [desktop])
+        XCTAssertFalse(split.showsClaudeCodeOrganization)
+        XCTAssertEqual(split.sources.compactMap { $0 }, [desktop])
         // A fresher Team reading must not displace the Max one: that was the measured card.
         XCTAssertEqual(ClaudeUsageSnapshot.merged(split.sources, now: now)?.sevenDayPercent, 43)
+        // It goes on a card of its own.
+        XCTAssertEqual(split.secondCardSources?.compactMap { $0 }, [statusline, cache])
+        XCTAssertEqual(ClaudeUsageSnapshot.merged(split.secondCardSources ?? [], now: now)?.sevenDayPercent, 0)
     }
 
     func testOneOrganizationOrAnUnknownOneMergesAsBefore() {
@@ -426,7 +437,8 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         let desktop = ClaudeUsageSnapshot(windows: [window("seven_day", pct: 43, resetsIn: nil)], observedAt: now)
         for (desktopOrg, codeOrg) in [("max", "max"), (nil, "team"), ("max", nil)] as [(String?, String?)] {
             let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
-                                                       desktopOrganization: desktopOrg, claudeCodeOrganization: codeOrg)
+                                                       desktopOrganization: desktopOrg, claudeCodeOrganization: codeOrg,
+                                                       now: now)
             XCTAssertFalse(card.claudeCodeOnAnotherOrganization)
             XCTAssertEqual(card.sources, [nil, cache, desktop])
         }
@@ -440,14 +452,14 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
                                           observedAt: now.addingTimeInterval(-3_000))
         let card = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: desktop,
                                                    desktopOrganization: "max", claudeCodeOrganization: "max",
-                                                   claudeCodeOrganizationRecorded: false)
-        XCTAssertEqual(card.sources, [desktop])
+                                                   claudeCodeOrganizationRecorded: false, now: now)
+        XCTAssertEqual(card.sources.compactMap { $0 }, [desktop])
         XCTAssertTrue(card.claudeCodeOrganizationUnverified)
         XCTAssertFalse(card.claudeCodeOnAnotherOrganization, "unknown is not 'another': no line about it")
         // No desktop history: Claude Code's organization is the only one, recorded or not.
         let alone = ClaudeUsageSnapshot.cardSources(statusline: nil, cache: cache, desktop: nil,
                                                     desktopOrganization: nil, claudeCodeOrganization: nil,
-                                                    claudeCodeOrganizationRecorded: false)
+                                                    claudeCodeOrganizationRecorded: false, now: now)
         XCTAssertEqual(alone.sources, [nil, cache, nil])
         XCTAssertFalse(alone.claudeCodeOrganizationUnverified)
     }

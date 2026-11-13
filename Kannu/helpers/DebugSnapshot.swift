@@ -18,6 +18,7 @@
 
 #if DEBUG
 import AppKit
+import Defaults
 import SwiftUI
 
 /// DEBUG builds only. `--kannu-snapshots <dir>` renders every Settings tab and a few boards to PNG,
@@ -53,16 +54,41 @@ struct DebugSnapshotRequest {
 enum DebugSnapshots {
     static func run(_ request: DebugSnapshotRequest, viewModel: KannuViewModel) async {
         try? FileManager.default.createDirectory(at: request.directory, withIntermediateDirectories: true)
+        writeFontReport(into: request.directory)
         // Fixture tasks before anything touches the task list: a snapshot never reads or writes
         // the user's tasks.json.
         TasksManager.snapshotFile = DebugSnapshotFixtures.tasksFile(now: Date())
+        SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
+        // The render draws no video, so Devices' 3D icon shows its movie's first frame.
+        DevicesSettingsView.snapshotDrawsStill = true
+        // The sidebar's badges, quiet on every board but `shellBadges`: none reads this Mac's agents, findings, usage
+        // or timer.
+        SidebarBadge.snapshotFixture = .quiet
+        // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
+        // of this Mac lands in a PNG.
+        let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
+        AgentsOverview.snapshotFixture = agents
+        ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: agents.sessions))
+        // Brain › Security's product and what its settings read from the findings store, the same way: none of this
+        // Mac's findings, scans, policy or analyses.
+        let security = DebugSnapshotFixtures.securityOverview(findings: 3, now: Date())
+        SecurityOverview.snapshotFixture = security
+        // Brain › Usage's product likewise: fixture switches, readings and models, never this Mac's.
+        let usagePage = DebugSnapshotFixtures.usageOverview(providers: 3, now: Date())
+        UsageOverview.snapshotFixture = usagePage
+        // Brain › Timer's product likewise: a fixture timer, running from its preset, and the fixture presets, never this
+        // Mac's.
+        let timerPage = DebugSnapshotFixtures.timerOverview(.running)
+        TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard's product and what its settings read from the clipboard manager, the same way: none of this
+        // Mac's copies or pins. The page never touches the manager then, which would load the saved history and start
+        // reading the real pasteboard.
+        let clipboard = DebugSnapshotFixtures.clipboardOverview(pinned: 0, history: 4, now: Date())
+        ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Notes likewise: fixture notes, never this Mac's, and no note's image read from its file.
+        let notesPage = DebugSnapshotFixtures.notesOverview(notes: 4, now: Date())
+        NotesOverview.snapshotFixture = notesPage
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
-        if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", AnyView(Form {
-                Section { TasksBackRow(parent: String(localized: "Tasks")) {} }
-                AllTasksPage(query: .constant(""), context: tasksBoardContext())
-            })))
-        }
         if request.tabs == nil || request.tabs?.contains("newTaskSheet") == true {
             // New Task half typed: "pl" offers #planning in its colour and "+ pl"; a reminder
             // tomorrow at 10:00 with Notify on.
@@ -74,24 +100,51 @@ enum DebugSnapshots {
             typed.draft.reminder = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: tomorrow)
             boards.append(("newTaskSheet", AnyView(NewTaskSheet(newTask: typed, listFilter: .all) { _ in })))
         }
+        if request.tabs == nil || request.tabs?.contains("newNoteSheet") == true {
+            // New note half typed, in yellow. Nothing saves: Add is a press.
+            boards.append(("newNoteSheet", AnyView(NewNoteSheet(title: "Groceries", text: "Milk, eggs and bread\nCoffee beans"))))
+        }
+        if request.tabs == nil || request.tabs?.contains("connectSheet") == true {
+            // It reads only a Defaults colour, and touches no Keychain until Connect.
+            boards.append(("connectSheet", AnyView(JiraConnectSheet())))
+        }
+        if request.tabs == nil || request.tabs?.contains("tagsSheet") == true {
+            // The fixture's local task, with two of the fixture's tags on it and the rest offered.
+            let fixture = DebugSnapshotFixtures.tasksFile(now: Date()).tasks
+            boards.append(("tagsSheet", AnyView(TaskTagsSheet(taskID: DebugSnapshotFixtures.localTaskID, title: "Write the release notes",
+                                                             current: ["docs", "planning"], existing: TaskFacets.tags(in: fixture)))))
+        }
+        if request.tabs == nil || request.tabs?.contains("valueSheet") == true {
+            // Set End Time: the date as our button. Its popover is a window of its own, so no board draws it open.
+            boards.append(("valueSheet", TasksSettings.snapshotEndTimeSheet()))
+        }
+        if request.tabs == nil || request.tabs?.contains("urlImportSheet") == true {
+            // A URL typed and no name yet, so Add is off.
+            boards.append(("urlImportSheet", AnyView(URLImportSheet(urlInput: .constant("https://example.com/animation.json"),
+                                                                   nameInput: .constant(""), onImport: {}, onCancel: {}))))
+        }
+        if request.tabs == nil || request.tabs?.contains("timerPresetSheet") == true {
+            // A preset's edit, from its tile: the fixture's Focus, 25 minutes in orange.
+            boards.append(("timerPresetSheet", AnyView(TimerPresetSheet(target: .edit(DebugSnapshotFixtures.timerPresets[0])))))
+        }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
-            boards.append(("taskPage", AnyView(Form {
-                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("taskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID,
+                                                                             context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("localTaskPage") == true {
             // A local task: its title typed in place, a reminder with Notify off.
-            boards.append(("localTaskPage", AnyView(Form {
-                Section { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("localTaskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID,
+                                                                                  context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("findings") == true {
             boards.append(("findings", AgentSecuritySettings.snapshotFindingRows(DebugSnapshotFixtures.findings)))
         }
         if request.tabs == nil || request.tabs?.contains("policyRules") == true {
             boards.append(("policyRules", AnyView(PolicyRulesEditor(draft: AgentPolicyDraft(previewing: DebugSnapshotFixtures.agentPolicy)))))
+        }
+        if request.tabs == nil || request.tabs?.contains("animationEditorControls") == true {
+            // No other board draws the animation editor: its controls, with no Lottie loaded.
+            boards.append(("animationEditorControls", AnimationEditorView.snapshotControls()))
         }
         if request.tabs == nil || request.tabs?.contains("detection") == true {
             boards.append(("detection", AgentSecuritySettings.snapshotDetectionRows()))
@@ -111,30 +164,203 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("components") == true {
             boards.append(("components", AnyView(componentsBoard)))
         }
+        if request.tabs == nil || request.tabs?.contains("designSystem") == true {
+            boards.append(("designSystem", AnyView(designSystemBoard)))
+        }
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
-        }
-        if request.tabs == nil || request.tabs?.contains("onboardingPermissions") == true {
-            // Every row, in the states this Mac's answers give them; nothing is requested.
-            boards.append(("onboardingPermissions", AnyView(
-                PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
-                                    onLaunchAtLoginChoice: { _ in }, onContinue: {})
-                    .frame(height: 1080)
-            )))
-        }
-        if request.tabs == nil || request.tabs?.contains("onboardingNotes") == true {
-            boards.append(("onboardingNotes", AnyView(
-                NotesSelectionView(onContinue: { _ in })
-                    .frame(width: 400, height: 600)
-            )))
         }
         for (name, view) in boards {
             for dark in [false, true] {
                 let root = AnyView(view
                     .environmentObject(SettingsHighlightCoordinator.shared)
                     .environmentObject(viewModel)
-                    .formStyle(.grouped))
-                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: 490, into: request.directory)
+                    .settingsDesignSystem())
+                // A page at the narrowest panel the window can have: a `SettingsPage` insets itself, in a tab or
+                // on its own. The rules sheet sets its own width, which 490 would crop on both sides.
+                let width = outsideThePanel.contains(name) ? (name == "policyRules" ? 560 : 490) : narrowestPanel
+                // A page has no background of its own, so it needs the panel behind it.
+                // Sheets and onboarding do not sit on the panel.
+                let background = outsideThePanel.contains(name) ? Color(nsColor: .windowBackgroundColor) : SettingsTheme.panel
+                await render(root, name: name + (dark ? "-dark" : "-light"), dark: dark, width: width, into: request.directory,
+                             background: background)
+            }
+        }
+        // The whole window: the sidebar's two lists, a search and a deep link.
+        for (name, view) in shellBoards where request.tabs == nil || request.tabs?.contains(name) == true {
+            let size = shellBoardSize(name)
+            for dark in [false, true] {
+                await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: size.width, into: request.directory, fixedHeight: size.height)
+            }
+        }
+        // Every badge at once, from a fixture: an agent waiting, two high findings, usage near its limit, a timer running.
+        if request.tabs == nil || request.tabs?.contains("shellBadges") == true {
+            SidebarBadge.snapshotFixture = .busy
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "shellBadges" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+            SidebarBadge.snapshotFixture = .quiet
+        }
+        // Brain › Agents with no session, one and three, at the window's first size: what is above the fold is how
+        // full the page looks. Fixtures only.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("agents\(count)") == true {
+            AgentsOverview.snapshotFixture = DebugSnapshotFixtures.agentsOverview(sessions: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "agents\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        AgentsOverview.snapshotFixture = agents
+        // Brain › Security with no finding, one and several, at the window's first size, as Agents' boards. Fixtures only.
+        for count in [0, 1, 3] where request.tabs == nil || request.tabs?.contains("security\(count)") == true {
+            SecurityOverview.snapshotFixture = DebugSnapshotFixtures.securityOverview(findings: count, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentSecurity).environmentObject(viewModel)),
+                             name: "security\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        SecurityOverview.snapshotFixture = security
+        // Brain › Usage with no provider on, one and three, the same way, and three with Agent Status off, which stops the
+        // usage store. The settings rows below the product still read this Mac's switches, as Agents' do.
+        let usageBoards: [(name: String, providers: Int, agentStatusOn: Bool)] = [
+            ("usage0", 0, true), ("usage1", 1, true), ("usage3", 3, true), ("usageOff", 3, false),
+        ]
+        for board in usageBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            var fixture = DebugSnapshotFixtures.usageOverview(providers: board.providers, now: Date())
+            fixture.agentStatusOn = board.agentStatusOn
+            UsageOverview.snapshotFixture = fixture
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .llmUsage).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        UsageOverview.snapshotFixture = usagePage
+        // Brain › Timer with no timer, one running from its preset, a task's paused in overtime, a Clock-app timer and the
+        // timer off, at the window's first size, as Agents' boards. Fixtures only: the settings rows below still read this
+        // Mac's switches.
+        for board in DebugSnapshotFixtures.TimerBoard.allCases where request.tabs == nil || request.tabs?.contains(board.rawValue) == true {
+            TimerOverview.snapshotFixture = DebugSnapshotFixtures.timerOverview(board)
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .timer).environmentObject(viewModel)),
+                             name: board.rawValue + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        TimerOverview.snapshotFixture = timerPage
+        // Brain › Clipboard with nothing copied, one pin and two copies, and three pins and five copies, at the window's
+        // first size, as Agents' boards; the last with History drawn open. Fixtures only.
+        for (count, copies) in [(0, 0), (1, 2), (3, 5)] where request.tabs == nil || request.tabs?.contains("clipboard\(count)") == true {
+            ClipboardOverview.snapshotFixture = DebugSnapshotFixtures.clipboardOverview(pinned: count, history: copies,
+                                                                                         showsHistory: count == 3, now: Date())
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .clipboard).environmentObject(viewModel)),
+                             name: "clipboard\(count)" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+        }
+        ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Tasks at the window's first size and at a 14-inch full screen (1,512 × 982), the two widths of its list
+        // (layout-proposal D1): the list, a task opened from it, in the list's place or beside it, and the Done and
+        // Archived tabs. Fixture tasks only (`TasksManager.snapshotFile`).
+        let window = NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        let fullScreen14 = NSSize(width: 1512, height: 982)
+        let tasksBoards: [(name: String, size: NSSize, path: [TasksPage], tab: TasksListTab)] = [
+            ("tasksWindow", window, [], .active),
+            ("tasksWide", fullScreen14, [], .active),
+            ("tasksTask", window, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksWideTask", fullScreen14, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksDone", window, [], .done),
+            ("tasksArchived", window, [], .archived),
+        ]
+        for board in tasksBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            TasksSettings.snapshotPath = board.path
+            TasksSettings.snapshotTab = board.tab
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .tasks).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
+            }
+        }
+        TasksSettings.snapshotPath = []
+        TasksSettings.snapshotTab = .active
+        // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
+        // and one made in Apple Notes; at a 14-inch full screen, four with none open and the one with its image beside
+        // the list (layout-proposal D1). The switches drawn under the product are this Mac's, so the boards are run with
+        // `-enableNotes YES`, and the sync's with `-enableAppleNotesSync YES` (`notePageMirror` with
+        // `-appleNotesSyncScope "Whole account"` too): the argument domain, nothing written.
+        let notesBoards: [(name: String, size: NSSize, notes: Int, open: UUID?)] = [
+            ("notes0", window, 0, nil), ("notes4", window, 4, nil),
+            ("notePage", window, 4, DebugSnapshotFixtures.notesImageNoteID),
+            ("notePageMirror", window, 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+            ("notesWide", fullScreen14, 4, nil), ("notePageWide", fullScreen14, 4, DebugSnapshotFixtures.notesImageNoteID),
+        ]
+        for board in notesBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            var fixture = DebugSnapshotFixtures.notesOverview(notes: board.notes, now: Date())
+            fixture.openNoteID = board.open
+            NotesOverview.snapshotFixture = fixture
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .notes).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
+            }
+        }
+        NotesOverview.snapshotFixture = notesPage
+        // The floating panels at their own sizes (docs/SETTINGS.md, "The floating panels"), from fixtures: each draws
+        // what it is handed, so no board builds the clipboard manager or the LocalSend service. Not through the loop
+        // above, which adds Brain's root: a panel is a window of its own, and applies whatever root it has itself.
+        let panelCopies = DebugSnapshotFixtures.clipboardOverview(pinned: 2, history: 5, now: Date()).data
+        let clipboardPanels: [(name: String, view: ClipboardPanelContent)] = [
+            // History, its first copy under the pointer: a row's Pin, Copy and Delete show only then.
+            ("clipboardPanel", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                     historyIsEmpty: false, onClose: {},
+                                                     hoveredItemId: panelCopies.history.first?.id)),
+            ("clipboardPanelFavorites", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                              historyIsEmpty: false, onClose: {}, selectedTab: .favorites)),
+            ("clipboardPanelEmpty", ClipboardPanelContent(history: [], pinned: [], historyIsEmpty: true, onClose: {})),
+        ]
+        for board in clipboardPanels where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            for dark in [false, true] {
+                await render(AnyView(board.view), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: ClipboardPanel.preferredSize.width, into: request.directory,
+                             fixedHeight: ClipboardPanel.preferredSize.height)
+            }
+        }
+        // The LocalSend picker on its Standard backdrop: five devices, the second under the pointer and the last having
+        // turned a file down; none found; and a scan running with none yet.
+        let devices = DebugSnapshotFixtures.localSendDevices
+        let pickers: [(name: String, devices: [LocalSendDeviceInfo], isRefreshing: Bool, hovered: String?)] = [
+            ("localSendPicker", devices, false, devices[1].id),
+            ("localSendPickerEmpty", [], false, nil),
+            ("localSendPickerScanning", [], true, nil),
+        ]
+        for board in pickers where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            let picker = LocalSendDevicePickerContent(devices: board.devices, rejectedDeviceIDs: [devices[4].id],
+                                                      isRefreshing: board.isRefreshing, glassMode: .standard,
+                                                      liquidGlassVariant: .v11, onRefresh: {}, onDeviceSelected: { _ in },
+                                                      onDismiss: {}, hoveredDeviceID: board.hovered)
+            for dark in [false, true] {
+                await render(AnyView(picker), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 480, into: request.directory, fixedHeight: 400)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("selectList") == true {
+            // A popover is a window of its own and the render captures one hosting view, so the open list is
+            // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
+            for dark in [false, true] {
+                await render(AnyView(selectListBoard.settingsDesignSystem()), name: "selectList" + (dark ? "-dark" : "-light"),
+                             dark: dark, width: 560, into: request.directory, background: SettingsTheme.paper, fixedHeight: 420)
             }
         }
         if request.tabs == nil || request.tabs?.contains("notch") == true {
@@ -156,7 +382,7 @@ enum DebugSnapshots {
                 let dots = notchDotsRow.padding(12).background(fill.color).notchAppearance(scheme, fill: fill.color)
                 await render(AnyView(dots), name: "fill-\(fill.name)-dots", dark: true, width: 360,
                              into: request.directory, scale: 3)
-                let chats = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: false)
+                let chats = NotchAgentStatusView(snapshotSessions: sessions)
                     .environmentObject(viewModel)
                     .frame(height: 560)
                     .background(fill.color)
@@ -174,35 +400,63 @@ enum DebugSnapshots {
             }
         }
         if request.tabs == nil || request.tabs?.contains("recentChats") == true {
-            // The agent tab's width inside a 640 pt panel, a 420 pt minimalistic one and the 340 pt island.
+            // The agent tab's width inside a 640 pt panel.
             let sessions = DebugSnapshotFixtures.recentChats(now: Date())
             ClaudeTurnTokenFollower.shared.setSnapshotTokens(DebugSnapshotFixtures.turnTokens(for: sessions))
-            for (width, minimalistic) in [(CGFloat(612), false), (360, true), (280, true)] {
-                let view = NotchAgentStatusView(snapshotSessions: sessions, snapshotMinimalistic: minimalistic)
+            let width: CGFloat = 612
+            let view = NotchAgentStatusView(snapshotSessions: sessions)
+                .environmentObject(viewModel)
+                .frame(height: 560)
+                .background(Color.black)
+                .environment(\.colorScheme, .dark)
+            await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
+        }
+        if request.tabs == nil || request.tabs?.contains("notchTasks") == true {
+            // The timer tab's Tasks page in the narrowest notch, its rail hanging in the gap to the left:
+            // the fixture tasks at the page's own height (three rows), then tall enough for every row.
+            typealias M = TimerComposerMetrics
+            let columnWidth = M.sideColumnWidth(notchWidth: M.smallestOpenNotchWidth)
+            let inset = M.railOffset + 8
+            let pages: [(suffix: String, height: CGFloat)] = [
+                ("", M.sidePageHeight(budget: M.minimumTabBudget, style: .manualWithPresets)),
+                ("-all", M.sideTaskRowsHeight(count: 10)),
+            ]
+            for page in pages {
+                let view = TimerSideColumn(page: .tasks, select: { _ in }, tasksAvailable: true, presetsAvailable: false,
+                                           budget: page.height, pageHeight: page.height, columnWidth: columnWidth, presets: [],
+                                           activePresetID: nil, startPreset: { _ in }, taskStarted: {}, editTask: { _ in })
                     .environmentObject(viewModel)
-                    .frame(height: 560)
+                    .padding(EdgeInsets(top: 8, leading: inset, bottom: 8, trailing: 8))
                     .background(Color.black)
-                    .environment(\.colorScheme, .dark)
-                await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
+                    .notchAppearance(.dark, fill: .black)
+                await render(AnyView(view), name: "notchTasks-\(Int(M.smallestOpenNotchWidth))\(page.suffix)", dark: true,
+                             width: columnWidth + inset + 8, into: request.directory, fixedHeight: page.height + 16)
             }
         }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
-            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read.
+            // one card, two (Claude and Cursor), three (stacked), a sign-in status, a stale read, and
+            // Claude's two organizations on their own and beside the others.
             // Each sits in the 142 pt slot a notched MacBook leaves, with a red line at its floor,
             // so a card running past it shows.
             let now = Date()
             let fixtures = DebugSnapshotFixtures.usageResults(now: now)
-            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool)] = [
-                ("usage-1", [.claude], nil, false),
-                ("usage-2", [.claude, .cursor], nil, false),
-                ("usage-3", [.claude, .cursor, .codex], nil, false),
-                ("usage-status", [.claude, .cursor], .signInNeeded, false),
-                ("usage-stale", [.claude, .cursor], nil, true),
+            let boards: [(name: String, providers: [ProviderID], status: ClaudeRefreshStatus?, stale: Bool, twoOrganizations: Bool)] = [
+                ("usage-1", [.claude], nil, false, false),
+                ("usage-2", [.claude, .cursor], nil, false, false),
+                ("usage-3", [.claude, .cursor, .codex], nil, false, false),
+                ("usage-status", [.claude, .cursor], .signInNeeded, false, false),
+                ("usage-stale", [.claude, .cursor], nil, true, false),
+                ("usage-orgs-2", [.claude], nil, false, true),
+                ("usage-orgs-3", [.claude, .cursor], nil, false, true),
+                ("usage-orgs-4", [.claude, .cursor, .codex], nil, false, true),
             ]
             for notchWidth in [CGFloat(640), 690] {
                 for board in boards {
-                    let results = fixtures(board.providers, board.stale)
+                    var results = fixtures(board.providers, board.stale)
+                    if board.twoOrganizations {
+                        results = DebugSnapshotFixtures.withSecondOrganization(results, now: now)
+                    }
                     let view = NotchLLMUsageView(snapshotResults: results, snapshotRefreshStatus: board.status,
                                                  snapshotOutlooks: DebugSnapshotFixtures.usageOutlooks(now: now),
                                                  snapshotNotchWidth: notchWidth)
@@ -216,13 +470,406 @@ enum DebugSnapshots {
                 }
             }
         }
+        // Onboarding as its window hosts it: `OnboardingView` at each step, at the window's size, wearing only what the
+        // view brings, never the root the loop above adds. The Permissions step's rows and states are fixtures, so no board
+        // reads this Mac's answers and nothing is probed or asked; `onboardingPermissionsAll` is that step's whole list,
+        // which the window scrolls, under the root and the panel the window gives it. After every board that reads the
+        // permissions, so none of them shows the fixture. Clearing it does not refresh the manager, which keeps the
+        // fixture's statuses until the run quits: only the menu report follows, and a refresh would read this Mac's answers.
+        LaunchPermissionManager.snapshotStatuses = DebugSnapshotFixtures.launchPermissionStatuses
+        for step in OnboardingStep.allCases {
+            let name = "onboarding" + "\(step)".prefix(1).uppercased() + "\(step)".dropFirst()
+            guard request.tabs == nil || request.tabs?.contains(name) == true else { continue }
+            for dark in [false, true] {
+                await render(AnyView(OnboardingView(snapshotStep: step).environmentObject(viewModel)),
+                             name: name + (dark ? "-dark" : "-light"), dark: dark, width: 400, into: request.directory,
+                             fixedHeight: 600)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("onboardingPermissionsAll") == true {
+            for dark in [false, true] {
+                let list = PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
+                                               onLaunchAtLoginChoice: { _ in }, onContinue: {})
+                    .background(SettingsTheme.panel)
+                    .settingsDesignSystem()
+                await render(AnyView(list), name: "onboardingPermissionsAll" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 400, into: request.directory)
+            }
+        }
+        LaunchPermissionManager.snapshotStatuses = nil
+        // Last, so SwiftUI has long built the menu bar.
+        writeMenuReport(into: request.directory)
     }
+
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "animationEditorControls", "connectSheet",
+                                                       "tagsSheet", "urlImportSheet", "valueSheet", "timerPresetSheet",
+                                                       "newNoteSheet"]
+
+    /// The smallest window, less the sidebar and the panel's one inset.
+    private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
+
+    /// The window's first size, but for `shellWide`, which stands in for full screen because no board can
+    /// enter it, `shellWidest`, a 2,560-pt display in full screen, where Agents' product stops at its cap, and
+    /// the search boards, at the smallest window, where the sidebar has the least room.
+    private static func shellBoardSize(_ name: String) -> NSSize {
+        switch name {
+        case "shellWide":
+            return NSSize(width: 1440, height: 900)
+        case "shellWidest":
+            return NSSize(width: 2560, height: 1440)
+        case "shellSearch", "shellSearchList":
+            return NSSize(width: SettingsTheme.windowMinWidth, height: SettingsTheme.windowMinHeight)
+        default:
+            return NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        }
+    }
+
+    /// `SettingsView` applies its own root, so these do not go through the loop that adds it.
+    private static var shellBoards: [(String, AnyView)] {
+        [
+            ("shell", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            ("shellSettings", AnyView(SettingsView(snapshotTab: .general))),
+            // Agents, the default tab and the one product page: its product widens to `productMaxWidth`, its
+            // settings stay at `pageMaxWidth`.
+            ("shellWide", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            ("shellWidest", AnyView(SettingsView(snapshotTab: .agentStatus))),
+            // The only headless evidence that a deep link swaps the sidebar, scrolls and pulses. Its row
+            // is below the fold, or a dead `scrollTo` would draw the same picture. It shows the scroll
+            // and says nothing about its 0.45 s (`snapshotScrollsAtOnce`). The request waits a moment
+            // because in the app the window's content has been laid out before a link arrives, and sent
+            // during this window's first layout, a row this far down does not scroll.
+            ("shellDeepLink", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(
+                        highlightID: SettingsTab.general.highlightID(for: "Always show on non-notch displays"))
+                }
+            })),
+            // The notch's caffeinate link lands below Agents' product now, in its settings.
+            ("shellDeepLinkAgents", AnyView(SettingsView(snapshotTab: .general).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestAgentStatusNavigation(highlightID: SettingsDeepLink.smartCaffeinateHighlightID)
+                }
+            })),
+            // A query with more suggestions than fit, the field focused. A snapshot's window cannot
+            // take focus, so the board asks for the list.
+            ("shellSearch", AnyView(SettingsView(snapshotTab: .hudAndOSD, search: "color", showsSuggestions: true))),
+            // The same flat list once the field has let go: what is left when a suggestion was picked.
+            ("shellSearchList", AnyView(SettingsView(snapshotTab: .general, search: "notch"))),
+            // View › Hide Sidebar: the panel alone, with the window's inset on both sides.
+            ("shellNoSidebar", AnyView(SettingsView(snapshotTab: .agentStatus, hidesSidebar: true))),
+            // Go › Usage from Agents, through the switch point a search pick uses, with no row pulsing. The request
+            // waits a moment, as the deep link's does.
+            ("shellGo", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestPage(.llmUsage)
+                }
+            })),
+        ]
+    }
+
+    /// Which fonts this launch really has. `open -W` loses stdout, and a PNG can hide a fallback.
+    private static func writeFontReport(into directory: URL) {
+        let report = """
+        Geist: \(SettingsTheme.geistIsAvailable ? "bundled" : "missing, system font")
+        Geist Mono: \(SettingsTheme.geistMonoIsAvailable ? "bundled" : "missing, system font")
+
+        """
+        try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// The menu bar as this launch built it, since no PNG shows it: each item's title, key, action, and
+    /// whether it is off or checked. Each menu is updated first, as opening it would.
+    private static func writeMenuReport(into directory: URL) {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        var lines: [String] = []
+        func list(_ menu: NSMenu, depth: Int) {
+            menu.delegate?.menuNeedsUpdate?(menu)
+            menu.update()
+            let indent = String(repeating: "    ", count: depth)
+            for item in menu.items {
+                guard !item.isSeparatorItem else {
+                    lines.append(indent + "---")
+                    continue
+                }
+                var line = indent + item.title
+                if !item.keyEquivalent.isEmpty { line += "  " + keyEquivalent(of: item) }
+                if let action = item.action { line += "  → " + NSStringFromSelector(action) }
+                if !item.isEnabled { line += "  (off)" }
+                if item.state == .on { line += "  ✓" }
+                if item.isHidden { line += "  (hidden)" }
+                lines.append(line)
+                if let submenu = item.submenu { list(submenu, depth: depth + 1) }
+            }
+        }
+        list(mainMenu, depth: 0)
+        try? (lines.joined(separator: "\n") + "\n")
+            .write(to: directory.appendingPathComponent("menu.txt"), atomically: true, encoding: .utf8)
+    }
+
+    private static func keyEquivalent(of item: NSMenuItem) -> String {
+        let flags = item.keyEquivalentModifierMask
+        let symbols: [(NSEvent.ModifierFlags, String)] = [(.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
+        return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + item.keyEquivalent
+    }
+
+    /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
+    /// press take a pointer), and every colour and font token by name.
+    private static var designSystemBoard: some View {
+        SettingsPage {
+            SettingsSection {
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on") }
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off") }
+                Toggle(isOn: .constant(true)) { Text(verbatim: "With a label, on, disabled") }
+                    .disabled(true)
+                Toggle(isOn: .constant(false)) { Text(verbatim: "With a label, off, disabled") }
+                    .disabled(true)
+                SettingsRow(verbatim: "No label, on: the row draws the title",
+                            description: "A description under the title, and the switch on the trailing side.") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, off") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                SettingsRow(verbatim: "No label, on, disabled") {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "No label, off, disabled") {
+                    Toggle(isOn: .constant(false)) { Text(verbatim: "Hidden label") }
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Toggles")
+            }
+
+            SettingsSection {
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard") }
+                    Button(action: {}) { Text(verbatim: "Primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Destructive") }
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Standard, disabled") }
+                        .disabled(true)
+                    Button(action: {}) { Text(verbatim: "Primary, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                        .disabled(true)
+                }
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Small") }
+                    Button(action: {}) { Text(verbatim: "Small primary") }
+                        .buttonStyle(SettingsButtonStyle(.primary))
+                    Button(role: .destructive, action: {}) { Text(verbatim: "Small destructive") }
+                }
+                .controlSize(.small)
+                // Quiet: bare at rest, so these show only their labels; the fill takes a pointer.
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    Button(action: {}) { Text(verbatim: "Quiet") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                    Button(action: {}) { Text(verbatim: "Quiet, disabled") }
+                        .buttonStyle(SettingsButtonStyle(.quiet))
+                        .disabled(true)
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .accessibilityLabel(Text(verbatim: "Start timing"))
+                    Button(action: {}) {
+                        Image(systemName: "play.fill")
+                            .imageScale(.large)
+                    }
+                    .buttonStyle(SettingsButtonStyle(.quiet))
+                    .disabled(true)
+                    .accessibilityLabel(Text(verbatim: "Start timing, disabled"))
+                    // A more menu's trigger: our quiet button over a native menu.
+                    SettingsMoreMenu {
+                        Button(action: {}) { Text(verbatim: "Show Details") }
+                    }
+                }
+            } header: {
+                Text(verbatim: "Buttons")
+            }
+
+            SettingsSection {
+                LabeledContent {
+                    Text(verbatim: "A bare value")
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                } label: {
+                    Text(verbatim: "With a value")
+                }
+                LabeledContent {
+                    TextField(text: .constant("Typed text stays primary")) { Text(verbatim: "Field") }
+                        .labelsHidden()
+                        .settingsField()
+                } label: {
+                    Text(verbatim: "With a typed field")
+                }
+                LabeledContent {
+                    TextField(text: .constant("Typed, disabled")) { Text(verbatim: "Field") }
+                        .settingsField()
+                        .disabled(true)
+                } label: {
+                    Text(verbatim: "With a typed field, disabled")
+                }
+                LabeledContent {
+                    TextField(text: .constant(""), prompt: Text(verbatim: "A prompt says what to type")) { Text(verbatim: "Field") }
+                        .settingsField()
+                } label: {
+                    Text(verbatim: "With an empty field")
+                }
+                DisclosureGroup(isExpanded: .constant(true)) {
+                    Toggle(isOn: .constant(true)) { Text(verbatim: "A row inside") }
+                    LabeledContent {
+                        Text(verbatim: "Another row").foregroundStyle(.secondary).textSelection(.enabled)
+                    } label: {
+                        Text(verbatim: "With a value")
+                    }
+                } label: {
+                    Text(verbatim: "A disclosure, open")
+                }
+                DisclosureGroup(isExpanded: .constant(false)) {
+                    Text(verbatim: "Never shown")
+                } label: {
+                    Text(verbatim: "A disclosure, closed")
+                }
+            } header: {
+                Text(verbatim: "Rows")
+            }
+
+            SettingsSection {
+                SettingsRow(verbatim: "A popover select", description: "Our list opens from it; the button shows the value.") {
+                    SettingsSelect("A popover select", selection: .constant(1),
+                                   choices: [0: "Off", 1: "After 3 minutes", 2: "After 10 minutes"])
+                }
+                SettingsRow(verbatim: "A popover select, disabled") {
+                    SettingsSelect("A popover select, disabled", selection: .constant(1),
+                                   choices: [0: "Off", 1: "After 3 minutes", 2: "After 10 minutes"])
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "With icons") {
+                    SettingsSelect("With icons", selection: .constant("terminal"), options: ["terminal", "folder", "safari"],
+                                   optionTitle: { $0.capitalized }) { Image(systemName: $0) }
+                }
+                SettingsRow(verbatim: "A saved choice no longer offered", description: "It shows its own title.") {
+                    SettingsSelect("A saved choice no longer offered", selection: .constant("Studio Display"),
+                                   options: ["Built-in Retina Display", "LG UltraFine"], optionTitle: { $0 })
+                }
+                SettingsRow(verbatim: "A literal choice no longer offered", description: "It has no title, so a dash.") {
+                    SettingsSelect("A literal choice no longer offered", selection: .constant(7), choices: [3: "3 items", 5: "5 items"])
+                }
+                SettingsRow(verbatim: "Two segments") {
+                    SettingsSelect("Two segments", selection: .constant("°C"), options: ["°C", "°F"], optionTitle: { $0 },
+                                   style: .segmented)
+                }
+                SettingsRow(verbatim: "Three segments") {
+                    SettingsSelect("Three segments", selection: .constant("Standard"), options: ["Standard", "Custom Liquid", "Classic"],
+                                   optionTitle: { $0 }, style: .segmented)
+                }
+                SettingsRow(verbatim: "Two segments, disabled") {
+                    SettingsSelect("Two segments, disabled", selection: .constant("°F"), options: ["°C", "°F"], optionTitle: { $0 },
+                                   style: .segmented)
+                }
+                .disabled(true)
+                SettingsRow(verbatim: "Three segments, disabled") {
+                    SettingsSelect("Three segments, disabled", selection: .constant("Custom Liquid"),
+                                   options: ["Standard", "Custom Liquid", "Classic"], optionTitle: { $0 }, style: .segmented)
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Choices")
+            }
+
+            SettingsSection {
+                SettingsSliderRow(verbatim: "A stepped slider", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                SettingsSliderRow(verbatim: "An unstepped slider", value: .constant(0.73), in: 0...1,
+                                  valueText: Text(verbatim: "73%"))
+                SettingsSliderRow(verbatim: "A slider, disabled", value: .constant(0.4), in: 0...1, step: 0.1,
+                                  valueText: Text(verbatim: "0.4"))
+                    .disabled(true)
+                SettingsStepperRow(verbatim: "A stepper", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                SettingsStepperRow(verbatim: "A stepper at its minimum", value: .constant(0), in: 0...10,
+                                   valueText: Text(verbatim: "0"))
+                SettingsStepperRow(verbatim: "A stepper, disabled", value: .constant(5), in: 0...10, valueText: Text(verbatim: "5"))
+                    .disabled(true)
+                SettingsRow(verbatim: "A field in a row") {
+                    TextField(text: .constant("Typed text")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A secure field, empty") {
+                    SecureField(text: .constant(""), prompt: Text(verbatim: "A prompt says what to type")) { Text(verbatim: "Secret") }
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A vertical field") {
+                    TextField(text: .constant("A long value wraps onto the next line instead of running out of the field, as a cookie does"),
+                              axis: .vertical) { Text(verbatim: "Field") }
+                        .lineLimit(2...4)
+                        .settingsField()
+                }
+                SettingsRow(verbatim: "A field, disabled") {
+                    TextField(text: .constant("Typed, disabled")) { Text(verbatim: "Field") }
+                        .settingsField()
+                }
+                .disabled(true)
+            } header: {
+                Text(verbatim: "Values")
+            }
+
+            SettingsSection {
+                ForEach(designSystemColors, id: \.name) { swatch in
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                            .fill(swatch.color)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                                    .strokeBorder(SettingsTheme.line)
+                            }
+                            .frame(width: 44, height: 22)
+                        Text(verbatim: swatch.name)
+                            .foregroundStyle(SettingsTheme.ink)
+                    }
+                }
+            } header: {
+                Text(verbatim: "Colours")
+            }
+
+            SettingsSection {
+                ForEach(designSystemFonts, id: \.name) { sample in
+                    Text(verbatim: "\(sample.name): Watch your agents")
+                        .font(sample.font)
+                }
+            } header: {
+                Text(verbatim: "Fonts")
+            }
+        }
+    }
+
+    private static let designSystemColors: [(name: String, color: Color)] = [
+        ("paper", SettingsTheme.paper), ("panel", SettingsTheme.panel), ("card", SettingsTheme.card),
+        ("selection", SettingsTheme.selection), ("hover", SettingsTheme.hover), ("line", SettingsTheme.line),
+        ("ink", SettingsTheme.ink), ("inkSecondary", SettingsTheme.inkSecondary),
+        ("accent", SettingsTheme.accent), ("accentStrong", SettingsTheme.accentStrong),
+        ("controlOff", SettingsTheme.controlOff), ("knob", SettingsTheme.knob),
+        ("onPrimary", SettingsTheme.onPrimary), ("destructive", SettingsTheme.destructive),
+        ("raised", SettingsTheme.raised), ("success", SettingsTheme.success),
+    ]
+
+    private static let designSystemFonts: [(name: String, font: Font)] = [
+        ("pageTitle", SettingsTheme.pageTitle), ("cardTitle", SettingsTheme.cardTitle), ("sheetTitle", SettingsTheme.sheetTitle),
+        ("body", SettingsTheme.body),
+        ("bodyStrong", SettingsTheme.bodyStrong),
+        ("sectionTitle", SettingsTheme.sectionTitle), ("description", SettingsTheme.description), ("caption", SettingsTheme.caption), ("micro", SettingsTheme.micro),
+        ("mono", SettingsTheme.mono),
+    ]
 
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.
     private static var componentsBoard: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Toggle(isOn: .constant(true)) {
                     Text(verbatim: "Native two-Text label")
                     Text(verbatim: "The second Text of a native label, for comparison with the description below.")
@@ -248,6 +895,12 @@ enum DebugSnapshots {
                         Text(verbatim: "Glyph only").tag(1)
                     } label: { Text(verbatim: "High-severity alerts in the notch") }
                 }
+                // The same row with ours. The row hides its slot's labels: the button's value must still show.
+                SettingsRow(verbatim: "High-severity alerts in the notch, ours",
+                            description: "A shield pill stays beside the traffic light until you acknowledge the finding. Click it to open the panel.") {
+                    SettingsSelect("High-severity alerts in the notch", selection: .constant(0),
+                                   choices: [0: "Until acknowledged", 1: "Glyph only"])
+                }
                 Picker(selection: .constant(0)) {
                     Text(verbatim: "Until acknowledged").tag(0)
                 } label: { Text(verbatim: "Native picker") }
@@ -260,15 +913,15 @@ enum DebugSnapshots {
             // The content standard: every row in this section is built from SettingsMetrics, so
             // the label column, the slider bars and the readouts must line up down the whole
             // section — that is what this board is for.
-            Section {
+            SettingsSection {
                 SettingsSliderRow(verbatim: "Minimum hover duration",
                                   description: "How long the pointer must rest on the notch before it opens.",
                                   value: .constant(1.0), in: 0...2, step: 0.1,
                                   valueText: Text(verbatim: "1.0s"))
                 SettingsSliderRow(verbatim: "Closed notch / pill width", value: .constant(220.0),
                                   in: 120...400, step: 5, valueText: Text(verbatim: "220 px"))
-                SettingsSliderRow(title: Text(verbatim: "Width: 36px"), value: .constant(36.0),
-                                  in: 24...80, step: 2, valueText: nil)
+                SettingsSliderRow(verbatim: "Width", value: .constant(36.0),
+                                  in: 24...80, step: 2, valueText: Text(verbatim: "36 px"))
                 SettingsStepperRow(verbatim: "Volume step", value: .constant(6),
                                    in: 1...25, valueText: Text(verbatim: "6%"))
                 SettingsNoteRow("Enable media panel blur",
@@ -285,7 +938,7 @@ enum DebugSnapshots {
                 }
             }
 
-            Section {
+            SettingsSection {
                 SettingsActionRow("Scan now", description: "Last run by Kannu Sep 11, 2026 at 4:54 AM") {
                     Button(action: {}) { Text(verbatim: "Scan now") }
                 }
@@ -307,7 +960,7 @@ enum DebugSnapshots {
                 Text(verbatim: "Actions and values")
             }
 
-            Section {
+            SettingsSection {
                 ForEach(
                     Array(SecurityFindingsStore.buildGroupRanking(
                         findings: DebugSnapshotFixtures.findings,
@@ -322,6 +975,26 @@ enum DebugSnapshots {
                 Text(verbatim: "Security findings")
             }
         }
+    }
+
+    /// The open list, as its popover holds it: eight options with the third chosen, and 24 tags with "pla" typed,
+    /// whose choice is far down the matches, so the list has scrolled to it.
+    private static var selectListBoard: some View {
+        let tags = ["docs", "planning", "urgent", "display", "backend", "platform", "replay", "frontend", "playback", "explain",
+                    "release", "placeholder", "design", "template", "playground", "research", "airplane", "plaintext", "bugfix",
+                    "workplace", "plans-q4", "infra", "q4-plan", "ui-playtest"]
+        return HStack(alignment: .top, spacing: 24) {
+            SettingsSelectList(title: Text(verbatim: "Hide red light after"), selection: .constant("10 seconds"),
+                               options: ["3 seconds", "5 seconds", "10 seconds", "15 seconds", "30 seconds", "1 minute",
+                                         "2 minutes", "5 minutes"],
+                               optionTitle: { $0 }, icon: { _ in EmptyView() }, close: {})
+                .fixedSize()
+            SettingsSelectList(title: Text(verbatim: "Tag"), selection: .constant("airplane"), options: tags,
+                               optionTitle: { $0 }, query: "pla", icon: { _ in EmptyView() }, close: {})
+                .fixedSize()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// The live and preview dots in every state, on black, for a pixel-level before/after.
@@ -347,17 +1020,32 @@ enum DebugSnapshots {
         }
     }
 
+    /// A page below Brain › Tasks' first, as the tab draws it: the back row bare on the panel, the page under it.
+    private static func tasksPageBelowTheFirst(_ page: some View) -> AnyView {
+        AnyView(SettingsPage {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                TasksBackRow(parent: String(localized: "Tasks")) {}
+                VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+                    page
+                }
+            }
+        })
+    }
+
     /// What the Tasks boards' pages need from the tab: sheets and navigation go nowhere.
     private static func tasksBoardContext() -> TasksPageContext {
         TasksPageContext(sheet: .constant(nil), pendingDelete: .constant(nil), confirmsDisconnect: .constant(nil),
                          open: { _ in }, connect: { _ in })
     }
 
+    /// `fixedHeight` skips the growing below: a board of the whole window has more than one scroll
+    /// view, and the first it finds is the sidebar's.
     private static func render(_ view: AnyView, name: String, dark: Bool, width: CGFloat, into directory: URL,
-                               scale: CGFloat = 2) async {
-        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width)
-            .background(Color(nsColor: .windowBackgroundColor))))
-        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: 900),
+                               scale: CGFloat = 2, background: Color = Color(nsColor: .windowBackgroundColor),
+                               fixedHeight: CGFloat? = nil) async {
+        let hosting = NSHostingView(rootView: AnyView(view.frame(width: width, height: fixedHeight)
+            .background(background)))
+        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: width, height: fixedHeight ?? 900),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.ignoresMouseEvents = true
@@ -366,12 +1054,13 @@ enum DebugSnapshots {
         window.orderFrontRegardless()
         hosting.layoutSubtreeIfNeeded()
         try? await Task.sleep(for: .milliseconds(700))
-        // A grouped Form is a scroll view that only builds the rows it shows: grow the window to the
-        // whole document so every row is laid out and drawn.
-        for _ in 0..<4 {
+        // A page is a scroll view, which draws only what it shows: grow the window to the whole document so
+        // every row is drawn.
+        for _ in 0..<(fixedHeight == nil ? 4 : 0) {
             let target: CGFloat
-            if let document = firstScrollView(in: hosting)?.documentView {
-                target = min(12_000, max(200, document.frame.height))
+            if let scroll = firstScrollView(in: hosting), let document = scroll.documentView {
+                // Plus what sits outside the scroller, or a page's header clips its last rows.
+                target = min(12_000, max(200, document.frame.height + hosting.bounds.height - scroll.frame.height))
             } else {
                 target = min(12_000, max(120, hosting.fittingSize.height))
             }
@@ -443,7 +1132,7 @@ enum DebugSnapshotFixtures {
     static let localTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F02")!
 
     /// About a dozen tasks for the Tasks boards (`TasksManager.snapshotFile`): estimates, tags with
-    /// colours, an overdue reminder, one past its estimate, a Jira task with its own estimate, a
+    /// colours (one task has two, for a notch row's "+1"), an overdue reminder, one past its estimate, a Jira task with its own estimate, a
     /// GitLab issue and merge request, one done and one archived. Never written anywhere.
     static func tasksFile(now: Date) -> TasksFile {
         func segment(_ minutes: Int, endingHoursAgo hours: Double = 2) -> WorkSegment {
@@ -463,7 +1152,7 @@ enum DebugSnapshotFixtures {
             TaskItem(title: "Prepare the sprint review", localEstimateSeconds: 3600,
                      scheduledAt: now.addingTimeInterval(-26 * 3600)),
             TaskItem(title: "Fix the flaky timer test", localEstimateSeconds: 30 * 60, segments: [segment(45)],
-                     tags: ["urgent"]),
+                     tags: ["urgent", "timer"]),
             TaskItem(title: "Reply to the design feedback"),
             TaskItem(id: jiraTaskID, source: .jira, title: "Customer API: org-scoped file upload keys",
                      remote: remote("ABC-412", estimate: 2 * 3600, status: "In Progress")),
@@ -510,19 +1199,39 @@ enum DebugSnapshotFixtures {
             var cursor = UsageSnapshot()
             cursor.accountTier = "Pro"
             cursor.weekLimit = limit(62, now.addingTimeInterval(9 * 86_400))
-            cursor.today = UsageTotals(inputTokens: 1_100_000, outputTokens: 120_000, costUSD: 3.4)
-            cursor.week = UsageTotals(inputTokens: 7_400_000, outputTokens: 680_000, costUSD: 21.8)
+            cursor.today = UsageTotals(uncachedInputTokens: 1_100_000, cacheReadTokens: 9_800_000, outputTokens: 120_000, costUSD: 3.4)
+            cursor.week = UsageTotals(uncachedInputTokens: 7_400_000, cacheReadTokens: 64_000_000, outputTokens: 680_000, costUSD: 21.8)
             cursor.onDemandSpendUSD = 3.4
             var codex = UsageSnapshot()
             codex.accountTier = "Plus"
             codex.billedCostOnly = true
             codex.sessionLimit = limit(20, now.addingTimeInterval(2 * 3600))
             codex.weekLimit = limit(55, now.addingTimeInterval(3 * 86_400))
-            codex.today = UsageTotals(inputTokens: 300_000, outputTokens: 40_000)
-            codex.week = UsageTotals(inputTokens: 2_100_000, outputTokens: 260_000)
+            codex.today = UsageTotals(uncachedInputTokens: 300_000, cacheReadTokens: 2_700_000, outputTokens: 40_000)
+            codex.week = UsageTotals(uncachedInputTokens: 2_100_000, cacheReadTokens: 19_000_000, outputTokens: 260_000)
             let all: [ProviderID: UsageResult] = [.claude: .success(claude), .cursor: .success(cursor), .codex: .success(codex)]
             return all.filter { providers.contains($0.key) }
         }
+    }
+
+    /// Claude Code on Team beside Claude Desktop's Max: Claude's second card, as
+    /// `ClaudeUsageProvider` builds it.
+    static func withSecondOrganization(_ results: [ProviderID: UsageResult], now: Date) -> [ProviderID: UsageResult] {
+        guard case .success(var claude)? = results[.claude] else { return results }
+        let observed = now.addingTimeInterval(-120)
+        var team = UsageSnapshot()
+        team.accountTier = "Team"
+        team.readingScope = "team"
+        team.billedCostOnly = true
+        team.limitsOnly = true
+        team.sessionLimit = UsageLimit(used: 31, limit: 100, resetsAt: now.addingTimeInterval(2 * 3600), severity: nil,
+                                       observedAt: observed)
+        team.weekLimit = UsageLimit(used: 64, limit: 100, resetsAt: now.addingTimeInterval(4 * 86_400), severity: nil,
+                                    observedAt: observed)
+        claude.extraCards = [team]
+        var results = results
+        results[.claude] = .success(claude)
+        return results
     }
 
     /// A pace that fills the 5-hour window before it resets, and a week heading for 95 %.
@@ -584,12 +1293,288 @@ enum DebugSnapshotFixtures {
         return cards
     }
 
+    /// Brain › Agents' product with no session, one or three: a Codex chat waiting, then Claude and Cursor at work,
+    /// so three sessions put "Needs you" over two recent rows. Cursor is on this "Mac" without its hook, so the install
+    /// offer shows, in the empty state for none and in Editors & hooks for three; with one, every hook is in, so that
+    /// cell shows its quiet line. A Claude window is near its limit; the findings fixture waits for review.
+    static func agentsOverview(sessions count: Int, now: Date) -> AgentsOverviewFixture {
+        let chats = recentChats(now: now)
+        let tools = [
+            AgentToolDetector.Tool(provider: "cursor", name: "Cursor", shortName: "Cursor", hook: .cursor, detected: true),
+            AgentToolDetector.Tool(provider: "claude", name: "Claude Code", shortName: "Claude Code", hook: .claude, detected: true),
+            AgentToolDetector.Tool(provider: "codex", name: "Codex", shortName: "Codex", hook: .codex, detected: true),
+            AgentToolDetector.Tool(provider: "antigravity", name: "Antigravity", shortName: "Antigravity", hook: .antigravity, detected: false),
+            AgentToolDetector.Tool(provider: "warp", name: "Warp", shortName: "Warp", hook: nil, detected: true),
+            AgentToolDetector.Tool(provider: "claudedesktop", name: "Claude Desktop", shortName: "Desktop", hook: nil, detected: true),
+        ]
+        let reading = UsageWindowReading(provider: "claude", key: "five_hour", label: "5-hour", percent: 82,
+                                         resetsAt: now.addingTimeInterval(7200), severity: nil,
+                                         observedAt: now.addingTimeInterval(-720))
+        let findings = self.findings
+        let high = findings.filter { $0.severity == .high }
+        let installed: Set<AgentHookProvider> = count == 1 ? [.claude, .codex, .cursor] : [.claude, .codex]
+        return AgentsOverviewFixture(
+            sessions: Array([chats[3], chats[0], chats[2]].prefix(count)),
+            tools: tools,
+            installedHooks: installed,
+            nearLimit: [reading],
+            security: AgentsSecuritySummary(toReview: findings.count, high: high.count, pinnedTitle: high.first?.title)
+        )
+    }
+
+    /// Brain › Security's product with no finding, one and several. None: ADR Discovery not found, so the page offers
+    /// Connect ADR, with no scan and no policy yet. One: the high unpinned server from a full scan, the next automatic
+    /// scan, and the rules board's policy. Several: all four findings with the `.env` read snoozed, so three wait and
+    /// one is acknowledged; a partial scan with two uncatalogued tools whose last Kannu run failed; and, with session
+    /// analysis on, two analyses, one of them malicious. On the main actor, as the store's grouping is.
+    @MainActor
+    static func securityOverview(findings count: Int, now: Date) -> SecurityOverviewFixture {
+        var data = SecurityPageData()
+        guard count > 0 else { return SecurityOverviewFixture(data: data, adrConnected: false, detectionEnabled: false) }
+        let all = self.findings
+        let several = count > 1
+        let snoozes = several ? [SecurityFindingSnooze(id: all[3].groupID, until: now.addingTimeInterval(86_400))] : []
+        data.groups = SecurityFindingsStore.buildGroupRanking(findings: several ? all : [all[0]], acknowledgedGroups: [:],
+                                                             legacyAcknowledged: [], snoozes: snoozes, now: now)
+        let scanned = now.addingTimeInterval(-3 * 3600)
+        data.lastScan = ADRScanRecord(date: scanned, origin: .kannu, fileName: "snapshot-fixture.json", assetCount: 27,
+                                      findingCount: 1, reviewCount: several ? 2 : 0, coverageComplete: !several,
+                                      coverageGaps: several ? 4 : 0, catalogVersion: "2026.08.22", schemaVersion: "1.0")
+        data.reviewCount = several ? 2 : 0
+        data.lastKannuScanAt = scanned
+        data.automaticScansActive = true
+        // A failed run brings the next one forward, an hour out; otherwise a day after the last.
+        data.nextAutomaticScanAt = several ? now.addingTimeInterval(3600) : scanned.addingTimeInterval(24 * 3600)
+        data.consecutiveScanFailures = several ? 1 : 0
+        data.policyStatus = .success(agentPolicy)
+        if several {
+            data.analyses = [
+                ADRSessionAnalysis(conversationID: "fixture-analysis-1", chatName: "Research the API",
+                                   date: now.addingTimeInterval(-5400), isMalicious: true, confidence: 0.91,
+                                   tactic: "permission_abuse", explanation: "A fetched page told the agent to upload ~/.ssh.",
+                                   threatMessages: 3, totalMessages: 48, method: "reasoning", modelUsed: "claude-sonnet",
+                                   inputTokens: 41_200, outputTokens: 2_300, costUSD: 0.042, analysisSeconds: 74,
+                                   messagesAnalyzed: 48, inputCharacters: 118_000, transcriptBytes: 240_000,
+                                   triageEnabled: false, reportPath: nil),
+                ADRSessionAnalysis(conversationID: "fixture-analysis-2", chatName: "Fix the login flow",
+                                   date: now.addingTimeInterval(-26 * 3600), isMalicious: false, confidence: 0.08,
+                                   tactic: nil, explanation: "", threatMessages: 0, totalMessages: 112, method: "reasoning",
+                                   modelUsed: "claude-sonnet", inputTokens: 88_000, outputTokens: 1_900, costUSD: 0.061,
+                                   analysisSeconds: 96, messagesAnalyzed: 112, inputCharacters: 240_000,
+                                   transcriptBytes: 410_000, triageEnabled: false, reportPath: nil),
+            ]
+        }
+        return SecurityOverviewFixture(data: data, adrConnected: true, detectionEnabled: several)
+    }
+
+    /// Brain › Usage's product with no provider on, one or three. One is Claude alone, with the notch board's readings:
+    /// a Max plan at 13 % of its 5-hour window with a pace that fills it, 83 % of the week heading for 95 %, and three
+    /// per-model weeks; and the models it ran. Three adds Codex with no reading yet, and Cursor's billing cycle near its
+    /// limit with its models' cost, one of them partly unpriced. The readings are labelled as the usage store labels
+    /// them. Agent Status is on; the `usageOff` board turns it off on the fixture, never in Defaults.
+    static func usageOverview(providers count: Int, now: Date) -> UsageOverviewFixture {
+        let observed = now.addingTimeInterval(-120)
+        let fiveHourReset = now.addingTimeInterval(4 * 3600 + 15 * 60)
+        let weekReset = now.addingTimeInterval(86_400 + 8 * 3600 + 5 * 60)
+        func reading(_ provider: String, _ key: String, _ label: String, _ percent: Double, _ reset: Date) -> UsageWindowReading {
+            UsageWindowReading(provider: provider, key: key, label: label, percent: percent, resetsAt: reset, severity: nil,
+                               observedAt: observed)
+        }
+        var claude = UsageSnapshot()
+        claude.billedCostOnly = true
+        claude.models = [
+            ModelUsage(model: "claude-opus-4-1", totals: UsageTotals(uncachedInputTokens: 180_000, cacheWriteTokens: 1_960_000,
+                                                                     cacheReadTokens: 48_000_000, outputTokens: 412_000, costUSD: 61.2)),
+            ModelUsage(model: "claude-sonnet-4-5", totals: UsageTotals(uncachedInputTokens: 90_000, cacheWriteTokens: 730_000,
+                                                                       cacheReadTokens: 21_000_000, outputTokens: 160_000, costUSD: 9.4)),
+            ModelUsage(model: "claude-haiku-4-5", totals: UsageTotals(uncachedInputTokens: 21_000, cacheWriteTokens: 75_000,
+                                                                      cacheReadTokens: 1_400_000, outputTokens: 12_400, costUSD: 0.3)),
+        ]
+        var cursor = UsageSnapshot()
+        cursor.models = [
+            ModelUsage(model: "gpt-5", totals: UsageTotals(uncachedInputTokens: 1_300_000, cacheReadTokens: 9_800_000,
+                                                           outputTokens: 96_000, costUSD: 9.1)),
+            // Some of its events had no price, so its cost reads "$4.80+".
+            ModelUsage(model: "claude-4.5-sonnet", totals: UsageTotals(uncachedInputTokens: 640_000, cacheReadTokens: 4_100_000,
+                                                                       outputTokens: 52_000, costUSD: 4.8, hasUnpricedModel: true)),
+        ]
+        var readings = [
+            reading("claude", "five_hour", "Max 5-hour", 13, fiveHourReset),
+            reading("claude", "seven_day", "Max weekly", 83, weekReset),
+            reading("claude", "model_scoped:Fable", "Max Fable weekly", 41, weekReset),
+            reading("claude", "model_scoped:Opus", "Max Opus weekly", 12, weekReset),
+            reading("claude", "model_scoped:Sonnet", "Max Sonnet weekly", 5, weekReset),
+        ]
+        var results: [ProviderID: UsageResult] = [.claude: .success(claude)]
+        let providers: [ProviderID]
+        switch count {
+        case 0:
+            return UsageOverviewFixture(providers: [], data: UsageOverviewData())
+        case 1:
+            providers = [.claude]
+        default:
+            providers = [.claude, .codex, .cursor]
+            readings.append(reading("cursor", "week", "billing cycle", 96, now.addingTimeInterval(9 * 86_400)))
+            results[.cursor] = .success(cursor)
+        }
+        return UsageOverviewFixture(providers: providers,
+                                    data: UsageOverviewData(readings: readings, outlooks: usageOutlooks(now: now),
+                                                            models: UsageOverview.modelRows(results)))
+    }
+
+    /// Brain › Timer's boards: no timer, Focus running from its preset with 18:42 left, the fixture task's timer paused
+    /// 2:15 into overtime, a Clock-app timer the manager mirrors, and the timer off.
+    enum TimerBoard: String, CaseIterable {
+        case idle = "timer0", running = "timer1", overtime = "timerOver", clock = "timerClock", off = "timerOff"
+    }
+
+    /// The default presets' names, lengths and colours, with fixed ids, so the running tile is the same on every run.
+    static let timerPresets = [
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000001") ?? UUID(), name: "Focus", duration: 25 * 60, color: .orange),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000002") ?? UUID(), name: "Break", duration: 5 * 60, color: .green),
+        TimerPreset(id: UUID(uuidString: "6F1A3C2E-0000-4000-8000-000000000003") ?? UUID(), name: "Deep Work", duration: 45 * 60, color: .purple),
+    ]
+
+    /// What `TimerOverview` shows on one of `TimerBoard`'s boards, built as the manager's copy would be.
+    static func timerOverview(_ board: TimerBoard) -> TimerOverviewFixture {
+        var data = TimerPageData()
+        switch board {
+        case .idle:
+            break
+        case .running:
+            let focus = timerPresets[0]
+            data.isActive = true
+            data.name = focus.name
+            data.time = "18:42"
+            data.length = "25:00"
+            data.remaining = 18 * 60 + 42
+            data.fraction = (focus.duration - data.remaining) / focus.duration
+            data.accent = focus.color
+            data.presetID = focus.id
+        case .overtime:
+            data.isActive = true
+            data.name = "Fix the flaky timer test"
+            data.time = "-2:15"
+            data.length = "30:00"
+            data.remaining = -135
+            data.fraction = 1
+            data.isPaused = true
+            data.isOvertime = true
+            data.accent = .pink
+            data.taskKey = "ds-vendors #4264"
+        case .clock:
+            data.isActive = true
+            data.name = "Tea"
+            data.time = "3:20"
+            data.length = "5:00"
+            data.remaining = 200
+            data.fraction = 100.0 / 300
+            data.isMirrored = true
+        case .off:
+            return TimerOverviewFixture(data: data, presets: timerPresets, timerOn: false)
+        }
+        return TimerOverviewFixture(data: data, presets: timerPresets)
+    }
+
+    /// Brain › Clipboard's product, from made-up copies, none of this Mac's: up to three pins (an ssh line, a link, a
+    /// file), oldest pin first, and up to five copies in History, newest first (text, a link, an image, rich text, and a
+    /// long line cut as the manager cuts it). The manager is monitoring.
+    static func clipboardOverview(pinned: Int, history: Int, showsHistory: Bool = false, now: Date) -> ClipboardOverviewFixture {
+        let pins: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "ssh deploy@staging.example.com", 9 * 86_400),
+            (.url, "https://developer.apple.com/documentation/swiftui", 5 * 86_400),
+            (.file, "file:///Users/example/Documents/Release%20notes.pdf", 2 * 86_400),
+        ]
+        let copies: [(ClipboardItemType, String, TimeInterval)] = [
+            (.text, "Thanks, that fixes it. I'll merge it after lunch.", 180),
+            (.url, "https://example.com/docs/getting-started", 1_500),
+            (.image, "Image (48 KB)", 3_600),
+            (.rtf, "Agenda: the release checklist, then the notch review", 10_800),
+            (.text, "SELECT count(*) FROM sessions WHERE ended_at IS NULL;", 93_600),
+        ]
+        var data = ClipboardPageData()
+        data.pinned = pins.prefix(pinned).map { type, content, ago in
+            var item = ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+            item.isPinned = true
+            return item
+        }
+        data.history = copies.prefix(history).map { type, content, ago in
+            ClipboardItem(snapshot: content, type: type, copiedAt: now.addingTimeInterval(-ago))
+        }
+        data.isMonitoring = true
+        return ClipboardOverviewFixture(data: data, showsHistory: showsHistory)
+    }
+
+    /// The note `notesOverview` gives an image, drawn here, never read from a file.
+    static let notesImageNoteID = UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E02")!
+
+    /// Brain › Notes' product with no note or four, made up and built in memory: no note of this Mac's, no file read or
+    /// written, nothing saved. Four is a pinned release checklist, groceries edited half an hour ago with an image, a
+    /// trip plan made in Apple Notes (read-only while sync reads the whole account) and an older note with no text.
+    /// The sync's switch and scope are this Mac's, read as the board draws (the boards set them through the argument
+    /// domain, nothing written), so the product agrees with the settings drawn under it; it last synced 12 minutes ago.
+    static func notesOverview(notes count: Int, now: Date) -> NotesOverviewFixture {
+        func note(_ id: String, _ title: String, _ content: String, hoursAgo: Double, color: Int, pinned: Bool = false,
+                  madeInAppleNotes: Bool = false) -> NoteItem {
+            NoteItem(id: UUID(uuidString: id)!, title: title, content: content,
+                     creationDate: now.addingTimeInterval(-(hoursAgo + 48) * 3600),
+                     modificationDate: now.addingTimeInterval(-hoursAgo * 3600), colorIndex: color, isPinned: pinned,
+                     appleNotesId: madeInAppleNotes ? "x-coredata://fixture/ICNote/p1" : nil,
+                     madeInAppleNotes: madeInAppleNotes)
+        }
+        let notes = [
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E01", "Release checklist",
+                 "Tag the build\nUpload the disk image\nPost the release notes", hoursAgo: 30, color: 1, pinned: true),
+            note(notesImageNoteID.uuidString, "Groceries", "Milk, eggs and bread\nCoffee beans\nSomething for dinner",
+                 hoursAgo: 0.5, color: 0),
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03", "Trip plan", "Train at 9:40\nHotel near the station",
+                 hoursAgo: 5, color: 3, madeInAppleNotes: true),
+            note("4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E04", "Ideas for the onboarding", "", hoursAgo: 52, color: 4),
+        ]
+        var data = NotesPageData()
+        data.notes = NotesPageData.ordered(Array(notes.prefix(count)))
+        data.syncOn = Defaults[.enableAppleNotesSync]
+        data.scope = Defaults[.appleNotesSyncScope]
+        data.lastSync = data.syncOn ? now.addingTimeInterval(-12 * 60) : nil
+        let image = NSImage(size: NSSize(width: 480, height: 270), flipped: false) { rect in
+            NSColor.systemTeal.setFill()
+            rect.fill()
+            NSColor.white.withAlphaComponent(0.55).setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 170, dy: 65)).fill()
+            return true
+        }
+        return NotesOverviewFixture(data: data, images: [notesImageNoteID: image])
+    }
+
+    /// Onboarding's Permissions step: the first rows unanswered, as a fresh install meets them, then every other state a
+    /// row can show but `.waiting`, whose request turns every other Allow off.
+    static let launchPermissionStatuses: [LaunchPermission: LaunchPermissionStatus] = [
+        .accessibility: .notAsked, .bluetooth: .notAsked, .downloads: .deferred, .location: .allowed,
+        .musicAutomation: .askedWhenAppOpens, .notesAutomation: .notAllowed, .warp: .notAsked,
+    ]
+
+    /// The LocalSend picker's made-up devices, none of this network's, on documentation addresses (192.0.2.0/24): a phone,
+    /// a laptop, an Android phone, a Windows desktop and a tablet.
+    static let localSendDevices: [LocalSendDeviceInfo] = [
+        LocalSendDeviceInfo(id: "fixture-iphone", alias: "Ada's iPhone", ip: "192.0.2.10", port: 53317, https: true,
+                            model: "iPhone 15"),
+        LocalSendDeviceInfo(id: "fixture-macbook", alias: "Studio MacBook", ip: "192.0.2.11", port: 53317, https: true,
+                            model: "MacBook Pro"),
+        LocalSendDeviceInfo(id: "fixture-pixel", alias: "Pixel 8", ip: "192.0.2.12", port: 53317, https: true, model: nil),
+        LocalSendDeviceInfo(id: "fixture-desktop", alias: "Office desktop", ip: "192.0.2.13", port: 53317, https: true,
+                            model: "Windows"),
+        LocalSendDeviceInfo(id: "fixture-ipad", alias: "Living room iPad", ip: "192.0.2.14", port: 53317, https: true,
+                            model: "iPad Air"),
+    ]
+
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
-        let totals: [String: (input: Int, output: Int)] = ["live": (1_400_000, 45_000), "ended": (820_000, 22_300)]
+        let totals: [String: (newInput: Int, output: Int, context: Int)] = ["live": (83_000, 40_000, 458_000),
+                                                                            "ended": (21_400, 22_300, 96_000)]
         var out: [String: TurnTokens] = [:]
         for session in sessions {
             guard let total = totals[session.conversationID], let turn = session.turn, let offset = turn.transcriptOffset else { continue }
-            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, input: total.input, output: total.output)
+            out[session.conversationID] = TurnTokens(startedAt: turn.startedAt, startOffset: offset, newInput: total.newInput,
+                                                     output: total.output, context: total.context)
         }
         return out
     }
@@ -616,6 +1601,37 @@ enum DebugSnapshotFixtures {
                          chatName: "A chat with a very long title that goes on and on to test wrapping in the row",
                          projectName: "app", cwd: "/Users/example/code/app"),
         ]
+    }
+}
+
+extension ClipboardItem {
+    /// DEBUG snapshot boards only: a made-up copy as the history would hold it, copied at `copiedAt`, its preview made as
+    /// the manager makes it. It writes no file, where the manager saves an image's: a board shows an image's line, never
+    /// its picture.
+    init(snapshot content: String, type: ClipboardItemType, copiedAt: Date) {
+        id = UUID()
+        self.type = type
+        timestamp = copiedAt
+        imageFileName = nil
+        rtfData = nil
+        switch type {
+        case .file:
+            stringData = nil
+            fileURLs = [content]
+            preview = URL(string: content)?.lastPathComponent ?? content
+        case .image:
+            stringData = nil
+            fileURLs = nil
+            preview = content
+        case .rtf:
+            stringData = content
+            fileURLs = nil
+            preview = String(content.prefix(50))
+        case .text, .url, .unknown:
+            stringData = content
+            fileURLs = nil
+            preview = ClipboardItem.generatePreview(stringData: content, type: type)
+        }
     }
 }
 #endif

@@ -89,7 +89,7 @@ class FullscreenMediaDetector: ObservableObject {
         Defaults.publisher(.enableFullscreenMediaDetection, options: [])
             .sink { [weak self] _ in Task { await self?.handleChange() } }
             .store(in: &cancellables)
-        // Granting Accessibility (Brain › Media's row) moves the verdict from the menu-bar
+        // Granting Accessibility (Brain › Settings › Media's row) moves the verdict from the menu-bar
         // fallback to `AXFullScreen`, and revoking it moves it back: neither is a space, playback
         // or setting change, so a fallback misreading used to stand until one came along.
         Task { @MainActor [weak self] in
@@ -154,8 +154,11 @@ class FullscreenMediaDetector: ObservableObject {
         var newStatus: [String: Bool] = [:]
         for name in names {
             newStatus[name] = apps.contains { app in
+                // Brain in full screen must not hide its own app's notch. By pid, since Debug and
+                // Release have different bundle ids.
                 guard app.screen.localizedName == name,
-                      app.bundleIdentifier != "com.apple.finder" else { return false }
+                      app.bundleIdentifier != "com.apple.finder",
+                      app.processId != ProcessInfo.processInfo.processIdentifier else { return false }
 
                 // The notch window stays on display in every fullscreen space (it sits in the
                 // max-level notch space on every hide option). Hiding is the views' job: this

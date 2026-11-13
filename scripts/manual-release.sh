@@ -143,8 +143,12 @@ DMG_PATH="$ROOT_DIR/build/${DMG_NAME}"
 mkdir -p "$ROOT_DIR/build"
 
 echo "Creating DMG: $DMG_PATH"
-chmod +x "$ROOT_DIR/scripts/create-dmg.sh"
-"$ROOT_DIR/scripts/create-dmg.sh" "$APP_PATH" "$DMG_PATH"
+chmod +x "$ROOT_DIR/scripts/create-dmg.sh" "$ROOT_DIR/scripts/install-dmgbuild.sh"
+# dmgbuild is build-time only: a throwaway venv, gone when this script exits.
+DMGBUILD_VENV="$(mktemp -d)"
+trap 'rm -rf "$DMGBUILD_VENV"' EXIT
+"$ROOT_DIR/scripts/install-dmgbuild.sh" "$DMGBUILD_VENV"
+PATH="$DMGBUILD_VENV/bin:$PATH" "$ROOT_DIR/scripts/create-dmg.sh" "$APP_PATH" "$DMG_PATH"
 
 export SPARKLE_EDDSA_PRIVATE_KEY
 SPARKLE_EDDSA_PRIVATE_KEY="$(cat "$SPARKLE_KEY")"

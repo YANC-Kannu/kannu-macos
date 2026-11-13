@@ -20,29 +20,32 @@ import AppKit
 import Defaults
 import SwiftUI
 
-/// Brain › Tasks, as a tree: Source › Project › Task. The overview lists where tasks come from —
-/// Local tasks, Jira Cloud, GitLab — each with how many it holds and a › to its page, then All
-/// tasks, Time to log, Interrupted sessions and the Tasks options. A source's page holds its
-/// connection, then its projects (or its tasks, with one project or none); a project's page its
-/// tasks; a task's page everything about it (`TaskDetailPage`). All tasks is every source in one
-/// order, with Find and the filters (`AllTasksPage`).
+/// Brain › Tasks, a product page (docs/SETTINGS.md, "Product pages"): the list leads, with what needs you above it
+/// (`TasksOverview`), and the settings follow: the Tasks switches, then where tasks come from — Local tasks, Jira
+/// Cloud, GitLab and the rest, each with how many it holds and a › to its page — and the tags' colours. Below the first
+/// page, a source's page holds its connection, then its projects (or its tasks, with one project or none); a project's
+/// page its tasks; a task's page everything about it (`TaskDetailPage`).
 ///
-/// Brain has no navigation stack, so the tree is an in-tab view swap on `path`: empty is the
-/// overview, opening a page appends it, and the back row atop every page goes up one level and
-/// names where it goes ("‹ GitLab"); going back scrolls to the row that was opened. Search lands on
-/// the overview's rows (the Advanced precedent, docs/SETTINGS.md), so any Tasks search or deep link
-/// returns to the overview — except `SettingsDeepLink.tasksListOpenID`, which opens All tasks
-/// ("Show all in Brain", a reminder's click).
+/// Brain has no navigation stack, so going in is an in-tab view swap on `path`: empty is the first page, opening a page
+/// appends it, and the back row atop every page goes up one level and names where it goes ("‹ GitLab"); going back
+/// scrolls to the row that was opened. A task opened from the list is `[.task(id)]`, and while the panel holds the list
+/// and a task's page side by side (`ListDetailLayout`) that path is drawn with the page beside the list instead of in
+/// its place (layout-proposal D1). One path, drawn two ways, so a resize converts nothing. Search lands on the first
+/// page's rows (docs/SETTINGS.md, "Section rules"), so any Tasks search or deep link returns there, at both widths.
 ///
-/// Built only from the `SettingsComponents` shapes (docs/SETTINGS.md). Task titles are the user's
-/// own text and render verbatim. With tasks off nothing here touches `TasksManager`, so the tab
-/// never reads the task file. None of the Tasks pages reads the Keychain: a sync does, off the main
-/// actor, in `TasksManager`.
+/// What the first page shows from `TasksManager` comes through one throttled copy, `TasksPageData`, followed only while
+/// Brain is on screen (docs/SETTINGS.md, "Live data"); a press calls the manager. The pages below the first follow the
+/// manager, as they always did: they edit a task or a source in place, and the manager publishes only on an edit, a
+/// timer's start or stop, or a sync, which runs only when asked (`SourceSync`). Task titles are the user's own text and
+/// render verbatim. With tasks off nothing here touches `TasksManager`, so the tab never reads the task file. None of
+/// the Tasks pages reads the Keychain: a sync does, off the main actor, in `TasksManager`.
 struct TasksSettings: View {
     @Default(.enableTasks) private var enableTasks
     @Default(.tasksDefaultSessionMinutes) private var defaultSessionMinutes
+    @ObservedObject private var visibility = BrainVisibility.shared
 
-    // On the Form, not on a row: rows of a long, lazy Form may not exist when these change.
+    // On the tab, not on a row: a row goes with its page when the path changes, and the task rows
+    // are lazy, built only while in view, so a row may not exist when these change.
     @State private var sheet: TaskSheet?
     @State private var pendingDelete: TaskItem?
     /// New Task's draft, kept between sheets so Cancel loses nothing. A box in `@State`, deliberately
@@ -52,78 +55,150 @@ struct TasksSettings: View {
     @State private var newTask = NewTaskDraft()
     /// The source whose Disconnect… was clicked, while its dialog asks what to keep.
     @State private var confirmsDisconnect: TaskSource?
-    /// The pages opened below the overview; empty is the overview.
+    /// The pages opened below the first; empty is the first page.
     @State private var path: [TasksPage] = []
-    /// All tasks' Find field. Here, not on the page, so it survives a look at a task and back.
+    /// The list's Find field, and which of its tabs it shows. Here, not on the list, so they survive a look at a task
+    /// and back.
     @State private var query = ""
+    @State private var listTab = TasksListTab.active
     /// The row to bring into view once the next page has appeared: the one that opened the page
     /// just left, or the row a search or deep link names.
     @State private var returnTo: AnyHashable?
+    /// What the first page shows from the manager, the list and the settings alike: a copy, never the manager itself.
+    /// Read as the page appears and as Brain comes back on screen, then followed at most twice a second while it is on
+    /// screen, and assigned only when it changed. Off screen it stays as it was (docs/SETTINGS.md, "Live data").
+    @State private var tasks = TasksPageData()
+    /// Whether the panel holds the list and a task's page side by side (`ListDetailLayout`). A flag, not the panel's
+    /// width, so a resize redraws the page only when it crosses.
+    @State private var showsPageBeside = false
     @ObservedObject private var highlights = SettingsHighlightCoordinator.shared
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
-    /// ⌘N, New Task, on the Form rather than on Add a task's button: that row scrolls out of a long,
-    /// lazy Form and would take a shortcut on its button with it. Only on the pages that have the
-    /// row. The filter is read when pressed, so this tab observes neither the filters nor the
-    /// manager (with Tasks off, nothing here touches `TasksManager`).
-    @ViewBuilder
-    private var newTaskShortcut: some View {
-        if enableTasks, let page = path.last, page == .allTasks || page == .source(.local) {
-            Button("New Task") {
-                guard sheet == nil, TasksManager.shared.isReady else { return }
-                sheet = .newTask(listFilter: page == .allTasks ? AllTasksPage.savedFilter(query: query) : .all)
-            }
-            .keyboardShortcut("n", modifiers: .command)
-            // Invisible but in the hierarchy, so the shortcut still resolves.
-            .opacity(0)
-            .frame(width: 0, height: 0)
-            .accessibilityHidden(true)
-        }
+    /// New Task over whatever page is open: File › New Task (⌘N), which the menu bar owns, and the header's and the
+    /// empty list's New task. It takes the filter of the list on screen (`newTaskListFilter`), so a task that list
+    /// would hide opens on its own page. The filter is read when asked, so this tab observes neither the filters nor
+    /// the manager (with Tasks off, nothing here touches `TasksManager`).
+    private func openNewTask() {
+        // Not `isReady`: the menu can ask from a Brain whose list is still loading, and the sheet keeps Add off until
+        // the list is ready.
+        guard enableTasks, sheet == nil else { return }
+        sheet = .newTask(listFilter: newTaskListFilter)
     }
 
-    private var context: TasksPageContext {
+    #if DEBUG
+    /// DEBUG snapshot boards only (`DebugSnapshots`): the path and the tab a board opens on.
+    static var snapshotPath: [TasksPage] = []
+    static var snapshotTab = TasksListTab.active
+    #endif
+
+    /// The page in the tab's place: the last of `path`, but a task opened from the list while its page fits beside it.
+    private var pageInPlace: TasksPage? {
+        guard enableTasks, let page = path.last else { return nil }
+        return taskBeside == nil ? page : nil
+    }
+
+    /// The task whose page shows beside the list: one opened from the list, while the panel holds both.
+    private var taskBeside: UUID? {
+        guard enableTasks, showsPageBeside, path.count == 1, case .task(let id)? = path.first else { return nil }
+        return id
+    }
+
+    /// The first page's: a page opened from it takes its place, or, a task, shows beside the list while there is room.
+    private var firstPageContext: TasksPageContext {
+        context { path = [$0] }
+    }
+
+    /// A page below the first's: opening goes one level in.
+    private var innerPageContext: TasksPageContext {
+        context { path.append($0) }
+    }
+
+    private func context(open: @escaping (TasksPage) -> Void) -> TasksPageContext {
         TasksPageContext(
             sheet: $sheet,
             pendingDelete: $pendingDelete,
             confirmsDisconnect: $confirmsDisconnect,
-            open: { path.append($0) },
-            connect: { sheet = .connect($0) }
+            open: open,
+            connect: { sheet = .connect($0) },
+            refresh: { copyFromStore() }
         )
     }
 
     var body: some View {
         ScrollViewReader { proxy in
-            Form {
-                if enableTasks, let page = path.last {
-                    Section {
+            if let page = pageInPlace {
+                SettingsPage {
+                    // The back row bare on the panel, a gap above the page's first card (the design review's
+                    // finding 24).
+                    VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
                         backRow(from: page)
+                        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+                            pageContent(page)
+                        }
                     }
-                    pageContent(page)
-                } else {
-                    overview
                 }
+                // The page just built has appeared: the row it should show, in view. Inside `.id(path)`, so it runs
+                // again for each page, also between two pages below the first.
+                .onAppear { scrollToReturnTarget(proxy) }
+                // A page opens at its top.
+                .id(path)
+            } else {
+                firstPageAndTask
+                    .onAppear { scrollToReturnTarget(proxy) }
             }
-            // The page just built has appeared: the row it should show, in view. After this
-            // update, so the row exists.
-            .onAppear {
-                guard let target = returnTo else { return }
-                returnTo = nil
-                DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
-            }
-            .background { newTaskShortcut }
-            // A page opens at its top.
-            .id(path)
         }
-        .navigationTitle(Text(verbatim: enableTasks ? path.last.map(Self.title) ?? Self.overviewTitle : Self.overviewTitle))
-        // Search and deep links land on the overview's rows, never inside a page; only All tasks'
-        // own deep link opens it. Settings scrolled before the page changed, so the rebuilt page
-        // scrolls to the row again. `initial`: the link may arrive before this tab is built.
+        // D1: the panel's width decides where a task's page goes, from this one measurement (`ListDetailLayout`).
+        .settingsListDetailFits($showsPageBeside)
+        .settingsPageTitle(pageInPlace.map(Self.title) ?? Self.overviewTitle)
+        .onReceive(NotificationCenter.default.publisher(for: .tasksNewTaskRequested)) { _ in
+            // The header's New task, or the empty list's (⌘N is the menu's: `pendingNewTask`, below).
+            openNewTask()
+        }
+        .onAppear {
+            #if DEBUG
+            if !Self.snapshotPath.isEmpty || Self.snapshotTab != .active {
+                path = Self.snapshotPath
+                listTab = Self.snapshotTab
+            }
+            #endif
+            guard enableTasks else { return }
+            // As the list did as it opened: macOS's answer may have changed, and Done and Archived count their days
+            // from now, not from the last sync.
+            TasksManager.shared.checkReminderPermission()
+            TasksManager.shared.refreshArchive()
+            // One read, not a subscription: the page opens on what the manager holds, and the subscription below takes
+            // over once Brain is on screen.
+            copyFromStore()
+        }
+        .task(id: visibility.isOnScreen && enableTasks) {
+            guard visibility.isOnScreen && enableTasks else { return }
+            // Back on screen: what changed while Brain was not, which `objectWillChange` will not send again.
+            copyFromStore()
+            // `objectWillChange` comes before a change; read through the run loop, the copy comes after it.
+            for await _ in TasksManager.shared.objectWillChange
+                .throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest: true)
+                .values {
+                copyFromStore()
+            }
+        }
+        // Search and deep links land on the first page's rows, never inside a page below it. `initial`: the link may
+        // arrive before this tab is built. The list's own link (the notch's "Show all in Brain", a reminder's click)
+        // shows Active. A page in the list's place closes, and the first page, built anew, scrolls to the row again,
+        // since Settings scrolled before it existed; a task's page beside the list stays, the first page being on
+        // screen beside it (the header's gear among such links).
         .onChange(of: highlights.activeHighlightID, initial: true) { _, id in
             guard let id, id.hasPrefix(highlightID("")) else { return }
-            let wasOpen = path
-            path = id == SettingsDeepLink.tasksListOpenID ? [.allTasks] : []
-            if path != wasOpen { returnTo = id }
+            if id == SettingsDeepLink.tasksListOpenID { listTab = .active }
+            guard pageInPlace != nil else { return }
+            path = []
+            returnTo = id
+        }
+        // File › New Task, taken once. `initial`: the menu opens this tab, then asks.
+        .onChange(of: highlights.pendingNewTask, initial: true) { _, asked in
+            guard asked else { return }
+            highlights.pendingNewTask = false
+            openNewTask()
         }
         // Tasks off: every reminder, waiting or on screen, is taken back, and the tree closes.
         // `TaskReminders` only — this never builds `TasksManager`.
@@ -131,7 +206,13 @@ struct TasksSettings: View {
             path = []
             if !isOn { TaskReminders.withdrawAll() }
         }
-        .sheet(item: $sheet) { sheet in
+        // Widening past the width with a task open in the list's place builds the list anew, at its top: it scrolls to
+        // the task's row, now selected beside the page.
+        .onChange(of: showsPageBeside) { _, beside in
+            if beside, let id = taskBeside { returnTo = id }
+        }
+        // A sheet writes through the manager; as it closes, the page reads it again at once, as after a press.
+        .sheet(item: $sheet, onDismiss: copyFromStore) { sheet in
             switch sheet {
             case .connect(.jira):
                 JiraConnectSheet()
@@ -142,7 +223,7 @@ struct TasksSettings: View {
             case .tags(let taskID, let title, let current, let existing):
                 TaskTagsSheet(taskID: taskID, title: title, current: current, existing: existing)
             case .newTask(let listFilter):
-                NewTaskSheet(newTask: newTask, listFilter: listFilter) { path.append(.task($0)) }
+                NewTaskSheet(newTask: newTask, listFilter: listFilter) { openTask($0) }
             default:
                 TaskValueSheet(sheet: sheet) { value in apply(value, from: sheet) }
             }
@@ -154,6 +235,7 @@ struct TasksSettings: View {
         ) { task in
             Button("Delete", role: .destructive) {
                 TasksManager.shared.delete(task.id)
+                copyFromStore()
                 // Its page, if open, has nothing left to show.
                 path.removeAll { $0 == .task(task.id) }
             }
@@ -177,74 +259,148 @@ struct TasksSettings: View {
         }
     }
 
-    // MARK: - The tree
+    /// After the page just built has appeared: the row it should show, in view, the one that opened the page left or the
+    /// one a search names. After this update, so the row exists.
+    private func scrollToReturnTarget(_ proxy: ScrollViewProxy) {
+        guard let target = returnTo else { return }
+        returnTo = nil
+        DispatchQueue.main.async { proxy.scrollTo(target, anchor: .center) }
+    }
 
-    /// Up one level, to the page it names, which scrolls to the row that opened this one. All tasks'
-    /// back row carries the page's own deep link, so an opened link lands on it.
+    /// The one place the first page reads the manager's state: a fresh copy, assigned only when it changed. Never with
+    /// tasks off, which would build the task list.
+    private func copyFromStore() {
+        guard enableTasks else { return }
+        let latest = TasksPageData(TasksManager.shared)
+        if latest != tasks { tasks = latest }
+    }
+
+    /// A task's page, from New Task: from the first page it takes the list's place, or shows beside it; from a page
+    /// below the first, one level in.
+    private func openTask(_ id: UUID) {
+        if pageInPlace == nil {
+            path = [.task(id)]
+        } else {
+            path.append(.task(id))
+        }
+    }
+
+    /// What the list on screen shows, so a new task it would hide opens on its own page (`NewTaskSheet`): the first
+    /// page's list while it shows open tasks, Local tasks' own; nil where no list of open tasks shows.
+    private var newTaskListFilter: TaskFilter? {
+        switch pageInPlace {
+        case nil:
+            return listTab == .active ? TaskFilter(tag: Defaults[.tasksListTagFilter], query: query) : nil
+        case .source(.local)?:
+            return TaskFilter(source: .local)
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - The first page, and a task beside it
+
+    private var firstPage: some View {
+        SettingsProductPage(settingsTitle: String(localized: "Tasks settings")) {
+            TasksOverview(data: tasks, tab: $listTab, query: $query, selected: taskBeside,
+                          live: visibility.isOnScreen, context: firstPageContext)
+        } settings: {
+            optionsSection
+            if enableTasks {
+                TaskSourcesSection(data: tasks, context: firstPageContext)
+                TaskTagColorsSection(data: tasks, context: firstPageContext)
+            }
+        }
+    }
+
+    /// The first page, and while the panel holds both (layout-proposal D1) a task's page beside it, laid out by
+    /// `SettingsListDetail`: the list in its own column, the page an inset after it, as wide as a settings column. The
+    /// first page is that stack's first child either way, so crossing the width keeps it, scrolled where it was.
+    private var firstPageAndTask: some View {
+        SettingsListDetail(showsBeside: showsListAndPage) {
+            firstPage
+        } beside: {
+            taskPageBeside
+        }
+    }
+
+    /// Wide enough for a task's page beside the list, with tasks on.
+    private var showsListAndPage: Bool {
+        enableTasks && showsPageBeside
+    }
+
+    /// The task's page beside the list, or, while none is open, what its place says.
     @ViewBuilder
+    private var taskPageBeside: some View {
+        if let id = taskBeside {
+            SettingsPage {
+                TaskDetailPage(taskID: id, context: firstPageContext)
+            }
+            // A task's page opens at its top.
+            .id(id)
+        } else {
+            SettingsPage {
+                SettingsSection {
+                    TasksMessage(title: String(localized: "No task selected"),
+                                 message: String(localized: "Click › on a task to see it here.")) {
+                        EmptyView()
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - The pages below the first
+
+    /// Up one level, to the page it names, which scrolls to the row that opened this one.
     private func backRow(from page: TasksPage) -> some View {
         let parent = path.dropLast().last.map(Self.title) ?? Self.overviewTitle
-        let row = TasksBackRow(parent: parent) { returnTo = Self.scrollTarget(of: path.removeLast()) }
-        if page == .allTasks {
-            row.settingsHighlight(id: SettingsDeepLink.tasksListOpenID)
-        } else {
-            row
-        }
+        return TasksBackRow(parent: parent) { returnTo = Self.scrollTarget(of: path.removeLast()) }
     }
 
     @ViewBuilder
     private func pageContent(_ page: TasksPage) -> some View {
         switch page {
         case .source(let source):
-            TaskSourcePage(source: source, context: context)
+            TaskSourcePage(source: source, context: innerPageContext)
         case .project(let source, let project):
-            TaskProjectPage(source: source, project: project, context: context)
+            TaskProjectPage(source: source, project: project, context: innerPageContext)
         case .task(let id):
-            TaskDetailPage(taskID: id, context: context)
-        case .allTasks:
-            AllTasksPage(query: $query, context: context)
+            TaskDetailPage(taskID: id, context: innerPageContext)
         }
     }
 
     private static var overviewTitle: String { String(localized: "Tasks") }
 
-    /// What a page is called, in its back row's child and in the window's title.
+    /// What a page is called, in its back row's child and in the page's large title.
     static func title(of page: TasksPage) -> String {
         switch page {
         case .source(let source): return source.title
         case .project(_, let project): return TaskFacets.projectShortName(project)
         case .task: return String(localized: "Task")
-        case .allTasks: return String(localized: "All tasks")
         }
     }
 
-    /// The row that opened a page: a source or All tasks by its highlight id, a project by its
-    /// page, a task by its id.
+    /// The row that opened a page: a source by its highlight id, a project by its page, a task by its id.
     private static func scrollTarget(of page: TasksPage) -> AnyHashable {
         switch page {
         case .source(let source): return SettingsDeepLink.taskSourceRows[source] ?? SettingsDeepLink.tasksSourcesHighlightID
         case .project: return page
         case .task(let id): return id
-        case .allTasks: return SettingsDeepLink.tasksListHighlightID
         }
     }
 
-    // MARK: - The overview
+    // MARK: - The settings
 
-    @ViewBuilder
-    private var overview: some View {
-        if enableTasks {
-            TaskSourcesSection(context: context)
-            TaskOverviewSections(sheet: $sheet, openAllTasks: { path.append(.allTasks) })
-        }
-
-        Section {
+    /// The Tasks switches, the settings' first section and always built: the header's gear lands on its first row.
+    private var optionsSection: some View {
+        SettingsSection {
             SettingsRow("Enable tasks", description: "Plan your work and time it.") {
                 Defaults.Toggle(key: .enableTasks) {
                     Text("Enable tasks")
                 }
             }
-            .settingsHighlight(id: highlightID("Enable tasks"))
+            .settingsHighlight(id: SettingsDeepLink.tasksEnableHighlightID)
 
             SettingsStepperRow(
                 "Default session length",
@@ -272,10 +428,11 @@ struct TasksSettings: View {
     /// Disconnect, from the dialog: the source's page, if open, leaves with its tasks.
     private func disconnect(_ source: TaskSource, removeTasks: Bool) {
         TasksManager.shared.disconnect(source, removeTasks: removeTasks)
+        copyFromStore()
         path.removeAll { page in
             switch page {
             case .source(let shown), .project(let shown, _): return shown == source
-            case .task, .allTasks: return false
+            case .task: return false
             }
         }
     }
@@ -295,24 +452,23 @@ struct TasksSettings: View {
         default:
             break
         }
+        copyFromStore()
     }
 }
 
-/// A page of Brain › Tasks below the overview.
+/// A page of Brain › Tasks below the first.
 enum TasksPage: Hashable {
     /// A source's connection, then its projects — or its tasks, with one project or none.
     case source(TaskSource)
     /// One project's tasks: a key as `TaskFacets.project` gives it, or `TaskFacets.noProject`.
     case project(TaskSource, String)
-    /// One task, opened from any list.
+    /// One task, opened from any list: beside the first page's list while there is room for both.
     case task(UUID)
-    /// Every source's tasks in one order, with Find and the filters.
-    case allTasks
 }
 
 /// What a page needs from the tab. The sheets (New Task's draft with them) and the alerts live on
-/// the outer Form, because rows of a long, lazy Form may not exist when they change; `open` goes
-/// one level in.
+/// the tab, because a row goes with its page when the path changes and the task rows are lazy;
+/// `open` goes one level in, or, from the first page, takes its place.
 struct TasksPageContext {
     let sheet: Binding<TaskSheet?>
     let pendingDelete: Binding<TaskItem?>
@@ -320,24 +476,26 @@ struct TasksPageContext {
     let open: (TasksPage) -> Void
     /// Connect…: the source's own sheet (a token, or Apple Reminders' permission).
     let connect: (TaskSource) -> Void
+    /// After a press: the first page reads the manager again at once, outside its throttle, so a second click never
+    /// waits for the copy. A page below the first follows the manager and needs nothing.
+    var refresh: () -> Void = {}
 }
 
-/// Atop every page, alone in its own Section: up one level, naming where it goes ("‹ GitLab"). The
-/// one sanctioned lone leading button in Brain (docs/SETTINGS.md): it is navigation, not an action
-/// on a row.
+/// Atop every page below the first, bare on the panel: up one level, naming where it goes ("‹ GitLab"). The one
+/// sanctioned lone leading button in Brain (docs/SETTINGS.md): it is navigation, not an action on a row. Flush, so its
+/// chevron starts on the page's column.
 struct TasksBackRow: View {
     let parent: String
     let back: () -> Void
 
     var body: some View {
         Button(action: back) {
-            Label {
-                Text(verbatim: parent)
-            } icon: {
+            HStack(spacing: SettingsMetrics.iconGap) {
                 Image(systemName: "chevron.left")
+                Text(verbatim: parent)
             }
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
         .accessibilityLabel(Text(verbatim: String(localized: "Back to \(parent)")))
     }
 }
@@ -359,27 +517,24 @@ struct TasksOpenButton: View {
     }
 }
 
-/// The overview's Sources: Local tasks, then each connected source with how many tasks it holds and a
-/// › to its page, where its connection and settings are; then "Add a source", a Connect menu of the
-/// sources not connected. A source not connected has no row of its own: its search entries land on
-/// Add a source (`SettingsView.landingOnABuiltRow`), and tasks it kept from before stay in All tasks.
-/// A separate view so `TasksManager` is created only once tasks are turned on.
+/// The settings' Sources: Local tasks, then each connected source with how many tasks it holds and a › to its page,
+/// where its connection and settings are; then "Add a source", a Connect menu of the sources not connected. A source
+/// not connected has no row of its own: its search entries land on Add a source (`SettingsView.landingOnABuiltRow`),
+/// and tasks it kept from before stay in the list.
 ///
-/// Status comes from the Defaults display copies and the manager's sync state, never from the
-/// Keychain (`TaskSourceStatus`). A source's row appearing asks for a sync only when the last one is
-/// stale; a problem shows here as "Needs attention" and in full on the source's page. Each row
-/// registers its own deep link, literally (`highlighted(_:for:)`), so search and the inventory test
-/// find it.
+/// Status comes from the page's copy (`TasksPageData`) and the Defaults display copies, never from the Keychain
+/// (`TaskSourceStatus`). A source's row appearing asks for a sync only when the last one is stale; a problem shows here
+/// as "Needs attention" and in full on the source's page. Each row registers its own deep link, literally
+/// (`highlighted(_:for:)`), so search and the inventory test find it.
 private struct TaskSourcesSection: View {
-    @ObservedObject private var manager = TasksManager.shared
+    let data: TasksPageData
     let context: TasksPageContext
 
     var body: some View {
-        let counts = TaskFacets.sourceCounts(manager.activeTasks)
-        let sources = manager.syncs.map(\.source)
-        let connected = sources.filter(\.isConnected)
-        let addable = sources.filter { !$0.isConnected }
-        Section {
+        let counts = data.sourceCounts
+        let connected = data.connected
+        let addable = data.sources.filter { !connected.contains($0) }
+        SettingsSection {
             LabeledContent {
                 openButton(count: counts[.local] ?? 0, page: .source(.local))
             } label: {
@@ -391,23 +546,36 @@ private struct TaskSourcesSection: View {
                 highlighted(sourceRow(source, count: counts[source] ?? 0), for: source)
             }
 
-            ForEach(addable.filter { manager.tokenRemovalFailed($0) }, id: \.self) { source in
+            ForEach(addable.filter { data.tokenRemovalFailed.contains($0) }, id: \.self) { source in
                 SettingsErrorText(String(localized: "Couldn't remove the \(source.name) token from your Keychain."))
                 SettingsActionRow(
                     "Saved token",
                     description: String(localized: "Or delete com.kannu.app.secure-secrets (\(TaskSourceStatus.keychainItem(for: source))) in Keychain Access.")
                 ) {
-                    Button("Remove Token") { manager.retryRemovingToken(source) }
+                    Button("Remove Token") {
+                        TasksManager.shared.retryRemovingToken(source)
+                        context.refresh()
+                    }
                 }
             }
 
             if !addable.isEmpty {
                 LabeledContent {
-                    Menu("Connect…") {
+                    Menu {
                         ForEach(addable, id: \.self) { source in
                             Button(source.title) { context.connect(source) }
                         }
+                    } label: {
+                        // Our button takes the native indicator away, so the label draws its own chevron.
+                        HStack(spacing: SettingsMetrics.iconGap) {
+                            Text("Connect…")
+                            Image(systemName: "chevron.down")
+                                .accessibilityHidden(true)
+                        }
                     }
+                    .menuStyle(.button)
+                    .buttonStyle(SettingsButtonStyle())
+                    .menuIndicator(.hidden)
                     .fixedSize()
                 } label: {
                     SettingsRowLabel("Add a source", description: Text(verbatim: addable.map(\.title).formatted(.list(type: .or))))
@@ -433,20 +601,22 @@ private struct TaskSourcesSection: View {
 
     /// A connected source: who it is connected as, or "Needs attention", and its open count.
     private func sourceRow(_ source: TaskSource, count: Int) -> some View {
-        let state = manager.syncState(source)
+        let state = data.syncStates[source] ?? .idle
         let problem = TaskSourceStatus.problem(state, source: source)
         let status = problem != nil || state == .needsKeychainApproval
             ? String(localized: "Needs attention")
-            : TaskSourceStatus.text(for: source)
+            : data.sourceStatus[source] ?? ""
         return LabeledContent {
             openButton(count: count, page: .source(source))
         } label: {
             VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                 Text(verbatim: source.title)
-                SettingsStatusText(status, isReady: source.isSyncOn && problem == nil)
+                SettingsStatusText(status, isReady: data.syncOn.contains(source) && problem == nil)
             }
         }
-        .onAppear { manager.syncIfStale(source) }
+        // A sync of its own only when the last is stale, as the page opens: never on a scroll, which a plain page has
+        // none of.
+        .onAppear { TasksManager.shared.syncIfStale(source) }
     }
 
     /// Each source's row with its own deep link, written out so it is found by search and pinned by
@@ -465,87 +635,40 @@ private struct TaskSourcesSection: View {
     }
 }
 
-/// The overview below the Sources: All tasks, Time to log and Interrupted sessions. A separate view
-/// so `TasksManager` is created only once tasks are turned on.
-private struct TaskOverviewSections: View {
-    @ObservedObject private var manager = TasksManager.shared
-    @Binding private var sheet: TaskSheet?
-    private let openAllTasks: () -> Void
-
-    init(sheet: Binding<TaskSheet?>, openAllTasks: @escaping () -> Void) {
-        _sheet = sheet
-        self.openAllTasks = openAllTasks
-    }
+/// Every tag on any task Kannu holds, done and archived ones too, with its colour, folded until opened. A colour is
+/// the tag's, shared by every task carrying it (`TasksManager.setTagColor`). Our disclosure, as every group under
+/// Settings now is (the design review's finding 13): the list moved up into the product, and this one is short.
+private struct TaskTagColorsSection: View {
+    let data: TasksPageData
+    let context: TasksPageContext
+    @State private var showsTagColors = false
 
     var body: some View {
-        allTasksSection
-        TimeToLogSection()
-        interruptedSection
-    }
-
-    // MARK: - All tasks ›
-
-    /// "12 to do · 3 in progress" — every task Kannu holds, whatever All tasks' filters hide — and
-    /// the way in.
-    private var allTasksSection: some View {
-        let counts = TaskFacets.counts(manager.activeTasks)
-        return Section {
-            if case .failed(let reason) = manager.loadState {
-                SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
-            }
-            LabeledContent {
-                TasksOpenButton(
-                    text: String(localized: "\(counts.toDo + counts.inProgress) open"),
-                    accessibilityLabel: String(localized: "Open all tasks"),
-                    action: openAllTasks
-                )
-            } label: {
-                SettingsRowLabel(
-                    "All tasks",
-                    description: Text(verbatim: String(localized: "\(counts.toDo) to do · \(counts.inProgress) in progress"))
-                )
-            }
-            .settingsHighlight(id: SettingsDeepLink.tasksListHighlightID)
-        } header: {
-            SettingsSectionHeader("Your tasks")
-        }
-    }
-
-    // MARK: - Interrupted sessions
-
-    @ViewBuilder
-    private var interruptedSection: some View {
-        let interrupted = manager.interruptedSessions
-        if !interrupted.isEmpty {
-            Section {
-                ForEach(interrupted) { entry in
+        let tags = data.ownTags
+        SettingsSection {
+            DisclosureGroup(isExpanded: $showsTagColors) {
+                if tags.isEmpty {
+                    SettingsNoteRow("No tags yet", description: "Tags you add to tasks appear here.")
+                }
+                ForEach(tags, id: \.self) { tag in
+                    let color = data.tagColors[TaskColoring.key(for: tag)] ?? .glass
                     LabeledContent {
-                        HStack(spacing: SettingsMetrics.rowContent) {
-                            Button("Set End Time") {
-                                sheet = .endTime(
-                                    taskID: entry.task.id,
-                                    segmentID: entry.segment.id,
-                                    title: entry.task.title,
-                                    start: entry.segment.start,
-                                    nextSessionStart: entry.nextSessionStart
-                                )
-                            }
-                            Button("Discard") {
-                                manager.discardInterruptedSession(segmentID: entry.segment.id, taskID: entry.task.id)
-                            }
-                        }
-                    } label: {
-                        SettingsRowLabel(
-                            Text(verbatim: entry.task.title),
-                            description: Text(verbatim: String(localized: "Timing since \(entry.segment.start.formatted(date: .abbreviated, time: .shortened))"))
+                        TaskColorPickerButton(
+                            selection: Binding(get: { color }, set: { picked in
+                                TasksManager.shared.setTagColor(picked, for: tag)
+                                context.refresh()
+                            }),
+                            accessibilityLabel: String(localized: "Colour of tag \(tag): \(color.localizedName)")
                         )
+                        .disabled(!data.isReady)
+                    } label: {
+                        SettingsRowLabel(Text(verbatim: "#\(tag)"))
                     }
                 }
-            } header: {
-                SettingsSectionHeader("Interrupted sessions")
-            } footer: {
-                SettingsFooter("Kannu stopped while timing these. Set an end time or discard.")
+            } label: {
+                SettingsRowLabel("Tag colours", description: "A task takes its first tag's colour; untagged ones, their source's.")
             }
+            .settingsHighlight(id: SettingsDeepLink.tasksTagColorsHighlightID)
         }
     }
 }
@@ -564,9 +687,9 @@ enum TaskSheet: Identifiable {
     case schedule(taskID: UUID, title: String, current: Date?)
     /// Connect… for a source: `JiraConnectSheet`, `GitLabConnectSheet`, or `SourceConnectSheet`.
     case connect(TaskSource)
-    /// Add a task's New Task, served by `NewTaskSheet`. `listFilter` is what All tasks shows, so a
-    /// task it would hide opens on its own page; `.all` from Local tasks.
-    case newTask(listFilter: TaskFilter)
+    /// New Task, served by `NewTaskSheet`. `listFilter` is what the list on screen shows, so a task it would hide
+    /// opens on its own page; nil where no list of open tasks shows.
+    case newTask(listFilter: TaskFilter?)
 
     var id: String {
         switch self {
@@ -630,15 +753,11 @@ private struct TaskValueSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text(heading)
-                .font(.headline)
+        SettingsSheet(heading, subtitle: Text(explanation)) {
             if let subject {
                 Text(verbatim: subject)
                     .settingsDescriptionStyle()
             }
-            Text(explanation)
-                .settingsDescriptionStyle()
             field
             // Only for a reminder that would notify: a muted task's re-timed reminder stays muted
             // (`setSchedule`), as on the task page and in New Task. The bell cannot change while the
@@ -648,37 +767,34 @@ private struct TaskValueSheet: View {
                 ReminderPermissionNote()
             }
             if let problem {
-                Text(verbatim: problem)
-                    .settingsDescriptionStyle(tint: .red)
+                SettingsErrorText(problem)
             }
-            HStack(spacing: SettingsMetrics.rowContent) {
-                if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
-                    Button("Remove Estimate") {
-                        onSave(.duration(nil))
-                        dismiss()
-                    }
+        } buttons: {
+            if case .estimate(_, _, let draft) = sheet, draft.estimateSeconds != nil {
+                Button("Remove Estimate") {
+                    onSave(.duration(nil))
+                    dismiss()
                 }
-                if case .schedule(_, _, .some) = sheet {
-                    Button("Clear Schedule") {
-                        onSave(.cleared)
-                        dismiss()
-                    }
-                }
-                Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(primaryTitle) { save() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isEstimate && estimate.estimateReading == .unreadable)
             }
+            if case .schedule(_, _, .some) = sheet {
+                Button("Clear Schedule") {
+                    onSave(.cleared)
+                    dismiss()
+                }
+            }
+            Spacer()
+            Button("Cancel", role: .cancel) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(primaryTitle) { save() }
+                .buttonStyle(SettingsButtonStyle(.primary))
+                .keyboardShortcut(.defaultAction)
+                .disabled(isEstimate && estimate.estimateReading == .unreadable)
         }
         .onChange(of: estimate.estimateText) { _, _ in problem = nil }
         // macOS's answer may have changed since the list last asked: the note follows it.
         .onAppear {
             if case .schedule = sheet { TasksManager.shared.checkReminderPermission() }
         }
-        .padding(SettingsMetrics.cardPadding)
-        .frame(width: 380)
     }
 
     private var isEstimate: Bool {
@@ -691,17 +807,20 @@ private struct TaskValueSheet: View {
         switch sheet {
         case .endTime(_, _, _, let start, let nextSessionStart):
             // Date() here, not a stored bound: the list may have rendered long before the click.
-            DatePicker("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())),
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Stopped working at") {
+                SettingsDateField("Stopped working at", selection: $date, in: start...max(start, min(nextSessionStart ?? .distantFuture, Date())))
+            }
         case .schedule:
-            DatePicker("Remind me at", selection: $date, in: Date()...,
-                       displayedComponents: [.date, .hourAndMinute])
+            LabeledContent("Remind me at") {
+                SettingsDateField("Remind me at", selection: $date, in: Date()...)
+            }
         case .estimate:
             TaskEstimateField(draft: $estimate, onSubmit: save)
         default:
             TextField("Length", text: $text, prompt: Text("1h 30m"))
                 .onSubmit(save)
                 .onChange(of: text) { _, _ in problem = nil }
+                .settingsField()
         }
     }
 
@@ -803,3 +922,16 @@ struct ReminderPermissionNote: View {
         }
     }
 }
+
+#if DEBUG
+extension TasksSettings {
+    /// DEBUG snapshot harness: Set End Time, the value sheet that shows the date field and, unlike Schedule, runs no
+    /// permission check. The sheet's type is private to this file.
+    static func snapshotEndTimeSheet() -> AnyView {
+        AnyView(TaskValueSheet(sheet: .endTime(taskID: DebugSnapshotFixtures.localTaskID, segmentID: UUID(),
+                                               title: "Write the release notes",
+                                               start: Date().addingTimeInterval(-3 * 3600), nextSessionStart: nil),
+                               onSave: { _ in }))
+    }
+}
+#endif

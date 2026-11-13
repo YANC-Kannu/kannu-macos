@@ -32,8 +32,8 @@ import XCTest
 ///    a row that quietly lost copyability.
 /// 4. The shared components themselves keep their `.textSelection`, so a refactor cannot strip
 ///    selectability from every user at once.
-/// 5. The content standard, pinned the same way: no ad-hoc font on row text, no hand-built
-///    `Slider`, no padding on a row. Each is a per-file count with a reason, so the survivors are
+/// 5. The content standard, pinned the same way: no ad-hoc font on row text, no slider or stepper
+///    built by hand, no padding on a row. Each is a per-file count with a reason, so the survivors are
 ///    a deliberate list (cards, chips, previews, popovers) and a new one is an edit here.
 final class SettingsLayoutRulesTests: XCTestCase {
 
@@ -70,8 +70,13 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 2,   // "Add" / "Add New" — labels of a tappable card
         "MusicSlotConfigurationView.swift": 1,      // palette item label — draggable/tappable chip
         "SecurityFindingRow.swift": 1,              // severity badge chip, accessibility-hidden
-        "SettingsView.swift": 6,                    // badges and tappable style cards: a
-                                                    // selectable label swallows the card's click
+        // Badges: decorative chips. A choice card's name takes `settingsChoiceLabel`, so the scan no longer counts it.
+        "SettingsBadge.swift": 1,                   // the one badge on a page
+        "SettingsHelpers.swift": 1,                 // the "Coming soon" tag, unused
+        "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
+        "SidebarBadges.swift": 1,                   // the high findings' count, a badge inside the row's button
+        "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
+        "TaskRowList.swift": 1,                     // a task row's tag chip, decorative as a badge
     ]
 
     func testEveryInformationalTextIsSelectableOrPinned() {
@@ -109,63 +114,215 @@ final class SettingsLayoutRulesTests: XCTestCase {
     private static let pinnedAdHocFontCounts: [String: Int] = [
         "AnimationEditorView.swift": 11,     // the animation editor sheet: its own dense scale
         "ExtensionsSettings.swift": 1,       // the empty state's 48-pt glyph
-        "IdleAnimationsSettingsSection.swift": 9,  // animation cards, their chips, the URL sheet
+        "IdleAnimationsSettingsSection.swift": 4,  // the Add card and the delete glyph; a card's name is `settingsChoiceLabel`
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
-        "SecurityFindingRow.swift": 2,       // the severity badge chips
-        "SettingsView.swift": 33,            // sidebar chrome and search results, style and HUD
-                                             // cards, previews, the colour popover, the
-                                             // timer-preset editor, badge capsules
+        "SecurityFindingRow.swift": 1,       // the severity badge chip
+        "SidebarBadges.swift": 2,            // the sidebar's high findings' count and the timer's glyph
+        "SettingsBadge.swift": 1,            // the one badge, in the caption's size
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
+        "CustomOSDSettings.swift": 1,        // the OSD preview
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
+        "HUDAndOSDSettings.swift": 5,        // HUD style previews
+        "LockScreenSettings.swift": 6,       // lock screen previews
+        "SettingsColorPicker.swift": 2,      // the colour popover
         "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
-        "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
+        "TaskRowList.swift": 1,              // a task row's tag chip, in the badge's caption size
     ]
 
     func testRowTextUsesTheFormsTypeOrTheSharedStyle() {
         assertPinnedCounts(Self.pinnedAdHocFontCounts, scanner: Self.adHocFontLines,
                            rule: "a caption-sized or pixel-sized font",
-                           cure: "row text uses the Form's own type, and every secondary line goes through settingsDescriptionStyle()")
+                           cure: "row text uses the root's body type, and every secondary line goes through settingsDescriptionStyle()")
     }
 
-    /// Lines building a `Slider` by hand. `SettingsSliderRow` is the only shape a Settings *row*
-    /// may use, so these are the ones that are not rows.
-    private static let pinnedInlineSliderCounts: [String: Int] = [
-        "AnimationEditorView.swift": 3,      // the animation editor sheet
-        "SettingsComponents.swift": 2,       // SettingsSliderRow itself, stepped and unstepped
-        "SettingsView.swift": 1,             // the OSD preview card's own level slider
+    /// Lines building a slider or a stepper by hand, ours or native. `SettingsSliderRow` and
+    /// `SettingsStepperRow` are the only shapes a Settings *row* may use, so these are the ones that
+    /// are not rows.
+    private static let pinnedHandBuiltValueControlCounts: [String: Int] = [
+        "AnimationEditorView.swift": 2,      // the editor sheet: the preview's zoom, and ParameterSliderRow's
+        "SettingsComponents.swift": 2,       // SettingsSliderRow and SettingsStepperRow themselves
+        "CustomOSDSettings.swift": 1,        // the OSD preview card's own level slider
     ]
 
-    func testNoSliderIsBuiltByHandInARow() {
-        assertPinnedCounts(Self.pinnedInlineSliderCounts, scanner: Self.inlineSliderLines,
-                           rule: "a hand-built Slider",
-                           cure: "a slider row is SettingsSliderRow — one width, one readout column")
+    func testNoValueControlIsBuiltByHandInARow() {
+        assertPinnedCounts(Self.pinnedHandBuiltValueControlCounts, scanner: Self.handBuiltValueControlLines,
+                           rule: "a slider or stepper built by hand",
+                           cure: "a slider row is SettingsSliderRow and a stepper row SettingsStepperRow — one width, one readout column")
     }
 
-    /// Lines adding padding. A grouped `Form` pads its own rows, so padding here belongs to a
+    /// Lines adding padding. A section pads its own rows, so padding here belongs to a
     /// card, a chip, a popover, a preview or an empty state — never to a row, which would make
     /// that one row taller than its neighbours.
     private static let pinnedRowPaddingCounts: [String: Int] = [
         "AnimationEditorView.swift": 8,      // the editor sheet
         "EditPanelView.swift": 1,            // a panel, not a Form
-        "ExtensionsSettings.swift": 5,       // the empty state and the expanded detail card
-        "IdleAnimationsSettingsSection.swift": 8,  // animation cards, chips, the URL sheet
+        "ExtensionsSettings.swift": 4,       // the empty state, the expanded details' gap, and the status chip
+        "IdleAnimationsSettingsSection.swift": 5,  // the cards' scrolling strip, the delete glyph, and the Add menu's two items
         "MusicSlotConfigurationView.swift": 5,     // the slot canvas
-        "NewTaskSheet.swift": 1,             // New Task is a sheet: a sheet pads its own content
-        "PolicyRulesEditor.swift": 1,        // the Edit rules sheet: a sheet pads its own content
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
-        "SettingsView.swift": 42,            // sidebar chrome, badge capsules, style and HUD
-                                             // cards, previews, the colour popover
+        "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
+        "BrainShell.swift": 4,               // the shell's own insets
+        "SettingsSidebarRow.swift": 1,       // the row's inset
+        "SidebarBadges.swift": 2,            // the high findings' count pill, in a sidebar row
+        "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
+        "SettingsPage.swift": 4,             // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
+        "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
+        "SettingsProductPage.swift": 4,      // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
+        "AgentsOverview.swift": 6,           // the hero's, a row's, the empty state's and a status cell's cards, Recent's heading in line with the rows, and the hero's figures on its text column
+        "TimerOverview.swift": 6,            // the running timer's, the empty state's, a preset tile's and Add Preset's cards, a tile's ⋯ in its corner, and the presets' heading in line with the tiles
+        "AgentStatusSettings.swift": 1,      // a preview
+        "AppearanceSettings.swift": 2,       // the skin and icon grids' drop targets
+        "CustomOSDSettings.swift": 1,        // the OSD preview
+        "HUDAndOSDSettings.swift": 5,        // HUD style cards and previews
+        "LockScreenSettings.swift": 3,       // lock screen previews (the glass sample went with its view)
+        "SettingsColorPicker.swift": 1,      // the colour popover
+        "SettingsHelpers.swift": 4,          // the unused "Upgrade to Pro" and "Coming soon" capsules
+        "SettingsBadge.swift": 1,            // the one badge's own inset
+        "SettingsCalloutCard.swift": 1,      // a callout's own card, and a row's expanded details
+        "SettingsToggleStyle.swift": 1,      // the knob, inset from its track
+        "SettingsButtonStyle.swift": 2,      // the button's own chrome, and a flush button pulled back onto its column
+        "SettingsSelect.swift": 2,           // a segment, and the track it sits in
+        "SettingsSelectList.swift": 2,       // the list inside its popover, and a row
+        "SettingsField.swift": 1,            // the field inside its chrome
+        "SettingsSheet.swift": 1,            // a sheet pads its own content, for every sheet but the two large ones
+        "SettingsDateField.swift": 1,        // the date popover's content
         "SpotifyAuthSettingsSection.swift": 1,     // the sign-in card
-        "SpotifyLoginSheet.swift": 1,        // a sheet, not a Form
-        "TaskTagsSheet.swift": 1,            // Add Tags is its own sheet now: a sheet pads its own content
-        "TaskConnectSheets.swift": 3,        // the Connect Jira and Connect GitLab sheets, and the
-                                             // one for the other sources: a sheet pads its own
-                                             // content
-        "TasksSettings.swift": 1,            // the estimate, add-time and end-time sheet
+        "SpotifyLoginSheet.swift": 1,        // the sign-in sheet's header bar, over its web view
+        "SecurityOverview.swift": 2,         // the count strip's and a status cell's cards
+        "UsageOverview.swift": 4,            // the empty state's, a provider's and a model row's cards, and the models' heading in line with the rows
+        "TaskRowList.swift": 2,              // a task's card, and a tag chip's inset
+        "TasksOverview.swift": 1,            // the list's footer in line with the rows, as a section's is
+        "TaskSourcePages.swift": 4,          // the task lists' headings and a project's footer in line with the rows, which are cards
+        "NotesOverview.swift": 1,            // the sync's status line in line with the cards' text
+        "NotePage.swift": 1,                 // the note's own card
     ]
 
     func testNoRowPadsItself() {
         assertPinnedCounts(Self.pinnedRowPaddingCounts, scanner: Self.paddingLines,
                            rule: "a padding",
-                           cure: "a row in a grouped Form adds none — the Form pads it")
+                           cure: "a row in a section adds none — the section pads it")
+    }
+
+    // MARK: - Rule 6: a choice, a slider and a stepper are ours
+
+    /// Lines building a native choice or value control. SwiftUI on macOS 14 has no custom picker, slider or
+    /// stepper style, so under Settings a choice is `SettingsSelect` (docs/SETTINGS.md, "Choices") and a value
+    /// `SettingsSlider` or `SettingsStepper` ("Values and fields"), and these are the ones that cannot be.
+    private static let pinnedNativeControlCounts: [String: Int] = [
+        // 2026-11-11: All tasks' filter menu and its four native pickers went with Stage 5's Tasks page, whose Tag
+        // filter and tabs are `SettingsSelect`s (plan:75).
+        // A tag's Colour, a ticked submenu of its pill's right-click menu: native inside a native menu, which
+        // no popover can join (design review finding 23 took the swatch beside the pill away).
+        "TaskTagsSheet.swift": 1,
+    ]
+
+    private static let nativeControlNames = ["Picker", "Slider", "Stepper"]
+
+    func testNoNativeChoiceOrValueControlIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeControlCounts, scanner: { Self.nativeControlLines(in: $0, names: Self.nativeControlNames) },
+                           rule: "a native Picker, Slider or Stepper",
+                           cure: "a choice is SettingsSelect in a SettingsRow, `choices:` for literal options; a value is SettingsSliderRow or SettingsStepperRow")
+        // A floor: the scan still finds a native control, so a pattern gone blind fails here.
+        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeControlLines(in: $1, names: Self.nativeControlNames).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no native control: the pattern went blind")
+
+        for planted in ["Picker(\"a\", selection: $a) {}", "Picker(\n    \"a\",\n    selection: $a\n) {}",
+                        "Picker (\"a\", selection: $a) {}", "SwiftUI.Picker(\"a\", selection: $a) {}",
+                        "Picker<Int, Text, EmptyView>(selection: $a) {} label: {}"] {
+            XCTAssertEqual(Self.nativeControlLines(in: planted, names: ["Picker"]).count, 1, planted)
+        }
+        for clean in ["ColorPicker(\"a\", selection: $a)", "DatePicker(\"a\", selection: $a)",
+                      "SettingsColorPicker(title: \"a\", selection: $a)", "SettingsSelect(\"a\", selection: $a, choices: [1: \"b\"])",
+                      "KannuColorPickerButton(color: c, accessibilityLabel: \"a\") {}", ".pickerStyle(.menu)",
+                      "// Picker(\"a\")", "/* Picker( */", "Text(\"Device Picker Style\")"] {
+            XCTAssertEqual(Self.nativeControlLines(in: clean, names: ["Picker"]), [], clean)
+        }
+
+        // A real page, one select put back.
+        let agents = try XCTUnwrap(Self.settingsSources()["AgentStatusSettings.swift"])
+        let first = try XCTUnwrap(agents.range(of: "SettingsSelect("), "the Agents page has no select to plant on")
+        let planted = agents.replacingCharacters(in: first, with: "Picker(")
+        XCTAssertEqual(Self.nativeControlLines(in: planted, names: ["Picker"]).count, 1)
+
+        // Sliders and steppers, ours passing and Apple's caught, the same way.
+        for planted in ["Slider(value: $x, in: 0...1)", "Stepper(value: $v, in: 0...9) {}", "Stepper(\"a\", value: $v)",
+                        "SwiftUI.Slider(value: $x, in: 0...1)"] {
+            XCTAssertEqual(Self.nativeControlLines(in: planted, names: Self.nativeControlNames).count, 1, planted)
+        }
+        for clean in ["SettingsSlider(value: $x, in: 0...1) { Text(\"a\") }", "SettingsSliderRow(\"a\", value: $x, in: 0...1, valueText: nil)",
+                      "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }",
+                      "SettingsStepperRow(\"a\", value: $v, in: 0...9, valueText: Text(\"b\"))", "Text(\"Slider color\")"] {
+            XCTAssertEqual(Self.nativeControlLines(in: clean, names: Self.nativeControlNames), [], clean)
+        }
+        // A real page, one slider put back.
+        let osd = try XCTUnwrap(Self.settingsSources()["CustomOSDSettings.swift"])
+        let slider = try XCTUnwrap(osd.range(of: "SettingsSlider("), "the Custom OSD page has no slider to plant on")
+        XCTAssertEqual(Self.nativeControlLines(in: osd.replacingCharacters(in: slider, with: "Slider("),
+                                               names: Self.nativeControlNames).count, 1)
+    }
+
+    // MARK: - Rule 8: a page and a section are ours
+
+    /// Lines building a native `Form` or `Section`. macOS 14 has no API for a custom form style to take a section
+    /// apart, so under Settings a page is `SettingsPage` and a group of rows `SettingsSection`, called the same way
+    /// (docs/SETTINGS.md, "Pages and sections"). These are the ones that cannot be: none, so a pin needs a reason.
+    private static let pinnedNativeContainerCounts: [String: Int] = [:]
+
+    private static let nativeContainerNames = ["Form", "Section"]
+
+    private static func nativeContainerLines(in text: String, names: [String] = SettingsLayoutRulesTests.nativeContainerNames) -> [String] {
+        nativeControlLines(in: text, names: names, opening: #"[({]"#)
+    }
+
+    func testNoNativeFormOrSectionIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedNativeContainerCounts, scanner: { Self.nativeContainerLines(in: $0) },
+                           rule: "a native Form or Section",
+                           cure: "a page is SettingsPage and a group of rows SettingsSection: the rows, then header: and footer:")
+        // A floor: the same scan, pointed at ours, finds the pages and their sections, so a pattern gone blind fails here.
+        let sources = Self.settingsSources()
+        let pages = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsPage"]).count }
+        let sections = sources.values.reduce(0) { $0 + Self.nativeContainerLines(in: $1, names: ["SettingsSection"]).count }
+        XCTAssertGreaterThan(pages, 0, "the scan found no page: the pattern went blind")
+        XCTAssertGreaterThan(sections, 0, "the scan found no section: the pattern went blind")
+
+        for planted in ["Form {}", "Form{\n}", "SwiftUI.Form {}", "Form (\n) {}", "Section {}", "Section(\"a\") {}",
+                        "Section(header: Text(\"a\")) {}", "SwiftUI.Section {}", "return Section {",
+                        "Section {\n    row\n} header: {\n    SettingsSectionHeader(\"a\")\n}", "Section<Text, Text, EmptyView> {"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: planted).count, 1, planted)
+        }
+        for clean in ["SettingsPage {}", "SettingsSection {}", "SettingsSectionHeader(\"a\")", "IdleAnimationsSettingsSection()",
+                      "TimeToLogSection(draft: d)", "Shortcuts().shortcutsSection", "private var tasksSection: some View {",
+                      "TaskForm(draft: d)", ".formStyle(.grouped)", "// Form {", "/* Section { */", "Text(\"Form {\")",
+                      "SettingsFooter(\"Section {\")"] {
+            XCTAssertEqual(Self.nativeContainerLines(in: clean), [], clean)
+        }
+
+        // Real pages, one section and one page put back.
+        let general = try XCTUnwrap(sources["GeneralSettings.swift"])
+        let section = try XCTUnwrap(general.range(of: "SettingsSection {"), "the General page has no section to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: general.replacingCharacters(in: section, with: "Section {")).count, 1)
+        let downloads = try XCTUnwrap(sources["DownloadsSettings.swift"])
+        let page = try XCTUnwrap(downloads.range(of: "SettingsPage {"), "the Downloads page has no page to plant on")
+        XCTAssertEqual(Self.nativeContainerLines(in: downloads.replacingCharacters(in: page, with: "SwiftUI.Form {")).count, 1)
+    }
+
+    /// One entry per line holding a call of one of `names`, read with comments and strings blanked:
+    /// `Picker(`, `Picker (`, `SwiftUI.Picker(` and `Picker<…>(`, never `ColorPicker(`, `.pickerStyle(`
+    /// or a title such as "Device Picker Style". Not the `openers` lookbehind of the design-system rules,
+    /// which misses `SwiftUI.Picker(`. `opening` is what starts the call; a container opens with a brace too.
+    static func nativeControlLines(in text: String, names: [String], opening: String = #"\("#) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        let pattern = #"(?<![A-Za-z0-9_])(?:SwiftUI\s*\.\s*)?(?:"# + names.joined(separator: "|") + #")\s*(?:<[^>]*>)?\s*"# + opening
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("bad pattern for \(names)")
+            return []
+        }
+        let nsCode = code as NSString
+        let lineNumbers = regex.matches(in: code, range: NSRange(location: 0, length: nsCode.length)).map { match in
+            nsCode.substring(to: match.range.location).components(separatedBy: "\n").count - 1
+        }
+        let lines = text.components(separatedBy: "\n")
+        return Array(Set(lineNumbers)).sorted().map { lines[$0].trimmingCharacters(in: .whitespaces) }
     }
 
     /// The tokens exist and something reads each of them, so a number cannot drift back into a
@@ -181,6 +338,289 @@ final class SettingsLayoutRulesTests: XCTestCase {
             XCTAssertTrue(sources.values.contains { $0.contains("SettingsMetrics.\(token)") },
                           "SettingsMetrics.\(token) is declared but nothing reads it")
         }
+    }
+
+    // MARK: - Rule 7: colours, fonts and button styles come from the theme
+
+    /// Lines building a raw colour. Each survivor is a preview of notch content, a status or severity colour, a card
+    /// of its own or the user's own colours. Only Stage 4 lowers these, by giving each a theme token; until then a
+    /// pin can only shrink. The theme is excepted: it is where the colours are made.
+    private static let pinnedRawColourCounts: [String: Int] = [
+        "AgentStatusSettings.swift": 1,      // status green
+        "AnimationEditorView.swift": 7,      // the editor's own previews and cards
+        "AppearanceSettings.swift": 5,       // the drop targets, an icon's backdrop, and a skin's black and edge
+        "DevicesSettings.swift": 1,          // the icon style card's resting fill
+        "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
+        "EditPanelView.swift": 1,            // dead code but its #Preview
+        "ExtensionsSettings.swift": 3,       // status colours
+        "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
+        "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
+        "LiveActivitiesSettings.swift": 10,  // each activity's own colour
+        "LockScreenSettings.swift": 15,      // lock screen previews (the glass sample went with its view)
+        "MusicSlotConfigurationView.swift": 10,    // the slot canvas
+        "ScreenAssistantSettings.swift": 5,  // status colours
+        "SecurityFindingRow.swift": 3,       // severity badges
+        "SecurityOverview.swift": 1,         // a partial scan's orange, moved up with the newest scan's line
+        "SettingsColorPicker.swift": 2,      // the user's colours: presets and the sampler
+        "SettingsHelpers.swift": 3,          // the unused "Upgrade to Pro" and "Coming soon" capsules
+        "SettingsProviderIcons.swift": 1,    // an icon's fallback tint
+        "SpotifyAuthSettingsSection.swift": 1,     // the status dot
+        "StatsSettings.swift": 2,            // graph colours
+        "TaskDetailPage.swift": 3,           // the unreadable-estimate orange
+        "TaskRowList.swift": 2,              // the same orange
+        "TasksOverview.swift": 1,            // the moved-aside task file's orange, moved up with the list
+        "TasksSettings.swift": 1,            // ReminderPermissionNote's orange
+    ]
+
+    /// Lines using a system font: the text styles and `.system`. The same survivors' compact scales, pinned the same
+    /// way. Separate from the ad-hoc font rule above, which is about size, so `.font(.caption)` counts in both.
+    private static let pinnedSystemFontCounts: [String: Int] = [
+        "AnimationEditorView.swift": 22,     // the editor's own dense scale and previews
+        "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
+        "BatterySettings.swift": 2,          // battery previews
+        "CustomOSDSettings.swift": 1,        // the "Live Preview" caption
+        "DevicesSettings.swift": 2,          // the icon style cards' glyphs
+        "EditPanelView.swift": 1,            // dead code but its #Preview
+        "ExtensionsSettings.swift": 12,      // the legend and the detail cards
+        "HUDAndOSDSettings.swift": 6,        // HUD style previews
+        "IdleAnimationsSettingsSection.swift": 5,  // the Add card and the delete glyph
+        "LockScreenSettings.swift": 6,       // lock screen previews
+        "MusicSlotConfigurationView.swift": 10,    // the slot canvas
+        "ScreenAssistantSettings.swift": 1,  // a status line
+        "SecurityFindingRow.swift": 1,       // the severity badge
+        "SettingsColorPicker.swift": 2,      // the colour popover
+        "SettingsHelpers.swift": 2,          // the unused "Upgrade to Pro" and "Coming soon" capsules
+        "SettingsPermissionCallout.swift": 1,  // the callout's title
+        "SpotifyAuthSettingsSection.swift": 6,     // the sign-in card
+        "StatsSettings.swift": 1,            // a graph caption
+        "TimerSettings.swift": 1,            // the custom timer's length, its mono readout at medium weight
+    ]
+
+    /// The theme makes the colours and holds the system font as Geist's fallback.
+    private static let theTheme: Set<String> = ["SettingsTheme.swift"]
+
+    func testNoRawColourIsBuiltUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedRawColourCounts, scanner: Self.rawColourLines, rule: "a raw colour",
+                           cure: "a colour comes from SettingsTheme, or is a hierarchical style such as .secondary",
+                           skipping: Self.theTheme)
+        // A floor: the survivors are still there, so a pattern gone blind fails here.
+        let found = Self.settingsSources().filter { !Self.theTheme.contains($0.key) }
+            .values.reduce(0) { $0 + Self.rawColourLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no raw colour: the pattern went blind")
+
+        for planted in [".foregroundStyle(.red)", ".fill(isOn ? .green : .gray)", "Color.orange.opacity(0.9)",
+                        "Color(red: 0.5, green: 0, blue: 1)", "Color(nsColor: .systemBlue)", "NSColor.systemRed",
+                        ".settingsDescriptionStyle(tint: .orange)", "AnyShapeStyle(.orange)", ".shadow(color: .black, radius: 2)",
+                        ".tint(.accentColor)", ".background(\n    Capsule()\n        .fill(.blue)\n)"] {
+            XCTAssertEqual(Self.rawColourLines(in: planted).count, 1, planted)
+        }
+        for clean in [".foregroundStyle(.secondary)", ".foregroundStyle(Color.secondary)", "Color.clear", ".fill(.clear)",
+                      ".foregroundStyle(SettingsTheme.ink)", "// Color.red", "Text(\"Color.red\")", "case .blue:",
+                      "selection = .blue", ".tint(tag.tint)", "NSColor(selection)", ".fill(Color.primary.opacity(0.08))"] {
+            XCTAssertEqual(Self.rawColourLines(in: clean), [], clean)
+        }
+
+        // A real page: the Connect sheet's error line given back its red.
+        let sheets = try XCTUnwrap(Self.settingsSources()["TaskConnectSheets.swift"])
+        let errorLine = try XCTUnwrap(sheets.range(of: "SettingsErrorText(problem)"), "the Connect sheets have no error line to plant on")
+        let planted = sheets.replacingCharacters(in: errorLine, with: "Text(verbatim: problem).settingsDescriptionStyle(tint: .red)")
+        XCTAssertEqual(Self.rawColourLines(in: planted).count, (Self.pinnedRawColourCounts["TaskConnectSheets.swift"] ?? 0) + 1)
+    }
+
+    func testNoSystemFontIsUsedUnderSettings() throws {
+        assertPinnedCounts(Self.pinnedSystemFontCounts, scanner: Self.systemFontLines, rule: "a system font",
+                           cure: "a font comes from SettingsTheme, or from the root",
+                           skipping: Self.theTheme)
+        let found = Self.settingsSources().filter { !Self.theTheme.contains($0.key) }
+            .values.reduce(0) { $0 + Self.systemFontLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no system font: the pattern went blind")
+
+        for planted in [".font(.headline)", ".font(.caption2)", ".font(.system(size: 11))", ".font(.system(.caption, design: .monospaced))",
+                        ".font(Font.system(size: 9))", ".font(.footnote.bold())", ".font(.subheadline.weight(.semibold))",
+                        ".font(isSmall ? .caption : .body)", ".fontWeight(.medium)", "NSFont.systemFont(ofSize: 12)",
+                        "let title = Font.title3", ".font(Font(NSFont.labelFont(ofSize: 11)))", ".font(\n    .system(size: 13,\n            weight: .semibold))"] {
+            XCTAssertEqual(Self.systemFontLines(in: planted).count, 1, planted)
+        }
+        for clean in [".font(SettingsTheme.body)", ".font(SettingsTheme.caption)", "// .font(.headline)", "Text(\".font(.title)\")",
+                      ".font(isSmall ? SettingsTheme.description : SettingsTheme.bodyStrong)", ".font(SettingsTheme.body.weight(.medium))",
+                      "Text(item.title)", ".font(font)"] {
+            XCTAssertEqual(Self.systemFontLines(in: clean), [], clean)
+        }
+
+        // A real page: the Spotify sheet's title back on the system's headline.
+        let spotify = try XCTUnwrap(Self.settingsSources()["SpotifyLoginSheet.swift"])
+        let title = try XCTUnwrap(spotify.range(of: ".font(SettingsTheme.sheetTitle)"), "the Spotify sheet has no title to plant on")
+        XCTAssertEqual(Self.systemFontLines(in: spotify.replacingCharacters(in: title, with: ".font(.headline)")).count,
+                       (Self.pinnedSystemFontCounts["SpotifyLoginSheet.swift"] ?? 0) + 1)
+    }
+
+    /// The tag chip's capsule: `SettingsTagChip` keeps the bordered bezel its colour wash shows through, until Stage 5
+    /// rebuilds tags.
+    private static let pinnedNativeButtonStyleCounts: [String: Int] = ["SettingsComponents.swift": 1]
+
+    func testNativeButtonStylesArePinned() throws {
+        assertPinnedCounts(Self.pinnedNativeButtonStyleCounts, scanner: Self.nativeButtonStyleLines,
+                           rule: "a native button style",
+                           cure: "a button is the root's SettingsButtonStyle, .primary for a main action and .quiet for a glyph or a back row")
+        let found = Self.settingsSources().values.reduce(0) { $0 + Self.nativeButtonStyleLines(in: $1).count }
+        XCTAssertGreaterThan(found, 0, "the scan found no native button style: the pattern went blind")
+
+        for planted in [".buttonStyle(.bordered)", ".buttonStyle(.borderless)", ".buttonStyle(.borderedProminent)",
+                        ".buttonStyle( .bordered )", ".buttonStyle(BorderlessButtonStyle())", ".buttonStyle(BorderedButtonStyle())",
+                        "let style = .borderedProminent"] {
+            XCTAssertEqual(Self.nativeButtonStyleLines(in: planted).count, 1, planted)
+        }
+        for clean in [".buttonStyle(SettingsButtonStyle(.quiet))", ".buttonStyle(.plain)", ".buttonStyle(.link)",
+                      ".menuStyle(.borderlessButton)", ".buttonBorderShape(.capsule)", "// .buttonStyle(.bordered)",
+                      "Text(\".buttonStyle(.borderless)\")"] {
+            XCTAssertEqual(Self.nativeButtonStyleLines(in: clean), [], clean)
+        }
+
+        // A real page: a task row's ▶ back on the borderless style.
+        let rows = try XCTUnwrap(Self.settingsSources()["TaskRowList.swift"])
+        let quiet = try XCTUnwrap(rows.range(of: ".buttonStyle(SettingsButtonStyle(.quiet))"), "the task rows have no quiet button to plant on")
+        XCTAssertEqual(Self.nativeButtonStyleLines(in: rows.replacingCharacters(in: quiet, with: ".buttonStyle(.borderless)")).count, 1)
+    }
+
+    /// `.primary` means the one thing to do here, so it is a sheet's default action or a page header's one verb, never a
+    /// callout's or a card's button (2026-11-05, the design review's finding 4; docs/SETTINGS.md). An exact list: a new
+    /// primary anywhere else, or one gone from here, fails.
+    private static let pinnedPrimaryButtonCounts: [String: Int] = [
+        "AnimationEditorView.swift": 1,      // the animation editor sheet's Save or Import
+        "IdleAnimationsSettingsSection.swift": 1,  // the URL sheet's Add
+        "NewTaskSheet.swift": 1,             // the New Task sheet's Add
+        "PolicyRulesEditor.swift": 1,        // the rules editor sheet's Save
+        "TaskConnectSheets.swift": 3,        // the three Connect sheets' Connect
+        "TaskTagsSheet.swift": 1,            // the Tags sheet's Done
+        "TasksSettings.swift": 1,            // the estimate, schedule and end-time sheet's primary
+        "TimerPresetSheet.swift": 1,         // the preset sheet's Add or Save
+        "TimerOverview.swift": 1,            // Start timer: the Timer page header's one verb
+        "TasksOverview.swift": 1,            // New task: the Tasks page header's one verb (Stage 5 gave the page a header)
+        // A page header's one verb: Security's Scan now, or Connect ADR while ADR Discovery is not found. One style for
+        // both, set where the header draws the verb; the empty state draws the same verb in the standard style.
+        "SecurityOverview.swift": 1,
+        "UsageOverview.swift": 1,            // Refresh: the Usage page header's one verb
+        "ClipboardOverview.swift": 1,        // a page header's one verb: Clipboard's Open history panel
+        "NotesOverview.swift": 1,            // New note: the Notes page header's one verb
+        "NewNoteSheet.swift": 1,             // the New note sheet's Add
+    ]
+
+    func testOnlySheetsAndNewTaskArePrimary() throws {
+        assertPinnedCounts(Self.pinnedPrimaryButtonCounts, scanner: Self.primaryButtonLines,
+                           rule: "a primary button",
+                           cure: "a callout's or a card's button takes the standard style; .primary is a sheet's default action or a page header's one verb")
+        for planted in [".buttonStyle(SettingsButtonStyle(.primary))", ".buttonStyle(SettingsButtonStyle( .primary ))",
+                        "let style = SettingsButtonStyle(.primary)", "SettingsButtonStyle(\n    .primary)"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1, planted)
+        }
+        for clean in [".buttonStyle(SettingsButtonStyle())", ".buttonStyle(SettingsButtonStyle(.quiet, flush: true))",
+                      "// .buttonStyle(SettingsButtonStyle(.primary))", "Text(\"SettingsButtonStyle(.primary)\")",
+                      "if prominence == .primary { return SettingsTheme.onPrimary }"] {
+            XCTAssertEqual(Self.primaryButtonLines(in: clean), [], clean)
+        }
+
+        // A real page: Appearance's Upload skin, a card's button, given back the primary style.
+        let appearance = try XCTUnwrap(Self.settingsSources()["AppearanceSettings.swift"])
+        let upload = try XCTUnwrap(appearance.range(of: "isSkinImporterPresented = true\n                    }"), "Appearance has no Upload skin to plant on")
+        let planted = appearance.replacingCharacters(in: upload, with: "isSkinImporterPresented = true\n                    }\n                    .buttonStyle(SettingsButtonStyle(.primary))")
+        XCTAssertEqual(Self.primaryButtonLines(in: planted).count, 1)
+        XCTAssertEqual(Self.primaryButtonLines(in: appearance), [])
+    }
+
+    /// One entry per line naming `SettingsButtonStyle(.primary)`, its spacing and wrapping aside, read with comments and
+    /// strings blanked.
+    static func primaryButtonLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        return lines(at: matchOffsets(of: #"\bSettingsButtonStyle\s*\(\s*\.primary\b"#, in: code), in: code, text: text)
+    }
+
+    /// The shorthand colours a style or a colour argument can be handed.
+    private static let shorthandColours = "red|orange|yellow|green|mint|teal|cyan|blue|indigo|purple|pink|brown|white|gray|black|accentColor"
+    private static let systemFontStyles = "largeTitle|title2|title3|title|headline|subheadline|body|callout|footnote|caption2|caption|system"
+
+    /// One entry per line building a raw colour, read with comments and strings blanked: `Color.<name>` or
+    /// `NSColor.<name>` but `clear` and the hierarchical styles; any `Color(`, so `Color(red:…)`, `Color(nsColor:)`
+    /// and `Color(.systemX)`; a shorthand colour anywhere inside a style modifier's balanced arguments, either arm of
+    /// a ternary included; a colour argument (`tint:`, `color:`, `foreground:`, `background:`, `symbolColor:`,
+    /// `fill:`) given one; and `AnyShapeStyle(.<colour>)`. `NSColor(someColor)` converts a colour, so it is not one.
+    static func rawColourLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        var offsets = matchOffsets(of: #"(?<![A-Za-z0-9_.])(?:NS)?Color\s*\.\s*(?!(?:clear|primary|secondary|tertiary|quaternary)\b)[a-z]\w*"#,
+                                   in: code)
+        offsets += matchOffsets(of: #"(?<![A-Za-z0-9_.])Color\s*\("#, in: code)
+        offsets += matchOffsets(of: #"\b(?:tint|color|foreground|background|symbolColor|fill)\s*:\s*\.(?:"# + shorthandColours + #")\b"#, in: code)
+        offsets += matchOffsets(of: #"AnyShapeStyle\(\s*\.(?:"# + shorthandColours + #")\b"#, in: code)
+        let styles = #"\.(?:foregroundStyle|foregroundColor|fill|stroke|strokeBorder|background|tint|accentColor|shadow|border|overlay)\s*\("#
+        for arguments in balancedArguments(after: styles, in: code) {
+            offsets += matchOffsets(of: #"(?<![A-Za-z0-9_])\.(?:"# + shorthandColours + #")\b"#, in: code, range: arguments)
+        }
+        return lines(at: offsets, in: code, text: text)
+    }
+
+    /// One entry per line using a system font, read with comments and strings blanked: a text style or `.system`
+    /// anywhere inside `.font(…)`'s balanced arguments, ternary arms and `.footnote.bold()` included; `Font.` with one
+    /// of those; `.font(Font(`; `NSFont.systemFont…` and its siblings; and `.fontWeight(`.
+    static func systemFontLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        var offsets = matchOffsets(of: #"(?<![A-Za-z0-9_.])Font\s*\.\s*(?:"# + systemFontStyles + #")\b"#, in: code)
+        offsets += matchOffsets(of: #"\.font\s*\(\s*Font\s*\("#, in: code)
+        offsets += matchOffsets(of: #"(?<![A-Za-z0-9_.])NSFont\s*\.\s*(?:systemFont|boldSystemFont|monospacedSystemFont|monospacedDigitSystemFont|labelFont|messageFont|controlContentFont|menuFont|menuBarFont|toolTipsFont|titleBarFont|paletteFont|userFont|userFixedPitchFont)"#,
+                                in: code)
+        offsets += matchOffsets(of: #"\.fontWeight\s*\("#, in: code)
+        for arguments in balancedArguments(after: #"\.font\s*\("#, in: code) {
+            offsets += matchOffsets(of: #"(?<![A-Za-z0-9_])\.(?:"# + systemFontStyles + #")\b"#, in: code, range: arguments)
+        }
+        return lines(at: offsets, in: code, text: text)
+    }
+
+    /// One entry per line setting a native button style: `.buttonStyle(.bordered)` or `.buttonStyle(.borderless)`,
+    /// in either spelling, and `.borderedProminent` anywhere. Read with comments and strings blanked.
+    static func nativeButtonStyleLines(in text: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(text, blankingStrings: true)
+        let pattern = #"\.buttonStyle\s*\(\s*(?:\.(?:bordered|borderless)|(?:Bordered|Borderless)ButtonStyle\s*\(\s*\))\s*\)"#
+            + #"|(?<![A-Za-z0-9_])\.borderedProminent\b|\bBorderedProminentButtonStyle\b"#
+        return lines(at: matchOffsets(of: pattern, in: code), in: code, text: text)
+    }
+
+    /// Where each match of `pattern` starts in `code`, in UTF-16 units, within `range` when one is given.
+    private static func matchOffsets(of pattern: String, in code: String, range: NSRange? = nil) -> [Int] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            XCTFail("bad pattern: \(pattern)")
+            return []
+        }
+        let whole = NSRange(location: 0, length: (code as NSString).length)
+        return regex.matches(in: code, range: range ?? whole).map(\.range.location)
+    }
+
+    /// The inside of each call `opener` starts, which ends at its `(`: from there to the matching `)`. Strings are
+    /// already blanked, so a paren in one never counts.
+    private static func balancedArguments(after opener: String, in code: String) -> [NSRange] {
+        guard let regex = try? NSRegularExpression(pattern: opener) else {
+            XCTFail("bad pattern: \(opener)")
+            return []
+        }
+        let text = code as NSString
+        return regex.matches(in: code, range: NSRange(location: 0, length: text.length)).map { match in
+            let open = match.range.location + match.range.length - 1
+            var depth = 0, index = open
+            repeat {
+                let unit = text.character(at: index)
+                if unit == 0x28 { depth += 1 } else if unit == 0x29 { depth -= 1 }
+                index += 1
+            } while index < text.length && depth > 0
+            // Past the closing paren, or at the end of an unbalanced call.
+            let end = depth == 0 ? index - 1 : index
+            return NSRange(location: open + 1, length: max(0, end - open - 1))
+        }
+    }
+
+    /// The source lines holding `offsets`, once each, in order, trimmed. Blanking keeps every line, so a line of the
+    /// blanked code is the same line of the source.
+    private static func lines(at offsets: [Int], in code: String, text: String) -> [String] {
+        let nsCode = code as NSString
+        let numbers = Set(offsets.map { nsCode.substring(to: $0).components(separatedBy: "\n").count - 1 })
+        let lines = text.components(separatedBy: "\n")
+        return numbers.sorted().map { lines[$0].trimmingCharacters(in: .whitespaces) }
     }
 
     // MARK: - Rule 4: the components stay selectable
@@ -260,6 +700,14 @@ final class SettingsLayoutRulesTests: XCTestCase {
         """).count, 1)
         // Primary text is not the rule's business.
         XCTAssertEqual(Self.unselectableInformationalChains(in: "Text(\"title\")").count, 0)
+        // The theme's spellings of the same text count too, or moving to a token would hide it.
+        for token in [".foregroundStyle(SettingsTheme.inkSecondary)", ".font(SettingsTheme.description)",
+                      ".font(SettingsTheme.caption)", ".font(SettingsTheme.micro)"] {
+            let themed = "Text(\"info\")\n    \(token)"
+            XCTAssertEqual(Self.unselectableInformationalChains(in: themed).count, 1, token)
+            XCTAssertEqual(Self.unselectableInformationalChains(in: themed + "\n    .textSelection(.enabled)").count, 0, token)
+        }
+        XCTAssertEqual(Self.unselectableInformationalChains(in: "Text(\"title\")\n    .font(SettingsTheme.body)").count, 0)
     }
 
     func testTheContentStandardScannersCatchPlantedOffenders() {
@@ -270,10 +718,20 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertEqual(Self.adHocFontLines(in: "// .font(.caption) is banned on row text").count, 0)
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").settingsDescriptionStyle()").count, 0)
         XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(.subheadline)").count, 0)
+        // A token, or a font by name, cannot launder a small font past the rule.
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(.custom(\"Geist-Regular\", size: 10))").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.caption)").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.micro)").count, 1)
+        XCTAssertEqual(Self.adHocFontLines(in: "Text(\"x\").font(SettingsTheme.body)").count, 0)
 
-        XCTAssertEqual(Self.inlineSliderLines(in: "Slider(value: $x, in: 0...1)").count, 1)
-        XCTAssertEqual(Self.inlineSliderLines(in: "// Slider(value: $x, in: 0...1)").count, 0)
-        XCTAssertEqual(Self.inlineSliderLines(in: "SettingsSliderRow(\"T\", value: $x, in: 0...1, valueText: nil)").count, 0)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Slider(value: $x, in: 0...1)").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "// Slider(value: $x, in: 0...1)").count, 0)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSliderRow(\"T\", value: $x, in: 0...1, valueText: nil)").count, 0)
+        // Ours, by hand, count once each: only a row is not hand-built.
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider(value: $x, in: 0...1)").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsStepper(value: $v, in: 0...9) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "SettingsSlider<Double>(value: $x, in: 0...1) { Text(\"a\") }").count, 1)
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: "Stepper (value: $v, in: 0...9) { Text(\"a\") }").count, 1)
 
         XCTAssertEqual(Self.paddingLines(in: ".padding(.vertical, 8)").count, 1)
         XCTAssertEqual(Self.paddingLines(in: "// .padding(12)").count, 0)
@@ -281,7 +739,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
 
         // The same offenders, wrapped the way a long call is usually written. A rule that only
         // reads one physical line at a time is one reformat away from being switched off.
-        XCTAssertEqual(Self.inlineSliderLines(in: """
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: """
         Slider(
             value: $value,
             in: range
@@ -298,7 +756,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
                 .vertical, 8)
         """).count, 1)
         // Joining lines must not join across a comment that sits inside the call.
-        XCTAssertEqual(Self.inlineSliderLines(in: """
+        XCTAssertEqual(Self.handBuiltValueControlLines(in: """
         Slider(
             // value comes from the binding above
             value: $value, in: range)
@@ -310,36 +768,69 @@ final class SettingsLayoutRulesTests: XCTestCase {
         XCTAssertGreaterThan(sources.count, 8, "the Settings directory moved — fix settingsSources()")
         XCTAssertNotNil(sources["SettingsView.swift"])
         XCTAssertNotNil(sources["SettingsComponents.swift"])
+        XCTAssertNotNil(sources["SettingsTheme.swift"], "the scan no longer reaches DesignSystem/")
+    }
+
+    /// A rule that cannot see a subfolder passes on every file in it, so the walk itself is proved.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files.filter { $0.deletingLastPathComponent().lastPathComponent != "Inner" }), [])
     }
 
     // MARK: - Plumbing
 
-    /// `Kannu/components/Settings/*.swift`, keyed by file name. The views are not compiled into
-    /// this target, so the rules read the sources as text — the same route
-    /// `SettingsHighlightInventoryTests` takes.
+    /// Every `.swift` file under `Kannu/components/Settings`, at any depth, keyed by file name. The
+    /// views are not compiled into this target, so the rules read the sources as text — the same
+    /// route `SettingsHighlightInventoryTests` takes. Keyed by name, so a second file with the same
+    /// name would hide the first from every rule here: that is a failure, not a quiet overwrite.
     private static func settingsSources() -> [String: String] {
         let dir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Kannu/components/Settings")
+        let files = swiftFiles(under: dir)
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so a rule reads only one of them")
         var out: [String: String] = [:]
-        let files = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
-        for name in files where name.hasSuffix(".swift") {
-            out[name] = try? String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+        for file in files {
+            out[file.lastPathComponent] = try? String(contentsOf: file, encoding: .utf8)
         }
-        return out.compactMapValues { $0 }
+        return out
+    }
+
+    private static func swiftFiles(under directory: URL) -> [URL] {
+        guard let walker = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else { return [] }
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
     }
 
     /// The shared shape of every pinned-count rule: no file may exceed its pin, and no pin may
     /// outlive the code it describes — a stale pin hides the next offender behind its slot.
+    /// `skipped` files are where a rule's subject is defined, such as the theme for colours.
     private func assertPinnedCounts(_ pinned: [String: Int],
                                     scanner: (String) -> [String],
                                     rule: String,
                                     cure: String,
+                                    skipping skipped: Set<String> = [],
                                     file: StaticString = #filePath,
                                     line: UInt = #line) {
         var counts: [String: Int] = [:]
-        for (path, text) in Self.settingsSources() {
+        for (path, text) in Self.settingsSources() where !skipped.contains(path) {
             let found = scanner(text)
             if !found.isEmpty { counts[path] = found.count }
             let allowed = pinned[path] ?? 0
@@ -359,17 +850,22 @@ final class SettingsLayoutRulesTests: XCTestCase {
         }
     }
 
-    /// Non-comment lines carrying a caption-sized or pixel-sized font.
+    /// Non-comment lines carrying a caption-sized, pixel-sized or named font. The small theme tokens
+    /// count too, so a token cannot launder a font this rule would otherwise catch.
     private static func adHocFontLines(in text: String) -> [String] {
         matchingLines(in: text) {
             $0.contains(".font(.caption") || $0.contains(".font(.system(size:")
-                || $0.contains(".font(.system(.caption")
+                || $0.contains(".font(.system(.caption") || $0.contains(".font(.custom(")
+                || $0.contains(".font(SettingsTheme.caption") || $0.contains(".font(SettingsTheme.micro")
         }
     }
 
-    /// Non-comment lines building a `Slider` directly.
-    private static func inlineSliderLines(in text: String) -> [String] {
-        matchingLines(in: text) { $0.contains("Slider(value:") }
+    /// Non-comment lines building a slider or a stepper directly, Apple's or ours: `Slider(value:`,
+    /// `SettingsSlider(value:`, `Stepper(value:` and `SettingsStepper(value:`, never a row.
+    private static func handBuiltValueControlLines(in text: String) -> [String] {
+        matchingLines(in: text) {
+            $0.range(of: #"(?<![A-Za-z0-9_])(?:Settings)?(?:Slider|Stepper)\s*(?:<[^>]*>)?\s*\(\s*value:"#, options: .regularExpression) != nil
+        }
     }
 
     /// Non-comment lines adding padding.
@@ -452,6 +948,10 @@ final class SettingsLayoutRulesTests: XCTestCase {
                 || joined.contains(".foregroundColor(.secondary)")
                 || joined.contains(".font(.caption")
                 || joined.contains(".font(.subheadline")
+                || joined.contains(".foregroundStyle(SettingsTheme.inkSecondary)")
+                || joined.contains(".font(SettingsTheme.description")
+                || joined.contains(".font(SettingsTheme.caption")
+                || joined.contains(".font(SettingsTheme.micro")
             if informational, !joined.contains(".textSelection"),
                !joined.contains(".settingsDescriptionStyle") {
                 out.append(line.trimmingCharacters(in: .whitespaces))
