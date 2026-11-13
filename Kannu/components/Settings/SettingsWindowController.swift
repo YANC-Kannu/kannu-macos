@@ -283,6 +283,14 @@ class SettingsWindowController: NSWindowController {
         return true
     }
 
+    /// View › Enter Full Screen. It does nothing while a transition runs, as the close's toggle does, or while a close
+    /// waits for the exit: ⌃⌘F pressed twice fast, or during a deferred ⌘W, never toggles mid-transition or takes a
+    /// closing Brain back into full screen.
+    func toggleFullScreenWhenIdle() {
+        guard !isChangingFullScreen, !closeAfterFullScreen else { return }
+        window?.toggleFullScreen(nil)
+    }
+
     private func finishPendingClose() {
         guard closeAfterFullScreen else { return }
         // A turn later: this runs inside AppKit's transition callback. `NSWindow.close()` does not
@@ -339,6 +347,8 @@ extension SettingsWindowController: NSWindowDelegate {
 
     func windowDidEnterFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
+        // View's menu item says Exit Full Screen from here.
+        if let window { BrainVisibility.shared.update(for: window) }
         guard closeAfterFullScreen else { return }
         // A turn later, as in `finishPendingClose`. `showWindow` may clear the flag first.
         DispatchQueue.main.async { [weak self] in
@@ -353,6 +363,8 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as full screen.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowWillExitFullScreen(_ notification: Notification) {
@@ -362,11 +374,15 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidExitFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
         finishPendingClose()
+        // View's menu item says Enter Full Screen again.
+        if let window { BrainVisibility.shared.update(for: window) }
     }
 
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as windowed.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {

@@ -199,12 +199,12 @@ final class NotchTagFilterRulesTests: XCTestCase {
     func testTheChipScannerCatchesPlantedOffenders() {
         let column = """
             private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
-                HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
+                HoverRevealText(task.title, font: SettingsTheme.font(size: 12, weight: .semibold), isActive: isHovered)
                 TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText), foundFirst: !TaskSearch.foundTags(of: task, query: searchText).isEmpty) {
                     HStack(spacing: 0) {
-                        HoverRevealText(Text(verbatim: caption).font(.system(size: 11, weight: .medium)), isActive: isHovered)
+                        HoverRevealText(Text(verbatim: caption).font(SettingsTheme.font(size: 11, weight: .medium)), isActive: isHovered)
                         overText(progress.over)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SettingsTheme.font(size: 11, weight: .medium))
                             .fixedSize()
                     }
                 }
@@ -381,18 +381,18 @@ final class NotchTagFilterRulesTests: XCTestCase {
         if !row.contains("foundFirst: !TaskSearch.foundTags(of: task, query: searchText).isEmpty") {
             problems.append("a row does not say when the search found its first tag")
         }
-        if let tags = row.range(of: "TaskTagChips("), let caption = row.range(of: ".font(.system(size: 11, weight: .medium))"),
+        if let tags = row.range(of: "TaskTagChips("), let caption = row.range(of: ".font(SettingsTheme.font(size: 11, weight: .medium))"),
            let line = row.range(of: ".frame(height: M.sideTaskCaptionHeight)"),
            tags.lowerBound < caption.lowerBound, caption.lowerBound < line.lowerBound {
             // The caption goes into the tags' line.
         } else {
             problems.append("the tags are not beside the caption on a line one chip tall")
         }
-        let overtime = #"overText\(progress\.over\)\s*\.font\(\.system\(size: 11, weight: \.medium\)\)\s*\.fixedSize\(\)"#
+        let overtime = #"overText\(progress\.over\)\s*\.font\(SettingsTheme\.font\(size: 11, weight: \.medium\)\)\s*\.fixedSize\(\)"#
         if row.range(of: overtime, options: .regularExpression) == nil {
             problems.append("the caption's overtime can shorten: it is not a text of its own at its full width")
         }
-        if !(row.contains("font: .system(size: 12, weight: .semibold)") && row.contains(".frame(height: M.sideTaskRowHeight)")) {
+        if !(row.contains("font: SettingsTheme.font(size: 12, weight: .semibold)") && row.contains(".frame(height: M.sideTaskRowHeight)")) {
             problems.append("the row's title font or its 36 pt height changed: TimerComposerMetricsTests measures them")
         }
         let chip = body(of: "struct SideChip: View", in: column) ?? ""

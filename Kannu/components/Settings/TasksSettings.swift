@@ -75,6 +75,17 @@ struct TasksSettings: View {
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
+    /// New Task over whatever page is open: File › New Task (⌘N), which the menu bar owns, and the header's and the
+    /// empty list's New task. It takes the filter of the list on screen (`newTaskListFilter`), so a task that list
+    /// would hide opens on its own page. The filter is read when asked, so this tab observes neither the filters nor
+    /// the manager (with Tasks off, nothing here touches `TasksManager`).
+    private func openNewTask() {
+        // Not `isReady`: the menu can ask from a Brain whose list is still loading, and the sheet keeps Add off until
+        // the list is ready.
+        guard enableTasks, sheet == nil else { return }
+        sheet = .newTask(listFilter: newTaskListFilter)
+    }
+
     #if DEBUG
     /// DEBUG snapshot boards only (`DebugSnapshots`): the path and the tab a board opens on.
     static var snapshotPath: [TasksPage] = []
@@ -141,9 +152,8 @@ struct TasksSettings: View {
         .settingsListDetailFits($showsPageBeside)
         .settingsPageTitle(pageInPlace.map(Self.title) ?? Self.overviewTitle)
         .onReceive(NotificationCenter.default.publisher(for: .tasksNewTaskRequested)) { _ in
-            // The header's New task, ⌘N, or the empty list's. Read at the press.
-            guard enableTasks, sheet == nil, TasksManager.shared.isReady else { return }
-            sheet = .newTask(listFilter: newTaskListFilter)
+            // The header's New task, or the empty list's (⌘N is the menu's: `pendingNewTask`, below).
+            openNewTask()
         }
         .onAppear {
             #if DEBUG
@@ -183,6 +193,12 @@ struct TasksSettings: View {
             guard pageInPlace != nil else { return }
             path = []
             returnTo = id
+        }
+        // File › New Task, taken once. `initial`: the menu opens this tab, then asks.
+        .onChange(of: highlights.pendingNewTask, initial: true) { _, asked in
+            guard asked else { return }
+            highlights.pendingNewTask = false
+            openNewTask()
         }
         // Tasks off: every reminder, waiting or on screen, is taken back, and the tree closes.
         // `TaskReminders` only — this never builds `TasksManager`.

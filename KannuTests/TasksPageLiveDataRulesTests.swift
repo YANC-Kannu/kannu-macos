@@ -49,9 +49,10 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
     private static let managerFeed = #"TasksManager\.shared\.objectWillChange\s*\.throttle\(for: \.milliseconds\(500\), scheduler: RunLoop\.main, latest: true\)\s*\.values"#
     /// The header's: whether the task list has been read, passed on only when that changes.
     private static let readyFeed = #"TasksManager\.shared\.\$loadState\.map\(\{ \$0 == \.ready \}\)\.removeDuplicates\(\)\.values"#
-    /// All the first page and its header may name on the manager: the two subscriptions, the reads as the page appears
-    /// (`isReady` there and at New task's press) and the calls a press makes. Anything else there is state, which only
-    /// the copy reads, so a value the manager gains later is caught too.
+    /// All the first page and its header may name on the manager: the two subscriptions, the read as the header appears
+    /// (`isReady`; New task's press reads none, since the sheet opens while the list loads and keeps Add off until it is
+    /// ready) and the calls a press makes. Anything else there is state, which only the copy reads, so a value the
+    /// manager gains later is caught too.
     private static let allowedManagerNames: Set<String> = [
         "objectWillChange", "$loadState", "isReady", "checkReminderPermission", "refreshArchive", "delete", "disconnect",
         "setEstimate", "addManualTime", "setEndTime", "setSchedule", "discardInterruptedSession", "retryRemovingToken",
@@ -367,9 +368,12 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
             problems.append("Tasks' header has no actions")
         }
         let header = body(after: "struct TasksHeaderActions: View", in: SettingsDesignSystemRulesTests.code(overview))
-        if SettingsDesignSystemRulesTests.matches(of: #"Button\("New task"\) \{ Self\.requestNewTask\(\) \}\s*\.buttonStyle\(SettingsButtonStyle\(\.primary\)\)\s*\.keyboardShortcut\("n", modifiers: \.command\)"#,
+        if SettingsDesignSystemRulesTests.matches(of: #"Button\("New task"\) \{ Self\.requestNewTask\(\) \}\s*\.buttonStyle\(SettingsButtonStyle\(\.primary\)\)"#,
                                                    in: header).count != 1 {
-            problems.append("New task is not the header's primary verb with ⌘N")
+            problems.append("New task is not the header's primary verb")
+        }
+        if header.contains(".keyboardShortcut(") {
+            problems.append("the header binds a shortcut: ⌘N is the menu bar's (File › New Task)")
         }
         if !header.contains("requestAgentStatusNavigation(highlightID: SettingsDeepLink.tasksEnableHighlightID)") {
             problems.append("the gear does not go to the first settings row")
@@ -378,7 +382,8 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
             problems.append("the page keeps a hidden ⌘N button of its own beside the header's verb")
         }
         if !body(after: ".onReceive(NotificationCenter.default.publisher(for: .tasksNewTaskRequested))", in: page)
-            .contains("sheet = .newTask(listFilter: newTaskListFilter)") {
+            .contains("openNewTask()")
+            || !body(after: "private func openNewTask()", in: page).contains("sheet = .newTask(listFilter: newTaskListFilter)") {
             problems.append("New task's press does not open New Task")
         }
         return problems
@@ -400,9 +405,10 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
             Self.wiringProblems(settings: settings, view: $0, overview: overview)
         }
         SettingsDesignSystemRulesTests.assertCaught([
-            ("                    .keyboardShortcut(\"n\", modifiers: .command)\n", ""),
-            ("                    .buttonStyle(SettingsButtonStyle(.primary))\n                    .keyboardShortcut",
-             "                    .keyboardShortcut"),
+            ("                    .disabled(!ready)\n",
+             "                    .keyboardShortcut(\"n\", modifiers: .command)\n                    .disabled(!ready)\n"),
+            ("                    .buttonStyle(SettingsButtonStyle(.primary))\n                    .disabled(!ready)",
+             "                    .disabled(!ready)"),
             ("highlightID: SettingsDeepLink.tasksEnableHighlightID)", "highlightID: SettingsDeepLink.tasksSourcesHighlightID)"),
         ], in: overview) { Self.wiringProblems(settings: settings, view: view, overview: $0) }
     }

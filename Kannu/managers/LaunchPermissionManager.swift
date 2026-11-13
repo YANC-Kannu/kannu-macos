@@ -49,6 +49,12 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     /// The permission whose request is running; every other Allow waits for it.
     @Published private(set) var requestInFlight: LaunchPermission?
 
+    #if DEBUG
+    /// Boards only (`--kannu-snapshots`): every row, in these states. While it is set, `refresh` reads none of this Mac's
+    /// answers and probes no folder, and `rows` lists every permission, so a board shows each state and asks nothing.
+    static var snapshotStatuses: [LaunchPermission: LaunchPermissionStatus]?
+    #endif
+
     private var bluetoothCentral: CBCentralManager?
     private let locationManager = CLLocationManager()
     private var downloadsReadable: Bool?
@@ -225,6 +231,12 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
     // MARK: - Status
 
     func refresh() {
+        #if DEBUG
+        if let fixture = Self.snapshotStatuses {
+            if fixture != statuses { statuses = fixture }
+            return
+        }
+        #endif
         probeFolderAccessIfUnknown()
         var next: [LaunchPermission: LaunchPermissionStatus] = [:]
         for permission in LaunchPermission.allCases {
@@ -313,7 +325,10 @@ final class LaunchPermissionManager: NSObject, ObservableObject {
         musicSource: MediaControllerType,
         appleNotesSync: Bool = Defaults[.enableNotes] && Defaults[.enableAppleNotesSync]
     ) -> [LaunchPermission] {
-        LaunchPermissionPolicy.rows(for: LaunchPermissionPolicy.Features(
+        #if DEBUG
+        if snapshotStatuses != nil { return LaunchPermission.allCases }
+        #endif
+        return LaunchPermissionPolicy.rows(for: LaunchPermissionPolicy.Features(
             systemHUD: Defaults[.enableSystemHUD] || Defaults[.enableCustomOSD]
                 || Defaults[.enableVerticalHUD] || Defaults[.enableCircularHUD],
             downloads: Defaults[.enableDownloadListener],

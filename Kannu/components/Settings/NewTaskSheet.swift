@@ -27,7 +27,7 @@ final class NewTaskDraft: ObservableObject {
     @Published var draft = TaskFormDraft()
 }
 
-/// New Task, from the Tasks page header's New task (⌘N) or its empty list: everything the notch's task form takes
+/// New Task, from Tasks' header or empty list, or File › New Task (⌘N): everything the notch's task form takes
 /// (David, 2026-10-24: "we want all capabilties that we give for tasks in notch") — a title, a typed
 /// estimate, tags with the ones in use offered as chips, a reminder with its notification on or
 /// off — then Add, or Add & Start while the timer is on. The notch's own rules (`TaskFormDraft`),
@@ -103,6 +103,11 @@ struct NewTaskSheet: View {
             }
 
             reminder
+            // A list that could not be read is not read again before a relaunch, so Add stays off: say why, in the
+            // Tasks page's own words, beside the buttons, as a Connect sheet shows its problem.
+            if case .failed(let reason) = manager.loadState {
+                SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
+            }
         } buttons: {
             if draft != TaskFormDraft() {
                 Button("Clear All") {

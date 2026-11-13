@@ -453,7 +453,6 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         // 2026-11-04: the segmented picker's opt-out and its plant are gone. Nothing segmented is native any more:
         // the animation editor's Loop Mode is a SettingsSelect (Stage 3, brain/3-1-select).
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
-        XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: Self.code(try XCTUnwrap(sources["GeneralSettings.swift"]))))
 
         XCTAssertEqual(Self.linksWithoutTheLinkStyle(in: "Link(\"a\", destination: u)\n").count, 1)
         // A style on the next view is not on this one.
@@ -479,11 +478,6 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.bareValuesWithoutAColour(in: "LabeledContent(\"a\") {\n    TextField(\"b\", text: $b)\n}\n").count, 0)
 
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: ["Page.swift": "Button(\"a\") {}\n    .buttonStyle(.borderedProminent)\n"]), ["Page.swift"])
-
-        let rows = "LaunchPermissionRow(permission: p)\n    }\n}\n"
-        XCTAssertTrue(Self.permissionRowsKeepTheSystemTint(in: rows + ".tint(.accentColor)\n"))
-        XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: rows + ".settingsHighlight(id: i)\n"))
-        XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: "Text(\"a\")\n.tint(.accentColor)\n"))
 
         Self.assertCaught([("SettingsToggleStyle(showsLabel: false)", "SettingsToggleStyle()"),
                            ("HStack(spacing: SettingsMetrics.rowContent) { buttons }",
@@ -519,9 +513,50 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         }
     }
 
-    /// `LaunchPermissionRow` lives in `Onboarding/`, so no scan here reads its `.borderedProminent`.
-    private static func permissionRowsKeepTheSystemTint(in general: String) -> Bool {
-        !matches(of: #"LaunchPermissionRow\([^\n]*\n\s*\}\n\s*\}\s*\.tint\(\.accentColor\)"#, in: general).isEmpty
+    // MARK: - Onboarding
+
+    /// `Onboarding/`, keyed by file name. Its window is one of its own, so its view applies the root itself, as a sheet
+    /// does, and it shares `LaunchPermissionRow` with General (docs/SETTINGS.md, "Onboarding").
+    private static func onboardingSources() throws -> [String: String] {
+        var sources: [String: String] = [:]
+        for file in try swiftFiles(under: repoRoot.appendingPathComponent("Kannu/components/Onboarding", isDirectory: true)) {
+            sources[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
+        }
+        XCTAssertNotNil(sources["PermissionsStepView.swift"], "the scan no longer reaches Onboarding/")
+        return sources
+    }
+
+    /// The design review's finding 4: Allow is the row's answer and Not now the quiet way out, each in our own style,
+    /// which draws alike in a window that is not key, where a native prominent button turns grey.
+    private static func permissionRowRankingProblems(in row: String) -> [String] {
+        var problems: [String] = []
+        for (button, style, problem) in [("Button(\"Allow\")", ".buttonStyle(SettingsButtonStyle(.primary))", "Allow is not the row's primary"),
+                                         ("Button(\"Not now\")", ".buttonStyle(SettingsButtonStyle(.quiet))", "Not now is not quiet")]
+        where openers(of: button, in: row).count != 1 || !calls(of: button, in: row, whereChain: { !$0.contains(style) }).isEmpty {
+            problems.append(problem)
+        }
+        return problems
+    }
+
+    func testOnboardingWearsTheRootAndRanksAllow() throws {
+        let sources = try Self.onboardingSources()
+        let view = Self.code(try XCTUnwrap(sources["OnboardingView.swift"]))
+        XCTAssertEqual(view.components(separatedBy: ".settingsDesignSystem()").count - 1, 1, "onboarding's window applies the root, once")
+        XCTAssertTrue(view.contains(".background(SettingsTheme.panel.ignoresSafeArea())"), "every step sits on the panel")
+        // The root's tint is the eye blue, so a native prominent button's white label could not be read in dark.
+        XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
+        XCTAssertEqual(Self.permissionRowRankingProblems(in: Self.code(try XCTUnwrap(sources["PermissionsStepView.swift"]))), [])
+
+        let row = "Button(\"Not now\") { p() }\n    .buttonStyle(SettingsButtonStyle(.quiet))\n"
+            + "Button(\"Allow\") { r() }\n    .buttonStyle(SettingsButtonStyle(.primary))\n    .disabled(f)\n"
+        XCTAssertEqual(Self.permissionRowRankingProblems(in: row), [])
+        XCTAssertEqual(Self.permissionRowRankingProblems(in: row.replacingOccurrences(of: "(.primary)", with: "(.quiet)")),
+                       ["Allow is not the row's primary"])
+        XCTAssertEqual(Self.permissionRowRankingProblems(in: row.replacingOccurrences(of: "SettingsButtonStyle(.quiet)", with: ".bordered")),
+                       ["Not now is not quiet"])
+        // A style on the next view is not on this one, and a row with no Allow ranks nothing.
+        XCTAssertEqual(Self.permissionRowRankingProblems(in: "Button(\"Allow\") { r() }\nText(\"a\")\n    .buttonStyle(SettingsButtonStyle(.primary))\n"),
+                       ["Allow is not the row's primary", "Not now is not quiet"])
     }
 
     private static func toggleProblems(in toggle: String) -> [String] {

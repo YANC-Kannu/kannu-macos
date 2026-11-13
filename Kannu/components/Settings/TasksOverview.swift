@@ -289,9 +289,9 @@ enum TasksListTab: String, CaseIterable, Identifiable {
 // MARK: - The header
 
 /// Tasks' header actions (docs/SETTINGS.md, "Product pages"): the gear, which goes to the first settings row, then
-/// the page's one primary verb, New task, ⌘N, while tasks are on. Its press asks the page, which holds New Task's
+/// the page's one primary verb, New task, while tasks are on. Its press asks the page, which holds New Task's
 /// sheet, its draft and the path, to open it: the header and the page are siblings under `SettingsForm`, and the
-/// root may hold no state of its own.
+/// root may hold no state of its own. ⌘N is the menu bar's File › New Task, which opens the same sheet.
 struct TasksHeaderActions: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @Default(.enableTasks) private var enabled
@@ -317,7 +317,6 @@ struct TasksHeaderActions: View {
             if enabled {
                 Button("New task") { Self.requestNewTask() }
                     .buttonStyle(SettingsButtonStyle(.primary))
-                    .keyboardShortcut("n", modifiers: .command)
                     .disabled(!ready)
             }
         }

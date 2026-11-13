@@ -4,6 +4,55 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer CodeRabbit's second review of everything around Brain
+- **Developer label:** CodeRabbit's second review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 from CodeRabbit's second review of Super 6
+- **Changes:**
+  - Brain › Notes: after a read or decode of a note's image that failed, for example of a file still being written,
+    its page tries the image again at the next save. It used to keep the file's date anyway, so the preview stayed
+    missing until the file itself changed.
+
+### 2026-11-13 - Answer CodeRabbit's first review of everything around Brain
+- **Developer label:** CodeRabbit's first review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 in part and inline-2 from CodeRabbit's first review of Super 6, folded into Stage 6 child 6; inline-1's retry answered on the PR
+- **Changes:**
+  - Brain › Tasks: New Task says why Add stays off when the task list could not be read, in the Tasks page's own words
+    ("Couldn't read the task list, so it can't change."), beside its buttons. It still opens at once while the list is
+    loading, with Add off until the list is ready. No retry: nothing reads the list again before a relaunch.
+  - `MenuBarRulesTests` and `SidebarBadgeLiveDataRulesTests` start with the project's GPL header block, as AGENTS.md
+    asks of every Swift file.
+  - `TasksPageLiveDataRulesTests`: a comment no longer says New task's press reads `isReady`.
+
+### 2026-11-13 - Answer the review of the final audit's fixes
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the reviewer's R1 and R2, and one found while gating; R3 and R4 answered in the lane's notes
+- **Changes:**
+  - View › Enter Full Screen also does nothing while a close in full screen waits for its exit, so ⌃⌘F in the turn
+    between the exit and the queued close no longer takes a closing Brain back into full screen (R1).
+    `MenuBarRulesTests` pins both conditions.
+  - A note's page: the image key's comment says it changes on every save, and that the task decides whether to read
+    the file again (R2).
+  - Brain's search suggestions: the fade's geometry transform takes the list's height as a captured value, since
+    SwiftUI may call it as `@Sendable`, so it reads no view state, as every other such transform in the app does.
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum names the second condition.
+
+### 2026-11-13 - Fix the final audit's small findings
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, F3, F5, F6, F8 and F9
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the audit's Lows F3, F5, F6, F8 and F9; F1 waits for its Mac check, F2, F4 and F7 were left out, and F10's copy goes with the next strings pass
+- **Changes:**
+  - View › Enter Full Screen (⌃⌘F) does nothing while a full-screen transition runs, as a close in full screen already
+    waited: pressed twice fast, or during a close's exit, it asked AppKit to toggle mid-transition (F3).
+    `MenuBarRulesTests` holds it.
+  - `applicationWillFinishLaunching` runs before the terms are checked, and `LaunchGateRulesTests` now pins its body to
+    the one in-memory registration it holds; AGENTS.md's launch-gate trap names it (F5).
+  - Brain › Notes: a note's page reads its image again only when the image file changes, not on every save of the text,
+    which came each 1.5 s while the notch edited the note Brain showed (F6).
+  - Brain's search suggestions keep only whether more rows sit below the list's foot, so scrolling them no longer writes
+    state on every tick (F8).
+  - A permission callout's VoiceOver group is named by its title, so Shelf's two "Open Privacy & Security" buttons are
+    told apart (F9).
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum.
+
 ### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
 - **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
 - **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR
@@ -27,6 +76,75 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     The notch's rows keep their scope-based question, a separate follow-up.
   - docs/SETTINGS.md: Notes' Delete question.
 
+### 2026-11-12 - Answer the review of onboarding
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: the reviewer's M1, M2 and M4; M3 answered in a comment; nothing found in the gates, the permission timing, the keyboard or VoiceOver
+- **Changes:**
+  - A profile card's glyph sits in a box of one height, so the four names line up: the symbols draw 25 to 32 pt tall
+    at the same size, and Developer's name sat 6 pt above Designer's.
+  - A profile card is at least 160 pt tall rather than exactly, so a longer translation or the system font grows it
+    instead of spilling past it, now that its description is no longer cut at three lines.
+  - Focus detection's Open Developer Tools settings carries its chevron, as Agents' "Open ›" does, so a bare quiet
+    button still says it leads somewhere.
+  - The onboarding boards' comment says why clearing the fixture does not refresh the manager: only the menu report
+    follows, and a refresh would read this Mac's answers.
+
+### 2026-11-12 - Onboarding takes Brain's look
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: every onboarding step on Brain's tokens, Geist, cards, buttons and insets, and the design review's Allow above Not now
+- **Changes:**
+  - The onboarding window applies Brain's root and paints the panel under every step. A step's title is the page
+    title, the line under it body text in the secondary ink, both at the page's inset, and its buttons trail, the verb
+    primary. Welcome and Finish keep a centred hero; Finish's buttons are a sheet's, Customize in Brain then Finish.
+  - The choices (music source, profiles, traffic light, staying awake, notes) are choice cards like Timer's start
+    tiles: the card colour, and the ring and VoiceOver's "selected" when chosen. The radio circles, gradients, tinted
+    fills, hover scale and springs went. A music source is a button now, so the keyboard reaches it; YouTube Music's
+    GitHub link sits over its card.
+  - The Permissions step keeps one card per permission, in the theme's card. Focus detection is a segmented
+    `SettingsSelect`, Open at login is our switch, and "Allowed" is a status line with its dot.
+  - Allow is the permission row's primary and Not now its quiet button (the design review's finding 4), in onboarding's
+    cards and General's Permissions rows, which share the row. Our own styles draw alike in a window that is not key,
+    so General's `.tint(.accentColor)` around the rows went, with its colour pin and its docs.
+  - The Profile step's line and the Developer card's description are no longer cut short.
+  - Behaviour is unchanged: no string, no gate and no prompt's timing changed, and the welcome music still plays only at
+    Finish. `FirstLaunchRulesTests` and `LaunchGateRulesTests` pass unchanged.
+  - Every step has a board (`OnboardingView(snapshotStep:)`, DEBUG), and the Permissions step's whole list another, from
+    fixture statuses (`LaunchPermissionManager.snapshotStatuses`, DEBUG), so no board reads this Mac's answers or probes
+    a folder. They replace two boards that wore Brain's root, which the window did not.
+  - `SettingsDesignSystemRulesTests` holds onboarding's root and panel, no `.borderedProminent` under `Onboarding/`, and
+    Allow's rank. docs/SETTINGS.md gains "Onboarding"; docs/REGRESSIONS.md entry 22 a 2026-11-12 addendum.
+
+### 2026-11-12 - Answer the review of the floating panels
+- **Developer label:** Brain redesign plan: Stage 6, floating panels, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the reviewer's minors; the picker's Refresh and Close keep their reach and gain names, and both panels' motion honours Reduce Motion
+- **Changes:**
+  - The LocalSend picker's Refresh and Close keep the reach of the circles they replaced: their glyphs sit in a 22-pt
+    frame inside the quiet style's inset, 38 by 28.
+  - Refresh and Close say "Refresh devices" and "Close" to VoiceOver, existing catalog keys; neither takes a tooltip,
+    which would be a second hover source beside the style's own.
+  - The clipboard panel's tab switch keeps its 0.2 s ease but none under Reduce Motion, and the picker's device no
+    longer grows under the pointer with Reduce Motion on.
+  - docs/SETTINGS.md "The floating panels" says so.
+
+### 2026-11-12 - The floating panels take Brain's theme
+- **Developer label:** Brain redesign plan: Stage 6, floating panels: clipboard, LocalSend picker and similar small panels
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the clipboard panel and the LocalSend picker on Brain's tokens, Geist, cards, buttons and insets, behaviour unchanged
+- **Changes:**
+  - The clipboard panel draws on `panel` in Geist: its title in `sheetTitle`, History or Favorites as a segmented
+    `SettingsSelect` with each tab's count, the search in Brain's field chrome, rows on the card inset with the `hover`
+    fill, and Brain's empty state. Its glyph buttons keep their plain style and tooltips, in the theme's colours.
+  - The LocalSend picker's content draws in Geist on Brain's dark tokens over the backdrop Shelf › Device Picker Style
+    picks: devices as soft cards, Refresh and Close quiet, Scan Again the standard button, Brain's empty state. Its
+    hover growth takes the theme's bounded ease, none under Reduce Motion.
+  - Each panel's view hands what it observes to a content view (`ClipboardPanelContent`,
+    `LocalSendDevicePickerContent`), so six new boards, light and dark, draw fixtures and never build the clipboard
+    manager or the LocalSend service. Window code, placement, focus, dismissal, tooltips and the capture policy are
+    unchanged.
+  - New `FloatingPanelRulesTests` pins the system fonts and raw colours left in both files, each with why, the panels'
+    root, and the boards' fixtures, against planted offenders.
+  - docs/SETTINGS.md gains "The floating panels"; docs/REGRESSIONS.md entry 17 a 2026-11-12 addendum, since both files
+    hold a panel.
+
 ### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
 - **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
 - **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR
@@ -45,6 +163,99 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
   - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
     switch.
+
+### 2026-11-12 - Answer the review of the sidebar badges
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: the reviewer's S1 and M2–M6; Security's and Usage's badges follow Agent Status as their pages do
+- **Changes:**
+  - Security's count and Usage's dot show only while Agent Status is on: off, their pages show none of it and the
+    notch shows no cue, so the sidebar kept a count nothing else would explain.
+  - docs/SETTINGS.md says the agents' badge is the notch's light (a finished agent's red outranks another's yellow)
+    and that a timer in overtime still runs.
+  - `SidebarBadgeLiveDataRulesTests` holds the gate, the order that drops repeats before the throttle, and Security's
+    read on coming back, against planted offenders.
+
+### 2026-11-12 - Brain's sidebar badges a state that needs you
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges (layout-proposal.md D2, badges only)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: badges for an agent waiting, high findings and usage near its limit, a static timer glyph, under Brain's live-data rules
+- **Changes:**
+  - Agents shows a dot in the light's yellow while an agent waits for input; Security, the count of high-severity
+    findings to review; Usage, a dot while a window is at or near its limit; Timer, a static ▶ while a timer runs.
+    Nothing else: no open-task count and no setup checklist (David, 2026-11-11, "Badges only").
+  - Each badge says its state in words to VoiceOver and the pointer, so it never rests on colour alone.
+  - Live data as on the pages: one copy per badge, throttled to 500 ms, only while Brain is on screen, read once as it
+    appears; the agents' badge follows the monitor's projection; nothing ticks, and `SettingsView` observes nothing
+    new. `SidebarBadgeLiveDataRulesTests` holds it against planted offenders.
+  - The sidebar's BETA pill becomes the pages' one badge, "Beta" (design review finding 12). `SettingsSidebarRow`
+    takes its badge as a view.
+  - Board `shellBadges` draws every badge from a fixture; every other board is quiet, so none reads this Mac's stores.
+  - Catalog: "Beta" and "Near its limit" in all 17 languages; "BETA" retired.
+  - docs/SETTINGS.md ("The shell and navigation", "Live data", the badge row); docs/REGRESSIONS.md entry 22's
+    2026-11-12 addendum.
+
+### 2026-11-12 - Answer the review of the menu bar
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
+- **Changes:**
+  - Go and New Task only beep while a sheet is open over Brain. Menu keys still reach the menu bar under a sheet, so
+    ⌘1 in New Task or a connect sheet switched the page underneath and closed the sheet, with what was typed in it.
+  - New Task opens while the task list is still loading: the menu can ask from a cold Brain, and Tasks dropped the
+    request until the list was ready. The sheet already keeps Add off until then.
+  - A failed entry into or exit from full screen updates `BrainVisibility` too, so View's item keeps the right title.
+  - `MenuBarRulesTests` holds the sheet check, the failed transitions' updates and the request's guard against planted
+    offenders.
+  - docs/SETTINGS.md says New Task opens over any Tasks page and what Hide Sidebar leaves reachable; docs/REGRESSIONS.md
+    entry 22's 2026-11-12 addendum names the sheet check.
+
+### 2026-11-12 - The menu bar gets Go, View and File around Brain
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate
+- **Changes:**
+  - Go lists Brain's product pages in the sidebar's order, ⌘1 to ⌘7, and opens each as its sidebar row does, through
+    the switch point a search pick uses, with no row pulsing. The order lives once, in `SettingsTab.sidebarOrder`.
+  - View: Hide or Show Sidebar (⌃⌘S, a new `brainShowsSidebar` key that `BrainShell` takes as a plain flag),
+    Appearance with the moon's three choices, and Enter or Exit Full Screen (⌃⌘F), titled from a new
+    `BrainVisibility.isFullScreen`. Each is off while Brain is not on screen.
+  - File › New Task (⌘N) opens Brain on Tasks with New Task, through a request Tasks takes once; on All tasks it takes
+    the list's filters, as before. The hidden ⌘N button on Tasks is gone, so the menu owns the shortcut; the item is
+    off while Tasks is off.
+  - Go and New Task open Brain through one function that brings the terms back until they are accepted, as Brain…
+    does. A registered `NSFullScreenMenuItemEverywhere` of false keeps AppKit from adding a second Enter Full Screen.
+  - The snapshot run writes the menu bar to `menu.txt`, and two boards draw the window with no sidebar and a Go item's
+    page. `MenuBarRulesTests` holds the menus against planted offenders; `BrainAppearanceRulesTests` names View ›
+    Appearance among the key's writers, and `BrainShellRulesTests` names `showsSidebar` beside the navigation state.
+  - Five catalog keys in all 17 languages: Go, Hide Sidebar, Show Sidebar, Enter Full Screen, Exit Full Screen.
+  - docs/SETTINGS.md gains "The menu bar" and the Hide Sidebar line; docs/REGRESSIONS.md entry 22 a 2026-11-12
+    addendum.
+
+### 2026-11-12 - Answer the review of Geist in the notch
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
+- **Changes:**
+  - The running timer's name and its rename field keep the system font: 20 pt in a 24 pt line, which Geist's 26 pt
+    line overfills.
+  - A symbol beside medium text keeps the system's medium: Geist Medium draws SF Symbols regular (measured, about a
+    fifth less ink), so Notes' back chevron, Open in Notes' and Add a reminder's symbols take their own font.
+  - `NotchFontRulesTests` pins the six lines; docs/SETTINGS.md "The notch" says why, with the dropped rounded design
+    and why the Agents tab's names take Geist when the music title does not.
+
+### 2026-11-12 - The notch's text in Geist, through one theme token
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: a shared font token in place of `.system` across the notch
+- **Changes:**
+  - `SettingsTheme.font(size:weight:)`: Geist at the size and weight `.system` took, the notch's sizes being its own
+    (`UsageCardMetrics`, `TimerComposerMetrics`). Bold and heavier draw Geist SemiBold, the heaviest face bundled;
+    with no Geist bundled it is the system font, as every token is.
+  - The open notch's text uses it: 124 lines in 12 files of `Notch/` and the Agents tab (the header's tooltip, Home,
+    Usage, Timer and its Tasks column, task form and suggestions, Notes, Stats, the Tasks and Clipboard popovers).
+    Text styles became their macOS sizes.
+  - Kept on the system font, pinned per file with why by `NotchFontRulesTests`: symbols, which `.system` sizes;
+    monospaced text, since Geist Mono ships Regular only (the timer's black readouts among it); the tag chip, whose
+    16 pt caption line Geist's 10 pt line overfills by AppKit's ruler; the music title, artist and lyrics, whose title
+    measures with an AppKit text style; the header's button symbols.
+  - Every budget keeps its size. `TimerComposerMetricsTests` measures the 36 pt task row with the Geist faces it now
+    draws; `NotchTagFilterRulesTests` and `TimerTaskDetailRulesTests` pin the rows' new font calls.
+  - docs/SETTINGS.md gains "The notch"; docs/REGRESSIONS.md entry 21 notes that `NotchNotesView` changed only fonts.
 
 ### 2026-11-12 - Answer the review of Brain's Notes list-detail
 - **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
