@@ -57,9 +57,17 @@ struct TaskRowList: View {
             timingIsPaused: manager.timing?.isPaused ?? false
         )
         let canStart = enableTimerFeature && manager.isReady
-        ForEach(list.rows) { row in
-            taskRow(row, showsColorDot: list.showsColorDots, canStart: canStart)
-                .id(row.id)
+        // Lazy, unlike the page around it: a list can hold hundreds of tasks, and a plain stack builds every row as
+        // the page opens. No search or deep link lands on a row here, and going back scrolls to a task by this
+        // `ForEach`'s own id, which a lazy stack reaches before the row is built (docs/SETTINGS.md, "Pages and
+        // sections"). Only with rows: an empty stack would still take a row's gap in its section.
+        if !list.rows.isEmpty {
+            LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
+                ForEach(list.rows) { row in
+                    taskRow(row, showsColorDot: list.showsColorDots, canStart: canStart)
+                        .id(row.id)
+                }
+            }
         }
     }
 
@@ -315,8 +323,8 @@ private struct CancelOnEscape: ViewModifier {
 /// Add a task: one row whose New Task button opens `NewTaskSheet`, which holds every field a task
 /// takes — never fields inline in the list (David, 2026-10-24: "a add task button maybe giving
 /// popup"). A new task goes on top. On Local tasks' page and All tasks; `listFilter` is what the
-/// list shows, so a task it would hide opens on its own page. ⌘N lives on the tab's Form
-/// (`TasksSettings`), since this row may not exist once scrolled away.
+/// list shows, so a task it would hide opens on its own page. ⌘N lives on the tab
+/// (`TasksSettings`), one shortcut for both pages that have this row.
 struct TaskAddRow: View {
     @ObservedObject private var manager = TasksManager.shared
     let context: TasksPageContext

@@ -126,7 +126,9 @@ struct SettingsRowLabel: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
             title
             if let description {
-                description.settingsDescriptionStyle(tint: descriptionTint)
+                description
+                    .settingsDescriptionStyle(tint: descriptionTint)
+                    .frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)
             }
         }
     }
@@ -379,7 +381,7 @@ struct SettingsStepperRow<Value: Strideable>: View {
 /// A Section header. Selectable — a header is explanatory text, not a control label — so the
 /// section's name can be copied like everything else around it. Use it for every
 /// `Section { … } header: { … }` in Settings; `SettingsLayoutRulesTests` rejects a raw `Text`
-/// there.
+/// there. It is the section's heading for VoiceOver, so a badge or a count beside it is not.
 struct SettingsSectionHeader: View {
     private let text: Text
 
@@ -396,6 +398,7 @@ struct SettingsSectionHeader: View {
         text
             .font(SettingsTheme.sectionTitle)
             .textSelection(.enabled)
+            .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -417,6 +420,8 @@ struct SettingsFooter: View {
             // The root's font would otherwise replace the smaller one a grouped Form gives a footer.
             .font(SettingsTheme.description)
             .fixedSize(horizontal: false, vertical: true)
+            // Prose wraps at `proseMaxWidth`; the outer frame keeps it on the section's leading edge.
+            .frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
     }
@@ -473,9 +478,8 @@ struct SettingsActionRow<Buttons: View>: View {
             } label: {
                 label
             }
-            // Wide buttons wrap under the title here. The root's one-line row would squeeze the
-            // description instead, to about 100 pt beside "Copy a prompt that drafts a policy".
-            .labeledContentStyle(.automatic)
+            // No style of its own: the root's labelled row puts the buttons trailing. Outside a grouped `Form`,
+            // the automatic style sets them straight after the title (Stage 4, 2026-11-05).
         } else {
             HStack(spacing: SettingsMetrics.rowContent) {
                 Spacer(minLength: 0)
@@ -487,7 +491,7 @@ struct SettingsActionRow<Buttons: View>: View {
 
 /// The "…" button that holds a row's less frequent actions. Never inside a `SettingsRow`
 /// control slot — the row's `.labelsHidden()` environment erases the menu's label and its
-/// items' titles; use a raw `LabeledContent` (the `analysisRow` shape) instead.
+/// items' titles; use a raw `LabeledContent` (the `SecurityAnalysisRow` shape) instead.
 struct SettingsMoreMenu<Items: View>: View {
     private let accessibilityLabel: Text
     private let items: Items

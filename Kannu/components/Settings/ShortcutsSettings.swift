@@ -35,8 +35,8 @@ struct Shortcuts: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableShortcuts) {
                     Text("Enable global keyboard shortcuts")
                 }
@@ -55,25 +55,25 @@ struct Shortcuts: View {
     }
 
     var shortcutsSection: some View {
-        Section {
-            shortcutRow("Toggle Sneak Peek:", name: .toggleSneakPeek,
-                        description: Text("Sneak Peek shows the media title and artist under the notch for a few seconds."))
-            shortcutRow("Toggle Notch Open:", name: .toggleNotchOpen,
+        SettingsSection {
+            shortcutRow("Toggle sneak peek", name: .toggleSneakPeek,
+                        description: Text("Briefly shows the title and artist under the notch."))
+            shortcutRow("Toggle notch open", name: .toggleNotchOpen,
                         description: Text("Toggle the Dynamic Island open or closed from anywhere."))
-            shortcutRow("Start Demo Timer:", name: .startDemoTimer,
+            shortcutRow("Start demo timer", name: .startDemoTimer,
                         description: enableTimerFeature
-                            ? Text("Starts a 5-minute demo timer to test the timer live activity feature. Only works when timer feature is enabled.")
+                            ? Text("Starts a 5-minute demo timer.")
                             : Text("Timer feature is disabled"),
                         isEnabled: enableTimerFeature)
             // The recorder shows the real shortcut; the old text claimed a default of Cmd+Shift+V.
-            shortcutRow("Clipboard History:", name: .clipboardHistoryPanel,
+            shortcutRow("Clipboard history", name: .clipboardHistoryPanel,
                         description: enableClipboardManager
-                            ? Text("Opens the clipboard history panel. Only works when clipboard feature is enabled.")
+                            ? Text("Opens the clipboard history panel.")
                             : Text("Clipboard feature is disabled"),
                         isEnabled: enableClipboardManager)
-            shortcutRow("Screen Assistant:", name: .screenAssistantPanel,
+            shortcutRow("Screen Assistant", name: .screenAssistantPanel,
                         description: Defaults[.enableScreenAssistant]
-                            ? Text("Opens the AI assistant panel for file analysis and conversation. Only works when screen assistant feature is enabled.")
+                            ? Text("Opens the AI assistant panel.")
                             : Text("Screen Assistant feature is disabled"),
                         isEnabled: Defaults[.enableScreenAssistant])
         } header: {

@@ -33,7 +33,8 @@ enum SettingsTheme {
     static let hover = color(light: 0xEEEAE1, dark: 0x1E1F23)
     static let line = color(light: 0xE2DED4, dark: 0x2D2E34)
     static let ink = color(light: 0x1C1A16, dark: 0xECEAE4)
-    static let inkSecondary = color(light: 0x6B675E, dark: 0xA3A199)
+    /// 4.5:1 on the line colour too, where a badge's text sits.
+    static let inkSecondary = color(light: 0x66625A, dark: 0xA3A199)
     static let accent = color(light: 0x4DA3FF, dark: 0x4DA3FF)
     /// The accent where it must be read: text and thin marks. 2.54:1 on paper is too faint for that.
     static let accentStrong = color(light: 0x1D69C9, dark: 0x4DA3FF)
@@ -51,6 +52,9 @@ enum SettingsTheme {
 
     /// One size on every page, so the title never changes size between tabs.
     static let pageTitle = sans(24, .semibold, "Geist-SemiBold")
+    /// A card's title, the step between a page's title and a row: the hero's state, an empty state's status, and a
+    /// status cell's headline figure.
+    static let cardTitle = sans(17, .semibold, "Geist-SemiBold")
     /// A sheet's title: a sheet is smaller than a page.
     static let sheetTitle = sans(15, .semibold, "Geist-SemiBold")
     static let body = sans(13, .regular, "Geist-Regular")
@@ -91,8 +95,6 @@ enum SettingsTheme {
     static let sidebarRowContent: CGFloat = 10
     static let sidebarBadgeHorizontalInset: CGFloat = 6
     static let sidebarBadgeVerticalInset: CGFloat = 2
-    /// The grouped `Form`'s own side margin. The page's title pads by it too, so it lines up with the cards.
-    static let formMargin: CGFloat = 20
     /// Where a page starts, from the panel's leading edge. A page is held there, never centred.
     static let pageInset: CGFloat = 32
     /// The same on a panel at least `widePanelWidth` wide, such as a full-screen one.
@@ -102,6 +104,49 @@ enum SettingsTheme {
     static let pageHeaderTop: CGFloat = 37
     /// The search field and its suggestions.
     static let fieldRadius: CGFloat = 8
+    /// The fade at the foot of the suggestions while more rows sit below, so a list of whole rows still says "more". The
+    /// list ends on a row's bottom edge, and a row's tab line sits 7 to 20 pt above it, so the fade reaches that line.
+    static let suggestionFade: CGFloat = 20
+
+    // MARK: - Pages and sections
+
+    /// Between two sections, and above the first and below the last.
+    static let sectionGap: CGFloat = 24
+    /// From the title's row to the page's scroll view, so a scrolled page is cut this far under the title, never against
+    /// it. The page's own top padding gives up as much, so a page at rest starts where it did.
+    static let pageScrollInset: CGFloat = 12
+    /// A section's card around its rows. Twelve at the sides too: one inset for text inside and beside a card, so a row,
+    /// a section's header and a card's title start on one edge.
+    static let sectionPadding = EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12)
+    /// Between two rows of a section: space, never a divider.
+    static let sectionRowGap: CGFloat = 14
+    /// From a section's header to its card, and from the card to its footer.
+    static let sectionLabelGap: CGFloat = 8
+    static let sectionRadius: CGFloat = 12
+    /// A row's caption stops here, so a label column never runs past about 80 characters at the description's size, however
+    /// long a caption still is.
+    static let descriptionMaxWidth: CGFloat = 440
+
+    // MARK: - Product pages: the product first, then its settings
+
+    /// A product page's own content stops here. Past it the extra width is right margin, as with `pageMaxWidth`.
+    static let productMaxWidth: CGFloat = 1200
+    /// A line of prose, such as an empty state's or a section's footer: about 74 characters at the description's size, 63 at
+    /// the body's.
+    static let proseMaxWidth: CGFloat = 380
+    /// The hero card, or the empty state in its place.
+    static let heroMinHeight: CGFloat = 200
+    /// The same inset as a section's card, so the hero's text starts where every card's does.
+    static let heroPadding: CGFloat = 12
+    static let heroIcon: CGFloat = 28
+    /// A row of a product page's list, and the space between two.
+    static let listRowHeight: CGFloat = 56
+    static let listRowGap: CGFloat = 6
+    static let listRowIcon: CGFloat = 20
+    /// A row's trailing column, its state, metrics and light, so the eye travels a bounded distance.
+    static let listTrailingWidth: CGFloat = 200
+    /// A start tile, side by side with the others and wrapping: Timer's presets, four to a row at the window's first size.
+    static let tileWidth: CGFloat = 180
 
     // MARK: - Controls
 
@@ -132,6 +177,14 @@ enum SettingsTheme {
     static let selectListHeight: CGFloat = 294
     static let fieldInset = EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8)
     static let focusRingWidth: CGFloat = 2
+    /// A choice card's one selected look: an accent ring this wide around its tile.
+    static let choiceRingWidth: CGFloat = 2
+
+    // MARK: - Badges
+
+    /// A badge beside a title on a page ("Beta", "Alpha", "Built-in"): quiet, on the line colour.
+    static let badgeInset = EdgeInsets(top: 2, leading: 6, bottom: 2, trailing: 6)
+    static let badgeRadius: CGFloat = 4
 
     // MARK: - Values
 

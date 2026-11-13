@@ -33,7 +33,13 @@ struct KannuColorPickerButton<Content: View>: View {
         Button {
             isPresented.toggle()
         } label: {
+            // A white ring inside a hairline, so a swatch never reads as a status dot (docs/SETTINGS.md, "The content
+            // standard"). Every user is in Brain, so the rings take Brain's theme.
             KannuColorSwatch(color: color, size: swatchSize)
+                .padding(SettingsTheme.hairline)
+                .background(SettingsTheme.knob, in: Circle())
+                .padding(SettingsTheme.hairline)
+                .background(SettingsTheme.line, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(accessibilityLabel))

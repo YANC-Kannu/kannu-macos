@@ -36,6 +36,7 @@ final class FirstLaunchRulesTests: XCTestCase {
         "Kannu/managers/BluetoothAudioManager.swift",
         "Kannu/managers/DownloadManager.swift",
         "Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift",
+        "Kannu/managers/AgentStatus/AgentToolDetector.swift",
         "Kannu/managers/AnimatedArtworkManager.swift",
         "Kannu/managers/ClipboardManager.swift",
         "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
@@ -171,7 +172,7 @@ final class FirstLaunchRulesTests: XCTestCase {
         )), ["something looks up Warp's database without the gate"])
 
         XCTAssertEqual(Self.problems(in: planted(
-            "Kannu/components/AgentStatus/NotchAgentStatusView.swift",
+            "Kannu/managers/AgentStatus/AgentToolDetector.swift",
             "detected: LaunchPermissionManager.isWarpInstalled",
             "detected: WarpAgentStore.databaseURL != nil"
         )), ["something looks up Warp's database without the gate"])
@@ -281,7 +282,8 @@ final class FirstLaunchRulesTests: XCTestCase {
         let monitor = sources["Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift"] ?? ""
         let ungatedWarpLookups = monitor.components(separatedBy: "func ").dropFirst()
             .filter { $0.contains("WarpAgentStore.databaseURL") && !$0.contains("LaunchPermissionManager.mayTouch(.warp)") }
-        let viewsStatWarp = (["Kannu/components/AgentStatus/NotchAgentStatusView.swift"]
+        // The notch's empty state and Brain › Agents ask `AgentToolDetector`, which goes by Launch Services.
+        let viewsStatWarp = (["Kannu/components/AgentStatus/NotchAgentStatusView.swift", "Kannu/managers/AgentStatus/AgentToolDetector.swift"]
             + sources.keys.filter { $0.hasPrefix("Kannu/components/Settings/") })
             .contains { (sources[$0] ?? "").contains("WarpAgentStore.databaseURL") }
         if !ungatedWarpLookups.isEmpty || viewsStatWarp {

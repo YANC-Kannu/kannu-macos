@@ -52,7 +52,7 @@ struct IdleAnimationsSettingsSection: View {
     @State private var editingExistingAnimation: CustomIdleAnimation?
     
     var body: some View {
-        Section {
+        SettingsSection {
             if showNotHumanFace {
                 // Horizontal scrollable grid of animations
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -122,12 +122,12 @@ struct IdleAnimationsSettingsSection: View {
                 }
                 .frame(height: 140)
             } else {
-                Text("Enable \"Idle Animation\" to customize animations")
+                Text("Enable \"Idle animation\" to customize animations")
                     .settingsDescriptionStyle()
             }
         } header: {
             HStack {
-                SettingsSectionHeader("Idle Animation Style")
+                SettingsSectionHeader("Idle animation style")
                 Spacer()
                 if showNotHumanFace {
                     Text("\(customIdleAnimations.count) animations")
@@ -198,7 +198,7 @@ struct IdleAnimationsSettingsSection: View {
                 }
             }
         }
-        .alert("Delete Animation", isPresented: $showingDeleteAlert) {
+        .alert("Delete animation", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Delete", role: .destructive) {
                 if let animation = selectedForDeletion {
@@ -210,7 +210,7 @@ struct IdleAnimationsSettingsSection: View {
                 Text("Are you sure you want to delete \"\(animation.name)\"?")
             }
         }
-        .alert("Import Error", isPresented: $showingError) {
+        .alert("Import error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
             Text(importError ?? "Unknown error occurred")
@@ -301,85 +301,69 @@ struct AnimationPreviewCard: View {
     @State private var isHovering = false
     
     var body: some View {
-        VStack(spacing: 8) {
-            // Preview area
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .strokeBorder(
-                                isSelected ? Color.accentColor : Color.clear,
-                                lineWidth: 2.5
-                            )
-                    )
-                
-                // Animation preview
-                AnimationPreview(animation: animation)
-                    .frame(width: 60, height: 40)
-                
-                // Delete button (only for custom animations)
-                if let onDelete = onDelete, isHovering {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Button {
-                                onDelete()
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.white, .red)
-                                    .font(.system(size: 20))
-                            }
-                            .buttonStyle(.plain)
-                            .padding(4)
-                        }
-                        Spacer()
+        // A button, so the keyboard reaches the card and VoiceOver hears which one is selected. Its name is not
+        // selectable: selectable text inside a button takes the click.
+        Button(action: onSelect) {
+            VStack(spacing: 8) {
+                // Preview area
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                        .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
+
+                    // Animation preview
+                    AnimationPreview(animation: animation)
+                        .frame(width: 60, height: 40)
+                }
+                .frame(width: 100, height: 80)
+
+                // Name and badge: the ring says selected, so the badge only says built-in.
+                VStack(spacing: 4) {
+                    Text(animation.name)
+                        .settingsChoiceLabel(isSelected: isSelected)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 100)
+
+                    if animation.isBuiltIn {
+                        SettingsBadge(String(localized: "Built-in"))
                     }
                 }
             }
-            .frame(width: 100, height: 80)
-            .onHover { hovering in
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    isHovering = hovering
-                }
-            }
-            
-            // Name and badge
-            VStack(spacing: 4) {
-                Text(animation.name)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 100)
-                    .textSelection(.enabled)
-                
-                if isSelected {
-                    Text("Selected")
-                        .font(.system(size: 10))
-                        .fontWeight(.medium)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.accentColor)
-                        )
-                } else if animation.isBuiltIn {
-                    Text("Built-in")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        // VoiceOver's path to Delete, which the glyph below offers only under the pointer.
+        .accessibilityActions {
+            if let onDelete = onDelete {
+                Button("Delete", action: onDelete)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            onSelect()
+        // Delete button (only for custom animations), on the tile's corner: over the card's button, never inside its
+        // label, so its click stays its own.
+        .overlay(alignment: .topTrailing) {
+            if let onDelete = onDelete, isHovering {
+                Button {
+                    onDelete()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.white, .red)
+                        .font(.system(size: 20))
+                }
+                .buttonStyle(.plain)
+                .padding(4)
+            }
+        }
+        // On the whole card, the glyph included, so moving onto the glyph does not hide it.
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
         }
         .contextMenu {
             if let onEdit = onEdit {
-                Button("Edit Animation") {
+                Button("Edit animation") {
                     onEdit()
                 }
                 Divider()
@@ -521,7 +505,7 @@ struct AddAnimationCard: View {
             // Closing Brain runs this, while `showingMenu` survives the close (docs/REGRESSIONS.md, entry 22).
             .onDisappear { showingMenu = false }
 
-            Text("Add New")
+            Text("Add new")
                 .font(.caption)
                 .fontWeight(.medium)
                 .foregroundStyle(.secondary)
@@ -538,13 +522,13 @@ struct URLImportSheet: View {
     let onCancel: () -> Void
     
     var body: some View {
-        SettingsSheet("Add Animation from URL") {
+        SettingsSheet("Add animation from URL") {
             LabeledContent("Lottie JSON URL") {
                 TextField("Lottie JSON URL", text: $urlInput, prompt: Text("https://example.com/animation.json"))
                     .settingsField()
             }
-            LabeledContent("Animation Name") {
-                TextField("Animation Name", text: $nameInput, prompt: Text("My Animation"))
+            LabeledContent("Animation name") {
+                TextField("Animation name", text: $nameInput, prompt: Text("My animation"))
                     .settingsField()
             }
         } buttons: {
@@ -565,7 +549,7 @@ struct URLImportSheet: View {
 
 // MARK: - Preview
 #Preview {
-    Form {
+    SettingsPage {
         IdleAnimationsSettingsSection()
     }
     .frame(width: 600, height: 400)
