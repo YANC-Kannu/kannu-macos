@@ -42,6 +42,8 @@ Three facts shape 2.0 (measured 2026-11-13):
     says which.
   - `whatsNewWindow` holds the window.
   - Its content view takes a fixture for its snapshot board.
+  - Its English copy is in `whats-new-copy.md` beside this file: the title, a line under it, the three cards and
+    Continue. The window's title and Continue reuse catalog keys that exist in all 17 languages.
 
 ## Risks / Trade-offs
 - **The bridge is forgotten, and 1.x users never see 2.0.** Mitigation: the ship step's checklist reads the old feed's
