@@ -694,8 +694,10 @@ struct SettingsView: View {
                 if listScrolls {
                     ScrollView {
                         suggestionRows
-                            .onGeometryChange(for: Bool.self) {
-                                $0.frame(in: .named(Self.scrollSpace)).maxY > listHeight + SettingsTheme.hairline
+                            // The foot is read here, in body: SwiftUI may call the transform as `@Sendable`, so it reads
+                            // no view state.
+                            .onGeometryChange(for: Bool.self) { [foot = listHeight + SettingsTheme.hairline] in
+                                $0.frame(in: .named(Self.scrollSpace)).maxY > foot
                             } action: {
                                 rowsBelowFoot = $0
                             }

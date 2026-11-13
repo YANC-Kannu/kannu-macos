@@ -1867,15 +1867,16 @@ a real Allow.
 **2026-11-13 addendum: View's full-screen item waits for a transition, and a note's page reads its image once per
 file.** The final audit (F3) found ⌃⌘F toggling with no guard: pressed twice fast, or during a close's exit, it asked
 AppKit to toggle in the middle of a transition, which the close's own toggle never does (the 2026-11-01 addendum above).
-The item now calls `SettingsWindowController.toggleFullScreenWhenIdle()`, which does nothing while
-`isChangingFullScreen`, and `MenuBarRulesTests` holds both halves against planted offenders. A note's page read its image
-again on every save of the note's text, each 1.5 s while the notch edited the note Brain showed (F6), so the 2026-11-11
-Notes addendum's "once" did not hold. Its `.task(id:)` still restarts on a save, but it now stats the file off the main
-thread and reads it only when the file's own modification date has changed: a save of the text keeps the file, and a new
-image is a new file under the same name. No hook and no animator were added, and neither the search suggestions' fade,
-now kept as one Bool (F8), nor the permission callout's VoiceOver name (F9) adds one, so the rest of this entry holds.
-**Not measured:** each needs a real window: ⌃⌘F pressed twice fast, and a note with an image typed in the notch while
-Brain shows it.
+The item now calls `SettingsWindowController.toggleFullScreenWhenIdle()`, which does nothing while a transition runs
+(`isChangingFullScreen`) or a close waits for the exit (`closeAfterFullScreen`), so a press in the turn between the exit
+and the queued close no longer takes a closing Brain back into full screen. `MenuBarRulesTests` holds the call and both
+conditions against planted offenders. A note's page read its image again on every save of the note's text, each 1.5 s
+while the notch edited the note Brain showed (F6), so the 2026-11-11 Notes addendum's "once" did not hold. Its
+`.task(id:)` still restarts on a save, but it now stats the file off the main thread and reads it only when the file's
+own modification date has changed: a save of the text keeps the file, and a new image is a new file under the same name.
+No hook and no animator were added, and neither the search suggestions' fade, now kept as one Bool (F8), nor the
+permission callout's VoiceOver name (F9) adds one, so the rest of this entry holds. **Not measured:** each needs a real
+window: ⌃⌘F pressed twice fast, and a note with an image typed in the notch while Brain shows it.
 
 ---
 

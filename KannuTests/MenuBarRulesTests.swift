@@ -188,9 +188,9 @@ final class MenuBarRulesTests: XCTestCase {
 
     // MARK: - The full-screen item waits for a transition
 
-    /// ⌃⌘F pressed twice fast, or during a close's exit, would toggle in the middle of a transition, which the close's
-    /// own toggle never does (docs/REGRESSIONS.md, entry 22). So View's item toggles through the controller, which does
-    /// nothing while one runs.
+    /// ⌃⌘F pressed twice fast, or during a deferred close, would toggle in the middle of a transition, which the close's
+    /// own toggle never does, or take a closing Brain back into full screen (docs/REGRESSIONS.md, entry 22). So View's
+    /// item toggles through the controller, which does nothing while a transition runs or a close waits for one.
     static func fullScreenToggleProblems(commands: String, controller: String) -> [String] {
         var problems: [String] = []
         let view = code(body(of: "private struct BrainViewCommands: View {", in: commands))
@@ -198,8 +198,8 @@ final class MenuBarRulesTests: XCTestCase {
             problems.append("View's full-screen item toggles without waiting for a transition")
         }
         let toggle = body(of: "func toggleFullScreenWhenIdle() {", in: code(controller))
-        if !isBefore("guard !isChangingFullScreen else { return }", "window?.toggleFullScreen(nil)", in: toggle) {
-            problems.append("the controller toggles full screen during a transition")
+        if !isBefore("guard !isChangingFullScreen, !closeAfterFullScreen else { return }", "window?.toggleFullScreen(nil)", in: toggle) {
+            problems.append("the controller toggles full screen during a transition or a deferred close")
         }
         return problems
     }
@@ -211,10 +211,13 @@ final class MenuBarRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             ("SettingsWindowController.shared.toggleFullScreenWhenIdle()", "SettingsWindowController.shared.window?.toggleFullScreen(nil)"),
         ], in: commands) { Self.fullScreenToggleProblems(commands: $0, controller: controller) }
-        let guarded = "        guard !isChangingFullScreen else { return }\n        window?.toggleFullScreen(nil)\n"
+        let check = "guard !isChangingFullScreen, !closeAfterFullScreen else { return }"
+        let guarded = "        \(check)\n        window?.toggleFullScreen(nil)\n"
         SettingsDesignSystemRulesTests.assertCaught([
             (guarded, "        window?.toggleFullScreen(nil)\n"),
-            (guarded, "        window?.toggleFullScreen(nil)\n        guard !isChangingFullScreen else { return }\n"),
+            (guarded, "        window?.toggleFullScreen(nil)\n        \(check)\n"),
+            // A press in the turn after the exit, before the queued close: Brain would go back into full screen.
+            (check, "guard !isChangingFullScreen else { return }"),
         ], in: controller) { Self.fullScreenToggleProblems(commands: commands, controller: $0) }
     }
 
