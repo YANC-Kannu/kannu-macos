@@ -39,6 +39,8 @@ struct NotePage: View {
     let delete: (NoteItem) -> Void
     @Default(.enableNotePinning) private var pinning
     @State private var image: NSImage?
+    /// The modification date of the file `image` came from; nil when none did.
+    @State private var imageDate: Date?
 
     /// Changes when the note's image does: the file keeps its name when the image is replaced.
     private var imageKey: String {
@@ -92,13 +94,21 @@ struct NotePage: View {
             #endif
             guard let fileName = note.imageFileName else {
                 image = nil
+                imageDate = nil
                 return
             }
             let url = NoteItem.noteImageDataDirectory.appendingPathComponent(fileName)
+            // Every save restarts this, each 1.5 s while the notch edits the note, and a save of the text keeps the
+            // image's file: so the file's own date, a stat off the main thread, says whether to read it again.
+            let date = await Task.detached(priority: .utility) {
+                (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+            }.value
+            guard !Task.isCancelled, date != imageDate else { return }
             let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
             // A newer read has started (the note was saved again) or the page has gone: this one's image is old.
             guard !Task.isCancelled else { return }
             image = data.flatMap { NSImage(data: $0) }
+            imageDate = date
         }
     }
 
