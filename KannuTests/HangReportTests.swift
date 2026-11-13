@@ -160,9 +160,9 @@ final class HangReportTests: XCTestCase {
     }
 
     func testTheIssueCarriesTheBuildAndTheStackAndNoIdentifiers() throws {
-        let url = try XCTUnwrap(report().issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(report().issueURL(repository: "YANC-Kannu/kannu-macos"))
         XCTAssertEqual(url.host, "github.com")
-        XCTAssertTrue(url.path.hasSuffix("/libinmv/kannu/issues/new"))
+        XCTAssertTrue(url.path.hasSuffix("/YANC-Kannu/kannu-macos/issues/new"))
 
         let body = report().issueBody
         XCTAssertTrue(body.contains("1.3.0 (3)"))
@@ -179,7 +179,7 @@ final class HangReportTests: XCTestCase {
     /// Decoded the way a form reader does, not the way `URLComponents` does: Foundation's own parser
     /// leaves `+` intact, so a round trip through it would pass while the real thing was broken.
     func testTheStackSurvivesFormDecodingOnTheOtherEnd() throws {
-        let url = try XCTUnwrap(report().issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(report().issueURL(repository: "YANC-Kannu/kannu-macos"))
         let body = try XCTUnwrap(
             (url.query ?? "")
                 .split(separator: "&")
@@ -209,7 +209,7 @@ final class HangReportTests: XCTestCase {
     func testAnEnormousStackStillProducesAnOpenableURL() throws {
         var huge = report()
         huge.frames = (0..<4000).map { "\($0)  Kannu  $s5Kannu28aRatherLongMangledSymbolNameyyF + \($0)" }
-        let url = try XCTUnwrap(huge.issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(huge.issueURL(repository: "YANC-Kannu/kannu-macos"))
         XCTAssertLessThanOrEqual(url.absoluteString.count, HangReport.issueURLLimit)
         XCTAssertTrue(url.absoluteString.contains("issues/new"))
     }

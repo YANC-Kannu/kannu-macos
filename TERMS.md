@@ -57,4 +57,4 @@ Nothing in these terms limits any right you have that cannot be limited or exclu
 
 **10. Contact**
 
-Kannu is developed in the open at https://github.com/libinmv/kannu. If you find a security vulnerability, please tell the maintainers privately first rather than in a public issue, so it can be fixed before it is widely known.
+Kannu is developed in the open at https://github.com/YANC-Kannu/kannu-macos. If you find a security vulnerability, please tell the maintainers privately first rather than in a public issue, so it can be fixed before it is widely known.
