@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Write Kannu 2.0's release notes, ReadMe and welcome copy, and name it Horus
+- **Developer label:** Kannu 2.0 release prep: the release copy, the [Cloud] tasks of the OpenSpec change `release-2-0`,
+  and the codename David picked, Horus
+- **Agent label:** Claude Code (Opus 5.5) — the notes for 2.0.0 beta 1 and 2.0.0, a draft of `[2.0.0]`'s summary, the
+  ReadMe for the pivot and What's New's English copy, Horus as `ReleaseInfo.codename`, and the change's tasks and run
+  log brought up to date with David's decisions
+- **Changes:**
+  - `ReleaseInfo.codename` is Horus (David, 2026-11-13), so Settings › About and both release paths' titles read
+    "Kannu 2.0.0 — Horus" once the version is 2.0.0. Its doc comment says why: Horus is one eye, like 2.0's logo and a
+    notch that closes like an eye. `scripts/RELEASE.md`'s Codenames table gives 2.0.0 its row; Vigil is next, then
+    Sentinel.
+  - `docs/release-notes/2.0.0.md`, written for a 1.3.4 user updating: Brain, Tasks, Tags, the notch, agents and
+    usage, the first launch, privacy, what changes on updating, and what is fixed. Its first line names Horus.
+  - `docs/release-notes/2.0.0-beta.1.md`, for the beta's two testers, who download it by hand and report to David:
+    what they get, what changes on updating, what to try, going back and reporting, and that Kannu's updates never
+    offer it. No sign-up, issue template or form.
+  - `ReadMe.md` rewritten for the pivot: the notch as the front door and Brain as the room behind it, then what is
+    inside by Brain, agents, tasks and tags, and the notch. Its install, build, licence, permission and setup facts
+    stay, with #3's Releases link and `Kannu.2.0.0.dmg` as the example, and a line on betas.
+  - `openspec/changes/release-2-0/changelog-summary.md` drafts the summary for the top of CHANGELOG's `[2.0.0]`.
+    `whats-new-copy.md` beside it holds the What's New window's English copy, with notes for its build and its
+    translations, and `design.md` points at it.
+  - `tasks.md` ticks 2.1 (#3's merge), 2.3, 3.2, 4.1 to 4.4 and 5.1, and records David's decisions of 13 Nov: Horus
+    (9.1), a What's New window in 2.0 (9.2), and #55 after 2.0 (9.7). It adds 4.6, which cuts 1.3.1 to 1.3.4 out of
+    `[Unreleased]` before the rename to `[2.0.0]`. `handoff.md` records the merges of #57 and #3, those decisions,
+    the PR states at 14:00 UTC and the release copy.
+
 ### 2026-11-13 - Answer CodeRabbit's second review of everything around Brain
 - **Developer label:** CodeRabbit's second review of the Stage 6 super (#52)
 - **Agent label:** Claude Code (Opus 5.5) — inline-1 from CodeRabbit's second review of Super 6
