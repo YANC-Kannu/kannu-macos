@@ -1,6 +1,6 @@
 # Run log: where Kannu 2.0 stands
 
-*As of 2026-11-13, 10:34 UTC, measured with `gh` and git. The redesign's full history stays in the local notes on
+*As of 2026-11-13, 22:05 UTC, measured with `gh` and git. The redesign's full history stays in the local notes on
 David's Mac. This file is the summary that anyone can continue from with only GitHub. Update it here from now on:
 when a line moves, change it, and add the time and how you measured it.*
 
@@ -16,7 +16,12 @@ note answered.
 | #43 | `super/brain-5-tasks` → `development` (retargeted) | ccef6388 | a711fece |
 | #52 | `super/brain-6-around` → `development` (retargeted) | 418dee32 | d7d839d3 |
 
-- `development` is at d7d839d3. Its tree is Stage 6's reviewed head tree. `main` is at c63e3752.
+- The landing left `development` at d7d839d3, whose tree is Stage 6's reviewed head tree. `main` is at c63e3752.
+- **#57 (OpenSpec, with this change) merged at 13:18 UTC** as 385070c8, after it caught up (3a1c1236, both Build
+  runners green).
+- **#3 (the repoint to `YANC-Kannu/kannu-macos`) merged at 14:02 UTC** as e69311ea.
+- **#58 (where agent sessions start, in `openspec/project.md`) merged at 14:47 UTC** as 1145e7b5, which is
+  `development` now (14:48 UTC, `git fetch`).
 - #52's reviews:
   - the first review's two notes were fixed in #56;
   - the second review's one note (a failed note-image load stayed cached) was fixed in 418dee32 on the super;
@@ -26,17 +31,34 @@ note answered.
   errors, use `gh api -X PUT repos/YANC-Kannu/kannu-macos/pulls/<n>/merge -f merge_method=merge`, on the same yes.
   Never use it to get around a refusal.
 ## Outside the stack
-After the landing, GitHub was recomputing mergeability for the PRs into `development`. The conflicts below are a
-`git merge-tree` forecast against d7d839d3.
+The states are what `gh` reported at 14:00 UTC. Where a PR conflicts, the files named are a `git merge-tree` forecast
+against d7d839d3.
 
 | PR | What | State |
 |---|---|---|
-| #57 | OpenSpec, with this change | caught up with `development` (a CHANGELOG-only conflict); merges on David's yes |
-| #55 | Kannu no longer holds up every Claude prompt | ready; would conflict in CHANGELOG, `SettingsView.swift` and `SettingsHighlightInventoryTests.swift` |
-| #3 | Points Kannu at `YANC-Kannu/kannu-macos`: the feed, CI and docs | ready; would conflict in CHANGELOG only |
+| #57 | OpenSpec, with this change | merged as 385070c8 (13:18 UTC) |
+| #55 | Kannu no longer holds up every Claude prompt | ready; CONFLICTING, in CHANGELOG, `SettingsView.swift` and `SettingsHighlightInventoryTests.swift`; waits until after 2.0 (9.7) |
+| #3 | Points Kannu at `YANC-Kannu/kannu-macos`: the feed, CI and docs | merged as e69311ea (14:02 UTC) |
+| #58 | Says where agent sessions start, in `openspec/project.md` | merged as 1145e7b5 (14:47 UTC) |
 | #14 | 1.4.0 gets the real Bluetooth HUD videos, not Git LFS pointers | ready; CLEAN; into `release/1.4.0` |
-| #9 | SonarCloud CI and Dependabot | ready; CONFLICTING |
+| #9 | SonarCloud CI and Dependabot | ready; GitHub still computing (CONFLICTING before) |
 | #4 | Imports `main` from `libinmv/kannu` | ready; BLOCKED; into `main` |
+
+## The release copy
+The [Cloud] writing tasks are on `docs/release-2-0-copy`. It was cut from `development` at 385070c8 and moved up to
+1145e7b5 as #3 and #58 merged, so the work sits on both. On David's yes it went up as one commit, in a PR into
+`development` (2026-11-13, 22:05 UTC):
+- `docs/release-notes/2.0.0-beta.1.md` and `docs/release-notes/2.0.0.md` (4.2, 4.3);
+- `changelog-summary.md` in this folder, the draft for the top of `[2.0.0]` (4.1). The rename waits for 4.6, which
+  first gives 1.3.1 to 1.3.4 their own section;
+- `ReadMe.md`, rewritten for the pivot, with #3's Releases link (4.4);
+- `whats-new-copy.md` in this folder, the window's English copy (5.1);
+- the codename (3.2): `ReleaseInfo.codename` is Horus, and `scripts/RELEASE.md`'s Codenames table gives 2.0.0 its
+  row, with Vigil next and then Sentinel;
+- task 2.3 ticked: all seven release secrets exist, by name.
+
+David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcome window (9.2), and #55 after 2.0
+(9.7).
 
 ## The installed checkpoint
 - **Installed on David's Mac** on 2026-11-12 at 23:44 UTC: a local combined build of all three supers on
@@ -53,10 +75,10 @@ After the landing, GitHub was recomputing mergeability for the PRs into `develop
 ## Pending asks for David
 1. **The Mac checks**, F1 first (below). The stack landed first, on David's yes, so they now run on the final install
    from `development` (section 6).
-2. **Catch #3 up** with `development` (CHANGELOG only), and merge it.
-3. **The decisions** in `tasks.md` section 9: the codename, What's New, the feed bridge, new features, AGENTS.md's
-   overview, #55, `release/1.4.0`, and OpenSpec 2.x. (Decided 2026-11-13: the video's storyboard stays on David's Mac
-   and is never committed.)
+2. **The decisions** left in `tasks.md` section 9: the feed bridge, new features, AGENTS.md's overview,
+   `release/1.4.0`, and OpenSpec 2.x. Decided 2026-11-13: the codename is Horus, 2.0 adds What's New, #55 waits until
+   after 2.0, and the video's storyboard stays on David's Mac and is never committed.
+3. **The release copy's PR** (above): its review, and a yes to merge it.
 
 ## David's Mac checks
 **On the installed build:**

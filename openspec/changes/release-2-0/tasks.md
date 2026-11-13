@@ -23,30 +23,40 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
   path. [Cloud] All 48 cited paths exist, except section 4's release notes, which are not written yet.
 
 ## 2. Land #3 and bridge the feed
-- [ ] 2.1 Catch #3 (`chore/repoint-yanc-kannu`, CONFLICTING) up with `development`, run its gates, and merge it.
-  [Mac] [David]
+- [x] 2.1 Catch #3 (`chore/repoint-yanc-kannu`) up with `development`, run its gates, and merge it. [Mac] [David]
+  Merged as e69311ea (2026-11-13, 14:02 UTC).
 - [ ] 2.2 Confirm who can push to `libinmv/kannu`. Only 2.0.0 final needs it. [David]
-- [ ] 2.3 Check that this repository's release secrets still exist (`gh secret list`) before the first tag. [David]
+- [x] 2.3 Check that this repository's release secrets still exist (`gh secret list`) before the first tag. [David]
+  All seven that `scripts/RELEASE.md` names exist, by name (2026-11-13).
 
 ## 3. Version
 - [ ] 3.1 Set `MARKETING_VERSION` to 2.0.0, and `CURRENT_PROJECT_VERSION` to 12 for beta.1, in both configurations of
   `Kannu.xcodeproj/project.pbxproj`. [Mac]
-- [ ] 3.2 Set the codename in `ReleaseInfo.codename` (`Kannu/models/Constants.swift`), once David picks it (9.1). Add
-  its row to `scripts/RELEASE.md`'s Codenames table. [Cloud] [David]
+- [x] 3.2 Set the codename in `ReleaseInfo.codename` (`Kannu/models/Constants.swift`), once David picks it (9.1). Add
+  its row to `scripts/RELEASE.md`'s Codenames table. [Cloud] [David] Horus, set in both on 2026-11-13. Vigil is next,
+  then Sentinel, and the first line of both release notes already says Horus.
 - [ ] 3.3 Before final: set 2.0.0's build to the last beta's plus one. [Mac]
 
 ## 4. Notes
-- [ ] 4.1 Draft the user-facing 2.0 summary for the top of CHANGELOG's `[2.0.0]`. When the version lands, rename
-  `[Unreleased]` to `[2.0.0] - <date> - <codename>`. [Cloud]
-- [ ] 4.2 Write `docs/release-notes/2.0.0-beta.1.md`: what testers get, what to try, how to report, and that Sparkle
-  will not offer it. [Cloud]
-- [ ] 4.3 Write `docs/release-notes/2.0.0.md`. [Cloud]
-- [ ] 4.4 Rewrite `ReadMe.md` for the pivot. Keep its install, build and licence facts. [Cloud]
+- [x] 4.1 Draft the user-facing 2.0 summary for the top of CHANGELOG's `[2.0.0]`. [Cloud] Drafted in
+  `changelog-summary.md`. The rename is 4.6.
+- [x] 4.2 Write `docs/release-notes/2.0.0-beta.1.md`: what testers get, what to try, how to report, and that Sparkle
+  will not offer it. [Cloud] Written. Its testers are David and libinmv, who download it by hand and report to David
+  (David, 2026-11-13), so it has no sign-up, template or form.
+- [x] 4.3 Write `docs/release-notes/2.0.0.md`. [Cloud] Written for a 1.3.4 user updating.
+- [x] 4.4 Rewrite `ReadMe.md` for the pivot. Keep its install, build and licence facts. [Cloud] Rewritten, with #3's
+  Releases link.
 - [ ] 4.5 Decide whether AGENTS.md's "Project overview" takes the 2.0 positioning. It still reads "Watch Your
   Agents" (9.6). [David]
+- [ ] 4.6 When 2.0.0's version lands (3.3), cut CHANGELOG's `[Unreleased]` in three steps. [Cloud]
+  1. Give the 23 entries that shipped in 1.3.1 to 1.3.4 a section of their own. They run from "Ship 1.3.4" down to
+     `[1.3.0]`, because `[Unreleased]` was last cut at 1.3.0.
+  2. Rename what is left to `[2.0.0] - <date> - <codename>`.
+  3. Put `changelog-summary.md`'s text under that heading.
 
-## 5. What's New (recommended; one child PR)
-- [ ] 5.1 Write the copy for the window and its three cards, Brain, Tasks and Tags, in English. [Cloud]
+## 5. What's New (one child PR; David chose it, 9.2)
+- [x] 5.1 Write the copy for the window and its three cards, Brain, Tasks and Tags, in English. [Cloud] In
+  `whats-new-copy.md`, with notes for 5.2 and 5.3.
 - [ ] 5.2 Build the window per `specs/whats-new` and `design.md`. [Mac]
 - [ ] 5.3 Add its strings to `Kannu/Localizable.xcstrings` in all 17 languages, with sorted insertion. [Mac or Cloud]
 - [ ] 5.4 Rule tests: never before the Terms, never on a fresh install, never during onboarding, and shown once.
@@ -92,15 +102,17 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [ ] 8.6 Assemble the cut, and David signs it off before release day. [David]
 
 ## 9. Open decisions (each asked when its step comes up)
-- [ ] 9.1 The codename. Horus is recommended: next on the list, and his eye matches the logo and a notch that closes
-  like an eye.
-- [ ] 9.2 Whether 2.0 adds the What's New window. Recommended: yes, one small child PR.
+- [x] 9.1 The codename. Horus is recommended: next on the list, and his eye matches the logo and a notch that closes
+  like an eye. Decided: Horus (David, 2026-11-13).
+- [x] 9.2 Whether 2.0 adds the What's New window. Recommended: yes, one small child PR. Decided: yes (David,
+  2026-11-13).
 - [ ] 9.3 Who pushes the `libinmv/kannu` feed bridge.
 - [ ] 9.4 Whether 2.0 adds features beyond what is built. If not, "more features" leads the 2.x roadmap.
 - [x] 9.5 Where the storyboard and prompts live: on David's Mac only, never committed (David, 2026-11-13). A cloud
   session cannot write there, so the storyboard is a local task (8.1).
 - [ ] 9.6 AGENTS.md's "Project overview" and the pivot (4.4, 4.5).
-- [ ] 9.7 Whether #55 (Claude hooks no longer hold up a prompt; ready, into `development`) ships in 2.0.
+- [x] 9.7 Whether #55 (Claude hooks no longer hold up a prompt; ready, into `development`) ships in 2.0. Decided: it
+  waits until after 2.0 (David, 2026-11-13), so the 2.0.0 notes leave it out.
 - [ ] 9.8 What happens to `release/1.4.0` and #14 now that 2.0 supersedes 1.4.0.
 - [ ] 9.9 Moving OpenSpec to 2.x, which keeps project context in `openspec/config.yaml` and retires this layout.
 
