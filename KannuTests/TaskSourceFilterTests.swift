@@ -123,4 +123,58 @@ final class TaskSourceFilterTests: XCTestCase {
         let noReminders = Order.viewFilter(hidden: [.appleReminders, .todoist], alwaysListed: nil)
         XCTAssertEqual(titles(Order.active(list, listed: noReminders)), "local jira gitlab github linear")
     }
+
+    // MARK: - The notch's Tag filter
+
+    /// "a", tagged docs; "b", untagged; "J", a Jira task labelled "Docs"; "K", labelled "web".
+    private func tagged() -> [TaskItem] {
+        func jira(_ title: String, label: String) -> TaskItem {
+            TaskItem(source: .jira, title: title,
+                     remote: RemoteTaskInfo(remoteID: title, key: "K-1", hostScope: "h", status: "", isDoneRemotely: false,
+                                            lastSeenAt: Date(timeIntervalSince1970: 0), labels: [label]))
+        }
+        return [TaskItem(title: "a", tags: ["docs"]), TaskItem(title: "b"), jira("J", label: "Docs"), jira("K", label: "web")]
+    }
+
+    /// The tasks with the tag, an own tag or a label, ignoring case; no tag lists them all.
+    func testTheTagFilterKeepsTheTasksWithTheTag() {
+        let list = tagged()
+        XCTAssertEqual(titles(Order.active(list, listed: Order.viewFilter(hidden: [], tag: "DOCS", alwaysListed: nil))), "a J")
+        XCTAssertEqual(titles(Order.active(list, listed: Order.viewFilter(hidden: [], tag: "web", alwaysListed: nil))), "K")
+        XCTAssertEqual(titles(Order.active(list, listed: Order.viewFilter(hidden: [], tag: TaskFacets.anyTag, alwaysListed: nil))),
+                       "a b J K")
+        XCTAssertEqual(titles(Order.active(list, listed: Order.viewFilter(hidden: [], alwaysListed: nil))), "a b J K",
+                       "a filter given no tag picks none")
+    }
+
+    /// It narrows Show in notch, never widens it: a hidden source's tagged task stays hidden.
+    func testTheTagFilterNarrowsShowInNotch() {
+        let list = tagged()
+        XCTAssertEqual(titles(Order.active(list, listed: Order.viewFilter(hidden: [.jira], tag: "docs", alwaysListed: nil))), "a")
+    }
+
+    /// The timed task always shows, whatever the tag and Show in notch hide, so it can be stopped from the list.
+    func testTheTimedTaskAlwaysPassesTheTagFilter() {
+        let list = tagged()
+        let timedB = Order.viewFilter(hidden: [], tag: "docs", alwaysListed: id("b", in: list))
+        XCTAssertEqual(titles(Order.active(list, listed: timedB)), "a b J")
+        let timedK = Order.viewFilter(hidden: [.jira], tag: "docs", alwaysListed: id("K", in: list))
+        XCTAssertEqual(titles(Order.active(list, listed: timedK)), "a K")
+    }
+
+    /// A task added in the notch clears a Tag filter that would hide it, and keeps one it passes.
+    func testAddingATaskClearsATagFilterThatWouldHideIt() {
+        let docs = TaskItem(title: "new", tags: ["Docs"])
+        let plain = TaskItem(title: "new")
+        XCTAssertEqual(Order.tagFilter("docs", afterAdding: docs), "docs", "a task with the tag keeps it, ignoring case")
+        XCTAssertEqual(Order.tagFilter("docs", afterAdding: plain), TaskFacets.anyTag, "a task without it clears it")
+        XCTAssertEqual(Order.tagFilter(TaskFacets.anyTag, afterAdding: plain), TaskFacets.anyTag)
+        // Whatever it was, the filter left behind shows the new task.
+        for tag in ["docs", "web", TaskFacets.anyTag] {
+            for task in [docs, plain] {
+                let kept = Order.tagFilter(tag, afterAdding: task)
+                XCTAssertTrue(Order.viewFilter(hidden: [], tag: kept, alwaysListed: nil)(task), "\(tag) hides \(task.tags)")
+            }
+        }
+    }
 }

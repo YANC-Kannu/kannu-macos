@@ -1631,6 +1631,10 @@ themselves; the sheets keep the hooks they had (Add Tags' and New Task's first f
 check, the Connect sheets' cancel), so the rest of this entry holds. The date field's popover closes on disappear, like the
 select's.
 
+**2026-11-05 addendum: the Tags sheet's colour swatch is gone.** A tag's colour shows once, as its pill's wash (design
+review finding 23), and is picked from Colour in the pill's right-click menu, a native submenu with no `@State` of its own.
+The sheet loses the swatch's popover and adds no `onAppear`, no `.task` and no animator, so the rest of this entry holds.
+
 **2026-11-05 addendum: a page builds every row as it appears.** Stage 4 replaced the grouped `Form` with `SettingsPage`,
 a plain `VStack` in one scroll view: a search or a deep link scrolls to a row's id, and a lazy stack cannot scroll to a
 row it has not built. The `Form` built a row as it scrolled in and dropped it as it scrolled out. So a row's `onAppear`
@@ -1777,10 +1781,39 @@ AppleScript: here a sync and Open in Notes are each a press. With a board's fixt
 **Not measured:** CPU with Notes open while a note is typed in the notch, and parked full screen in another Space.
 `NotesPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
 
+**2026-11-11 addendum: Tasks' first page runs its live data only while Brain is on screen, and a task's two minute
+clocks stop there too.** Brain › Tasks is a product page now (`TasksOverview` above its settings). Its overview, list
+and Sources observed `TasksManager` whole, closed or not: the manager publishes only on an edit, a timer's start or
+stop, or a sync, but each publish redrew a closed Brain left on Tasks. Now the first page holds one copy,
+`TasksPageData`, read as the page appears and again as Brain comes back on screen, then followed through
+`objectWillChange` at most twice a second, in a `.task(id:)` on `BrainVisibility.isOnScreen` and the Tasks switch that
+returns at once while either is false; the header follows `$loadState` the same way, dropping repeats. A press reads
+the manager again at once. Time to log's cards, the notch popover's own `WorklogDraftCard`, are built only while an
+entry waits, and the pages below the first follow the manager as before. The timed row's `TimelineView(.everyMinute)`
+and a task page's minute loop now run only while Brain is on screen; both used to run on in a full-screen Brain parked
+in another Space. New hooks: the page's `onAppear` (the reminder permission check and the archive, which All tasks ran
+as it opened, then one read of the copy) and its `.task`; the header's `onAppear` (one read) and `.task`; and an
+`onReceive` of New task's request, which opens a sheet only on a press. D1's list-detail adds one `onGeometryChange`
+that sets a flag when the panel crosses 1,224 pt, and no animation: the switch is a redraw, and the first page keeps
+its place in the tree across it. The back row lost its card. A sheet's close reads the copy again (`onDismiss`), and
+going back still scrolls by an `onAppear` inside the page's `.id(path)`, where it runs for each page. None loads a
+field. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another
+Space. `TasksPageLiveDataRulesTests` holds each clause against planted offenders, so the rest of this entry holds.
+
 **2026-11-11 addendum: the copy pass adds no `onAppear`, no `.task` and no animator.** Stage 4's child 4-3c rewrote
 Settings' strings (sentence case, captions of about eight words, the catalog) and capped two widths, a footer at
 `proseMaxWidth` and a row's caption at `descriptionMaxWidth`. No hook, subscription or animation was added or moved, so
 `SettingsAnimationRulesTests` and the design-system rules hold as they were.
+
+**2026-11-12 addendum: Notes' list-detail adds one measurement, and no animation.** Brain › Notes shows a note's page
+beside the list from 1,224 pt of panel (layout-proposal D1), through the layout Brain › Tasks now shares with it
+(`SettingsListDetail`, `settingsListDetailFits(_:)`): one `onGeometryChange` on the tab that sets a flag when the panel
+crosses, and no animation, since the switch is a redraw. The list is the layout's first child at both widths and
+carries no id, so opening a note beside it keeps it built and scrolled where it was; each note's page carries its own
+id, so it opens at its top, and its one hook, the image read, runs once per note, as before. The live data is
+unchanged: one copy, followed only while Brain is on screen. Each visit still opens on the list, at both widths.
+**Not measured:** a window dragged across 1,224 pt with a note open; it needs a real window. `NotesPageLiveDataRulesTests`
+and `SettingsListDetailRulesTests` hold each clause against planted offenders.
 
 ---
 

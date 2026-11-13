@@ -312,8 +312,9 @@ struct TaskDetailSummary: Equatable {
 /// The one line under a task's title in Brain's task lists, as segments the view joins with " · "
 /// and colours (an alert reads orange). Kept short so a row stays two lines: the short key ("#4326"
 /// alone on its project's page), the source's status unless it says nothing (GitLab's "Open"),
-/// timing now or paused, time against the estimate and any overtime, when it is due, and the tags.
-/// What the source has logged, and every other fact, is on the task's own page.
+/// timing now or paused, time against the estimate and any overtime, when it is due, and the tags
+/// (`showsTags`: a list that draws them as chips leaves them out). What the source has logged, and every other fact,
+/// is on the task's own page.
 struct TaskRowCaption: Equatable {
     struct Segment: Equatable {
         let text: String
@@ -328,7 +329,7 @@ struct TaskRowCaption: Equatable {
     let segments: [Segment]
 
     init(task: TaskItem, tracked: Int, timing: Timing?, now: Date, onProjectPage: Bool = false,
-         calendar: Calendar = .current) {
+         showsTags: Bool = true, calendar: Calendar = .current) {
         var segments: [Segment] = []
         if let key = TaskDetailSummary.shortKey(for: task, withProject: !onProjectPage) {
             segments.append(Segment(text: key))
@@ -361,7 +362,7 @@ struct TaskRowCaption: Equatable {
             let day = TaskDetailSummary.dueDayText(due, now: now, calendar: calendar)
             segments.append(Segment(text: day.text, isAlert: day.isOverdue))
         }
-        if !task.tags.isEmpty {
+        if showsTags, !task.tags.isEmpty {
             segments.append(Segment(text: task.tags.map { "#\($0)" }.joined(separator: " ")))
         }
         self.segments = segments

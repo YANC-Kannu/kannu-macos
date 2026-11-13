@@ -86,12 +86,6 @@ enum DebugSnapshots {
         let notesPage = DebugSnapshotFixtures.notesOverview(notes: 4, now: Date())
         NotesOverview.snapshotFixture = notesPage
         var boards = SettingsView.snapshotTabs(filter: request.tabs)
-        if request.tabs == nil || request.tabs?.contains("allTasks") == true {
-            boards.append(("allTasks", SettingsView.snapshotPageTitle(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "Tasks")) {} }
-                AllTasksPage(query: .constant(""), context: tasksBoardContext())
-            })))
-        }
         if request.tabs == nil || request.tabs?.contains("newTaskSheet") == true {
             // New Task half typed: "pl" offers #planning in its colour and "+ pl"; a reminder
             // tomorrow at 10:00 with Notify on.
@@ -131,17 +125,13 @@ enum DebugSnapshots {
             boards.append(("timerPresetSheet", AnyView(TimerPresetSheet(target: .edit(DebugSnapshotFixtures.timerPresets[0])))))
         }
         if request.tabs == nil || request.tabs?.contains("taskPage") == true {
-            boards.append(("taskPage", AnyView(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("taskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.jiraTaskID,
+                                                                             context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("localTaskPage") == true {
             // A local task: its title typed in place, a reminder with Notify off.
-            boards.append(("localTaskPage", AnyView(SettingsPage {
-                SettingsSection { TasksBackRow(parent: String(localized: "All tasks")) {} }
-                TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID, context: tasksBoardContext())
-            })))
+            boards.append(("localTaskPage", tasksPageBelowTheFirst(TaskDetailPage(taskID: DebugSnapshotFixtures.localTaskID,
+                                                                                  context: tasksBoardContext()))))
         }
         if request.tabs == nil || request.tabs?.contains("findings") == true {
             boards.append(("findings", AgentSecuritySettings.snapshotFindingRows(DebugSnapshotFixtures.findings)))
@@ -281,13 +271,40 @@ enum DebugSnapshots {
             }
         }
         ClipboardOverview.snapshotFixture = clipboard
+        // Brain › Tasks at the window's first size and at a 14-inch full screen (1,512 × 982), the two widths of its list
+        // (layout-proposal D1): the list, a task opened from it, in the list's place or beside it, and the Done and
+        // Archived tabs. Fixture tasks only (`TasksManager.snapshotFile`).
+        let window = NSSize(width: SettingsTheme.windowDefaultWidth, height: SettingsTheme.windowDefaultHeight)
+        let fullScreen14 = NSSize(width: 1512, height: 982)
+        let tasksBoards: [(name: String, size: NSSize, path: [TasksPage], tab: TasksListTab)] = [
+            ("tasksWindow", window, [], .active),
+            ("tasksWide", fullScreen14, [], .active),
+            ("tasksTask", window, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksWideTask", fullScreen14, [.task(DebugSnapshotFixtures.localTaskID)], .active),
+            ("tasksDone", window, [], .done),
+            ("tasksArchived", window, [], .archived),
+        ]
+        for board in tasksBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            TasksSettings.snapshotPath = board.path
+            TasksSettings.snapshotTab = board.tab
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .tasks).environmentObject(viewModel)),
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
+            }
+        }
+        TasksSettings.snapshotPath = []
+        TasksSettings.snapshotTab = .active
         // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
-        // and one made in Apple Notes. The switches drawn under the product are this Mac's, so the boards are run with
+        // and one made in Apple Notes; at a 14-inch full screen, four with none open and the one with its image beside
+        // the list (layout-proposal D1). The switches drawn under the product are this Mac's, so the boards are run with
         // `-enableNotes YES`, and the sync's with `-enableAppleNotesSync YES` (`notePageMirror` with
         // `-appleNotesSyncScope "Whole account"` too): the argument domain, nothing written.
-        let notesBoards: [(name: String, notes: Int, open: UUID?)] = [
-            ("notes0", 0, nil), ("notes4", 4, nil), ("notePage", 4, DebugSnapshotFixtures.notesImageNoteID),
-            ("notePageMirror", 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+        let notesBoards: [(name: String, size: NSSize, notes: Int, open: UUID?)] = [
+            ("notes0", window, 0, nil), ("notes4", window, 4, nil),
+            ("notePage", window, 4, DebugSnapshotFixtures.notesImageNoteID),
+            ("notePageMirror", window, 4, UUID(uuidString: "4E07E5A0-0B0A-4D5E-9C11-2F4B6A8D0E03")),
+            ("notesWide", fullScreen14, 4, nil), ("notePageWide", fullScreen14, 4, DebugSnapshotFixtures.notesImageNoteID),
         ]
         for board in notesBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
             var fixture = DebugSnapshotFixtures.notesOverview(notes: board.notes, now: Date())
@@ -295,9 +312,8 @@ enum DebugSnapshots {
             NotesOverview.snapshotFixture = fixture
             for dark in [false, true] {
                 await render(AnyView(SettingsView(snapshotTab: .notes).environmentObject(viewModel)),
-                             name: board.name + (dark ? "-dark" : "-light"), dark: dark,
-                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
-                             fixedHeight: SettingsTheme.windowDefaultHeight)
+                             name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                             into: request.directory, fixedHeight: board.size.height)
             }
         }
         NotesOverview.snapshotFixture = notesPage
@@ -356,6 +372,28 @@ enum DebugSnapshots {
                 .background(Color.black)
                 .environment(\.colorScheme, .dark)
             await render(AnyView(view), name: "recentChats-\(Int(width))", dark: true, width: width, into: request.directory)
+        }
+        if request.tabs == nil || request.tabs?.contains("notchTasks") == true {
+            // The timer tab's Tasks page in the narrowest notch, its rail hanging in the gap to the left:
+            // the fixture tasks at the page's own height (three rows), then tall enough for every row.
+            typealias M = TimerComposerMetrics
+            let columnWidth = M.sideColumnWidth(notchWidth: M.smallestOpenNotchWidth)
+            let inset = M.railOffset + 8
+            let pages: [(suffix: String, height: CGFloat)] = [
+                ("", M.sidePageHeight(budget: M.minimumTabBudget, style: .manualWithPresets)),
+                ("-all", M.sideTaskRowsHeight(count: 10)),
+            ]
+            for page in pages {
+                let view = TimerSideColumn(page: .tasks, select: { _ in }, tasksAvailable: true, presetsAvailable: false,
+                                           budget: page.height, pageHeight: page.height, columnWidth: columnWidth, presets: [],
+                                           activePresetID: nil, startPreset: { _ in }, taskStarted: {}, editTask: { _ in })
+                    .environmentObject(viewModel)
+                    .padding(EdgeInsets(top: 8, leading: inset, bottom: 8, trailing: 8))
+                    .background(Color.black)
+                    .notchAppearance(.dark, fill: .black)
+                await render(AnyView(view), name: "notchTasks-\(Int(M.smallestOpenNotchWidth))\(page.suffix)", dark: true,
+                             width: columnWidth + inset + 8, into: request.directory, fixedHeight: page.height + 16)
+            }
         }
         if request.tabs == nil || request.tabs?.contains("usage") == true {
             // The Usage tab's cards at the two standard notch widths (588 and 638 pt of content):
@@ -871,6 +909,18 @@ enum DebugSnapshots {
         }
     }
 
+    /// A page below Brain › Tasks' first, as the tab draws it: the back row bare on the panel, the page under it.
+    private static func tasksPageBelowTheFirst(_ page: some View) -> AnyView {
+        AnyView(SettingsPage {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                TasksBackRow(parent: String(localized: "Tasks")) {}
+                VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+                    page
+                }
+            }
+        })
+    }
+
     /// What the Tasks boards' pages need from the tab: sheets and navigation go nowhere.
     private static func tasksBoardContext() -> TasksPageContext {
         TasksPageContext(sheet: .constant(nil), pendingDelete: .constant(nil), confirmsDisconnect: .constant(nil),
@@ -971,7 +1021,7 @@ enum DebugSnapshotFixtures {
     static let localTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F02")!
 
     /// About a dozen tasks for the Tasks boards (`TasksManager.snapshotFile`): estimates, tags with
-    /// colours, an overdue reminder, one past its estimate, a Jira task with its own estimate, a
+    /// colours (one task has two, for a notch row's "+1"), an overdue reminder, one past its estimate, a Jira task with its own estimate, a
     /// GitLab issue and merge request, one done and one archived. Never written anywhere.
     static func tasksFile(now: Date) -> TasksFile {
         func segment(_ minutes: Int, endingHoursAgo hours: Double = 2) -> WorkSegment {
@@ -991,7 +1041,7 @@ enum DebugSnapshotFixtures {
             TaskItem(title: "Prepare the sprint review", localEstimateSeconds: 3600,
                      scheduledAt: now.addingTimeInterval(-26 * 3600)),
             TaskItem(title: "Fix the flaky timer test", localEstimateSeconds: 30 * 60, segments: [segment(45)],
-                     tags: ["urgent"]),
+                     tags: ["urgent", "timer"]),
             TaskItem(title: "Reply to the design feedback"),
             TaskItem(id: jiraTaskID, source: .jira, title: "Customer API: org-scoped file upload keys",
                      remote: remote("ABC-412", estimate: 2 * 3600, status: "In Progress")),

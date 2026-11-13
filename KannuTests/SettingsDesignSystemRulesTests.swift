@@ -447,8 +447,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
 
         let components = Self.code(try XCTUnwrap(sources["SettingsComponents.swift"]))
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
-        XCTAssertEqual(Self.code(try XCTUnwrap(sources["AllTasksPage.swift"])).components(separatedBy: ".disclosureGroupStyle(.automatic)").count - 1, 3,
-                       "All tasks' long groups keep the native disclosure")
+        // 2026-11-11: All tasks' three long groups, the last native disclosures, became the Tasks list's Done and Archived
+        // tabs and an ordinary Tag colours group (the design review's finding 13).
+        XCTAssertEqual(Self.filesUsing(".disclosureGroupStyle(.automatic)", in: sources), [], "a disclosure under Settings is ours")
         // 2026-11-04: the segmented picker's opt-out and its plant are gone. Nothing segmented is native any more:
         // the animation editor's Loop Mode is a SettingsSelect (Stage 3, brain/3-1-select).
         XCTAssertEqual(Self.filesUsing(".borderedProminent", in: sources), [], "a white label cannot be read on the root's eye blue in dark")
@@ -956,8 +957,9 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                           in: theme, by: Self.capProblems)
     }
 
-    /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
-    private static let pinnedNativeMenus = ["AllTasksPage.swift": 1]
+    /// None since Stage 5's Tasks page: All tasks' filter menu, whose four ticked pickers were native submenus, went with
+    /// it (plan:75). A menu that must keep the native trigger goes here with its reason.
+    private static let pinnedNativeMenus: [String: Int] = [:]
 
     /// Menus whose own chain does not have our button draw the trigger. Each menu says so itself, rather than
     /// leaving it to the root: the button menu style takes the current button style, ours takes the native

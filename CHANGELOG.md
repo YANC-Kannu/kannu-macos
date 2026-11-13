@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
+- **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR
+- **Changes:**
+  - Notch: the filter menu's Tag submenu ticks the saved tag when the tasks now spell it in another case (`docs` saved,
+    `Docs` offered): the matching row carries the saved spelling. Filtering already matched ignoring case.
+  - Brain › Tasks: widening the window past the width with a task open in the list's place scrolls the rebuilt list to
+    the task's row, now selected beside its page, as Notes does. The list used to open at its top.
+  - Brain › Tasks: the Tag filter had the same case mismatch as the notch's Tag submenu, found alongside inline-1: the
+    choice that matches the saved tag ignoring case now carries the saved spelling, so the list ticks it.
+  - docs/SETTINGS.md: a task's page, and widening the window with it open.
+
 ### 2026-11-12 - Answer CodeRabbit's second review of Brain's product pages
 - **Developer label:** CodeRabbit's second review of the Stage 4 super (#42)
 - **Agent label:** Claude Code (Opus 5.5) — the two fixes from CodeRabbit's second review of Super 4; the other four answered on the PR
@@ -33,6 +45,88 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
   - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
     switch.
+
+### 2026-11-12 - Answer the review of Brain's Notes list-detail
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
+- **Changes:**
+  - Widening the window past 1,224 pt with a note open in the list's place builds the list anew: it now scrolls to the
+    note's row, selected beside the page, instead of opening at its top (M2).
+  - The page beside the list takes an id of its own, not the note's, which its row carries, so a scroll back to the
+    row has one target (M3).
+  - With no note at all, the empty place beside the list says "No note selected" without telling you to click a › that
+    is not there; the layout stays a function of the width alone, as D1 has it, and as Mail keeps its empty pane (M1,
+    taken this way rather than by folding the column away).
+  - `NotesPageLiveDataRulesTests` holds each answer against planted offenders; docs/SETTINGS.md says so.
+
+### 2026-11-12 - Brain's Notes page shows a note beside the list at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail (layout-proposal D1)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: D1's list-detail for Notes, with Tasks' layout moved once into a shared view both pages use
+- **Changes:**
+  - From 1,224 pt of panel (`ListDetailLayout`, as Tasks has it), a note opened from the list shows beside it: its
+    row wears the selected ring and is selected for VoiceOver, and its card names the note over when it was edited,
+    since the tab keeps Notes' title. With none open, its place says "No note selected". Narrower, the in-tab swap
+    stays, its back row now bare on the panel, as Tasks' are (the design review's finding 24).
+  - One selection, drawn either way, so a resize converts nothing. Each visit still opens on the list, at both widths;
+    a Notes search or deep link closes only a page in the list's place.
+  - Tasks' list-detail layout and its measurement moved once into a shared place, `SettingsListDetail` and
+    `settingsListDetailFits(_:)` (two DesignSystem files, one type each), which Tasks and Notes both use. Tasks draws
+    what it drew: its boards match 5-4's but for the fixture's times.
+  - The note's page stays read-only (Pin, Copy, Delete, Open in Notes), and New note's sheet is unchanged.
+  - Tests: `SettingsListDetailRulesTests` (new) holds the shared layout's widths and bans; the D1 clauses of
+    `TasksPageLiveDataRulesTests` and `NotesPageLiveDataRulesTests` hold each page's use of it, against planted
+    offenders; `BrainShellRulesTests` lists the two new files among those that know no page.
+  - Two catalog keys in 17 languages ("No note selected", "Click › on a note to see it here."); boards `notesWide` and
+    `notePageWide`; docs/SETTINGS.md, and docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-11 - Answer the review of Brain's Tasks page
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: the review's S1 and M2 to M6, and the back row's scroll back
+- **Changes:**
+  - The first page keeps one place in the tree at both widths, so crossing 1,224 pt, or a wide first open, keeps the
+    list scrolled where it was, Find's caret and Tag colours' fold (S1).
+  - Going back between two pages below the first scrolls to the row again: its `onAppear` is back inside `.id(path)`.
+    Applied after it, it ran once and never again (measured in a harness).
+  - A sheet's close, the delete alert and the value sheets read the copy at once, as a press does (M2).
+  - The Sources rows' connection, status and sync flag are in the copy, so a change to them alone redraws the page
+    (M3); the interrupted sessions, the Tag filter's choices, Tag colours' tags and the source counts are worked out in
+    the copy, not on every keystroke in Find (M4). `TasksManager` keeps its own property, now `Equatable`.
+  - A search or deep link keeps a task's page beside the list, the list being on screen, so the header's gear no longer
+    closes it (M5).
+  - Each card is one VoiceOver group named for its task, so its ✓, ▶ and › say whose they are (M6).
+  - `TasksPageLiveDataRulesTests` and `TaskListRulesTests` hold each answer against planted offenders; docs/SETTINGS.md
+    and docs/REGRESSIONS.md entry 22's addendum say so.
+
+### 2026-11-11 - Brain's Tasks page leads with the list, with a task's page beside it at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, with D1's list-detail
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: Tasks as a product page (tabs, Find with #tag, a Tag filter, rows as soft cards, New task in the header) under Agents' live-data contract, and D1's list-detail by one tested width function
+- **Changes:**
+  - Brain › Tasks opens on its product, above "Tasks settings": interrupted sessions and Time to log while they hold
+    something, then the list. Its tabs, Active, Done and Archived, replace All tasks' page and its three native
+    disclosures (the design review's finding 13); Find takes `#tag` (`TaskSearch`), and the Tag filter is a
+    `SettingsSelect` of every tag and label. The Source, Project and Status filters leave the list: a source and a
+    project have their own pages.
+  - Each task is a soft card with its tags as chips (the first in its colour and "+N" for the rest, never cutting the
+    caption), ✓, ▶ and ›; a closed one has Reopen, Archive or Restore and its ›; everything else stays in the
+    right-click menu, which opens with Show Details. Source and project pages draw the same cards.
+  - New task, ⌘N, is the page header's one verb, beside the gear, which goes to Enable tasks. It replaces Add a task's
+    row and the hidden ⌘N button; a new task the list on screen would hide opens on its own page.
+  - D1 (David, 2026-11-06): once the panel holds the list and a 720-pt page (`ListDetailLayout`, 1,224 pt with the
+    wide inset, tested in `ListDetailLayoutTests`), a task opened from the list shows beside it, selected; narrower it
+    takes the list's place. One path drawn two ways, from one `onGeometryChange`: no `minWidth:`, `ViewThatFits` or
+    `.inspector`. Search and deep links return to the first page at both widths.
+  - Back rows are bare quiet buttons on the panel, with no card (the design review's finding 24).
+  - Live data as on Agents: the first page reads `TasksManager` through one copy, `TasksPageData`, throttled to 500 ms,
+    assigned only on a change and followed only while Brain is on screen; a press reads it again at once. The timed
+    row's and a task page's minute clocks stop while Brain is not on screen. `TasksPageLiveDataRulesTests` holds each
+    clause and D1's rules against planted offenders.
+  - Tag colours moves to the settings, folded in our disclosure. 12 new catalog keys in 17 languages; the tab titles
+    take keys of their own, so "Done" can differ from a sheet's Done button.
+  - Tests: the list, path, filter and pin rules follow the new page (`TaskListRulesTests`, `SettingsLayoutRulesTests`,
+    `SettingsDesignSystemRulesTests`, `SettingsHighlightInventoryTests` 274 and 268, `BrainShellRulesTests`,
+    `IntegrationSecretRulesTests`).
+  - docs/SETTINGS.md describes the page, its live data and list-detail; docs/REGRESSIONS.md entry 22 has a dated
+    addendum.
 
 ### 2026-11-11 - Answer the review of Brain's Notes page
 - **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
@@ -512,6 +606,83 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
     with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
   - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
+
+### 2026-11-05 - Answer the review of the notch's tag chips and the Tags sheet
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch fixes, and David's picks on their review ("Yes, take them")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 3: the independent reviewer's findings, and a tinted "+N" while it hides a searched tag
+- **Changes:**
+  - While a `#tag` search found a row's first tag and only "+N" fits, the pill is tinted in the accent, so the find
+    still shows. `TaskSearch.foundTags` says which tags the search found; `chipTags` still puts them first.
+  - VoiceOver hears a tag pill's colour, as it heard the swatch's.
+  - Without VoiceOver a right-click menu has no key, so keyboard-only users colour tags in All tasks › Tag colours;
+    docs/SETTINGS.md says so, and names the fifth pinned picker.
+  - Pins, each with a plant: the shortened chip truncates, any swatch beside a pill is the colour twice, the row says
+    when the search found its first tag, and a lone "+N" hiding it is tinted. Three comments that said a tag takes
+    nothing from the caption now say "+N" may.
+
+### 2026-11-05 - The notch rail's caption wins over its tags, and a tag shows its colour once
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch caption and tag colour ("one chip when it fits, +N always")
+- **Agent label:** Claude Code (Opus 5.5) — the rail's caption keeps its time and overtime ahead of the tag chips; the Tags sheet's colour swatch goes, its pick moving to the pill's right-click menu
+- **Changes:**
+  - Rail rows: the caption wins (`TaskTagChips`, the first layout that fits). The whole caption, then the first tag
+    whole, or shortened in the middle to no less than 60 pt (`sideTaskChipMinWidth`), and "+N" for the rest; otherwise
+    one "+N" for every tag, the caption taking the room first (`layoutPriority`). A `#tag` search still puts its tag
+    first. The rule that a tag of up to 12 characters showed whole while the caption gave way is gone.
+  - The caption's overtime (" · 15m over", in orange) is a text of its own at its full width: on a short line the time
+    before it gives way. At the narrowest notch "Fix the flaky timer test" reads "45m… · 15m over +2" (was
+    "45m… #urgent +1"), and "ds-vendors #4264" shows whole with "+1" (was "ds-vendors #…" beside "#backend").
+  - The Tags sheet: the colour swatch before each pill is gone, so the pill's wash is the tag's one colour. Colour, a
+    ticked submenu in the pill's right-click menu, picks it from the presets, staged until Done as the swatch's pick was.
+  - "Colour" is a new catalog key, in the catalog's 17 other languages.
+  - Tests: `NotchTagFilterRulesTests` pins the caption-first layouts and the whole overtime, `TaskColorRulesTests` the
+    pill's one colour and its Colour picker, each scanner with planted offenders; `SettingsLayoutRulesTests` counts the one
+    native picker, which `TaskColorRulesTests` holds inside the right-click menu.
+  - docs/SETTINGS.md (the tag chip's wash, the native Colour submenu) and docs/REGRESSIONS.md (entry 22, a dated line)
+    follow.
+
+### 2026-11-05 - The notch's task rail shows tags, and filters by one
+- **Developer label:** Brain redesign plan: Stage 5, tags in the notch
+- **Agent label:** Claude Code (Opus 5.5) — the notch's chips, Tag submenu and tag filter, with their rules; the Brain Tasks page waits for David's decision
+- **Changes:**
+  - Rail rows show the first tag and "+N" beside the caption (`TaskTagChips`, on `SideChip`), the tag a `#tag` search
+    finds first (`TaskSearch.chipTags`). A short tag shows whole and the caption gives way, sliding into view on hover;
+    a tag over 12 characters shares the line and shortens in the middle.
+  - The caption line is one chip tall in every row (`sideTaskCaptionHeight`, 16 pt), so titles line up with or without
+    tags; the row stays 36 pt.
+  - `TaskSourceMenu` gets a Tag submenu: All, then each tag as "#docs", ticked as picked. Its tags are passed in
+    (`TaskFacets.filterTags` of what Show in notch lists), so the menu stays free of `TasksManager`. A picked tag no task
+    has any more still shows.
+  - New key `tasksNotchTagFilter`, beside Show in notch: `TaskSourcePreferences` follows it, `isNarrowing` counts it (the
+    "Filtered" line, the filled glyph) and `showAll()` clears it. The rail and the popover's Up next list through it
+    (`TaskOrdering.viewFilter(hidden:tag:alwaysListed:)`), and the timed task always shows.
+  - Adding a task in the notch clears a tag filter that would hide it (`TaskOrdering.tagFilter(_:afterAdding:)`), in
+    `TasksManager.showInNotch` (was `showLocalTasks`). The task form and a typed start called it already; the popover's
+    Add a task now calls it instead of its own Local line. Brain's New Task leaves the notch's filters alone.
+  - The typed search under the timer bar and a new task's title ignores the tag filter, so a task it hides is still
+    found by its name and never made twice.
+  - "Tag" is a new catalog key, in the catalog's 17 other languages; the submenu's "All" is the existing key.
+  - Tests: `TaskSourceFilterTests` (the filter, the timed task, the add rule), `NotchTagFilterRulesTests` (the wiring,
+    each scanner with planted offenders), `TimerComposerMetricsTests` (a chip measured against the 36 pt row).
+    `TimerSideColumnRulesTests`, `TimerTaskSessionRulesTests` and `TaskFormWiringTests` follow the changed calls.
+  - New board `notchTasks`: the rail's Tasks page at the narrowest notch, with the fixture tasks; one of them now has two
+    tags, for "+1".
+
+### 2026-11-05 - A #tag search finds the whole tag, and labels count as tags
+- **Developer label:** Brain redesign plan: Stage 5, task logic
+- **Agent label:** Claude Code (Opus 5.5) — pure logic and tests for the Tasks page and the notch; no view changes
+- **Changes:**
+  - `TaskFacets.displayTags(of:)`: a task's own tags in the user's order, then its labels in the server's, a scoped
+    label by its value, once each ignoring case.
+  - `TaskFacets.filterTags(in:)`: what the Tag filter will offer, own tags and labels alike, the first spelling of
+    each, sorted ignoring case. `tags(in:)` stays own tags only, for tag suggestions.
+  - The Tag filter (`TaskFilter.tag`) finds a label as it finds an own tag, so every choice `filterTags` offers
+    finds its tasks. All tasks' menu still offers own tags until the Tasks page moves to `filterTags`.
+  - `TaskSearch`: a `#word` finds a tag or label that is the word as a whole, or else the word with its `#`
+    anywhere. `#work` no longer finds "Homework" or "workshop", and `#4264` still finds "group/app#4264". Plain
+    words and a `#` alone search as before.
+  - `TaskSearch.chipTags(of:query:)`: `displayTags` with the tags the search finds first, so a row's one chip is the
+    tag searched for.
+  - `TaskFacetsTests` and `TaskSearchTests` cover each rule, the `#work` and `#4264` cases with their neighbours.
 
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"

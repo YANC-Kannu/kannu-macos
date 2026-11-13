@@ -27,9 +27,9 @@ import SwiftUI
 /// - **Log time?**: the Time to log cards still asking (`WorklogDraftCard`, the very card Brain
 ///   shows, so Log goes the same one way it does there);
 /// - **Up next**: Add a task… (a local task, at the top of the order, whatever the filter), then
-///   the task order narrowed by Show in notch (`TaskOrdering.viewFilter`), at most
-///   `TaskOrdering.upNextLimit` rows, each with its key, title, "42m of 2h" and ▶; or an empty
-///   state. While the filter hides a source, one quiet line says "Filtered · Show all";
+///   the task order narrowed by Show in notch and its Tag filter (`TaskOrdering.viewFilter`), at
+///   most `TaskOrdering.upNextLimit` rows, each with its key, title, "42m of 2h" and ▶; or an empty
+///   state. While the filter hides a source or picks a tag, one quiet line says "Filtered · Show all";
 /// - **Show all in Brain**.
 ///
 /// Live time ticks through a `TimelineView`, once a second, only while the Now card is on screen
@@ -92,13 +92,20 @@ struct TasksPopover: View {
     /// (`TaskSourcePreferences.hiddenInNotch`).
     private var isFiltered: Bool { preferences.isNarrowing }
 
-    /// Show in notch over the connected baseline (`TasksManager.activeTasks`). The task being timed
-    /// always passes.
+    /// Show in notch and its Tag filter over the connected baseline (`TasksManager.activeTasks`). The
+    /// task being timed always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, tag: preferences.tagFilter, alwaysListed: manager.timing?.taskID)
     }
 
-    /// Show all: every source back in the notch.
+    /// The Tag submenu's choices: the tags of every task Show in notch lists, whatever tag is picked,
+    /// so a choice never vanishes from its own menu.
+    private var tagChoices: [String] {
+        TaskFacets.filterTags(in: TaskOrdering.active(manager.activeTasks, listed: TaskOrdering.viewFilter(
+            hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)))
+    }
+
+    /// Show all: every source back in the notch, and no Tag filter.
     private func showAllSources() {
         preferences.showAll()
     }
@@ -126,7 +133,7 @@ struct TasksPopover: View {
                     }
                 }
                 Spacer(minLength: 0)
-                TaskSourceMenu(openBrain: openBrain)
+                TaskSourceMenu(openBrain: openBrain, tags: tagChoices)
                 if !manager.syncStates.isEmpty {
                     refreshButton(at: context.date)
                 }
@@ -352,7 +359,8 @@ struct TasksPopover: View {
         }
     }
 
-    /// "Filtered · Show all": Show in notch hides a source. Show all puts every source back.
+    /// "Filtered · Show all": Show in notch hides a source or picks a tag. Show all puts every source
+    /// back and clears the tag.
     private var filteredLine: some View {
         HStack(spacing: 4) {
             Text("Filtered")
@@ -387,12 +395,13 @@ struct TasksPopover: View {
         }
     }
 
-    /// The new task is always local: with Local hidden it would vanish as it is added, so adding one
-    /// puts Local back in the notch.
+    /// The new task is always local, and may lack the tag picked: hidden by either it would vanish as
+    /// it is added, so adding one puts Local back in the notch and clears a Tag filter that would hide
+    /// it (`TasksManager.showInNotch`, as the timer tab's adds do).
     private func addTask() {
-        if manager.addTask(title: newTitle, estimateSeconds: nil) != nil {
+        if let id = manager.addTask(title: newTitle, estimateSeconds: nil) {
             newTitle = ""
-            if preferences.hiddenInNotch.contains(.local) { preferences.shownBinding(for: .local).wrappedValue = true }
+            manager.showInNotch(id)
         }
     }
 
@@ -467,8 +476,8 @@ struct TasksPopover: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    /// Whether Show in notch is what empties Up next: it hides a source, and without it an open task
-    /// would show. With no open task anywhere the plain empty state is the true one.
+    /// Whether the filter is what empties Up next: it hides a source or picks a tag, and without it an
+    /// open task would show. With no open task anywhere the plain empty state is the true one.
     private var filterHidesEveryTask: Bool {
         isFiltered && !TaskOrdering.upNext(manager.activeTasks, excluding: manager.timing?.taskID, limit: 1).isEmpty
     }
