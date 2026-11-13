@@ -163,12 +163,16 @@ enum SettingsDeepLink {
         .linear: tasksLinearSourceHighlightID, .todoist: tasksTodoistSourceHighlightID,
         .appleReminders: tasksAppleRemindersSourceHighlightID,
     ]
-    /// Brain › Tasks › Your tasks, the All tasks row that opens the list: where search lands. The
-    /// id keeps its old "Task list" name, so no link breaks.
+    /// Brain › Tasks' list, on its Find row: where the list's search entries land. The id keeps its old
+    /// "Task list" name, so no link breaks.
     static let tasksListHighlightID = SettingsTab.tasks.highlightID(for: "Task list")
-    /// The All tasks page itself, opened, on its back row: the popover's "Show all in Brain" and a
-    /// click on a task reminder. `TasksSettings` opens the page for this id.
+    /// Brain › Tasks' list itself, on its tabs: the popover's "Show all in Brain" and a click on a task
+    /// reminder. `TasksSettings` shows the open tasks for this id.
     static let tasksListOpenID = SettingsTab.tasks.highlightID(for: "Task list page")
+    /// Brain › Tasks' switch, the settings' first row: where the page header's gear lands.
+    static let tasksEnableHighlightID = SettingsTab.tasks.highlightID(for: "Enable tasks")
+    /// Brain › Tasks › Tag colours, in the settings.
+    static let tasksTagColorsHighlightID = SettingsTab.tasks.highlightID(for: "Tag colours")
     /// Brain › Tasks › Time to log, shown while an entry waits: the popover's "… more in Brain".
     static let tasksTimeToLogHighlightID = SettingsTab.tasks.highlightID(for: "Time to log")
     /// Brain › Agents' switch: where search lands for the tab's other rows while monitoring is off.
@@ -316,14 +320,14 @@ extension View {
 private struct SettingsForm<Content: View>: View {
     let tab: SettingsTab
     /// A product page's actions, on its title's row: Agents' gear, Security's gear and Scan now or Connect ADR, Usage's
-    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, and Notes' gear and New
-    /// note. Each reads its own store.
+    /// gear and Refresh, Timer's gear and Start timer, Clipboard's "…" and Open history panel, Tasks' gear and New
+    /// task, and Notes' gear and New note. Each reads its own store.
     var actions: AnyView? = nil
     @ViewBuilder var content: () -> Content
 
     @EnvironmentObject private var highlightCoordinator: SettingsHighlightCoordinator
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// A sub-page's own title (Brain › Tasks' All tasks). Nil is the tab's.
+    /// A sub-page's own title (Brain › Tasks' source and task pages). Nil is the tab's.
     @State private var pageTitle: String?
     /// A flag, not the panel's width, so a resize redraws the page only when it crosses `widePanelWidth`.
     @State private var isWidePanel = false
@@ -995,18 +999,18 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .tasks, title: "GitLab colour", keywords: ["gitlab", "tasks", "colour", "color", "tint", "glass", "integration"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Include merge requests", keywords: ["gitlab", "merge requests", "mr", "review", "reviewer", "pull requests"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Refresh GitLab items", keywords: ["gitlab", "refresh", "reload", "synced", "rate limited", "offline"], highlightID: SettingsDeepLink.tasksGitLabSourceHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsTab.tasks.highlightID(for: "Enable tasks")),
+            SettingsSearchEntry(tab: .tasks, title: "Enable tasks", keywords: ["tasks", "todo", "to-do", "estimate", "time tracking", "actual time"], highlightID: SettingsDeepLink.tasksEnableHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Default session length", keywords: ["tasks", "session", "length", "minutes", "pomodoro", "timer"], highlightID: SettingsTab.tasks.highlightID(for: "Default session length")),
             SettingsSearchEntry(tab: .tasks, title: "Sound when the estimate is reached", keywords: ["tasks", "sound", "estimate", "alarm", "chime", "overtime"], highlightID: SettingsTab.tasks.highlightID(for: "Sound when the estimate is reached")),
             SettingsSearchEntry(tab: .tasks, title: "Time to log", keywords: ["tasks", "log time", "log work", "worklog", "time tracking", "spent", "timesheet", "jira", "gitlab"], highlightID: SettingsTab.tasks.highlightID(for: "Time to log")),
-            // All tasks' rows, and a task's own page, exist only while open, so their entries land on
-            // the overview's All tasks row, which opens it.
+            // The list's rows, and a task's own page, are not search rows (a task's page exists only while open), so
+            // their entries land on the list's Find row.
             SettingsSearchEntry(tab: .tasks, title: "All tasks", keywords: ["tasks", "task list", "list", "to do", "in progress", "open tasks", "my tasks", "order", "priority", "move to top", "up next", "tracked", "actual time", "start", "time a task"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Find a task", keywords: ["tasks", "find", "search", "look up", "key", "title"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task filters", keywords: ["tasks", "filter", "source", "project", "status", "to do", "in progress", "local", "jira", "gitlab"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Add a task", keywords: ["tasks", "add", "new task", "todo", "estimate", "tags", "reminder"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Task tags", keywords: ["tasks", "tags", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
-            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksListHighlightID),
+            SettingsSearchEntry(tab: .tasks, title: "Tag colours", keywords: ["tasks", "tags", "colour", "color", "tint", "glass", "labels", "hashtag"], highlightID: SettingsDeepLink.tasksTagColorsHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Schedule a task", keywords: ["tasks", "schedule", "reminder", "notification", "remind me", "due"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Recently closed tasks", keywords: ["tasks", "done", "finished", "completed", "closed", "reopen"], highlightID: SettingsDeepLink.tasksListHighlightID),
             SettingsSearchEntry(tab: .tasks, title: "Archived tasks", keywords: ["tasks", "archive", "archived", "hidden", "restore", "delete", "clear"], highlightID: SettingsDeepLink.tasksListHighlightID),
@@ -1167,7 +1171,7 @@ struct SettingsView: View {
                 NotesSettingsView()
             }
         case .tasks:
-            SettingsForm(tab: .tasks) {
+            SettingsForm(tab: .tasks, actions: AnyView(TasksHeaderActions())) {
                 TasksSettings()
             }
         case .llmUsage:
@@ -1203,12 +1207,6 @@ extension SettingsView {
 }
 
 extension SettingsView {
-    /// DEBUG snapshot harness: Brain › Tasks' All tasks under its large title, as the window builds it.
-    /// `SettingsForm` is private to this file.
-    static func snapshotPageTitle(_ page: some View) -> AnyView {
-        AnyView(SettingsForm(tab: .tasks) { page.settingsPageTitle(TasksSettings.title(of: .allTasks)) })
-    }
-
     /// DEBUG snapshot harness: the shortcut recorder rows, shown only once global shortcuts are on.
     static func snapshotShortcutRows() -> AnyView {
         AnyView(SettingsPage { Shortcuts().shortcutsSection })

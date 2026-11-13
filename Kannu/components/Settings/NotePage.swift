@@ -25,13 +25,16 @@ import SwiftUI
 /// edited, its text and its image, with Pin, Copy and Delete, and Open in Notes for a note made there. The notch's Notes
 /// tab edits notes, and Apple Notes edits the ones made there.
 ///
-/// It is handed the note and nothing else of the page, so the list-detail layout (layout-proposal.md, D1) can stand it
+/// It is handed the note and nothing else of the page, so the list-detail layout (layout-proposal.md, D1) stands it
 /// beside the list at wide windows, driven by the same selection. Like the list, it reads the page's copy, never the
 /// notes: an edit in the notch shows here within half a second while Brain is on screen. Its one hook reads the note's
 /// image from its file, off the main thread, once per image; it keeps no clock.
 struct NotePage: View {
     let note: NoteItem
     let isReadOnly: Bool
+    /// Beside the list, where the tab's title stays Notes', the card's first line names the note over when it was
+    /// edited, as its row does. In the list's place the note's title is the page's, so the line says only when.
+    var showsTitle = false
     /// Deletes the note, asking first for one made in Apple Notes. `NotesSettingsView` holds the question.
     let delete: (NoteItem) -> Void
     @Default(.enableNotePinning) private var pinning
@@ -46,8 +49,13 @@ struct NotePage: View {
         VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
             HStack(alignment: .firstTextBaseline, spacing: SettingsMetrics.rowContent) {
                 NoteColorDot(note: note)
-                Text(verbatim: Self.meta(note, isReadOnly: isReadOnly, now: Date()))
-                    .settingsDescriptionStyle()
+                if showsTitle {
+                    SettingsRowLabel(Text(verbatim: note.title),
+                                     description: Text(verbatim: Self.meta(note, isReadOnly: isReadOnly, now: Date())))
+                } else {
+                    Text(verbatim: Self.meta(note, isReadOnly: isReadOnly, now: Date()))
+                        .settingsDescriptionStyle()
+                }
                 Spacer(minLength: SettingsMetrics.rowContent)
                 actions
             }

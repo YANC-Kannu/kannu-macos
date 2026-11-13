@@ -158,6 +158,7 @@
 		AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000972 /* NotchSkinPrompt.swift */; };
 		AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000974 /* SettingsSearchRanking.swift */; };
 		AA1000000000000000000983 /* SettingsSelectNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000982 /* SettingsSelectNavigation.swift */; };
+		AA1000000000000000000B41 /* ListDetailLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B40 /* ListDetailLayout.swift */; };
 		AA1000000000000000000977 /* LaunchPermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000976 /* LaunchPermissions.swift */; };
 		AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000980 /* AppleNotesMergePolicy.swift */; };
 		AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000978 /* ScreenCapturePolicy.swift */; };
@@ -322,6 +323,7 @@
 		AA1000000000000000000972 /* NotchSkinPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchSkinPrompt.swift; path = Kannu/models/NotchSkinPrompt.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000974 /* SettingsSearchRanking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsSearchRanking.swift; path = Kannu/helpers/SettingsSearchRanking.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000982 /* SettingsSelectNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsSelectNavigation.swift; path = Kannu/helpers/SettingsSelectNavigation.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B40 /* ListDetailLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ListDetailLayout.swift; path = Kannu/helpers/ListDetailLayout.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000976 /* LaunchPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchPermissions.swift; path = Kannu/models/LaunchPermissions.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000980 /* AppleNotesMergePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleNotesMergePolicy.swift; path = Kannu/managers/AppleNotesMergePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000978 /* ScreenCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenCapturePolicy.swift; path = Kannu/helpers/ScreenCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
@@ -837,6 +839,7 @@
 				AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */,
 				AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */,
 				AA1000000000000000000983 /* SettingsSelectNavigation.swift in Sources */,
+				AA1000000000000000000B41 /* ListDetailLayout.swift in Sources */,
 				AA1000000000000000000977 /* LaunchPermissions.swift in Sources */,
 				AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */,
 				AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */,

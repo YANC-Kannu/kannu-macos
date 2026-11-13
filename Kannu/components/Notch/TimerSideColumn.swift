@@ -25,8 +25,8 @@ import SwiftUI
 ///
 /// - **Tasks**, with tasks and the timer on: a toolbar (search, the Show in notch filter, Refresh,
 ///   Time to log) level with the session name field, then the task order
-///   (`TasksManager.activeTasks`), each row with its title, key, "42m of 2h" and ▶. The header's
-///   Tasks button hides while this page can show (`TasksHeaderVisibility`);
+///   (`TasksManager.activeTasks`), each row with its title, key, "42m of 2h", its tags and ▶. The
+///   header's Tasks button hides while this page can show (`TasksHeaderVisibility`);
 /// - **Presets**, with Show presets in the notch tab on: the preset cards, as before.
 ///
 /// The page fills the column from the session name field's line down to the tab's bottom line.
@@ -246,13 +246,15 @@ extension TimerSidePage {
 ///
 /// - **The rail** (`rail`), an overlay hung into the gap between the composer and the page, where
 ///   the divider was: search, which opens a field at the top of the page that narrows the list as
-///   the user types (`TaskSearch`); the Show in notch filter (`TaskSourceMenu`, the popover's own,
-///   with Show all, Connect and Manage tasks…); Refresh, while Jira or GitLab syncs, whose tooltip
-///   says when each last synced; and Time to log, a clock with Kannu's yellow "needs your input"
-///   dot, while an entry asks. An overlay takes no room, so the gap stays the divider's 41 pt and
+///   the user types (`TaskSearch`; `#tag` finds a tag); the Show in notch filter (`TaskSourceMenu`,
+///   the popover's own, with its Tag submenu, Show all, Connect and Manage tasks…); Refresh, while
+///   Jira or GitLab syncs, whose tooltip says when each last synced; and Time to log, a clock with
+///   Kannu's yellow "needs your input" dot, while an entry asks. An overlay takes no room, so the gap stays the divider's 41 pt and
 ///   nothing moves when the page changes.
 /// - **The list**: the task order as it stands (`TasksManager.activeTasks`), narrowed by Show in
-///   notch and the search, so the first row is what the user ordered first. The whole page tall,
+///   notch, its Tag filter and the search, so the first row is what the user ordered first. Each row
+///   shows its caption whole with its first tag and "+N" when they fit, else one "+N" for all its
+///   tags, before which only the time gives way (`TaskTagChips`). The whole page tall,
 ///   ending where Start and Reset do. A row expands into its card (`TimerTaskDetail`), and the
 ///   clock opens the Time to log cards (`TimerLogTimePage`); the rail stays beside both.
 ///
@@ -392,13 +394,20 @@ private struct TimerTasksPage: View {
     /// (`TaskSourcePreferences.hiddenInNotch`).
     private var isFiltered: Bool { preferences.isNarrowing }
 
-    /// Show in notch over the connected baseline, as the popover has it. The task being timed always
-    /// passes.
+    /// Show in notch and its Tag filter over the connected baseline, as the popover has them. The task
+    /// being timed always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, tag: preferences.tagFilter, alwaysListed: manager.timing?.taskID)
     }
 
-    /// Show all: every source back in the notch.
+    /// The Tag submenu's choices: the tags of every task Show in notch lists, whatever tag is picked,
+    /// so a choice never vanishes from its own menu.
+    private var tagChoices: [String] {
+        TaskFacets.filterTags(in: TaskOrdering.active(manager.activeTasks, listed: TaskOrdering.viewFilter(
+            hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)))
+    }
+
+    /// Show all: every source back in the notch, and no Tag filter.
     private func showAllSources() {
         preferences.showAll()
     }
@@ -468,7 +477,7 @@ private struct TimerTasksPage: View {
             }
             .zIndex(4)
             railSlot {
-                TaskSourceMenu(openBrain: { $0.open() }, style: .rail)
+                TaskSourceMenu(openBrain: { $0.open() }, tags: tagChoices, style: .rail)
             }
             .zIndex(3)
             if !manager.syncStates.isEmpty {
@@ -643,9 +652,9 @@ private struct TimerTasksPage: View {
         .frame(height: rowsHeight)
     }
 
-    /// Key and title on one line, "42m of 2h" under it, then a local task's done tick and ▶. The
-    /// text is a button of its own: clicking it expands the task into its card, in the column's own
-    /// frame.
+    /// Key and title on one line, "42m of 2h" and the tags under it, then a local task's done tick
+    /// and ▶. The text is a button of its own: clicking it expands the task into its card, in the
+    /// column's own frame.
     private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
         let isTicked = manager.doneTicks.isTicked(task.id)
@@ -658,13 +667,25 @@ private struct TimerTasksPage: View {
                 let isHovered = hoveredRowID == task.id
                 VStack(alignment: .leading, spacing: 1) {
                     HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
-                    HoverRevealText(
-                        (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
-                            + overText(progress.over))
-                            .font(.system(size: 11, weight: .medium)),
-                        isActive: isHovered
-                    )
-                    .foregroundStyle(.secondary)
+                    // The caption, then the tags that fit beside it, the one the search found first; the
+                    // caption wins (`TaskTagChips`). The line is a chip tall in every row, tags or not,
+                    // so every row's title sits on the same line.
+                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText),
+                                 foundFirst: !TaskSearch.foundTags(of: task, query: searchText).isEmpty) {
+                        // The overtime never shortens: on a short line the time before it gives way.
+                        HStack(spacing: 0) {
+                            HoverRevealText(
+                                Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.system(size: 11, weight: .medium)),
+                                isActive: isHovered
+                            )
+                            overText(progress.over)
+                                .font(.system(size: 11, weight: .medium))
+                                .fixedSize()
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(height: M.sideTaskCaptionHeight)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 // Ticked done and waiting out the undo window.

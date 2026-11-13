@@ -22,7 +22,8 @@ import SwiftUI
 
 /// Brain › Notes' product, above its settings: the notes, pinned first and then the latest edit first, as the notch's
 /// Notes tab lists them, under Apple Notes' sync status while sync is on (docs/SETTINGS.md, "Product pages"). A row's ›
-/// opens the note's own page in the tab (`NotePage`, the in-tab swap), and its right-click menu holds the rest.
+/// opens the note's own page (`NotePage`): beside the list while the panel holds both, where the row shows selected,
+/// or in the tab, the in-tab swap. Its right-click menu holds the rest.
 ///
 /// It shows what is saved and starts nothing of its own: no sync, no AppleScript and no file read. Pin, Copy, Open in
 /// Notes and Delete act only on a press, through `NotesManager`, the notes' one write path, as the notch's rows make
@@ -34,7 +35,9 @@ import SwiftUI
 /// last edited by the time of day or the date, so the page keeps no clock.
 struct NotesOverview: View {
     let data: NotesPageData
-    /// Opens a note's own page in the tab. `NotesSettingsView` holds which note is open.
+    /// The note whose page shows beside the list, drawn selected; nil while a note's page takes the list's place.
+    let selected: UUID?
+    /// Opens a note's own page, beside the list or in its place. `NotesSettingsView` holds which note is open.
     let open: (NoteItem) -> Void
     /// Deletes a note, asking first for one made in Apple Notes. `NotesSettingsView` holds the question.
     let delete: (NoteItem) -> Void
@@ -77,7 +80,8 @@ struct NotesOverview: View {
                         // lazy stack reaches before the row is built (docs/SETTINGS.md, "Pages and sections").
                         LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap) {
                             ForEach(data.notes) { note in
-                                NotesListRow(note: note, isReadOnly: data.isReadOnly(note), open: open, delete: delete)
+                                NotesListRow(note: note, isReadOnly: data.isReadOnly(note), isSelected: selected == note.id,
+                                             open: open, delete: delete)
                                     .id(note.id)
                             }
                         }
@@ -163,6 +167,8 @@ struct NotesHeaderActions: View {
 private struct NotesListRow: View {
     let note: NoteItem
     let isReadOnly: Bool
+    /// Its page shows beside the list.
+    let isSelected: Bool
     let open: (NoteItem) -> Void
     let delete: (NoteItem) -> Void
     @Default(.enableNotePinning) private var pinning
@@ -202,6 +208,14 @@ private struct NotesListRow: View {
             Divider()
             Button("Delete", role: .destructive) { delete(note) }
         }
+        // Selected, the one selected look, a 2-pt ring (docs/SETTINGS.md, "Choices"), outset into the gap between rows
+        // so it frames the row and touches no text. For VoiceOver the row is one group named for its note, so its ›
+        // says whose it is, and selected.
+        .settingsChoiceRing(RoundedRectangle(cornerRadius: SettingsTheme.controlRadius, style: .continuous)
+                                .inset(by: -SettingsTheme.sectionRowGap / 2), isSelected: isSelected)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(verbatim: note.title))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     /// "4:57 PM · Milk, eggs, bread": the last edit, then the text's first line. A note with no text says only when.
@@ -237,10 +251,11 @@ struct NoteColorDot: View {
     }
 }
 
-/// The rows' place when there is nothing to list, or the page's while Notes is off: the status, at most one line that
-/// teaches, and at most one action (docs/SETTINGS.md, "Product pages"), as Clipboard's. It sits in a section's card,
-/// whose padding is the hero's, so it is as tall as the hero less that padding.
-private struct NotesMessage<Action: View>: View {
+/// The rows' place when there is nothing to list, the page's while Notes is off, and a note's page's place beside the
+/// list while none is open: the status, at most one line that teaches, and at most one action (docs/SETTINGS.md,
+/// "Product pages"), as Clipboard's. It sits in a section's card, whose padding is the hero's, so it is as tall as the
+/// hero less that padding.
+struct NotesMessage<Action: View>: View {
     let title: String
     let message: String?
     @ViewBuilder let action: () -> Action

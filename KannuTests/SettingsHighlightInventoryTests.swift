@@ -97,11 +97,15 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // and its two battery rows), one entry, three registrations and three ids fewer.
         // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
         // opposite of what is on screen, so this row is the way back to Match macOS.
+        // 2026-11-11: Brain › Tasks' list moved up onto its first page (Stage 5): its tabs carry the
+        // list's deep link and its Find row the list's entries, which the All tasks back row and row did,
+        // and Tag colours, folded in the settings, registers an id of its own for its entry (one row and
+        // one id more).
         // 2026-11-11: Notes' gear lands on its first settings row, Enable Notes, which registers an id
         // (one registration, one id; no entry: a search for the tab finds it by name).
         XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,
@@ -192,20 +196,21 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.statsMonitoringHighlightID"))
     }
 
-    /// Brain › Tasks' pages below the overview exist only while open, so nothing on them may carry
-    /// a highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). All tasks'
-    /// own deep link is on its back row, which the overview's file builds.
+    /// Brain › Tasks' pages below the first exist only while open, so nothing on them may carry a
+    /// highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). The list's
+    /// rows carry none either: they are lazy. The list's own deep link and its entries are on its tabs
+    /// and its Find row, which the first page builds (`TasksOverview`).
     func testTheRowsBelowTheTasksOverviewRegisterNothing() throws {
         let sources = try Self.sources()
-        for name in ["TaskSourcePages.swift", "TaskRowList.swift", "AllTasksPage.swift", "TaskDetailPage.swift", "NewTaskSheet.swift"] {
+        for name in ["TaskSourcePages.swift", "TaskRowList.swift", "TaskDetailPage.swift", "NewTaskSheet.swift"] {
             let page = try XCTUnwrap(sources[name], name)
             XCTAssertFalse(page.contains("settingsHighlight("), "\(name) registers a highlight id on a row search cannot reach")
             XCTAssertFalse(page.contains("highlightID("), "\(name) names a highlight id")
         }
     }
 
-    /// A source page's rows land on that source's row on the overview, which opens the page; the
-    /// overview's All tasks row takes the entries for All tasks and a task's page.
+    /// A source page's rows land on that source's row on the first page, which opens the page; the
+    /// list's Find row takes the entries for the list and a task's page, and Tag colours has its own.
     func testTasksPageEntriesLandOnTheRowThatOpensThem() throws {
         let inventory = try Self.inventory()
         let landing = Dictionary(inventory.entries.filter { $0.tab == "tasks" }.map { ($0.title, $0.highlight) },
@@ -215,7 +220,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
             "tasksJiraSourceHighlightID": ["Jira Cloud", "Sync Jira", "Jira colour", "Refresh Jira issues", "Issue filter (JQL)"],
             "tasksAddSourceHighlightID": ["Add a source"],
             "tasksGitLabSourceHighlightID": ["GitLab", "Sync GitLab", "GitLab colour", "Include merge requests", "Refresh GitLab items"],
-            "tasksListHighlightID": ["All tasks", "Find a task", "Add a task", "Tag colours", "Archived tasks"],
+            "tasksListHighlightID": ["All tasks", "Find a task", "Add a task", "Recently closed tasks", "Archived tasks"],
+            "tasksTagColorsHighlightID": ["Tag colours"],
         ]
         for (link, titles) in rows {
             let id = try XCTUnwrap(inventory.deepLinks[link], link)
