@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer CodeRabbit's first review of everything around Brain
+- **Developer label:** CodeRabbit's first review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 in part and inline-2 from CodeRabbit's first review of Super 6, folded into Stage 6 child 6; inline-1's retry answered on the PR
+- **Changes:**
+  - Brain › Tasks: New Task says why Add stays off when the task list could not be read, in the Tasks page's own words
+    ("Couldn't read the task list, so it can't change."), beside its buttons. It still opens at once while the list is
+    loading, with Add off until the list is ready. No retry: nothing reads the list again before a relaunch.
+  - `MenuBarRulesTests` and `SidebarBadgeLiveDataRulesTests` start with the project's GPL header block, as AGENTS.md
+    asks of every Swift file.
+  - `TasksPageLiveDataRulesTests`: a comment no longer says New task's press reads `isReady`.
+
 ### 2026-11-13 - Answer the review of the final audit's fixes
 - **Developer label:** Brain redesign plan: the scoped final audit's fix child, and its independent review
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the reviewer's R1 and R2, and one found while gating; R3 and R4 answered in the lane's notes

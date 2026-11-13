@@ -103,6 +103,11 @@ struct NewTaskSheet: View {
             }
 
             reminder
+            // A list that could not be read is not read again before a relaunch, so Add stays off: say why, in the
+            // Tasks page's own words, beside the buttons, as a Connect sheet shows its problem.
+            if case .failed(let reason) = manager.loadState {
+                SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
+            }
         } buttons: {
             if draft != TaskFormDraft() {
                 Button("Clear All") {
