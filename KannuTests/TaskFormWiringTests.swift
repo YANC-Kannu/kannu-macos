@@ -75,11 +75,11 @@ final class TaskFormWiringTests: XCTestCase {
     }
 
     /// Brain's New Task adds through `insertTask` alone (David, 2026-10-24): a task half-typed in the
-    /// notch stays kept, and the notch's Show local stays as the user left it.
+    /// notch stays kept, and the notch's Show local and Tag filter stay as the user left them.
     func testBrainsNewTaskLeavesTheNotchsFormAlone() throws {
         let insert = try Self.body("func insertTask(from draft: TaskFormDraft)", in: try Self.manager())
         XCTAssertFalse(insert.contains("forgetFormDraft("), "Brain's add would discard what the notch's form holds")
-        XCTAssertFalse(insert.contains("showLocalTasks()"), "Brain's add would flip the notch's Show local")
+        XCTAssertFalse(insert.contains("showInNotch("), "Brain's add would flip the notch's Show local or clear its Tag filter")
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let sheet = try String(contentsOf: root.appendingPathComponent("Kannu/components/Settings/NewTaskSheet.swift"), encoding: .utf8)
             .split(separator: "\n", omittingEmptySubsequences: false)

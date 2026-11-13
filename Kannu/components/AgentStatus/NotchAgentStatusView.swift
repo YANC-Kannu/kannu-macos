@@ -20,14 +20,14 @@ struct NotchAgentStatusView: View {
     @Default(.agentActiveColor) private var activePaletteColor
     @Default(.agentAwaitingInputColor) private var awaitingPaletteColor
     @Default(.agentStoppedColor) private var stoppedPaletteColor
-    /// The 420/340 pt panels have no room for the run-time column; the status line carries the time.
-    @Default(.enableMinimalisticUI) private var minimalistic
     @State private var isSuppressingScrollGesture = false
     @State private var redBlinkStartTimes: [String: Date] = [:]
     /// The pinned finding whose "Copy for agent" was just pressed; cleared after 2 s.
     @State private var copiedFindingID: String?
     /// Bumped once when a red badge's blink window ends, so the 10 Hz blink stops on time.
     @State private var blinkWake = Date.distantPast
+    /// The empty state's tools, checked as it appears.
+    @State private var detectedTools: [AgentToolDetector.Tool] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     private let scrollSuppressionToken = UUID()
@@ -35,14 +35,11 @@ struct NotchAgentStatusView: View {
     private var hasSkin: Bool { skinManager.selectedSkinImage != nil }
 
 #if DEBUG
-    /// Snapshot boards only (`DebugSnapshots`): fixture sessions and panel mode instead of the live ones.
+    /// Snapshot boards only (`DebugSnapshots`): fixture sessions instead of the live ones.
     var snapshotSessions: [AgentSessionStatus]? = nil
-    var snapshotMinimalistic: Bool? = nil
     private var sourceSessions: [AgentSessionStatus] { snapshotSessions ?? monitor.sessions }
-    private var isMinimalistic: Bool { snapshotMinimalistic ?? minimalistic }
 #else
     private var sourceSessions: [AgentSessionStatus] { monitor.sessions }
-    private var isMinimalistic: Bool { minimalistic }
 #endif
 
     private var dedupedSessions: [AgentSessionStatus] {
@@ -64,45 +61,6 @@ struct NotchAgentStatusView: View {
 
     private var primarySession: AgentSessionStatus? {
         AgentTrafficLightMapper.primarySession(from: visibleSessions)
-    }
-
-    private struct ProviderInstallStatus {
-        let source: AgentProviderIconSource
-        let name: String
-        let detected: Bool
-    }
-
-    private var providerStatuses: [ProviderInstallStatus] {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser
-        return [
-            ProviderInstallStatus(
-                source: .cursor, name: "Cursor",
-                detected: fm.fileExists(atPath: home.appendingPathComponent("Library/Application Support/Cursor/User/globalStorage/state.vscdb").path)
-            ),
-            ProviderInstallStatus(
-                source: .claude, name: "Claude Code",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".claude/projects").path)
-            ),
-            ProviderInstallStatus(
-                source: .codex, name: "Codex",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".codex/sessions").path)
-            ),
-            ProviderInstallStatus(
-                source: .antigravity, name: "Antigravity",
-                detected: fm.fileExists(atPath: home.appendingPathComponent(".gemini").path)
-            ),
-            ProviderInstallStatus(
-                source: .warp, name: "Warp",
-                // Launch Services, not Warp's container: statting that raises "access data from
-                // other apps", which belongs to onboarding's Permissions step.
-                detected: LaunchPermissionManager.isWarpInstalled
-            ),
-            ProviderInstallStatus(
-                source: .claudeDesktop, name: "Desktop",
-                detected: fm.fileExists(atPath: ClaudeDesktopAgentSessionStore.defaultRoot.path)
-            ),
-        ]
     }
 
     var body: some View {
@@ -147,21 +105,21 @@ struct NotchAgentStatusView: View {
     private var emptyStateView: some View {
         VStack(spacing: 10) {
             Text("Your agents are taking a coffee break ☕")
-                .font(.subheadline.weight(.medium))
+                .font(SettingsTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
             Text("Fire up Cursor, Claude Code, Codex, Antigravity, Warp, or Claude Desktop and start a session — we'll watch the lights for you.")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 0) {
-                ForEach(providerStatuses, id: \.name) { status in
+                ForEach(detectedTools) { status in
                     HStack(spacing: 5) {
-                        AgentProviderIconView(source: status.source, size: 14)
+                        AgentProviderIconView(source: .init(rawProvider: status.provider), size: 14)
                             .opacity(status.detected ? 1 : 0.3)
-                        Text(status.name)
-                            .font(.system(size: 10))
+                        Text(status.shortName)
+                            .font(SettingsTheme.font(size: 10))
                             .foregroundStyle(status.detected ? .primary : .tertiary)
                             .lineLimit(1)
                         if status.detected {
@@ -188,6 +146,9 @@ struct NotchAgentStatusView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
+        // A visit's file checks, never a render's (`AgentToolDetector`). Here, not on the whole view: while an agent
+        // works, every hover-open lands on Agent Status, and the empty state is not shown.
+        .onAppear { detectedTools = AgentToolDetector.detect() }
     }
 
     /// Top-right caffeinate control, visible in every panel state. Two faces:
@@ -204,7 +165,7 @@ struct NotchAgentStatusView: View {
             // a "Recent chats" heading over the coffee-break message would label nothing.
             if !allSessions.isEmpty {
                 Text("Recent chats")
-                    .font(.caption.weight(.semibold))
+                    .font(SettingsTheme.font(size: 10, weight: .semibold))
                     .foregroundStyle(.secondary)
             }
             // Medium findings never interrupt: one count, one click to Settings.
@@ -218,7 +179,7 @@ struct NotchAgentStatusView: View {
                         Image(systemName: "exclamationmark.shield").font(.system(size: 9))
                         Text(openFindingCount == 1 ? String(localized: "1 finding") : String(localized: "\(openFindingCount) findings"))
                     }
-                    .font(.caption2)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundStyle(.secondary)
                 }
                 .buttonStyle(.plain)
@@ -316,20 +277,20 @@ struct NotchAgentStatusView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(finding.title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(SettingsTheme.font(size: 11, weight: .semibold))
                         .lineLimit(1)
                     Text(finding.severity.label)
-                        .font(.caption2.weight(.semibold))
+                        .font(SettingsTheme.font(size: 10, weight: .semibold))
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Capsule().fill(notchForeground.opacity(0.12)))
                 }
                 Text(finding.summary)
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if let evidence = finding.displayedEvidence.first {
                     Text(evidence)
-                        .font(.caption2)
+                        .font(SettingsTheme.font(size: 10))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -455,10 +416,10 @@ struct NotchAgentStatusView: View {
     @ViewBuilder
     private func analysisLine(for session: AgentSessionStatus) -> some View {
         if findingsStore.isAnalyzing(session.conversationID) {
-            Text("ADR: analysing…").font(.caption2).foregroundStyle(.secondary)
+            Text("ADR: analysing…").font(SettingsTheme.font(size: 10)).foregroundStyle(.secondary)
         } else if let analysis = findingsStore.analysis(for: session.conversationID) {
             Text("ADR: \(analysis.shortLabel)")
-                .font(.caption2)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundStyle(analysis.isMalicious ? .primary : .secondary)
         }
     }
@@ -508,27 +469,23 @@ struct NotchAgentStatusView: View {
                     text: session.providerLabel,
                     secondarySuffix: session.displayProjectName,
                     maxStaticLength: 18,
-                    font: .headline,
+                    font: SettingsTheme.font(size: 13, weight: .bold),
                     nsFont: .headline,
                     textColor: .primary,
                     secondaryTextColor: .secondary,
                     marqueeWidth: 220
                 )
-                statusText(for: session, font: .subheadline)
+                statusText(for: session, font: SettingsTheme.font(size: 11))
                 analysisLine(for: session)
                 AgentChatNameLabel(
                     text: session.displayChatName,
-                    font: .caption2,
+                    font: SettingsTheme.font(size: 10),
                     textColor: .secondary,
                     marqueeWidth: 180
                 )
             }
             .layoutPriority(1)
-            if isMinimalistic {
-                Spacer(minLength: 0)
-            } else {
-                AgentTurnMetricsView(session: session, prominent: true)
-            }
+            AgentTurnMetricsView(session: session, prominent: true)
             stateBadge(session.displayState, sessionId: session.id, large: true)
         }
         .padding(12)
@@ -554,14 +511,14 @@ struct NotchAgentStatusView: View {
                         text: session.providerLabel,
                         secondarySuffix: session.displayProjectName,
                         maxStaticLength: 16,
-                        font: .caption.weight(.semibold),
+                        font: SettingsTheme.font(size: 10, weight: .semibold),
                         nsFont: .caption1,
                         textColor: .primary,
                         secondaryTextColor: .secondary,
                         marqueeWidth: 160
                     )
                 }
-                statusText(for: session, font: .caption2)
+                statusText(for: session, font: SettingsTheme.font(size: 10))
                 analysisLine(for: session)
                 AgentChatNameLabel(
                     text: session.displayChatName,
@@ -569,11 +526,7 @@ struct NotchAgentStatusView: View {
                 )
             }
             .layoutPriority(1)
-            if isMinimalistic {
-                Spacer(minLength: 0)
-            } else {
-                AgentTurnMetricsView(session: session)
-            }
+            AgentTurnMetricsView(session: session)
             stateBadge(session.displayState, sessionId: session.id, large: false)
         }
         .padding(10)
@@ -590,23 +543,10 @@ struct NotchAgentStatusView: View {
     }
 
     /// The state word and why it stopped. The run time sits in the trailing column
-    /// (`AgentTurnMetricsView`); on the minimalistic panels, which have no room for it, it follows
-    /// here instead.
-    @ViewBuilder
+    /// (`AgentTurnMetricsView`).
     private func statusText(for session: AgentSessionStatus, font: Font) -> some View {
         let suffix = session.runOutcomeSuffix + session.backgroundWorkSuffix + resumeSuffix(for: session)
-        if isMinimalistic, let display = AgentTurnMetricsView.display(for: session) {
-            switch display {
-            case let .live(since):
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(context.date.timeIntervalSince(since)), font: font)
-                }
-            case let .ended(interval):
-                statusLine(session, suffix: suffix + " · " + AgentTurnFormat.duration(interval), font: font)
-            }
-        } else {
-            statusLine(session, suffix: suffix, font: font)
-        }
+        return statusLine(session, suffix: suffix, font: font)
     }
 
     private func statusLine(_ session: AgentSessionStatus, suffix: String, font: Font) -> some View {

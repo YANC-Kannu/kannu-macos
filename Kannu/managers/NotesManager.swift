@@ -29,7 +29,7 @@ final class NotesManager {
     private var permissionObserver: NSObjectProtocol?
 
     private init() {
-        // Allowing "Control Notes" (onboarding, Brain › General › Permissions, or the sync switch)
+        // Allowing "Control Notes" (onboarding, Brain › Settings › General › Permissions, or the sync switch)
         // is what lets a sync that was held back run.
         permissionObserver = NotificationCenter.default.addObserver(
             forName: .launchPermissionsChanged, object: nil, queue: .main

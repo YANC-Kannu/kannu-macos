@@ -57,7 +57,7 @@ struct MusicSlotConfigurationView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Layout Preview")
+            Text("Layout preview")
                 .font(.headline)
             Text("Drag items between slots or drop from the palette to remap controls.")
                 .font(.subheadline)
@@ -109,7 +109,7 @@ struct MusicSlotConfigurationView: View {
     private var palette: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("Control Palette")
+                Text("Control palette")
                     .font(.headline)
                 Spacer()
                 ScrollHintIndicator()
@@ -156,7 +156,7 @@ private struct ScrollHintIndicator: View {
                     musicControlSlots = MusicControlButton.defaultLayout
                 }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SettingsButtonStyle(.quiet))
         }
     }
 

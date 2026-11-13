@@ -578,3 +578,40 @@ struct TasksFile: Codable, Equatable {
         return decoder
     }
 }
+
+/// The done tick's undo window, the checklist pattern of Reminders and Things: a tick waits
+/// `undoSeconds` before the task leaves its list, and a second click in that time takes it back.
+/// `TasksManager` holds one, so a tick still lands when the row that took it has gone.
+struct TaskDoneTicks: Equatable {
+    static let undoSeconds: TimeInterval = 1.5
+
+    private(set) var pending: Set<UUID> = []
+
+    /// Only a local task in the list: a Jira or GitLab task's status belongs to its source.
+    static func canTick(_ task: TaskItem) -> Bool {
+        task.source == .local && task.visibility == .active
+    }
+
+    func isTicked(_ id: UUID) -> Bool {
+        pending.contains(id)
+    }
+
+    /// A click on the tick. True when the task is now waiting to be marked done (arm the commit),
+    /// false when a waiting tick was taken back.
+    mutating func toggle(_ id: UUID) -> Bool {
+        if pending.remove(id) != nil { return false }
+        pending.insert(id)
+        return true
+    }
+
+    /// The undo window ran out: true when the tick still stands and the task is to be marked done.
+    mutating func commit(_ id: UUID) -> Bool {
+        pending.remove(id) != nil
+    }
+
+    /// Every tick still waiting, for a quit: they are marked done at once.
+    mutating func commitAll() -> Set<UUID> {
+        defer { pending.removeAll() }
+        return pending
+    }
+}

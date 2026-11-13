@@ -39,7 +39,8 @@ import Foundation
 /// has a `model` field.
 ///
 /// `input_tokens` already includes `cached_input_tokens` (and any `cache_write_input_tokens`), and
-/// `output_tokens` already includes `reasoning_output_tokens`, so neither is added a second time.
+/// `output_tokens` already includes `reasoning_output_tokens`, so neither is added a second time. The
+/// record splits the cached part out as a cache read, as Claude's are.
 ///
 /// A forked session or a spawned subagent starts its rollout with its parent's history, `token_count`
 /// events included, re-stamped with the moment of the fork. Counting them would add the parent's
@@ -55,13 +56,17 @@ struct CodexUsageLine {
     struct Tokens: Equatable {
         var input = 0
         var cachedInput = 0
+        /// `cache_write_input_tokens`: like `cachedInput`, a part of `input`.
+        var cacheWriteInput = 0
         var output = 0
         var reasoningOutput = 0
         var total = 0
 
-        init(input: Int = 0, cachedInput: Int = 0, output: Int = 0, reasoningOutput: Int = 0, total: Int = 0) {
+        init(input: Int = 0, cachedInput: Int = 0, cacheWriteInput: Int = 0, output: Int = 0,
+             reasoningOutput: Int = 0, total: Int = 0) {
             self.input = input
             self.cachedInput = cachedInput
+            self.cacheWriteInput = cacheWriteInput
             self.output = output
             self.reasoningOutput = reasoningOutput
             self.total = total
@@ -73,6 +78,7 @@ struct CodexUsageLine {
             guard let object = value as? [String: Any] else { return nil }
             func count(_ key: String) -> Int { max(0, (object[key] as? NSNumber)?.intValue ?? 0) }
             self.init(input: count("input_tokens"), cachedInput: count("cached_input_tokens"),
+                      cacheWriteInput: count("cache_write_input_tokens"),
                       output: count("output_tokens"), reasoningOutput: count("reasoning_output_tokens"),
                       total: count("total_tokens"))
         }
@@ -82,6 +88,7 @@ struct CodexUsageLine {
             guard let previous else { return self }
             return Tokens(input: max(0, input - previous.input),
                           cachedInput: max(0, cachedInput - previous.cachedInput),
+                          cacheWriteInput: max(0, cacheWriteInput - previous.cacheWriteInput),
                           output: max(0, output - previous.output),
                           reasoningOutput: max(0, reasoningOutput - previous.reasoningOutput),
                           total: max(0, total - previous.total))
@@ -188,8 +195,14 @@ struct CodexUsageLine {
         // `archived_sessions`) counts once; two different requests would have to match to the
         // millisecond and in their running totals to collide.
         let key = "codex-\(timestamp)-\(total?.total ?? -1)-\(usage.input)-\(usage.output)"
+        // `input_tokens` includes the cached and cache-write parts: split them out (clamped, so the
+        // parts never exceed the whole), and `promptTokens` is Codex's own input count while the
+        // headline leaves the cache reads out, as Claude's does.
+        let cached = min(usage.cachedInput, usage.input)
+        let written = min(usage.cacheWriteInput, usage.input - cached)
         return UsageRecord(timestamp: date, model: model ?? "unknown",
-                           inputTokens: usage.input, outputTokens: usage.output, dedupKey: key)
+                           uncachedInputTokens: usage.input - cached - written, cacheWriteTokens: written,
+                           cacheReadTokens: cached, outputTokens: usage.output, dedupKey: key)
     }
 
     /// Whether the usage event at `date` belongs to a replayed parent history; ends the replay

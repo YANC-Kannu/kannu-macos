@@ -28,7 +28,7 @@ final class AgentHookInstaller: ObservableObject {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     static let scriptName = AgentHookLayout.scriptName
-    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=46"
+    private static let scriptVersionMarker = "KANNU_HOOK_SCRIPT_VERSION=48"
 
     private static var home: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -209,16 +209,19 @@ final class AgentHookInstaller: ObservableObject {
         # 700: the files carry session titles and project names, and Kannu trusts their
         # contents to drive the traffic light — no reason for other users to see them.
         mkdir -p "$KANNU_STATUS_DIR" && chmod 700 "$KANNU_STATUS_DIR"
-        # The payload goes to Python through a file, not the environment. Exported as KANNU_INPUT, a
-        # tool input over ~1 MiB made execve fail with "Argument list too long" before the heredoc ran,
-        # and the script fell through to `exit 0` with no status write and no allow line. mktemp makes
-        # the file 0600 inside the 700 directory; Python unlinks it, and the rm below covers every
-        # other way out.
-        KANNU_INPUT_FILE="$(mktemp "$KANNU_STATUS_DIR/.kannu-input.XXXXXX" 2>/dev/null)" || KANNU_INPUT_FILE=""
-        if [ -n "$KANNU_INPUT_FILE" ]; then cat > "$KANNU_INPUT_FILE"; else cat > /dev/null; fi
-        export KANNU_INPUT_FILE
+        # The payload reaches Python on file descriptor 3, a copy of this script's stdin (Python's own
+        # stdin is the heredoc below), so it is never written to disk. Exported as KANNU_INPUT, a tool
+        # input over ~1 MiB made execve fail with "Argument list too long" before the heredoc ran. v41 to
+        # v46 copied it to a .kannu-input.XXXXXX file in the status directory instead and deleted it after
+        # Python read it: a hook killed in between (the host's timeout, an interrupt, the host quitting)
+        # left the payload there for good, a user's prompt included. Kannu removes those at launch. A
+        # closed stdin reads as empty.
+        { exec 3<&0; } 2>/dev/null || exec 3</dev/null
 
         if ! command -v python3 >/dev/null 2>&1; then
+          # Read and dropped, as the Python path reads it, so the host is never left writing to a pipe
+          # nobody reads.
+          cat <&3 > /dev/null 2>&1
           TS=$(($(date +%s) * 1000))
           printf '{"state":"%s","ts":%s,"provider":"%s"}' "$KANNU_STATE" "$TS" "$KANNU_PROVIDER" > "$KANNU_STATUS_DIR/$KANNU_PROVIDER-default.json"
           # Codex validates hook output strictly and rejects this line; empty stdout is its success.
@@ -240,7 +243,6 @@ final class AgentHookInstaller: ObservableObject {
                     esac ;;
             *) echo '{"permission":"allow","continue":true}' ;;
           esac
-          [ -n "$KANNU_INPUT_FILE" ] && rm -f "$KANNU_INPUT_FILE"
           exit 0
         fi
 
@@ -272,25 +274,19 @@ final class AgentHookInstaller: ObservableObject {
         hook_event = os.environ.get("KANNU_HOOK_EVENT", "unknown")
         hook_matcher = os.environ.get("KANNU_HOOK_MATCHER", "")
         status_dir = Path(os.environ.get("KANNU_STATUS_DIR", "")).expanduser()
-        # Read from the file the wrapper wrote (see the top of this script); the environment variable is
-        # only a fallback for a caller that still exports one. Capped so a runaway payload cannot be held
-        # whole in memory: past the cap the event still updates the light, uncounted.
+        # Read from file descriptor 3, the wrapper's copy of the hook's stdin (see the top of this
+        # script); the environment variable is only a fallback for a caller that still exports one.
+        # Capped so a runaway payload cannot be held whole in memory: past the cap the event still
+        # updates the light, uncounted, and the rest is read and dropped so the host never blocks
+        # writing it. Closed here, so nothing this script starts later inherits it.
         INPUT_CAP = 16 * 1024 * 1024
-        raw = ""
-        _input_path = os.environ.get("KANNU_INPUT_FILE", "")
-        if _input_path:
-            try:
-                with open(_input_path, "r", encoding="utf-8", errors="replace") as _fh:
-                    raw = _fh.read(INPUT_CAP + 1)
-            except Exception:
-                raw = ""
-            try:
-                os.unlink(_input_path)
-            except Exception:
-                pass
-            if len(raw) > INPUT_CAP:
-                raw = ""
-        else:
+        try:
+            with os.fdopen(3, "rb") as _fh:
+                _payload = _fh.read(INPUT_CAP + 1)
+                while len(_payload) > INPUT_CAP and _fh.read(1024 * 1024):
+                    pass
+            raw = "" if len(_payload) > INPUT_CAP else _payload.decode("utf-8", errors="replace")
+        except Exception:
             raw = os.environ.get("KANNU_INPUT", "")
         status_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1418,6 +1414,8 @@ final class AgentHookInstaller: ObservableObject {
                                "local_agent", "local_workflow"}
         TURN_BG_DONE = {"completed", "failed", "killed", "cancelled", "canceled", "stopped", "error"}
         TURN_MAX_BG_AGENTS = 999
+        # v47: how Claude Code's prompt starts when it hands the model a finished background task's result.
+        TURN_NOTIFICATION_PREFIX = "<task-notification>"
 
         def turn_path(value):
             # Claude's main transcript only: under ~/.claude/projects, a .jsonl, never a subagent's.
@@ -1513,6 +1511,15 @@ final class AgentHookInstaller: ObservableObject {
                     count += 1
             return count
 
+        def task_notification(turn):
+            # v47: a finished background agent's result, which Claude Code submits as a prompt after the Stop.
+            # Only while the ended turn recorded agents left running: anything else typed after a Stop is a new
+            # request. The prefix is checked on a bounded slice, never the whole prompt.
+            if provider != "claude" or parent_id or not turn.get("turn_bg_agents"):
+                return False
+            prompt = data.get("prompt")
+            return isinstance(prompt, str) and prompt[:4096].lstrip().startswith(TURN_NOTIFICATION_PREFIX)
+
         def next_turn(existing, now_ms):
             # (turn keys, transcript path) for this write.
             turn = carried_turn(existing, now_ms)
@@ -1535,7 +1542,11 @@ final class AgentHookInstaller: ObservableObject {
             # requests. Only a prompt to an agent that has stopped starts one.
             open_turn = bool(turn) and "turn_ended_ms" not in turn
             prompted = hook_event in TURN_PROMPT_EVENTS or antigravity_first_call
-            starts = (prompted and not open_turn) or (hook_event in TURN_WAKE_EVENTS and not turn)
+            # v47: the prompt that hands back an agent the Stop left running is that request going on: it
+            # resumes the ended turn (start and transcript offset kept) instead of starting one, which wiped the
+            # request's run time, tool calls and tokens each time an agent finished.
+            resumes = prompted and bool(turn) and not open_turn and task_notification(turn)
+            starts = (prompted and not open_turn and not resumes) or (hook_event in TURN_WAKE_EVENTS and not turn)
             if parent_id and turn and hook_event in TURN_WAKE_EVENTS and parent_turn_start() > turn["turn_started_ms"]:
                 # A subagent resumed in a later request of its chat.
                 starts = True
@@ -1550,7 +1561,7 @@ final class AgentHookInstaller: ObservableObject {
                             turn["turn_transcript_offset"] = 0
                     elif size >= 0:
                         turn["turn_transcript_offset"] = size
-            elif turn and hook_event in TURN_WAKE_EVENTS:
+            elif turn and (hook_event in TURN_WAKE_EVENTS or resumes):
                 # Working again after the Stop without a new prompt: still the same request.
                 turn.pop("turn_ended_ms", None)
                 turn.pop("turn_bg_agents", None)
@@ -2193,7 +2204,10 @@ final class AgentHookInstaller: ObservableObject {
             pass
         emit(hidden_notes_out)
         PY
-        [ -n "$KANNU_INPUT_FILE" ] && rm -f "$KANNU_INPUT_FILE"
+        # Python reads file descriptor 3 to the end before anything else and never exits non-zero on
+        # purpose, so only a failed run (python3 dying before it reads) can leave the payload unread.
+        # Drain it then, so the host is never left writing to a pipe nobody reads.
+        [ $? -eq 0 ] || cat <&3 > /dev/null 2>&1
         exit 0
         """
 

@@ -23,17 +23,19 @@ import SwiftUI
 /// One task's page (‹ the list it was opened from), in the words of `TaskDetailSummary`, as the
 /// notch's card is, so a task reads the same everywhere:
 ///
-/// - its title, with the short key and where it stands, and ▶ or ■; its source's labels; its tags
-///   as chips that remove themselves, with Add Tags; its time against the estimate, any overtime,
-///   with its estimate typed in place (`TaskEstimateField`) and Add Time;
+/// - its title, with the short key and where it stands, and ▶ or ■ with a local task's done tick
+///   (`TaskDoneTick`) beside it; its source's labels; its tags as chips that remove themselves, with
+///   Add Tags; its time against the estimate, any overtime, with its estimate typed in place
+///   (`TaskEstimateField`) and Add Time;
 /// - its facts, most important first; a local task's reminder; Open in Jira or GitLab, and whether
 ///   its time is offered in Time to log;
-/// - what ends it: Mark Done, Archive or Delete, or, once closed or archived, Reopen and Restore.
+/// - what ends it: the tick, Archive or Delete, or, once closed or archived, Reopen and Restore.
 ///
 /// Its rows carry no highlight ids (docs/SETTINGS.md). A task deleted while its page is open
 /// leaves the page (`TasksSettings`); one gone some other way says so.
 struct TaskDetailPage: View {
     @ObservedObject private var manager = TasksManager.shared
+    @ObservedObject private var visibility = BrainVisibility.shared
     @Default(.enableTimerFeature) private var enableTimerFeature
     let taskID: UUID
     let context: TasksPageContext
@@ -54,7 +56,7 @@ struct TaskDetailPage: View {
             // one card with "Details" centred (David's picture, 2026-10-24).
             content(task)
         } else {
-            Section {
+            SettingsSection {
                 SettingsNoteRow("This task is gone", description: "It was deleted, or cleared from the archive.")
             }
         }
@@ -76,12 +78,22 @@ struct TaskDetailPage: View {
         let remoteLabels = (task.remote?.labels ?? []).map(TaskDetailSummary.labelDisplay)
         let line = [summary.shortKey, summary.status.name, summary.isDraft ? String(localized: "Draft") : nil]
             .compactMap { $0 }.joined(separator: " · ")
-        return Section {
+        return SettingsSection {
             LabeledContent {
                 if task.visibility == .active {
-                    TaskTimingButton(isTimed: isTimed,
-                                     canStart: enableTimerFeature && manager.isReady,
-                                     start: { manager.start(task.id) }, stop: { manager.stopTiming() })
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        // Done by ▶ itself (David, 2026-10-29), not down in Finish. A remote task
+                        // is done in its source.
+                        if TaskDoneTicks.canTick(task) {
+                            TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                         isEnabled: manager.isReady, size: 14) {
+                                manager.toggleDone(task.id)
+                            }
+                        }
+                        TaskTimingButton(isTimed: isTimed,
+                                         canStart: enableTimerFeature && manager.isReady,
+                                         start: { manager.start(task.id) }, stop: { manager.stopTiming() })
+                    }
                 }
             } label: {
                 if task.source == .local {
@@ -111,7 +123,8 @@ struct TaskDetailPage: View {
                 if !focused { applyTitle(to: task) }
             }
             .onDisappear { applyTitle(to: task) }
-            // Closing Brain only orders its window out: no focus change, no onDisappear.
+            // Saved at the close itself. `onDisappear` only follows a turn later, when
+            // `SettingsWindowController` takes the page out of the closed window.
             .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { note in
                 guard (note.object as? NSWindow)?.identifier == SettingsWindowController.windowIdentifier else { return }
                 applyTitle(to: task)
@@ -174,10 +187,12 @@ struct TaskDetailPage: View {
                 guard (note.object as? NSWindow)?.identifier == SettingsWindowController.windowIdentifier else { return }
                 applyEstimate(typedEstimate, to: task)
             }
-            // The page's clock, on one row only: on a group of Sections it may run once a row. A
-            // lazy Form drops the row once it scrolls away, and the clock pauses with it; it catches
-            // up the moment the row is back.
-            .task {
+            // The page's clock, on one row only: on a group of sections it would run once a section.
+            // The page builds every row as it opens, so the clock runs while the page is open,
+            // scrolled or not, and stops when the page goes or Brain closes, and while Brain is not
+            // on screen (docs/SETTINGS.md, "Live data"); back on screen it catches up at once.
+            .task(id: visibility.isOnScreen) {
+                guard visibility.isOnScreen else { return }
                 while !Task.isCancelled {
                     let now = Date()
                     minute = now
@@ -223,7 +238,7 @@ struct TaskDetailPage: View {
     // MARK: - Details
 
     private func detailsSection(_ task: TaskItem, summary: TaskDetailSummary) -> some View {
-        Section {
+        SettingsSection {
             if let note = summary.note {
                 SettingsNoteRow(verbatim: note)
             }
@@ -295,17 +310,16 @@ struct TaskDetailPage: View {
 
     // MARK: - Done, archived, deleted
 
-    /// A local task is finished here: Mark Done, Archive, or Delete. A remote one is finished in its
-    /// source and archived here — a deleted one would only come back on the next sync.
+    /// A local task is finished here: Archive or Delete (done is the tick by ▶). A remote one is
+    /// finished in its source and archived here — a deleted one would only come back on the next sync.
     @ViewBuilder
     private func endSection(_ task: TaskItem) -> some View {
         let isTimed = manager.timing?.taskID == task.id
-        Section {
+        SettingsSection {
             switch task.visibility {
             case .active:
                 if task.source == .local {
-                    SettingsActionRow("Finish", description: "Done keeps its time; Delete removes it.") {
-                        Button("Mark Done") { manager.markDone(task.id) }
+                    SettingsActionRow("Finish", description: "Archive keeps its time; Delete removes it.") {
                         Button("Archive") { manager.archive(task.id) }
                         Button("Delete", role: .destructive) { context.pendingDelete.wrappedValue = task }
                             .disabled(isTimed)

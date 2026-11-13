@@ -357,7 +357,7 @@ enum ClipboardDisplayMode: String, CaseIterable, Codable, Defaults.Serializable 
         switch self {
         case .popover: return String(localized: "Popover")
         case .panel: return String(localized: "Panel")
-        case .separateTab: return String(localized: "Separate Tab")
+        case .separateTab: return String(localized: "Separate tab")
         }
     }
     
@@ -412,13 +412,13 @@ enum ADRHighAlertMode: String, CaseIterable, Defaults.Serializable, Identifiable
     var description: String {
         switch self {
         case .untilAcknowledged:
-            return String(localized: "A shield pill stays beside the traffic light until you acknowledge the finding. Click it to open the panel.")
+            return String(localized: "A shield pill stays until you acknowledge the finding.")
         case .fiveSeconds:
-            return String(localized: "The pill shows for five seconds when a finding is new, then only a small shield remains until acknowledged.")
+            return String(localized: "A five-second pill, then a small shield.")
         case .glyphOnly:
             return String(localized: "Only a small shield beside the traffic light; no pill.")
         case .off:
-            return String(localized: "Nothing in the closed notch. Findings still appear in the panel and in Brain.")
+            return String(localized: "Nothing in the closed notch; findings stay in Brain.")
         }
     }
 
@@ -443,8 +443,8 @@ enum AgentStatusNotificationProvider: String, CaseIterable, Codable, Defaults.Se
 
     var description: String {
         switch self {
-        case .ntfy: return String(localized: "Send push notifications via ntfy.sh (iPhone, Apple Watch, Android)")
-        case .pushover: return String(localized: "Send push notifications via Pushover (iPhone and Apple Watch)")
+        case .ntfy: return String(localized: "Push via ntfy.sh to iPhone, Watch or Android.")
+        case .pushover: return String(localized: "Push via Pushover to iPhone or Watch.")
         case .webhook: return String(localized: "POST JSON to a custom URL for your own integrations")
         }
     }
@@ -656,9 +656,9 @@ enum MusicSkipBehavior: String, CaseIterable, Identifiable, Defaults.Serializabl
     var displayName: String {
         switch self {
         case .track:
-            return String(localized: "Track Skip")
+            return String(localized: "Track skip")
         case .tenSecond:
-            return String(localized: "±10 Seconds")
+            return String(localized: "±10 seconds")
         }
     }
 
@@ -681,7 +681,7 @@ enum TimerIconColorMode: String, CaseIterable, Identifiable, Defaults.Serializab
     var displayName: String {
         switch self {
         case .adaptive: return String(localized:"Adaptive gradient")
-        case .solid: return String(localized:"Solid colour")
+        case .solid: return String(localized:"Solid color")
         }
     }
 }
@@ -917,10 +917,12 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     }()
     
     var color: Color {
-        if colorIndex >= 0 && colorIndex < NoteItem.colors.count {
-            return NoteItem.colors[colorIndex]
-        }
-        return .yellow
+        NoteItem.color(at: colorIndex)
+    }
+
+    /// The palette colour at `index`, or yellow for an index the palette does not have.
+    static func color(at index: Int) -> Color {
+        colors.indices.contains(index) ? colors[index] : .yellow
     }
     
     // Helper to get image data from file
@@ -940,6 +942,9 @@ extension Defaults.Keys {
         // MARK: General
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
+    static let brainAppearance = Key<BrainAppearance>("brainAppearance", default: .system)
+    /// View › Hide Sidebar: false takes Brain's sidebar away, and its search with it.
+    static let brainShowsSidebar = Key<Bool>("brainShowsSidebar", default: true)
     /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
     /// while this is off, because its menu is the way back.
     static let showNotch = Key<Bool>("showNotch", default: true)
@@ -971,9 +976,11 @@ extension Defaults.Keys {
     
         // MARK: Behavior
     /// Seconds the pointer must rest before hover-to-open fires — and, on displays where Kannu
-    /// hides until hovered, before the island slides in at all. 1 s so a pointer crossing the
-    /// top edge on its way to a browser tab does not summon it.
-    static let minimumHoverDuration = Key<TimeInterval>("minimumHoverDuration", default: 1.0)
+    /// hides until hovered, before the island slides in at all. 0.3 s (was 1 s, David 2026-10-28):
+    /// the dwell needs continuous presence on the hardware notch, or on the hidden island's edge,
+    /// so a pointer crossing the top edge on its way to a browser tab still does not summon it.
+    /// Anyone who moved the slider keeps their value.
+    static let minimumHoverDuration = Key<TimeInterval>("minimumHoverDuration", default: 0.3)
     static let enableHaptics = Key<Bool>("enableHaptics", default: true)
     static let openNotchOnHover = Key<Bool>("openNotchOnHover", default: true)
 	static let extendHoverArea = Key<Bool>("extendHoverArea", default: false)
@@ -1149,8 +1156,6 @@ extension Defaults.Keys {
     static let showPowerStatusNotifications = Key<Bool>("showPowerStatusNotifications", default: true)
     static let showBatteryIndicator = Key<Bool>("showBatteryIndicator", default: BatteryActivityManager.shared.hasBattery())
     static let showBatteryPercentage = Key<Bool>("showBatteryPercentage", default: true)
-    static let showBatteryPercentInside = Key<Bool>("showBatteryPercentInside", default: true)
-    static let showMinimalisticBatteryIndicator = Key<Bool>("showMinimalisticBatteryIndicator", default: true)
     static let showPowerStatusIcons = Key<Bool>("showPowerStatusIcons", default: true)
     static let playLowBatteryAlertSound = Key<Bool>("playLowBatteryAlertSound", default: true)
     static let showChargingBatteryHUD = Key<Bool>("showChargingBatteryHUD", default: true)
@@ -1297,6 +1302,10 @@ extension Defaults.Keys {
     /// Code process rewrites that field, desktop-hosted sessions with the desktop's organization
     /// and Claude Code's own sign-in with its token's, so it flips between them.
     static let claudeCodeUsageOrganization = Key<String?>("claudeCodeUsageOrganization", default: nil)
+    /// Organization id to where its windows reset, from Claude Code's cache at Kannu's last run on
+    /// that organization (`ClaudeCachedUsage.OrganizationResets`). Claude Desktop's history has no
+    /// resets of its own, and Claude Code may be on another organization by the time it is read.
+    static let claudeOrganizationResets = Key<[String: ClaudeCachedUsage.OrganizationResets]>("claudeOrganizationResets", default: [:])
     /// Organization id to `oauthAccount.organizationType` ("claude_max", "claude_team"…), learned
     /// whenever `~/.claude.json` names both, so the card can say which plan each side is on even
     /// while the file names the other one. Plan types only, never names or emails.
@@ -1444,7 +1453,6 @@ extension Defaults.Keys {
     static let enableExtensionLockScreenWidgets = Key<Bool>("enableExtensionLockScreenWidgets", default: true)
     static let enableExtensionNotchExperiences = Key<Bool>("enableExtensionNotchExperiences", default: true)
     static let enableExtensionNotchTabs = Key<Bool>("enableExtensionNotchTabs", default: true)
-    static let enableExtensionNotchMinimalisticOverrides = Key<Bool>("enableExtensionNotchMinimalisticOverrides", default: true)
     static let enableExtensionNotchInteractiveWebViews = Key<Bool>("enableExtensionNotchInteractiveWebViews", default: true)
     static let extensionAuthorizationEntries = Key<[ExtensionAuthorizationEntry]>("extensionAuthorizationEntries", default: [])
     static let extensionRateLimitRecords = Key<[ExtensionRateLimitRecord]>("extensionRateLimitRecords", default: [])
@@ -1554,9 +1562,6 @@ extension Defaults.Keys {
     // MARK: ImageService
     static let didClearLegacyURLCacheV1 = Key<Bool>("didClearLegacyURLCacheV1", default: false)
     
-    // MARK: Minimalistic UI Mode
-    static let enableMinimalisticUI = Key<Bool>("enableMinimalisticUI", default: false)
-    
     // MARK: Lyrics Feature
     static let enableLyrics = Key<Bool>("enableLyrics", default: false)
     static let showLiveCanvasInDynamicIsland = Key<Bool>("showLiveCanvasInDynamicIsland", default: false)
@@ -1653,6 +1658,10 @@ extension Defaults.Keys {
     static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
     static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
     static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    /// The notch's Tag filter, beside Show in notch in the same menu (`TaskSourceMenu`):
+    /// `TaskFacets.anyTag` (""), or the one tag, own or a label, the notch's task lists narrow to.
+    /// Brain's Task list keeps its own (`tasksListTagFilter`).
+    static let tasksNotchTagFilter = Key<String>("tasksNotchTagFilter", default: TaskFacets.anyTag)
     // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
     // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
     static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)
@@ -1717,6 +1726,26 @@ extension Defaults.Keys {
             Defaults[.screenCaptureVisibility] = legacy ? .hideEverything : .showEverything
         }
         Defaults[.didMigrateScreenCaptureVisibility] = true
+    }
+
+    /// The minimalistic UI mode is gone. In that mode the closed notch showed music even with "Show
+    /// standard media controls" off, so a former user turns that toggle on to keep their music. Then
+    /// the mode's four stored keys are removed. Their `Defaults` keys no longer exist, so they are
+    /// read and removed raw, like `migrateScreenCaptureVisibility` reads its legacy key. Idempotent
+    /// without a flag: once the keys are gone there is nothing left to read or remove.
+    static func migrateRemovedMinimalisticUI() {
+        let store = UserDefaults.standard
+        if store.object(forKey: "enableMinimalisticUI") as? Bool == true {
+            Defaults[.showStandardMediaControls] = true
+        }
+        for key in [
+            "enableMinimalisticUI",
+            "showMinimalisticBatteryIndicator",
+            "showBatteryPercentInside",
+            "enableExtensionNotchMinimalisticOverrides",
+        ] {
+            store.removeObject(forKey: key)
+        }
     }
 
     /// Everyone gets the new default, including people who had chosen otherwise.
@@ -1833,3 +1862,5 @@ extension TaskSourceFilter: Defaults.Serializable {}
 extension TaskStatusFilter: Defaults.Serializable {}
 /// `TaskColor.swift` is in the logic test target as well.
 extension TaskColor: Defaults.Serializable {}
+/// `ClaudeCachedUsage.swift` too; `Codable` gives the storage.
+extension ClaudeCachedUsage.OrganizationResets: Defaults.Serializable {}

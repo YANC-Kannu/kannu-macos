@@ -25,7 +25,8 @@ import Defaults
 
 /// The onboarding window's steps, in order. Nothing in it plays a sound or raises a macOS dialog by
 /// itself: `.permissions` asks for each permission only when the user presses Allow, and the
-/// welcome music and the notch's hello wait for Finish.
+/// welcome music and the notch's hello wait for Finish. Each step is drawn as a sheet is, on a page's insets: its
+/// title, a line under it, its cards, then its buttons trailing (docs/SETTINGS.md, "Onboarding").
 enum OnboardingStep: CaseIterable {
     case welcome
     case musicSource
@@ -131,6 +132,10 @@ struct OnboardingView: View {
             }
         }
         .frame(width: 400, height: 600)
+        // A window of its own, so it takes Brain's root itself, as a sheet does (docs/SETTINGS.md, "The design system"):
+        // the panel under every step and the title bar, and Brain's type, buttons and switches.
+        .background(SettingsTheme.panel.ignoresSafeArea())
+        .settingsDesignSystem()
     }
 
     private func advance(to next: OnboardingStep) {
@@ -141,7 +146,7 @@ struct OnboardingView: View {
 
     /// The source chosen on the second step. After a Not now on its "Control …" row, Now Playing
     /// instead, which needs no Automation, so nothing asks later; the user can pick the app again
-    /// in Brain › Media, where macOS asks in context.
+    /// in Brain › Settings › Media, where macOS asks in context.
     private func applyMusicSource() {
         var source = musicSource
         if LaunchPermissionManager.answer(for: .musicAutomation) == .deferred,
@@ -158,3 +163,15 @@ struct OnboardingView: View {
         notesChoice.apply(notesAutomationDeferred: LaunchPermissionManager.answer(for: .notesAutomation) == .deferred)
     }
 }
+
+#if DEBUG
+extension OnboardingView {
+    /// Boards only (`--kannu-snapshots`): the window's view, opened at `step`, so a board draws what the window hosts.
+    /// Spotify is the source, so the Permissions step names an app. Nothing on a board is pressed.
+    init(snapshotStep: OnboardingStep) {
+        self.init(onLaunchAtLoginChoice: { _ in }, onFinish: {}, onOpenSettings: {})
+        _step = State(initialValue: snapshotStep)
+        _musicSource = State(initialValue: .spotify)
+    }
+}
+#endif

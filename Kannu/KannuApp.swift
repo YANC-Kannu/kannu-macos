@@ -59,6 +59,86 @@ struct KannuApp: App {
             }
             .keyboardShortcut(",", modifiers: .command)
         }
+        // File: New Task, over Brain's Tasks.
+        CommandGroup(replacing: .newItem) {
+            NewTaskCommand { openBrain(on: .tasks, newTask: true) }
+        }
+        // View: Brain's sidebar, its appearance and full screen. Brain is an AppKit window, so neither
+        // SwiftUI nor AppKit puts full screen in this menu for it (measured: `menu.txt`).
+        CommandGroup(replacing: .sidebar) {
+            BrainViewCommands()
+        }
+        // Go: the product pages, in the sidebar's order.
+        CommandMenu(String(localized: "Go")) {
+            ForEach(Array(SettingsTab.productPages.enumerated()), id: \.element) { index, tab in
+                Button(tab.title) { openBrain(on: tab) }
+                    .keyboardShortcut(Self.goShortcut(index))
+            }
+        }
+    }
+
+    /// ⌘1 for the first page and so on, while a digit is left.
+    static func goShortcut(_ index: Int) -> KeyboardShortcut? {
+        guard (0..<9).contains(index) else { return nil }
+        return KeyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+    }
+
+    /// Brain on a page, as its sidebar row opens it, with New Task over it when asked. Before the terms
+    /// are accepted it brings them back instead, as Brain… does: nothing runs first.
+    private func openBrain(on tab: SettingsTab, newTask: Bool = false) {
+        guard appDelegate.launchContinued else {
+            TermsGateWindowController.shared.bringToFront()
+            return
+        }
+        // A sheet over Brain keeps its page. Menu keys still reach the menu bar under a sheet, and switching the page
+        // under it would close it, with what was typed in it.
+        if SettingsWindowController.shared.window?.attachedSheet != nil {
+            NSSound.beep()
+            return
+        }
+        SettingsWindowController.shared.showWindow()
+        SettingsHighlightCoordinator.shared.requestPage(tab)
+        if newTask { SettingsHighlightCoordinator.shared.pendingNewTask = true }
+    }
+}
+
+/// File › New Task: off while Tasks is off, since there is no list to add to.
+private struct NewTaskCommand: View {
+    @Default(.enableTasks) private var enableTasks
+    let action: () -> Void
+
+    var body: some View {
+        Button(String(localized: "New Task"), action: action)
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(!enableTasks)
+    }
+}
+
+/// View's items act on Brain's window, so they are off while it is not on screen. Reading `BrainVisibility`
+/// builds nothing: the window and its pages stay unbuilt until the terms are accepted.
+private struct BrainViewCommands: View {
+    @Default(.brainShowsSidebar) private var showsSidebar
+    @Default(.brainAppearance) private var appearance
+    @ObservedObject private var visibility = BrainVisibility.shared
+
+    var body: some View {
+        Button(showsSidebar ? String(localized: "Hide Sidebar") : String(localized: "Show Sidebar")) {
+            showsSidebar.toggle()
+        }
+        .keyboardShortcut("s", modifiers: [.control, .command])
+        .disabled(!visibility.isOnScreen)
+        // The moon's three choices.
+        Picker(String(localized: "Appearance"), selection: $appearance) {
+            ForEach(BrainAppearance.allCases) { Text($0.localizedName).tag($0) }
+        }
+        .disabled(!visibility.isOnScreen)
+        Divider()
+        Button(visibility.isFullScreen ? String(localized: "Exit Full Screen") : String(localized: "Enter Full Screen")) {
+            // Brain is on screen, so its window exists and the terms were accepted.
+            SettingsWindowController.shared.toggleFullScreenWhenIdle()
+        }
+        .keyboardShortcut("f", modifiers: [.control, .command])
+        .disabled(!visibility.isOnScreen)
     }
 }
 
@@ -272,6 +352,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private static let loginItemLog = os.Logger(subsystem: "com.kannu.app", category: "LaunchAtLogin")
+    private static let hookLeftoversLog = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
     private var isInstalledCopy: Bool {
         let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
@@ -695,12 +776,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     height += 70
                 }
                 
-                return addShadowPadding(to: CGSize(width: width, height: height), isMinimalistic: Defaults[.enableMinimalisticUI])
+                return addShadowPadding(to: CGSize(width: width, height: height))
             }
         }
         
-        // Use minimalistic or normal size based on settings
-        var baseSize = Defaults[.enableMinimalisticUI] ? minimalisticOpenNotchSize(isDynamicIslandMode: shouldUseDynamicIslandMode(for: vm.screen)) : openNotchSize
+        var baseSize = openNotchSize
         
         // Use a consistent height for different view types
         if coordinator.currentView == .timer {
@@ -715,12 +795,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             isStatsTabActive: coordinator.currentView == .stats,
             secondRowProgress: coordinator.statsSecondRowExpansion
         )
-        let result = addShadowPadding(
-            to: adjustedContentSize,
-            isMinimalistic: Defaults[.enableMinimalisticUI]
-        )
-
-        return result
+        return addShadowPadding(to: adjustedContentSize)
     }
 
     /// Adjusts a base notch size for a specific screen by adding Dynamic Island
@@ -962,6 +1037,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.terminate(self)
     }
 
+    /// AppKit adds an Enter Full Screen of its own once launching ends, unless a menu item already sends
+    /// `toggleFullScreen:`. View's is a SwiftUI command, which it cannot see, so its own would be a second one.
+    /// Registered, not written: it holds for this run only, and starts or asks nothing before the terms.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: ["NSFullScreenMenuItemEverywhere": false])
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
         // `--kannu-snapshots <dir>`: render Settings to PNG and quit, before anything else starts.
@@ -1099,6 +1181,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
         Defaults.Keys.migrateScreenCaptureVisibility()
+        Defaults.Keys.migrateRemovedMinimalisticUI()
         Defaults.Keys.migrateThirdPartyDDCIntegration()
         Defaults.Keys.enforceRemovedFeatureDefaults()
         SecureSecretsStore.migrateFromDefaultsIfNeeded()
@@ -1259,19 +1342,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
 
-        // Observe minimalistic UI setting changes - trigger window resize
-        Defaults.publisher(.enableMinimalisticUI, options: []).sink { [weak self] _ in
-            // Defaults.publisher is raw KVO with no scheduler: the sink runs inside the
-            // `Defaults[...] = x` assignment's own stack frame — from a SwiftUI @Default
-            // binding, that is the middle of a SwiftUI update pass, and resizing an NSWindow
-            // (setFrame + displayIfNeeded) from there is the re-entrancy the
-            // FirstMouseHostingView sizing workaround exists to avoid. Hop like every other
-            // sink here; the next main-actor turn is still before the next frame.
-            Task { @MainActor [weak self] in
-                self?.updateWindowSizeIfNeeded()
-            }
-        }.store(in: &cancellables)
-        
         // Observe screen recording settings changes
         Defaults.publisher(.enableScreenRecordingDetection, options: []).sink { _ in
             if Defaults[.enableScreenRecordingDetection] {
@@ -1290,6 +1360,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.dndManager.stopMonitoring()
             }
         }.store(in: &cancellables)
+
+        // Hook scripts v41 to v46 could leave a copy of a hook's payload, the user's prompt included,
+        // in the status directory. Swept whether or not the feature is on: the files outlive turning
+        // it off. Off the main thread, like the reaper; only a count is logged.
+        let hookStatusDirectory = AgentHookInstaller.statusDirectory
+        let hookLeftoversLog = Self.hookLeftoversLog
+        DispatchQueue.global(qos: .utility).async {
+            let removed = HookInputLeftovers.removeStale(in: hookStatusDirectory)
+            if removed > 0 {
+                hookLeftoversLog.info("Removed \(removed, privacy: .public) stale hook payload files")
+            }
+        }
 
         // Agent status (traffic light live activity)
         if Defaults[.enableAgentStatusFeature] {
@@ -2310,7 +2392,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 onFinish: { [weak self] in
                     self?.completeOnboarding()
                     window.orderOut(nil)
-                    NSApp.setActivationPolicy(.accessory)
+                    // Command-comma reaches Brain before onboarding ends, and it can be full screen:
+                    // `.accessory` is what a close from there waits to set (docs/REGRESSIONS.md, entry 22).
+                    let brainIsOpen = NSApp.windows.contains { $0.identifier == SettingsWindowController.windowIdentifier && $0.isVisible }
+                    if !brainIsOpen { NSApp.setActivationPolicy(.accessory) }
                     window.close()
                     NSApp.deactivate()
                     self?.startHello()
@@ -2368,31 +2453,21 @@ final class MediaControlsStateCoordinator {
     private var cancellables = Set<AnyCancellable>()
 
     private init() {
-        let masterPublisher = Defaults.publisher(.showStandardMediaControls)
-        let minimalisticPublisher = Defaults.publisher(.enableMinimalisticUI)
-
-        Publishers.CombineLatest(masterPublisher, minimalisticPublisher)
+        Defaults.publisher(.showStandardMediaControls)
             .receive(on: RunLoop.main)
-            .sink { [weak self] masterChange, minimalisticChange in
-                self?.handleStateChange(
-                    showStandard: masterChange.newValue,
-                    minimalistic: minimalisticChange.newValue
-                )
+            .sink { [weak self] change in
+                self?.handleStateChange(showStandard: change.newValue)
             }
             .store(in: &cancellables)
     }
 
-    private func handleStateChange(showStandard: Bool, minimalistic: Bool) {
-        if !showStandard && !minimalistic {
-            cacheAndDisableMusicLiveActivity()
-        } else {
-            restoreMusicLiveActivity(clearCache: showStandard)
-        }
-
+    private func handleStateChange(showStandard: Bool) {
         if showStandard {
+            restoreMusicLiveActivity()
             restoreLockScreenPanelIfNeeded()
             restoreMusicControlWindowIfNeeded()
         } else {
+            cacheAndDisableMusicLiveActivity()
             cacheAndDisableLockScreenPanel()
             cacheAndDisableMusicControlWindow()
         }
@@ -2408,16 +2483,14 @@ final class MediaControlsStateCoordinator {
         }
     }
 
-    private func restoreMusicLiveActivity(clearCache: Bool) {
+    private func restoreMusicLiveActivity() {
         guard let cached = Defaults[.cachedMusicLiveActivityPreference] else { return }
 
         if KannuViewCoordinator.shared.musicLiveActivityEnabled != cached {
             KannuViewCoordinator.shared.musicLiveActivityEnabled = cached
         }
 
-        if clearCache {
-            Defaults[.cachedMusicLiveActivityPreference] = nil
-        }
+        Defaults[.cachedMusicLiveActivityPreference] = nil
     }
 
     private func cacheAndDisableLockScreenPanel() {

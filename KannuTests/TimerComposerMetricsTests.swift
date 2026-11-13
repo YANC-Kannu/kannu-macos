@@ -18,6 +18,8 @@
 //  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 //
 
+import AppKit
+import CoreText
 import XCTest
 
 /// The timer tab's composer fits the notch as it is: the notch must not grow for the timer tab (it
@@ -178,6 +180,38 @@ final class TimerComposerMetricsTests: XCTestCase {
     func testTheSideRowsStayReadable() {
         XCTAssertGreaterThanOrEqual(M.sideTaskRowHeight, 32, "two lines of text and a ▶ need the room")
     }
+
+    /// Tags beside the caption keep the row 36 pt: a tag chip (`SideChip`: a 10 pt semibold line, 2 pt
+    /// above and below) and the caption (11 pt medium) fit the caption line, and the 12 pt semibold
+    /// title, the 1 pt between and that line fit the row. Measured with the fonts the row draws: Geist for
+    /// the title and the caption (`SettingsTheme.font`), the system font for the chip, which keeps it
+    /// because Geist's 10 pt line is a point taller (docs/SETTINGS.md, "The notch").
+    /// `NotchTagFilterRulesTests` pins those fonts in the sources.
+    func testATagChipKeepsTheTaskRow36Points() throws {
+        func line(_ size: CGFloat, _ weight: NSFont.Weight) -> CGFloat {
+            ceil(NSLayoutManager().defaultLineHeight(for: .systemFont(ofSize: size, weight: weight)))
+        }
+        func geistLine(_ size: CGFloat, _ face: String) throws -> CGFloat {
+            _ = Self.geistRegistered
+            let font = try XCTUnwrap(NSFont(name: face, size: size), "\(face) did not load from Kannu/Fonts")
+            return ceil(NSLayoutManager().defaultLineHeight(for: font))
+        }
+        XCTAssertEqual(M.sideTaskRowHeight, 36)
+        XCTAssertLessThanOrEqual(line(10, .semibold) + 2 * 2, M.sideTaskCaptionHeight, "a chip is taller than the caption line")
+        XCTAssertLessThanOrEqual(try geistLine(11, "Geist-Medium"), M.sideTaskCaptionHeight)
+        XCTAssertLessThanOrEqual(try geistLine(12, "Geist-SemiBold") + 1 + M.sideTaskCaptionHeight, M.sideTaskRowHeight,
+                                 "the title and the caption line overflow the row")
+    }
+
+    /// The test target carries none of the app's resources, so the row's Geist faces come from the
+    /// repo's own files, for this process only.
+    private static let geistRegistered: Void = {
+        let fonts = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Kannu/Fonts", isDirectory: true)
+        for face in ["Geist-Medium", "Geist-SemiBold"] {
+            CTFontManagerRegisterFontsForURL(fonts.appendingPathComponent("\(face).ttf") as CFURL, .process, nil)
+        }
+    }()
 
     /// With a single task, the list still has room under the row for its ▶ tooltip, which opens
     /// below inside a ScrollView that clips (docs/TOOLTIPS.md rule 2): the bubble reaches about

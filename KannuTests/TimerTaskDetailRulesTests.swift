@@ -133,7 +133,7 @@ final class TimerTaskDetailRulesTests: XCTestCase {
         let column = try Self.column()
         XCTAssertFalse(column.contains("sideKeyText"), "the key-prefixed text helper must stay gone")
         let card = try Self.declaration("private struct TimerTaskDetail", in: column)
-        XCTAssertTrue(card.contains("HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)"),
+        XCTAssertTrue(card.contains("HoverRevealText(summary.title, font: SettingsTheme.font(size: 13, weight: .semibold), lines: 2)"),
                       "the card's title is summary.title alone, two lines, sliding up when longer")
         XCTAssertTrue(card.contains("summary.shortKey"), "the key shows as its own short chip")
         XCTAssertTrue(card.contains(".fixedSize(horizontal: false, vertical: true)"),

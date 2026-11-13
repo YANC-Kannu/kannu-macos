@@ -45,18 +45,22 @@ enum ClaudeDesktopUsageHistory {
     private static let week: TimeInterval = 7 * 24 * 3600
 
     static func load(from url: URL = defaultURL, now: Date = Date(),
-                     account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
-        read(from: url, now: now, account: account).snapshot
+                     resets: [String: ClaudeCachedUsage.OrganizationResets] = [:],
+                     claudeCodeOrganization: String? = nil) -> ClaudeUsageSnapshot? {
+        read(from: url, now: now, resets: resets, claudeCodeOrganization: claudeCodeOrganization).snapshot
     }
 
     /// The snapshot, and the organization the desktop app records usage for even when none of
     /// its windows is current any more — the card follows that organization either way.
+    /// Blocking I/O: never on the main actor (REGRESSIONS entry 11).
     static func read(from url: URL = defaultURL, now: Date = Date(),
-                     account: ClaudeCachedUsage.AccountContext = .init())
+                     resets: [String: ClaudeCachedUsage.OrganizationResets] = [:],
+                     claudeCodeOrganization: String? = nil)
         -> (snapshot: ClaudeUsageSnapshot?, organizationUUID: String?) {
         guard let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return (nil, nil) }
-        return (parse(json: json, now: now, account: account), organization(json: json))
+        return (parse(json: json, now: now, resets: resets, claudeCodeOrganization: claudeCodeOrganization),
+                organization(json: json))
     }
 
     /// The organization of the newest sample that names one: the one the desktop app is on now.
@@ -86,20 +90,26 @@ enum ClaudeDesktopUsageHistory {
     /// here is marked `resetIsInferred` — this file reports no reset — so `merged` lends it the
     /// server's exact reset whenever Claude Code's cache has one for the same organization.
     ///
+    /// `resets` is what Kannu remembers of each organization's resets, from Claude Code's cache
+    /// whenever Claude Code was on that organization (`ClaudeCachedUsage.OrganizationResets`); the
+    /// desktop's own organization's are used, whatever Claude Code is on now. A file whose samples
+    /// name no organization (older ones) is read with Claude Code's: then there is only one.
+    ///
     /// - **5 hour**: the window starts with the first message after the last one ended, so its
-    ///   reset cannot be recovered from samples. No countdown; `notAfter` is five hours after the
-    ///   sample.
-    /// - **Weekly**: the window resets on a fixed weekly anchor per organization, taken from Claude
-    ///   Code's cached reset when Claude Code is on the same organization, however old
-    ///   (`ClaudeCachedUsage.AccountContext`). The reset after the sample is exact; once it has
-    ///   passed, the bar is dropped. Without an anchor, a rollover seen in the samples stands in,
-    ///   projected the same way: a countdown only when it was caught within an hour, else just the
-    ///   latest possible reset as `notAfter` — a rollover found after a gap of days could have
-    ///   happened at any point in it, and a countdown measured from its far end ran up to that
-    ///   whole gap late.
+    ///   reset cannot be recovered from samples. No countdown, and `notAfter` is five hours after
+    ///   the sample — unless the remembered five-hour reset is of the very window the sample is in
+    ///   (the sample lies in the five hours before it): then that reset.
+    /// - **Weekly**: the window resets on a fixed weekly anchor per organization: the remembered
+    ///   weekly reset, however old. The reset after the sample is exact; once it has passed, the
+    ///   bar is dropped. Only without one — the last resort — a rollover seen in the samples
+    ///   stands in, projected the same way: a countdown only when it was caught within an hour,
+    ///   else just the latest possible reset as `notAfter` — a rollover found after a gap of days
+    ///   could have happened at any point in it, and a countdown measured from its far end ran up
+    ///   to that whole gap late.
     /// - **Anything else**: kept for at most a week after the sample, with no countdown.
     static func parse(json: [String: Any], now: Date = Date(),
-                      account: ClaudeCachedUsage.AccountContext = .init()) -> ClaudeUsageSnapshot? {
+                      resets: [String: ClaudeCachedUsage.OrganizationResets] = [:],
+                      claudeCodeOrganization: String? = nil) -> ClaudeUsageSnapshot? {
         guard let rawSamples = json["samples"] as? [[String: Any]] else { return nil }
 
         // Trust the timestamps rather than the append order.
@@ -115,9 +125,9 @@ enum ClaudeDesktopUsageHistory {
         // are other limits entirely.
         let organization = all.last(where: { $0.org != nil })?.org
         let samples = organization.map { id in all.filter { $0.org == id } } ?? all
-        // Another organization's weekly reset says nothing about this one's.
-        let anchor = account.organizationUUID == nil || organization == nil || account.organizationUUID == organization
-            ? account.weeklyResetAnchor : nil
+        // This organization's own resets: another organization's say nothing about it.
+        let known = (organization ?? claudeCodeOrganization).flatMap { resets[$0] }
+        let anchor = known?.weekly
 
         guard let newest = samples.last else { return nil }
         let observedAt = Date(timeIntervalSince1970: newest.tMs / 1000)
@@ -129,6 +139,10 @@ enum ClaudeDesktopUsageHistory {
             var notAfter: Date
             if key == ClaudeUsageSnapshot.fiveHourKey {
                 notAfter = observedAt.addingTimeInterval(fiveHours)
+                if let reset = known?.fiveHour, observedAt < reset,
+                   observedAt >= reset.addingTimeInterval(-fiveHours) {
+                    resetsAt = reset
+                }
             } else if key.hasPrefix("seven_day") {
                 notAfter = observedAt.addingTimeInterval(week)
                 if let anchor {
@@ -170,8 +184,8 @@ enum ClaudeDesktopUsageHistory {
         return anchor.addingTimeInterval(weeks * week)
     }
 
-    /// When a window last rolled over, as seen in the samples — the stand-in for a weekly anchor
-    /// when Claude Code is on another organization or has never cached one. `seenAt` is the first
+    /// When a window last rolled over, as seen in the samples — the last-resort stand-in for a
+    /// weekly anchor, when no reset of this organization is remembered. `seenAt` is the first
     /// sample after the drop and `notBefore` the one before it: the rollover happened in between.
     ///
     /// A rollover is visible as a drop in utilization. Small decays are not rollovers, hence the

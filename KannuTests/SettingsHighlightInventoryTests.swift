@@ -92,14 +92,28 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // "Notes to sync" row. The same day All tasks lost its Task order row (David: "no drag and
         // order tasks or numbering"): the "Task order" entry is gone and its other words moved onto
         // "All tasks", one entry fewer with registrations and ids unchanged.
+        // 2026-10-28: the minimalistic UI mode is gone (David: "remove minimalistic ui mode"), and
+        // with it the UI Mode section: its "Enable Minimalistic UI" entry and three rows (the switch
+        // and its two battery rows), one entry, three registrations and three ids fewer.
+        // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
+        // opposite of what is on screen, so this row is the way back to Match macOS.
+        // 2026-11-11: Brain › Tasks' list moved up onto its first page (Stage 5): its tabs carry the
+        // list's deep link and its Find row the list's entries, which the All tasks back row and row did,
+        // and Tag colours, folded in the settings, registers an id of its own for its entry (one row and
+        // one id more).
+        // 2026-11-11: Notes' gear lands on its first settings row, Enable Notes, which registers an id
+        // (one registration, one id; no entry: a search for the tab finds it by name).
         XCTAssertEqual(inventory.entries.count, 244, "search entries")
         XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
         XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
     }
 
+    /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,
+    /// now "Timer Presets" (found by "accent colour" too), lands on their heading, which names its tab, instead of the
+    /// first row of the old inline editor.
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
         let unattributed = try Self.inventory().registrations.keys.filter { $0.tab == nil }.map(\.title)
-        XCTAssertEqual(Set(unattributed), ["Accent colour", "Device Picker Style"])
+        XCTAssertEqual(Set(unattributed), ["Device Picker Style"])
     }
 
     func testQuitIsFindableBySearch() throws {
@@ -113,7 +127,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         for word in ["\"quit\"", "\"exit\""] {
             XCTAssertTrue(entry.contains(word), "searching \(word) must find Quit Kannu")
         }
-        XCTAssertTrue(settingsView.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
+        let general = try XCTUnwrap(try Self.sources()["GeneralSettings.swift"])
+        XCTAssertTrue(general.contains(".settingsHighlight(id: highlightID(\"Quit Kannu\"))"), "the Quit row lost its highlight id")
     }
 
     // MARK: - Pairing
@@ -171,20 +186,31 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         }
     }
 
-    /// Brain › Tasks' pages below the overview exist only while open, so nothing on them may carry
-    /// a highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). All tasks'
-    /// own deep link is on its back row, which the overview's file builds.
+    /// Agents and Stats build their other rows only while their switch is on, so a search lands
+    /// those entries on the switch until then: the redirect is wired for these two tabs only.
+    func testASwitchedOffTabLandsOnItsSwitch() throws {
+        let settingsView = try XCTUnwrap(try Self.sources()["SettingsView.swift"])
+        XCTAssertTrue(settingsView.contains("if entry.tab == .agentStatus, !Defaults[.enableAgentStatusFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.agentMonitoringHighlightID"))
+        XCTAssertTrue(settingsView.contains("if entry.tab == .stats, !Defaults[.enableStatsFeature] {"))
+        XCTAssertTrue(settingsView.contains("landed.highlightID = SettingsDeepLink.statsMonitoringHighlightID"))
+    }
+
+    /// Brain › Tasks' pages below the first exist only while open, so nothing on them may carry a
+    /// highlight id: a search landing there would scroll to nothing (docs/SETTINGS.md). The list's
+    /// rows carry none either: they are lazy. The list's own deep link and its entries are on its tabs
+    /// and its Find row, which the first page builds (`TasksOverview`).
     func testTheRowsBelowTheTasksOverviewRegisterNothing() throws {
         let sources = try Self.sources()
-        for name in ["TaskSourcePages.swift", "TaskRowList.swift", "AllTasksPage.swift", "TaskDetailPage.swift", "NewTaskSheet.swift"] {
+        for name in ["TaskSourcePages.swift", "TaskRowList.swift", "TaskDetailPage.swift", "NewTaskSheet.swift"] {
             let page = try XCTUnwrap(sources[name], name)
             XCTAssertFalse(page.contains("settingsHighlight("), "\(name) registers a highlight id on a row search cannot reach")
             XCTAssertFalse(page.contains("highlightID("), "\(name) names a highlight id")
         }
     }
 
-    /// A source page's rows land on that source's row on the overview, which opens the page; the
-    /// overview's All tasks row takes the entries for All tasks and a task's page.
+    /// A source page's rows land on that source's row on the first page, which opens the page; the
+    /// list's Find row takes the entries for the list and a task's page, and Tag colours has its own.
     func testTasksPageEntriesLandOnTheRowThatOpensThem() throws {
         let inventory = try Self.inventory()
         let landing = Dictionary(inventory.entries.filter { $0.tab == "tasks" }.map { ($0.title, $0.highlight) },
@@ -194,7 +220,8 @@ final class SettingsHighlightInventoryTests: XCTestCase {
             "tasksJiraSourceHighlightID": ["Jira Cloud", "Sync Jira", "Jira colour", "Refresh Jira issues", "Issue filter (JQL)"],
             "tasksAddSourceHighlightID": ["Add a source"],
             "tasksGitLabSourceHighlightID": ["GitLab", "Sync GitLab", "GitLab colour", "Include merge requests", "Refresh GitLab items"],
-            "tasksListHighlightID": ["All tasks", "Find a task", "Add a task", "Tag colours", "Archived tasks"],
+            "tasksListHighlightID": ["All tasks", "Find a task", "Add a task", "Recently closed tasks", "Archived tasks"],
+            "tasksTagColorsHighlightID": ["Tag colours"],
         ]
         for (link, titles) in rows {
             let id = try XCTUnwrap(inventory.deepLinks[link], link)
@@ -207,14 +234,43 @@ final class SettingsHighlightInventoryTests: XCTestCase {
     // MARK: - Parsing
 
     private static func sources() throws -> [String: String] {
-        let files = try FileManager.default.contentsOfDirectory(at: settingsDirectory, includingPropertiesForKeys: nil)
-            .filter { $0.pathExtension == "swift" }
+        let files = try swiftFiles(under: settingsDirectory)
+        XCTAssertEqual(repeatedNames(in: files), [], "two files under Settings share a name, so this inventory reads only one of them")
         var out: [String: String] = [:]
         for file in files {
             out[file.lastPathComponent] = try String(contentsOf: file, encoding: .utf8)
         }
         XCTAssertNotNil(out["SettingsView.swift"])
+        // No DesignSystem/ file registers an id, so nothing else would notice this walk going flat.
+        XCTAssertNotNil(out["SettingsTheme.swift"])
         return out
+    }
+
+    private static func swiftFiles(under directory: URL) throws -> [URL] {
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil))
+        var files: [URL] = []
+        for case let file as URL in walker where file.pathExtension == "swift" {
+            files.append(file)
+        }
+        return files
+    }
+
+    private static func repeatedNames(in files: [URL]) -> [String] {
+        Dictionary(grouping: files, by: \.lastPathComponent).filter { $0.value.count > 1 }.keys.sorted()
+    }
+
+    /// A row registered in a subfolder is in the inventory only as far as this walk reaches.
+    func testTheWalkReachesSubfoldersAndReportsARepeatedName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let deep = root.appendingPathComponent("DesignSystem/Inner")
+        try FileManager.default.createDirectory(at: deep, withIntermediateDirectories: true)
+        for path in ["Top.swift", "DesignSystem/Theme.swift", "DesignSystem/Inner/Top.swift", "DesignSystem/Notes.md"] {
+            try Data().write(to: root.appendingPathComponent(path))
+        }
+        let files = try Self.swiftFiles(under: root)
+        XCTAssertEqual(files.map(\.lastPathComponent).sorted(), ["Theme.swift", "Top.swift", "Top.swift"])
+        XCTAssertEqual(Self.repeatedNames(in: files), ["Top.swift"])
     }
 
     private static func inventory() throws -> Inventory {

@@ -22,6 +22,25 @@ tool-specific file — this repo has already paid twice for one rule living in t
 - **`.agents/skills/kannu-senior-contributor/SKILL.md`** — how to match existing conventions here and
   how to prepare a commit.
 
+<!-- OPENSPEC:START -->
+# OpenSpec Instructions
+
+These instructions are for AI assistants working in this project.
+
+Always open `@/openspec/AGENTS.md` when the request:
+- Mentions planning or proposals (words like proposal, spec, change, plan)
+- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
+- Sounds ambiguous and you need the authoritative spec before coding
+
+Use `@/openspec/AGENTS.md` to learn:
+- How to create and apply change proposals
+- Spec format and conventions
+- Project structure and guidelines
+
+Keep this managed block so 'openspec update' can refresh the instructions.
+
+<!-- OPENSPEC:END -->
+
 ## Project overview
 
 Kannu is a free, open-source macOS utility that lives in the MacBook notch. Its purpose: let developers **monitor AI coding agents** (Cursor, Codex, Claude Code, VS Code agents, Antigravity, and others) without switching to their coding application. The primary indicator is a traffic-light system:
@@ -110,8 +129,9 @@ Kannu runs locally. Treat process inspection, shell commands, filesystem access,
 
 ## Commit and PR guidelines
 
-`CONTRIBUTING.md` has the full process; PRs target `development`, one concern each. The part that
-rejects commits is the CHANGELOG entry, so it is restated here in full rather than linked:
+`CONTRIBUTING.md` has the full process; PRs target `development`, one concern each. Work too large
+for one review ships as stacked super PRs, described below the CHANGELOG rules. The part that rejects
+commits is the CHANGELOG entry, so it is restated here in full rather than linked:
 
 1. Define the **developer feature label** — what you are building.
 2. Define the **agent feature label** if an agent did any of the work. The line is required either
@@ -137,6 +157,18 @@ contract; a wrong shape is a rejected commit, not a style note.
 `KannuTests/ChangelogRuleDocsTests.swift` pins this text against the hook's own parser, so if the two
 ever disagree, CI says so instead of an agent finding out at commit time.
 
+**Stacked super PRs.** CodeRabbit allows one review an hour and skips a PR with too many files (sources
+say 150 or 300, so plan for 150). Work too large for one review goes up as a stack:
+
+- Each stage is a `super/<name>` branch with a PR onto the super below it; the bottom one targets
+  `development`. A super's diff is only that stage. Check its file count before requesting a review.
+- Small child PRs merge into their super with a merge commit once CI is green. **Never request a
+  CodeRabbit review on a child PR.**
+- Request reviews on supers only, bottom-up, one at a time, and read them in full.
+- A super merges into `development` only after its review, with a merge commit, never a squash, or the
+  stack above loses its ancestry. Retarget the next super, then delete the merged branch.
+- A fix on a lower super is merged up the stack and re-requested on that super only.
+
 ## Output expectations
 
 For coding tasks report: what changed, why, files affected, important architectural decisions, testing performed, remaining concerns. For audits report: finding, location, why it matters, severity, recommended fix. Never claim code was tested, built, or verified unless that operation was actually performed.
@@ -146,16 +178,17 @@ For coding tasks report: what changed, why, files affected, important architectu
 - The **pre-commit hook** requires a staged `CHANGELOG.md` entry under `## [Unreleased]` with every source commit, and rejects a hook-script mirror mismatch. It does **not** build — it is bash/awk and runs in milliseconds. (A previous version of this file claimed it builds; that was wrong.)
 - **Debug builds put the real code in `Kannu.app/Contents/MacOS/Kannu.debug.dylib`** — the main binary is a tiny stub, so string-grepping it for new code gives false negatives.
 - A recreated build directory can leave a **stale xcodebuild build database** that reports `BUILD SUCCEEDED` with zero compile tasks. When verifying a build, confirm compile activity (or delete the derivedData path first).
-- **Nothing runs before the Terms of Use are accepted.** `applicationDidFinishLaunching` starts only the crash marker, the hang watchdog, the updater and the orphan reaper, then either continues the launch (`continueLaunch()`) or shows the terms gate. The `AppDelegate` singletons are `lazy var` for this reason — they used to be built eagerly at init, which spawned helpers and raised permission prompts before anyone had agreed to anything — and `continueLaunch()` touches each one in order. Keep them lazy, keep new launch work inside `continueLaunch()`, and do not give `KannuApp` an `init` that does work; `LaunchGateRulesTests` pins all three. Separately: a first touch of any TCC-protected resource (Bluetooth, ~/Downloads, …) blocks the main thread until the permission dialog is answered, and ad-hoc rebuilds change the code signature so the prompts recur — first touches of protected resources still belong on a background queue.
+- **Nothing runs before the Terms of Use are accepted.** `applicationDidFinishLaunching` starts only the crash marker, the hang watchdog, the updater and the orphan reaper, then either continues the launch (`continueLaunch()`) or shows the terms gate. The `AppDelegate` singletons are `lazy var` for this reason — they used to be built eagerly at init, which spawned helpers and raised permission prompts before anyone had agreed to anything — and `continueLaunch()` touches each one in order. Keep them lazy, keep new launch work inside `continueLaunch()`, and do not give `KannuApp` an `init` that does work; `LaunchGateRulesTests` pins all three. `applicationWillFinishLaunching` runs earlier still, so it holds one in-memory `register(defaults:)` for View's full-screen item and nothing else, and `LaunchGateRulesTests` pins it to that line. Separately: a first touch of any TCC-protected resource (Bluetooth, ~/Downloads, …) blocks the main thread until the permission dialog is answered, and ad-hoc rebuilds change the code signature so the prompts recur — first touches of protected resources still belong on a background queue.
 - **No permission dialog before onboarding's Permissions step, and none after a Not now.** A fresh
   install used to raise four macOS dialogs in the same second as the welcome music, which now plays
   only at onboarding's Finish (`startHello()`). A feature whose first touch raises a dialog (TCC,
   Automation, MusicKit, another app's container) checks `LaunchPermissionManager.mayTouch(_:)`
   before it, starts on `.launchPermissionsChanged`, and gets a `LaunchPermission` case and a
   Permissions row. `FirstLaunchRulesTests` pins every gate.
+- **Anything the app bundles must be an ordinary git blob, never Git LFS.** `xcodebuild` copies a 131-byte pointer into the app without complaint. `AVPlayer` then fails with `Cannot Open` and the view draws nothing, because the views only check that the bundle URL exists. Every release through 1.4.0-beta.3 shipped that way. This repo no longer uses LFS: it has no `.gitattributes`, and no tracked file is a pointer. `BundledVideoTests` and `scripts/check-no-lfs-pointers.sh` (run by `create-dmg.sh`) catch a relapse. Older refs still hold pointers, `main` and `release/1.4.0` included until this change reaches them. Their objects are on Atoll's LFS store, not this repo's, so `lfs: true` on a checkout of one would fail.
 - **`Defaults.publisher(...)` without `options: []` fires an initial event on subscription** — any sequencing built on "this only fires on change" silently breaks.
 - `AgentHookInstaller` embeds the hook script (authoritative, versioned via `KANNU_HOOK_SCRIPT_VERSION`); `scripts/kannu-agent-status.sh` is a generated mirror — never let them drift. This is now enforced by the pre-commit hook, because the prose version of this rule failed three times.
-- **CI runs on push and PR to both `main` and `development`** (`.github/workflows/ci.yml`) — but a PR whose *base* is a feature branch gets no Build job at all, only SonarCloud, so a stacked PR can look green having never been compiled. Check which jobs actually ran before trusting a tick.
+- **CI runs on push and PR to both `main` and `development`, and on PRs into `super/*`** (`.github/workflows/ci.yml`) — but a PR whose *base* is any other feature branch gets no Build job at all, so a stacked PR can look green having never been compiled. Check which jobs actually ran before trusting a tick.
 - **Recurring regressions and the invariants that prevent them: `docs/REGRESSIONS.md`.** Read it before changing anything under `Kannu/managers/AgentStatus/` **or any file in that document's Danger zones table** — the table is the list that matters, and it now reaches outside AgentStatus (`ModalPresenter.swift`, `BluetoothAudioManager.swift`). Scoping this line to one directory is exactly why an invariant that was already written down got re-broken twice in a file it did not name. When a rule in that file breaks again, add the dated addendum in the same commit as the fix.
 
 ## Instruction-file integrity
