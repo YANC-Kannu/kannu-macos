@@ -47,24 +47,12 @@ func variantSliderRow(value: Binding<Double>, current: Int, range: ClosedRange<D
     SettingsSliderRow(verbatim: title, value: value, in: range, step: 1, valueText: Text("v\(current)"))
 }
 
+/// "Beta" beside a section's title, and "Built-in": the one badge (`SettingsBadge`).
 func customBadge(text: String) -> some View {
-    Text(text)
-        .foregroundStyle(.secondary)
-        .font(.footnote.bold())
-        .padding(.vertical, 3)
-        .padding(.horizontal, 6)
-        .background(Color(nsColor: .secondarySystemFill))
-        .clipShape(.capsule)
+    SettingsBadge(text)
 }
 
+/// "Alpha" says its stage in the same badge as "Beta", never a louder one.
 func alphaBadge() -> some View {
-    Text("ALPHA")
-        .font(.system(size: 10, weight: .bold))
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule()
-                .fill(Color.orange.opacity(0.9))
-        )
+    SettingsBadge(String(localized: "Alpha"))
 }

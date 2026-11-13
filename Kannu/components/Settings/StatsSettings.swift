@@ -59,8 +59,8 @@ struct StatsSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableStatsFeature) {
                     Text("Enable system stats monitoring")
                 }
@@ -79,8 +79,8 @@ struct StatsSettings: View {
             }
 
             if enableStatsFeature {
-                Section {
-                    SettingsRow("Stop monitoring after closing the notch", description: "When enabled, stats monitoring stops a few seconds after the notch closes.") {
+                SettingsSection {
+                    SettingsRow("Stop monitoring after closing the notch", description: "Stops a few seconds after the notch closes.") {
                         Defaults.Toggle(key: .statsStopWhenNotchCloses) {
                             Text("Stop monitoring after closing the notch")
                         }
@@ -103,14 +103,14 @@ struct StatsSettings: View {
                         .textSelection(.enabled)
                     }
                 } header: {
-                    SettingsSectionHeader("Monitoring Behavior")
+                    SettingsSectionHeader("Monitoring behavior")
                 } footer: {
                     SettingsFooter("Sampling can continue while the notch is closed when the timeout is disabled.")
                 }
 
-                Section {
+                SettingsSection {
                     Defaults.Toggle(key: .showCpuGraph) {
-                        Text("CPU Usage")
+                        Text("CPU usage")
                     }
                     .settingsHighlight(id: highlightID("CPU Usage"))
 
@@ -123,15 +123,15 @@ struct StatsSettings: View {
                         .settingsHighlight(id: highlightID("Temperature unit"))
                     }
                     Defaults.Toggle(key: .showMemoryGraph) {
-                        Text("Memory Usage")
+                        Text("Memory usage")
                     }
                     .settingsHighlight(id: highlightID("Memory Usage"))
                     Defaults.Toggle(key: .showGpuGraph) {
-                        Text("GPU Usage")
+                        Text("GPU usage")
                     }
                     .settingsHighlight(id: highlightID("GPU Usage"))
                     Defaults.Toggle(key: .showNetworkGraph) {
-                        Text("Network Activity")
+                        Text("Network activity")
                     }
                     .settingsHighlight(id: highlightID("Network Activity"))
                     Defaults.Toggle(key: .showDiskGraph) {
@@ -139,7 +139,7 @@ struct StatsSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Disk I/O"))
                 } header: {
-                    SettingsSectionHeader("Graph Visibility")
+                    SettingsSectionHeader("Graph visibility")
                 } footer: {
                     if enabledGraphsCount >= 4 {
                         SettingsFooter("With \(enabledGraphsCount) graphs enabled, the Dynamic Island will expand horizontally to accommodate all graphs in a single row.")
@@ -148,9 +148,9 @@ struct StatsSettings: View {
                     }
                 }
 
-                Section {
+                SettingsSection {
                     HStack {
-                        Text("Monitoring Status")
+                        Text("Monitoring status")
                             .textSelection(.enabled)
                         Spacer()
                         HStack(spacing: 4) {
@@ -166,7 +166,7 @@ struct StatsSettings: View {
                     if statsManager.isMonitoring {
                         if showCpuGraph {
                             HStack {
-                                Text("CPU Usage")
+                                Text("CPU usage")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(statsManager.cpuUsageString)
@@ -177,7 +177,7 @@ struct StatsSettings: View {
 
                         if showMemoryGraph {
                             HStack {
-                                Text("Memory Usage")
+                                Text("Memory usage")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(statsManager.memoryUsageString)
@@ -188,7 +188,7 @@ struct StatsSettings: View {
 
                         if showGpuGraph {
                             HStack {
-                                Text("GPU Usage")
+                                Text("GPU usage")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(statsManager.gpuUsageString)
@@ -199,7 +199,7 @@ struct StatsSettings: View {
 
                         if showNetworkGraph {
                             HStack {
-                                Text("Network Download")
+                                Text("Network download")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(String(format: "%.1f MB/s", statsManager.networkDownload))
@@ -208,7 +208,7 @@ struct StatsSettings: View {
                             }
 
                             HStack {
-                                Text("Network Upload")
+                                Text("Network upload")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(String(format: "%.1f MB/s", statsManager.networkUpload))
@@ -219,7 +219,7 @@ struct StatsSettings: View {
 
                         if showDiskGraph {
                             HStack {
-                                Text("Disk Read")
+                                Text("Disk read")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(String(format: "%.1f MB/s", statsManager.diskRead))
@@ -228,7 +228,7 @@ struct StatsSettings: View {
                             }
 
                             HStack {
-                                Text("Disk Write")
+                                Text("Disk write")
                                     .textSelection(.enabled)
                                 Spacer()
                                 Text(String(format: "%.1f MB/s", statsManager.diskWrite))
@@ -238,7 +238,7 @@ struct StatsSettings: View {
                         }
 
                         HStack {
-                            Text("Last Updated")
+                            Text("Last updated")
                                 .textSelection(.enabled)
                             Spacer()
                             Text(statsManager.lastUpdated, style: .relative)
@@ -247,17 +247,17 @@ struct StatsSettings: View {
                         }
                     }
                 } header: {
-                    SettingsSectionHeader("Live Performance Data")
+                    SettingsSectionHeader("Live performance data")
                 }
 
-                Section {
+                SettingsSection {
                     SettingsActionRow {
-                        Button("Clear Data") {
+                        Button("Clear data") {
                             statsManager.clearHistory()
                         }
                         .disabled(statsManager.isMonitoring)
 
-                        Button(statsManager.isMonitoring ? "Stop Monitoring" : "Start Monitoring") {
+                        Button(statsManager.isMonitoring ? "Stop monitoring" : "Start monitoring") {
                             if statsManager.isMonitoring {
                                 statsManager.stopMonitoring()
                             } else {

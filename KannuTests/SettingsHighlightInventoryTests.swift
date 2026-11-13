@@ -97,14 +97,19 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // and its two battery rows), one entry, three registrations and three ids fewer.
         // 2026-11-01: Appearance gains Brain appearance (one entry, one row): the moon only picks the
         // opposite of what is on screen, so this row is the way back to Match macOS.
+        // 2026-11-11: Notes' gear lands on its first settings row, Enable Notes, which registers an id
+        // (one registration, one id; no entry: a search for the tab finds it by name).
         XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 273, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 267, "distinct registered ids")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 274, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 268, "distinct registered ids")
     }
 
+    /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,
+    /// now "Timer Presets" (found by "accent colour" too), lands on their heading, which names its tab, instead of the
+    /// first row of the old inline editor.
     func testOnlyTheKnownRowsTakeTheirIdBuilderFromAParent() throws {
         let unattributed = try Self.inventory().registrations.keys.filter { $0.tab == nil }.map(\.title)
-        XCTAssertEqual(Set(unattributed), ["Accent colour", "Device Picker Style"])
+        XCTAssertEqual(Set(unattributed), ["Device Picker Style"])
     }
 
     func testQuitIsFindableBySearch() throws {

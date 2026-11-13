@@ -42,7 +42,7 @@ struct TaskSourcePage: View {
 
     var body: some View {
         if source == .local {
-            Section {
+            SettingsSection {
                 TaskColorRow(
                     "Local tasks colour",
                     description: "For your own tasks that have no tags.",
@@ -52,7 +52,7 @@ struct TaskSourcePage: View {
             } header: {
                 SettingsSectionHeader("Local tasks")
             }
-            Section {
+            SettingsSection {
                 TaskAddRow(context: context)
                 TaskRowList(filter: TaskFilter(source: .local), context: context)
             } header: {
@@ -71,7 +71,7 @@ struct TaskSourcePage: View {
         let tasks = manager.activeTasks.filter { $0.source == source }
         let projects = TaskFacets.projectCounts(in: tasks)
         if projects.count > 1 {
-            Section {
+            SettingsSection {
                 ForEach(projects, id: \.key) { project in
                     let page = TasksPage.project(source, project.key)
                     LabeledContent {
@@ -89,7 +89,7 @@ struct TaskSourcePage: View {
                 SettingsSectionHeader(source.keyStyle == .list ? String(localized: "Lists") : String(localized: "Projects"))
             }
         } else {
-            Section {
+            SettingsSection {
                 if tasks.isEmpty {
                     SettingsNoteRow("No tasks yet", description: "Open tasks appear here after a sync.")
                 }
@@ -109,7 +109,7 @@ struct TaskProjectPage: View {
     let context: TasksPageContext
 
     var body: some View {
-        Section {
+        SettingsSection {
             TaskRowList(filter: TaskFilter(source: TaskSourceFilter(source), project: project),
                         onProjectPage: true, context: context)
         } header: {
@@ -134,7 +134,7 @@ struct SourceConnectionSection: View {
     private var rateLimitedUntil: Date? { state.rateLimitEnd }
 
     var body: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 if source.isConnected {
                     Button("Disconnect…") { context.confirmsDisconnect.wrappedValue = source }

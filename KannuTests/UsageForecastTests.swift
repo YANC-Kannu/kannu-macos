@@ -187,7 +187,7 @@ final class UsageForecastTests: XCTestCase {
         let readings = UsageWindowReading.readings(fromClaude: snapshot, now: now)
         XCTAssertEqual(readings.map(\.id), ["claude:five_hour", "claude:seven_day", "claude:model_scoped:fable"])
         XCTAssertEqual(readings.map(\.label), ["5-hour", "weekly", "Fable weekly"])
-        XCTAssertEqual(UsageWindowReading.label(provider: "cursor", key: "week"), "billing-cycle")
+        XCTAssertEqual(UsageWindowReading.label(provider: "cursor", key: "week"), "billing cycle")
     }
 
     func testAScopedSnapshotKeepsItsOwnSeriesAndNamesItsPlan() {

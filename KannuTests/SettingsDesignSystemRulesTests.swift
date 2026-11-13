@@ -267,6 +267,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         }
         require("ink", on: ["paper", "panel", "card"], atLeast: 7)
         require("inkSecondary", on: ["paper", "panel", "card"], atLeast: 4.5)
+        // A badge's text, on the line colour it sits on (`SettingsBadge`).
+        require("inkSecondary", on: ["line"], atLeast: 4.5)
         require("accentStrong", on: ["paper", "panel", "card"], atLeast: 4.5)
         require("controlOff", on: ["panel", "card"], atLeast: 3)
         // The labels the button style really draws, on the fills it really draws them on: `card`
@@ -297,6 +299,11 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         let faintDark = theme.replacingOccurrences(of: "dark: 0xA3A199", with: "dark: 0x3A3A3A")
         XCTAssertNotEqual(faintDark, theme, "the plant must change the theme")
         XCTAssertTrue(Self.readabilityFailures(in: faintDark).contains("inkSecondary on card, dark"))
+
+        // The grey before the badge needed it: 4.2:1 on the line colour, though 5:1 on a card.
+        let oldGrey = theme.replacingOccurrences(of: "inkSecondary = color(light: 0x66625A", with: "inkSecondary = color(light: 0x6B675E")
+        XCTAssertNotEqual(oldGrey, theme, "the plant must change the theme")
+        XCTAssertEqual(Self.readabilityFailures(in: oldGrey), ["inkSecondary on line, light"])
 
         let otherBlue = theme.replacingOccurrences(of: "accent = color(light: 0x4DA3FF", with: "accent = color(light: 0x1D69C9")
         XCTAssertNotEqual(otherBlue, theme, "the plant must change the theme")
@@ -478,7 +485,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertFalse(Self.permissionRowsKeepTheSystemTint(in: "Text(\"a\")\n.tint(.accentColor)\n"))
 
         Self.assertCaught([("SettingsToggleStyle(showsLabel: false)", "SettingsToggleStyle()"),
-                           (".labeledContentStyle(.automatic)", ""),
+                           ("HStack(spacing: SettingsMetrics.rowContent) { buttons }",
+                            "HStack(spacing: SettingsMetrics.rowContent) { buttons }.labeledContentStyle(.automatic)"),
                            ("struct SettingsActionRow", "struct RenamedActionRow"),
                            ("struct SettingsRow<", "struct RenamedRow<")],
                           in: components, by: Self.sharedComponentProblems)
@@ -561,9 +569,15 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     /// What a press, a hover and a squeeze must leave alone. A custom style's label can be squeezed
     /// where a native button's cannot: a row broke "Acknowledgements" across two lines before this.
     private static func buttonProblems(in button: String) -> [String] {
-        [".fixedSize(horizontal: true, vertical: false)",
-         ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
-         "isEnabled && (configuration.isPressed || isHovering)"].filter { !button.contains($0) }
+        let problems = [".fixedSize(horizontal: true, vertical: false)",
+                        ".opacity(!isEnabled ? SettingsTheme.disabledOpacity : configuration.isPressed ? SettingsTheme.pressedOpacity : 1)",
+                        "isEnabled && (configuration.isPressed || isHovering)"].filter { !button.contains($0) }
+        // Flush moves only a quiet button's frame, and after the fill and the hover, so both keep the chrome's width:
+        // before them, the label would touch the fill's edge and the inset left of it would stop taking clicks.
+        let flush = ".padding(.leading, flush && prominence == .quiet ? -inset.leading : .zero)"
+        guard let hover = button.range(of: ".onHover"), let padding = button.range(of: flush),
+              hover.upperBound <= padding.lowerBound else { return problems + [flush] }
+        return problems
     }
 
     func testAButtonKeepsItsWidthAndShowsAPress() throws {
@@ -571,7 +585,10 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
         XCTAssertEqual(Self.buttonProblems(in: button), [])
         Self.assertCaught([(".fixedSize(horizontal: true, vertical: false)", ""),
                            ("configuration.isPressed ? SettingsTheme.pressedOpacity : 1", "1"),
-                           ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)")],
+                           ("isEnabled && (configuration.isPressed || isHovering)", "(configuration.isPressed || isHovering)"),
+                           ("flush && prominence == .quiet ? ", "flush ? "),
+                           (".onHover { isHovering = $0 }",
+                            ".padding(.leading, flush && prominence == .quiet ? -inset.leading : .zero).onHover { isHovering = $0 }")],
                           in: button, by: Self.buttonProblems)
     }
 
@@ -655,6 +672,63 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
                            ("content.focused($tracksFocus)", "content"), (dim, ""), (dim, dim + dim),
                            ("let isFocused: Bool?", "let isFocused: Bool?\n    let onSubmit: () -> Void")],
                           in: field, by: Self.fieldProblems)
+    }
+
+    // MARK: - Pages and sections
+
+    /// What `SettingsSection` keeps: a soft card in the theme's colour and radius around its rows, apart by space and
+    /// never by a divider; a header and a footer in the secondary ink, both in line with the rows' text, as the grouped
+    /// `Form` placed them; one group for VoiceOver, so like buttons in two sections are told apart; and the three ways a
+    /// `Section` was called. The heading is `SettingsSectionHeader`'s own (`testSectionHeadersAndFootersKeepTheirOwnType`):
+    /// on the whole header slot it would make a badge or a count beside the title a heading too. The page's column is
+    /// `BrainShellRulesTests.testAPageIsCappedAndLeading`.
+    private static func sectionProblems(in section: String) -> [String] {
+        var problems = [".background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))",
+                        "VStack(alignment: .leading, spacing: SettingsTheme.sectionRowGap)", ".padding(SettingsTheme.sectionPadding)",
+                        ".accessibilityElement(children: .contain)", ".foregroundStyle(SettingsTheme.inkSecondary)",
+                        "where Header == EmptyView, Footer == EmptyView {", "where Footer == EmptyView {", "where Header == EmptyView {"]
+            .filter { !section.contains($0) }
+        if section.components(separatedBy: ".padding(.horizontal, SettingsTheme.sectionPadding.leading)").count != 3 {
+            problems.append("the header and the footer are not in line with the rows")
+        }
+        if section.contains("Divider") { problems.append("rows apart by a divider") }
+        if section.contains(".isHeader") { problems.append("the whole header slot is a heading, a badge or count beside the title too") }
+        return problems
+    }
+
+    /// Neither the page nor the section does anything on its own: no hook and no animator, since closing Brain runs
+    /// `onDisappear` and reopening `onAppear` (docs/REGRESSIONS.md, entry 22). And nothing lazy: a search scrolls to a
+    /// row's id, and a lazy stack cannot scroll to a row it has not built. The exception is inside pages, never here:
+    /// three long lists that no search reaches are lazy themselves (the task rows, the Archive, Security's findings), so
+    /// a long list is not built whole as its page opens (docs/SETTINGS.md, "Pages and sections").
+    private static func pageLifecycleProblems(in code: String) -> [String] {
+        [".onAppear", ".onDisappear", ".task", "withAnimation", ".animation(", "TimelineView", "Lazy", "List", "Form"].filter { code.contains($0) }
+    }
+
+    func testThePageAndItsSectionsKeepTheirShape() throws {
+        let sources = try Self.designSystemSources().mapValues(Self.code)
+        let section = try XCTUnwrap(sources["SettingsSection.swift"])
+        XCTAssertEqual(Self.sectionProblems(in: section), [])
+        let padding = ".padding(.horizontal, SettingsTheme.sectionPadding.leading)"
+        Self.assertCaught([("SettingsTheme.card, in:", "SettingsTheme.paper, in:"), ("cornerRadius: SettingsTheme.sectionRadius", "cornerRadius: SettingsTheme.controlRadius"),
+                           ("spacing: SettingsTheme.sectionRowGap", "spacing: 0"), (".padding(SettingsTheme.sectionPadding)", ""),
+                           (".accessibilityElement(children: .contain)", ""),
+                           ("            header\n                .padding", "            header\n                .accessibilityAddTraits(.isHeader)\n                .padding"),
+                           (".foregroundStyle(SettingsTheme.inkSecondary)", ".foregroundStyle(SettingsTheme.ink)"),
+                           (padding, ""), ("where Footer == EmptyView {", "where Footer == Text {"),
+                           ("                content\n", "                content\n                Divider()\n")],
+                          in: section, by: Self.sectionProblems)
+
+        let page = try XCTUnwrap(sources["SettingsPage.swift"])
+        for code in [page, section] {
+            XCTAssertEqual(Self.pageLifecycleProblems(in: code), [])
+        }
+        Self.assertCaught([("VStack(alignment: .leading, spacing: SettingsTheme.sectionGap)", "LazyVStack(alignment: .leading, spacing: SettingsTheme.sectionGap)"),
+                           ("ScrollView {", "List {"), ("ScrollView {", "ScrollView {\n.onAppear {}"), ("ScrollView {", "ScrollView {\n.task {}")],
+                          in: page, by: Self.pageLifecycleProblems)
+        Self.assertCaught([("var body: some View {", "var body: some View {\nwithAnimation(nil) {}"),
+                           ("var body: some View {", "var body: some View {\n.onDisappear {}")],
+                          in: section, by: Self.pageLifecycleProblems)
     }
 
     // MARK: - Values
@@ -824,27 +898,62 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     }
 
     /// The shared components the root would otherwise change. Its font replaces what a grouped `Form`
-    /// gives headers and footers, so they say theirs, or every section header goes light and every
-    /// footer grows. Its one-line row would squeeze a titled action row's description, and its switch
-    /// would still draw a label in a row that draws the title itself.
+    /// gave headers and footers, so they say theirs, or every section header goes light and every
+    /// footer grows. Its switch would still draw a label in a row that draws the title itself. A titled
+    /// action row takes the root's row, so its buttons are trailing: outside a grouped `Form` the automatic
+    /// style sets them straight after the title (2026-11-05, Stage 4: it opted out, for the `Form`'s wrap).
+    /// The section header is a heading for VoiceOver itself, so a badge or a count beside it is not.
     private static func sharedComponentProblems(in components: String) -> [String] {
-        let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
-                        ("SettingsFooter", ".font(SettingsTheme.description)"),
-                        ("SettingsActionRow", ".labeledContentStyle(.automatic)"),
-                        ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
-        return required.compactMap { component, modifier -> String? in
-            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return "\(component) is gone" }
+        func region(of component: String) -> Substring? {
+            guard let start = components.range(of: "struct \(component)[:<]", options: .regularExpression) else { return nil }
             let end = components.range(of: "\n}\n", range: start.upperBound..<components.endIndex)?.lowerBound ?? components.endIndex
-            return components[start.lowerBound..<end].contains(modifier) ? nil : "\(component) lost \(modifier)"
+            return components[start.lowerBound..<end]
         }
+        let required = [("SettingsSectionHeader", ".font(SettingsTheme.sectionTitle)"),
+                        ("SettingsSectionHeader", ".accessibilityAddTraits(.isHeader)"),
+                        ("SettingsFooter", ".font(SettingsTheme.description)"),
+                        ("SettingsFooter", ".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)"),
+                        ("SettingsRowLabel", ".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)"),
+                        ("SettingsRow", "SettingsToggleStyle(showsLabel: false)")]
+        var problems = required.compactMap { component, modifier -> String? in
+            guard let body = region(of: component) else { return "\(component) is gone" }
+            return body.contains(modifier) ? nil : "\(component) lost \(modifier)"
+        }
+        if let actionRow = region(of: "SettingsActionRow") {
+            if actionRow.contains(".labeledContentStyle(") { problems.append("SettingsActionRow sets a labelled-row style of its own") }
+        } else {
+            problems.append("SettingsActionRow is gone")
+        }
+        return problems
     }
 
     func testSectionHeadersAndFootersKeepTheirOwnType() throws {
         let components = Self.code(try XCTUnwrap(try Self.sources()["SettingsComponents.swift"]))
         XCTAssertEqual(Self.sharedComponentProblems(in: components), [])
-        Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), ("            .font(SettingsTheme.description)\n", ""),
+        Self.assertCaught([(".font(SettingsTheme.sectionTitle)", ""), (".accessibilityAddTraits(.isHeader)", ""),
+                           ("            .font(SettingsTheme.description)\n", ""),
+                           (".frame(maxWidth: SettingsTheme.proseMaxWidth, alignment: .leading)", ""),
+                           (".frame(maxWidth: SettingsTheme.descriptionMaxWidth, alignment: .leading)", ""),
                            ("struct SettingsSectionHeader", "struct RenamedHeader"), ("struct SettingsFooter:", "struct RenamedFooter:")],
                           in: components, by: Self.sharedComponentProblems)
+    }
+
+    /// Text wraps at a cap, whatever the copy: a footer or an empty state's line at `proseMaxWidth` (380), a row's caption at
+    /// `descriptionMaxWidth` (440), so no line under Settings runs past about 80 characters. The shared components apply them
+    /// (`sharedComponentProblems`); this holds the two numbers.
+    private static func capProblems(in theme: String) -> [String] {
+        [("proseMaxWidth", 380), ("descriptionMaxWidth", 440)].compactMap { name, value in
+            theme.contains("static let \(name): CGFloat = \(value)") ? nil : "\(name) is not \(value)"
+        }
+    }
+
+    func testTheTextCapsHold() throws {
+        let theme = try Self.theme()
+        XCTAssertEqual(Self.capProblems(in: theme), [])
+        Self.assertCaught([("proseMaxWidth: CGFloat = 380", "proseMaxWidth: CGFloat = 400"),
+                           ("descriptionMaxWidth: CGFloat = 440", "descriptionMaxWidth: CGFloat = 520"),
+                           ("static let descriptionMaxWidth", "static let captionMaxWidth")],
+                          in: theme, by: Self.capProblems)
     }
 
     /// All tasks' filter menu, whose four ticked pickers are native submenus: Stage 5 rebuilds the page (plan:75).
@@ -1006,7 +1115,8 @@ final class SettingsDesignSystemRulesTests: XCTestCase {
     private static let sheetTypes = ["JiraConnectSheet": "TaskConnectSheets.swift", "GitLabConnectSheet": "TaskConnectSheets.swift",
                                      "SourceConnectSheet": "TaskConnectSheets.swift", "TaskTagsSheet": "TaskTagsSheet.swift",
                                      "NewTaskSheet": "NewTaskSheet.swift", "TaskValueSheet": "TasksSettings.swift",
-                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift"]
+                                     "PolicyRulesEditor": "PolicyRulesEditor.swift", "URLImportSheet": "IdleAnimationsSettingsSection.swift",
+                                     "TimerPresetSheet": "TimerPresetSheet.swift"]
     /// The two large sheets, which keep layouts of their own and take the root and the panel themselves.
     private static let largeSheetFiles = ["AnimationEditorView.swift", "SpotifyLoginSheet.swift"]
 
