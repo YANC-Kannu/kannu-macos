@@ -109,13 +109,15 @@ and in the GitHub release title (`Kannu 1.3.0 — Heimdall`). The list, in order
 |---|---|
 | 1.2.0 | Argus |
 | 1.3.0 | Heimdall |
-| next | Horus |
-| then | Vigil, Sentinel |
+| 2.0.0 | Horus |
+| next | Vigil |
+| then | Sentinel |
 
 Pick the next name for what the release actually does, not just for its turn in the list — the list
 is the shortlist, not a queue. Argus, all eyes, suited a release that only watched; Heimdall, who
-keeps watch at Bifröst and refuses passage, suited the one that added the agent policy. If a release
-does not fit the next name on the list, take one further down or add a watcher to it.
+keeps watch at Bifröst and refuses passage, suited the one that added the agent policy; Horus, one
+eye, suited 2.0's one-eye logo and a notch that closes like an eye. If a release does not fit the
+next name on the list, take one further down or add a watcher to it.
 
 The name lives in one place: `ReleaseInfo.codename` in `Kannu/models/Constants.swift`. Both release
 paths grep that line for the title, so bump it there and nowhere else. 1.0.0 shipped as "Fiji", the
