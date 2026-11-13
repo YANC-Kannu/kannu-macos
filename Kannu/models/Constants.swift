@@ -954,6 +954,9 @@ extension Defaults.Keys {
     /// `OnboardingProgress.currentVersion` once onboarding is finished; 0 until then. An install
     /// from before it existed is marked done at launch, because `firstLaunch` is already false.
     static let onboardingCompletedVersion = Key<Int>("onboardingCompletedVersion", default: 0)
+    /// The What's New edition last seen (`WhatsNew.currentEdition`); 0 until one is. Closing the window writes it, and
+    /// so does a fresh install's first launch, where onboarding introduces Kannu instead.
+    static let whatsNewSeenEdition = Key<Int>("whatsNewSeenEdition", default: 0)
     /// `LaunchPermission` raw values the user pressed Allow for (the request ran).
     static let askedLaunchPermissions = Key<[String]>("askedLaunchPermissions", default: [])
     /// `LaunchPermission` raw values the user said Not now to: their features wait for consent.

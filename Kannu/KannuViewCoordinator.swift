@@ -135,7 +135,6 @@ class KannuViewCoordinator: ObservableObject {
     /// `AppDelegate.applyNotchVisibility`, read by every window's `ContentView`. Not stored: a
     /// launch never plays it.
     @Published var notchEye = NotchEyeState.settled
-    @AppStorage("showWhatsNew") var showWhatsNew: Bool = true
     @AppStorage("musicLiveActivityEnabled") var musicLiveActivityEnabled: Bool = true
     @AppStorage("timerLiveActivityEnabled") var timerLiveActivityEnabled: Bool = true
 

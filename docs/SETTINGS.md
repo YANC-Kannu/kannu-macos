@@ -885,6 +885,31 @@ scrolls. The Permissions step's rows and states are fixtures (`DebugSnapshotFixt
 `LaunchPermissionManager.snapshotStatuses`, DEBUG only), so a board reads none of this Mac's answers and `refresh`
 probes no folder. Its welcome draws no sparkles: a board renders no emitter.
 
+## What's New
+
+Kannu 2.0's welcome (`WhatsNewWindow`, `WhatsNewView`; openspec `whats-new`) is a window of its own, as onboarding's is:
+titled, at the normal level, with the panel under its transparent title bar and Brain's root applied once. It follows
+macOS's appearance. It is drawn as an onboarding step is:
+
+- **Its title and one line under it:** the title in `pageTitle` (a header), the line in `body` on `inkSecondary`, both
+  selectable.
+- **A card each for Brain, Tasks and Tags:** the card's title in `cardTitle` over its text in `body` on `inkSecondary`, on
+  `card`. VoiceOver reads each card as one element. The Tasks card's title is the sidebar's own key.
+- **Continue trailing,** `.primary`, which Return presses. Escape closes the window too, through its key equivalents, so it
+  works whatever has focus.
+
+Its width is fixed and its height is its content's, measured once as it opens, so a card grows with its text in every
+language. The content then goes in through `setHostedContent`, so SwiftUI never resizes the window (docs/REGRESSIONS.md,
+entry 17). Nothing in it animates, and under Reduce Motion the window's own appearance does not either.
+
+When it opens is `WhatsNew.decision`'s, asked once near the end of `continueLaunch()`, so never before the terms: an update
+that has not seen `WhatsNew.currentEdition`, with onboarding behind it. A fresh install counts the edition as seen on its
+first launch, since onboarding introduces Kannu there, and every close counts it as seen. `WhatsNewTests` and
+`WhatsNewRulesTests` hold these rules. A later release's news is a new edition: bump `currentEdition` and write new copy.
+
+Its boards draw the shipped copy from the catalog's compiled strings, never the window: `whatsNew` in English, in light
+and dark, and `whatsNewLanguages`, every other language in light, Arabic right to left.
+
 ## The content standard
 
 The components above already imply one set of numbers. `SettingsMetrics` in
