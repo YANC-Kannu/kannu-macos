@@ -42,7 +42,8 @@ struct NotePage: View {
     /// The modification date of the file `image` came from; nil when none did.
     @State private var imageDate: Date?
 
-    /// Changes when the note's image does: the file keeps its name when the image is replaced.
+    /// Changes on every save of the note, since the image's file keeps its name when the image is replaced; the task
+    /// reads the file again only when the file's own date has changed.
     private var imageKey: String {
         "\(note.imageFileName ?? "")|\(note.modificationDate.timeIntervalSince1970)"
     }

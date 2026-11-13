@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer the review of the final audit's fixes
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the reviewer's R1 and R2, and one found while gating; R3 and R4 answered in the lane's notes
+- **Changes:**
+  - View › Enter Full Screen also does nothing while a close in full screen waits for its exit, so ⌃⌘F in the turn
+    between the exit and the queued close no longer takes a closing Brain back into full screen (R1).
+    `MenuBarRulesTests` pins both conditions.
+  - A note's page: the image key's comment says it changes on every save, and that the task decides whether to read
+    the file again (R2).
+  - Brain's search suggestions: the fade's geometry transform takes the list's height as a captured value, since
+    SwiftUI may call it as `@Sendable`, so it reads no view state, as every other such transform in the app does.
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum names the second condition.
+
 ### 2026-11-13 - Fix the final audit's small findings
 - **Developer label:** Brain redesign plan: the scoped final audit's fix child, F3, F5, F6, F8 and F9
 - **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the audit's Lows F3, F5, F6, F8 and F9; F1 waits for its Mac check, F2, F4 and F7 were left out, and F10's copy goes with the next strings pass
