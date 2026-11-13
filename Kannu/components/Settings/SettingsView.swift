@@ -671,8 +671,9 @@ struct SettingsView: View {
         private static let scrollSpace = "suggestionScroll"
         /// Each row's bottom edge in the list, measured, since a title takes one line or two.
         @State private var rowBottoms: [SettingsSearchEntry.ID: CGFloat] = [:]
-        /// Where the rows end, below the top of the scroll view as it is scrolled.
-        @State private var rowsFoot: CGFloat = 0
+        /// Whether rows sit below the scroll view's foot as it is scrolled. Only the answer is kept, so a scroll writes it
+        /// only as the last row comes in or goes out.
+        @State private var rowsBelowFoot = false
 
         /// Decided from what is known now, so an unmeasured list is never taller than `maxListHeight`: more matches than
         /// fit, or a last row not yet measured, scroll; otherwise the list scrolls only if its measured rows run past it.
@@ -693,15 +694,19 @@ struct SettingsView: View {
                 if listScrolls {
                     ScrollView {
                         suggestionRows
-                            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.scrollSpace)).maxY } action: {
-                                rowsFoot = $0
+                            // The foot is read here, in body: SwiftUI may call the transform as `@Sendable`, so it reads
+                            // no view state.
+                            .onGeometryChange(for: Bool.self) { [foot = listHeight + SettingsTheme.hairline] in
+                                $0.frame(in: .named(Self.scrollSpace)).maxY > foot
+                            } action: {
+                                rowsBelowFoot = $0
                             }
                     }
                     .coordinateSpace(.named(Self.scrollSpace))
                     .frame(height: listHeight)
                     // While rows sit below the foot, a short fade says there is more; it goes once the last row is in.
                     .overlay(alignment: .bottom) {
-                        if rowsFoot > listHeight + SettingsTheme.hairline {
+                        if rowsBelowFoot {
                             LinearGradient(colors: [SettingsTheme.card.opacity(0), SettingsTheme.card],
                                            startPoint: .top, endPoint: .bottom)
                                 .frame(height: SettingsTheme.suggestionFade)

@@ -49,9 +49,10 @@ final class TasksPageLiveDataRulesTests: XCTestCase {
     private static let managerFeed = #"TasksManager\.shared\.objectWillChange\s*\.throttle\(for: \.milliseconds\(500\), scheduler: RunLoop\.main, latest: true\)\s*\.values"#
     /// The header's: whether the task list has been read, passed on only when that changes.
     private static let readyFeed = #"TasksManager\.shared\.\$loadState\.map\(\{ \$0 == \.ready \}\)\.removeDuplicates\(\)\.values"#
-    /// All the first page and its header may name on the manager: the two subscriptions, the reads as the page appears
-    /// (`isReady` there and at New task's press) and the calls a press makes. Anything else there is state, which only
-    /// the copy reads, so a value the manager gains later is caught too.
+    /// All the first page and its header may name on the manager: the two subscriptions, the read as the header appears
+    /// (`isReady`; New task's press reads none, since the sheet opens while the list loads and keeps Add off until it is
+    /// ready) and the calls a press makes. Anything else there is state, which only the copy reads, so a value the
+    /// manager gains later is caught too.
     private static let allowedManagerNames: Set<String> = [
         "objectWillChange", "$loadState", "isReady", "checkReminderPermission", "refreshArchive", "delete", "disconnect",
         "setEstimate", "addManualTime", "setEndTime", "setSchedule", "discardInterruptedSession", "retryRemovingToken",
