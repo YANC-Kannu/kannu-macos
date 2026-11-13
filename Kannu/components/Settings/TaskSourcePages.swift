@@ -21,8 +21,8 @@ import Defaults
 import SwiftUI
 
 /// A source's page in Brain › Tasks (‹ Tasks): its connection, then its projects, each a › to its
-/// own page — or, with one project or none, its tasks right there. Local tasks has its colour, Add a
-/// task, then its tasks.
+/// own page — or, with one project or none, its tasks right there. Local tasks has its colour, then
+/// its tasks; the page header's New task adds one.
 ///
 /// Every source's connection is the same section (`SourceConnectionSection`): Disconnect…, what
 /// needs fixing, Sync, the colour a task from it shows with no tags (`TaskColoring`), Refresh, and
@@ -42,7 +42,7 @@ struct TaskSourcePage: View {
 
     var body: some View {
         if source == .local {
-            Section {
+            SettingsSection {
                 TaskColorRow(
                     "Local tasks colour",
                     description: "For your own tasks that have no tags.",
@@ -52,12 +52,13 @@ struct TaskSourcePage: View {
             } header: {
                 SettingsSectionHeader("Local tasks")
             }
-            Section {
-                TaskAddRow(context: context)
-                TaskRowList(filter: TaskFilter(source: .local), context: context)
-            } header: {
+            // The rows are cards of their own, so no card around them (the design review's finding 11).
+            VStack(alignment: .leading, spacing: SettingsTheme.listRowGap) {
                 SettingsSectionHeader("Tasks")
+                    .padding(.horizontal, SettingsTheme.sectionPadding.leading)
+                TaskRowList(filter: TaskFilter(source: .local), context: context)
             }
+            .accessibilityElement(children: .contain)
         } else {
             SourceConnectionSection(source: source, context: context)
             projectsOrTasks
@@ -71,7 +72,7 @@ struct TaskSourcePage: View {
         let tasks = manager.activeTasks.filter { $0.source == source }
         let projects = TaskFacets.projectCounts(in: tasks)
         if projects.count > 1 {
-            Section {
+            SettingsSection {
                 ForEach(projects, id: \.key) { project in
                     let page = TasksPage.project(source, project.key)
                     LabeledContent {
@@ -89,14 +90,17 @@ struct TaskSourcePage: View {
                 SettingsSectionHeader(source.keyStyle == .list ? String(localized: "Lists") : String(localized: "Projects"))
             }
         } else {
-            Section {
+            VStack(alignment: .leading, spacing: SettingsTheme.listRowGap) {
+                SettingsSectionHeader("Tasks")
+                    .padding(.horizontal, SettingsTheme.sectionPadding.leading)
                 if tasks.isEmpty {
-                    SettingsNoteRow("No tasks yet", description: "Open tasks appear here after a sync.")
+                    SettingsSection {
+                        SettingsNoteRow("No tasks yet", description: "Open tasks appear here after a sync.")
+                    }
                 }
                 TaskRowList(filter: TaskFilter(source: TaskSourceFilter(source)), context: context)
-            } header: {
-                SettingsSectionHeader("Tasks")
             }
+            .accessibilityElement(children: .contain)
         }
     }
 }
@@ -109,16 +113,18 @@ struct TaskProjectPage: View {
     let context: TasksPageContext
 
     var body: some View {
-        Section {
+        VStack(alignment: .leading, spacing: SettingsTheme.listRowGap) {
+            SettingsSectionHeader(TaskFacets.projectShortName(project))
+                .padding(.horizontal, SettingsTheme.sectionPadding.leading)
             TaskRowList(filter: TaskFilter(source: TaskSourceFilter(source), project: project),
                         onProjectPage: true, context: context)
-        } header: {
-            SettingsSectionHeader(TaskFacets.projectShortName(project))
-        } footer: {
             if let group = TaskFacets.projectGroup(project) {
                 SettingsFooter(group)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .padding(.horizontal, SettingsTheme.sectionPadding.leading)
             }
         }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -134,7 +140,7 @@ struct SourceConnectionSection: View {
     private var rateLimitedUntil: Date? { state.rateLimitEnd }
 
     var body: some View {
-        Section {
+        SettingsSection {
             LabeledContent {
                 if source.isConnected {
                     Button("Disconnect…") { context.confirmsDisconnect.wrappedValue = source }

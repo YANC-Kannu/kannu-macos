@@ -47,7 +47,7 @@ struct LogTimeCards: View {
                 openBrain(.timeToLog)
             }
             .buttonStyle(.link)
-            .font(.system(size: 12, weight: .medium))
+            .font(SettingsTheme.font(size: 12, weight: .medium))
         }
     }
 }

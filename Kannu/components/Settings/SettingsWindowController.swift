@@ -33,8 +33,11 @@ class SettingsWindowController: NSWindowController {
     /// Brain's SwiftUI. It sits in the window only while the window is open, and outlives every
     /// close, so its page, scroll position and typing are still there on reopening.
     private var settingsContent: NSHostingView<SettingsView>?
-    /// How the page was left when the content came out of the window. Nil while it is in the window.
+    /// How the page was left when the content came out of the window, or how it stood before the first open.
+    /// Nil once it is put back.
     private var leftState: LeftState?
+    /// False until the first open, which has no close to remember and gets a `leftState` of its own.
+    private var hasOpened = false
     /// A close asked for in full screen waits for the exit, so the window is never ordered out, and
     /// the app never turned `.accessory`, inside a full-screen Space.
     private var closeAfterFullScreen = false
@@ -153,6 +156,7 @@ class SettingsWindowController: NSWindowController {
         
         // Placed before it is ordered in, or a window this size visibly jumps.
         centerWindowOnActiveScreen()
+        seedLeftStateForFirstOpen()
 
         // Show the window with proper ordering
         window?.orderFrontRegardless()
@@ -160,6 +164,8 @@ class SettingsWindowController: NSWindowController {
 
         // Activate the app and ensure window gets focus
         NSApp.activate(ignoringOtherApps: true)
+        // On screen from here: a window never shown may already count as visible, and then AppKit sends no change.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Force window to front after activation
         DispatchQueue.main.async { [weak self] in
@@ -196,6 +202,22 @@ class SettingsWindowController: NSWindowController {
             scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
         )
         window.contentView = NSView()
+    }
+
+    /// The first open has no `leftState`, since nothing has closed, yet ordering the window in still gives the
+    /// page's first text field focus, selects its text and scrolls to it. A page builds every row, so that field can
+    /// be a deep one that writes straight through, such as Agents' ntfy topic or a Pushover key, and the next key
+    /// typed would replace what is stored. So the first open is put back like a reopening, to how it stood: nothing
+    /// focused, every scroller where it starts. Laid out first, since until then the page has no scroll views.
+    private func seedLeftStateForFirstOpen() {
+        guard !hasOpened, let settingsContent else { return }
+        hasOpened = true
+        settingsContent.layoutSubtreeIfNeeded()
+        leftState = LeftState(
+            focus: nil,
+            selection: nil,
+            scrollPositions: Self.scrollers(in: settingsContent).map { ($0.contentView, $0.contentView.bounds.origin) }
+        )
     }
 
     /// Ordering the content back in gives the page's first text field focus with its text selected,
@@ -261,6 +283,14 @@ class SettingsWindowController: NSWindowController {
         return true
     }
 
+    /// View › Enter Full Screen. It does nothing while a transition runs, as the close's toggle does, or while a close
+    /// waits for the exit: ⌃⌘F pressed twice fast, or during a deferred ⌘W, never toggles mid-transition or takes a
+    /// closing Brain back into full screen.
+    func toggleFullScreenWhenIdle() {
+        guard !isChangingFullScreen, !closeAfterFullScreen else { return }
+        window?.toggleFullScreen(nil)
+    }
+
     private func finishPendingClose() {
         guard closeAfterFullScreen else { return }
         // A turn later: this runs inside AppKit's transition callback. `NSWindow.close()` does not
@@ -278,6 +308,8 @@ class SettingsWindowController: NSWindowController {
 
     private func relinquishFocus() {
         window?.orderOut(nil)
+        // Off screen from here, without waiting for AppKit's occlusion change, which can come late.
+        if let window { BrainVisibility.shared.update(for: window) }
         
         // Set app back to accessory mode immediately
         NSApp.setActivationPolicy(.accessory)
@@ -315,6 +347,8 @@ extension SettingsWindowController: NSWindowDelegate {
 
     func windowDidEnterFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
+        // View's menu item says Exit Full Screen from here.
+        if let window { BrainVisibility.shared.update(for: window) }
         guard closeAfterFullScreen else { return }
         // A turn later, as in `finishPendingClose`. `showWindow` may clear the flag first.
         DispatchQueue.main.async { [weak self] in
@@ -329,6 +363,8 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidFailToEnterFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as full screen.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowWillExitFullScreen(_ notification: Notification) {
@@ -338,11 +374,15 @@ extension SettingsWindowController: NSWindowDelegate {
     func windowDidExitFullScreen(_ notification: Notification) {
         isChangingFullScreen = false
         finishPendingClose()
+        // View's menu item says Enter Full Screen again.
+        if let window { BrainVisibility.shared.update(for: window) }
     }
 
     func windowDidFailToExitFullScreen(_ window: NSWindow) {
         isChangingFullScreen = false
         finishPendingClose()
+        // An occlusion change during the attempt may have read it as windowed.
+        BrainVisibility.shared.update(for: window)
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
@@ -352,5 +392,12 @@ extension SettingsWindowController: NSWindowDelegate {
     
     func windowDidResignKey(_ notification: Notification) {
     }
-    
+
+    /// Closed, minimised, hidden with the app, fully covered or left in another Space: AppKit says so here, and a
+    /// page's live views stop until any of the window is on screen again (docs/SETTINGS.md, "Live data"). A full-screen
+    /// Brain parked in another Space keeps `isVisible` true, so this, not the close, is what stops it there.
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard let window else { return }
+        BrainVisibility.shared.update(for: window)
+    }
 }

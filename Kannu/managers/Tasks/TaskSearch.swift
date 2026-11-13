@@ -26,17 +26,20 @@ import Foundation
 /// and the source's labels, a scoped label also by its value. `localizedStandardContains`, so case
 /// and diacritics never matter ("cafe" finds "Café"), as in Finder.
 ///
+/// A word typed with `#` is a tag: it finds a tag or label that is the word as a whole, or else the
+/// word with its `#` anywhere a plain word is found. So `#work` finds the tag "work" but not
+/// "Homework" or "workshop", and `#4264` still finds the key "group/app#4264". Case and accents never
+/// matter here either. A `#` alone is no word yet, so it hides nothing.
+///
 /// Pure, in the logic target.
 enum TaskSearch {
     static func matches(_ task: TaskItem, query: String) -> Bool {
-        // "#work" finds the tag "work": tags are kept without their `#` (`TaskItem.cleanedTags`).
-        let words = query.split(whereSeparator: \.isWhitespace)
-            .map { $0.drop(while: { $0 == "#" }) }
-            .filter { !$0.isEmpty }
+        let words = Word.parse(query)
         guard !words.isEmpty else { return true }
-        let fields = searchable(task)
+        let tags = tagNames(of: task)
+        let fields = searchable(task) + tags
         return words.allSatisfy { word in
-            fields.contains { $0.localizedStandardContains(word) }
+            fields.contains { word.isFound(in: $0) } || tags.contains { word.names($0) }
         }
     }
 
@@ -46,16 +49,58 @@ enum TaskSearch {
         return tasks.filter { matches($0, query: query) }
     }
 
+    /// `TaskFacets.displayTags` (own, then labels), those `query` finds first, in order; case and accents ignored.
+    static func chipTags(of task: TaskItem, query: String) -> [String] {
+        let found = foundTags(of: task, query: query)
+        return found + TaskFacets.displayTags(of: task).filter { !found.contains($0) }
+    }
+
+    /// The tags `query` finds, in `displayTags` order: the ones `chipTags` puts first. None without a query.
+    static func foundTags(of task: TaskItem, query: String) -> [String] {
+        let words = Word.parse(query)
+        guard !words.isEmpty else { return [] }
+        let labels = task.remote?.labels ?? []
+        return TaskFacets.displayTags(of: task).filter { tag in
+            // A label's chip reads its value; its full name finds it too ("workflow::doing").
+            let names = [tag] + labels.filter { TaskDetailSummary.labelDisplay($0).lowercased() == tag.lowercased() }
+            return words.contains { word in names.contains { word.isFound(in: $0) || word.names($0) } }
+        }
+    }
+
     private static func searchable(_ task: TaskItem) -> [String] {
         var fields = [task.title]
         if let key = task.remote?.key { fields.append(key) }
         if let short = TaskDetailSummary.shortKey(for: task) { fields.append(short) }
-        fields += task.tags
-        for label in task.remote?.labels ?? [] {
-            fields.append(label)
-            fields.append(TaskDetailSummary.labelDisplay(label))
-        }
         return fields
+    }
+
+    /// What a `#word` can name as a whole: the user's tags, and each label by its full name and by its value.
+    private static func tagNames(of task: TaskItem) -> [String] {
+        task.tags + (task.remote?.labels ?? []).flatMap { [$0, TaskDetailSummary.labelDisplay($0)] }
+    }
+
+    /// One word typed: its text without the leading `#`s, and whether it had one (a tag word).
+    private struct Word {
+        let text: String
+        let isTag: Bool
+
+        /// The words in `query`, split at spaces. A `#` alone is no word.
+        static func parse(_ query: String) -> [Word] {
+            query.split(whereSeparator: \.isWhitespace).compactMap { typed in
+                let text = typed.drop(while: { $0 == "#" })
+                return text.isEmpty ? nil : Word(text: String(text), isTag: typed.hasPrefix("#"))
+            }
+        }
+
+        /// Whether `field` holds the word anywhere, a tag word with its `#`: "#4264" is in "group/app#4264".
+        func isFound(in field: String) -> Bool {
+            field.localizedStandardContains(isTag ? "#" + text : text)
+        }
+
+        /// Whether a tag word is `tag` as a whole, case and accents ignored: `#work` is "Work", never "workshop".
+        func names(_ tag: String) -> Bool {
+            isTag && tag.compare(text, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+        }
     }
 }
 

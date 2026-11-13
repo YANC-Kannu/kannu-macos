@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer CodeRabbit's second review of everything around Brain
+- **Developer label:** CodeRabbit's second review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 from CodeRabbit's second review of Super 6
+- **Changes:**
+  - Brain › Notes: after a read or decode of a note's image that failed, for example of a file still being written,
+    its page tries the image again at the next save. It used to keep the file's date anyway, so the preview stayed
+    missing until the file itself changed.
+
 ### 2026-11-13 - OpenSpec carries Kannu's plan in the repo, with 2.0 as its first change
 - **Developer label:** OpenSpec in the Kannu repo, so a new chat keeps the context, seeded with the 2.0 release
 - **Agent label:** Claude Code (Opus 5.5) — OpenSpec 0.23.0 set up for Claude Code; the project context, seven specs
@@ -27,6 +35,782 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     - deltas for the release (2.0 numbering, beta then final, the `libinmv/kannu` feed bridge) and a new What's New
       window;
     - `handoff.md`, the run log of where the stack and the asks stand.
+
+### 2026-11-13 - Answer CodeRabbit's first review of everything around Brain
+- **Developer label:** CodeRabbit's first review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 in part and inline-2 from CodeRabbit's first review of Super 6, folded into Stage 6 child 6; inline-1's retry answered on the PR
+- **Changes:**
+  - Brain › Tasks: New Task says why Add stays off when the task list could not be read, in the Tasks page's own words
+    ("Couldn't read the task list, so it can't change."), beside its buttons. It still opens at once while the list is
+    loading, with Add off until the list is ready. No retry: nothing reads the list again before a relaunch.
+  - `MenuBarRulesTests` and `SidebarBadgeLiveDataRulesTests` start with the project's GPL header block, as AGENTS.md
+    asks of every Swift file.
+  - `TasksPageLiveDataRulesTests`: a comment no longer says New task's press reads `isReady`.
+
+### 2026-11-13 - Answer the review of the final audit's fixes
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the reviewer's R1 and R2, and one found while gating; R3 and R4 answered in the lane's notes
+- **Changes:**
+  - View › Enter Full Screen also does nothing while a close in full screen waits for its exit, so ⌃⌘F in the turn
+    between the exit and the queued close no longer takes a closing Brain back into full screen (R1).
+    `MenuBarRulesTests` pins both conditions.
+  - A note's page: the image key's comment says it changes on every save, and that the task decides whether to read
+    the file again (R2).
+  - Brain's search suggestions: the fade's geometry transform takes the list's height as a captured value, since
+    SwiftUI may call it as `@Sendable`, so it reads no view state, as every other such transform in the app does.
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum names the second condition.
+
+### 2026-11-13 - Fix the final audit's small findings
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, F3, F5, F6, F8 and F9
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the audit's Lows F3, F5, F6, F8 and F9; F1 waits for its Mac check, F2, F4 and F7 were left out, and F10's copy goes with the next strings pass
+- **Changes:**
+  - View › Enter Full Screen (⌃⌘F) does nothing while a full-screen transition runs, as a close in full screen already
+    waited: pressed twice fast, or during a close's exit, it asked AppKit to toggle mid-transition (F3).
+    `MenuBarRulesTests` holds it.
+  - `applicationWillFinishLaunching` runs before the terms are checked, and `LaunchGateRulesTests` now pins its body to
+    the one in-memory registration it holds; AGENTS.md's launch-gate trap names it (F5).
+  - Brain › Notes: a note's page reads its image again only when the image file changes, not on every save of the text,
+    which came each 1.5 s while the notch edited the note Brain showed (F6).
+  - Brain's search suggestions keep only whether more rows sit below the list's foot, so scrolling them no longer writes
+    state on every tick (F8).
+  - A permission callout's VoiceOver group is named by its title, so Shelf's two "Open Privacy & Security" buttons are
+    told apart (F9).
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum.
+
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
+- **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR
+- **Changes:**
+  - Notch: the filter menu's Tag submenu ticks the saved tag when the tasks now spell it in another case (`docs` saved,
+    `Docs` offered): the matching row carries the saved spelling. Filtering already matched ignoring case.
+  - Brain › Tasks: widening the window past the width with a task open in the list's place scrolls the rebuilt list to
+    the task's row, now selected beside its page, as Notes does. The list used to open at its top.
+  - Brain › Tasks: the Tag filter had the same case mismatch as the notch's Tag submenu, found alongside inline-1: the
+    choice that matches the saved tag ignoring case now carries the saved spelling, so the list ticks it.
+  - docs/SETTINGS.md: a task's page, and widening the window with it open.
+
+### 2026-11-12 - Answer CodeRabbit's second review of Brain's product pages
+- **Developer label:** CodeRabbit's second review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the two fixes from CodeRabbit's second review of Super 4; the other four answered on the PR
+- **Changes:**
+  - Displays: the Standard notch style's stored value is "Standard Notch" again, and its label stays "Standard notch".
+    The copy pass had changed both, so a style saved before it, the global one or a display's own, no longer decoded.
+  - Notes: Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the scope. A
+    narrowing leaves such a note listed until the next sync, and its Delete still reaches Notes; it used to go at once.
+    The notch's rows keep their scope-based question, a separate follow-up.
+  - docs/SETTINGS.md: Notes' Delete question.
+
+### 2026-11-12 - Answer the review of onboarding
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: the reviewer's M1, M2 and M4; M3 answered in a comment; nothing found in the gates, the permission timing, the keyboard or VoiceOver
+- **Changes:**
+  - A profile card's glyph sits in a box of one height, so the four names line up: the symbols draw 25 to 32 pt tall
+    at the same size, and Developer's name sat 6 pt above Designer's.
+  - A profile card is at least 160 pt tall rather than exactly, so a longer translation or the system font grows it
+    instead of spilling past it, now that its description is no longer cut at three lines.
+  - Focus detection's Open Developer Tools settings carries its chevron, as Agents' "Open ›" does, so a bare quiet
+    button still says it leads somewhere.
+  - The onboarding boards' comment says why clearing the fixture does not refresh the manager: only the menu report
+    follows, and a refresh would read this Mac's answers.
+
+### 2026-11-12 - Onboarding takes Brain's look
+- **Developer label:** Brain redesign plan: Stage 6, onboarding on the new theme
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 4: every onboarding step on Brain's tokens, Geist, cards, buttons and insets, and the design review's Allow above Not now
+- **Changes:**
+  - The onboarding window applies Brain's root and paints the panel under every step. A step's title is the page
+    title, the line under it body text in the secondary ink, both at the page's inset, and its buttons trail, the verb
+    primary. Welcome and Finish keep a centred hero; Finish's buttons are a sheet's, Customize in Brain then Finish.
+  - The choices (music source, profiles, traffic light, staying awake, notes) are choice cards like Timer's start
+    tiles: the card colour, and the ring and VoiceOver's "selected" when chosen. The radio circles, gradients, tinted
+    fills, hover scale and springs went. A music source is a button now, so the keyboard reaches it; YouTube Music's
+    GitHub link sits over its card.
+  - The Permissions step keeps one card per permission, in the theme's card. Focus detection is a segmented
+    `SettingsSelect`, Open at login is our switch, and "Allowed" is a status line with its dot.
+  - Allow is the permission row's primary and Not now its quiet button (the design review's finding 4), in onboarding's
+    cards and General's Permissions rows, which share the row. Our own styles draw alike in a window that is not key,
+    so General's `.tint(.accentColor)` around the rows went, with its colour pin and its docs.
+  - The Profile step's line and the Developer card's description are no longer cut short.
+  - Behaviour is unchanged: no string, no gate and no prompt's timing changed, and the welcome music still plays only at
+    Finish. `FirstLaunchRulesTests` and `LaunchGateRulesTests` pass unchanged.
+  - Every step has a board (`OnboardingView(snapshotStep:)`, DEBUG), and the Permissions step's whole list another, from
+    fixture statuses (`LaunchPermissionManager.snapshotStatuses`, DEBUG), so no board reads this Mac's answers or probes
+    a folder. They replace two boards that wore Brain's root, which the window did not.
+  - `SettingsDesignSystemRulesTests` holds onboarding's root and panel, no `.borderedProminent` under `Onboarding/`, and
+    Allow's rank. docs/SETTINGS.md gains "Onboarding"; docs/REGRESSIONS.md entry 22 a 2026-11-12 addendum.
+
+### 2026-11-12 - Answer the review of the floating panels
+- **Developer label:** Brain redesign plan: Stage 6, floating panels, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the reviewer's minors; the picker's Refresh and Close keep their reach and gain names, and both panels' motion honours Reduce Motion
+- **Changes:**
+  - The LocalSend picker's Refresh and Close keep the reach of the circles they replaced: their glyphs sit in a 22-pt
+    frame inside the quiet style's inset, 38 by 28.
+  - Refresh and Close say "Refresh devices" and "Close" to VoiceOver, existing catalog keys; neither takes a tooltip,
+    which would be a second hover source beside the style's own.
+  - The clipboard panel's tab switch keeps its 0.2 s ease but none under Reduce Motion, and the picker's device no
+    longer grows under the pointer with Reduce Motion on.
+  - docs/SETTINGS.md "The floating panels" says so.
+
+### 2026-11-12 - The floating panels take Brain's theme
+- **Developer label:** Brain redesign plan: Stage 6, floating panels: clipboard, LocalSend picker and similar small panels
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 5: the clipboard panel and the LocalSend picker on Brain's tokens, Geist, cards, buttons and insets, behaviour unchanged
+- **Changes:**
+  - The clipboard panel draws on `panel` in Geist: its title in `sheetTitle`, History or Favorites as a segmented
+    `SettingsSelect` with each tab's count, the search in Brain's field chrome, rows on the card inset with the `hover`
+    fill, and Brain's empty state. Its glyph buttons keep their plain style and tooltips, in the theme's colours.
+  - The LocalSend picker's content draws in Geist on Brain's dark tokens over the backdrop Shelf › Device Picker Style
+    picks: devices as soft cards, Refresh and Close quiet, Scan Again the standard button, Brain's empty state. Its
+    hover growth takes the theme's bounded ease, none under Reduce Motion.
+  - Each panel's view hands what it observes to a content view (`ClipboardPanelContent`,
+    `LocalSendDevicePickerContent`), so six new boards, light and dark, draw fixtures and never build the clipboard
+    manager or the LocalSend service. Window code, placement, focus, dismissal, tooltips and the capture policy are
+    unchanged.
+  - New `FloatingPanelRulesTests` pins the system fonts and raw colours left in both files, each with why, the panels'
+    root, and the boards' fixtures, against planted offenders.
+  - docs/SETTINGS.md gains "The floating panels"; docs/REGRESSIONS.md entry 17 a 2026-11-12 addendum, since both files
+    hold a panel.
+
+### 2026-11-12 - Answer CodeRabbit's first review of Brain's product pages
+- **Developer label:** CodeRabbit's first review of the Stage 4 super (#42)
+- **Agent label:** Claude Code (Opus 5.5) — the six fixes from CodeRabbit's first review of Super 4; the other six answered on the PR
+- **Changes:**
+  - Security: Import reads the findings store into the page's copy again as the file is chosen, so whether it asks
+    before replacing the policy is never decided on a copy up to half a second old.
+  - Downloads: a style card is disabled while download detection is off, so the keyboard and VoiceOver know it is off.
+    `.plain` dims a disabled button by half, so the card's own half dim goes and it looks as it did.
+  - Idle animations: a custom animation's card offers Delete as a named accessibility action, so VoiceOver reaches it
+    without the hover glyph or the right-click menu, which both stay.
+  - Timer: Start timer reads the timer manager at its press and starts nothing while a timer runs, even before the
+    header's copy has first been read; `TimerPageLiveDataRulesTests` lists that read among the page's readers.
+  - Timer's preset sheet opens a preset over 23 hours whole: the Hours stepper reaches its hours, so an edit no longer
+    cuts them to 23.
+  - Boards: the Agents, Security and Clipboard fixtures carry their feature switch, on, as Usage's and Timer's do, so
+    this Mac's Agent Status and Clipboard manager switches no longer decide what those pages and their headers draw.
+  - docs/SETTINGS.md: the preset sheet's long lengths, Start timer's read at the press, and the Clipboard boards'
+    switch.
+
+### 2026-11-12 - Answer the review of the sidebar badges
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: the reviewer's S1 and M2–M6; Security's and Usage's badges follow Agent Status as their pages do
+- **Changes:**
+  - Security's count and Usage's dot show only while Agent Status is on: off, their pages show none of it and the
+    notch shows no cue, so the sidebar kept a count nothing else would explain.
+  - docs/SETTINGS.md says the agents' badge is the notch's light (a finished agent's red outranks another's yellow)
+    and that a timer in overtime still runs.
+  - `SidebarBadgeLiveDataRulesTests` holds the gate, the order that drops repeats before the throttle, and Security's
+    read on coming back, against planted offenders.
+
+### 2026-11-12 - Brain's sidebar badges a state that needs you
+- **Developer label:** Brain redesign plan: Stage 6, the sidebar badges (layout-proposal.md D2, badges only)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 3: badges for an agent waiting, high findings and usage near its limit, a static timer glyph, under Brain's live-data rules
+- **Changes:**
+  - Agents shows a dot in the light's yellow while an agent waits for input; Security, the count of high-severity
+    findings to review; Usage, a dot while a window is at or near its limit; Timer, a static ▶ while a timer runs.
+    Nothing else: no open-task count and no setup checklist (David, 2026-11-11, "Badges only").
+  - Each badge says its state in words to VoiceOver and the pointer, so it never rests on colour alone.
+  - Live data as on the pages: one copy per badge, throttled to 500 ms, only while Brain is on screen, read once as it
+    appears; the agents' badge follows the monitor's projection; nothing ticks, and `SettingsView` observes nothing
+    new. `SidebarBadgeLiveDataRulesTests` holds it against planted offenders.
+  - The sidebar's BETA pill becomes the pages' one badge, "Beta" (design review finding 12). `SettingsSidebarRow`
+    takes its badge as a view.
+  - Board `shellBadges` draws every badge from a fixture; every other board is quiet, so none reads this Mac's stores.
+  - Catalog: "Beta" and "Near its limit" in all 17 languages; "BETA" retired.
+  - docs/SETTINGS.md ("The shell and navigation", "Live data", the badge row); docs/REGRESSIONS.md entry 22's
+    2026-11-12 addendum.
+
+### 2026-11-12 - Answer the review of the menu bar
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: the reviewer's two Ss and four Ms; Go and New Task leave a sheet alone, and New Task opens from a cold Brain
+- **Changes:**
+  - Go and New Task only beep while a sheet is open over Brain. Menu keys still reach the menu bar under a sheet, so
+    ⌘1 in New Task or a connect sheet switched the page underneath and closed the sheet, with what was typed in it.
+  - New Task opens while the task list is still loading: the menu can ask from a cold Brain, and Tasks dropped the
+    request until the list was ready. The sheet already keeps Add off until then.
+  - A failed entry into or exit from full screen updates `BrainVisibility` too, so View's item keeps the right title.
+  - `MenuBarRulesTests` holds the sheet check, the failed transitions' updates and the request's guard against planted
+    offenders.
+  - docs/SETTINGS.md says New Task opens over any Tasks page and what Hide Sidebar leaves reachable; docs/REGRESSIONS.md
+    entry 22's 2026-11-12 addendum names the sheet check.
+
+### 2026-11-12 - The menu bar gets Go, View and File around Brain
+- **Developer label:** Brain redesign plan: Stage 6, the menu bar
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 1: Go with the product pages, View with the sidebar, appearance and full screen, File with New Task, each behind the terms gate
+- **Changes:**
+  - Go lists Brain's product pages in the sidebar's order, ⌘1 to ⌘7, and opens each as its sidebar row does, through
+    the switch point a search pick uses, with no row pulsing. The order lives once, in `SettingsTab.sidebarOrder`.
+  - View: Hide or Show Sidebar (⌃⌘S, a new `brainShowsSidebar` key that `BrainShell` takes as a plain flag),
+    Appearance with the moon's three choices, and Enter or Exit Full Screen (⌃⌘F), titled from a new
+    `BrainVisibility.isFullScreen`. Each is off while Brain is not on screen.
+  - File › New Task (⌘N) opens Brain on Tasks with New Task, through a request Tasks takes once; on All tasks it takes
+    the list's filters, as before. The hidden ⌘N button on Tasks is gone, so the menu owns the shortcut; the item is
+    off while Tasks is off.
+  - Go and New Task open Brain through one function that brings the terms back until they are accepted, as Brain…
+    does. A registered `NSFullScreenMenuItemEverywhere` of false keeps AppKit from adding a second Enter Full Screen.
+  - The snapshot run writes the menu bar to `menu.txt`, and two boards draw the window with no sidebar and a Go item's
+    page. `MenuBarRulesTests` holds the menus against planted offenders; `BrainAppearanceRulesTests` names View ›
+    Appearance among the key's writers, and `BrainShellRulesTests` names `showsSidebar` beside the navigation state.
+  - Five catalog keys in all 17 languages: Go, Hide Sidebar, Show Sidebar, Enter Full Screen, Exit Full Screen.
+  - docs/SETTINGS.md gains "The menu bar" and the Hide Sidebar line; docs/REGRESSIONS.md entry 22 a 2026-11-12
+    addendum.
+
+### 2026-11-12 - Answer the review of Geist in the notch
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: the reviewer's S1 and S2, M1 and M4 in the docs
+- **Changes:**
+  - The running timer's name and its rename field keep the system font: 20 pt in a 24 pt line, which Geist's 26 pt
+    line overfills.
+  - A symbol beside medium text keeps the system's medium: Geist Medium draws SF Symbols regular (measured, about a
+    fifth less ink), so Notes' back chevron, Open in Notes' and Add a reminder's symbols take their own font.
+  - `NotchFontRulesTests` pins the six lines; docs/SETTINGS.md "The notch" says why, with the dropped rounded design
+    and why the Agents tab's names take Geist when the music title does not.
+
+### 2026-11-12 - The notch's text in Geist, through one theme token
+- **Developer label:** Brain redesign plan: Stage 6, Geist in the notch
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 2: a shared font token in place of `.system` across the notch
+- **Changes:**
+  - `SettingsTheme.font(size:weight:)`: Geist at the size and weight `.system` took, the notch's sizes being its own
+    (`UsageCardMetrics`, `TimerComposerMetrics`). Bold and heavier draw Geist SemiBold, the heaviest face bundled;
+    with no Geist bundled it is the system font, as every token is.
+  - The open notch's text uses it: 124 lines in 12 files of `Notch/` and the Agents tab (the header's tooltip, Home,
+    Usage, Timer and its Tasks column, task form and suggestions, Notes, Stats, the Tasks and Clipboard popovers).
+    Text styles became their macOS sizes.
+  - Kept on the system font, pinned per file with why by `NotchFontRulesTests`: symbols, which `.system` sizes;
+    monospaced text, since Geist Mono ships Regular only (the timer's black readouts among it); the tag chip, whose
+    16 pt caption line Geist's 10 pt line overfills by AppKit's ruler; the music title, artist and lyrics, whose title
+    measures with an AppKit text style; the header's button symbols.
+  - Every budget keeps its size. `TimerComposerMetricsTests` measures the 36 pt task row with the Geist faces it now
+    draws; `NotchTagFilterRulesTests` and `TimerTaskDetailRulesTests` pin the rows' new font calls.
+  - docs/SETTINGS.md gains "The notch"; docs/REGRESSIONS.md entry 21 notes that `NotchNotesView` changed only fonts.
+
+### 2026-11-12 - Answer the review of Brain's Notes list-detail
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: the review's three minor findings (no blocker), each held by the rule test
+- **Changes:**
+  - Widening the window past 1,224 pt with a note open in the list's place builds the list anew: it now scrolls to the
+    note's row, selected beside the page, instead of opening at its top (M2).
+  - The page beside the list takes an id of its own, not the note's, which its row carries, so a scroll back to the
+    row has one target (M3).
+  - With no note at all, the empty place beside the list says "No note selected" without telling you to click a › that
+    is not there; the layout stays a function of the width alone, as D1 has it, and as Mail keeps its empty pane (M1,
+    taken this way rather than by folding the column away).
+  - `NotesPageLiveDataRulesTests` holds each answer against planted offenders; docs/SETTINGS.md says so.
+
+### 2026-11-12 - Brain's Notes page shows a note beside the list at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, Notes list-detail (layout-proposal D1)
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 5: D1's list-detail for Notes, with Tasks' layout moved once into a shared view both pages use
+- **Changes:**
+  - From 1,224 pt of panel (`ListDetailLayout`, as Tasks has it), a note opened from the list shows beside it: its
+    row wears the selected ring and is selected for VoiceOver, and its card names the note over when it was edited,
+    since the tab keeps Notes' title. With none open, its place says "No note selected". Narrower, the in-tab swap
+    stays, its back row now bare on the panel, as Tasks' are (the design review's finding 24).
+  - One selection, drawn either way, so a resize converts nothing. Each visit still opens on the list, at both widths;
+    a Notes search or deep link closes only a page in the list's place.
+  - Tasks' list-detail layout and its measurement moved once into a shared place, `SettingsListDetail` and
+    `settingsListDetailFits(_:)` (two DesignSystem files, one type each), which Tasks and Notes both use. Tasks draws
+    what it drew: its boards match 5-4's but for the fixture's times.
+  - The note's page stays read-only (Pin, Copy, Delete, Open in Notes), and New note's sheet is unchanged.
+  - Tests: `SettingsListDetailRulesTests` (new) holds the shared layout's widths and bans; the D1 clauses of
+    `TasksPageLiveDataRulesTests` and `NotesPageLiveDataRulesTests` hold each page's use of it, against planted
+    offenders; `BrainShellRulesTests` lists the two new files among those that know no page.
+  - Two catalog keys in 17 languages ("No note selected", "Click › on a note to see it here."); boards `notesWide` and
+    `notePageWide`; docs/SETTINGS.md, and docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-11 - Answer the review of Brain's Tasks page
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: the review's S1 and M2 to M6, and the back row's scroll back
+- **Changes:**
+  - The first page keeps one place in the tree at both widths, so crossing 1,224 pt, or a wide first open, keeps the
+    list scrolled where it was, Find's caret and Tag colours' fold (S1).
+  - Going back between two pages below the first scrolls to the row again: its `onAppear` is back inside `.id(path)`.
+    Applied after it, it ran once and never again (measured in a harness).
+  - A sheet's close, the delete alert and the value sheets read the copy at once, as a press does (M2).
+  - The Sources rows' connection, status and sync flag are in the copy, so a change to them alone redraws the page
+    (M3); the interrupted sessions, the Tag filter's choices, Tag colours' tags and the source counts are worked out in
+    the copy, not on every keystroke in Find (M4). `TasksManager` keeps its own property, now `Equatable`.
+  - A search or deep link keeps a task's page beside the list, the list being on screen, so the header's gear no longer
+    closes it (M5).
+  - Each card is one VoiceOver group named for its task, so its ✓, ▶ and › say whose they are (M6).
+  - `TasksPageLiveDataRulesTests` and `TaskListRulesTests` hold each answer against planted offenders; docs/SETTINGS.md
+    and docs/REGRESSIONS.md entry 22's addendum say so.
+
+### 2026-11-11 - Brain's Tasks page leads with the list, with a task's page beside it at wide windows
+- **Developer label:** Brain redesign plan: Stage 5, the Brain Tasks page, with D1's list-detail
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 4: Tasks as a product page (tabs, Find with #tag, a Tag filter, rows as soft cards, New task in the header) under Agents' live-data contract, and D1's list-detail by one tested width function
+- **Changes:**
+  - Brain › Tasks opens on its product, above "Tasks settings": interrupted sessions and Time to log while they hold
+    something, then the list. Its tabs, Active, Done and Archived, replace All tasks' page and its three native
+    disclosures (the design review's finding 13); Find takes `#tag` (`TaskSearch`), and the Tag filter is a
+    `SettingsSelect` of every tag and label. The Source, Project and Status filters leave the list: a source and a
+    project have their own pages.
+  - Each task is a soft card with its tags as chips (the first in its colour and "+N" for the rest, never cutting the
+    caption), ✓, ▶ and ›; a closed one has Reopen, Archive or Restore and its ›; everything else stays in the
+    right-click menu, which opens with Show Details. Source and project pages draw the same cards.
+  - New task, ⌘N, is the page header's one verb, beside the gear, which goes to Enable tasks. It replaces Add a task's
+    row and the hidden ⌘N button; a new task the list on screen would hide opens on its own page.
+  - D1 (David, 2026-11-06): once the panel holds the list and a 720-pt page (`ListDetailLayout`, 1,224 pt with the
+    wide inset, tested in `ListDetailLayoutTests`), a task opened from the list shows beside it, selected; narrower it
+    takes the list's place. One path drawn two ways, from one `onGeometryChange`: no `minWidth:`, `ViewThatFits` or
+    `.inspector`. Search and deep links return to the first page at both widths.
+  - Back rows are bare quiet buttons on the panel, with no card (the design review's finding 24).
+  - Live data as on Agents: the first page reads `TasksManager` through one copy, `TasksPageData`, throttled to 500 ms,
+    assigned only on a change and followed only while Brain is on screen; a press reads it again at once. The timed
+    row's and a task page's minute clocks stop while Brain is not on screen. `TasksPageLiveDataRulesTests` holds each
+    clause and D1's rules against planted offenders.
+  - Tag colours moves to the settings, folded in our disclosure. 12 new catalog keys in 17 languages; the tab titles
+    take keys of their own, so "Done" can differ from a sheet's Done button.
+  - Tests: the list, path, filter and pin rules follow the new page (`TaskListRulesTests`, `SettingsLayoutRulesTests`,
+    `SettingsDesignSystemRulesTests`, `SettingsHighlightInventoryTests` 274 and 268, `BrainShellRulesTests`,
+    `IntegrationSecretRulesTests`).
+  - docs/SETTINGS.md describes the page, its live data and list-detail; docs/REGRESSIONS.md entry 22 has a dated
+    addendum.
+
+### 2026-11-11 - Answer the review of Brain's Notes page
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: the review's two passes answered; a list typed in New note is never saved half done, and the rule test closes its gaps
+- **Changes:**
+  - New note: Return in the text no longer saves the note (Return is the text's own there, and ⌘Return adds), so a
+    list typed line by line is never saved half done; Return in the title still adds. A title of spaces is saved as no
+    title.
+  - Deleting a note reads the notes again at once, so its row never lingers for the throttle's half second.
+  - A note's page drops an image read that a newer one, or the page closing, has overtaken.
+  - `NotesPageLiveDataRulesTests` now counts `Task.sleep` as a clock and pins every read of a note's image file to the
+    note's page and Copy, each with planted offenders; its sheet clause holds the text's Return to the text.
+  - Translations: the Notes page's own strings that had none ("Notes to sync", its two choices, "Sync with Apple Notes",
+    "Last synced", "Apple Notes" and the narrowing question's message), Arabic and Hungarian "Add", and three fixes
+    (Czech, Spanish, Russian).
+  - docs/SETTINGS.md says when a note's image file is read, and the sheet's keys.
+
+### 2026-11-11 - Brain's Notes page leads with the notes
+- **Developer label:** Brain redesign plan: Stage 4b, the Notes product page, its in-tab swap first
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 5: Notes as a product page with a note's own page as an in-tab swap, under Agents' live-data contract, starting no sync of its own
+- **Changes:**
+  - Brain › Notes opens on its notes, above "Notes settings": pinned first, then the latest edit first, as the notch's
+    Notes tab lists them, in a lazy list. A row is the note's colour (a pin in that colour when it is pinned), its
+    title, and when it was last edited and how its text starts; then a › to its own page. Its right-click menu holds
+    Open note, Pin or Unpin, Copy, Open in Notes for a note made there, and Delete.
+  - While Apple Notes sync is on, one status line above the notes: a sync running, the last one's time, or its error.
+  - A note's own page opens in the tab under "‹ Notes": the note whole and read-only, its text selectable and its image
+    as a preview, with Pin, Copy and Delete, and Open in Notes for a note made there. Delete asks first for a note made
+    in Apple Notes, as the notch's rows do. Each visit, and a Notes search or deep link, opens on the list. `NotePage`
+    takes only the note: the seam for Stage 5's list-detail.
+  - The header holds the gear, which goes to Enable Notes, then New note (David's "Yes, add the sheet"): a sheet with the
+    title, the text and the colour, saved on Add through the notch's own write path, never as it is typed. With no
+    note, "No notes yet", one line and New note; while Notes is off, "Notes is off" with Turn On and no New note.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock. The
+    page no longer observes the sync manager, the notch's coordinator or its view model, and starts no sync of its own.
+    `NotesPageLiveDataRulesTests` holds each clause against planted offenders.
+  - Notes' copy by 4-3c's rules, which skip Notes: the switches in sentence case, the General footer dropped, Last
+    synced by the time of day with no spinner, the Apple Notes footer as two facts, and the scope captions about 8 words.
+  - 35 new strings, each in the catalog's 17 languages (the five note colours the notch named in English among them),
+    7 retired, and "Green" in the languages it lacked. Boards `notes0`, `notes4`, `notePage`, `notePageMirror` and
+    `newNoteSheet` draw from fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Brain's copy pass: sentence case, captions of about eight words, capped widths
+- **Developer label:** Brain redesign plan: Stage 4 child 3c, the copy pass (the design review's findings 15 and 2), with Usage's labels (4b-1 M1), Security's next-scan wording (4b-2 M1) and Security's older uncatalogued strings (4b-2 M6), which their reviews held for it
+- **Agent label:** Claude Code (Sonnet 5.5) — Stage 4 child 3c: the copy pass, its 17-language catalog entries (translators on Sonnet), the two width caps and the tests that pin them
+- **Changes:**
+  - Sentence case across Brain's settings, product pages and sheets: a capital for the first word and for a name only.
+    "Turn On" is "Turn on" on every "is off" card, "colour" is "color", no title, label or footer ends in a colon, and
+    Mobile notifications' fields show an example ("my-kannu-alerts", "https://ntfy.sh") instead of their own name.
+  - About 70 row captions and footers cut: every caption of 11 or more words is about 8, the enum captions that feed
+    rows too, and seven footers over 40 words are trimmed. A fact a caption needed but a row cannot hold (nothing is
+    sent, a key is never stored, where a transcript goes, what a reminder carries) moved to its section's footer; two
+    footers are new. No "Off: … On: …" caption is left. The screen-capture captions keep "Some capture tools ignore
+    this", which `ScreenCapturePolicyTests` requires.
+  - Caps: `SettingsFooter` wraps at `proseMaxWidth` (380 pt) and a row's caption at the new `descriptionMaxWidth` (440
+    pt). `SettingsDesignSystemRulesTests` holds both components and both numbers, with planted offenders.
+  - Held items: Usage's window labels ("billing cycle"), forecast captions and push sentence are catalogued; Security's
+    next-scan line reads "Next scan …" (the deliberate "the last scan failed" stays); 51 of the Security page's older
+    strings are catalogued.
+  - Catalog: 316 new keys and 7 merged into existing entries, all in 17 languages; 196 old keys retired, each one the
+    compiler's own string extraction no longer finds in the code ("Turn On" stays: Notes' page, in flight, uses it).
+    Highlight ids (490 literals) and search keywords are unchanged; every untouched catalog entry is identical.
+  - Tests: the pins of renamed strings follow them (`ADRDocsTests`, `BrainNamingRulesTests`, whose "Global settings"
+    allowlist entry goes because the literal no longer says "Settings", `ClipboardPageLiveDataRulesTests`,
+    `UsageForecastTests`).
+  - docs/SETTINGS.md holds the caps, the copy rules and the renamed strings; docs/ADR.md names the findings' buttons in
+    sentence case; docs/REGRESSIONS.md entry 22 gets an addendum (no `onAppear`, `.task` or animator added).
+
+### 2026-11-11 - Answer the review of Brain's Clipboard page
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: the reviewer's S1 and M1; History folds again on every visit
+- **Changes:**
+  - History folds again each time the page appears, Brain's reopening included. Brain's content outlives its window, so
+    History opened once stayed open on every later visit, a reopened Brain on a shared screen included.
+  - `ClipboardPageLiveDataRulesTests` holds the fold, with a planted offender.
+  - docs/SETTINGS.md says when History folds, and that Pinned Items always show, a pin being the user's own choice;
+    docs/REGRESSIONS.md entry 22's addendum names the fold among the page's hooks.
+
+### 2026-11-11 - Brain's Clipboard page leads with the pinned items and History
+- **Developer label:** Brain redesign plan: Stage 4b, the Clipboard product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 4: Clipboard as a product page built from the clipboard manager's copies, under Agents' live-data contract, its boards from made-up copies only
+- **Changes:**
+  - Brain › Clipboard opens on its product, above "Clipboard settings": Pinned Items with their count, then History,
+    folded until it is opened, with its count. A row is the copy's preview over its kind and date, with Copy, Pin or
+    Unpin, and Delete; a pinned row has no Delete, which only unpins in the panel and the popover.
+  - With nothing copied, an empty state, "No clipboard history", with its one line and no action; while the clipboard
+    manager is off, "Clipboard Manager is off" with Turn On.
+  - The header holds "…", with Clear History and Clear Pinned Items, which replace the Actions buttons and still clear
+    at once, and the page's one verb, Open history panel, which shows the floating clipboard panel on a press.
+  - Live data as on Agents: one copy of the manager's pins, History and status, throttled to 500 ms, assigned only on a
+    change and followed only while Brain is on screen; the page no longer observes the manager whole.
+    `ClipboardPageLiveDataRulesTests` holds each clause against planted offenders, and that a board never touches the
+    manager, whose first touch deletes image files the installed app shares with a debug build.
+  - Current Items, Pinned Items, Actions and Current History left the settings. Monitoring Status is a status line with
+    its dot, so the page has no raw colour or system font left, and both pins for it go.
+  - 7 new strings, each in the catalog's 17 languages. The Russian for "Pin items from history to save them here" was
+    another string's, about the Dynamic Island, and is fixed. Boards `clipboard0`, `clipboard1` and `clipboard3` draw the
+    page from made-up copies; docs/SETTINGS.md and docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-11 - Answer the review of Brain's Timer page
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, and the answers to its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: the reviewer's S1 to S3 and its minors; a press shows at once, VoiceOver hears whose ⋯ it is, and the rule test closes its gaps
+- **Changes:**
+  - Pause, Resume, Stop and a tile's start read the timer again right after the press, so the card never shows the
+    old state for the throttle's half second, where a second click would act against what it showed. An edit of the
+    presets does too, so a paused timer's colour follows its preset.
+  - Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"), not "More" once per tile.
+    The running timer is one group named "Timer", and its length is spoken as a length ("of 25 minutes").
+  - The search entry that landed on the presets' heading is now "Timer Presets", found by "accent colour" too.
+  - The preset sheet keeps a length over 23:59:59, which only an older version could save, unless its steppers move,
+    and saves once even if Return reaches both the name field and Save.
+  - `TimerPageLiveDataRulesTests` now holds the copy assigned only on a change, no other way to the manager (a local
+    name for it, a sink), no change of the timer from any hook (`onChange`, `onDisappear`, `onReceive` included), no
+    clock in the sheet or the settings either, Start timer's off switch on Start timer itself, Pause or Resume
+    following `offersPause`, and the read after each press, each with planted offenders.
+  - Dutch reads "Bewerk…" and "Voorinstelling bewerken", as the catalog's "Edit" does.
+
+### 2026-11-11 - Brain's Timer page leads with the running timer and its presets
+- **Developer label:** Brain redesign plan: Stage 4b, the Timer product page, with the design review's finding 25
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 3: Timer as a product page, the running timer and the presets as start tiles edited in a sheet, under Agents' live-data contract, with no clock of its own
+- **Changes:**
+  - Brain › Timer opens on its product, above "Timer settings": the running timer in the hero's three bands (its
+    state, its name, then the time left, large, over its length, with Pause or Resume and Stop and a bar of how much
+    has run), then the presets as start tiles. A click on a tile starts its preset, as the notch's preset list does,
+    and the running preset's tile wears the selected ring.
+  - With no timer running, an empty state: "No timer running" and one line pointing at the tiles. While the timer is
+    off, "Timer is off" with Turn On stands in place of the timer and the tiles. A timer mirrored from the Clock app
+    shows without buttons, as in the notch: the Clock app pauses and stops it.
+  - The header holds the gear and Start timer, which starts the custom timer at its stored length, as the popover's
+    Start Custom Timer does: on a press only, and off while a timer runs, while the timer is off, or at 0:00.
+  - The presets are edited in a sheet (the design review's finding 25): a tile's ⋯ and its right-click menu hold
+    Edit…, Move Up, Move Down and Delete, Add Preset is the last tile, and Restore Defaults, which asks first, sits in
+    the presets' ⋯. The sheet refuses a blank name and a 0:00 length. The inline editor in the settings, with its mini
+    steppers under small labels, is gone, and its layout pins shrink with it.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock of
+    its own: the time moves with the timer's own one-second tick, so it shows what the notch shows. A press reads the
+    timer as it is then. `TimerPageLiveDataRulesTests` holds each clause against planted offenders, and the page joins
+    the timer surfaces that read `sessionAccent` and offer Resume while paused in overtime.
+  - 9 new strings, each in the catalog's 17 languages, and one theme value, `tileWidth`. Boards `timer0`, `timer1`,
+    `timerOver`, `timerClock`, `timerOff` and `timerPresetSheet` draw the page from fixtures; docs/SETTINGS.md and
+    docs/REGRESSIONS.md (entry 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Security page
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page, and its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: the independent reviewer's S1, S2, S3, M2 and M4
+- **Changes:**
+  - The count strip is gone while to review, high and acknowledged are all zero. "Show acknowledged and snoozed again"
+    shows only while a finding is acknowledged or snoozed, not for an acknowledgement whose finding is gone.
+  - `SecurityPageLiveDataRulesTests` holds each loop to its job: the page's takes a fresh copy, the header's passes
+    the scan flag on. It also allows only the store's press methods and the two subscriptions by name, so a value the
+    store gains later cannot be read past the copy. Each rule has a planted offender.
+  - docs/SETTINGS.md: the settings row's Scan now can turn off up to 500 ms after the header's, and `runScanNow`
+    refuses a second scan; "Live data" names Agents' Security cell where it read as the page; the strip's rule.
+
+### 2026-11-06 - Brain's Security page leads with its findings
+- **Developer label:** Brain redesign plan: Stage 4b, the Security product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 2: Security as a product page built from one throttled copy of the findings store, under Agents' live-data contract, with no work of its own
+- **Changes:**
+  - Brain › Security opens on its product, above "Security settings": a count strip (to review, high and
+    acknowledged, with "Show acknowledged and snoozed again"), the findings in their lazy list, a status row of the
+    newest scan result, Scan this Mac and Policy rules, and Recent analyses while session analysis is on.
+  - With no finding waiting, an empty state in the list's place: "No findings yet" or "No open findings", one line,
+    and the page's verb. While Agent Status is off, one card with Turn On.
+  - The header holds the gear, which goes to the first settings row, then Scan now, off while a scan runs, or Connect
+    ADR while ADR Discovery is not found, which goes to ADR Discovery's row. Both act on a press only, through the
+    settings' own paths.
+  - The page no longer observes the findings store, which republishes on every hook write while a session runs with
+    permission checks off: it holds one copy, followed at most twice a second while Brain is on screen. It starts no
+    scan, ADR check, policy read or analysis of its own. `SecurityPageLiveDataRulesTests` holds each clause against
+    planted offenders.
+  - The settings keep every row, id, search entry and deep link: "High-severity alerts in the notch" heads them as
+    Alerts, and the findings, the newest scan result and Recent analyses moved up.
+  - 5 new strings in the catalog's 17 languages. Boards `security0`, `security1` and `security3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 10 and 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's Usage page
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page, and David's picks on its review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: the independent reviewer's findings; nothing stale on the page, and Refresh holds where the automatic refresh holds
+- **Changes:**
+  - Refresh skips Claude's `/usage` while the notch's Claude card shows a status that holds the automatic refresh (a
+    sign-in to start or finish), read at the press, never followed. The press then runs as the automatic refresh does,
+    and no longer clears that line before you act on it.
+  - A window past its reset or expiry never shows: each card keeps the live ones only, by the rule the notch's bars and
+    the alerts use. The usage store drops them too, but only while it runs.
+  - While Agent Status is off, which stops the usage store, the page shows Agents' "Agent Status is off" with Turn On
+    in place of the cards, and Refresh is off: a refresh could change nothing it shows.
+  - Each Claude organization's windows stay together, its own first. A model's cost with unpriced events reads "$4.80+",
+    as the notch writes it. VoiceOver hears a model's tokens in words. Percentages round half away from zero, as the
+    notch's bars, so 12.5 reads 13.
+  - `UsagePageLiveDataRulesTests` gains the hold, the live filter, the off state, a counting `Text` and the settings
+    file's two refresh calls, each with planted offenders. Board `usageOff` draws the off state.
+  - docs/REGRESSIONS.md entry 8 and docs/SETTINGS.md say what the press really runs (`claude auth status` too, and
+    neither the pace nor the hold flag) and what the rule test checks.
+
+### 2026-11-06 - Brain's Usage page leads with the limits and the models
+- **Developer label:** Brain redesign plan: Stage 4b, the Usage product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4b child 1: Usage as a product page built from the usage store's readings, under Agents' live-data contract, with no read of its own
+- **Changes:**
+  - Brain › Usage opens on its product, above "Usage settings": a card for each provider that is on (Claude, Codex,
+    Cursor), and in it each window as a row, its name over "Resets … · As of …" and the forecast when it says
+    something, with its bar and percentage in a fixed trailing column. Near the limit, as the alerts count it, the bar
+    and the figure turn red. A provider with no reading yet says so in one line.
+  - "Models this week" lists the models each provider ran in Recent chats' rows: the tokens in and out, and the cost
+    only where the provider bills per token. Nothing showed `UsageSnapshot.models` before.
+  - With no provider on, an empty state: "No limits to show", one line, and "Turn on a provider", which goes to the
+    switches below.
+  - The header holds the gear and Refresh. Refresh runs on a press only, through the notch's own paths, unchanged: its
+    Refresh usage, and Claude's `/usage` as the automatic refresh runs it, so a press here never starts a browser
+    sign-in. It is off while a refresh runs or no provider is on.
+  - Live data as on Agents: one subscription throttled to 500 ms, stopped while Brain is off screen, and no clock; the
+    page never reads usage of its own. `UsagePageLiveDataRulesTests` holds each clause against planted offenders.
+  - Antigravity has no card: its quotas are not among the usage store's readings. The notch still shows them.
+  - 7 new strings, each in the catalog's 17 languages. Boards `usage0`, `usage1` and `usage3` draw the page from
+    fixtures; docs/SETTINGS.md and docs/REGRESSIONS.md (entries 8 and 22) gain their lines.
+
+### 2026-11-06 - Answer the review of Brain's consistency pass
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes, and David's picks on their review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the independent reviewer's S1, S2, M2 and M12, and David's picks S3, M1, M4, S4, S5 and M5
+- **Changes:**
+  - Every choice card is a plain button that carries "selected" itself, so the keyboard reaches it and VoiceOver
+    hears which one is chosen; three were tap gestures. The idle animation's delete glyph sits over its card's
+    button, never inside it, and the card's name is no longer selectable text inside a button.
+  - The search suggestions decide whether to scroll from what is known at once: more than seven matches, or a last
+    row not yet measured, scroll in at most 344 pt, so an unmeasured list is never taller. The row measures, cleared
+    when the matches change, only trim the list to whole rows, and a short fade at its foot says more rows sit below.
+  - The secondary ink is a touch darker in light (#66625A), 4.5:1 on the line colour a badge sits on as well as on
+    every surface; the readability rule holds it there, with the old grey as its plant.
+  - Shelf's Full Disk Access callout and the ADR callout take the offer's blue, as Focus's did.
+  - The Lock Screen glass preview's view, unused since the last change, goes with its `glassdesktop` image.
+  - "Clear History" gains the nine languages it lacked.
+  - A rule now allows `.primary` only on the sheets' default actions and on Tasks' New Task, with a planted offender.
+  - docs/SETTINGS.md: the cards as buttons, the suggestions, the callout colours, Lock screen's counts;
+    docs/REGRESSIONS.md entry 22's addendum.
+
+### 2026-11-05 - Brain's pages say each thing one way
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the pages
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 10, 11, 13, 16, 17, 18 and 21 on the pages, and the comments that explained a placement by a lazy Form
+- **Changes:**
+  - Card buttons take the standard style: Appearance's Upload skin and Add icon, an extension's Authorize and
+    Re-authorize, and Agents' Turn On and Install hook. `.primary` stays on sheets' default actions and on Tasks' New
+    Task, the page's one verb until Stage 5 gives it a header.
+  - Every choice card says "selected" with the one ring, and its name in ink: the HUD style's dot, the idle animation's
+    "Selected" pill and the skin's and icon's blue name pills go, with the tinted fill on the download and Bluetooth
+    cards. An idle animation's "Built-in" is the badge.
+  - General's Permissions are rows of their card, their buttons trailing, not cards inside it; onboarding keeps its
+    cards. An extension's expanded details are a bordered card, not a darker one.
+  - A finding's "Details" is a flush quiet button in ink, its chevron after the word.
+  - Slider values move from titles into the readout: HUD's Width, Height, Size, Screen padding and Line width, and
+    General's two custom notch sizes.
+  - Lock screen's Preview and the Actions of Clipboard and Screen Assistant get a title and a caption, their footers
+    moved into the caption; About's two report buttons share one row, each keeping its search landing.
+  - The Focus callout takes the offer's blue. Appearance drops the Lock Screen glass preview, an empty panel; the Lock
+    screen page's Preview shows the real widgets. A board draws Devices' 3D icon from its movie's first frame, since
+    boards draw no video; the app plays the movie as before.
+  - Comments that explained a placement by "a lazy Form" give today's reason (Tasks, Timer, General, HUD and OSD).
+  - Strings: 11 new keys in all 17 languages; 10 keys this change left unused leave the catalog.
+  - Pins follow the counts that moved; docs/SETTINGS.md and docs/REGRESSIONS.md entry 22 gain their lines.
+
+### 2026-11-05 - Brain's shared pieces get one look each
+- **Developer label:** Brain redesign plan: Stage 4, the design review's consistency fixes for the shared components
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3b: the review's findings 4, 11, 12, 14, 19 and 20 where a shared component carries them, and the looks the pages take next
+- **Changes:**
+  - A callout keeps its card as a boundary, the card's colour inside a 1-pt line border instead of a darker slab, and
+    its buttons take the standard style (`settingsCalloutCard`, `SettingsPermissionCallout`).
+  - One badge, `SettingsBadge`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius.
+    "Beta" and "Built-in" use it, and "ALPHA" becomes "Alpha" in the same badge.
+  - One selected look for a choice card, a 2-pt accent ring and the name in ink, medium when chosen
+    (`settingsChoiceRing`, `settingsChoiceLabel`).
+  - A colour swatch carries a white ring inside a hairline, so it never reads as a status dot.
+  - A page's scroll view starts 12 pt under the title, so a scrolled page is never cut against it; at rest a page
+    starts where it did.
+  - The search suggestions show whole rows only, each title in the body's size over two lines at most, its tab under
+    it in the description's.
+  - "Alpha" in all 17 languages; the pins follow the badge, the callout and the page.
+
+### 2026-11-05 - Answer the review of Brain's theme values and Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes, and David's three calls on their review ("Yes, all three")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the independent reviewer's findings; a pin for the hero's off-screen path, flush for quiet buttons only, and an honest hook count
+- **Changes:**
+  - Editors & hooks counts only tools that have a hook. Warp and Claude Desktop have none and counted as hooked, so
+    Cursor missing its hook beside them read "2 of 3 hooked" with nothing installed; it now reads "0 of 1 hooked",
+    and a Mac with only those two reads "2 tools watched".
+  - Each missing hook is offered once: while the empty state offers the first, the cell offers the rest. It hid them
+    all, so a second missing hook was offered nowhere above Editor Hooks.
+  - The hero's figure reads "Tool calls": it counts calls, beside the cell's "tools watched", which counts editors.
+  - `flush` works for a quiet button only, after its fill and its hover, so a filled button never draws outside its
+    frame and the inset left of a flush label still takes clicks. A pin and two plants hold both.
+  - `AgentsPageLiveDataRulesTests` also reads `AgentTurnMetricsView.figureRow`, the hero's off-screen path, for a
+    clock or a follower, and holds the overview to one tool check a visit, each with plants.
+  - docs/SETTINGS.md: a flush button goes under text, never beside it; the empty state's line runs to two lines at
+    most; the count and the offer as above. Strings: "1 tool watched", "%lld tools watched" and "Tool calls" in all
+    17 languages, sorted; "Tools", added two commits ago and now unused, leaves the catalog.
+
+### 2026-11-05 - Brain's Agents hero reads in three bands, and offers the install once
+- **Developer label:** Brain redesign plan: Stage 4, the design review's fixes for the Agents page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 1, 3 and 6, with 9's and 8's Agents call sites; the live-data contract held unchanged
+- **Changes:**
+  - The hero is three bands: its state as the title in a 17-pt card title and its light's colour, with the light at
+    the right; the session as before; and, pinned to the bottom, the run's figures (run time, tools, tokens in · out),
+    each over a small label from the text column, with "Open chat ›" at the right. It is at least 200 pt tall, not
+    240. The whole card stays the one button: "Open chat ›" is a label drawn like a quiet button.
+  - The install offer shows once: in the empty state when that is shown, otherwise in Editors & hooks. Agents' header
+    keeps the gear alone, so Brain checks the tools once a visit, not twice.
+  - Editors & hooks is one status line: "5 tools watched · hooks installed", or "4 of 5 hooked" and then only the tools
+    missing a hook, each with Install. Every hook keeps its icon in Editor Hooks below.
+  - The status cells' headline figures and the empty state's title use the card title; the empty state's line is the
+    body's size. Usage's percentage stands over what it measures, so the narrowest window does not break "5-hour".
+    Security's "Open ›" is a flush quiet button.
+  - `AgentTurnMetricsView` gains a `figures` option for the hero; the notch's column is unchanged.
+  - 7 new strings, each in the catalog's 17 languages.
+  - Boards: `agents1` now has every hook in, so it shows the cell's quiet line; docs/SETTINGS.md and docs/REGRESSIONS.md
+    entry 22 gain their lines.
+
+### 2026-11-05 - Brain's cards share one inset and a card title
+- **Developer label:** Brain redesign plan: Stage 4, the design review's theme values
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 3a: the review's findings 5, 9 and 8 as theme values and a button option
+- **Changes:**
+  - One inset for text inside and beside a card: a section's sides and the hero's padding are 12 pt, so a row, a
+    section's header and a card's title start on one edge. Only the page's title and the settings rule sit at 0.
+  - `cardTitle`, 17 pt semibold Geist, the step between the page's title and a row. "No extensions yet" uses it, with its
+    line in the body's size on the secondary ink.
+  - `SettingsButtonStyle(.quiet, flush: true)` puts a lone quiet button's label on its column, and the fill under the
+    pointer reaches left by the inset. Tasks' back rows use it, their chevron 4 pt from the title.
+  - The design-system board names `cardTitle`; the layout pins move with the button's padding and Extensions' font;
+    docs/SETTINGS.md gains the inset, the card title and flush buttons.
+
+### 2026-11-05 - Answer the review of Brain's Agents page
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — the live-data and CPU reviewer's findings on child 2; the Mac-only questions go to David's checks
+- **Changes:**
+  - Security's cell follows the findings store at most twice a second and redraws only when its summary changes. It
+    observed the whole store, which republishes on every hook write while a session runs with permission checks off,
+    so Agents could redraw up to about 20 times a second.
+  - Opening and closing Brain set `BrainVisibility` themselves rather than wait for AppKit's occlusion change. A late
+    one could keep the live leaves running after a close; a missing one could leave the first open frozen.
+  - The notch checks the tools as its empty state appears, not on every hover-open while an agent works.
+  - `AgentsPageLiveDataRulesTests` also holds the hero and the rows to `drawsLive`, bans a `Task` inside a live
+    `.task`, and pins the flag's one assignment, its two new writers, Security's throttle and the notch's check, each
+    against plants.
+  - docs/SETTINGS.md and docs/REGRESSIONS.md: Security's rate, the new writers, Brain's two tool checks a visit and the
+    token follower's 50 ms catch-up.
+
+### 2026-11-05 - Brain's Agents page leads with your agents
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the product first, then its settings; fixtures on every board; the live-data contract held clause by clause
+- **Changes:**
+  - Brain › Agents opens on its agents. A hero titled by its state ("Needs you", "Working", "Finished") shows the
+    session the notch ranks first, with its chat, its state in words and colour, its run's metrics and its light.
+    Recent chats follow as rows, and a status row of three cells: Editors & hooks (the tools on this Mac, with Install
+    for each one missing its hook), Usage (readings near their limit, each with its reset and when it was read) and
+    Security (only while findings wait for review). A click on the hero or a row opens its chat.
+  - With no session the hero's place says "No agents running", one line on how to start, and offers the first
+    missing hook; with Agent Status off it says so, with Turn On. The header has a gear to the settings and the same
+    install offer.
+  - `SettingsProductPage` lays a product page out: the product in a column up to 1,200 pt, then a full-width "Agent
+    settings" rule and the settings in their 720-pt column. Every row keeps its id, search entry and deep link.
+    Detected Editors became the Editors & hooks cell; Editor Hooks stays a section, where a hook can be removed. The
+    terminal-tab and Smart caffeinate descriptions are cut to about eight words.
+  - Live data: the sessions come through one subscription throttled to 500 ms, only while Brain is on screen, and
+    the page reads them once as it opens. While Brain is off screen the metrics and the status row give way to a
+    static copy, so neither the token follower, nor a 1 Hz clock, nor the usage and findings stores run for it. A
+    click resolves its target in the action, never while drawing.
+  - 19 new strings, each in the catalog's 17 languages.
+  - Boards: `agents0`, `agents1` and `agents3` at the window's first size, `shellWide` on Agents, `shellWidest` at
+    2,560 pt and `shellDeepLinkAgents`, all from fixtures: no session, tool, reading or finding of this Mac.
+  - `AgentsPageLiveDataRulesTests` holds each clause of the contract, the click, the tool checks and the product
+    page's frame against planted offenders; `BrainShellRulesTests` lets `SettingsForm` take actions.
+  - docs/SETTINGS.md gains "Product pages" and "Live data"; docs/REGRESSIONS.md entry 22 and its Danger zones row
+    gain their dated lines.
+
+### 2026-11-05 - Brain's live views stop while it is off screen
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the visibility signal the live-data contract stands on
+- **Changes:**
+  - `BrainVisibility` says whether any of Brain's window is on screen. `SettingsWindowController` sets it from the
+    window's occlusion state, which goes false when Brain is closed, minimised, hidden, fully covered or in another
+    Space, where a full-screen Brain keeps `isVisible` true. It starts false, so nothing live runs before the first
+    open.
+  - The Agents style preview follows only the light, and only while Brain is on screen. It observed the whole agent
+    monitor, Brain open or not, so every hook write re-ran it. Nothing under Settings observes the monitor now, and
+    `ClosedNotchObservationTests` drops its entry.
+
+### 2026-11-05 - One answer to which agent tools are on this Mac
+- **Developer label:** Brain redesign plan: Stage 4, the Agents product page
+- **Agent label:** Claude Code (Opus 5.5) — Stage 4 child 2: the tool detector Brain and the notch share
+- **Changes:**
+  - `AgentToolDetector` says which of Cursor, Claude Code, Codex, Antigravity, Warp and Claude Desktop have run on
+    this Mac, by file checks and Launch Services, never Warp's container. `AgentHookLayout.toolIsPresent` answers yes
+    for five of them whatever is installed, so it could not say which hook to offer.
+  - The notch's empty state asks it once per visit, from `onAppear`, where it checked six paths on every render.
+  - `FirstLaunchRulesTests` reads the detector for the Warp gate.
+
+### 2026-11-05 - Answer the review of Brain's pages
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — the reviewer's three confirmed findings on child 1; the Mac-only questions go to David's checks
+- **Changes:**
+  - The first open after launch no longer focuses a page's first text field. It had nothing to put back, so ordering
+    in focused that field with its text selected, and with every row built it could be one deep in Agents that writes
+    straight through, such as the ntfy topic or a Pushover key. `SettingsWindowController` now records the page just
+    before the first order-in, nothing focused, and puts it back as it does on a reopening.
+  - The task rows (All tasks, Local tasks, a source, a project), the Archive and Security's findings sit in a
+    `LazyVStack` inside their page, so a long list is no longer built whole as the page opens. No search or deep link
+    lands on one of their rows, and going back to a task still scrolls to it by the list's own id.
+  - VoiceOver: only `SettingsSectionHeader` is a heading, so a Beta badge or a count beside it no longer reads as
+    one. A section and a permission callout are each one group, so Shelf's two "Open Privacy & Security" buttons are
+    heard with their callouts.
+  - `SettingsAnimationRulesTests` pins the first open beside the reopening, with five plants;
+    `SettingsDesignSystemRulesTests` moves the heading's pin to `SettingsSectionHeader` and holds the section's group.
+  - docs/SETTINGS.md names the three lazy lists and why; docs/REGRESSIONS.md entry 22 gains its dated line.
+
+### 2026-11-05 - Brain's pages leave Form
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — a scripted edit, 31 `Form`s and 145 `Section`s by script and one by hand; every page scrolls across the panel; a bare `Form` or `Section` now fails a test
+- **Changes:**
+  - Every `Form` under Settings is a `SettingsPage` and every `Section` a `SettingsSection`, Agents included. A one-off
+    script changed one word per site and refused what it could not rewrite: Media's
+    `Section(header: Text("Lock Screen Media"))`, done by hand, now has a `SettingsSectionHeader`.
+  - Every page scrolls across the whole panel, so its scrollbar sits at the panel's edge. `SettingsForm` measures the
+    panel and hands the inset to the page and its large title; `formMargin`, the `Form`'s own margin, is gone. At the
+    default window size the cards are 720 pt wide, the cap, where the `Form` left 680.
+  - Sections are soft cards with no row dividers. A page builds every row as it appears, so a search can scroll to any
+    of them, and a row's `onAppear` runs as the page opens, not as the row scrolls into view.
+  - A titled `SettingsActionRow` takes the root's labelled row, so its buttons stay trailing: outside a `Form` the
+    automatic style set them straight after the title.
+  - The boards' `Form`s and `Section`s are pages and sections too, and every page board renders at the narrowest panel,
+    612 pt.
+  - `SettingsLayoutRulesTests` bans `Form` and `Section` under Settings, `SwiftUI.Form` and `Section(header:)`
+    included, with plants, a floor, two real pages put back and an empty pin table. `BrainShellRulesTests` holds the
+    page's column, capped and leading inside one scroll view, and the inset's one measurement; the boards' pins follow
+    the new width.
+  - docs/SETTINGS.md gains "Pages and sections" and updates the component table, the window, the boards and the
+    section rules. docs/REGRESSIONS.md entry 22 notes that a page builds every row as it appears.
+
+### 2026-11-05 - Brain gets its own page and section
+- **Developer label:** Brain redesign plan: Stage 4, pages
+- **Agent label:** Claude Code (Opus 5.5) — `SettingsPage` and `SettingsSection`, called as `Form` and `Section` are, so the next change renames one word per site
+- **Changes:**
+  - `SettingsPage`: one scroll view across the panel, its sections in one plain `VStack` column, capped at
+    `pageMaxWidth` and started `settingsPageInset` from the panel's leading edge. Not lazy: a search scrolls to a
+    row's id, and a lazy stack cannot scroll to a row it has not built.
+  - `SettingsSection`: the rows in a soft card, apart by space and never by a divider; the header above the card as a
+    heading for VoiceOver and the footer under it in the secondary ink, both in line with the rows' text. `header:`
+    and `footer:` are optional, as on `Section`.
+  - `SettingsPageInsetKey`: the inset a page and its title start at, `pageInset` unless the window says otherwise.
+  - Theme tokens "Pages and sections": `sectionGap`, `sectionPadding`, `sectionRowGap`, `sectionLabelGap` and
+    `sectionRadius`.
+  - `SettingsDesignSystemRulesTests` holds the section's card, spacing, header and footer, and keeps hooks, animators
+    and laziness out of both views. `BrainShellRulesTests` keeps page knowledge out of them, and
+    `SettingsLayoutRulesTests` pins their padding.
 
 ### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
 - **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
@@ -57,6 +841,83 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - The hand-built value-control ban also catches an explicit generic argument or a space before the parenthesis,
     with two new plants; a test pins the range `SettingsDateField` hands its two pickers.
   - `docs/SETTINGS.md`: the animation editor's colour count is 7, and the total 126.
+
+### 2026-11-05 - Answer the review of the notch's tag chips and the Tags sheet
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch fixes, and David's picks on their review ("Yes, take them")
+- **Agent label:** Claude Code (Opus 5.5) — Stage 5 child 3: the independent reviewer's findings, and a tinted "+N" while it hides a searched tag
+- **Changes:**
+  - While a `#tag` search found a row's first tag and only "+N" fits, the pill is tinted in the accent, so the find
+    still shows. `TaskSearch.foundTags` says which tags the search found; `chipTags` still puts them first.
+  - VoiceOver hears a tag pill's colour, as it heard the swatch's.
+  - Without VoiceOver a right-click menu has no key, so keyboard-only users colour tags in All tasks › Tag colours;
+    docs/SETTINGS.md says so, and names the fifth pinned picker.
+  - Pins, each with a plant: the shortened chip truncates, any swatch beside a pill is the colour twice, the row says
+    when the search found its first tag, and a lone "+N" hiding it is tinted. Three comments that said a tag takes
+    nothing from the caption now say "+N" may.
+
+### 2026-11-05 - The notch rail's caption wins over its tags, and a tag shows its colour once
+- **Developer label:** Brain redesign plan: Stage 5, the design review's notch caption and tag colour ("one chip when it fits, +N always")
+- **Agent label:** Claude Code (Opus 5.5) — the rail's caption keeps its time and overtime ahead of the tag chips; the Tags sheet's colour swatch goes, its pick moving to the pill's right-click menu
+- **Changes:**
+  - Rail rows: the caption wins (`TaskTagChips`, the first layout that fits). The whole caption, then the first tag
+    whole, or shortened in the middle to no less than 60 pt (`sideTaskChipMinWidth`), and "+N" for the rest; otherwise
+    one "+N" for every tag, the caption taking the room first (`layoutPriority`). A `#tag` search still puts its tag
+    first. The rule that a tag of up to 12 characters showed whole while the caption gave way is gone.
+  - The caption's overtime (" · 15m over", in orange) is a text of its own at its full width: on a short line the time
+    before it gives way. At the narrowest notch "Fix the flaky timer test" reads "45m… · 15m over +2" (was
+    "45m… #urgent +1"), and "ds-vendors #4264" shows whole with "+1" (was "ds-vendors #…" beside "#backend").
+  - The Tags sheet: the colour swatch before each pill is gone, so the pill's wash is the tag's one colour. Colour, a
+    ticked submenu in the pill's right-click menu, picks it from the presets, staged until Done as the swatch's pick was.
+  - "Colour" is a new catalog key, in the catalog's 17 other languages.
+  - Tests: `NotchTagFilterRulesTests` pins the caption-first layouts and the whole overtime, `TaskColorRulesTests` the
+    pill's one colour and its Colour picker, each scanner with planted offenders; `SettingsLayoutRulesTests` counts the one
+    native picker, which `TaskColorRulesTests` holds inside the right-click menu.
+  - docs/SETTINGS.md (the tag chip's wash, the native Colour submenu) and docs/REGRESSIONS.md (entry 22, a dated line)
+    follow.
+
+### 2026-11-05 - The notch's task rail shows tags, and filters by one
+- **Developer label:** Brain redesign plan: Stage 5, tags in the notch
+- **Agent label:** Claude Code (Opus 5.5) — the notch's chips, Tag submenu and tag filter, with their rules; the Brain Tasks page waits for David's decision
+- **Changes:**
+  - Rail rows show the first tag and "+N" beside the caption (`TaskTagChips`, on `SideChip`), the tag a `#tag` search
+    finds first (`TaskSearch.chipTags`). A short tag shows whole and the caption gives way, sliding into view on hover;
+    a tag over 12 characters shares the line and shortens in the middle.
+  - The caption line is one chip tall in every row (`sideTaskCaptionHeight`, 16 pt), so titles line up with or without
+    tags; the row stays 36 pt.
+  - `TaskSourceMenu` gets a Tag submenu: All, then each tag as "#docs", ticked as picked. Its tags are passed in
+    (`TaskFacets.filterTags` of what Show in notch lists), so the menu stays free of `TasksManager`. A picked tag no task
+    has any more still shows.
+  - New key `tasksNotchTagFilter`, beside Show in notch: `TaskSourcePreferences` follows it, `isNarrowing` counts it (the
+    "Filtered" line, the filled glyph) and `showAll()` clears it. The rail and the popover's Up next list through it
+    (`TaskOrdering.viewFilter(hidden:tag:alwaysListed:)`), and the timed task always shows.
+  - Adding a task in the notch clears a tag filter that would hide it (`TaskOrdering.tagFilter(_:afterAdding:)`), in
+    `TasksManager.showInNotch` (was `showLocalTasks`). The task form and a typed start called it already; the popover's
+    Add a task now calls it instead of its own Local line. Brain's New Task leaves the notch's filters alone.
+  - The typed search under the timer bar and a new task's title ignores the tag filter, so a task it hides is still
+    found by its name and never made twice.
+  - "Tag" is a new catalog key, in the catalog's 17 other languages; the submenu's "All" is the existing key.
+  - Tests: `TaskSourceFilterTests` (the filter, the timed task, the add rule), `NotchTagFilterRulesTests` (the wiring,
+    each scanner with planted offenders), `TimerComposerMetricsTests` (a chip measured against the 36 pt row).
+    `TimerSideColumnRulesTests`, `TimerTaskSessionRulesTests` and `TaskFormWiringTests` follow the changed calls.
+  - New board `notchTasks`: the rail's Tasks page at the narrowest notch, with the fixture tasks; one of them now has two
+    tags, for "+1".
+
+### 2026-11-05 - A #tag search finds the whole tag, and labels count as tags
+- **Developer label:** Brain redesign plan: Stage 5, task logic
+- **Agent label:** Claude Code (Opus 5.5) — pure logic and tests for the Tasks page and the notch; no view changes
+- **Changes:**
+  - `TaskFacets.displayTags(of:)`: a task's own tags in the user's order, then its labels in the server's, a scoped
+    label by its value, once each ignoring case.
+  - `TaskFacets.filterTags(in:)`: what the Tag filter will offer, own tags and labels alike, the first spelling of
+    each, sorted ignoring case. `tags(in:)` stays own tags only, for tag suggestions.
+  - The Tag filter (`TaskFilter.tag`) finds a label as it finds an own tag, so every choice `filterTags` offers
+    finds its tasks. All tasks' menu still offers own tags until the Tasks page moves to `filterTags`.
+  - `TaskSearch`: a `#word` finds a tag or label that is the word as a whole, or else the word with its `#`
+    anywhere. `#work` no longer finds "Homework" or "workshop", and `#4264` still finds "group/app#4264". Plain
+    words and a `#` alone search as before.
+  - `TaskSearch.chipTags(of:query:)`: `displayTags` with the tags the search finds first, so a row's one chip is the
+    tag searched for.
+  - `TaskFacetsTests` and `TaskSearchTests` cover each rule, the `#work` and `#4264` cases with their neighbours.
 
 ### 2026-11-05 - Answer the keyboard and VoiceOver review of Brain's sheets and menus
 - **Developer label:** "Keep it, with fixes"

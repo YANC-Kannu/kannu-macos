@@ -43,11 +43,11 @@ struct WelcomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                         .padding(.bottom, 8)
                     Text("കണ്ണ്")
-                        .font(.system(.largeTitle, design: .default))
-                        .fontWeight(.semibold)
+                        .font(SettingsTheme.pageTitle)
+                        .foregroundStyle(SettingsTheme.ink)
                     Text("Kannu")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+                        .font(SettingsTheme.cardTitle)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
                         .padding(.bottom, 30)
                     if false {
                         Text("PRO")
@@ -70,11 +70,9 @@ struct WelcomeView: View {
                         onGetStarted?()
                     } label: {
                         Text("Get started")
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 6)
                     }
-                    .buttonStyle(BorderedProminentButtonStyle())
-                    
+                    .buttonStyle(SettingsButtonStyle(.primary))
+
                     // Privacy Policy Link
                     Button(action: {
                         if let url = URL(string: "https://kannu.app/legal/privacy-policy/") {
@@ -82,21 +80,16 @@ struct WelcomeView: View {
                         }
                     }) {
                         Text("Privacy Policy")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
                     .padding(.top, 8)
                 }
                 .padding(.top)
             }
         }
+        // The window's panel shows through: `OnboardingView` paints it under every step.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .ignoresSafeArea()
-        .background {
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        }
     }
 }
 

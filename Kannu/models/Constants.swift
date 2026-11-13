@@ -357,7 +357,7 @@ enum ClipboardDisplayMode: String, CaseIterable, Codable, Defaults.Serializable 
         switch self {
         case .popover: return String(localized: "Popover")
         case .panel: return String(localized: "Panel")
-        case .separateTab: return String(localized: "Separate Tab")
+        case .separateTab: return String(localized: "Separate tab")
         }
     }
     
@@ -412,13 +412,13 @@ enum ADRHighAlertMode: String, CaseIterable, Defaults.Serializable, Identifiable
     var description: String {
         switch self {
         case .untilAcknowledged:
-            return String(localized: "A shield pill stays beside the traffic light until you acknowledge the finding. Click it to open the panel.")
+            return String(localized: "A shield pill stays until you acknowledge the finding.")
         case .fiveSeconds:
-            return String(localized: "The pill shows for five seconds when a finding is new, then only a small shield remains until acknowledged.")
+            return String(localized: "A five-second pill, then a small shield.")
         case .glyphOnly:
             return String(localized: "Only a small shield beside the traffic light; no pill.")
         case .off:
-            return String(localized: "Nothing in the closed notch. Findings still appear in the panel and in Brain.")
+            return String(localized: "Nothing in the closed notch; findings stay in Brain.")
         }
     }
 
@@ -443,8 +443,8 @@ enum AgentStatusNotificationProvider: String, CaseIterable, Codable, Defaults.Se
 
     var description: String {
         switch self {
-        case .ntfy: return String(localized: "Send push notifications via ntfy.sh (iPhone, Apple Watch, Android)")
-        case .pushover: return String(localized: "Send push notifications via Pushover (iPhone and Apple Watch)")
+        case .ntfy: return String(localized: "Push via ntfy.sh to iPhone, Watch or Android.")
+        case .pushover: return String(localized: "Push via Pushover to iPhone or Watch.")
         case .webhook: return String(localized: "POST JSON to a custom URL for your own integrations")
         }
     }
@@ -656,9 +656,9 @@ enum MusicSkipBehavior: String, CaseIterable, Identifiable, Defaults.Serializabl
     var displayName: String {
         switch self {
         case .track:
-            return String(localized: "Track Skip")
+            return String(localized: "Track skip")
         case .tenSecond:
-            return String(localized: "±10 Seconds")
+            return String(localized: "±10 seconds")
         }
     }
 
@@ -681,7 +681,7 @@ enum TimerIconColorMode: String, CaseIterable, Identifiable, Defaults.Serializab
     var displayName: String {
         switch self {
         case .adaptive: return String(localized:"Adaptive gradient")
-        case .solid: return String(localized:"Solid colour")
+        case .solid: return String(localized:"Solid color")
         }
     }
 }
@@ -943,6 +943,8 @@ extension Defaults.Keys {
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
     static let brainAppearance = Key<BrainAppearance>("brainAppearance", default: .system)
+    /// View › Hide Sidebar: false takes Brain's sidebar away, and its search with it.
+    static let brainShowsSidebar = Key<Bool>("brainShowsSidebar", default: true)
     /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
     /// while this is off, because its menu is the way back.
     static let showNotch = Key<Bool>("showNotch", default: true)
@@ -1656,6 +1658,10 @@ extension Defaults.Keys {
     static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
     static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
     static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    /// The notch's Tag filter, beside Show in notch in the same menu (`TaskSourceMenu`):
+    /// `TaskFacets.anyTag` (""), or the one tag, own or a label, the notch's task lists narrow to.
+    /// Brain's Task list keeps its own (`tasksListTagFilter`).
+    static let tasksNotchTagFilter = Key<String>("tasksNotchTagFilter", default: TaskFacets.anyTag)
     // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
     // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
     static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)

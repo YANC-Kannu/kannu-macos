@@ -33,8 +33,8 @@ struct Downloads: View {
     }
 
     var body: some View {
-        SwiftUI.Form {
-            Section {
+        SettingsPage {
+            SettingsSection {
                 Defaults.Toggle(key: .enableDownloadListener) {
                     Text("Enable download detection")
                 }
@@ -63,7 +63,7 @@ struct Downloads: View {
                 }
                 .settingsHighlight(id: highlightID("Download indicator style"))
             } header: {
-                SettingsSectionHeader("Download Detection")
+                SettingsSectionHeader("Download detection")
             } footer: {
                 SettingsFooter("Monitor your Downloads folder for Chromium-style downloads (.crdownload files) and show a live activity in the Dynamic Island while downloads are in progress.")
             }
@@ -80,59 +80,62 @@ struct Downloads: View {
         @State private var isHovering = false
 
         var body: some View {
-            VStack(spacing: 8) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(backgroundColor)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(borderColor, lineWidth: isSelected ? 2 : 1)
-                        )
-
-                    if style == .progress {
-                        ProgressView()
-                            .progressViewStyle(.linear)
-                            .tint(.accentColor)
-                            .frame(width: 40)
-                    } else {
-                        SpinningCircleDownloadView()
-                    }
-                }
-                .frame(width: 80, height: 60)
-                .onHover { hovering in
-                    if !disabled {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isHovering = hovering
-                        }
-                    }
-                }
-
-                Text(style.rawValue)
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(width: 100)
-                    .foregroundStyle(disabled ? .secondary : .primary)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
+            // A button, so the keyboard reaches the card and VoiceOver hears which one is selected and, while detection
+            // is off, that it is unavailable. Disabled, it does nothing, as the click did; `.plain` dims it by half, as
+            // the card's own opacity did, so the card no longer adds one.
+            Button {
                 if !disabled {
                     action()
                 }
+            } label: {
+                VStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(backgroundColor)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(borderColor, lineWidth: 1)
+                            )
+                            .settingsChoiceRing(RoundedRectangle(cornerRadius: 12), isSelected: isSelected)
+
+                        if style == .progress {
+                            ProgressView()
+                                .progressViewStyle(.linear)
+                                .tint(.accentColor)
+                                .frame(width: 40)
+                        } else {
+                            SpinningCircleDownloadView()
+                        }
+                    }
+                    .frame(width: 80, height: 60)
+                    .onHover { hovering in
+                        if !disabled {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isHovering = hovering
+                            }
+                        }
+                    }
+
+                    Text(style.rawValue)
+                        .settingsChoiceLabel(isSelected: isSelected)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 100)
+                }
+                .contentShape(Rectangle())
             }
-            .opacity(disabled ? 0.5 : 1.0)
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .disabled(disabled)
         }
 
         private var backgroundColor: Color {
             if disabled { return Color(nsColor: .controlBackgroundColor) }
-            if isSelected { return Color.accentColor.opacity(0.1) }
             if isHovering { return Color.primary.opacity(0.05) }
             return Color(nsColor: .controlBackgroundColor)
         }
 
         private var borderColor: Color {
-            if isSelected { return Color.accentColor }
             if isHovering { return Color.primary.opacity(0.1) }
             return Color.clear
         }

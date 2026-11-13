@@ -41,89 +41,95 @@ struct MusicControllerSelectionView: View {
     @State private var selectedMediaController: MediaControllerType = Defaults[.mediaController]
     
     var body: some View {
-        VStack(spacing: 20) {
-            Text("Choose a Music Source")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding(.top, 24)
+        // The scroll view spans the window, so its bar sits at the window's edge; its cards keep the page's inset.
+        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                Text("Choose a Music Source")
+                    .font(SettingsTheme.pageTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
 
-            Text("Select the music source you want to use. You can change this later in Brain.")
-                .multilineTextAlignment(.center)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                Text("Select the music source you want to use. You can change this later in Brain.")
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .padding(.horizontal, SettingsTheme.pageInset)
 
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: SettingsTheme.listRowGap) {
                     ForEach(availableMediaControllers) { controller in
                         ControllerOptionView(
                             controller: controller,
-                            isSelected: self.selectedMediaController == controller
+                            isSelected: self.selectedMediaController == controller,
+                            onSelect: { self.selectedMediaController = controller }
                         )
-                        .onTapGesture {
-                            self.selectedMediaController = controller
-                        }
                     }
                 }
-                .padding()
+                .padding(.horizontal, SettingsTheme.pageInset)
             }
-
-            Spacer()
 
             Button("Continue", action: {
                 onContinue(selectedMediaController)
             })
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding(.bottom, 24)
+            .buttonStyle(SettingsButtonStyle(.primary))
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, SettingsTheme.pageInset)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        )
+        .padding(.vertical, SettingsTheme.sectionGap)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
+/// A source as a choice card (docs/SETTINGS.md, "Choices"): a plain button, so the keyboard reaches it and VoiceOver
+/// hears which one is selected.
 struct ControllerOptionView: View {
     let controller: MediaControllerType
     let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var gitHubURL: URL? {
+        controller == .youtubeMusic ? URL(string: "https://github.com/th-ch/youtube-music") : nil
+    }
 
     var body: some View {
-        HStack(spacing: 16) {
-            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .font(.title2)
-                .foregroundColor(isSelected ? .accentColor : .secondary.opacity(0.5))
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isSelected)
-
-            VStack(alignment: .leading, spacing: 4) {
+        let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
+        Button(action: onSelect) {
+            // A label inside the card's button, so it stays unselectable: selectable text swallows the click.
+            VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
                 Text(controller.rawValue)
-                    .font(.headline)
-                    .fontWeight(.semibold)
+                    .settingsChoiceLabel(isSelected: isSelected)
 
                 Text(controller.description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                if controller == .youtubeMusic, let url = URL(string: "https://github.com/th-ch/youtube-music") {
-                    Link("View on GitHub: th-ch/youtube-music", destination: url)
-                        .font(.subheadline)
-                        .padding(.top, 2)
+                    .font(SettingsTheme.description)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if gitHubURL != nil {
+                    // Room for the link, which sits over the card, never inside its button.
+                    Text("View on GitHub: th-ch/youtube-music")
+                        .font(SettingsTheme.description)
+                        .hidden()
                 }
             }
-            
-            Spacer()
+            .padding(SettingsMetrics.cardPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SettingsTheme.card, in: shape)
+            .settingsChoiceRing(shape, isSelected: isSelected)
+            .contentShape(shape)
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(isSelected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
-        )
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .overlay(alignment: .bottomLeading) {
+            if let gitHubURL {
+                Link("View on GitHub: th-ch/youtube-music", destination: gitHubURL)
+                    .font(SettingsTheme.description)
+                    .buttonStyle(.link)
+                    .padding(SettingsMetrics.cardPadding)
+            }
+        }
     }
 }
 

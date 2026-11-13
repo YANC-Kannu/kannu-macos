@@ -55,7 +55,7 @@ struct HUD: View {
     /// this style's Accessibility side effects).
     var body: some View {
         if !hasAccessibilityPermission && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: "Without Accessibility permission macOS handles the volume and brightness keys itself and shows its own HUD, so Kannu hides its own to avoid two HUDs stacking. Granting it lets Kannu replace them.",
                     requestAction: { accessibilityPermission.requestAuthorizationPrompt() },
@@ -69,12 +69,12 @@ struct HUD: View {
 
 
         if enableSystemHUD && !Defaults[.enableCustomOSD] && (hasAccessibilityPermission || enableThirdPartyDDCIntegration) {
-            Section {
+            SettingsSection {
                 Toggle("Volume HUD", isOn: $enableVolumeHUD)
                 Toggle("Brightness HUD", isOn: $enableBrightnessHUD)
-                SettingsRow("Keyboard Backlight HUD", description: enableThirdPartyDDCIntegration
-                            ? Text("Disabled while external display integration is active. Brightness keys are handled by the external app.") : nil) {
-                    Toggle("Keyboard Backlight HUD", isOn: $enableKeyboardBacklightHUD)
+                SettingsRow("Keyboard backlight HUD", description: enableThirdPartyDDCIntegration
+                            ? Text("Disabled while an external display app handles brightness.") : nil) {
+                    Toggle("Keyboard backlight HUD", isOn: $enableKeyboardBacklightHUD)
                 }
                 .disabled(enableThirdPartyDDCIntegration)
             } header: {
@@ -84,8 +84,8 @@ struct HUD: View {
             }
         }
 
-        Section {
-            SettingsRow("Play feedback when volume is changed", description: "Plays the supplied feedback clip whenever you press the hardware volume keys.") {
+        SettingsSection {
+            SettingsRow("Play feedback when volume is changed", description: "Plays a feedback sound on volume key presses.") {
                 Defaults.Toggle(key: .playVolumeChangeFeedback) {
                     Text("Play feedback when volume is changed")
                 }
@@ -97,7 +97,7 @@ struct HUD: View {
             SettingsFooter("Requires Accessibility permission so Dynamic Island can intercept the hardware volume keys.")
         }
 
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .useColorCodedVolumeDisplay) {
                 Text("Color-coded volume display")
             }
@@ -116,7 +116,7 @@ struct HUD: View {
             }
             .settingsHighlight(id: highlightID("Show percentages beside progress bars"))
         } header: {
-            SettingsSectionHeader("Dynamic Island Progress Bars")
+            SettingsSectionHeader("Dynamic Island progress bars")
         } footer: {
             if colorCodingDisabled {
                 SettingsFooter("Color-coded fills and smooth gradients are unavailable in Segmented mode. Switch to Hierarchical or Gradient to adjust these options.")
@@ -127,7 +127,7 @@ struct HUD: View {
             }
         }
 
-        Section {
+        SettingsSection {
             SettingsRow("HUD style") {
                 SettingsSelect("HUD style", selection: $inlineHUD, choices: [
                     false: String(localized: "Default"),

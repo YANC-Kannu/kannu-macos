@@ -75,7 +75,7 @@ struct CustomOSDSettings: View {
     /// style's Accessibility and hide-on-disable side effects, and the macOS 26 material fallback).
     var body: some View {
         if !hasAccessibilityPermission && !enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 SettingsPermissionCallout(
                     message: "Accessibility permission is needed to intercept system controls for the Custom OSD.",
                     requestAction: { accessibilityPermission.requestAuthorizationPrompt() },
@@ -87,14 +87,14 @@ struct CustomOSDSettings: View {
         }
 
         if hasAccessibilityPermission || enableThirdPartyDDCIntegration {
-            Section {
+            SettingsSection {
                 Toggle("Volume OSD", isOn: $enableOSDVolume)
                     .settingsHighlight(id: highlightID("Volume OSD"))
                 Toggle("Brightness OSD", isOn: $enableOSDBrightness)
                     .settingsHighlight(id: highlightID("Brightness OSD"))
-                SettingsRow("Keyboard Backlight OSD", description: enableThirdPartyDDCIntegration
-                            ? Text("Disabled while external display integration is active. Brightness keys are handled by the external app.") : nil) {
-                    Toggle("Keyboard Backlight OSD", isOn: $enableOSDKeyboardBacklight)
+                SettingsRow("Keyboard backlight OSD", description: enableThirdPartyDDCIntegration
+                            ? Text("Disabled while an external display app handles brightness.") : nil) {
+                    Toggle("Keyboard backlight OSD", isOn: $enableOSDKeyboardBacklight)
                 }
                 .settingsHighlight(id: highlightID("Keyboard Backlight OSD"))
                 .disabled(enableThirdPartyDDCIntegration)
@@ -104,7 +104,7 @@ struct CustomOSDSettings: View {
                 SettingsFooter("Choose which system controls should display custom OSD windows.")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow("Material") {
                     SettingsSelect("Material", selection: $osdMaterial,
                                    options: availableOSDMaterials, optionTitle: \.rawValue)
@@ -132,8 +132,8 @@ struct CustomOSDSettings: View {
                     }
                 }
 
-                SettingsRow("Icon & Progress Color") {
-                    SettingsSelect("Icon & Progress Color", selection: $osdIconColorStyle,
+                SettingsRow("Icon & progress color") {
+                    SettingsSelect("Icon & progress color", selection: $osdIconColorStyle,
                                    options: OSDIconColorStyle.allCases, optionTitle: \.rawValue)
                 }
                 .settingsHighlight(id: highlightID("Icon & Progress Color"))
@@ -144,7 +144,6 @@ struct CustomOSDSettings: View {
                 SettingsSectionHeader("Appearance")
             } footer: {
                 VStack(alignment: .leading, spacing: 2) {
-                    SettingsFooter("Material Options:")
                     SettingsFooter("• Frosted Glass: Translucent blur effect")
                     SettingsFooter("• Liquid Glass: Modern glass effect (macOS 26+)")
                     SettingsFooter("• Solid Dark/Light/Auto: Opaque backgrounds")
@@ -152,11 +151,11 @@ struct CustomOSDSettings: View {
                 }
             }
 
-            Section {
+            SettingsSection {
                 HStack {
                     Spacer()
                     VStack(spacing: 16) {
-                        Text("Live Preview")
+                        Text("Live preview")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
@@ -185,7 +184,7 @@ struct CustomOSDSettings: View {
                             
                         SettingsSlider(value: $previewValue, in: 0...1,
                                        valueDescription: Text(Double(previewValue), format: .percent.precision(.fractionLength(0)))) {
-                            Text("Live Preview")
+                            Text("Live preview")
                         }
                             .frame(width: 160)
                     }
