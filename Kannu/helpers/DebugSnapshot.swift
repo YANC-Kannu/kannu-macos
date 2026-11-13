@@ -497,6 +497,27 @@ enum DebugSnapshots {
             }
         }
         LaunchPermissionManager.snapshotStatuses = nil
+        // What's New as its window hosts it, from a fixture: the shipped copy, read from the catalog's compiled strings.
+        // `whatsNew` is English, in light and dark. `whatsNewLanguages`, only when named, is every other language in
+        // light, right to left where the language is, so each translation is seen to fit. Only the content view: a board
+        // never builds the window, and never opens it.
+        if request.tabs == nil || request.tabs?.contains("whatsNew") == true {
+            for dark in [false, true] {
+                await render(AnyView(WhatsNewView(content: DebugSnapshotFixtures.whatsNew(language: "en"), onContinue: {})),
+                             name: "whatsNew" + (dark ? "-dark" : "-light"), dark: dark, width: WhatsNewView.width,
+                             into: request.directory)
+            }
+        }
+        if request.tabs?.contains("whatsNewLanguages") == true {
+            for language in DebugSnapshotFixtures.whatsNewLanguages {
+                let direction: LayoutDirection = Locale.Language(identifier: language).characterDirection == .rightToLeft
+                    ? .rightToLeft : .leftToRight
+                let view = WhatsNewView(content: DebugSnapshotFixtures.whatsNew(language: language), onContinue: {})
+                    .environment(\.layoutDirection, direction)
+                await render(AnyView(view), name: "whatsNew-\(language)-light", dark: false, width: WhatsNewView.width,
+                             into: request.directory)
+            }
+        }
         // Last, so SwiftUI has long built the menu bar.
         writeMenuReport(into: request.directory)
     }
@@ -1126,6 +1147,19 @@ enum DebugSnapshots {
 /// Findings for the snapshot board only — never ingested into the store, whose ingest prunes the
 /// shared acknowledgements.
 enum DebugSnapshotFixtures {
+    /// The What's New boards' content: the shipped copy (`WhatsNewContent.kannu2`), from `language`'s compiled strings
+    /// in the app's bundle, so a board shows what the window shows in that language whatever the Mac's own is.
+    static func whatsNew(language: String) -> WhatsNewContent {
+        guard let path = Bundle.main.path(forResource: language, ofType: "lproj"), let bundle = Bundle(path: path) else {
+            return .kannu2()
+        }
+        return .kannu2(bundle: bundle)
+    }
+
+    /// Every language the catalog ships but English, which the `whatsNew` board draws.
+    static let whatsNewLanguages = ["ar", "cs", "de", "en-GB", "es", "fr", "hu", "it", "ko", "nl", "pl", "pt-BR", "ru",
+                                    "th", "tr", "uk", "zh-Hans"]
+
     /// The Jira task the `taskPage` board opens: a remote 2h estimate and no estimate of Kannu's.
     static let jiraTaskID = UUID(uuidString: "6E1D5A40-2C7B-4F1E-9B1A-3D2C1B0A9F01")!
     /// The local task the `localTaskPage` board opens: a reminder in 20 hours, its notification off.

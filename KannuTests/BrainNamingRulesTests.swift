@@ -87,6 +87,8 @@ final class BrainNamingRulesTests: XCTestCase {
         Allowed(file: "Kannu/managers/Tasks/TaskReminders.swift",
                 literal: .containing("x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
                 reason: "the URL of the macOS Notifications pane, never shown"),
+        Allowed(file: "Kannu/components/WhatsNew/WhatsNewView.swift", literal: .containing("Settings is now Brain"),
+                reason: "What's New's Brain card names the window's old name once, to say it is Brain now"),
     ]
 
     // MARK: - The rename

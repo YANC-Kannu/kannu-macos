@@ -47,12 +47,17 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 
 ## 5. What's New (recommended; one child PR)
 - [ ] 5.1 Write the copy for the window and its three cards, Brain, Tasks and Tags, in English. [Cloud]
-- [ ] 5.2 Build the window per `specs/whats-new` and `design.md`. [Mac]
-- [ ] 5.3 Add its strings to `Kannu/Localizable.xcstrings` in all 17 languages, with sorted insertion. [Mac or Cloud]
-- [ ] 5.4 Rule tests: never before the Terms, never on a fresh install, never during onboarding, and shown once.
-  Add a DEBUG board from a fixture. [Mac]
+- [x] 5.2 Build the window per `specs/whats-new` and `design.md`. [Mac] `WhatsNewWindow` and `WhatsNewView`, opened
+  from `continueLaunch()` when `WhatsNew.decision` says so. The seen edition is `Defaults[.whatsNewSeenEdition]`; the
+  stray `showWhatsNew` `@AppStorage` is retired, since a Bool cannot say which edition was seen.
+- [x] 5.3 Add its strings to `Kannu/Localizable.xcstrings` in all 17 languages, with sorted insertion. [Mac or Cloud]
+  Seven keys, plus Brain marked never translated. "Tasks" is the sidebar's key, so the sidebar translates it too.
+- [x] 5.4 Rule tests: never before the Terms, never on a fresh install, never during onboarding, and shown once.
+  Add a DEBUG board from a fixture. [Mac] `WhatsNewTests`, `WhatsNewRulesTests`; boards `whatsNew` and
+  `whatsNewLanguages`.
 - [ ] 5.5 Gates: full KannuTests, the Debug build, boards before and after, and the hook. Then a Mac check on an
-  updated install and on a fresh user account. [Mac] [David]
+  updated install and on a fresh user account. [Mac] [David] The gates passed on 2026-11-13: 2,534 tests with 0
+  failures, a clean Debug build with no new warning (24, as before), the boards, and the hook. The Mac checks wait.
 
 ## 6. Final install and Mac checks
 - [ ] 6.1 Build the signed Release app from `development` with everything above, and install it the house way: quit,
