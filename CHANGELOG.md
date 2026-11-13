@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - OpenSpec carries Kannu's plan in the repo, with 2.0 as its first change
+- **Developer label:** OpenSpec in the Kannu repo, so a new chat keeps the context, seeded with the 2.0 release
+- **Agent label:** Claude Code (Opus 5.5) — OpenSpec 0.23.0 set up for Claude Code; the project context, seven specs
+  of the redesign as built, and the release-2-0 change with its run log
+- **Changes:**
+  - OpenSpec 0.23.0, run through `npx` with telemetry off, adds `openspec/` with its `AGENTS.md`, `project.md`,
+    `specs/` and `changes/`. It also adds `/openspec:proposal`, `/openspec:apply` and `/openspec:archive` under
+    `.claude/commands/openspec/`.
+  - AGENTS.md gains OpenSpec's managed block, after "Read these first", so an agent that plans opens
+    `openspec/AGENTS.md`. OpenSpec writes the same block into CLAUDE.md, and it was taken out again. CLAUDE.md is
+    unchanged: the ART framework still comes first and `@AGENTS.md` last.
+  - `openspec/project.md` holds 2.0's positioning, the stack and the house conventions: the hold rule, stacked
+    supers, the lean rules, live data, the string catalog, snapshot boards, the danger zones and the release. Each
+    points at the file that owns it.
+  - Specs for brain-shell, product-pages, tasks, tags, notes, clipboard and release describe the behaviour built on
+    `super/brain-6-around`, and cite its files.
+  - `openspec/changes/release-2-0/` holds:
+    - the proposal;
+    - the release gates as tasks;
+    - a design note;
+    - deltas for the release (2.0 numbering, beta then final, the `libinmv/kannu` feed bridge) and a new What's New
+      window;
+    - `handoff.md`, the run log of where the stack and the asks stand.
+
 ### 2026-11-11 - Clipboard image cleanup keeps pinned images, and a Debug build keeps to its own folder
 - **Developer label:** "Fix two pre-existing bugs in Kannu's clipboard history image cleanup"
 - **Agent label:** Claude Code (Opus 5.5) — both fixes and their tests; why a Debug folder is in the code's comments
