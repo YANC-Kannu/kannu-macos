@@ -4,6 +4,14 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer CodeRabbit's second review of everything around Brain
+- **Developer label:** CodeRabbit's second review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 from CodeRabbit's second review of Super 6
+- **Changes:**
+  - Brain › Notes: after a read or decode of a note's image that failed, for example of a file still being written,
+    its page tries the image again at the next save. It used to keep the file's date anyway, so the preview stayed
+    missing until the file itself changed.
+
 ### 2026-11-13 - Answer CodeRabbit's first review of everything around Brain
 - **Developer label:** CodeRabbit's first review of the Stage 6 super (#52)
 - **Agent label:** Claude Code (Opus 5.5) — inline-1 in part and inline-2 from CodeRabbit's first review of Super 6, folded into Stage 6 child 6; inline-1's retry answered on the PR
