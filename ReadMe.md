@@ -65,7 +65,7 @@ For detailed prompts and one-click setup actions, open **Brain** in Kannu. Contr
 
 ## Install (Pre-built DMG)
 
-1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.3.4.dmg`) from the [Releases page](https://github.com/libinmv/kannu/releases).
+1. Download the latest `Kannu.<version>.dmg` (for example `Kannu.1.3.4.dmg`) from the [Releases page](https://github.com/YANC-Kannu/kannu-macos/releases).
 2. Open the DMG and drag **Kannu** into the **Applications** folder.
 3. Launch Kannu from Applications.
 
