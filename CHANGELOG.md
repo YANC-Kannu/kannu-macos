@@ -4,6 +4,47 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Answer CodeRabbit's first review of everything around Brain
+- **Developer label:** CodeRabbit's first review of the Stage 6 super (#52)
+- **Agent label:** Claude Code (Opus 5.5) — inline-1 in part and inline-2 from CodeRabbit's first review of Super 6, folded into Stage 6 child 6; inline-1's retry answered on the PR
+- **Changes:**
+  - Brain › Tasks: New Task says why Add stays off when the task list could not be read, in the Tasks page's own words
+    ("Couldn't read the task list, so it can't change."), beside its buttons. It still opens at once while the list is
+    loading, with Add off until the list is ready. No retry: nothing reads the list again before a relaunch.
+  - `MenuBarRulesTests` and `SidebarBadgeLiveDataRulesTests` start with the project's GPL header block, as AGENTS.md
+    asks of every Swift file.
+  - `TasksPageLiveDataRulesTests`: a comment no longer says New task's press reads `isReady`.
+
+### 2026-11-13 - Answer the review of the final audit's fixes
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, and its independent review
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the reviewer's R1 and R2, and one found while gating; R3 and R4 answered in the lane's notes
+- **Changes:**
+  - View › Enter Full Screen also does nothing while a close in full screen waits for its exit, so ⌃⌘F in the turn
+    between the exit and the queued close no longer takes a closing Brain back into full screen (R1).
+    `MenuBarRulesTests` pins both conditions.
+  - A note's page: the image key's comment says it changes on every save, and that the task decides whether to read
+    the file again (R2).
+  - Brain's search suggestions: the fade's geometry transform takes the list's height as a captured value, since
+    SwiftUI may call it as `@Sendable`, so it reads no view state, as every other such transform in the app does.
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum names the second condition.
+
+### 2026-11-13 - Fix the final audit's small findings
+- **Developer label:** Brain redesign plan: the scoped final audit's fix child, F3, F5, F6, F8 and F9
+- **Agent label:** Claude Code (Opus 5.5) — Stage 6 child 6: the audit's Lows F3, F5, F6, F8 and F9; F1 waits for its Mac check, F2, F4 and F7 were left out, and F10's copy goes with the next strings pass
+- **Changes:**
+  - View › Enter Full Screen (⌃⌘F) does nothing while a full-screen transition runs, as a close in full screen already
+    waited: pressed twice fast, or during a close's exit, it asked AppKit to toggle mid-transition (F3).
+    `MenuBarRulesTests` holds it.
+  - `applicationWillFinishLaunching` runs before the terms are checked, and `LaunchGateRulesTests` now pins its body to
+    the one in-memory registration it holds; AGENTS.md's launch-gate trap names it (F5).
+  - Brain › Notes: a note's page reads its image again only when the image file changes, not on every save of the text,
+    which came each 1.5 s while the notch edited the note Brain showed (F6).
+  - Brain's search suggestions keep only whether more rows sit below the list's foot, so scrolling them no longer writes
+    state on every tick (F8).
+  - A permission callout's VoiceOver group is named by its title, so Shelf's two "Open Privacy & Security" buttons are
+    told apart (F9).
+  - docs/REGRESSIONS.md: entry 22's 2026-11-13 addendum.
+
 ### 2026-11-12 - Answer CodeRabbit's first review of Brain's Tasks pages
 - **Developer label:** CodeRabbit's first review of the Stage 5 super (#43)
 - **Agent label:** Claude Code (Opus 5.5) — inline-1 and inline-2 from CodeRabbit's first review of Super 5, and Brain's Tag filter, found alongside inline-1; the two nitpicks answered on the PR

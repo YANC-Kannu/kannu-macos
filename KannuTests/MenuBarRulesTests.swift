@@ -1,22 +1,20 @@
-//
-//  MenuBarRulesTests.swift
-//  KannuTests
-//
-//  Copyright (C) 2026 Kannu contributors
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program.  If not, see <https://www.gnu.org/licenses/>.
-//
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 
 import XCTest
 
@@ -184,6 +182,41 @@ final class MenuBarRulesTests: XCTestCase {
             ("        finishPendingClose()\n        // View's menu item says Enter Full Screen again.\n        if let window { BrainVisibility.shared.update(for: window) }\n",
              "        finishPendingClose()\n"),
         ], in: controller, by: Self.fullScreenTitleProblems)
+    }
+
+    // MARK: - The full-screen item waits for a transition
+
+    /// ⌃⌘F pressed twice fast, or during a deferred close, would toggle in the middle of a transition, which the close's
+    /// own toggle never does, or take a closing Brain back into full screen (docs/REGRESSIONS.md, entry 22). So View's
+    /// item toggles through the controller, which does nothing while a transition runs or a close waits for one.
+    static func fullScreenToggleProblems(commands: String, controller: String) -> [String] {
+        var problems: [String] = []
+        let view = code(body(of: "private struct BrainViewCommands: View {", in: commands))
+        if !view.contains("SettingsWindowController.shared.toggleFullScreenWhenIdle()") || view.contains("toggleFullScreen(nil)") {
+            problems.append("View's full-screen item toggles without waiting for a transition")
+        }
+        let toggle = body(of: "func toggleFullScreenWhenIdle() {", in: code(controller))
+        if !isBefore("guard !isChangingFullScreen, !closeAfterFullScreen else { return }", "window?.toggleFullScreen(nil)", in: toggle) {
+            problems.append("the controller toggles full screen during a transition or a deferred close")
+        }
+        return problems
+    }
+
+    func testTheFullScreenItemWaitsForATransition() throws {
+        let commands = Self.commands(in: try Self.read("Kannu/KannuApp.swift"))
+        let controller = try Self.read("Kannu/components/Settings/SettingsWindowController.swift")
+        XCTAssertEqual(Self.fullScreenToggleProblems(commands: commands, controller: controller), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("SettingsWindowController.shared.toggleFullScreenWhenIdle()", "SettingsWindowController.shared.window?.toggleFullScreen(nil)"),
+        ], in: commands) { Self.fullScreenToggleProblems(commands: $0, controller: controller) }
+        let check = "guard !isChangingFullScreen, !closeAfterFullScreen else { return }"
+        let guarded = "        \(check)\n        window?.toggleFullScreen(nil)\n"
+        SettingsDesignSystemRulesTests.assertCaught([
+            (guarded, "        window?.toggleFullScreen(nil)\n"),
+            (guarded, "        window?.toggleFullScreen(nil)\n        \(check)\n"),
+            // A press in the turn after the exit, before the queued close: Brain would go back into full screen.
+            (check, "guard !isChangingFullScreen else { return }"),
+        ], in: controller) { Self.fullScreenToggleProblems(commands: commands, controller: $0) }
     }
 
     // MARK: - One full-screen item
