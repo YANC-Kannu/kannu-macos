@@ -70,6 +70,16 @@ staged and uncommitted.
   - merge once the latest commit is reviewed and every note is answered.
 - Don't wait on a review or CI before starting the next piece. Each PR-state change still needs David's yes.
 
+### Where agent sessions start
+The hook script names each agent session's project after the folder the agent runs in: its first workspace root, or
+Claude Code's `cwd`. An agent also loads that folder's instructions, hooks and settings. So:
+- A coordinating chat runs in this repository's own checkout, never in another project's folder.
+- Each lane gets its own git worktree first (`git worktree add --no-track -b <branch> <path> <base>`), and its session
+  then starts with that worktree as its folder.
+  - A lane never works in the main checkout, which may hold another change's branch: its commits would land there.
+- A chat that started in the wrong folder moves into the right one once it exists. The move takes effect when the chat's
+  turn ends, so the chat uses absolute paths until then.
+
 ### Live data (`docs/SETTINGS.md`, "Live data")
 Brain's content is built once and kept for the app's life. The agent monitor publishes up to about 20 times a second.
 So a page that shows live data keeps three rules, each pinned by its page's `…LiveDataRulesTests`:
