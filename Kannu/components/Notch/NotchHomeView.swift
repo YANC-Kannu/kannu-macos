@@ -852,7 +852,7 @@ struct MusicSliderView: View {
             }
             .fontWeight(.medium)
             .foregroundColor(timeLabelColor)
-            .font(.system(size: 11, weight: .medium, design: .default).monospacedDigit())
+            .font(SettingsTheme.font(size: 11, weight: .medium).monospacedDigit())
         }
     }
 
@@ -937,7 +937,7 @@ struct MusicSliderView: View {
     }
 
     private var inlineLabelFont: Font {
-        .system(size: 11, weight: .medium, design: .default).monospacedDigit()
+        SettingsTheme.font(size: 11, weight: .medium).monospacedDigit()
     }
 
     private var sliderFrameHeight: CGFloat {
@@ -1217,11 +1217,11 @@ struct MediaOutputSelectorPopover: View {
 
             HStack {
                 Text("Output volume")
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text(volumePercentage)
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundColor(.secondary)
             }
         }
@@ -1230,12 +1230,12 @@ struct MediaOutputSelectorPopover: View {
     private var devicesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Output devices")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundColor(.secondary)
 
             if routeManager.devices.isEmpty {
                 Text("No audio outputs available")
-                    .font(.callout)
+                    .font(SettingsTheme.font(size: 12))
                     .foregroundColor(.secondary)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1305,12 +1305,12 @@ struct AirPlaySelectorPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("AirPlay")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundColor(.secondary)
 
             if airPlayManager.devices.isEmpty {
                 Text("No AirPlay devices found")
-                    .font(.callout)
+                    .font(SettingsTheme.font(size: 12))
                     .foregroundColor(.secondary)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)

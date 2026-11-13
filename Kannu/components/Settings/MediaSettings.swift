@@ -63,10 +63,10 @@ struct Media: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                SettingsRow("Music Source") {
-                    SettingsSelect("Music Source", selection: $mediaController,
+        SettingsPage {
+            SettingsSection {
+                SettingsRow("Music source") {
+                    SettingsSelect("Music source", selection: $mediaController,
                                    options: availableMediaControllers, optionTitle: \.localizedName)
                 }
                 .onChange(of: mediaController) { _, _ in
@@ -77,11 +77,11 @@ struct Media: View {
                 }
                 .settingsHighlight(id: highlightID("Music Source"))
             } header: {
-                SettingsSectionHeader("Media Source")
+                SettingsSectionHeader("Media source")
             } footer: {
                 if MusicManager.shared.isNowPlayingDeprecated {
                     VStack(alignment: .leading, spacing: 2) {
-                        SettingsFooter("YouTube Music requires this third-party app to be installed: ")
+                        SettingsFooter("YouTube Music requires this third-party app to be installed.")
                         Link("https://github.com/th-ch/youtube-music", destination: URL(string: "https://github.com/th-ch/youtube-music")!)
                             .buttonStyle(.link)
                             .font(SettingsTheme.description)
@@ -98,7 +98,7 @@ struct Media: View {
                 SpotifyAuthSettingsSection()
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .showStandardMediaControls) {
                     Text("Show media controls in Dynamic Island")
                 }
@@ -110,7 +110,7 @@ struct Media: View {
                 .disabled(!showStandardMediaControls)
                 .settingsHighlight(id: highlightID("Auto-hide inactive notch media player"))
             } header: {
-                SettingsSectionHeader("Dynamic Island Visibility")
+                SettingsSectionHeader("Dynamic Island visibility")
             } footer: {
                 if standardControlsSuppressed {
                     SettingsFooter("Standard notch media controls are hidden. Re-enable the toggle above to restore them.")
@@ -118,7 +118,7 @@ struct Media: View {
                     SettingsFooter("When off, the notch player stays visible with placeholder info while nothing plays.")
                 }
             }
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .showShuffleAndRepeat) {
                     HStack {
                         Text("Enable customizable controls")
@@ -126,7 +126,7 @@ struct Media: View {
                     }
                 }
                 if showShuffleAndRepeat {
-                    SettingsRow("Show \"Change Media Output\" control", description: "Adds the AirPlay/route picker button back to the customizable controls palette.") {
+                    SettingsRow("Show \"Change Media Output\" control", description: "Adds the AirPlay output picker to the control palette.") {
                         Defaults.Toggle(key: .showMediaOutputControl) {
                             Text("Show \"Change Media Output\" control")
                         }
@@ -142,16 +142,18 @@ struct Media: View {
                 }
             }
 
-            Section(header: Text("Lock Screen Media")) {
-                SettingsRow("Enable album art parallax", description: "Applies the notch-style parallax effect to the lock screen media widget album art.") {
+            SettingsSection {
+                SettingsRow("Enable album art parallax", description: "Parallax effect on the lock screen album art.") {
                     Defaults.Toggle(key: .lockScreenMusicAlbumParallaxEnabled) {
                         Text("Enable album art parallax")
                     }
                 }
                 .settingsHighlight(id: highlightID("Enable album art parallax"))
+            } header: {
+                SettingsSectionHeader("Lock screen media")
             }
             if musicControlWindowEnabled {
-                Section {
+                SettingsSection {
                     SettingsRow("Skip buttons", description: musicSkipBehavior.description) {
                         SettingsSelect("Skip buttons", selection: $musicSkipBehavior,
                                        options: MusicSkipBehavior.allCases, optionTitle: \.displayName,
@@ -162,16 +164,16 @@ struct Media: View {
                     SettingsSectionHeader("Floating window panel skip behaviour")
                 }
             }
-            Section {
+            SettingsSection {
                 SettingsRow("Enable music live activity", description: standardControlsSuppressed
-                            ? Text("Standard notch media controls are hidden while this toggle is off.") : nil) {
+                            ? Text("Media controls stay hidden while this is off.") : nil) {
                     Toggle(
                         "Enable music live activity",
                         isOn: $coordinator.musicLiveActivityEnabled.animation()
                     )
                 }
                 .disabled(standardControlsSuppressed)
-                SettingsRow("Show floating media controls", description: "Shows play/pause and skip buttons beside the notch while music is active.") {
+                SettingsRow("Show floating media controls", description: "Play, pause and skip buttons beside the notch.") {
                     Defaults.Toggle(key: .musicControlWindowEnabled) {
                         Text("Show floating media controls")
                     }
@@ -184,7 +186,7 @@ struct Media: View {
                     Text("Enable lyrics")
                 }
                 .settingsHighlight(id: highlightID("Enable lyrics"))
-                SettingsRow("Show live canvas in Dynamic Island", description: "Shows the app's live canvas in place of album art when one is available.") {
+                SettingsRow("Show live canvas in Dynamic Island", description: "Shows the live canvas instead of album art.") {
                     Defaults.Toggle(key: .showLiveCanvasInDynamicIsland) {
                         Text("Show live canvas in Dynamic Island")
                     }
@@ -192,13 +194,13 @@ struct Media: View {
                 .settingsHighlight(id: highlightID("Show live canvas in Dynamic Island"))
 
                 // How much the album art moves with the pointer.
-                SettingsSliderRow("Parallax Effect Intensity", value: $parallaxEffectIntensity, in: 0...12, step: 1.0,
+                SettingsSliderRow("Parallax effect intensity", value: $parallaxEffectIntensity, in: 0...12, step: 1.0,
                                   valueText: Text("\(parallaxEffectIntensity, specifier: "%0.1f")"))
                 .settingsHighlight(id: highlightID("Enable album art parallax effect"))
 
 
-                SettingsRow("Sneak Peek Style") {
-                    SettingsSelect("Sneak Peek Style", selection: $sneakPeekStyles,
+                SettingsRow("Sneak peek style") {
+                    SettingsSelect("Sneak peek style", selection: $sneakPeekStyles,
                                    options: SneakPeekStyle.allCases, optionTitle: \.rawValue)
                 }
                 .disabled(!enableSneakPeek)
@@ -216,7 +218,7 @@ struct Media: View {
                 SettingsSectionHeader("Media playback live activity")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableRealTimeWaveform) {
                     HStack {
                         Text("Enable real-time waveform")
@@ -242,12 +244,12 @@ struct Media: View {
                 
                 Toggle("Scrubbable real-time waveform", isOn: $enableWaveformScrubber)
             } header: {
-                SettingsSectionHeader("Music Visualizer")
+                SettingsSectionHeader("Music visualizer")
             } footer: {
                 SettingsFooter("Shows a real-time audio spectrum synced to your music. Requires macOS 14.2 or later.")
             }
 
-            Section {
+            SettingsSection {
                 Defaults.Toggle(key: .enableLockScreenMediaWidget) {
                     Text("Show lock screen media panel")
                 }
@@ -287,7 +289,7 @@ struct Media: View {
                         .opacity(enableLockScreenMediaWidget ? 1 : 0.5)
                         .settingsHighlight(id: highlightID("Enable media panel blur"))
                 }
-                SettingsRow("Fullscreen artwork on right-click", description: "Right-click the lock screen album art to use it as the wallpaper; right-click again to restore.") {
+                SettingsRow("Fullscreen artwork on right-click", description: "Right-click the album art to toggle it as wallpaper.") {
                     Defaults.Toggle(key: .lockScreenMusicFullscreenArtworkEnabled) {
                         Text("Fullscreen artwork on right-click")
                     }
@@ -305,15 +307,15 @@ struct Media: View {
                 .disabled(!enableLockScreenMediaWidget || !lockScreenMusicFullscreenArtworkEnabled)
                 .settingsHighlight(id: highlightID("Keep album art visible during fullscreen artwork"))
             } header: {
-                SettingsSectionHeader("Lock Screen Integration")
+                SettingsSectionHeader("Lock screen integration")
             } footer: {
                 SettingsFooter("These controls mirror the Lock screen tab.")
             }
             .disabled(!showStandardMediaControls)
 
-            Section {
-                SettingsRow("Hide DynamicIsland Options") {
-                    SettingsSelect("Hide DynamicIsland Options", selection: $hideNotchOption, choices: [
+            SettingsSection {
+                SettingsRow("Hide DynamicIsland options") {
+                    SettingsSelect("Hide DynamicIsland options", selection: $hideNotchOption, choices: [
                         .always: String(localized: "Always hide in fullscreen"),
                         .nowPlayingOnly: String(localized: "Hide only when NowPlaying app is in fullscreen"),
                         .never: String(localized: "Never hide"),
@@ -330,7 +332,7 @@ struct Media: View {
                 if hideNotchOption != .never, !accessibilityPermission.isAuthorized {
                     SettingsActionRow(
                         "Accessibility access",
-                        description: "Fullscreen is detected exactly with Accessibility. Without it, Kannu goes by whether the menu bar is hidden."
+                        description: "Lets Kannu detect full screen exactly."
                     ) {
                         Button("Open System Settings") {
                             AccessibilityPermissionStore.shared.openSystemSettings()
@@ -340,7 +342,7 @@ struct Media: View {
                 }
             } header: {
                 HStack {
-                    SettingsSectionHeader("Hide DynamicIsland Options")
+                    SettingsSectionHeader("Hide DynamicIsland options")
                     customBadge(text: "Beta")
                 }
             }
@@ -364,6 +366,6 @@ struct Media: View {
 
     private var customLiquidBlurRow: some View {
         SettingsNoteRow("Enable media panel blur",
-                        description: "Custom liquid glass already renders with Apple's liquid material, so this option is managed automatically.")
+                        description: "Custom liquid glass handles this automatically.")
     }
 }

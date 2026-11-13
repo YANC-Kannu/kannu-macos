@@ -26,8 +26,9 @@ import SwiftUI
 ///
 /// It reads `TasksManager`, so `NotchTimerView` never has to: the host passes what is typed and
 /// keeps the list's state (`TaskSuggestionState`), and draws the list only with tasks on. Rows come
-/// from the tasks the notch lists. The list has no background of its own: what it lies over is
-/// covered (`coveredBySuggestions`), so it reads on any notch skin.
+/// from the tasks Show in notch lists, whatever the Tag filter picks: a task the tag hides is still
+/// found by its name, so typing it never makes it twice. The list has no background of its own: what
+/// it lies over is covered (`coveredBySuggestions`), so it reads on any notch skin.
 struct TimerTaskSuggestions: View {
     @Environment(\.notchForeground) private var notchForeground
     @ObservedObject private var manager = TasksManager.shared
@@ -42,7 +43,8 @@ struct TimerTaskSuggestions: View {
     /// The New row's + takes a colour dot's width (`TaskColorDot`, 10 pt), so the text lines up.
     private static let markWidth: CGFloat = 10
 
-    /// The rows for what is typed, among the tasks the notch lists; none until the file is read.
+    /// The rows for what is typed, among the tasks Show in notch lists, never narrowed by the Tag
+    /// filter; none until the file is read.
     private var found: [TaskSuggestionState.Row] {
         guard manager.isReady else { return [] }
         let listed = TaskOrdering.active(manager.activeTasks, listed: TaskOrdering.viewFilter(
@@ -87,7 +89,7 @@ struct TimerTaskSuggestions: View {
             HStack(spacing: 6) {
                 rowContent(row)
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: M.suggestionRowHeight)
@@ -212,7 +214,7 @@ struct TimerTaskPickInfo: View {
                 let tracked = manager.trackedSeconds(of: task)
                 if tracked > 0 || task.effectiveEstimateSeconds != nil {
                     Text(verbatim: TaskTimeMath.progress(tracked: tracked, estimate: task.effectiveEstimateSeconds).text)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .fixedSize()

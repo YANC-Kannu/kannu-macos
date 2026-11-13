@@ -25,11 +25,14 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 
 | You are adding | Use |
 |---|---|
+| A page | `SettingsPage { … }`: one scroll view across the panel, its sections in one column — never `Form` (below, "Pages and sections") |
+| A product page: what it is about, then its settings | `SettingsProductPage(settingsTitle:) { product } settings: { sections }`, its actions on `SettingsForm` (below, "Product pages"); anything live follows "Live data" |
+| A group of rows | `SettingsSection { rows } header: { … } footer: { … }`, called as `Section` was — never `Section` |
 | A section header | `SettingsSectionHeader("…")` — never a raw `Text` in `header: {}` |
 | Text under a group of rows | `SettingsFooter("…")` — never a raw `Text` in `footer: {}` |
 | A row: title (+ caption) with a trailing control | `SettingsRow("Title", description: "…") { control }` |
 | A choice of one value among several | `SettingsSelect` in a `SettingsRow` — `choices:` for literal options, `style: .segmented` for two or three short ones, never `Picker` (below, "Choices") |
-| A text field | The native field with `.settingsField()` last on its chain; in a Form, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
+| A text field | The native field with `.settingsField()` last on its chain; on a page, in a `SettingsRow` that names it; what to type in `prompt:` (below, "Values and fields") |
 | A date and time | `SettingsDateField` — our button showing the date, and our popover holding the system's calendar grid and time field; never `DatePicker`. The popover focuses its calendar and Escape closes only it; a date is reached by keyboard under Full Keyboard Access |
 | A row that only says something, with no control | `SettingsNoteRow("Title", description: "…")` |
 | A slider row | `SettingsSliderRow` — our `SettingsSlider`, one width everywhere, selectable readout; never `Slider` (below, "Values and fields") |
@@ -38,11 +41,14 @@ live in `DesignSystem/` beside it (below). Never rebuild these shapes by hand.
 | A read-only trailing value (path, date, count) | `SettingsValueText(value)` |
 | A status line with a ready dot | `SettingsStatusText(text, isReady:)` |
 | A red error line under a control | `SettingsErrorText(message)` |
-| One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below) |
-| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless` |
+| One or more buttons on a row | `SettingsActionRow` — trailing, never a lone left-hanging button (the one exception: a sub-page's "‹ Back" row, below). A row of buttons alone in its card takes a title and a caption too (below, "Section rules") |
+| A glyph on a row (▶, ›, −), a back row, a link-like action | `SettingsButtonStyle(.quiet)` — bare at rest, filled under the pointer; never `.borderless`. A lone one under text, on that text's column (a back row, "Open ›", a finding's "Details ›"), is `flush: true`, so its label keeps the column's edge (below, "The content standard"); never one beside text, where its fill would reach over the text. Only `.quiet` takes `flush` |
+| A badge beside a title ("Beta", "Alpha", "Built-in") | `SettingsBadge`, through `customBadge(text:)` and `alphaBadge()`: the secondary ink on the line colour, the caption's size, title case, a 4-pt radius. Never a capsule of a colour of its own. The sidebar's Beta is this badge too; its state badges are not a title's ("The shell and navigation") |
+| A choice drawn as cards (a HUD style, an idle animation, a skin, an icon) | `.settingsChoiceRing(shape, isSelected:)` on the tile and `.settingsChoiceLabel(isSelected:)` on its name (below, "Choices") |
+| A callout, or a row's expanded details, inside a section | `SettingsPermissionCallout`, or `.settingsCalloutCard()`: the card's own colour inside a 1-pt line border, never a darker slab, and its buttons the standard style. A callout's title is orange for a permission something needs and `accentStrong` for an offer (Focus, Shelf's Full Disk Access, ADR), never a colour of its own |
 | Overflow actions on a row | `SettingsMoreMenu { … }` (the "…" button): our quiet button over a native menu |
 | A menu | Our button over a native menu: `.menuStyle(.button)`, `.buttonStyle(SettingsButtonStyle(…))` and `.menuIndicator(.hidden)` on the `Menu`, and a `chevron.down` in its label when it needs one. The items stay a native menu, with its keyboard, type-to-select and VoiceOver |
-| Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour; `init(adding:kind:)` for an offer ("#planning", "+ pl") |
+| Tags, removable or offered to add, wrapping | `SettingsTagChip` inside a `SettingsFlowLayout` — a capsule; `tint:` washes it in a tag's colour, the one place the colour shows (no swatch beside the chip); `init(adding:kind:)` for an offer ("#planning", "+ pl") |
 | Free-standing explanatory text | `.settingsDescriptionStyle()` (selectable, secondary, wraps) |
 | A spacing, a width, a dot size | `SettingsMetrics.<token>` — never a number in place |
 | A copy-to-pasteboard action for agents | `CopyForAgentButton` |
@@ -57,17 +63,22 @@ component already does.
   `SettingsLabeledContentStyle`, `SettingsDisclosureGroupStyle`, `settingsDesignSystem()`, the choice
   control (`SettingsSelect`, `SettingsSelectList`), the field's chrome (`SettingsField`), the value
   controls (`SettingsSlider`, `SettingsStepper`), the sheet (`SettingsSheet`), the date
-  (`SettingsDateField`), and the shell's own views (below).
+  (`SettingsDateField`), the page and its sections (`SettingsPage`, `SettingsSection`,
+  `SettingsPageInsetKey`), the product page (`SettingsProductPage`), the badge (`SettingsBadge`), a
+  choice card's and a callout's looks (`SettingsChoiceCard`, `SettingsCalloutCard`: view modifiers, no
+  type), and the shell's own views (below).
 - **There is one root.** `settingsDesignSystem()` is what every page inherits. The window's shell and
   the snapshot boards both apply it, so they cannot drift, and nothing else sets the form style beside
-  it. It hides a `Form`'s own background so the panel shows through. It has no `.foregroundStyle`: that
+  it. It still sets the grouped form style and hides a `Form`'s background, though no page is a `Form` any
+  more (below, "Pages and sections"). It has no `.foregroundStyle`: that
   would recolour the labels of native prominent buttons and menus. A sheet is a window of its own, and
   whether SwiftUI passes the root into a presentation cannot be told from source, so each presented
   window applies it again: `SettingsSheet` for every sheet, and the two large sheets, the animation
   editor and Spotify's sign-in, themselves. A sheet is never a `Form`, so the second root changes
-  nothing in it.
-- **The root's font replaces what a grouped `Form` gives its section headers and footers**, so
-  `SettingsSectionHeader` and `SettingsFooter` say their own, and anything else inside a footer must too.
+  nothing in it. Onboarding's window applies it once too (below, "Onboarding").
+- **The root's font reaches a section's header and footer**, so `SettingsSectionHeader` and
+  `SettingsFooter` say their own, and anything else inside a footer must too. `SettingsSection` gives the
+  footer the secondary ink, as a grouped `Form` did.
 - **Geist when bundled, the system font at the same size when not.** Only the theme names a font, and
   only the theme uses the system's: a text style or `.system` anywhere else is pinned per file and can
   only shrink (below, "Colours and fonts").
@@ -83,11 +94,9 @@ A call-site style beats the root, so these stay on purpose:
 | Site | Why |
 |---|---|
 | `SettingsToggleStyle(showsLabel: false)` | A row that draws the title itself. A custom style ignores `.labelsHidden()`, so it is told |
-| `SettingsButtonStyle(.primary)` | A default action or a main action. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
+| `SettingsButtonStyle(.primary)` | A sheet's default action, or a page header's one verb (Tasks' New task among them). Never a callout's or a card's button, which take the standard style, or a page shows three to five primaries and none of them ranks. A custom style cannot see `.keyboardShortcut(.defaultAction)`, so a site says so itself |
 | `.buttonStyle(.link)` on a `Link` | The root's button style would otherwise draw it as a button |
 | `.labeledContentStyle(.automatic)` on a checkbox | The root's labelled-row style pushes the label and the control to opposite edges |
-| `.labeledContentStyle(.automatic)` in a titled `SettingsActionRow` | Wide buttons wrap under the title natively. The root's one-line row would squeeze the description |
-| `.disclosureGroupStyle(.automatic)` in `AllTasksPage` | A custom disclosure puts all its rows in one view, and these lists can be long |
 | `.foregroundStyle(.secondary)` on a bare `LabeledContent` value | The root's labelled-row style leaves the content's colour alone, or it would grey what is typed into a field |
 | `.plain` on a view that draws itself, and `AccessoryBarButtonStyle` | A card, a suggestion or a sidebar row draws its own chrome. `AccessoryBarButtonStyle` is `EditPanelView`'s, dead code (Stage 4) |
 
@@ -101,12 +110,11 @@ What stays native, and why:
 | The calendar grid and time field inside `SettingsDateField` | They cannot be restyled; the popover around them is ours |
 | A popover's own arrow and chrome | `NSPopover`'s; its content paints the panel |
 | Menu items: `SettingsMoreMenu`'s, `Connect…`'s, Reset's, the estimate presets', and every `.contextMenu` | A native menu keeps its keyboard, type-to-select and VoiceOver; only the trigger is ours |
-| All tasks' filter menu and its four pickers | Ticked submenus of a native `Menu`, which no popover can replace. Stage 5 rebuilds the page with a Tag filter through `SettingsSelect` |
+| The Tags sheet's Colour picker | A ticked submenu of a tag pill's right-click menu, a native menu, which no popover can join. It replaced the swatch beside the pill, so the tag's colour shows once, as the pill's wash. Without VoiceOver a right-click menu has no key, so a keyboard-only user colours tags in Tasks settings › Tag colours, whose swatches take focus |
 | New Task's two checkboxes | Stage 5 rebuilds the task form |
 | `SettingsTagChip`'s `.bordered` capsule | Stage 5 rebuilds tags |
 | The sidebar search, and a local task's inline title | Plain fields with chrome or typography of their own |
 | `KeyboardShortcuts.Recorder`, Spotify's `WKWebView` | AppKit views of their own |
-| `.tint(.accentColor)` around `LaunchPermissionRow` | Shared with onboarding (Stage 6), so Allow stays `.borderedProminent`, and its white label cannot be read on the root's eye blue in dark |
 | The menu bar's look | The redesign plan keeps it |
 
 **To add a token:** one flat `static let` in `SettingsTheme.swift`, in the group it belongs to, with
@@ -144,47 +152,116 @@ numbers, and this table only says why.
 
 | File | Colours | Fonts | Why they remain |
 |---|---|---|---|
-| `AgentStatusSettings.swift` | 2 | 1 | Status green; a preview caption |
-| `AllTasksPage.swift` | 1 | 0 | The partial-result orange |
+| `AgentStatusSettings.swift` | 1 | 0 | Status green (Detected Editors' green and caption left with it, Stage 4 child 2) |
 | `AnimationEditorView.swift` | 7 | 22 | The editor's own dense scale and previews |
-| `AppearanceSettings.swift` | 10 | 3 | Style cards and previews of notch content |
+| `AppearanceSettings.swift` | 5 | 1 | The skin and icon grids' drop targets, an icon's backdrop and placeholder, a skin's black and edge |
 | `BatterySettings.swift` | 0 | 2 | Battery previews |
-| `ClipboardSettings.swift` | 4 | 1 | Status colours |
-| `CustomOSDSettings.swift` | 0 | 1 | The "Live Preview" caption |
-| `DevicesSettings.swift` | 3 | 4 | Device cards |
-| `DownloadsSettings.swift` | 5 | 2 | Download style cards |
+| `CustomOSDSettings.swift` | 0 | 1 | The "Live preview" caption |
+| `DevicesSettings.swift` | 1 | 2 | The icon style cards' resting fill and glyphs |
+| `DownloadsSettings.swift` | 3 | 0 | The style cards' resting fill and the progress tint |
 | `EditPanelView.swift` | 1 | 1 | Dead code but its `#Preview` |
-| `ExtensionsSettings.swift` | 3 | 13 | Status colours; the legend and detail cards |
-| `GeneralSettings.swift` | 1 | 0 | `.tint(.accentColor)` around `LaunchPermissionRow`, shared with onboarding |
-| `HUDAndOSDSettings.swift` | 17 | 7 | HUD style cards and previews |
-| `IdleAnimationsSettingsSection.swift` | 6 | 10 | Animation cards |
+| `ExtensionsSettings.swift` | 3 | 12 | Status colours; the legend and detail cards |
+| `HUDAndOSDSettings.swift` | 15 | 6 | HUD style previews and the cards' resting fill |
+| `IdleAnimationsSettingsSection.swift` | 3 | 5 | The cards' resting fill, the Add card and the delete glyph |
 | `LiveActivitiesSettings.swift` | 10 | 0 | Each activity's own colour |
-| `LockScreenSettings.swift` | 18 | 6 | Lock screen previews |
+| `LockScreenSettings.swift` | 15 | 6 | Lock screen previews |
 | `MusicSlotConfigurationView.swift` | 10 | 10 | The slot canvas |
 | `ScreenAssistantSettings.swift` | 5 | 1 | Status colours |
-| `SecurityFindingRow.swift` | 4 | 3 | Severity badges |
+| `SecurityFindingRow.swift` | 3 | 1 | Severity badges |
+| `SecurityOverview.swift` | 1 | 0 | A partial scan's orange, moved up with the newest scan's line |
 | `SettingsColorPicker.swift` | 2 | 2 | The user's colours (presets, sampler) |
-| `SettingsHelpers.swift` | 6 | 4 | Badge capsules |
+| `SettingsHelpers.swift` | 3 | 2 | The unused "Upgrade to Pro" and "Coming soon" capsules |
 | `SettingsPermissionCallout.swift` | 0 | 1 | The callout's title |
 | `SettingsProviderIcons.swift` | 1 | 0 | An icon's fallback tint |
 | `SpotifyAuthSettingsSection.swift` | 1 | 6 | Status dot; the sign-in card |
 | `StatsSettings.swift` | 2 | 1 | Graph colours |
 | `TaskDetailPage.swift` | 3 | 0 | The unreadable-estimate orange |
 | `TaskRowList.swift` | 2 | 0 | The same orange |
+| `TasksOverview.swift` | 1 | 0 | The moved-aside task file's orange, moved up with the list |
 | `TasksSettings.swift` | 1 | 0 | `ReminderPermissionNote`'s orange |
-| `TimerSettings.swift` | 1 | 5 | The preset editor |
+| `TimerSettings.swift` | 0 | 1 | The custom timer's length, its mono readout at medium weight (the preset editor left for Timer's sheet, Stage 4b) |
 
 `SettingsDesignSystemRulesTests` holds `DesignSystem/`'s animations to Reduce Motion the same way: every
 `withAnimation` and `.animation` there is `reduceMotion ? nil :` the theme's `quickAnimation` ease, never a
 spring or the default. Pages keep their own until Stage 4.
+
+### The notch
+
+The open notch draws its text in Geist too, through one token: `SettingsTheme.font(size:weight:)`. It takes the
+size and weight `.system` took, because the notch's sizes are its own, set by its height budgets
+(`UsageCardMetrics`, `TimerComposerMetrics`). Geist ships Regular, Medium and SemiBold, so bold and heavier draw
+SemiBold, and lighter draws Regular. With no Geist bundled it is the system font at the same size and weight, as
+every token is. A text style became its macOS size (`.caption` 10, `.subheadline` 11, `.callout` 12, `.body` and
+`.headline` 13, `.title2` 17), and a `.fontWeight` over the token picks Geist's face of that weight. Notes and the
+timer's titles drew SF Rounded; Geist has no rounded cut, so with no Geist bundled they fall back to the plain system
+font, not the rounded one.
+
+Geist's line is taller than the system's at most sizes (measured with SwiftUI's own layout: the same at 7, 8, 10,
+11 and 15 pt, a point taller at 9 and 12 to 14, two at 16 to 20), and its text is a little narrower. Every budget keeps its size:
+the Usage cards' rows are fixed and hold their text, and a task row is still 36 pt (`TimerComposerMetricsTests`
+measures it with the Geist faces it draws).
+
+What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
+
+- **Symbols.** `.system` sizes an SF Symbol; it is not type. A symbol inside text under the token takes its weight
+  from Geist's face, and reads Medium as regular (measured: SemiBold draws semibold), so a symbol beside medium text
+  has its own `.system` font: Notes' back chevron, Open in Notes and Add a reminder.
+- **Monospaced text:** the timer's three readouts (black), a task's key and tracked clock, a preset's length, the
+  note's character count and the digit field. Geist Mono ships Regular only.
+- **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line, and by AppKit's ruler Geist's 10 pt line is
+  13 against the system's 12, so a chip would be 17. SwiftUI lays out both faces' 10 pt line at 13.
+- **The music player's title, artist and lyrics.** The title decides whether to scroll by measuring its width with
+  an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font. The Agents tab's
+  names scroll through the same `MarqueeText` but decide by length, and the marquee measures the drawn text's width,
+  so they take Geist.
+- **The running timer's name and its rename field:** 20 pt in a 24 pt line, which the system's 20 pt line fills and
+  Geist's, 26 pt, overfills.
+- **The header's buttons**, whose symbols scale from their font (`.imageScale`), and two AppKit measures.
+
+The closed notch (its live activities and HUDs), the timer's ruler, the Timer and Stats popovers built outside
+`Notch/`, and the floating panels are not in this pass. The floating panels have their own, below.
+
+### The floating panels
+
+Two panels float over other apps on Brain's theme: the clipboard panel (`ClipboardPanel`, Panel display mode, Brain ›
+Clipboard's Open history panel) and the LocalSend picker (`LocalSendDevicePickerWindowManager`, from the Shelf). Each
+is a window of its own, so it applies Brain's root itself, as a sheet does (`settingsDesignSystem()`), and draws with
+the components and tokens a page uses: its title in `sheetTitle`, text in `body` and `description`, `ink` and
+`inkSecondary`, the card inset (`cardPadding`), Brain's empty state (the glyph at `pageTitle`, the status in
+`cardTitle`, one line in `body`, as Clipboard's page draws its own), and `SettingsButtonStyle` where a button has no
+tooltip of its own.
+
+- **The clipboard panel** follows the Mac's appearance, on `panel`. History or Favorites is a segmented
+  `SettingsSelect`, each tab with how many it holds; the search is Brain's field chrome (`settingsField`), what to type
+  in its `prompt:`; a row under the pointer takes the `hover` fill. Its glyph buttons stay plain buttons with their
+  `.hoverTooltip`, because `SettingsButtonStyle` tracks hover itself and a second hover source silences a tooltip
+  (docs/TOOLTIPS.md, rule 3). They draw in `ink`, a favourite's heart in `accentStrong`, a copy just made in `success`,
+  Delete and Clear in `destructive`. The close button stays the window's red traffic light, which Brain keeps native.
+- **The LocalSend picker** keeps the backdrop Shelf › Device Picker Style picks, Standard or Custom Liquid glass, made
+  for light text, so its content is dark whatever the Mac's appearance (`.environment(\.colorScheme, .dark)` on the
+  content, not the backdrop, which renders as it always did). A device is a soft card (`card`, `sectionRadius`, a
+  `line` border); under the pointer it takes `selection` and an `accentStrong` border, and a device that turned a
+  file down a `destructive` one. Refresh and Close are `.quiet`, their glyphs in a 22-pt frame so they keep the
+  circles' reach, and each says its name to VoiceOver; neither takes a tooltip, since the style tracks hover itself.
+  Scan Again is the standard button. The tile grows under the pointer on the theme's bounded ease, never a spring,
+  and not at all under Reduce Motion, as the clipboard panel's tab switch does not ease then.
+
+Placement, focus, dismissal, tooltips and what the clipboard captures are as they were: the panels' window code did
+not change. Each panel draws from values its view hands in (`ClipboardPanelContent`, `LocalSendDevicePickerContent`),
+so its boards (`clipboardPanel…`, `localSendPicker…`) draw fixtures and never build the clipboard manager or the
+LocalSend service. `FloatingPanelRulesTests` pins the system fonts and raw colours left, each with why (symbols; the
+window's chrome), and the boards' fixtures.
+
+Screen Assistant's chat and model panels, the clipboard's popover (a notch popover), the music and timer controls
+beside the notch, the HUDs and the lock screen's windows are not in this pass.
 
 ## Choices
 
 A choice of one value among several is `SettingsSelect`, in a `SettingsRow` that draws its title. SwiftUI on
 macOS 14 has no custom picker style, and a custom view cannot read `.tag()`s, so the options are data:
 `options:` with an `optionTitle:` (`\.localizedName`), or `choices: [value: String(localized: "…")]` for
-literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the four
-All tasks keeps.
+literal ones, in the order written. `Picker` is banned under Settings; `SettingsLayoutRulesTests` pins the one the
+Tags sheet's Colour submenu keeps.
 
 - **The trigger** is a button in our style showing the value and a chevron. A short list keeps its widest
   title's width, so the row does not move when the choice changes. A saved value no longer among the options
@@ -194,6 +271,13 @@ All tasks keeps.
   highlighted. Past ten options (`SettingsSelectNavigation.searchThreshold`) a search field leads, ranked as
   Brain's search ranks, and the rows scroll at ten and a half rows' height; a shorter list takes typed letters.
 - **Segments**, `style: .segmented`, draw two or three short options in place: one click, every choice in view.
+- **Choice cards** (a HUD style, an idle animation, a notch skin, an app icon, a download or Bluetooth icon style) say
+  "selected" one way: a 2-pt `accentStrong` ring around the tile (`settingsChoiceRing`; the eye blue is 2.3:1 on a
+  light card, under the 3:1 a state mark needs), and the name under it in ink, `bodyStrong` when chosen and `body`
+  when not (`settingsChoiceLabel`). No dot, no pill and no tinted fill. A second state, such as an idle animation's
+  "Built-in", is the badge. Each card is a `Button` in the `.plain` style that carries `.isSelected` itself, as a
+  sidebar row does, so the keyboard reaches it and VoiceOver hears which card is chosen; its name is not selectable,
+  and a glyph on it (an idle animation's delete) is an overlay over the button, never inside its label.
 
 | Key | Where | Does |
 |---|---|---|
@@ -224,6 +308,8 @@ which draw the title and the readout. SwiftUI on macOS 14 has no custom slider o
 own views. `Slider` and `Stepper` are banned under Settings, and `SettingsLayoutRulesTests` pins the few of ours
 drawn by hand outside a row.
 
+- **A slider's value is its readout**, `valueText` ("Width" and "36 px"), never part of its title, where it left the
+  readout column empty and the bar 40 pt short of its neighbours'. `valueText: nil` is for a row with no number.
 - **The slider** is a track filled with the accent up to a knob. A click on the track jumps the knob there and a
   drag moves it: Brain moves by its title row only, so the drag is the slider's. A step snaps from the lower
   bound; with none, a key moves it by 5 % of its range. No animation: the knob follows the value. Right to left it
@@ -244,7 +330,7 @@ drawn by hand outside a row.
 chain, so typing, the caret, input methods, secure entry, `.focused`, `.onSubmit` and `.onExitCommand` stay the
 field's. Its name sits beside it, never inside:
 
-- In a Form, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
+- On a page, a field goes in a `SettingsRow`, or a `LabeledContent` with a `SettingsRowLabel`, that names it. The
   chrome hides the field's own label, which VoiceOver keeps.
 - What to type goes in `prompt:`: a catalog key, or `Text(verbatim:)` for an example such as a host name. In a
   sheet, where the field's title was its placeholder, the prompt says it again.
@@ -258,10 +344,407 @@ field's. Its name sits beside it, never inside:
 chrome, the two above pinned. `--kannu-snapshot-tabs designSystem` draws each in its resting and disabled
 states, and `components` draws the slider and stepper rows in one column.
 
+## Pages and sections
+
+A page is a `SettingsPage` and a group of rows a `SettingsSection`, both in `DesignSystem/`. macOS 14 has no API
+for a custom form style to take a `Form`'s sections apart, so both are our own views, called the way `Form` and
+`Section` were: `SettingsSection { rows } header: { SettingsSectionHeader("…") } footer: { SettingsFooter("…") }`,
+either closure left out when there is none.
+
+- **The page is one scroll view across the panel**, so its scrollbar sits at the panel's edge and the wheel works
+  anywhere on it. Its sections stand in one column, `sectionGap` apart, capped at `pageMaxWidth` and started
+  `settingsPageInset` from the panel's leading edge (below, "The window"). The large title stays outside it.
+- **The scroll view starts `pageScrollInset` (12 pt) under the title**, and the column gives up as much of its top
+  padding. So a scrolled page is cut 12 pt under the title, never against it, and a page at rest starts where it did.
+  `SettingsProductPage` does the same.
+- **It builds every row as it appears.** A plain `VStack`, not a lazy one: a search or a deep link scrolls to a
+  row's id, and a lazy stack cannot scroll to a row it has not built. So a row's `onAppear` and `.task` run as
+  the page opens, not as the row scrolls into view, and `onDisappear` as the page goes or Brain closes, not as
+  the row scrolls away. A row that animates keeps animating while its page is open, in view or not; a closed
+  Brain still costs nothing (docs/REGRESSIONS.md, entry 22).
+- **Except the long lists, which are lazy inside the page:** the task rows (Brain › Tasks' list on each of its
+  tabs, Active, Done and Archived; Local tasks, a source and a project, `TaskRowCards`), Security's findings and
+  Notes' notes. Each can hold hundreds of rows (Notes' do with Apple Notes' whole account synced), and a plain stack
+  would build them all as the page opens. No search or deep link lands on one of their rows: Tasks' and Notes' rows
+  carry no highlight id, and the findings' link lands on their section's header. Going back to a task or a note
+  scrolls to its row by the `ForEach`'s own id, which a lazy stack reaches before the row is built. The lazy stack
+  holds only the list's rows, spaced as they were (a task row is a card of its own, `listRowGap` apart; a finding or
+  a note `sectionRowGap` apart in its card), and is left out while the list is empty, since an empty one still takes
+  a row's gap. Anything a search can reach stays outside it.
+- **A section is its rows in a soft card** (`card`, `sectionRadius`), `sectionRowGap` apart: space, never a
+  divider. Its header and footer sit outside the card, in line with the rows' text, as the grouped `Form` placed
+  them. `SettingsSectionHeader` is the heading for VoiceOver, not the whole header, so a Beta badge or a count
+  beside it is not one; the footer takes the secondary ink. A missing header or footer adds no gap. For VoiceOver
+  the section is one group, as `SettingsPermissionCallout` is, so like buttons in two of them are told apart
+  (Shelf's two "Open Privacy & Security"). A modifier on a section (`.disabled`, `.opacity`, `.onAppear`,
+  `.sheet`) reaches all of it, its header and footer too.
+- **A section with no rows draws an empty card**, where a `Form` drew nothing, so a section whose rows are all
+  conditional sits inside an `if` that guarantees one, as each such section does.
+- **Nothing stays a `Form` or a `Section`.** `SettingsLayoutRulesTests` bans both under Settings, `SwiftUI.Form`
+  and `Section(header:)` included, proven on planted offenders; its pin table is empty, and a site that must stay
+  native goes there with its reason. `SettingsDesignSystemRulesTests` holds the section's card, spacing, header,
+  footer and group, and keeps hooks, animators and laziness out of both views (the three lazy lists above are
+  inside pages, not in either view); `BrainShellRulesTests` holds the page's column and the inset's one
+  measurement.
+
+## Product pages
+
+A product page opens on what it is about, then its settings. Brain › Agents, Brain › Usage, Brain › Security,
+Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are the ones so far.
+
+- **`SettingsProductPage(settingsTitle:) { product } settings: { sections }`**, in `DesignSystem/`: one scroll view
+  across the panel, as `SettingsPage`, held the page inset from the leading edge and never centred. The product
+  stands in a column up to `productMaxWidth`, 1,200 pt; past it the extra width is right margin. A full-width
+  "<Page> settings" rule starts the settings, which keep `pageMaxWidth`, so a label stays near its switch. Plain
+  stacks, so a search or a deep link still scrolls to a settings row. The same items in the same order at every
+  width, only wider: no breakpoint and no second layout.
+- **The header's actions** sit on the title's row, at its trailing end, which stops where the product column does:
+  `SettingsForm(tab:actions:)` hands them to `SettingsPageHeader`. Icon buttons first, the page's one primary verb
+  last, each reading its own store. `.toolbar` stays banned.
+- **Agents** leads with a hero for the session `primarySession` ranks first, at least `heroMinHeight` (200 pt) tall,
+  in three bands. Top: its state as the title ("Needs you", "Working", "Finished"), in `cardTitle` and in its light's
+  colour, with the light at the right. Middle: the icon, provider · project, the chat and the state in words. Bottom,
+  pinned: the run's figures, each over a small label (Run time, Tool calls, Tokens in · out), from the text column, and
+  "Open chat ›" at the right. The whole card is one button, so "Open chat ›" is a label drawn like a quiet button, never
+  a button inside a button. Then Recent chats, rows `listRowHeight` tall and `listRowGap` apart, each with a trailing
+  column of `listTrailingWidth`: the state in words and in its light's colour, the metrics and the light. Then a status
+  row of three equal cells: Editors & hooks (one line, "5 tools watched · hooks installed", or "2 of 3 hooked" and then
+  each tool missing its hook, with Install; only a tool that has a hook counts toward "hooked", so Warp and Claude
+  Desktop are watched, never hooked), Usage
+  (readings near their limit, each its percentage over what it measures, with its reset and "As of"; never a read of
+  its own) and Security (only while findings wait for review). A cell's headline figure is `cardTitle`, and a quiet
+  cell is one line. A click on the hero or a row opens its chat.
+- **An empty state** keeps the hero's place and height: the status in `cardTitle`, one short sentence at most
+  `proseMaxWidth` wide (two lines at most) in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
+  first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn on. The status row and the
+  settings show in both.
+- **Agents' header** holds the gear alone, which goes to the first settings row. **Each missing hook is offered once:**
+  the empty state, while shown, offers the first and the Editors & hooks cell the rest; otherwise the cell offers them
+  all. Never in the header, never twice (the cell's `showsFirstOffer`). The tools come from `AgentToolDetector` (`Kannu/managers/AgentStatus/`): file checks and
+  Launch Services from the page's `onAppear`, once a visit, never in `body` and never Warp's container; the notch asks as
+  its empty state appears, never on the hover-opens while an agent works.
+- **Nothing moved out of reach.** Every settings row keeps its id, its search entry and its deep link, below the
+  product: Smart caffeinate's link from the notch lands there. Detected Editors became the Editors & hooks cell. Editor
+  Hooks stays a settings section: every hook with its tool's icon, and the one place a hook can be removed.
+- **Boards**: `agents0`, `agents1` and `agents3` draw Agents at the window's first size with no session, one and three,
+  from fixtures (`AgentsOverview.snapshotFixture`), never this Mac's sessions, tools, readings or findings. `agents0`
+  shows the install offer in the empty state, `agents1` the Editors & hooks cell's quiet line (every hook in) and
+  `agents3` the offer in that cell. `shellWide` and `shellWidest` (2,560 pt) draw it wide, and `shellDeepLinkAgents` the
+  caffeinate link landing below the product.
+- **Usage** leads with the notch's provider cards in Brain's style, built from the usage store's readings and outlooks
+  (`UsageAlertManager`): a card for each provider that is on, among those whose limits the store keeps (Claude, Codex,
+  Cursor). The card's title is the provider's icon and name; then each live window (`isLive`: not past its reset or
+  its expiry) is a row, its name over "Resets … · As of …" and the forecast when it says something, with the bar and
+  the percentage, rounded half away from zero as the notch's, in a trailing column of `listTrailingWidth`. Each
+  organization's windows stay together, its own first, and in each the 5-hour window, then the week, then the rest. The
+  bar is the slider's track, filled with the accent, and near the limit, as the alerts count it, the bar and the figure
+  are `destructive`; a warning forecast is too. A provider with no live reading is one quiet line. Then "Models this
+  week", from each provider's last read (`UsageSnapshot.models`), in Recent chats' rows: the provider over the model,
+  the tokens in and out trailing, and the cost only where the provider bills per token (Cursor), with a "+" when some
+  of its events had no price, as the notch writes it; VoiceOver hears the counts in words. Hidden when empty.
+  Antigravity's quotas are not among the store's readings, so it has no card; the notch shows them.
+- **Usage's empty state**, with no such provider on: "No limits to show", one line, and "Turn on a provider" (the
+  standard style), which goes to the Providers switches, or to the monitor's while it is off. **While Agent Status is
+  off**, which stops the usage store, Agents' own "Agent Status is off" with Turn on stands in place of the cards.
+- **Usage's header** holds the gear, which goes to the monitor's switch, then **Refresh**, the page's one primary verb,
+  off while a refresh runs, no provider is on or Agent Status is off. It runs on a press only, through the notch's own
+  paths, unchanged: its Refresh usage (`LLMUsageManager.refreshRequestedByUser`), and Claude's `/usage` as the automatic
+  refresh runs it (`refreshClaudeUsageFromCLI(manual: false)`), so a press here never starts a browser sign-in; that
+  stays a press of the notch's Claude ↻, beside the status line and Cancel it needs. Claude's run is skipped while that
+  line shows a status that holds the automatic refresh, read at the press, so the press never clears it
+  (docs/REGRESSIONS.md, entry 8).
+- **Boards**: `usage0`, `usage1` and `usage3` draw Usage at the window's first size with no provider on, Claude alone,
+  and Claude, Codex (no reading yet) and Cursor (near its limit), and `usageOff` the three with Agent Status off, from
+  fixtures (`UsageOverview.snapshotFixture`), never this Mac's readings or its Agent Status; the settings rows below
+  still read its switches, as Agents' do. `llmUsage` draws the page whole at the narrowest panel.
+- **Security** leads with a count strip: how many findings wait for review, how many of them are high, and how many are
+  acknowledged or snoozed, with "Show acknowledged and snoozed again" while any are; it is gone while all three are
+  zero. Then
+  "Security findings": the findings, worst first, in their lazy list (above, "Pages and sections"), or in their place
+  the empty state, "No findings yet" before any scan and "No open findings" after, with its one line and the page's
+  verb. Then a status row of three equal cells, in the settings' own words: the newest scan result (orange when its
+  coverage is partial), Scan this Mac (Kannu's last and next scan), and Policy rules. Then Recent analyses while session
+  analysis is on. While Agent Status is off the product is one card, "Agent Status is off", with Turn on. The notch's
+  link and search's "Security findings" land on the list's header, which is always built.
+- **Security's header** holds the gear, which goes to the first settings row (Alerts' "High-severity alerts in the
+  notch"), then the page's one primary verb: Scan now, off while a scan runs, or Connect ADR while ADR Discovery is not
+  found, which goes to ADR Discovery's row with its install command and Check again. Nothing while Agent Status is off.
+  The empty state draws the same verb in the standard style. **The page starts no work of its own:** no scan, no ADR
+  check (it spawns processes), no policy read and no analysis. Scan now and Connect ADR act on a press only, through the
+  settings' own paths. The settings keep the checks they had, each on a press or once a visit: ADR's tools while never
+  looked for, the Detection checkout while analysis is on and never checked (nothing else checks it at launch, and the
+  notch's Analyze menu waits for it), and the policy.
+- **What moved up** from Security's settings: the findings with their footer, the newest scan result and Recent
+  analyses, none of which had a highlight id. "High-severity alerts in the notch", which sat among the findings, is the
+  settings' first section, Alerts, with its id and search entry. Every other row is where it was.
+- **Boards**: `security0`, `security1` and `security3` draw Security at the window's first size with no finding (ADR
+  Discovery not found, so Connect ADR), one, and several (one snoozed, a partial scan, two analyses), from fixtures
+  (`SecurityOverview.snapshotFixture`), never this Mac's findings store. The `agentSecurity` board draws the page with
+  the several. The settings under them still read this Mac's switches and ADR's status, as Agents' do.
+- **Timer** leads with the running timer, in the hero's three bands. Top: its state as the title ("Running", "Paused",
+  "Overtime", which is `destructive`), with the session's colour as a dot at the right. Middle: its name, with a timed
+  task's key or "Mirrored from the Clock app". Bottom, pinned: the time left in `pageTitle` with digits of one width,
+  as the notch writes it, over "of" its length, with Pause or Resume and Stop at the right, then a bar of how much has
+  run, in the session's colour, full and `destructive` in overtime. Pause or Resume shows unless the timer runs in
+  overtime; paused there, it still offers Resume, as every timer surface does. A timer mirrored from the Clock app has
+  no buttons, as in the notch: the Clock app pauses and stops it. Then **Presets**: a start tile each, `tileWidth` wide
+  and wrapping, its colour and name over its length. A click starts the preset through the popover's own call,
+  replacing a timer that runs, as the notch's preset list does; the running preset's tile wears the selected ring, and
+  a 0:00 preset, which only an older version could save, does not start. A tile's ⋯ and its right-click menu hold
+  Edit…, Move up, Move down and Delete; Add preset is the last tile, and the heading's ⋯ holds Restore defaults, which
+  asks first. Each ⋯ is named for VoiceOver by what it belongs to ("Focus, More", "Presets, More"). Search's "Timer
+  Presets", found by "accent colour" too, lands on the heading, which is built whenever the timer is on.
+- **Timer's preset sheet** (`TimerPresetSheet`, the design review's finding 25): the name, the length in Custom timer's
+  stepper rows, and the colour, written on Add or Save and never as typed, so Cancel leaves the preset as it was. It
+  refuses a blank name, a blank row in the notch's list, and a 0:00 length, which would ring a second after it
+  started; a length over 23:59:59, which only an older version could save, opens whole, with the Hours stepper reaching
+  its hours, so an edit never cuts them to 23. It replaced the inline editor in the settings, which drew its own
+  steppers under 9-pt labels.
+- **Timer's empty state**: "No timer running" and "Click a preset below to start a timer.", whose action is the tiles
+  under it. **While the timer is off**, "Timer is off" with Turn on stands in place of the timer and the tiles: the
+  notch shows no timer then.
+- **Timer's header** holds the gear, which goes to the timer switch, then **Start timer**, the page's one primary verb:
+  the custom timer at its stored length (Custom timer, below), named "Custom Timer", as the popover's Start Custom Timer
+  starts it. It acts on a press only, and is off while a timer runs, as the popover hides its own start then, while the
+  timer is off, and at 0:00.
+- **Boards**: `timer0` (no timer), `timer1` (Focus running from its preset), `timerOver` (a task's timer paused in
+  overtime), `timerClock` (a Clock-app timer) and `timerOff` draw Timer at the window's first size from fixtures
+  (`TimerOverview.snapshotFixture`), never this Mac's timer or presets; the settings rows below still read its switches.
+  `timer` draws the page whole at the narrowest panel, two tiles to a row, and `timerPresetSheet` the sheet on Focus.
+- **Clipboard** leads with Pinned items, their count beside the header, then History, its count beside its title, folded
+  each time the page appears, Brain's reopening included, since its content outlives the window: a copy can be anything,
+  a password typed in a plain app included (the capture policy skips only concealed, transient and token-shaped copies),
+  and a full-screen Brain can be on a shared screen. Pinned items always show: a pin is the user's own choice. A row is
+  the copy's preview over its kind and when it was copied, by its date, so the page keeps no clock; then its glyphs,
+  Copy, Pin or Unpin, and Delete. A pinned row has no Delete: there, the panel's and the popover's Delete only unpin.
+  With nothing pinned, Pinned items says so in one row. With nothing at all, an empty state, "No clipboard history",
+  with its one line and no action, since history fills itself. While the clipboard manager is off, one card,
+  "Clipboard manager is off", with Turn on.
+- **Clipboard's header** holds "…", with Clear history and Clear pinned items, each off while there is nothing to clear
+  and each clearing at once, as the Actions buttons it replaces did; then the page's one primary verb, Open history
+  panel, the notch's floating clipboard panel, whatever the display mode. Nothing while the manager is off. **The page
+  starts no work of its own:** no capture and no poll. A glyph, a clear and the verb act on a press only, through the
+  manager's own calls; the settings keep their calls, the switch's start and stop and the start as the page appears
+  while the manager is on.
+- **What moved up** from Clipboard's settings: Current Items and Pinned Items, now the counts; Actions, now "…"; and
+  Current History, now History. None had a highlight id. Monitoring status stays, as a status line with its dot.
+- **Boards**: `clipboard0`, `clipboard1` and `clipboard3` draw Clipboard at the window's first size with nothing copied,
+  one pin and two copies, and three pins and five copies with History open, from fixtures
+  (`ClipboardOverview.snapshotFixture`), never this Mac's clipboard. The `clipboard` board draws four copies and no pin.
+  With a fixture set the page never touches the clipboard manager: its first touch loads the saved history and deletes
+  the image files that history does not name, in a folder the installed app shares, and its start reads the real
+  pasteboard. The page and its header take the manager's switch from the fixture, on, as Usage's take Agent Status, so
+  no board draws the page's off card now; the settings rows below still read this Mac's switches.
+- **Tasks** leads with what needs you, each only while it holds something: the sessions Kannu stopped while timing
+  (Interrupted sessions, with Set End Time and Discard) and Time to log's cards. Then the list (`TasksOverview`): its
+  three tabs, Active (the open tasks of every connected source, in the task order), Done (closed lately: done here,
+  or no longer listed by their source) and Archived (`SettingsSelect`, segmented); under them Find, where a word
+  typed with `#` finds a tag or a label as a whole (`TaskSearch`), and the Tag filter (`SettingsSelect`, every tag
+  and label on any task, `TaskFacets.filterTags`). The Source, Project and Status filters All tasks had are gone: a
+  source and a project have their own pages, and the tabs split what is open from what is closed. Each task is a
+  soft card, `listRowGap` apart: its colour dot, its title over one caption with its tags as chips (the first tag in
+  its colour and "+N" for the rest, or one "+N" when the caption leaves no room, so the caption, which carries the
+  time and any overtime, is never cut for a chip; a tag Find found comes first), then a local task's ✓, ▶ or ■, and a
+  › to its page. A closed card has its one action, Reopen, Archive or Restore, then its ›. The rest is each card's
+  right-click menu, which opens with Show Details. Lazy, as before, and lists only.
+- **Tasks' empty states:** "No open tasks" with one line and the page's verb in the standard style; Done's and
+  Archived's say what lands there; "No tasks match" while Find or the Tag filter hides everything. While tasks are
+  off, "Tasks is off" with Turn On stands in place of the list, and the page touches no task file.
+- **Tasks' header** holds the gear, which goes to the first settings row (Enable tasks), then **New task**, the
+  page's one primary verb, while tasks are on and the task list has been read. It opens New Task on any page of the
+  tab; a new task the list on screen would hide opens on its own page. ⌘N is the menu bar's File › New Task, which
+  opens the same sheet the same way, so neither the header nor the page binds it.
+- **Tasks' settings**, under a "Tasks settings" rule: the Tasks switches first, where the gear lands, then Sources
+  (Local tasks and each source with how many tasks it holds and a › to its page) and Tag colours, folded.
+- **A task's page, wide** (layout-proposal D1; above, "Section rules"): from 1,224 pt of panel a task opened from the
+  list shows beside it, and its card wears the selected ring; narrower it takes the list's place under "‹ Tasks", and
+  widening the window past the width with it open scrolls the list to its row.
+- **Boards**: `tasksWindow`, `tasksTask`, `tasksDone` and `tasksArchived` draw Tasks at the window's first size: the
+  list, a task opened from it in the list's place, and the Done and Archived tabs; `tasksWide` and `tasksWideTask` at
+  a 14-inch full screen (1,512 × 982): the list with no task open, and with one beside it. Fixture tasks only
+  (`TasksManager.snapshotFile`), never this Mac's; the switches come from this Mac's settings, so the boards run with
+  `-enableTasks '<true/>'`. `tasks` draws the page whole at the narrowest panel.
+- **Notes** leads with the notes in one card, pinned first and then the latest edit first, as the notch's Notes tab
+  lists them, in a lazy list (above, "Pages and sections"). A row is the note's colour (a pin in that colour when it is
+  pinned, as the notch marks one, in a column a list row's icon wide, so the titles share an edge), its title and a
+  caption: when it was last edited, by the time of day or the date, so the page keeps no clock, then its text's first
+  line. Then a › to its own page; its right-click menu holds Open note, Pin or Unpin (while pinning is on, as in the
+  notch), Copy, Open in Notes for a note made there, and Delete. While Apple Notes sync is on, one status line above the
+  notes says that a sync runs, when the last one ran, or its error; it reads the page's copy and starts nothing. With no
+  note, "No notes yet", "Write your first note here or in the notch." and New note in the standard style, the header's
+  verb again, as Security's empty state draws its own. While Notes is off, one card, "Notes is off", with Turn On.
+- **A note's own page** (below, "Section rules"): from 1,224 pt of panel the › shows it beside the list
+  (layout-proposal.md, D1), the note's row wearing the selected ring, and its card names the note over when it was
+  edited, since the tab keeps Notes' title; with none open, its place says "No note selected", and how to open one
+  while there is one. Narrower it is an in-tab swap: the › opens it under a bare "‹ Notes" back row, with the note's
+  title as the page's title, at its top; going back scrolls to the note's row, and so does widening the window past
+  the width with the note open. Either way it shows the note whole and read-only: when it was edited ("Made in
+  Apple Notes" after it for a note shown read-only), the text, selectable, and its image as a preview at most the prose
+  width and a hero card's height, read from its file once, off the main thread. Then Pin or Unpin, Copy and Delete, and
+  Open in Notes for a note made there: the notch edits notes, and Apple Notes the ones made there. `NotePage` is handed
+  the note and nothing else, so both widths draw it from the same selection. Each visit opens on the list, at both
+  widths, since a note left open would come back whole on a reopened Brain, which can be on a shared screen; a Notes
+  search or deep link closes a note's page in the list's place, where its row is, and leaves one beside the list.
+- **Notes' presses:** Delete asks first for a note made in Apple Notes and linked to it while sync is on, whatever the
+  scope, since it moves to Recently Deleted there too: a narrowing leaves such a note listed until the next sync, and
+  its Delete still reaches Notes. Any other goes at once. **The page starts no work of its own:** no sync and no
+  AppleScript as it appears or follows, though the notch's Notes tab syncs as it appears. Pin, Copy, Open in Notes
+  (AppleScript, behind the sync manager's gate) and Delete act on a press only, through `NotesManager`, the notes' one
+  write path; Delete then reads the notes again at once, so the row goes with the note. A note's image file is read
+  only by Copy's press and by a note's page, once, off the main thread, never by a row. The settings keep their three
+  syncs, each on a press: the scope's choice, the narrowing question's Sync Kannu folder, and Sync now.
+- **Notes' header** holds the gear, which goes to the first settings row, Enable Notes, then **New note**, the page's one
+  primary verb, which opens New note's sheet on a press. No New note while Notes is off.
+- **New note's sheet** (`NewNoteSheet`; layout-proposal.md §5 item 7, David's "Yes, add the sheet"): the title and the
+  text, each with a prompt that says what to type, and the colour, a `SettingsSelect` of the notch's six with each
+  colour's dot. Add saves the note through `NotesManager.save`, as a note made in the notch is, and never one with no
+  title and no text (a title of spaces is none); nothing is saved as it is typed, so Cancel leaves nothing. Return is
+  Add in the title; in the text, which runs to several lines, Return is the text's own and ⌘Return is Add, so a list
+  typed line by line is never saved half done. One id for the sheet, so Return reaching both the title and Add saves
+  once. A note's own page stays read-only.
+- **What changed** in Notes' settings, by the copy pass's rules (4-3c skips Notes): the switches in sentence case; the
+  General footer, which said no fact, dropped; Last synced by the time of day, with no spinner and no relative date,
+  since the status line above says when a sync runs; the Apple Notes footer as two facts, a line each; the two scope
+  choices' captions about 8 words. Every row keeps its id and search entry, and Enable Notes registers one, the gear's
+  landing.
+- **Boards**: `notes0` and `notes4` draw Notes at the window's first size with no note and four (a pinned one, one with
+  an image, one made in Apple Notes and one with no text), `notePage` the page of the one with the image and
+  `notePageMirror` the one made in Apple Notes; `notesWide` and `notePageWide` at a 14-inch full screen (1,512 × 982),
+  the four with none open and with the one with the image beside the list; from fixtures
+  (`NotesOverview.snapshotFixture`), never this Mac's notes, sync state or image files. `notes` draws the page at the
+  narrowest panel, and `newNoteSheet` the sheet half typed, never saved. The switches drawn under the product are this Mac's, so the boards run with `-enableNotes '<true/>'`,
+  the sync's with `-enableAppleNotesSync '<true/>'` and `notePageMirror` with `-appleNotesSyncScope 'Whole account'`
+  too: the argument domain, nothing saved. A bare `YES` reaches Defaults as text, which reads as the switch's default.
+
+## Live data
+
+Brain's content is built once and kept for the app's life. Closing takes it out of the window, and a change published
+while it is out still re-runs `body` (docs/REGRESSIONS.md, entry 22). The agent monitor publishes on every hook write,
+up to about 20 times a second, and Agents is the page Brain opens on. So a page that shows live data keeps three rules,
+which `AgentsPageLiveDataRulesTests` reads from the source, `SecurityPageLiveDataRulesTests` for Security and
+`ClipboardPageLiveDataRulesTests` for Clipboard, each
+checked against planted offenders:
+
+1. **Throttled and scoped.** The page copies what it shows into `@State` from one subscription to the one value it
+   needs: Agents' sessions through `$sessions.throttle(for: .milliseconds(500), scheduler: RunLoop.main, latest:
+   true)`, at most twice a second, and the style preview's light through `$trafficLightState.removeDuplicates()`.
+   Nothing under Settings observes the whole monitor (`ClosedNotchObservationTests`). Security's cell follows the
+   findings store's `objectWillChange` on the same throttle and redraws only when its summary changes: while a
+   session runs with permission checks off, every hook write restamps its finding and the store republishes. One leaf
+   runs faster: `AgentTurnMetricsView` observes the token follower, which republishes every 50 ms while it catches up
+   on a long turn, as it does for the notch. **Brain › Security** follows that store the same way for its whole page:
+   `AgentSecuritySettings` copies what the product and the settings show into one value, `SecurityPageData`, through
+   `objectWillChange` on the same throttle, assigned only on a change, and hands it to `SecurityOverview`; its header
+   follows `$isScanning` through `removeDuplicates()`. So the settings row's Scan now, which reads the copy, can turn
+   off up to 500 ms after the header's; `runScanNow` returns at once while a scan runs, so a press in that gap starts no
+   second scan. Nothing on the page observes the store, keeps a reference to it
+   or reads its state past that copy; a press calls its methods. `ADRConnection`, which publishes only around a check
+   of ADR's tools, is observed directly. **Brain › Clipboard** follows the clipboard manager, which publishes on
+   every copy it records, the same way: `ClipboardSettings` copies the pins, History and whether the manager runs into
+   one value, `ClipboardPageData`, through `objectWillChange` on the same throttle, assigned only on a change, and hands
+   it to `ClipboardOverview`; a copy never changes once captured, so the value compares them by id. Its header follows
+   whether there is anything to clear through `removeDuplicates`. Nothing on the page observes the manager, keeps a
+   reference to it or reads its state past that copy; a press calls its methods.
+2. **Stopped while Brain is not on screen.** The subscription is a `.task(id: visibility.isOnScreen)` that returns at
+   once while the flag is false, so it ends when the flag goes false and starts again when it comes back. Agents'
+   Security cell's is the live status row's own `.task`, and that row exists only while the flag is true. Neither wraps
+   its loop in a `Task`, which would outlive the cancel. `BrainVisibility.isOnScreen` follows the window's occlusion state
+   (`windowDidChangeOcclusionState`): false while Brain is closed, minimised, hidden with the app, fully covered or in
+   another Space, where a full-screen Brain keeps `isVisible` true. Opening and closing set it too, rather than wait
+   for that change, which can come late, or not at all for a window never shown. It starts false, so nothing live
+   runs before Brain is first on screen. The page reads once as it appears, so it opens on what is happening, not on
+   an empty state. Brain › Security's two subscriptions are its page's and its header's own
+   `.task(id: visibility.isOnScreen)`. Back on screen the page reads the store once before it follows it, since
+   `objectWillChange` does not send again what changed while Brain was away; a `@Published` value's publisher sends
+   its current value as it subscribes, so Agents' and the header's need no such read. Brain › Clipboard's two
+   subscriptions are its page's and its header's own `.task(id: visibility.isOnScreen)`; back on screen the page reads
+   the manager once before it follows it, for the same reason.
+3. **No work while nothing is on screen.** The live leaves give way to a static copy. `AgentTurnMetricsView`, which
+   observes the token follower and ticks once a second, becomes the run time as it froze and the tool count, without
+   tokens; the status row, which observes the usage store and follows the findings store, is read once instead. The
+   page, its scroll position and anything typed stay. The hero's figures are the same leaf with its `figures` option
+   (nil in the notch and in Brain's rows), and their static copy lays out through the same `figureRow`, with no clock.
+   Security keeps no clock at all: a scan is told by its time, and off screen its copy simply stays as it was.
+
+A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
+walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
+screen in another Space during a busy agent, and the same for Security during a session with permission checks off.
+It needs a real window, so it is David's check before install.
+
+**Usage** keeps the same three, and `UsagePageLiveDataRulesTests` holds them against planted offenders. Its readings,
+outlooks and models come through one subscription to `UsageAlertManager`'s `$readings` and `$outlooks` and
+`LLMUsageManager`'s `$results`, throttled to 500 ms and assigned only on a change; the header's "a refresh is running"
+through one to the two refresh flags that drops repeats; each a `.task(id: visibility.isOnScreen)`, and the stores are
+read once as the page appears. It keeps no clock and no animation: a reset and a reading are told by the time of day,
+and the page leaves out a window past its reset or expiry itself as it draws (`isLive`), since the store drops one only
+while it runs, which is while Agent Status is on; off screen the copy simply stays. **It never reads usage of its own**
+(docs/REGRESSIONS.md, entry 8): Claude's limits come from the agent monitor's reads, Codex's and Cursor's from the
+notch's Usage tab, the opt-in background check or Refresh, so a reading can be hours old and each says when it was
+taken. Refresh's press is the one way in, and the rule test pins its two calls, and the hold Claude's run checks, to it.
+
+**Timer** keeps the same three, and `TimerPageLiveDataRulesTests` holds them against planted offenders. A running timer
+publishes three changes a second (`remainingTime`, `elapsedTime` and `lastUpdated` on every tick), so the page never
+observes the manager: what it shows is copied into one value, `TimerPageData`, from one subscription to the manager's
+`objectWillChange`, throttled to 500 ms and assigned only on a change; the header's "a timer runs" comes through one to
+`$isTimerActive` that drops repeats; each is a `.task(id: visibility.isOnScreen)`, and the manager is read once as the
+page appears and again each time Brain comes back. **Its time keeps no clock of its own.** It moves with the manager's
+one-second tick, which the throttle lets through, so it shows what the notch shows, at most half a second later. The
+manager keeps no deadline (it counts `remainingTime` down, and a pause stops the count), so a `TimelineView`, a `Timer`
+or a counting `Text` here would be a second clock that could disagree with the notch, and would tick on while a timer
+stood paused. Off screen the copy stays as it was; an idle or paused timer publishes nothing, so the page then does no
+work at all. Its buttons act only on a press, through the popover's own calls, and Pause or Resume reads the timer as
+it is at the press, never the copy, as Start timer does to start nothing over a running timer, which the header's copy
+misses until its task first reads the manager. Each press, and each edit of the presets, then reads the timer again at
+once, one read and never a subscription, so the card never shows the old state for the throttle's half second, and a
+paused timer's colour follows an edit of its preset. **Not measured:** the CPU of Timer open while a timer runs; it
+needs a real window.
+
+**Tasks** keeps the same three for its first page, and `TasksPageLiveDataRulesTests` holds them against planted
+offenders. What the list, what needs you above it and the settings below show from `TasksManager` is copied into one
+value, `TasksPageData`, read as the page appears and again as Brain comes back on screen, then followed through the
+manager's `objectWillChange`, throttled to 500 ms and assigned only on a change, in a `.task(id:)` on
+`BrainVisibility.isOnScreen` and the Tasks switch, so with tasks off nothing reads the task file; the header's "the
+list has been read" comes through one subscription to `$loadState` that drops repeats. A press calls the manager, then
+the page reads it again at once, outside the throttle, so a second click never waits behind the first; so does a
+sheet's close and the delete alert. What the page works out from every task (the interrupted sessions, the Tag filter's
+choices, the source counts) is worked out in the copy, once a change, not in `body` once a keystroke in Find, and the
+Sources rows' Defaults display copies are in it too, since the page redraws only when the copy changed. Two parts
+follow the manager as they always did, and say so: Time to log's cards are the notch popover's own
+(`WorklogDraftCard`), built only while an entry waits, which the copy says; and the pages below the first (a source's,
+a project's, a task's, also beside the list) edit what they show in place. The manager publishes only on an edit, a
+timer's start or stop, or a sync, which runs only when asked (`SourceSync`: a page appearing, Refresh, Connect; no
+timer, no polling), so none of this ticks. **The two clocks a task has run only while Brain is on screen:** the timed
+row's minute (`TaskRowCards`' `live`) and a task's page's (`TaskDetailPage`, a `.task(id:)` on Brain's visibility,
+which catches up at once when Brain comes back). The list keeps no clock of its own: a closed task's days are read as
+it draws. **Not measured:** CPU with Tasks open while a task is timed, and parked full screen in another Space.
+
+**Notes** keeps the same three, and `NotesPageLiveDataRulesTests` holds them against planted offenders. The notch
+autosaves a note every 1.5 s while one is typed, and a sync rewrites the notes, so the page never observes them: what the
+list, a note's page and the settings show is copied into one value, `NotesPageData`, from one subscription, the notes
+and the sync's switch, scope and date through `Defaults.publisher(keys:options: [])` merged with the sync manager's
+`objectWillChange`, throttled to 500 ms and assigned only on a change, in a `.task(id: visibility.isOnScreen)`. The
+copy is read once as the page appears and again each time Brain comes back. Nothing on the page observes the sync
+manager or holds the notes in a `@Default`, and nor do the notch's coordinator and view model, which the page before
+observed whole and never used. It keeps no clock: a note's edit and the last sync are told by the time of day or the
+date. A note's page has one hook, which reads its image from its file once, off the main thread. **It starts no sync:**
+the notch's Notes tab syncs, and so runs Notes' AppleScript, as it appears; Brain's page syncs only on a press of the
+settings' three. **Not measured:** the CPU of Notes open while a note is typed in the notch; it needs a real window.
+
+**The sidebar's badges** keep the same three, and `SidebarBadgeLiveDataRulesTests` holds them against planted
+offenders. Each badge copies its one value from one subscription throttled to 500 ms and assigned only on a change,
+in a `.task(id: visibility.isOnScreen)` that returns at once while the flag is false, and reads its source once as it
+appears. Agents' follows the monitor's projection (the light and whether it shows), never the monitor; Security's
+follows the findings store's `objectWillChange` and reads the store once more as Brain comes back; Usage's follows
+`UsageAlertManager.$nearLimit` and leaves out a window past its reset as it reads; Timer's follows `$isTimerActive`
+and `$isPaused`, never the time, so nothing in the sidebar ticks. Nothing observes a store whole, and a board never
+reads one: every board is quiet but `shellBadges`, which draws all four from a fixture. **Not measured:** the CPU of
+Brain open while an agent works; it needs a real window.
+
 ## The shell and navigation
 
 `BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It
-takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab.
+takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes strings, never a tab, and a
+badge as a view its caller builds.
 
 - **Two lists, and no mode flag.** The product list ends at Settings and About; the settings list starts
   with Back. Which one shows is read from the selected tab (`SettingsTab.group`), and `selectedTab` is
@@ -272,9 +755,15 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
 - **A query shows one flat list** of the matching tabs, with no Back row and no Settings row. Clearing it
   returns to the list the selected tab is on. A deep link to a tab that list leaves out clears the query, so
   the sidebar still shows the tab. The suggestions render inside the sidebar's column.
+- **A suggestion is a row:** its title in `body`, two lines at most, and its tab under it in `description`. Whether
+  the list scrolls is decided from what is known at once: more than seven matches, or a last row not yet measured,
+  scroll, in at most 344 pt, so the list is never taller than that, even unmeasured. Each row measures where its
+  bottom edge falls, and the measures only trim the scroll view to the lowest one under 344 pt, so it never cuts a
+  row's text; they are cleared when the matches change. While rows sit below the foot, a short fade
+  (`suggestionFade`) says there is more.
 - **A page's large title is its tab's**, from `SettingsForm`, so a page needs no edit to have one. A
   sub-page that has a title of its own says `settingsPageTitle(_:)`, as Brain › Tasks does. The title
-  sits outside the page's `Form`, so it stays put while the page scrolls.
+  sits outside the page's scroll view, so it stays put while the page scrolls.
 - **The sidebar is a custom list, not `List(selection:)`**, which draws its own selection on macOS. So it
   takes arrow keys itself and follows its own selection, and a row, Back and the Settings row each hand it
   the keyboard. Up and down walk the list on screen; About is a foot row and not in that order. Left is Back
@@ -282,23 +771,60 @@ takes its three parts as slots, so it knows no page. `SettingsSidebarRow` takes 
   Keyboard Access.
 - **The moon writes `brainAppearance`,** and the window applies it (below). From Match macOS it picks the
   opposite of what is on screen.
+- **A row's badge says a state that needs you** (`SidebarBadges.swift`, layout-proposal.md D2): Agents' dot in the
+  light's own yellow while an agent waits for input, shaded on paper as Agents' state word is; Security's count of
+  high-severity findings to review, on the destructive colour; Usage's destructive dot while a window is at or near
+  its limit (`UsageAlertPolicy.nearLimit`). Timer's static ▶ says a timer runs, overtime included, and not while it
+  is paused. Security's and Usage's show only while Agent Status is on, as their pages do. Agents' is the notch's
+  light, so a finished agent's red outranks another's yellow there and here. Nothing else: no open-task count,
+  which is never zero, and no setup checklist. Each says itself in words too, to VoiceOver and the pointer ("Needs
+  you", "High: 2", "Near its limit", "Running"). A Settings page in beta shows the pages' one badge, "Beta". The
+  badges keep the live-data rules (below); `SettingsView` only places them, so the root observes nothing for them.
+
+- **View › Hide Sidebar** (`brainShowsSidebar`) takes the sidebar column away, search with it, and the panel keeps the
+  window's inset on both sides. `BrainShell` takes it as a plain flag. It says whether the sidebar shows at all, never
+  which list. Hidden, Go still reaches the product pages; the Settings list, search and About come back with Show
+  Sidebar, which stays on whenever Brain is on screen.
 
 `BrainShellRulesTests` holds this. `--kannu-snapshot-tabs shell,shellSettings,shellDeepLink,shellWide,shellSearch,shellSearchList`
 draws the whole window: both lists, a deep link's scroll and ring, the stand-in for full screen, and a search
 with its suggestions and without. An animated scroll does not move in their off-screen window, so the boards scroll at
 once (`snapshotScrollsAtOnce`), and the 0.45 s is never drawn. The window's own title bar is not in them, and
-arrow keys and hover take a real window.
+arrow keys and hover take a real window. `shellNoSidebar` draws the window with its sidebar hidden, `shellGo` a Go
+item's page, and `shellBadges` every badge at once, from a fixture.
+
+## The menu bar
+
+Brain's menus are SwiftUI commands in `KannuApp.swift`, beside Brain… (⌘,). The menus Kannu adds after the launch
+(Focus, Accessibility, Permissions, Tools) are unchanged.
+
+- **File › New Task** (⌘N) opens Brain on Tasks with New Task over whichever Tasks page is open, at once, even while the
+  list is still loading: the sheet keeps Add off until it is ready. On All tasks the sheet takes the list's filters, as
+  Add a task does. The menu owns ⌘N, and the item is off while Tasks is off.
+- **View:** Hide or Show Sidebar (⌃⌘S), Appearance (the moon's three choices), then Enter or Exit Full Screen (⌃⌘F). They
+  act on Brain's window, so they are off while it is not on screen, and they read `BrainVisibility`, which builds nothing.
+  AppKit would add an Enter Full Screen of its own, which a SwiftUI command cannot stop, so the app registers
+  `NSFullScreenMenuItemEverywhere` as false before launching ends.
+- **Go:** the product pages in the sidebar's order (`SettingsTab.productPages`), ⌘1 to ⌘7. An item opens its page as its
+  sidebar row does: the request a search pick sends, through the same switch point, for no row, so nothing pulses and a
+  Tasks page keeps its place.
+
+Go and New Task open Brain through one function, `openBrain`, which brings the terms back until they are accepted, as
+Brain… does, and only beeps while a sheet is open over Brain: menu keys still reach the menu bar under a sheet, and a
+page switched under it would close it, with what was typed in it. `MenuBarRulesTests` holds the menus against planted
+offenders. No PNG shows the menu bar, so a snapshot run
+writes it to `menu.txt` as the launch built it: each item's key, action, and whether it is off or checked.
 
 ## The window
 
 - **Sizes.** It opens at 1100×760 and goes down to 820×560, centred on the screen under the pointer and
-  clamped to it. A page stops at 720 pt, so a row does not stretch across a full-screen panel, and it is
+  clamped to it. A page stops at 720 pt (a product page's product at 1,200: "Product pages"), so a row does not stretch across a full-screen panel, and it is
   never centred: it starts 32 pt from the panel's leading edge, or 48 pt on a panel 1,000 pt or wider, so a
   full-screen panel's spare width gathers on the right instead of on both sides of a floating column.
-  `SettingsForm` pads the page by the inset less `formMargin`, the grouped `Form`'s own 20 pt margin, so
+  `SettingsForm` measures the panel and hands the inset to the page and its title (`settingsPageInset`), so
   titles and cards line up. Its title is 24 pt on every page, its cap height 44 pt below the panel's top. The
-  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`,
-  `formMargin` and `pageHeaderTop`. The root's frame
+  values are `SettingsTheme`'s `window…` tokens, `pageMaxWidth`, `pageInset`, `pageInsetWide`, `widePanelWidth`
+  and `pageHeaderTop`. The root's frame
   has a minimum and no maximum, because SwiftUI's size bridge clamps the window to it (`docs/REGRESSIONS.md`,
   entry 17).
 - **Transparent title bar.** The title is hidden, and kept for the Window menu and Mission Control. The shell's
@@ -316,15 +842,48 @@ arrow keys and hover take a real window.
   macOS. `BrainAppearanceRulesTests` holds this.
 
 A board's window is borderless, so the moon draws in the PNGs and the traffic lights never do. No board can
-enter full screen: `shellWide`, at 1440×900, stands in for it. Tabs render at 612 pt, the narrowest panel
-the window can have, through `SettingsForm`, which pads them; a board of a bare `Form` renders at 588 pt, the
-page that padding leaves. `shellSearch` and `shellSearchList` render at the smallest window, where the sidebar has
-the least room.
+enter full screen: `shellWide`, at 1440×900, stands in for it. A board renders the layer tree, which draws no
+video and no liquid glass: Devices' 3D icon, a looping movie in the app, shows the movie's first frame on a board
+(`DevicesSettingsView.snapshotDrawsStill`), and a glass panel would come out white.
+Every page renders at 612 pt, the narrowest panel
+the window can have: a `SettingsPage` insets itself, in a tab or on its own. `shellSearch` and `shellSearchList`
+render at the smallest window, where the sidebar has the least room.
 
 **Never list `shelf`, and never run the boards without `--kannu-snapshot-tabs`.** An unfiltered run renders
 every tab, and the Shelf page touches `~/Documents` and `~/Downloads` through its folder access store, whose
 first touch blocks the main thread on a macOS permission prompt (AGENTS.md, "Nothing runs before the Terms of
 Use are accepted"). Check the Shelf page by hand.
+
+## Onboarding
+
+The first-run window (`OnboardingView`, 400×600) is a window of its own, so it applies the root itself, once, as a
+sheet does, and paints `SettingsTheme.panel` under every step and under the title bar. It follows macOS's appearance:
+`brainAppearance` is Brain's window's alone. Each step is a sheet's shape on a page's insets:
+
+- **Its title and one line under it**, starting at `pageInset`: the title in `pageTitle` (a header), the line in `body`
+  on `inkSecondary`, both selectable. Welcome and Finish centre their hero instead.
+- **Its choices as choice cards** ("Choices"): a `.plain` button that looks like Timer's start tile (`card`,
+  `sectionRadius`, `cardPadding`), with the ring and `.isSelected` when chosen and its name in `settingsChoiceLabel`.
+  The line under the name sits inside the button, so it stays unselectable. A list's cards are `listRowGap` apart, the
+  profiles' grid `cardPadding`. A card's notch preview keeps the notch's black and its own colours. YouTube Music's
+  GitHub link sits over its card, never inside the card's button.
+- **Its buttons trailing**, the verb `.primary`. Finish's are a sheet's: Customize in Brain, then Finish, which Return
+  presses.
+- **The Permissions step keeps one card per permission.** `LaunchPermissionRow` is shared with General's Permissions,
+  where it is a row. In both, Allow is the row's primary and Not now quiet (the design review's finding 4). Our own
+  styles draw alike in a window that is not key, where a native prominent button turns grey, so the rows need no tint
+  of their own. The Focus choice is a segmented `SettingsSelect`, and Open at login our switch.
+
+`SettingsDesignSystemRulesTests` holds the root, the panel, Allow's rank, and no `.borderedProminent` under
+`Onboarding/`. No string changed with the theme: the steps' titles keep their Title Case. Behaviour did not change
+either: when a permission is asked, the welcome music and every gate are `FirstLaunchRulesTests`' and
+`LaunchGateRulesTests`'.
+
+Every step has a board: `OnboardingView(snapshotStep:)` at the window's size, named from `OnboardingStep`'s cases
+(`onboardingWelcome` to `onboardingFinished`), and `onboardingPermissionsAll`, that step's whole list, which the window
+scrolls. The Permissions step's rows and states are fixtures (`DebugSnapshotFixtures.launchPermissionStatuses`, set on
+`LaunchPermissionManager.snapshotStatuses`, DEBUG only), so a board reads none of this Mac's answers and `refresh`
+probes no folder. Its welcome draws no sparkles: a board renders no emitter.
 
 ## The content standard
 
@@ -339,21 +898,39 @@ section describes it, it does not define it.
 | Title to description | 2 | `labelStack` |
 | Inside a row's trailing content | 8 | `rowContent` |
 | Between footer lines | 6 | `footerStack` |
+| A row's caption, widest | 440 | `descriptionMaxWidth` |
+| A footer, or an empty state's line, widest | 380 | `proseMaxWidth` |
 | A slider's or stepper's whole trailing column, or a typed value beside its button (a task's Time row) | 220 | `sliderWidth` |
 | Its readout, trailing, monospaced digits | minWidth 40 | `valueColumn` |
 | The ready dot in a status line | 7 | `statusDot` |
-| A control's title to its glyph ("Open ›", a tag chip's ×) | 4 | `iconGap` |
+| A control's title to its glyph ("Open ›", "‹ Tasks", a tag chip's ×) | 4 | `iconGap` |
 | Inside a card | 12 | `cardPadding` |
 
+- **One inset, 12 pt, for text inside and beside a card.** A section's rows, header and footer (`sectionPadding`), the
+  hero and an empty state (`heroPadding`) and a status cell (`cardPadding`) all start their text 12 pt in, so a page's
+  titles share one edge. Only the page's title and the "<Page> settings" rule sit on the column's edge. A lone quiet
+  button keeps that edge with `flush`: bare at rest, its 8-pt inset would set its label off the text above it, so the
+  label sits on the edge and the fill under the pointer reaches left instead.
+- **A card's title is `cardTitle`, 17 pt,** the step between the page's 24 and a row's 13: the hero's state, an empty
+  state's status (Agents, Extensions) and a status cell's headline figure. An empty state's one line is `body` on
+  `inkSecondary`, not a description: it teaches, so it reads as text.
+- **No card inside a card.** Paper, panel and card are three surfaces already; a darker slab inside a section's card
+  makes a fourth. An entry of a list is a row of the card, `sectionRowGap` from the next, as General's Permissions
+  are (`LaunchPermissionRow(asRow: true)`; onboarding keeps its own card). Only a callout, or a row's expanded
+  details (an extension's), keeps a card of its own: `.settingsCalloutCard()`, the card's colour inside a 1-pt
+  `line` border, so it is a boundary, not another surface.
+- **A colour swatch is ringed:** a 1-pt `knob` ring inside a 1-pt `line` ring (`KannuColorPickerButton`), so it never
+  reads as a status dot, which stays a bare `statusDot` (7 pt).
+
 - **No ad-hoc type in a row.** `.caption`, `.caption2` and `.system(size:)` do not belong on text
-  that sits in a Form row's label or control column — that is what made one section's descriptions
+  that sits in a row's label or control column — that is what made one section's descriptions
   wrap at three different widths. They survive only where pinned, for badges, chips and icon glyphs,
   and inside a card that has its own compact scale: `SettingsLayoutRulesTests` pins them per file
   twice, by size here and as system fonts ("Colours and fonts").
-- **A row adds no padding.** The grouped `Form` pads its rows already, so `.padding(.vertical, …)`
+- **A row adds no padding.** Its section pads its rows already, so `.padding(.vertical, …)`
   on a row makes that one row taller than its neighbours. Padding belongs to cards, popovers,
   chips and empty states — nowhere else. Pinned per file.
-- **One control size per section.** A Form row uses the default size. `.small` is for controls
+- **One control size per section.** A row uses the default size. `.small` is for controls
   inside a card (`SettingsPermissionCallout`, `SecurityFindingRow`, an extension's expanded
   panel), and then for every control in that card.
 - **Every row is a row.** `SettingsRow`, `SettingsActionRow`, `SettingsSliderRow`,
@@ -363,8 +940,9 @@ section describes it, it does not define it.
   only says something.
 - **A slider or a stepper is never hand-built in a row.** `SettingsSliderRow` and `SettingsStepperRow`
   are the only row shapes; `SettingsSlider` and `SettingsStepper` by hand only outside a row, pinned.
-  A row whose value reads in its own title passes `valueText: nil` and the readout column stays
-  reserved, so the bar is the same length everywhere.
+  The value goes in the readout (`valueText`), never in the title ("Width: 36px" was); a row with no
+  number passes `valueText: nil`, and the readout column stays reserved, so the bar is the same length
+  everywhere.
 - **An error line is a sibling of the row it belongs to**, so it takes that row's inset — including
   inside an Advanced disclosure.
 - **`SettingsValueText` is for a trailing value, never for a leading line.** It is one line with
@@ -385,22 +963,22 @@ section describes it, it does not define it.
 - `SettingsRow`'s control slot is for controls whose own label the row replaces — Toggle,
   `SettingsSelect`, a field. It applies `.labelsHidden()` to the whole slot, an environment modifier: a
   `Menu` placed there loses its label and its items' titles and reads as dead (the "Policy rules" "…"
-  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `analysisRow` shape) or
+  bug). Such controls go in a raw `LabeledContent` with a `SettingsRowLabel` (the `SecurityAnalysisRow` shape) or
   a `SettingsActionRow`. `SettingsSelect` may sit in the slot, popover and all, because its trigger and
   its list's rows are buttons with plain text, which the modifier leaves alone: the `components` board
   shows its value in a row beside a native picker's. A `Menu` still may not.
 
 - `onAppear` runs again every time Brain reopens, not only on arriving at a page: closing takes the
   content out of the window (docs/REGRESSIONS.md, entry 22). One that loads a field must not read
-  over what was typed and not yet saved.
+  over what was typed and not yet saved. And it runs for every row as the page opens, not as the row
+  scrolls into view: a page builds all its rows (below, "Pages and sections").
 
-- One concern per `Section`; separate concerns get separate Sections, never a `Divider` inside one.
+- One concern per `SettingsSection`; separate concerns get separate sections, never a `Divider` inside one.
 - A Section earns its gap: a one-row Section spends a whole section gap on one row, so a row that
-  serves a Section joins it. A row that only narrows a list (a Find field) is that list's first
-  row, not a Section of its own, and a page's folded extras (All tasks' Recently closed, Archive
-  and Tag colours) are rows of one Section at its end — the one exception to "one concern per
-  Section". A row that is a concern of its own still stands alone: a sub-page's back row (below),
-  or a page's one setting (Local tasks' colour).
+  serves a Section joins it. A row that only narrows a list (a Find field) sits with that list, at
+  its head, not in a Section of its own. A row that is a concern of its own still stands alone: a
+  page's one setting (Local tasks' colour), or a group folded on its own (Tasks settings › Tag
+  colours).
 - A section that mixes everyday controls with rarely-needed ones may tuck the rare rows into one
   `DisclosureGroup` labelled **Advanced** (collapsed by default), keeping the section glanceable.
   Rows inside it carry no highlight ids; their search entries point at the disclosure's own id,
@@ -418,18 +996,39 @@ section describes it, it does not define it.
   - A row that exists only in some states (a task source's row, only while it is connected) has a
     standing row its entries land on until then (Brain › Tasks › Add a source), through a redirect
     `SettingsHighlightInventoryTests` pins. docs/TASK-SOURCES.md lists what a new source adds.
-  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet)`) with a chevron
-    `Label`, alone in its own `Section` — the one sanctioned lone left-hanging button, because it
-    is navigation, not an action on a row. Nothing else on a page takes this shape. The sidebar's
-    Back row is shell chrome, not a row of a page.
-  - A caller that means a sub-page itself (a notch "Show all" link, a notification click) uses
-    a deep link of its own, registered on that page's back row (`SettingsDeepLink.tasksListOpenID`
-    opens All tasks); the tab opens the page for that id alone. Search entries keep pointing at the
-    opening row.
-  - All tasks' filters are view-only: they narrow that page and nothing else. While a filter or its
-    Find field is set, a "Filtered" row above the rows says so ("3 of 12 tasks"), with a Show All
-    that resets the filters and empties Find. The page shows no total otherwise: that row is its
-    one count.
+  - The back row is a lone leading quiet `Button` (`SettingsButtonStyle(.quiet, flush: true)`), its
+    chevron `iconGap` before its title, bare on the panel and `sectionLabelGap` above the page's first
+    card, never in a card of its own (the design review's finding 24) — the one sanctioned lone
+    left-hanging button, because it is navigation, not an action on a row. Nothing else on a page
+    takes this shape. The sidebar's Back row is shell chrome, not a row of a page.
+  - A caller that means a part of the first page itself (a notch "Show all" link, a notification
+    click) uses a deep link of its own, registered there (`SettingsDeepLink.tasksListOpenID`, on
+    the list's tabs, which shows the open tasks); search entries keep pointing at their own rows.
+  - **A list may show its item's page beside it** (layout-proposal D1, David 2026-11-06): once the
+    panel holds the page inset, the list (360 pt), the inset, a settings column's 720 pt and a last
+    inset (`ListDetailLayout`, 1,224 pt with the wide inset), an item opened from the list shows
+    beside it instead of in its place, and the list stays. Brain › Tasks and Brain › Notes share
+    one layout for it, `SettingsListDetail`, and one measurement, `settingsListDetailFits(_:)`: the
+    same selection (Tasks' path, `[.task(id)]`; Notes' open note) is drawn either way, so a resize
+    converts nothing; the page decides from one `onGeometryChange` into a flag, never `minWidth:`
+    (the size bridge would clamp the window), `ViewThatFits` (it builds every layout) or
+    `.inspector`. The list keeps the first page whole, its settings under it, in a column of the
+    list's width with the inset on each side; the item's page is a `SettingsPage` with no inset of
+    its own, so the list's trailing inset is the gap, and its scroll view runs to the panel's edge.
+    The first page is the layout's first child at both widths, so crossing the width keeps it,
+    scrolled where it was. The item opened shows selected in the list (the one selected look, a 2-pt
+    ring, and `isSelected` for VoiceOver, on a task's card or a note's row, each named for its
+    item); with none open, its place says so. Pages below the first (a source's, a project's, a
+    task opened from them) are the in-tab swap at every width. A search or deep link lands on the
+    first page's row at both widths: a page in the list's place closes, and an item's page beside
+    the list stays, the list being on screen.
+  - Going back scrolls by an `onAppear` inside the page's `.id(path)`: applied after it, it runs
+    once and never again as the path moves between two pages below the first (measured,
+    2026-11-11).
+  - The list's filters are view-only: they narrow it and nothing else. While its Tag filter or its
+    Find field is set, a "Filtered" row above the rows says so ("3 of 12 tasks", of the tab's own
+    tasks), with a Show All that resets the filter and empties Find. The list shows no total
+    otherwise: that row is its one count.
 - A long list of similar rows (tasks) keeps each row to its title, one short caption and at most
   two trailing controls: the row's main action (▶) and a › to the item's own page, where everything
   about it lives. Its other actions go in a `.contextMenu` that opens with "Show Details" — never a
@@ -439,10 +1038,11 @@ section describes it, it does not define it.
   is typed in place on its page (a task's estimate in its Time row, `TaskEstimateField`; a local
   task's title in its title row, a plain field in the body font, so it still reads as the row's
   title).
-- A list's Add is one row (Brain › Tasks' Add a task), whose prominent New Task button opens a
-  sheet holding every field the item takes — never fields inline in the list (David, 2026-10-24:
-  "a add task button maybe giving popup"). Its shortcut (⌘N) sits on the tab's Form, never on the
-  row's button: a long, lazy Form drops the row once it scrolls away, and the shortcut with it.
+- A list's Add is its page header's one verb (Brain › Tasks' New task), which opens a sheet
+  holding every field the item takes — never fields inline in the list (David, 2026-10-24: "a add
+  task button maybe giving popup"). Its shortcut, ⌘N, is the menu bar's File › New Task, which
+  works wherever Brain is; the page holds the sheet and its draft, and the verb asks
+  it to open (`.tasksNewTaskRequested`), since the header and the page are siblings.
 - A sheet is a `SettingsSheet`, never a `Form`: its title (and a secondary line under it), the
   fields, then trailing buttons — Cancel (`.cancelAction`), then the primary, named for what it does
   ("Add", "Schedule", "Done"; `.defaultAction`). A `Spacer` of the sheet's own spreads them only
@@ -453,20 +1053,34 @@ section describes it, it does not define it.
   matches the entry exactly (`SettingsHighlightInventoryTests` pins the pairing and the counts;
   the counts move only as a deliberate edit).
 - A row's description says what the control does, in about 8 words. No "Off: …" sentence, no
-  mechanics, and no repeat of the title.
+  mechanics, and no repeat of the title. A fact it would need but a row cannot hold, a privacy or trust fact, goes in
+  its section's footer. A caption wraps at `descriptionMaxWidth` and a footer at `proseMaxWidth`, so no line of prose
+  runs past about 80 characters.
+- Copy is sentence case everywhere: a capital for the first word and for a name: a product, a name Apple or a vendor
+  owns, an acronym, or one of the few Kannu feature names a string uses as a name (Agent Status, Screen Assistant,
+  Quick Share). Every other feature word is lower case ("Clipboard manager", "Live activities", "Sneak peek"). One
+  spelling, American ("color"). No trailing colon on a title, a label or a footer. A field's `prompt:` says what to
+  type, with an example in `Text(verbatim:)` such as "my-kannu-alerts".
 - A menu item that acts in place, opens a small sheet or asks a confirmation carries no ellipsis
   ("Add Tags", "Set Estimate", "Delete"); a confirmation alone does not earn one. "…" marks only a
   menu item that goes on to a connect flow or another window ("Connect Jira…", "Manage tasks…").
   The Sources rows' "Connect…" and "Disconnect…" are row buttons, not menu items, and keep theirs.
 - Footers carry privacy or trust facts only ("Tasks and their time stay on this Mac."), one short
   line each. The one exception: a list whose rows keep their other actions in a `.contextMenu`, and
-  has no row left to say so, may name it once under the list (All tasks' "Right-click a task for
-  more, such as Move to Top.").
+  has no row left to say so, may name it once under the list (Tasks' "Right-click a task for
+  more, such as Move to Top."), and a list's tab may say once what becomes of its rows (Done's
+  "Moved to the archive after 3 days.").
 - Error and recovery text is specific but short: what failed, and the one thing to do next.
 - Badges (`customBadge`, `comingSoonTag`, `alphaBadge`, `proFeatureBadge`) are decorative chips
   and stay unselectable — they are the pinned exceptions in `SettingsLayoutRulesTests`, along
   with labels inside tappable cards. A new exception is added to that pin with a reason, not
-  slipped past it.
+  slipped past it. A page's badge is `SettingsBadge` ("Beta", "Alpha", "Built-in"), one look for one
+  fact; `customBadge` and `alphaBadge` draw it.
+- A row of buttons alone in its card takes a title and a caption on the left, as every row does
+  (Lock screen's Preview widgets, the Actions of Clipboard and Screen Assistant), and the footer
+  that explained the buttons goes into the caption. Buttons on one theme share one
+  `SettingsActionRow` (About's Report a problem… and Copy latest report), each keeping its own
+  highlight id.
 - User-facing strings use `String(localized:)`; the shared components take `LocalizedStringKey`
   so literals localize on their own.
 

@@ -27,7 +27,7 @@ final class NewTaskDraft: ObservableObject {
     @Published var draft = TaskFormDraft()
 }
 
-/// New Task, from Add a task on All tasks and Local tasks: everything the notch's task form takes
+/// New Task, from Tasks' header or empty list, or File › New Task (⌘N): everything the notch's task form takes
 /// (David, 2026-10-24: "we want all capabilties that we give for tasks in notch") — a title, a typed
 /// estimate, tags with the ones in use offered as chips, a reminder with its notification on or
 /// off — then Add, or Add & Start while the timer is on. The notch's own rules (`TaskFormDraft`),
@@ -38,8 +38,9 @@ final class NewTaskDraft: ObservableObject {
 /// own content; a Form row never does.
 struct NewTaskSheet: View {
     @ObservedObject var newTask: NewTaskDraft
-    /// All tasks' filters, so a new task they would hide opens on its own page instead of vanishing.
-    let listFilter: TaskFilter
+    /// What the list on screen shows, so a new task it would hide opens on its own page instead of vanishing; nil
+    /// where no list of open tasks shows (Done, Archived, a page below the first), so it opens there too.
+    let listFilter: TaskFilter?
     /// Opens a task's page: the new one when the filters hide it, or the one a typed title repeats.
     let open: (UUID) -> Void
     @ObservedObject private var manager = TasksManager.shared
@@ -102,6 +103,11 @@ struct NewTaskSheet: View {
             }
 
             reminder
+            // A list that could not be read is not read again before a relaunch, so Add stays off: say why, in the
+            // Tasks page's own words, beside the buttons, as a Connect sheet shows its problem.
+            if case .failed(let reason) = manager.loadState {
+                SettingsErrorText(String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
+            }
         } buttons: {
             if draft != TaskFormDraft() {
                 Button("Clear All") {
@@ -202,7 +208,7 @@ struct NewTaskSheet: View {
     // MARK: - Add
 
     /// The task on top of the list, then, for Add & Start, timed as its ▶ would. The draft empties
-    /// for the next New Task. When All tasks' filters would hide it, its page opens, so it never
+    /// for the next New Task. When the list on screen would hide it, its page opens, so it never
     /// seems to vanish; the filters stay as the user set them.
     private func add(andStart: Bool) {
         // A reminder that passed while the sheet stood open: the next whole hour, as on reopening,
@@ -217,7 +223,7 @@ struct NewTaskSheet: View {
         let hidden = manager.tasks.first { $0.id == id }.map { task in
             var probe = task
             if started { probe.segments = TaskTimeMath.opening(probe.segments, at: Date()) }
-            return !TaskFacets.matches(probe, filter: listFilter)
+            return listFilter.map { !TaskFacets.matches(probe, filter: $0) } ?? true
         } ?? false
         dismiss()
         if hidden { open(id) }

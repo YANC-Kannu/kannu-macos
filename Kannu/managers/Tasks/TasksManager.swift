@@ -71,7 +71,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     }
 
     /// A segment left open by a quit or a crash, with its task.
-    struct InterruptedSession: Identifiable {
+    struct InterruptedSession: Identifiable, Equatable {
         let task: TaskItem
         let segment: WorkSegment
         /// When the next session on the task began, if one has: the end may not pass it
@@ -397,7 +397,7 @@ final class TasksManager: ObservableObject, TaskSourceHost {
             taskID = addTask(from: kept)
             if let taskID { applyQuickAdd(quick, to: taskID) }
         } else if let added = addTask(title: typed, estimateSeconds: nil) {
-            showLocalTasks()
+            showInNotch(added)
             taskID = added
         } else {
             taskID = nil
@@ -584,22 +584,22 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         if let reminder = typed.reminder { setSchedule(reminder, for: id) }
     }
 
-    /// The notch's task form's new task (`insertTask`); then the draft is used up, and a list
-    /// hiding local tasks shows them again so the task does not vanish as it is added. One path for
+    /// The notch's task form's new task (`insertTask`); then the draft is used up, and the notch's
+    /// filters let the task show (`showInNotch`), so it does not vanish as it is added. One path for
     /// Add, Add & Start, a preset clicked with the form open, and a typed name whose title the form
     /// held. Nil when it cannot be saved.
     @discardableResult
     func addTask(from draft: TaskFormDraft) -> UUID? {
         guard let id = insertTask(from: draft) else { return nil }
         forgetFormDraft(editing: nil)
-        showLocalTasks()
+        showInNotch(id)
         return id
     }
 
     /// A new task as a form typed it: a local task at the top with its tags and reminder, the bell
     /// before the schedule so a muted reminder is never sent first. Brain's New Task adds through
-    /// this alone, so a task half-typed in the notch stays kept and the notch's Show local stays as
-    /// the user left it. Nil when it cannot be saved.
+    /// this alone, so a task half-typed in the notch stays kept and the notch's Show local and Tag
+    /// filter stay as the user left them. Nil when it cannot be saved.
     /// `#tag` and `@time` typed in the title join the form's own fields first
     /// (`TaskFormDraft.foldingQuickAdd`).
     @discardableResult
@@ -636,10 +636,16 @@ final class TasksManager: ObservableObject, TaskSourceHost {
         return true
     }
 
-    /// Local tasks hidden in the notch come back when one is added, so it does not vanish as it
-    /// is made. A reused or picked task is listed while it runs anyway.
-    private func showLocalTasks() {
+    /// A task just added in the notch shows there, so it does not vanish as it is made: hidden local
+    /// tasks come back, and a Tag filter the task does not pass is cleared
+    /// (`TaskOrdering.tagFilter(_:afterAdding:)`). The task form, a typed start and the popover's
+    /// Add a task call it; Brain's New Task never does. A reused or picked task is listed while it
+    /// runs anyway.
+    func showInNotch(_ id: UUID) {
         if !Defaults[.tasksPopoverShowLocal] { Defaults[.tasksPopoverShowLocal] = true }
+        guard let task = tasks.first(where: { $0.id == id }) else { return }
+        let tag = TaskOrdering.tagFilter(Defaults[.tasksNotchTagFilter], afterAdding: task)
+        if tag != Defaults[.tasksNotchTagFilter] { Defaults[.tasksNotchTagFilter] = tag }
     }
 
     /// A local task's new title (`TaskItem.cleanedTitle`). A Jira or GitLab title is the server's,
