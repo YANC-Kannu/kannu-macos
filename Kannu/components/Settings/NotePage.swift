@@ -108,8 +108,11 @@ struct NotePage: View {
             let data = await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
             // A newer read has started (the note was saved again) or the page has gone: this one's image is old.
             guard !Task.isCancelled else { return }
-            image = data.flatMap { NSImage(data: $0) }
-            imageDate = date
+            let loaded = data.flatMap { NSImage(data: $0) }
+            image = loaded
+            // Only a decoded image keeps its file's date: a failed read or decode, say of a file still being written,
+            // is tried again at the next save.
+            imageDate = loaded == nil ? nil : date
         }
     }
 
