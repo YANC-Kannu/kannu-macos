@@ -1,32 +1,39 @@
 # Run log: where Kannu 2.0 stands
 
-*As of 2026-11-13, 08:40 UTC, measured with `gh` and git. The redesign's full history stays in the local notes on
+*As of 2026-11-13, 10:34 UTC, measured with `gh` and git. The redesign's full history stays in the local notes on
 David's Mac. This file is the summary that anyone can continue from with only GitHub. Update it here from now on:
 when a line moves, change it, and add the time and how you measured it.*
 
 ## The stack
-The Brain redesign is three stacked supers. Each PR's diff is its own stage: on 12 Nov, Stage 4 merged `development`,
-Stage 5 merged Stage 4, and Stage 6 merged Stage 5.
+The Brain redesign was three stacked supers. **All three landed in `development` on 13 Nov at 10:30 UTC.** They
+went in bottom-up, each a merge commit pinned to its reviewed head, with both Build runners green and every review
+note answered.
 
-| PR | Branch → base | Head | State | Next |
-|---|---|---|---|---|
-| #42 | `super/brain-4-pages` → `development` | 75f08ecb | draft; CLEAN; both Build runners green; reviewed, every note answered | ready and merge, after David's Mac checks (tasks 1.3, 1.4) |
-| #43 | `super/brain-5-tasks` → `super/brain-4-pages` | ccef6388 | draft; CLEAN; green; reviewed, every note answered | after #42: retarget to `development`, ready, merge |
-| #52 | `super/brain-6-around` → `super/brain-5-tasks` | 764690d4 | draft; CLEAN; green; first review had 2 Minor notes, both fixed in #56 | after #56: re-review, answer, retarget, merge |
-| #56 | `brain/6-6-audit-fixes` → `super/brain-6-around` | 5793076f | ready; CI running at 08:40 | merge once both runners pass |
+| PR | Branch → base | Reviewed head | Merged as |
+|---|---|---|---|
+| #56 | `brain/6-6-audit-fixes` → `super/brain-6-around` | 5793076f | 16263d8b (08:47 UTC) |
+| #42 | `super/brain-4-pages` → `development` | 75f08ecb | 70ab4242 |
+| #43 | `super/brain-5-tasks` → `development` (retargeted) | ccef6388 | a711fece |
+| #52 | `super/brain-6-around` → `development` (retargeted) | 418dee32 | d7d839d3 |
 
-- `development` is at 4168408b (#46 merged), and `main` at c63e3752.
+- `development` is at d7d839d3. Its tree is Stage 6's reviewed head tree. `main` is at c63e3752.
+- #52's reviews:
+  - the first review's two notes were fixed in #56;
+  - the second review's one note (a failed note-image load stayed cached) was fixed in 418dee32 on the super;
+  - the third review was clean.
 - Each catch-up merge brought in only reviewed content, so none was reviewed again. David was told this.
 - **Supers merge with merge commits, never squashes,** or the stack above loses its ancestry. If `gh pr merge`
   errors, use `gh api -X PUT repos/YANC-Kannu/kannu-macos/pulls/<n>/merge -f merge_method=merge`, on the same yes.
   Never use it to get around a refusal.
-- **#52's replies** to its two CodeRabbit threads go up once #56 merges.
-
 ## Outside the stack
+After the landing, GitHub was recomputing mergeability for the PRs into `development`. The conflicts below are a
+`git merge-tree` forecast against d7d839d3.
+
 | PR | What | State |
 |---|---|---|
-| #55 | Kannu no longer holds up every Claude prompt | ready; CLEAN; into `development` |
-| #3 | Points Kannu at `YANC-Kannu/kannu-macos`: the feed, CI and docs | ready; CONFLICTING with `development` |
+| #57 | OpenSpec, with this change | caught up with `development` (a CHANGELOG-only conflict); merges on David's yes |
+| #55 | Kannu no longer holds up every Claude prompt | ready; would conflict in CHANGELOG, `SettingsView.swift` and `SettingsHighlightInventoryTests.swift` |
+| #3 | Points Kannu at `YANC-Kannu/kannu-macos`: the feed, CI and docs | ready; would conflict in CHANGELOG only |
 | #14 | 1.4.0 gets the real Bluetooth HUD videos, not Git LFS pointers | ready; CLEAN; into `release/1.4.0` |
 | #9 | SonarCloud CI and Dependabot | ready; CONFLICTING |
 | #4 | Imports `main` from `libinmv/kannu` | ready; BLOCKED; into `main` |
@@ -44,11 +51,10 @@ Stage 5 merged Stage 4, and Stage 6 merged Stage 5.
   - F11 is two Mac checks.
 
 ## Pending asks for David
-1. **The Mac checks** of the installed build, F1 first (below).
-2. **Merge #56** once its runners pass, then post #52's replies and request its re-review.
-3. **Land the stack bottom-up:** #42, then #43, then #52, each as a merge commit.
-4. **Catch #3 up** with `development`, and merge it.
-5. **The decisions** in `tasks.md` section 9: the codename, What's New, the feed bridge, new features, AGENTS.md's
+1. **The Mac checks**, F1 first (below). The stack landed first, on David's yes, so they now run on the final install
+   from `development` (section 6).
+2. **Catch #3 up** with `development` (CHANGELOG only), and merge it.
+3. **The decisions** in `tasks.md` section 9: the codename, What's New, the feed bridge, new features, AGENTS.md's
    overview, #55, `release/1.4.0`, and OpenSpec 2.x. (Decided 2026-11-13: the video's storyboard stays on David's Mac
    and is never committed.)
 
