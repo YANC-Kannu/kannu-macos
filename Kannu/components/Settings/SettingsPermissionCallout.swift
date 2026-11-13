@@ -75,8 +75,9 @@ struct SettingsPermissionCallout: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .settingsCalloutCard()
-        // One group for VoiceOver: Shelf shows two callouts, each with an "Open Privacy & Security".
+        // One group for VoiceOver, named by its title: Shelf shows two callouts, each with an "Open Privacy & Security".
         .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
     }
 }
 

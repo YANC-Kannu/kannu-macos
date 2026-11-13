@@ -61,6 +61,9 @@ enum DebugSnapshots {
         SettingsHighlightCoordinator.snapshotScrollsAtOnce = true
         // The render draws no video, so Devices' 3D icon shows its movie's first frame.
         DevicesSettingsView.snapshotDrawsStill = true
+        // The sidebar's badges, quiet on every board but `shellBadges`: none reads this Mac's agents, findings, usage
+        // or timer.
+        SidebarBadge.snapshotFixture = .quiet
         // Brain › Agents' product, on every board that shows it, from fixtures: no session, tool, reading or finding
         // of this Mac lands in a PNG.
         let agents = DebugSnapshotFixtures.agentsOverview(sessions: 3, now: Date())
@@ -167,20 +170,6 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("extensionRows") == true {
             boards.append(("extensionRows", ExtensionsSettingsView.snapshotEntryRows()))
         }
-        if request.tabs == nil || request.tabs?.contains("onboardingPermissions") == true {
-            // Every row, in the states this Mac's answers give them; nothing is requested.
-            boards.append(("onboardingPermissions", AnyView(
-                PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
-                                    onLaunchAtLoginChoice: { _ in }, onContinue: {})
-                    .frame(height: 1080)
-            )))
-        }
-        if request.tabs == nil || request.tabs?.contains("onboardingNotes") == true {
-            boards.append(("onboardingNotes", AnyView(
-                NotesSelectionView(onContinue: { _ in })
-                    .frame(width: 400, height: 600)
-            )))
-        }
         for (name, view) in boards {
             for dark in [false, true] {
                 let root = AnyView(view
@@ -204,6 +193,17 @@ enum DebugSnapshots {
                 await render(AnyView(view.environmentObject(viewModel)), name: name + (dark ? "-dark" : "-light"), dark: dark,
                              width: size.width, into: request.directory, fixedHeight: size.height)
             }
+        }
+        // Every badge at once, from a fixture: an agent waiting, two high findings, usage near its limit, a timer running.
+        if request.tabs == nil || request.tabs?.contains("shellBadges") == true {
+            SidebarBadge.snapshotFixture = .busy
+            for dark in [false, true] {
+                await render(AnyView(SettingsView(snapshotTab: .agentStatus).environmentObject(viewModel)),
+                             name: "shellBadges" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: SettingsTheme.windowDefaultWidth, into: request.directory,
+                             fixedHeight: SettingsTheme.windowDefaultHeight)
+            }
+            SidebarBadge.snapshotFixture = .quiet
         }
         // Brain › Agents with no session, one and three, at the window's first size: what is above the fold is how
         // full the page looks. Fixtures only.
@@ -317,6 +317,44 @@ enum DebugSnapshots {
             }
         }
         NotesOverview.snapshotFixture = notesPage
+        // The floating panels at their own sizes (docs/SETTINGS.md, "The floating panels"), from fixtures: each draws
+        // what it is handed, so no board builds the clipboard manager or the LocalSend service. Not through the loop
+        // above, which adds Brain's root: a panel is a window of its own, and applies whatever root it has itself.
+        let panelCopies = DebugSnapshotFixtures.clipboardOverview(pinned: 2, history: 5, now: Date()).data
+        let clipboardPanels: [(name: String, view: ClipboardPanelContent)] = [
+            // History, its first copy under the pointer: a row's Pin, Copy and Delete show only then.
+            ("clipboardPanel", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                     historyIsEmpty: false, onClose: {},
+                                                     hoveredItemId: panelCopies.history.first?.id)),
+            ("clipboardPanelFavorites", ClipboardPanelContent(history: panelCopies.history, pinned: panelCopies.pinned,
+                                                              historyIsEmpty: false, onClose: {}, selectedTab: .favorites)),
+            ("clipboardPanelEmpty", ClipboardPanelContent(history: [], pinned: [], historyIsEmpty: true, onClose: {})),
+        ]
+        for board in clipboardPanels where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            for dark in [false, true] {
+                await render(AnyView(board.view), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: ClipboardPanel.preferredSize.width, into: request.directory,
+                             fixedHeight: ClipboardPanel.preferredSize.height)
+            }
+        }
+        // The LocalSend picker on its Standard backdrop: five devices, the second under the pointer and the last having
+        // turned a file down; none found; and a scan running with none yet.
+        let devices = DebugSnapshotFixtures.localSendDevices
+        let pickers: [(name: String, devices: [LocalSendDeviceInfo], isRefreshing: Bool, hovered: String?)] = [
+            ("localSendPicker", devices, false, devices[1].id),
+            ("localSendPickerEmpty", [], false, nil),
+            ("localSendPickerScanning", [], true, nil),
+        ]
+        for board in pickers where request.tabs == nil || request.tabs?.contains(board.name) == true {
+            let picker = LocalSendDevicePickerContent(devices: board.devices, rejectedDeviceIDs: [devices[4].id],
+                                                      isRefreshing: board.isRefreshing, glassMode: .standard,
+                                                      liquidGlassVariant: .v11, onRefresh: {}, onDeviceSelected: { _ in },
+                                                      onDismiss: {}, hoveredDeviceID: board.hovered)
+            for dark in [false, true] {
+                await render(AnyView(picker), name: board.name + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 480, into: request.directory, fixedHeight: 400)
+            }
+        }
         if request.tabs == nil || request.tabs?.contains("selectList") == true {
             // A popover is a window of its own and the render captures one hosting view, so the open list is
             // drawn directly. A fixed size: the grow loop would measure the long list's scroll view.
@@ -432,11 +470,40 @@ enum DebugSnapshots {
                 }
             }
         }
+        // Onboarding as its window hosts it: `OnboardingView` at each step, at the window's size, wearing only what the
+        // view brings, never the root the loop above adds. The Permissions step's rows and states are fixtures, so no board
+        // reads this Mac's answers and nothing is probed or asked; `onboardingPermissionsAll` is that step's whole list,
+        // which the window scrolls, under the root and the panel the window gives it. After every board that reads the
+        // permissions, so none of them shows the fixture. Clearing it does not refresh the manager, which keeps the
+        // fixture's statuses until the run quits: only the menu report follows, and a refresh would read this Mac's answers.
+        LaunchPermissionManager.snapshotStatuses = DebugSnapshotFixtures.launchPermissionStatuses
+        for step in OnboardingStep.allCases {
+            let name = "onboarding" + "\(step)".prefix(1).uppercased() + "\(step)".dropFirst()
+            guard request.tabs == nil || request.tabs?.contains(name) == true else { continue }
+            for dark in [false, true] {
+                await render(AnyView(OnboardingView(snapshotStep: step).environmentObject(viewModel)),
+                             name: name + (dark ? "-dark" : "-light"), dark: dark, width: 400, into: request.directory,
+                             fixedHeight: 600)
+            }
+        }
+        if request.tabs == nil || request.tabs?.contains("onboardingPermissionsAll") == true {
+            for dark in [false, true] {
+                let list = PermissionsStepView(rows: LaunchPermission.allCases, musicSource: .spotify,
+                                               onLaunchAtLoginChoice: { _ in }, onContinue: {})
+                    .background(SettingsTheme.panel)
+                    .settingsDesignSystem()
+                await render(AnyView(list), name: "onboardingPermissionsAll" + (dark ? "-dark" : "-light"), dark: dark,
+                             width: 400, into: request.directory)
+            }
+        }
+        LaunchPermissionManager.snapshotStatuses = nil
+        // Last, so SwiftUI has long built the menu bar.
+        writeMenuReport(into: request.directory)
     }
 
-    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "onboardingPermissions", "onboardingNotes",
-                                                       "animationEditorControls", "connectSheet", "tagsSheet", "urlImportSheet",
-                                                       "valueSheet", "timerPresetSheet", "newNoteSheet"]
+    private static let outsideThePanel: Set<String> = ["newTaskSheet", "policyRules", "animationEditorControls", "connectSheet",
+                                                       "tagsSheet", "urlImportSheet", "valueSheet", "timerPresetSheet",
+                                                       "newNoteSheet"]
 
     /// The smallest window, less the sidebar and the panel's one inset.
     private static let narrowestPanel = SettingsTheme.windowMinWidth - SettingsTheme.sidebarWidth - SettingsTheme.panelInset
@@ -488,6 +555,15 @@ enum DebugSnapshots {
             ("shellSearch", AnyView(SettingsView(snapshotTab: .hudAndOSD, search: "color", showsSuggestions: true))),
             // The same flat list once the field has let go: what is left when a suggestion was picked.
             ("shellSearchList", AnyView(SettingsView(snapshotTab: .general, search: "notch"))),
+            // View › Hide Sidebar: the panel alone, with the window's inset on both sides.
+            ("shellNoSidebar", AnyView(SettingsView(snapshotTab: .agentStatus, hidesSidebar: true))),
+            // Go › Usage from Agents, through the switch point a search pick uses, with no row pulsing. The request
+            // waits a moment, as the deep link's does.
+            ("shellGo", AnyView(SettingsView(snapshotTab: .agentStatus).onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    SettingsHighlightCoordinator.shared.requestPage(.llmUsage)
+                }
+            })),
         ]
     }
 
@@ -499,6 +575,41 @@ enum DebugSnapshots {
 
         """
         try? report.write(to: directory.appendingPathComponent("fonts.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// The menu bar as this launch built it, since no PNG shows it: each item's title, key, action, and
+    /// whether it is off or checked. Each menu is updated first, as opening it would.
+    private static func writeMenuReport(into directory: URL) {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        var lines: [String] = []
+        func list(_ menu: NSMenu, depth: Int) {
+            menu.delegate?.menuNeedsUpdate?(menu)
+            menu.update()
+            let indent = String(repeating: "    ", count: depth)
+            for item in menu.items {
+                guard !item.isSeparatorItem else {
+                    lines.append(indent + "---")
+                    continue
+                }
+                var line = indent + item.title
+                if !item.keyEquivalent.isEmpty { line += "  " + keyEquivalent(of: item) }
+                if let action = item.action { line += "  → " + NSStringFromSelector(action) }
+                if !item.isEnabled { line += "  (off)" }
+                if item.state == .on { line += "  ✓" }
+                if item.isHidden { line += "  (hidden)" }
+                lines.append(line)
+                if let submenu = item.submenu { list(submenu, depth: depth + 1) }
+            }
+        }
+        list(mainMenu, depth: 0)
+        try? (lines.joined(separator: "\n") + "\n")
+            .write(to: directory.appendingPathComponent("menu.txt"), atomically: true, encoding: .utf8)
+    }
+
+    private static func keyEquivalent(of item: NSMenuItem) -> String {
+        let flags = item.keyEquivalentModifierMask
+        let symbols: [(NSEvent.ModifierFlags, String)] = [(.control, "⌃"), (.option, "⌥"), (.shift, "⇧"), (.command, "⌘")]
+        return symbols.filter { flags.contains($0.0) }.map(\.1).joined() + item.keyEquivalent
     }
 
     /// Everything `settingsDesignSystem()` gives a page, every resting and disabled state (hover and
@@ -1434,6 +1545,27 @@ enum DebugSnapshotFixtures {
         }
         return NotesOverviewFixture(data: data, images: [notesImageNoteID: image])
     }
+
+    /// Onboarding's Permissions step: the first rows unanswered, as a fresh install meets them, then every other state a
+    /// row can show but `.waiting`, whose request turns every other Allow off.
+    static let launchPermissionStatuses: [LaunchPermission: LaunchPermissionStatus] = [
+        .accessibility: .notAsked, .bluetooth: .notAsked, .downloads: .deferred, .location: .allowed,
+        .musicAutomation: .askedWhenAppOpens, .notesAutomation: .notAllowed, .warp: .notAsked,
+    ]
+
+    /// The LocalSend picker's made-up devices, none of this network's, on documentation addresses (192.0.2.0/24): a phone,
+    /// a laptop, an Android phone, a Windows desktop and a tablet.
+    static let localSendDevices: [LocalSendDeviceInfo] = [
+        LocalSendDeviceInfo(id: "fixture-iphone", alias: "Ada's iPhone", ip: "192.0.2.10", port: 53317, https: true,
+                            model: "iPhone 15"),
+        LocalSendDeviceInfo(id: "fixture-macbook", alias: "Studio MacBook", ip: "192.0.2.11", port: 53317, https: true,
+                            model: "MacBook Pro"),
+        LocalSendDeviceInfo(id: "fixture-pixel", alias: "Pixel 8", ip: "192.0.2.12", port: 53317, https: true, model: nil),
+        LocalSendDeviceInfo(id: "fixture-desktop", alias: "Office desktop", ip: "192.0.2.13", port: 53317, https: true,
+                            model: "Windows"),
+        LocalSendDeviceInfo(id: "fixture-ipad", alias: "Living room iPad", ip: "192.0.2.14", port: 53317, https: true,
+                            model: "iPad Air"),
+    ]
 
     static func turnTokens(for sessions: [AgentSessionStatus]) -> [String: TurnTokens] {
         let totals: [String: (newInput: Int, output: Int, context: Int)] = ["live": (83_000, 40_000, 458_000),

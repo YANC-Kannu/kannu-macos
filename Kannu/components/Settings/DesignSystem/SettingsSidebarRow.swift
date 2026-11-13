@@ -19,16 +19,17 @@
 import SwiftUI
 
 /// One row of Brain's sidebar: a tab, Back, or the Settings row. It takes strings, never a tab, so
-/// the sidebar's navigation stays in `SettingsView`.
-struct SettingsSidebarRow: View {
+/// the sidebar's navigation stays in `SettingsView`. A badge is a view the caller builds, so the row
+/// reads no state of its own.
+struct SettingsSidebarRow<Badge: View>: View {
     private let title: String
     private let systemImage: String
     private let isSelected: Bool
-    private let badge: String?
+    private let badge: Badge
     private let action: () -> Void
     @State private var isHovering = false
 
-    init(_ title: String, systemImage: String, isSelected: Bool = false, badge: String? = nil,
+    init(_ title: String, systemImage: String, isSelected: Bool = false, badge: Badge,
          action: @escaping () -> Void) {
         self.title = title
         self.systemImage = systemImage
@@ -52,14 +53,7 @@ struct SettingsSidebarRow: View {
                 Text(verbatim: title)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                if let badge {
-                    Text(verbatim: badge)
-                        .font(SettingsTheme.micro)
-                        .foregroundStyle(SettingsTheme.onPrimary)
-                        .padding(.horizontal, SettingsTheme.sidebarBadgeHorizontalInset)
-                        .padding(.vertical, SettingsTheme.sidebarBadgeVerticalInset)
-                        .background(Capsule().fill(SettingsTheme.ink))
-                }
+                badge
             }
             .font(SettingsTheme.body)
             .foregroundStyle(SettingsTheme.ink)
@@ -76,5 +70,12 @@ struct SettingsSidebarRow: View {
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+extension SettingsSidebarRow where Badge == EmptyView {
+    /// Back and the Settings row, which have no badge.
+    init(_ title: String, systemImage: String, isSelected: Bool = false, action: @escaping () -> Void) {
+        self.init(title, systemImage: systemImage, isSelected: isSelected, badge: EmptyView(), action: action)
     }
 }

@@ -74,7 +74,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SettingsBadge.swift": 1,                   // the one badge on a page
         "SettingsHelpers.swift": 1,                 // the "Coming soon" tag, unused
         "SettingsView.swift": 1,                    // a suggestion's tab name — label of a tappable row
-        "SettingsSidebarRow.swift": 1,              // the BETA capsule, inside the row's button
+        "SidebarBadges.swift": 1,                   // the high findings' count, a badge inside the row's button
         "AgentsOverview.swift": 1,                  // a row's provider — inside the button that opens the chat
         "TaskRowList.swift": 1,                     // a task row's tag chip, decorative as a badge
     ]
@@ -117,7 +117,7 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "IdleAnimationsSettingsSection.swift": 4,  // the Add card and the delete glyph; a card's name is `settingsChoiceLabel`
         "MusicSlotConfigurationView.swift": 7,     // the slot canvas and its draggable chips
         "SecurityFindingRow.swift": 1,       // the severity badge chip
-        "SettingsSidebarRow.swift": 1,       // the BETA capsule
+        "SidebarBadges.swift": 2,            // the sidebar's high findings' count and the timer's glyph
         "SettingsBadge.swift": 1,            // the one badge, in the caption's size
         "AppearanceSettings.swift": 1,       // an app icon card's placeholder glyph
         "CustomOSDSettings.swift": 1,        // the OSD preview
@@ -162,7 +162,8 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "SecurityFindingRow.swift": 3,       // the finding card and its badge
         "SettingsView.swift": 6,             // the highlight's ring, the search field and its suggestions
         "BrainShell.swift": 4,               // the shell's own insets
-        "SettingsSidebarRow.swift": 3,       // the row's inset and the capsule's two
+        "SettingsSidebarRow.swift": 1,       // the row's inset
+        "SidebarBadges.swift": 2,            // the high findings' count pill, in a sidebar row
         "SettingsPageHeader.swift": 2,       // the large title's insets, above the page
         "SettingsPage.swift": 4,             // the page's inset from the panel's edge, its top and bottom, and the scroll view's own inset under the title
         "SettingsSection.swift": 3,          // the section's card around its rows, and its header and footer in line with them
@@ -352,7 +353,6 @@ final class SettingsLayoutRulesTests: XCTestCase {
         "DownloadsSettings.swift": 3,        // the download style card's resting fill and its progress tint
         "EditPanelView.swift": 1,            // dead code but its #Preview
         "ExtensionsSettings.swift": 3,       // status colours
-        "GeneralSettings.swift": 1,          // .tint(.accentColor) around LaunchPermissionRow, shared with onboarding
         "HUDAndOSDSettings.swift": 15,       // HUD style previews and the cards' resting fill
         "IdleAnimationsSettingsSection.swift": 3,  // the cards' resting fill and the delete glyph
         "LiveActivitiesSettings.swift": 10,  // each activity's own colour

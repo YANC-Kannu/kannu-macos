@@ -1257,6 +1257,15 @@ frame, and this entry's throw or a 700-wide window in a full-screen Space are th
 exact outcome was never run. So `.fullScreenPrimary` and the removal of `.frame(width: 700)` landed in one
 commit, and `WindowFullscreenRulesTests.testBrainsRootHasNoFixedWidth` holds the frame.
 
+**2026-11-12 addendum: the floating panels' theme changed their views, not their windows.** The clipboard panel and the
+LocalSend picker take Brain's theme (docs/SETTINGS.md, "The floating panels"). `LocalSendDevicePickerWindowManager.swift`
+is a panel manager and `ClipboardPanel.swift` holds a panel, so this is where they are read. Nothing above the views
+changed in either: window creation, `setHostedContent`, the corner masks, the sizes (320×400, 480×400), the levels and
+spaces, the picker's click-outside dismissal and the clipboard's placement are the base's. Each view now hands what it
+observes to a content view that draws it, so a board can draw fixtures; the picker's discovery still starts as it
+appears. `FloatingPanelRulesTests` holds the boards and the theme; `HostedContentRulesTests` and
+`ClipboardPanelPlacementTests` are unchanged.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -1476,6 +1485,11 @@ counts a delta; `handleCloseScrollGesture` clears its blur before its guard; an 
 registers and unregisters and takes no hits. Each scanner is checked against planted offenders.
 Missing: that a scroll over the notes really never closes the notch is checked by eye on the
 installed build, since nothing automated drives a trackpad.
+
+**2026-11-12 addendum: Geist in the notch changes only fonts here.** Stage 6 moves the notch's text to Geist
+(docs/SETTINGS.md, "The notch"), and in `NotchNotesView` that is the `.font` of its text, the editor's included: no
+view gains or loses a `ScrollView`, `TextEditor` or `List`, and every `.ownsVerticalScroll()` stays where it was.
+`NotchScrollOwnershipRulesTests` still reads the file.
 
 ---
 
@@ -1814,6 +1828,55 @@ id, so it opens at its top, and its one hook, the image read, runs once per note
 unchanged: one copy, followed only while Brain is on screen. Each visit still opens on the list, at both widths.
 **Not measured:** a window dragged across 1,224 pt with a note open; it needs a real window. `NotesPageLiveDataRulesTests`
 and `SettingsListDetailRulesTests` hold each clause against planted offenders.
+
+**2026-11-12 addendum: the menu bar opens Brain only after the terms, and adds no hook and no animator.** Go, View and
+File join Brain… (docs/SETTINGS.md, "The menu bar"). Go and New Task open Brain through one function that checks the
+terms first, then send the request a search pick sends, for no row, so nothing pulses. While a sheet is open over Brain
+that function only beeps: menu keys reach the menu bar under a sheet, and a page switched under it closes it. View's items read
+`BrainVisibility`, which builds nothing, and are off while Brain is not on screen; its full-screen item takes its title
+from a new `isFullScreen` there, set as full screen begins and ends, and pages follow only `isOnScreen`. Hide Sidebar
+removes the sidebar column without an animation. Tasks takes New Task's request in an `onChange` and loads nothing. A
+registered `NSFullScreenMenuItemEverywhere` of false, before launching ends, keeps AppKit from adding a second Enter
+Full Screen beside View's. `MenuBarRulesTests` holds these against planted offenders. **Not measured:** the menus with
+Brain open, which take a real window: one Enter Full Screen, its title as Brain enters and leaves full screen, and
+⌘1–⌘7, ⌃⌘S and ⌘N with a page's field focused.
+
+**2026-11-12 addendum: the sidebar's badges run only while Brain is on screen, and the root observes nothing for them.**
+The sidebar is on screen beside every page, so its badges (`SidebarBadges.swift`, docs/SETTINGS.md "The shell and
+navigation") are live leaves of their own: each copies one value through a subscription throttled to 500 ms, in a
+`.task(id:)` on `BrainVisibility.isOnScreen` that returns at once while it is false, and reads its source once as it
+appears. Agents' badge follows the monitor's projection, never the monitor (entry 10), and `SettingsView` names none
+of the four stores, so the root, which would redraw all of Brain, observes nothing new. Nothing ticks: the timer's
+glyph follows whether a timer runs, not its time. New hooks: each badge's `onAppear` reads once and its `.task`
+follows; none animates. With a board's fixture set, no badge touches a store. **Not measured:** the CPU of Brain open
+while an agent works. `SidebarBadgeLiveDataRulesTests` holds each clause against planted offenders.
+
+**2026-11-12 addendum: onboarding takes Brain's look, and General's Permissions rank Allow; no hook and no animator
+added.** Onboarding's window applies the root and paints the panel (docs/SETTINGS.md, "Onboarding"). Its cards are
+plain buttons with the ring. The hover scale, the springs and the selection fades went with the old look, so the steps
+add no animator, and the steps' cross-fade and the welcome's sparkles are unchanged. `LaunchPermissionRow`, shared with
+General's Permissions, ranks Allow as the row's primary and Not now as quiet (the design review's finding 4) in our own
+styles, so General's `.tint(.accentColor)` around the rows had nothing left to do and went with its pin. What each
+button does and when macOS asks are unchanged: `FirstLaunchRulesTests` and `LaunchGateRulesTests` pass with their
+clauses and plants unchanged. The onboarding boards set `LaunchPermissionManager.snapshotStatuses` (DEBUG only), after
+every board that shows General's rows, and clear it after them, so `refresh` reads none of this Mac's answers and
+probes no folder while they draw. So the rest of this entry holds. **Not measured:** the window itself, which a board
+cannot draw (no title bar, no emitter): the cross-fade, the sparkles, the keyboard and VoiceOver through the cards, and
+a real Allow.
+
+**2026-11-13 addendum: View's full-screen item waits for a transition, and a note's page reads its image once per
+file.** The final audit (F3) found ⌃⌘F toggling with no guard: pressed twice fast, or during a close's exit, it asked
+AppKit to toggle in the middle of a transition, which the close's own toggle never does (the 2026-11-01 addendum above).
+The item now calls `SettingsWindowController.toggleFullScreenWhenIdle()`, which does nothing while a transition runs
+(`isChangingFullScreen`) or a close waits for the exit (`closeAfterFullScreen`), so a press in the turn between the exit
+and the queued close no longer takes a closing Brain back into full screen. `MenuBarRulesTests` holds the call and both
+conditions against planted offenders. A note's page read its image again on every save of the note's text, each 1.5 s
+while the notch edited the note Brain showed (F6), so the 2026-11-11 Notes addendum's "once" did not hold. Its
+`.task(id:)` still restarts on a save, but it now stats the file off the main thread and reads it only when the file's
+own modification date has changed: a save of the text keeps the file, and a new image is a new file under the same name.
+No hook and no animator were added, and neither the search suggestions' fade, now kept as one Bool (F8), nor the
+permission callout's VoiceOver name (F9) adds one, so the rest of this entry holds. **Not measured:** each needs a real
+window: ⌃⌘F pressed twice fast, and a note with an image typed in the notch while Brain shows it.
 
 ---
 

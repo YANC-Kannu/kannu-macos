@@ -68,6 +68,13 @@ enum SettingsTheme {
     static let mono: Font = geistMonoIsAvailable
         ? .custom("GeistMono-Regular", size: 13)
         : .system(size: 13, weight: .regular, design: .monospaced)
+    /// The notch's text: Geist at the size and weight the notch's own measures set (`UsageCardMetrics`,
+    /// `TimerComposerMetrics`), sizes this scale has no name for. Geist ships Regular, Medium and SemiBold, so bold and
+    /// heavier draw SemiBold, and lighter draws Regular. A symbol keeps `.system`, which sizes it, and so does monospaced
+    /// text: Geist Mono ships Regular only. docs/SETTINGS.md, "The notch".
+    static func font(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        sans(size, weight, geistFace(weight))
+    }
 
     // MARK: - The window
 
@@ -211,6 +218,14 @@ enum SettingsTheme {
 
     private static func sans(_ size: CGFloat, _ weight: Font.Weight, _ name: String) -> Font {
         geistIsAvailable ? .custom(name, size: size) : .system(size: size, weight: weight)
+    }
+
+    private static func geistFace(_ weight: Font.Weight) -> String {
+        switch weight {
+        case .medium: "Geist-Medium"
+        case .semibold, .bold, .heavy, .black: "Geist-SemiBold"
+        default: "Geist-Regular"
+        }
     }
 
     private static func color(light: UInt32, dark: UInt32) -> Color {

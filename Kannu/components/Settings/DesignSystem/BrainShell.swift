@@ -21,13 +21,17 @@ import SwiftUI
 /// Brain's layout: a title row, the sidebar on the paper, and the page in an inset panel. Generic
 /// slots, so it knows no page, and `SettingsView`'s navigation types stay private to that file.
 struct BrainShell<Sidebar: View, HeaderAccessory: View, Detail: View>: View {
+    /// View › Hide Sidebar: false leaves the panel alone, with the window's inset on both sides.
+    private let showsSidebar: Bool
     private let sidebar: Sidebar
     private let headerAccessory: HeaderAccessory
     private let detail: Detail
 
-    init(@ViewBuilder sidebar: () -> Sidebar,
+    init(showsSidebar: Bool = true,
+         @ViewBuilder sidebar: () -> Sidebar,
          @ViewBuilder headerAccessory: () -> HeaderAccessory,
          @ViewBuilder detail: () -> Detail) {
+        self.showsSidebar = showsSidebar
         self.sidebar = sidebar()
         self.headerAccessory = headerAccessory()
         self.detail = detail()
@@ -44,17 +48,19 @@ struct BrainShell<Sidebar: View, HeaderAccessory: View, Detail: View>: View {
             .padding(.horizontal, SettingsTheme.panelInset)
 
             HStack(spacing: 0) {
-                VStack(spacing: SettingsTheme.sidebarStack) { sidebar }
-                    .padding(.horizontal, SettingsTheme.panelInset)
-                    .padding(.bottom, SettingsTheme.panelInset)
-                    .frame(width: SettingsTheme.sidebarWidth)
-                    .frame(maxHeight: .infinity, alignment: .top)
+                if showsSidebar {
+                    VStack(spacing: SettingsTheme.sidebarStack) { sidebar }
+                        .padding(.horizontal, SettingsTheme.panelInset)
+                        .padding(.bottom, SettingsTheme.panelInset)
+                        .frame(width: SettingsTheme.sidebarWidth)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                }
 
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(SettingsTheme.panel)
                     .clipShape(RoundedRectangle(cornerRadius: SettingsTheme.panelRadius, style: .continuous))
-                    .padding([.trailing, .bottom], SettingsTheme.panelInset)
+                    .padding(showsSidebar ? [.trailing, .bottom] : [.horizontal, .bottom], SettingsTheme.panelInset)
             }
         }
         .background(SettingsTheme.paper)

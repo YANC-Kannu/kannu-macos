@@ -34,20 +34,25 @@ struct PermissionsStepView: View {
     @State private var focusMode: FocusMonitoringMode = Defaults[.focusMonitoringMode]
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("A Few Permissions")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding(.top, 24)
+        // The scroll view spans the window, so its bar sits at the window's edge; its cards keep the page's inset.
+        VStack(alignment: .leading, spacing: SettingsTheme.sectionGap) {
+            VStack(alignment: .leading, spacing: SettingsTheme.sectionLabelGap) {
+                Text("A Few Permissions")
+                    .font(SettingsTheme.pageTitle)
+                    .foregroundStyle(SettingsTheme.ink)
+                    .textSelection(.enabled)
+                    .accessibilityAddTraits(.isHeader)
 
-            Text("macOS asks for each one only when you press Allow. Skip any: what it powers stays off until you allow it in Brain.")
-                .multilineTextAlignment(.center)
-                .font(.body)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                Text("macOS asks for each one only when you press Allow. Skip any: what it powers stays off until you allow it in Brain.")
+                    .font(SettingsTheme.body)
+                    .foregroundStyle(SettingsTheme.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .padding(.horizontal, SettingsTheme.pageInset)
 
             ScrollView {
-                VStack(spacing: 10) {
+                VStack(spacing: SettingsTheme.listRowGap) {
                     ForEach(rows) { permission in
                         LaunchPermissionRow(permission: permission, musicSource: musicSource)
                     }
@@ -59,17 +64,14 @@ struct PermissionsStepView: View {
                             reason: String(localized: "So the notch is there whenever your agents are.")
                         )
                     }
-                    .toggleStyle(.switch)
                     .permissionCard()
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, SettingsTheme.pageInset)
             }
 
             Text("Change these any time in Brain › Settings › General › Permissions, or System Settings › Privacy & Security.")
-                .multilineTextAlignment(.center)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.horizontal)
+                .settingsDescriptionStyle()
+                .padding(.horizontal, SettingsTheme.pageInset)
 
             Button("Continue") {
                 // A row left unanswered is a Not now: its feature waits, and nothing asks later.
@@ -80,37 +82,40 @@ struct PermissionsStepView: View {
                 onLaunchAtLoginChoice(launchAtLogin)
                 onContinue()
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(SettingsButtonStyle(.primary))
             .disabled(permissions.requestInFlight != nil)
-            .padding(.bottom, 24)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, SettingsTheme.pageInset)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        )
+        .padding(.vertical, SettingsTheme.sectionGap)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onAppear { permissions.refresh() }
     }
 
     /// The choice the onboarding window used to pop up over its Welcome screen.
     private var focusRow: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
             PermissionRowLabel(
                 symbol: "moon",
                 title: String(localized: "Focus detection"),
                 reason: String(localized: "Developer Tools access reads Focus more reliably; without it, Kannu reads it as it can.")
             )
-            Picker("Focus detection", selection: $focusMode) {
-                Text("Without DevTools").tag(FocusMonitoringMode.withoutDevTools)
-                Text("Use DevTools").tag(FocusMonitoringMode.useDevTools)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            SettingsSelect("Focus detection", selection: $focusMode, choices: [
+                .withoutDevTools: String(localized: "Without DevTools"),
+                .useDevTools: String(localized: "Use DevTools"),
+            ], style: .segmented)
             if focusMode == .useDevTools {
-                Button("Open Developer Tools settings") { DeveloperToolsSettings.open() }
-                    .buttonStyle(.link)
-                    .font(.caption)
+                // A lone quiet button under the card's text, on its column, with its chevron, as Agents' "Open ›"
+                // (docs/SETTINGS.md, "Which component for what"): bare at rest, the chevron says it goes somewhere.
+                Button {
+                    DeveloperToolsSettings.open()
+                } label: {
+                    HStack(spacing: SettingsMetrics.iconGap) {
+                        Text("Open Developer Tools settings")
+                        Image(systemName: "chevron.right")
+                    }
+                }
+                .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
             }
         }
         .permissionCard()
@@ -119,6 +124,8 @@ struct PermissionsStepView: View {
 
 /// One permission: why Kannu wants it, where it stands, and Allow / Not now. Shared by the
 /// onboarding step, as a card of its own, and Brain › Settings › General › Permissions, as a row.
+/// Allow is the answer the row asks for, so it is the primary and Not now the quiet one (the design review's finding 4):
+/// our own styles, drawn alike in a window that is not key, where a native prominent button turns grey.
 struct LaunchPermissionRow: View {
     let permission: LaunchPermission
     let musicSource: MediaControllerType
@@ -135,9 +142,9 @@ struct LaunchPermissionRow: View {
                 controls
             }
         } else {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
                 PermissionRowLabel(symbol: symbol, title: title, reason: reason)
-                HStack(spacing: 8) {
+                HStack(spacing: SettingsMetrics.rowContent) {
                     Spacer(minLength: 0)
                     controls
                 }
@@ -154,28 +161,25 @@ struct LaunchPermissionRow: View {
         case .notAsked, .deferred:
             if status == .notAsked {
                 Button("Not now") { permissions.postpone(permission) }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(SettingsButtonStyle(.quiet))
             } else {
-                Text("Not now").font(.caption).foregroundColor(.secondary)
+                Text("Not now").settingsDescriptionStyle()
             }
             Button("Allow") { permissions.request(permission, musicSource: musicSource) }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(SettingsButtonStyle(.primary))
                 .disabled(permissions.requestInFlight != nil)
         case .waiting:
             ProgressView().controlSize(.small)
-            Text("Waiting for macOS…").font(.caption).foregroundColor(.secondary)
+            Text("Waiting for macOS…").settingsDescriptionStyle()
         case .allowed:
-            Label("Allowed", systemImage: "checkmark.circle.fill")
-                .font(.caption)
-                .foregroundColor(.green)
+            SettingsStatusText(String(localized: "Allowed"), isReady: true)
         case .notAllowed:
-            Text("Not allowed").font(.caption).foregroundColor(.secondary)
+            Text("Not allowed").settingsDescriptionStyle()
             Button("Open System Settings") { permissions.openSystemSettings(for: permission) }
-                .buttonStyle(.bordered)
+                .buttonStyle(SettingsButtonStyle())
         case .askedWhenAppOpens:
             Text("macOS asks when \(permission == .notesAutomation ? String(localized: "Notes") : musicSource.localizedName) opens")
-                .font(.caption)
-                .foregroundColor(.secondary)
+                .settingsDescriptionStyle()
         }
     }
 
@@ -232,19 +236,24 @@ private struct PermissionRowLabel: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // The theme's one accent, not the Mac's: the strong one for the glyph, which must be seen.
             Image(systemName: symbol)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundStyle(SettingsTheme.accentStrong)
                 .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.accentColor.opacity(0.15)))
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(SettingsTheme.accent.opacity(0.15)))
+                .accessibilityHidden(true)
             if asRow {
                 SettingsRowLabel(verbatim: title, description: reason)
             } else {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
+                // Unselectable: on onboarding's switch card this is the switch's label.
+                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
+                    Text(title)
+                        .font(SettingsTheme.bodyStrong)
+                        .foregroundStyle(SettingsTheme.ink)
                     Text(reason)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(SettingsTheme.description)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -254,8 +263,9 @@ private struct PermissionRowLabel: View {
 }
 
 private extension View {
+    /// Onboarding's card for one permission or choice: a section's card, on the window's panel.
     func permissionCard() -> some View {
-        padding(12)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.secondary.opacity(0.08)))
+        padding(SettingsMetrics.cardPadding)
+            .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
     }
 }

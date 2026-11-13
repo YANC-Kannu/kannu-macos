@@ -30,6 +30,8 @@ final class BrainAppearanceRulesTests: XCTestCase {
     private static let page = "components/Settings/AppearanceSettings.swift"
     private static let constants = "models/Constants.swift"
     private static let notchWindow = "components/Notch/KannuWindow.swift"
+    /// The menu bar's View › Appearance: the moon's three choices, through its own `@Default`.
+    private static let menuBar = "KannuApp.swift"
 
     /// Every file under `Kannu/` that names an appearance, by its path from there.
     private static func sources() throws -> [String: String] {
@@ -59,7 +61,7 @@ final class BrainAppearanceRulesTests: XCTestCase {
         // A window that sets its own, with no receiver. The notch's is the only one.
         let ownWriters = files(in: sources, matching: #"(?<![\w.])appearance\s*=\s*(?:NSAppearance\b|\.init\b|nil\b)"#)
         if ownWriters != [notchWindow] { problems.append("these set their own appearance: \(ownWriters.sorted())") }
-        // Only the moon and the row write the key, each through its `@Default`.
+        // Only the moon, the row and View › Appearance write the key, each through its `@Default`.
         let keyWriters = files(in: sources, matching: #"Defaults\[\.brainAppearance\]\s*=(?!=)"#)
         if !keyWriters.isEmpty { problems.append("these write the key directly: \(keyWriters.sorted())") }
         let global = files(in: sources, matching: #"\bNSApp(?:lication\.shared)?\??\.appearance\b"#)
@@ -68,7 +70,7 @@ final class BrainAppearanceRulesTests: XCTestCase {
         if !forced.isEmpty { problems.append("these force a colour scheme: \(forced.sorted())") }
         // Word boundaries: not `brainAppearanceObserver`, and not the capitalised enum.
         let readers = files(in: sources, matching: #"\bbrainAppearance\b"#)
-        if readers != [controller, toggle, page, constants] { problems.append("these name the key: \(readers.sorted())") }
+        if readers != [controller, toggle, page, constants, menuBar] { problems.append("these name the key: \(readers.sorted())") }
         return problems
     }
 
@@ -92,7 +94,7 @@ final class BrainAppearanceRulesTests: XCTestCase {
 
     func testTheKeyReachesBrainsWindowAndNothingElse() throws {
         let sources = try Self.sources()
-        for path in [Self.controller, Self.snapshots, Self.toggle, Self.page, Self.constants, Self.notchWindow] {
+        for path in [Self.controller, Self.snapshots, Self.toggle, Self.page, Self.constants, Self.notchWindow, Self.menuBar] {
             XCTAssertNotNil(sources[path], "\(path) was not read, so this rule proves less than it says")
         }
         XCTAssertEqual(Self.problems(in: sources), [])
