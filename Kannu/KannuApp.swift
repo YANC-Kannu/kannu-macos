@@ -135,7 +135,7 @@ private struct BrainViewCommands: View {
         Divider()
         Button(visibility.isFullScreen ? String(localized: "Exit Full Screen") : String(localized: "Enter Full Screen")) {
             // Brain is on screen, so its window exists and the terms were accepted.
-            SettingsWindowController.shared.window?.toggleFullScreen(nil)
+            SettingsWindowController.shared.toggleFullScreenWhenIdle()
         }
         .keyboardShortcut("f", modifiers: [.control, .command])
         .disabled(!visibility.isOnScreen)

@@ -283,6 +283,13 @@ class SettingsWindowController: NSWindowController {
         return true
     }
 
+    /// View › Enter Full Screen. It waits as the close's toggle does: ⌃⌘F pressed twice fast, or during a close's exit,
+    /// does nothing while a transition runs, rather than ask AppKit to toggle in the middle of one.
+    func toggleFullScreenWhenIdle() {
+        guard !isChangingFullScreen else { return }
+        window?.toggleFullScreen(nil)
+    }
+
     private func finishPendingClose() {
         guard closeAfterFullScreen else { return }
         // A turn later: this runs inside AppKit's transition callback. `NSWindow.close()` does not

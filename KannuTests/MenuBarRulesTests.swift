@@ -186,6 +186,38 @@ final class MenuBarRulesTests: XCTestCase {
         ], in: controller, by: Self.fullScreenTitleProblems)
     }
 
+    // MARK: - The full-screen item waits for a transition
+
+    /// ⌃⌘F pressed twice fast, or during a close's exit, would toggle in the middle of a transition, which the close's
+    /// own toggle never does (docs/REGRESSIONS.md, entry 22). So View's item toggles through the controller, which does
+    /// nothing while one runs.
+    static func fullScreenToggleProblems(commands: String, controller: String) -> [String] {
+        var problems: [String] = []
+        let view = code(body(of: "private struct BrainViewCommands: View {", in: commands))
+        if !view.contains("SettingsWindowController.shared.toggleFullScreenWhenIdle()") || view.contains("toggleFullScreen(nil)") {
+            problems.append("View's full-screen item toggles without waiting for a transition")
+        }
+        let toggle = body(of: "func toggleFullScreenWhenIdle() {", in: code(controller))
+        if !isBefore("guard !isChangingFullScreen else { return }", "window?.toggleFullScreen(nil)", in: toggle) {
+            problems.append("the controller toggles full screen during a transition")
+        }
+        return problems
+    }
+
+    func testTheFullScreenItemWaitsForATransition() throws {
+        let commands = Self.commands(in: try Self.read("Kannu/KannuApp.swift"))
+        let controller = try Self.read("Kannu/components/Settings/SettingsWindowController.swift")
+        XCTAssertEqual(Self.fullScreenToggleProblems(commands: commands, controller: controller), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("SettingsWindowController.shared.toggleFullScreenWhenIdle()", "SettingsWindowController.shared.window?.toggleFullScreen(nil)"),
+        ], in: commands) { Self.fullScreenToggleProblems(commands: $0, controller: controller) }
+        let guarded = "        guard !isChangingFullScreen else { return }\n        window?.toggleFullScreen(nil)\n"
+        SettingsDesignSystemRulesTests.assertCaught([
+            (guarded, "        window?.toggleFullScreen(nil)\n"),
+            (guarded, "        window?.toggleFullScreen(nil)\n        guard !isChangingFullScreen else { return }\n"),
+        ], in: controller) { Self.fullScreenToggleProblems(commands: commands, controller: $0) }
+    }
+
     // MARK: - One full-screen item
 
     /// AppKit adds its own Enter Full Screen once launching ends unless an item sends `toggleFullScreen:`, which a SwiftUI
