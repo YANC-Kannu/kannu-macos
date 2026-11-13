@@ -10,17 +10,17 @@ The gates run in order. Each task is tagged with where it can run:
 Keep this file current as work moves; `handoff.md` holds the latest state behind each line.
 
 ## 1. Finish the stack
-- [ ] 1.1 Merge #56, the final audit's fixes (F3, F5, F6, F8, F9) plus #52's two CodeRabbit fixes, into
-  `super/brain-6-around` once both Build runners pass. [CI] [David]
-- [ ] 1.2 Request CodeRabbit's re-review of #52. Read it in full, fix or answer every note (the lean rules), and post
-  the replies. [David]
+- [x] 1.1 Merge #56, the final audit's fixes (F3, F5, F6, F8, F9) plus #52's two CodeRabbit fixes, into
+  `super/brain-6-around` once both Build runners pass. [CI] [David] Merged as 16263d8b.
+- [x] 1.2 Request CodeRabbit's re-review of #52. Read it in full, fix or answer every note (the lean rules), and post
+  the replies. [David] Its one note was fixed in 418dee32, and the review after that was clean.
 - [ ] 1.3 David's Mac checks on the installed combined build, F1 (New note's Return) first. The list is in `handoff.md`.
-  [Mac] [David]
-- [ ] 1.4 #42: mark it ready and merge it into `development`, with a merge commit. [David]
-- [ ] 1.5 #43: retarget it to `development`, mark it ready and merge it. [David]
-- [ ] 1.6 #52: the same, once its review is answered and #56 is in. [David]
-- [ ] 1.7 After the stack lands, check that every file the specs cite exists on `development`, and fix any stale
-  path. [Cloud]
+  [Mac] [David] The stack landed first, on David's yes, so these checks now run on the final install (section 6).
+- [x] 1.4 #42: mark it ready and merge it into `development`, with a merge commit. [David] Merged as 70ab4242.
+- [x] 1.5 #43: retarget it to `development`, mark it ready and merge it. [David] Merged as a711fece.
+- [x] 1.6 #52: the same, once its review is answered and #56 is in. [David] Merged as d7d839d3.
+- [x] 1.7 After the stack lands, check that every file the specs cite exists on `development`, and fix any stale
+  path. [Cloud] All 48 cited paths exist, except section 4's release notes, which are not written yet.
 
 ## 2. Land #3 and bridge the feed
 - [ ] 2.1 Catch #3 (`chore/repoint-yanc-kannu`, CONFLICTING) up with `development`, run its gates, and merge it.
