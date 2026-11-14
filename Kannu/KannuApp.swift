@@ -180,7 +180,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // `continueLaunch()` touches each one, in this order, the moment the launch may proceed.
     lazy var vm: KannuViewModel = .init()
     @ObservedObject var coordinator = KannuViewCoordinator.shared
-    var whatsNewWindow: NSWindow?
+    /// Kannu 2.0's welcome while it is open (`showWhatsNewWindow()`); nil once it closes.
+    var whatsNewWindow: WhatsNewWindow?
     var timer: Timer?
     lazy var dndManager = DoNotDisturbManager.shared  // NEW: DND detection
     lazy var bluetoothAudioManager = BluetoothAudioManager.shared  // NEW: Bluetooth audio detection
@@ -1574,6 +1575,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let timerWidgetManager = LockScreenTimerWidgetManager.shared
         timerWidgetManager.handleLockStateChange(isLocked: LockScreenManager.shared.currentLockStatus)
 
+        // What's New: an update meets 2.0's welcome once, after the terms and never over onboarding. A fresh install
+        // never does, because onboarding introduces Kannu there, so its first launch counts it as seen. Skipped under
+        // UI testing, as onboarding is.
+        if !AppRuntimeEnvironment.isUITesting {
+            switch WhatsNew.decision(isUpgrade: isUpgrade,
+                                     onboardingComplete: LaunchPermissionManager.isOnboardingComplete,
+                                     seenEdition: Defaults[.whatsNewSeenEdition]) {
+            case .show:
+                showWhatsNewWindow()
+            case .markSeen:
+                Defaults[.whatsNewSeenEdition] = WhatsNew.currentEdition
+            case .skip:
+                break
+            }
+        }
+
         // Last, once the notch and the shelf exist: files opened with Kannu while the terms were up.
         if !shelfURLsAwaitingAcceptance.isEmpty {
             let waiting = shelfURLsAwaitingAcceptance
@@ -2419,6 +2436,31 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         onboardingWindowController?.window?.makeKeyAndOrderFront(nil)
         onboardingWindowController?.window?.orderFrontRegardless()
+    }
+
+    /// Kannu 2.0's welcome (`WhatsNewWindow`), opened by `continueLaunch()` only. Like onboarding's window, it makes
+    /// Kannu a regular app while it is up, so it can take the keyboard.
+    private func showWhatsNewWindow() {
+        guard whatsNewWindow == nil else { return }
+        let window = WhatsNewWindow.make(content: .kannu2())
+        window.onClose = { [weak self] in self?.whatsNewWindowDidClose() }
+        ScreenCaptureVisibilityManager.shared.register(window, scope: .panel)
+        whatsNewWindow = window
+
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    /// Continue, Escape, the close button and ⌘W all end here, so each one counts as seen: it never opens again.
+    private func whatsNewWindowDidClose() {
+        Defaults[.whatsNewSeenEdition] = WhatsNew.currentEdition
+        whatsNewWindow = nil
+        // Brain may have opened meanwhile, and it can be full screen: `.accessory` is what its own close sets
+        // (docs/REGRESSIONS.md, entry 22), as onboarding's Finish leaves it.
+        let brainIsOpen = NSApp.windows.contains { $0.identifier == SettingsWindowController.windowIdentifier && $0.isVisible }
+        if !brainIsOpen { NSApp.setActivationPolicy(.accessory) }
     }
 }
 
