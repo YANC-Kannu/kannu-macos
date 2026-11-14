@@ -30,8 +30,8 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
   All seven that `scripts/RELEASE.md` names exist, by name (2026-11-13).
 
 ## 3. Version
-- [ ] 3.1 Set `MARKETING_VERSION` to 2.0.0, and `CURRENT_PROJECT_VERSION` to 12 for beta.1, in both configurations of
-  `Kannu.xcodeproj/project.pbxproj`. [Mac]
+- [x] 3.1 Set `MARKETING_VERSION` to 2.0.0, and `CURRENT_PROJECT_VERSION` to 12 for beta.1, in both configurations of
+  `Kannu.xcodeproj/project.pbxproj`. [Mac] Set on 2026-11-14. Build 12 sits above the 1.4.0 betas' builds 9 to 11.
 - [x] 3.2 Set the codename in `ReleaseInfo.codename` (`Kannu/models/Constants.swift`), once David picks it (9.1). Add
   its row to `scripts/RELEASE.md`'s Codenames table. [Cloud] [David] Horus, set in both on 2026-11-13. Vigil is next,
   then Sentinel, and the first line of both release notes already says Horus.
