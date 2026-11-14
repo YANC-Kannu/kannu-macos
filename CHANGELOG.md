@@ -4,6 +4,37 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-13 - Welcome people who update to Kannu 2.0 with a What's New window
+- **Developer label:** Kannu 2.0's What's New window, release-2-0 tasks 5.2 to 5.5 (David chose it on 13 Nov, decision 9.2)
+- **Agent label:** Claude Code (Opus 5.5) — the window and when it opens, its strings in 17 languages, its rule tests and
+  its snapshot board
+- **Changes:**
+  - Kannu opens a What's New window once for people who update: after the Terms of Use, never on a fresh install, where
+    onboarding introduces Kannu, and never while onboarding runs. Closing it by any route, Continue, Escape, the close
+    button or ⌘W, counts it as seen, and it never opens again. `continueLaunch()` asks `WhatsNew.decision` once, near
+    its end; under UI testing it is skipped, as onboarding is.
+  - The window says "Welcome to Kannu 2.0", one line under it, and a card each for Brain, Tasks and Tags, with
+    Continue. It is drawn as an onboarding step is, in Brain's theme and Geist, in light and dark. Return presses
+    Continue and Escape closes it, whatever has focus. VoiceOver reads each card's title and text together. Nothing in
+    it animates, and under Reduce Motion the window's own appearance does not either. Its height is its content's, so a
+    card grows with its text in every language.
+  - `whatsNewSeenEdition` in `Constants.swift` records the edition seen; `WhatsNew.currentEdition` is 1, 2.0's
+    welcome. The stray `showWhatsNew` `@AppStorage` in `KannuViewCoordinator` is retired rather than reused: a Bool
+    cannot say which edition was seen, and every key lives in `Constants.swift`. `whatsNewWindow` holds the window.
+  - The catalog gains the window's seven strings in all 17 languages, and Brain, marked never translated. The Tasks
+    card uses the sidebar's own "Tasks" key, so Brain's sidebar now names the Tasks page in every language too. "What's
+    New" was still English in ar, cs, es, hu and uk, and "Continue" in ar and hu; both are translated now, and their
+    other languages, already right, are marked reviewed.
+  - `BrainNamingRulesTests` allows the Brain card's "Settings is now Brain", which names the window's old name on
+    purpose.
+  - `WhatsNewTests` holds the decision's truth table. `WhatsNewRulesTests` reads the source for each rule, never before
+    the terms, never on a fresh install, never during onboarding and shown once, and for the keyboard, VoiceOver,
+    motion, theme and sizing rules, with a planted offender for each. It also checks that every string is in the
+    catalog and that every translation keeps `#launch` and its time as words the quick-add parser reads.
+  - DEBUG boards: `whatsNew` draws the shipped copy in English, in light and dark, and `whatsNewLanguages` every other
+    language, Arabic right to left. Neither builds the window.
+  - docs/SETTINGS.md gains a "What's New" section. openspec `release-2-0`: tasks 5.2 to 5.4 are ticked.
+
 ### 2026-11-13 - Write Kannu 2.0's release notes, ReadMe and welcome copy, and name it Horus
 - **Developer label:** Kannu 2.0 release prep: the release copy, the [Cloud] tasks of the OpenSpec change `release-2-0`,
   and the codename David picked, Horus
