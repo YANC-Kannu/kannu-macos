@@ -357,7 +357,7 @@ enum ClipboardDisplayMode: String, CaseIterable, Codable, Defaults.Serializable 
         switch self {
         case .popover: return String(localized: "Popover")
         case .panel: return String(localized: "Panel")
-        case .separateTab: return String(localized: "Separate Tab")
+        case .separateTab: return String(localized: "Separate tab")
         }
     }
     
@@ -412,13 +412,13 @@ enum ADRHighAlertMode: String, CaseIterable, Defaults.Serializable, Identifiable
     var description: String {
         switch self {
         case .untilAcknowledged:
-            return String(localized: "A shield pill stays beside the traffic light until you acknowledge the finding. Click it to open the panel.")
+            return String(localized: "A shield pill stays until you acknowledge the finding.")
         case .fiveSeconds:
-            return String(localized: "The pill shows for five seconds when a finding is new, then only a small shield remains until acknowledged.")
+            return String(localized: "A five-second pill, then a small shield.")
         case .glyphOnly:
             return String(localized: "Only a small shield beside the traffic light; no pill.")
         case .off:
-            return String(localized: "Nothing in the closed notch. Findings still appear in the panel and in Brain.")
+            return String(localized: "Nothing in the closed notch; findings stay in Brain.")
         }
     }
 
@@ -443,8 +443,8 @@ enum AgentStatusNotificationProvider: String, CaseIterable, Codable, Defaults.Se
 
     var description: String {
         switch self {
-        case .ntfy: return String(localized: "Send push notifications via ntfy.sh (iPhone, Apple Watch, Android)")
-        case .pushover: return String(localized: "Send push notifications via Pushover (iPhone and Apple Watch)")
+        case .ntfy: return String(localized: "Push via ntfy.sh to iPhone, Watch or Android.")
+        case .pushover: return String(localized: "Push via Pushover to iPhone or Watch.")
         case .webhook: return String(localized: "POST JSON to a custom URL for your own integrations")
         }
     }
@@ -656,9 +656,9 @@ enum MusicSkipBehavior: String, CaseIterable, Identifiable, Defaults.Serializabl
     var displayName: String {
         switch self {
         case .track:
-            return String(localized: "Track Skip")
+            return String(localized: "Track skip")
         case .tenSecond:
-            return String(localized: "±10 Seconds")
+            return String(localized: "±10 seconds")
         }
     }
 
@@ -681,7 +681,7 @@ enum TimerIconColorMode: String, CaseIterable, Identifiable, Defaults.Serializab
     var displayName: String {
         switch self {
         case .adaptive: return String(localized:"Adaptive gradient")
-        case .solid: return String(localized:"Solid colour")
+        case .solid: return String(localized:"Solid color")
         }
     }
 }
@@ -943,6 +943,8 @@ extension Defaults.Keys {
     static let logLevel = Key<LogLevel>("logLevel", default: .none)
     static let menubarIcon = Key<Bool>("menubarIcon", default: true)
     static let brainAppearance = Key<BrainAppearance>("brainAppearance", default: .system)
+    /// View › Hide Sidebar: false takes Brain's sidebar away, and its search with it.
+    static let brainShowsSidebar = Key<Bool>("brainShowsSidebar", default: true)
     /// Off tears every notch window down. The menu bar eye is shown whatever `menubarIcon` says
     /// while this is off, because its menu is the way back.
     static let showNotch = Key<Bool>("showNotch", default: true)
@@ -952,6 +954,9 @@ extension Defaults.Keys {
     /// `OnboardingProgress.currentVersion` once onboarding is finished; 0 until then. An install
     /// from before it existed is marked done at launch, because `firstLaunch` is already false.
     static let onboardingCompletedVersion = Key<Int>("onboardingCompletedVersion", default: 0)
+    /// The What's New edition last seen (`WhatsNew.currentEdition`); 0 until one is. Closing the window writes it, and
+    /// so does a fresh install's first launch, where onboarding introduces Kannu instead.
+    static let whatsNewSeenEdition = Key<Int>("whatsNewSeenEdition", default: 0)
     /// `LaunchPermission` raw values the user pressed Allow for (the request ran).
     static let askedLaunchPermissions = Key<[String]>("askedLaunchPermissions", default: [])
     /// `LaunchPermission` raw values the user said Not now to: their features wait for consent.
@@ -1660,6 +1665,10 @@ extension Defaults.Keys {
     static let tasksPopoverShowLinear = Key<Bool>("tasksPopoverShowLinear", default: true)
     static let tasksPopoverShowTodoist = Key<Bool>("tasksPopoverShowTodoist", default: true)
     static let tasksPopoverShowAppleReminders = Key<Bool>("tasksPopoverShowAppleReminders", default: true)
+    /// The notch's Tag filter, beside Show in notch in the same menu (`TaskSourceMenu`):
+    /// `TaskFacets.anyTag` (""), or the one tag, own or a label, the notch's task lists narrow to.
+    /// Brain's Task list keeps its own (`tasksListTagFilter`).
+    static let tasksNotchTagFilter = Key<String>("tasksNotchTagFilter", default: TaskFacets.anyTag)
     // Each integration's colour (`TaskColoring`): what a task with no tags shows. Tag colours live in
     // tasks.json with the tags. `.glass` is the plain look tasks had before colours.
     static let tasksLocalColor = Key<TaskColor>("tasksLocalColor", default: .glass)
@@ -1835,20 +1844,21 @@ extension Defaults.Keys {
 /// Release codename, shown in Settings › About and used for the GitHub release title
 /// (`scripts/manual-release.sh` and `.github/workflows/release.yml` grep the `static let codename` declaration, so keep its
 /// shape). Kannu names releases after watchers — the app's job is to watch your
-/// agents — one per feature release: Argus (1.2.0), Heimdall (1.3.0), then Horus, Vigil, Sentinel.
+/// agents — one per feature release: Argus (1.2.0), Heimdall (1.3.0), Horus (2.0.0), then Vigil, Sentinel.
 /// 1.0.0 shipped as "Fiji", the tail of the Atoll island chain this fork inherited; that was not a
 /// scheme choice and is not continued.
 ///
 /// The name is picked for what the release does, not just for its turn in the list. Argus was many
 /// eyes — 1.2.0 only watched. Heimdall keeps watch at Bifröst *and refuses passage*, which is the
 /// two halves of 1.3.0: the local security checks that detect, and the agent policy that can deny a
-/// tool call on Claude Code and Cursor. Detect and respond.
+/// tool call on Claude Code and Cursor. Detect and respond. Horus is one eye, like 2.0's logo and a
+/// notch that closes like an eye, and still a watcher: Brain, behind the notch, still watches the agents.
 enum ReleaseInfo {
-    static let codename = "Heimdall"
+    static let codename = "Horus"
 
     /// `owner/repo`, used to build the prefilled issue a user can send after a freeze or a crash.
     /// Kannu never posts anything itself — the link opens their browser with the fields filled in.
-    static let repository = "libinmv/kannu"
+    static let repository = "YANC-Kannu/kannu-macos"
 }
 
 /// `DisplayPlacement` lives in the logic test target, which does not link Defaults, so the storage

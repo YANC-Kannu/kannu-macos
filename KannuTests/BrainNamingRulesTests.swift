@@ -78,8 +78,6 @@ final class BrainNamingRulesTests: XCTestCase {
                 reason: "the Clipboard section's header: that feature's own group of options inside Brain"),
         Allowed(file: "Kannu/components/Settings/SettingsPermissionCallout.swift", literal: .exactly("Open Settings"),
                 reason: "SettingsPermissionCallout's default button, which opens macOS System Settings"),
-        Allowed(file: "Kannu/components/Settings/ExtensionsSettings.swift", literal: .exactly("Global Settings"),
-                reason: "the section header for options that apply to every extension"),
         Allowed(file: "Kannu/components/Live activities/DynamicIslandBattery.swift", literal: .exactly("Battery Settings"),
                 reason: "opens the macOS Battery settings"),
         Allowed(file: "Kannu/components/ScreenAssistant/ChatPanels.swift", literal: .exactly("Open Model Settings"),
@@ -89,6 +87,8 @@ final class BrainNamingRulesTests: XCTestCase {
         Allowed(file: "Kannu/managers/Tasks/TaskReminders.swift",
                 literal: .containing("x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
                 reason: "the URL of the macOS Notifications pane, never shown"),
+        Allowed(file: "Kannu/components/WhatsNew/WhatsNewView.swift", literal: .containing("Settings is now Brain"),
+                reason: "What's New's Brain card names the window's old name once, to say it is Brain now"),
     ]
 
     // MARK: - The rename

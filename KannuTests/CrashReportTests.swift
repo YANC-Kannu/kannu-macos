@@ -234,7 +234,7 @@ final class CrashReportTests: XCTestCase {
         let report = try XCTUnwrap(CrashReport.parse(fileName: cpuDiagnosticName, contents: cpuDiagnostic, home: home, hostName: ""))
         XCTAssertEqual(report.sourceName, "Kannu_2026-09-12-033808_this-mac.cpu_resource.diag")
         XCTAssertFalse(report.issueBody.contains(host))
-        let url = try XCTUnwrap(report.issueURL(repository: "libinmv/kannu")).absoluteString
+        let url = try XCTUnwrap(report.issueURL(repository: "YANC-Kannu/kannu-macos")).absoluteString
         XCTAssertFalse(url.contains(host))
     }
 
@@ -293,7 +293,7 @@ final class CrashReportTests: XCTestCase {
     /// `symbol + 8` frame and every `+0530` timestamp arrived mangled. Decoded the way a form
     /// reader does, because Foundation's own parser leaves `+` alone and would pass either way.
     func testTheReportSurvivesFormDecodingOnTheOtherEnd() throws {
-        let url = try XCTUnwrap(try XCTUnwrap(parseIPS()).issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(try XCTUnwrap(parseIPS()).issueURL(repository: "YANC-Kannu/kannu-macos"))
         let body = try XCTUnwrap(
             (url.query ?? "")
                 .split(separator: "&")
@@ -310,7 +310,7 @@ final class CrashReportTests: XCTestCase {
     /// A CPU report has no stack at all, and was still corrupted — through the timestamp's UTC
     /// offset, which is the one `+` every textual diagnostic carries.
     func testEvenAStacklessReportKeepsItsTimeZone() throws {
-        let url = try XCTUnwrap(try XCTUnwrap(parseCPU()).issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(try XCTUnwrap(parseCPU()).issueURL(repository: "YANC-Kannu/kannu-macos"))
         let body = try XCTUnwrap(
             (url.query ?? "").split(separator: "&").first { $0.hasPrefix("body=") }
                 .map { String($0.dropFirst("body=".count)) }
@@ -325,7 +325,7 @@ final class CrashReportTests: XCTestCase {
     func testAnEnormousStackStillProducesAnOpenableURL() throws {
         var report = try XCTUnwrap(parseIPS())
         report.frames = (0..<4000).map { "\($0)  Kannu  $s5Kannu24aLongMangledSymbolNameyyF + \($0)" }
-        let url = try XCTUnwrap(report.issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(report.issueURL(repository: "YANC-Kannu/kannu-macos"))
         XCTAssertLessThanOrEqual(url.absoluteString.count, GitHubIssue.urlLengthLimit)
         XCTAssertTrue(url.absoluteString.contains("issues/new"))
     }
@@ -354,9 +354,9 @@ final class CrashReportTests: XCTestCase {
     }
 
     func testTheIssueURLIsWellFormed() throws {
-        let url = try XCTUnwrap(try XCTUnwrap(parseIPS()).issueURL(repository: "libinmv/kannu"))
+        let url = try XCTUnwrap(try XCTUnwrap(parseIPS()).issueURL(repository: "YANC-Kannu/kannu-macos"))
         XCTAssertEqual(url.host, "github.com")
-        XCTAssertTrue(url.path.hasSuffix("/libinmv/kannu/issues/new"))
+        XCTAssertTrue(url.path.hasSuffix("/YANC-Kannu/kannu-macos/issues/new"))
         XCTAssertTrue(url.query?.contains("labels=crash") == true)
     }
 

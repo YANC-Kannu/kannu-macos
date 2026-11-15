@@ -27,7 +27,7 @@ struct UsageWindowReading: Equatable {
     /// The usage provider: "claude", "codex" or "cursor".
     let provider: String
     let key: String
-    /// Short name for a push or caption: "5-hour", "weekly", "Fable weekly", "billing-cycle".
+    /// Short name for a push or caption: "5-hour", "weekly", "Fable weekly", "billing cycle".
     let label: String
     /// 0–100.
     let percent: Double
@@ -95,7 +95,7 @@ struct UsageWindowReading: Equatable {
     static func label(provider: String, key: String) -> String {
         switch key {
         case "session": return String(localized: "5-hour")
-        case "week": return provider == "cursor" ? String(localized: "billing-cycle") : String(localized: "weekly")
+        case "week": return provider == "cursor" ? String(localized: "billing cycle") : String(localized: "weekly")
         default: return key.replacingOccurrences(of: "_", with: " ")
         }
     }

@@ -22,6 +22,25 @@ tool-specific file — this repo has already paid twice for one rule living in t
 - **`.agents/skills/kannu-senior-contributor/SKILL.md`** — how to match existing conventions here and
   how to prepare a commit.
 
+<!-- OPENSPEC:START -->
+# OpenSpec Instructions
+
+These instructions are for AI assistants working in this project.
+
+Always open `@/openspec/AGENTS.md` when the request:
+- Mentions planning or proposals (words like proposal, spec, change, plan)
+- Introduces new capabilities, breaking changes, architecture shifts, or big performance/security work
+- Sounds ambiguous and you need the authoritative spec before coding
+
+Use `@/openspec/AGENTS.md` to learn:
+- How to create and apply change proposals
+- Spec format and conventions
+- Project structure and guidelines
+
+Keep this managed block so 'openspec update' can refresh the instructions.
+
+<!-- OPENSPEC:END -->
+
 ## Project overview
 
 Kannu is a free, open-source macOS utility that lives in the MacBook notch. Its purpose: let developers **monitor AI coding agents** (Cursor, Codex, Claude Code, VS Code agents, Antigravity, and others) without switching to their coding application. The primary indicator is a traffic-light system:
@@ -159,7 +178,7 @@ For coding tasks report: what changed, why, files affected, important architectu
 - The **pre-commit hook** requires a staged `CHANGELOG.md` entry under `## [Unreleased]` with every source commit, and rejects a hook-script mirror mismatch. It does **not** build — it is bash/awk and runs in milliseconds. (A previous version of this file claimed it builds; that was wrong.)
 - **Debug builds put the real code in `Kannu.app/Contents/MacOS/Kannu.debug.dylib`** — the main binary is a tiny stub, so string-grepping it for new code gives false negatives.
 - A recreated build directory can leave a **stale xcodebuild build database** that reports `BUILD SUCCEEDED` with zero compile tasks. When verifying a build, confirm compile activity (or delete the derivedData path first).
-- **Nothing runs before the Terms of Use are accepted.** `applicationDidFinishLaunching` starts only the crash marker, the hang watchdog, the updater and the orphan reaper, then either continues the launch (`continueLaunch()`) or shows the terms gate. The `AppDelegate` singletons are `lazy var` for this reason — they used to be built eagerly at init, which spawned helpers and raised permission prompts before anyone had agreed to anything — and `continueLaunch()` touches each one in order. Keep them lazy, keep new launch work inside `continueLaunch()`, and do not give `KannuApp` an `init` that does work; `LaunchGateRulesTests` pins all three. Separately: a first touch of any TCC-protected resource (Bluetooth, ~/Downloads, …) blocks the main thread until the permission dialog is answered, and ad-hoc rebuilds change the code signature so the prompts recur — first touches of protected resources still belong on a background queue.
+- **Nothing runs before the Terms of Use are accepted.** `applicationDidFinishLaunching` starts only the crash marker, the hang watchdog, the updater and the orphan reaper, then either continues the launch (`continueLaunch()`) or shows the terms gate. The `AppDelegate` singletons are `lazy var` for this reason — they used to be built eagerly at init, which spawned helpers and raised permission prompts before anyone had agreed to anything — and `continueLaunch()` touches each one in order. Keep them lazy, keep new launch work inside `continueLaunch()`, and do not give `KannuApp` an `init` that does work; `LaunchGateRulesTests` pins all three. `applicationWillFinishLaunching` runs earlier still, so it holds one in-memory `register(defaults:)` for View's full-screen item and nothing else, and `LaunchGateRulesTests` pins it to that line. Separately: a first touch of any TCC-protected resource (Bluetooth, ~/Downloads, …) blocks the main thread until the permission dialog is answered, and ad-hoc rebuilds change the code signature so the prompts recur — first touches of protected resources still belong on a background queue.
 - **No permission dialog before onboarding's Permissions step, and none after a Not now.** A fresh
   install used to raise four macOS dialogs in the same second as the welcome music, which now plays
   only at onboarding's Finish (`startHello()`). A feature whose first touch raises a dialog (TCC,

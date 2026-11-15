@@ -28,12 +28,14 @@ final class ClosedNotchObservationTests: XCTestCase {
 
     /// The views allowed to observe the whole monitor, and how many observers each file holds: leaves
     /// that render session data, and surfaces that exist to show live rows. The count is exact, so a
-    /// second observer in an allowed file fails too.
+    /// second observer in an allowed file fails too. Nothing under Brain is here: Brain's content outlives its
+    /// window, so a page copies what it shows through a throttled subscription that stops while Brain is off
+    /// screen (docs/SETTINGS.md, "Live data"; `AgentsPageLiveDataRulesTests`). The Agents style preview left
+    /// this list on 2026-11-05.
     private static let allowedObservers: [String: Int] = [
         "Kannu/components/AgentStatus/AgentTrafficLightLiveActivity.swift": 1,  // AgentTrafficLightIndicator, the leaf
         "Kannu/components/AgentStatus/NotchAgentStatusView.swift": 1,           // the open panel's list
         "Kannu/components/Notch/NotchLLMUsageView.swift": 1,                    // usage tab
-        "Kannu/components/Settings/AgentStatusSettings.swift": 1,               // style preview (6d6a826 pattern)
     ]
 
     func testOnlyLeafViewsObserveTheWholeMonitor() {

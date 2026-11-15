@@ -39,7 +39,7 @@ struct TimeToLogSection: View {
     var body: some View {
         let open = manager.openDrafts
         if !open.isEmpty {
-            Section {
+            SettingsSection {
                 LabeledContent {
                     SettingsValueText(open.count == 1 ? String(localized: "1 waiting") : String(localized: "\(open.count) waiting"))
                 } label: {

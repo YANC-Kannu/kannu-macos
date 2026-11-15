@@ -8,7 +8,7 @@ Triggered only by pushing a `v*` tag. The workflow archives with Developer ID, n
 
 ### One-time: GitHub secrets
 
-Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
+Add at **Settings → Secrets and variables → Actions** on `YANC-Kannu/kannu-macos`:
 
 | Secret | Description |
 |--------|-------------|
@@ -23,13 +23,13 @@ Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
 Example (run locally after exporting your `.p12`):
 
 ```bash
-gh secret set APPLE_CERTIFICATE --repo libinmv/kannu < <(base64 -i ~/path/to/cert.p12)
-gh secret set APPLE_CERTIFICATE_PASSWORD --repo libinmv/kannu
-gh secret set KEYCHAIN_PASSWORD --repo libinmv/kannu
-gh secret set APPLE_TEAM_ID --repo libinmv/kannu --body "S2WWHQQH2V"
-gh secret set APPLE_ID --repo libinmv/kannu
-gh secret set APPLE_NOTARIZATION_PASSWORD --repo libinmv/kannu
-gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo libinmv/kannu < ~/path/to/eddsa_private.key
+gh secret set APPLE_CERTIFICATE --repo YANC-Kannu/kannu-macos < <(base64 -i ~/path/to/cert.p12)
+gh secret set APPLE_CERTIFICATE_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set KEYCHAIN_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_TEAM_ID --repo YANC-Kannu/kannu-macos --body "S2WWHQQH2V"
+gh secret set APPLE_ID --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_NOTARIZATION_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo YANC-Kannu/kannu-macos < ~/path/to/eddsa_private.key
 ```
 
 ### Release day
@@ -109,13 +109,15 @@ and in the GitHub release title (`Kannu 1.3.0 — Heimdall`). The list, in order
 |---|---|
 | 1.2.0 | Argus |
 | 1.3.0 | Heimdall |
-| next | Horus |
-| then | Vigil, Sentinel |
+| 2.0.0 | Horus |
+| next | Vigil |
+| then | Sentinel |
 
 Pick the next name for what the release actually does, not just for its turn in the list — the list
 is the shortlist, not a queue. Argus, all eyes, suited a release that only watched; Heimdall, who
-keeps watch at Bifröst and refuses passage, suited the one that added the agent policy. If a release
-does not fit the next name on the list, take one further down or add a watcher to it.
+keeps watch at Bifröst and refuses passage, suited the one that added the agent policy; Horus, one
+eye, suited 2.0's one-eye logo and a notch that closes like an eye. If a release does not fit the
+next name on the list, take one further down or add a watcher to it.
 
 The name lives in one place: `ReleaseInfo.codename` in `Kannu/models/Constants.swift`. Both release
 paths grep that line for the title, so bump it there and nowhere else. 1.0.0 shipped as "Fiji", the

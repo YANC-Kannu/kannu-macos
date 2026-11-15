@@ -30,7 +30,9 @@ import XCTest
 /// - the Tags sheet's pills reorder — by drag and drop through `TaskTagEditing.moving`, by a
 ///   right-click "Move to Front" menu, and by the same move as a named VoiceOver action — since the
 ///   first tag gives the task its colour; and its Done saves the colours picked there with the
-///   tags, Cancel neither.
+///   tags, Cancel neither;
+/// - a pill shows its tag's colour once, as the chip's wash, with no swatch beside it (design review
+///   finding 23), and its right-click menu's Colour picks it through the staged binding.
 ///
 /// Each detector has a planted-offender test, so a scanner that stops matching fails instead of
 /// passing vacuously.
@@ -148,13 +150,28 @@ final class TaskColorRulesTests: XCTestCase {
                     .dropDestination(for: String.self) { items, _ in
                         tags = TaskTagEditing.moving(items[0], to: index, in: tags); return true
                     }
-                    .contextMenu { Button("Move to Front") { } }
+                    .contextMenu {
+                        Button("Move to Front") { }
+                        Picker("Colour", selection: colorBinding(for: tag)) { }
+                    }
                     .accessibilityAction(named: Text("Move to Front")) { }
             }
             """
         let cancel = "Button(\"Cancel\", role: .cancel) { dismiss() }\n"
         let done = "Button(\"Done\") {\n    manager.setTags(tags, for: id)\n    manager.setTagColors(picks)\n    dismiss()\n}\n"
         XCTAssertEqual(Self.tagsSheetProblems(in: pill + cancel + done), [])
+
+        // The swatch back beside the chip: the colour twice. The picker gone, or outside the menu.
+        let swatch = pill.replacingOccurrences(of: "HStack { Text(tag) }",
+                                               with: "HStack { TaskColorPickerButton(selection: colorBinding(for: tag)); Text(tag) }")
+        XCTAssertEqual(Self.tagsSheetProblems(in: swatch + cancel + done), ["pill draws a colour swatch beside its chip"])
+        let dot = pill.replacingOccurrences(of: "HStack { Text(tag) }", with: "HStack { TaskColorDot(color(of: tag)); Text(tag) }")
+        XCTAssertEqual(Self.tagsSheetProblems(in: dot + cancel + done), ["pill draws a colour swatch beside its chip"])
+        let noPicker = pill.replacingOccurrences(of: "Picker(\"Colour\", selection: colorBinding(for: tag)) { }", with: "")
+        XCTAssertEqual(Self.tagsSheetProblems(in: noPicker + cancel + done), ["pill's right-click menu has no Colour picker"])
+        let pickerOutside = noPicker.replacingOccurrences(of: "HStack { Text(tag) }",
+                                                          with: "HStack { Text(tag); Picker(\"Colour\", selection: colorBinding(for: tag)) { } }")
+        XCTAssertEqual(Self.tagsSheetProblems(in: pickerOutside + cancel + done), ["pill's right-click menu has no Colour picker"])
 
         let undraggable = pill.replacingOccurrences(of: ".draggable(tag)", with: "")
         XCTAssertEqual(Self.tagsSheetProblems(in: undraggable + cancel + done), ["pill has no .draggable(tag)"])
@@ -216,7 +233,8 @@ extension TaskColorRulesTests {
     }
 
     /// What keeps the Tags sheet's pills from reordering, or its colour picks from being saved with
-    /// the tags on Done — or lets Cancel save either.
+    /// the tags on Done — or lets Cancel save either; or shows a pill's colour twice, or leaves it
+    /// with no way to be picked.
     static func tagsSheetProblems(in source: String) -> [String] {
         var problems: [String] = []
         if let pill = body(of: "func pill(", in: source) {
@@ -225,6 +243,12 @@ extension TaskColorRulesTests {
                 ".accessibilityAction(named: Text(\"Move to Front\"))",
             ]
             problems += reorder.filter { !pill.contains($0) }.map { "pill has no \($0)" }
+            if ["TaskColorPickerButton(", "TaskColorDot(", "KannuColorPickerButton("].contains(where: { pill.contains($0) }) {
+                problems.append("pill draws a colour swatch beside its chip")
+            }
+            if !(body(of: ".contextMenu", in: String(pill))?.contains("Picker(\"Colour\", selection: colorBinding(for: tag))") ?? false) {
+                problems.append("pill's right-click menu has no Colour picker")
+            }
         } else {
             problems.append("func pill( not found")
         }
@@ -271,6 +295,7 @@ extension TaskColorRulesTests {
         "Kannu/components/Timer/TimerIconAnimation.swift",
         "Kannu/components/Timer/TimerPopover.swift",
         "Kannu/components/LockScreen/LockScreenTimerWidget.swift",
+        "Kannu/components/Settings/TimerOverview.swift",
     ]
     static let presetColorReads = ["activePreset?.color", "activePreset!.color", "activePresetColor", "$0.id == presetId"]
 

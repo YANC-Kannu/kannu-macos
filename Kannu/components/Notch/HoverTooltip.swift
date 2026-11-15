@@ -41,7 +41,7 @@ private struct HoverTooltipBubble: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2)
+            .font(SettingsTheme.font(size: 10))
             .foregroundStyle(.white)
             // `.fixedSize()` on BOTH axes is load-bearing. This is an overlay, so the
             // proposed width is the parent control's — often a ~14pt icon button.

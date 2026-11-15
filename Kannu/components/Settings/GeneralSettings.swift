@@ -66,9 +66,9 @@ struct GeneralSettings: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                SettingsRow("Menubar icon", description: "The eye in the menu bar. Click it to open the notch on the display you are on; right-click for Show Notch, Brain, updates, restart and quit. It stays while the notch is hidden.") {
+        SettingsPage {
+            SettingsSection {
+                SettingsRow("Menubar icon", description: "Click to open the notch; right-click for more.") {
                     Defaults.Toggle(key: .menubarIcon) {
                         Text("Menubar icon")
                     }
@@ -137,18 +137,15 @@ struct GeneralSettings: View {
                 SettingsSectionHeader("System features")
             }
 
-            Section {
+            SettingsSection {
                 // Onboarding's Permissions rows: what a Not now there held back is allowed here,
-                // one macOS dialog at a time.
-                VStack(spacing: 10) {
+                // one macOS dialog at a time. Rows of this card, not cards inside it.
+                VStack(spacing: SettingsTheme.sectionRowGap) {
                     // The current music source decides whether a "Control …" row shows.
                     ForEach(LaunchPermissionManager.rows(musicSource: Defaults[.mediaController])) { permission in
-                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController])
+                        LaunchPermissionRow(permission: permission, musicSource: Defaults[.mediaController], asRow: true)
                     }
                 }
-                // Shared with onboarding, so Allow stays `.borderedProminent`, and its white label
-                // cannot be read on the root's eye blue in dark.
-                .tint(.accentColor)
                 .settingsHighlight(id: highlightID("Permissions"))
             } header: {
                 SettingsSectionHeader("Permissions")
@@ -156,7 +153,7 @@ struct GeneralSettings: View {
                 SettingsFooter("Kannu asks macOS for a permission only when you press Allow. What you skip stays off until you allow it here.")
             }
 
-            Section {
+            SettingsSection {
                 SettingsRow("Notch display height") {
                     SettingsSelect("Notch display height", selection: $notchHeightMode, choices: [
                         .matchRealNotchSize: String(localized: "Match real notch size"),
@@ -177,8 +174,8 @@ struct GeneralSettings: View {
                         }
                         .settingsHighlight(id: highlightID("Notch display height"))
                 if notchHeightMode == .custom {
-                    SettingsSliderRow(title: Text("Custom notch size - \(notchHeight, specifier: "%.0f")"),
-                                      value: $notchHeight, in: 15...45, step: 1, valueText: nil)
+                    SettingsSliderRow("Custom notch size", value: $notchHeight, in: 15...45, step: 1,
+                                      valueText: Text("\(Int(notchHeight)) px"))
                     .onChange(of: notchHeight) {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
@@ -202,14 +199,14 @@ struct GeneralSettings: View {
                     NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                 }
                 if nonNotchHeightMode == .custom {
-                    SettingsSliderRow(title: Text("Custom notch size - \(nonNotchHeight, specifier: "%.0f")"),
-                                      value: $nonNotchHeight, in: 0...40, step: 1, valueText: nil)
+                    SettingsSliderRow("Custom notch size", value: $nonNotchHeight, in: 0...40, step: 1,
+                                      valueText: Text("\(Int(nonNotchHeight)) px"))
                     .onChange(of: nonNotchHeight) {
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
                 }
             } header: {
-                SettingsSectionHeader("Notch Height")
+                SettingsSectionHeader("Notch height")
             }
 
             NotchBehaviour()
@@ -220,7 +217,7 @@ struct GeneralSettings: View {
         // `NSScreen.screens` is not observable: an `onChange(of:)` of it ran only when something
         // else redrew the page, and a display coming or going need not. A new `screens` redraws
         // the page, and with it the per-display overrides, which read `NSScreen.screens` too.
-        // On the Form, not the Display row: rows of a lazy Form may not exist when it fires.
+        // On the page, which owns `screens`: the Display row and the per-display overrides both read it.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             screens = NSScreen.screens.compactMap { $0.localizedName }
         }
@@ -233,7 +230,7 @@ struct GeneralSettings: View {
 
     @ViewBuilder
     func gestureControls() -> some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .enableGestures) {
                 Text("Enable gestures")
             }
@@ -283,7 +280,7 @@ struct GeneralSettings: View {
 
     @ViewBuilder
     func NotchBehaviour() -> some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(key: .extendHoverArea) {
                 Text("Extend hover area")
             }
@@ -301,7 +298,7 @@ struct GeneralSettings: View {
             // hidden island slides in.
             if openNotchOnHover || !alwaysShowOnNonNotchDisplays || alwaysShowOverrides.values.contains(false) {
                 SettingsSliderRow("Minimum hover duration",
-                                  description: "How long the pointer must rest on the notch before it opens. On displays where Kannu hides until hovered, this is also how long the pointer must rest at the top edge before the island slides in.",
+                                  description: "How long the pointer rests before the notch opens.",
                                   value: $minimumHoverDuration, in: 0...2, step: 0.1,
                                   valueText: Text("\(minimumHoverDuration, specifier: "%.1f")s"))
                 .onChange(of: minimumHoverDuration) {
@@ -317,7 +314,7 @@ struct GeneralSettings: View {
                 NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
             }
             .settingsHighlight(id: highlightID("External display style"))
-            SettingsRow("Always show on non-notch displays", description: "By default the notch hides on external displays and appears when you hover near the top. Turn this on to keep it visible.") {
+            SettingsRow("Always show on non-notch displays", description: "Keeps the notch visible instead of hiding until hover.") {
                 Defaults.Toggle(key: .alwaysShowOnNonNotchDisplays) {
                     Text("Always show on non-notch displays")
                 }
@@ -357,7 +354,7 @@ struct GeneralSettings: View {
     func perDisplayOverrideSections(_ displays: [(name: String, isBuiltIn: Bool)]) -> some View {
         ForEach(displays, id: \.name) { display in
             let name = display.name
-            Section {
+            SettingsSection {
                 SettingsRow("Style") {
                     SettingsSelect("Style", selection: displayStyleBinding(for: name),
                                    options: [nil] + ExternalDisplayStyle.allCases.map(Optional.some),
@@ -431,7 +428,7 @@ extension GeneralSettings {
     /// DEBUG snapshot harness: the per-display overrides, which list only displays without a
     /// notch (none on a lone MacBook), for two made-up displays.
     static func snapshotPerDisplayRows() -> AnyView {
-        AnyView(Form {
+        AnyView(SettingsPage {
             GeneralSettings().perDisplayOverrideSections([
                 (name: "Studio Display (made up)", isBuiltIn: false),
                 (name: "Built-in Display (made up)", isBuiltIn: true),

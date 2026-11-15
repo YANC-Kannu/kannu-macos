@@ -191,20 +191,20 @@ struct SecurityFindingRow: View {
                 Divider()
             }
             if let path = finding.revealPath {
-                Button("Reveal File in Finder") {
+                Button("Reveal file in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
                 }
             }
             if let folder = finding.projectFolder {
-                Button("Reveal Project Folder") {
+                Button("Reveal project folder") {
                     NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: folder, isDirectory: true)])
                 }
             }
             if let openChat {
-                Button("Open Chat", action: openChat)
+                Button("Open chat", action: openChat)
             }
             Divider()
-            Button("Copy Details") {
+            Button("Copy details") {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(SecurityFindingGuide.detailsText(for: finding), forType: .string)
@@ -231,17 +231,15 @@ struct SecurityFindingRow: View {
                 withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
             }
         } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+            // Brain's one disclosure shape: the title, then the chevron, in ink.
+            HStack(spacing: SettingsMetrics.iconGap) {
                 Text("Details")
+                Image(systemName: "chevron.right")
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
-            .font(.subheadline)
-            .foregroundStyle(Color.accentColor)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        // First under the finding's text, so its label sits on that text's column.
+        .buttonStyle(SettingsButtonStyle(.quiet, flush: true))
         .accessibilityLabel(isExpanded ? Text("Hide details") : Text("Show details"))
     }
 }

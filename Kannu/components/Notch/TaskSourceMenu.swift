@@ -53,10 +53,16 @@ enum TasksBrainDestination {
 /// A source that is not connected has no check item; "Add a source…", like "Manage tasks…", opens
 /// Brain at Sources: a token is typed only in Brain's Connect sheet, never in the notch. This menu
 /// reads Defaults only — never the Keychain.
+///
+/// The Tag submenu narrows the same lists to one tag, own or a label (`tasksNotchTagFilter`), with
+/// the choice ticked, as All tasks' Tag filter is in Brain. Its tags are passed in, so the menu never
+/// reads `TasksManager`. Show all clears it with the sources.
 struct TaskSourceMenu: View {
     @ObservedObject private var preferences = TaskSourcePreferences.shared
     /// Closes the popover, then opens Brain there.
     let openBrain: (TasksBrainDestination) -> Void
+    /// The Tag submenu's choices: `TaskFacets.filterTags(in:)` of the tasks Show in notch lists.
+    let tags: [String]
     /// The popover's header glyph, or the timer tab's rail icon (`TimerRailIcon`'s square).
     var style: Style = .header
 
@@ -81,8 +87,12 @@ struct TaskSourceMenu: View {
                     Button("Add a source…") { openBrain(.sources) }
                 }
             }
+            // Nothing to pick without a tag, unless a picked one lingers.
+            if !tags.isEmpty || preferences.tagFilter != TaskFacets.anyTag {
+                tagPicker
+            }
             if isNarrowing {
-                // Every source back in the notch, without unticking each.
+                // Every source back in the notch, and every tag, without unticking each.
                 Button(String(localized: "Show all")) { preferences.showAll() }
             }
             Divider()
@@ -105,6 +115,21 @@ struct TaskSourceMenu: View {
         .modifier(RailSquare(isOn: style == .rail, isActive: isNarrowing))
         .accessibilityLabel("Filter tasks")
         .hoverTooltip(String(localized: "Filter tasks"), edge: .below)
+    }
+
+    /// All, or one tag, as a submenu. A picked tag no task has any more still shows, so the menu is
+    /// never blank (All tasks' rule).
+    private var tagPicker: some View {
+        let picked = preferences.tagFilter
+        return Picker("Tag", selection: preferences.tagBinding) {
+            Text("All").tag(TaskFacets.anyTag)
+            ForEach(tags, id: \.self) { tag in
+                Text(verbatim: "#\(tag)").tag(tag.lowercased() == picked.lowercased() ? picked : tag)
+            }
+            if picked != TaskFacets.anyTag, !tags.contains(where: { $0.lowercased() == picked.lowercased() }) {
+                Text(verbatim: "#\(picked)").tag(picked)
+            }
+        }
     }
 }
 

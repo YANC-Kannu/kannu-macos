@@ -27,9 +27,9 @@ import SwiftUI
 /// - **Log time?**: the Time to log cards still asking (`WorklogDraftCard`, the very card Brain
 ///   shows, so Log goes the same one way it does there);
 /// - **Up next**: Add a task… (a local task, at the top of the order, whatever the filter), then
-///   the task order narrowed by Show in notch (`TaskOrdering.viewFilter`), at most
-///   `TaskOrdering.upNextLimit` rows, each with its key, title, "42m of 2h" and ▶; or an empty
-///   state. While the filter hides a source, one quiet line says "Filtered · Show all";
+///   the task order narrowed by Show in notch and its Tag filter (`TaskOrdering.viewFilter`), at
+///   most `TaskOrdering.upNextLimit` rows, each with its key, title, "42m of 2h" and ▶; or an empty
+///   state. While the filter hides a source or picks a tag, one quiet line says "Filtered · Show all";
 /// - **Show all in Brain**.
 ///
 /// Live time ticks through a `TimelineView`, once a second, only while the Now card is on screen
@@ -66,12 +66,12 @@ struct TasksPopover: View {
 
             Button("Show all in Brain") { openBrain(.taskList) }
                 .buttonStyle(.link)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
         }
         .padding(16)
         .frame(width: 320)
         // The header's own font and grey reach into a popover's content; start from the defaults.
-        .font(.body)
+        .font(SettingsTheme.font(size: 13))
         .foregroundStyle(.primary)
         .background(
             VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
@@ -92,13 +92,20 @@ struct TasksPopover: View {
     /// (`TaskSourcePreferences.hiddenInNotch`).
     private var isFiltered: Bool { preferences.isNarrowing }
 
-    /// Show in notch over the connected baseline (`TasksManager.activeTasks`). The task being timed
-    /// always passes.
+    /// Show in notch and its Tag filter over the connected baseline (`TasksManager.activeTasks`). The
+    /// task being timed always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, tag: preferences.tagFilter, alwaysListed: manager.timing?.taskID)
     }
 
-    /// Show all: every source back in the notch.
+    /// The Tag submenu's choices: the tags of every task Show in notch lists, whatever tag is picked,
+    /// so a choice never vanishes from its own menu.
+    private var tagChoices: [String] {
+        TaskFacets.filterTags(in: TaskOrdering.active(manager.activeTasks, listed: TaskOrdering.viewFilter(
+            hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)))
+    }
+
+    /// Show all: every source back in the notch, and no Tag filter.
     private func showAllSources() {
         preferences.showAll()
     }
@@ -117,16 +124,16 @@ struct TasksPopover: View {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Tasks")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(SettingsTheme.font(size: 14, weight: .semibold))
                     ForEach(syncLines(at: context.date), id: \.self) { line in
                         Text(verbatim: line)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SettingsTheme.font(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
-                TaskSourceMenu(openBrain: openBrain)
+                TaskSourceMenu(openBrain: openBrain, tags: tagChoices)
                 if !manager.syncStates.isEmpty {
                     refreshButton(at: context.date)
                 }
@@ -185,14 +192,14 @@ struct TasksPopover: View {
             ProgressView()
                 .controlSize(.small)
             Text("Loading tasks…")
-                .font(.system(size: 12))
+                .font(SettingsTheme.font(size: 12))
                 .foregroundStyle(.secondary)
         }
     }
 
     private func failureRow(_ reason: String) -> some View {
         Text(verbatim: String(localized: "Couldn't read the task list, so it can't change. \(reason)"))
-            .font(.system(size: 11))
+            .font(SettingsTheme.font(size: 11))
             .foregroundStyle(.red)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -225,7 +232,7 @@ struct TasksPopover: View {
 
     private func sectionTitle(_ title: LocalizedStringKey) -> some View {
         Text(title)
-            .font(.system(size: 12, weight: .semibold))
+            .font(SettingsTheme.font(size: 12, weight: .semibold))
             .foregroundStyle(.secondary)
     }
 
@@ -240,7 +247,7 @@ struct TasksPopover: View {
                     .lineLimit(1)
             }
             Text(verbatim: task.title)
-                .font(.system(size: 14, weight: .semibold))
+                .font(SettingsTheme.font(size: 14, weight: .semibold))
                 .lineLimit(2)
         }
     }
@@ -306,7 +313,7 @@ struct TasksPopover: View {
                         .foregroundStyle(.orange)
                 }
             }
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
         }
     }
@@ -329,7 +336,7 @@ struct TasksPopover: View {
                 Spacer(minLength: 0)
                 if total > tasks.count {
                     Text(verbatim: String(localized: "\(tasks.count) of \(total)"))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -339,7 +346,7 @@ struct TasksPopover: View {
             addTaskField
             if !enableTimerFeature && !tasks.isEmpty {
                 Text("Turn on the timer in Brain to time tasks.")
-                    .font(.system(size: 11))
+                    .font(SettingsTheme.font(size: 11))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -352,7 +359,8 @@ struct TasksPopover: View {
         }
     }
 
-    /// "Filtered · Show all": Show in notch hides a source. Show all puts every source back.
+    /// "Filtered · Show all": Show in notch hides a source or picks a tag. Show all puts every source
+    /// back and clears the tag.
     private var filteredLine: some View {
         HStack(spacing: 4) {
             Text("Filtered")
@@ -362,7 +370,7 @@ struct TasksPopover: View {
             Button("Show all", action: showAllSources)
                 .buttonStyle(.link)
         }
-        .font(.system(size: 11, weight: .medium))
+        .font(SettingsTheme.font(size: 11, weight: .medium))
     }
 
     /// A local task, added at the top of the order. Return adds it; nothing here sends anything.
@@ -387,12 +395,13 @@ struct TasksPopover: View {
         }
     }
 
-    /// The new task is always local: with Local hidden it would vanish as it is added, so adding one
-    /// puts Local back in the notch.
+    /// The new task is always local, and may lack the tag picked: hidden by either it would vanish as
+    /// it is added, so adding one puts Local back in the notch and clears a Tag filter that would hide
+    /// it (`TasksManager.showInNotch`, as the timer tab's adds do).
     private func addTask() {
-        if manager.addTask(title: newTitle, estimateSeconds: nil) != nil {
+        if let id = manager.addTask(title: newTitle, estimateSeconds: nil) {
             newTitle = ""
-            if preferences.hiddenInNotch.contains(.local) { preferences.shownBinding(for: .local).wrappedValue = true }
+            manager.showInNotch(id)
         }
     }
 
@@ -403,10 +412,10 @@ struct TasksPopover: View {
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: task.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(SettingsTheme.font(size: 13, weight: .medium))
                     .lineLimit(1)
                 (Text(verbatim: caption) + overText(progress.over))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -451,9 +460,9 @@ struct TasksPopover: View {
         let connected = !preferences.connected.isEmpty
         return VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: emptyTitle(connected: connected))
-                .font(.system(size: 13, weight: .semibold))
+                .font(SettingsTheme.font(size: 13, weight: .semibold))
             Text(emptyMessage(connected: connected))
-                .font(.system(size: 11))
+                .font(SettingsTheme.font(size: 11))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if !connected {
@@ -467,8 +476,8 @@ struct TasksPopover: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
-    /// Whether Show in notch is what empties Up next: it hides a source, and without it an open task
-    /// would show. With no open task anywhere the plain empty state is the true one.
+    /// Whether the filter is what empties Up next: it hides a source or picks a tag, and without it an
+    /// open task would show. With no open task anywhere the plain empty state is the true one.
     private var filterHidesEveryTask: Bool {
         isFiltered && !TaskOrdering.upNext(manager.activeTasks, excluding: manager.timing?.taskID, limit: 1).isEmpty
     }
