@@ -78,7 +78,10 @@ David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcom
 2. **The decisions** left in `tasks.md` section 9: the feed bridge, new features, AGENTS.md's overview,
    `release/1.4.0`, and OpenSpec 2.x. Decided 2026-11-13: the codename is Horus, 2.0 adds What's New, #55 waits until
    after 2.0, and the video's storyboard stays on David's Mac and is never committed.
-3. **The release copy's PR** (above): its review, and a yes to merge it.
+3. **The version PR** (2.0.0, build 12, task 3.1): a yes to merge it.
+   - Then the final install from `development` (6.1).
+   - Then the Mac checks (6.2), with What's New on an updated install and on a fresh account.
+   - The release copy (#60) and What's New (#59) have merged.
 
 ## David's Mac checks
 **On the installed build:**
