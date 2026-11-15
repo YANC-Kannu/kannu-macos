@@ -93,17 +93,20 @@ final class AgentHookLayoutTests: XCTestCase {
     // MARK: - Which Claude groups make Claude wait (hook v49)
 
     func testClaudeWaitsOnlyWhereKannuMayHaveToAnswer() {
+        // One name per group: "event" for a generic group, "event/matcherKey" for a matcher-scoped one.
         func blocking(enforce: Bool, warn: Bool) -> Set<String> {
-            Set(AgentHookLayout.claudeHookEntries.map(\.event).filter {
-                !AgentHookLayout.claudeHookIsAsync(event: $0, enforcePolicy: enforce, warnAgent: warn)
-            })
+            Set(AgentHookLayout.claudeHookEntries.filter {
+                !AgentHookLayout.claudeHookIsAsync(event: $0.event, state: $0.state, enforcePolicy: enforce, warnAgent: warn)
+            }.map { $0.matcherKey.isEmpty ? $0.event : "\($0.event)/\($0.matcherKey)" })
         }
-        let ends: Set<String> = ["Stop", "StopFailure", "SubagentStop", "SessionEnd"]
+        // The end of a turn or a session, and every group that turns the light yellow.
+        let always: Set<String> = ["Stop", "StopFailure", "SubagentStop", "SessionEnd",
+                                   "PermissionRequest", "PreToolUse/gated", "Notification/needs_input"]
         let notes: Set<String> = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"]
-        XCTAssertEqual(blocking(enforce: false, warn: false), ends, "by default only the end of a turn or a session blocks")
-        XCTAssertEqual(blocking(enforce: true, warn: false), ends.union(["PreToolUse"]), "a deny needs PreToolUse answered")
-        XCTAssertEqual(blocking(enforce: false, warn: true), ends.union(notes), "the note rides these events")
-        XCTAssertEqual(blocking(enforce: true, warn: true), ends.union(notes))
+        XCTAssertEqual(blocking(enforce: false, warn: false), always, "by default nothing else blocks")
+        XCTAssertEqual(blocking(enforce: true, warn: false), always.union(["PreToolUse"]), "a deny needs PreToolUse answered")
+        XCTAssertEqual(blocking(enforce: false, warn: true), always.union(notes), "the note rides these events")
+        XCTAssertEqual(blocking(enforce: true, warn: true), always.union(notes))
     }
 
     func testTheClaudeMergeMarksAsyncGroupsAndKeepsTheUsersHooks() throws {
@@ -126,7 +129,9 @@ final class AgentHookLayoutTests: XCTestCase {
             "/Users/u/.claude/kannu-agent-status.sh executing claude PreToolUse"
         ])
         XCTAssertTrue(kannuHandlers(once, "PostToolUse").allSatisfy { $0["async"] as? Bool == true })
-        XCTAssertTrue(kannuHandlers(once, "PreToolUse").allSatisfy { $0["async"] as? Bool == true })
+        XCTAssertNil(kannuHandlers(once, "PreToolUse").first?["async"], "the gated group turns the light yellow: it blocks")
+        XCTAssertEqual(kannuHandlers(once, "PreToolUse").last?["async"] as? Bool, true)
+        XCTAssertTrue(kannuHandlers(once, "PermissionRequest").allSatisfy { $0["async"] == nil })
         XCTAssertTrue(kannuHandlers(once, "Stop").allSatisfy { $0["async"] == nil }, "the end of a turn must land")
         XCTAssertEqual(kannuHandlers(once, "Stop").count, 1)
 

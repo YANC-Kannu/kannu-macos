@@ -257,12 +257,44 @@ final class HookScriptTests: XCTestCase {
         }
     }
 
-    func testANeedsYouEventIsNeverDroppedAsStale() throws {
+    func testAnOpenRequestIsNotDroppedForANewerToolEvent() throws {
+        // A parallel tool call's PreToolUse started later, but this request may still be open.
         let now = Self.nowMs
         try writeStatus("o3", state: "executing", event: "PreToolUse", tsMs: now - 10_000,
                         extra: ["event_started_ms": now + 60_000])
         try run(state: "awaiting_input", event: "PermissionRequest", conversation: "o3")
         XCTAssertEqual(try readState("o3"), "awaiting_input", "the one event the user must not miss")
+    }
+
+    func testAnAnsweredRequestDoesNotReopenAnEndedTurn() throws {
+        // A turn cannot end with its request open: a request older than the Stop was answered.
+        let now = Self.nowMs
+        try writeStatus("o6", state: "stopped", event: "Stop", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "turn_started_ms": now - 5_000, "turn_ended_ms": now])
+        try run(state: "awaiting_input", event: "PermissionRequest", conversation: "o6")
+        let json = try XCTUnwrap(try readJSON("o6"))
+        XCTAssertEqual(json["state"] as? String, "stopped", "no false yellow on a finished turn")
+        XCTAssertEqual((json["turn_ended_ms"] as? NSNumber)?.int64Value, now, "the turn stays ended")
+    }
+
+    func testAnOlderQuotaStopDoesNotEndANewerTurn() throws {
+        let now = Self.nowMs
+        try writeStatus("o7", state: "thinking", event: "UserPromptSubmit", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "turn_started_ms": now])
+        try run(state: "stopped", event: "StopFailure", conversation: "o7", extra: ["error": "rate_limit"])
+        XCTAssertEqual(try readState("o7"), "thinking")
+    }
+
+    func testALateToolCallIsNotCountedInTheTurnAfterIt() throws {
+        // A PostToolUse from the turn before lands after the next prompt opened a turn of its own.
+        let now = Self.nowMs
+        try writeStatus("o8", state: "thinking", event: "UserPromptSubmit", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "turn_started_ms": now + 30_000,
+                                "turn_tool_calls": 0, "turn_tool_ids": [String]()])
+        try run(state: "thinking", event: "PostToolUse", conversation: "o8", extra: ["tool_use_id": "toolu_late"])
+        let json = try XCTUnwrap(try readJSON("o8"))
+        XCTAssertEqual((json["turn_tool_calls"] as? NSNumber)?.intValue, 0, "the call belongs to the turn before")
+        XCTAssertEqual((json["turn_started_ms"] as? NSNumber)?.int64Value, now + 30_000)
     }
 
     func testALaterEventStillWinsAndRecordsWhenItStarted() throws {

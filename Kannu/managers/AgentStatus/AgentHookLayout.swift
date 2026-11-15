@@ -273,8 +273,12 @@ struct AgentHookLayout: Equatable {
     /// hidden text is found" is on. Claude ignores an async hook's decision and hands its context over
     /// a turn late (code.claude.com/docs/en/hooks). Before v49 every group blocked, at a measured
     /// 160–200 ms a run: once per prompt and twice per tool call.
-    static func claudeHookIsAsync(event: String, enforcePolicy: Bool, warnAgent: Bool) -> Bool {
-        if claudeBlockingEvents.contains(event) { return false }
+    ///
+    /// A group that turns the light yellow (`awaiting_input`) blocks too, so its write lands before the
+    /// user can answer and Claude moves on. Async, a PermissionRequest that finished after the approval,
+    /// the tool and the Stop painted a finished turn yellow. These run only when Claude asks the user.
+    static func claudeHookIsAsync(event: String, state: String, enforcePolicy: Bool, warnAgent: Bool) -> Bool {
+        if claudeBlockingEvents.contains(event) || state == "awaiting_input" { return false }
         if enforcePolicy && event == "PreToolUse" { return false }
         if warnAgent && claudeHiddenTextNoteEvents.contains(event) { return false }
         return true
@@ -292,7 +296,7 @@ struct AgentHookLayout: Equatable {
             var handler: [String: Any] = ["type": "command",
                                           "command": "\(script.path) \(entry.state) claude \(entry.event)\(matcherArg)",
                                           "timeout": 10]
-            if claudeHookIsAsync(event: entry.event, enforcePolicy: enforcePolicy, warnAgent: warnAgent) {
+            if claudeHookIsAsync(event: entry.event, state: entry.state, enforcePolicy: enforcePolicy, warnAgent: warnAgent) {
                 handler["async"] = true
             }
             var group: [String: Any] = ["hooks": [handler]]

@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - Answer CodeRabbit's review of the async Claude hooks
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — the four findings of CodeRabbit's first review of the async hooks, through Auto-fix
+- **Changes:**
+  - The groups that turn the light yellow block again: PermissionRequest, the gated PreToolUse, and Notification's
+    needs-input group. They run only when Claude asks the user something. Async, a PermissionRequest that finished
+    after the approval, the tool and the Stop painted a finished chat yellow.
+  - The hook script's stale check: a needs-you event that started before an ended turn is stale, because a turn
+    cannot end while its request is open; before, it got through, painted the chat yellow and reopened the turn (a
+    PermissionRequest counts as a wake event). Against a working state it still gets through, since a parallel
+    request may still be open. A quota stop is now stale against a newer turn, like any stop.
+  - A late tool call is no longer counted into a turn that started after it.
+  - "Live Claude Code limits": a failure to install or hand back the status line shows under Editor hooks, not
+    only in the log.
+  - `AgentHookInstaller.swift` gains the project's GPL header.
+  - Tests: the blocking groups include the needs-you ones. Four new `HookScriptTests` cases: an answered request
+    that cannot reopen an ended turn, an older quota stop that cannot end a newer turn, a late call that is not
+    counted into the next turn, and an open request that outlives a newer tool event.
+
 ### 2026-11-13 - Claude no longer waits on Kannu's hooks, and the status line is opt-in
 - **Developer label:** "what is an artifact the is getting called to kannu app in every prompt, a user complained about that" — then "can this be avoided"
 - **Agent label:** Claude Code (Opus 5.5) — traced the complaint, made the hooks async with a stale-event guard (hook v49), made the status line opt-in, tests

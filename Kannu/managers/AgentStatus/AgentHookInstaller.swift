@@ -1,3 +1,21 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 import Combine
 import Defaults
 import Foundation
@@ -2043,12 +2061,16 @@ final class AgentHookInstaller: ObservableObject {
         # finish after one that started later: a PostToolUse landing after the turn's Stop painted a finished
         # chat green again. The file keeps when the event behind its state started. An event that started
         # before that leaves the state, the clock, the turn and the verdict as they are, and adds only what it
-        # found: its sightings, and its tool call to the turn. A needs-you or quota event is never dropped as
-        # stale: it is the one the user must not miss, and the merge below already arbitrates it.
+        # found: its sightings, and its tool call to the turn the call belongs to. A needs-you event is stale
+        # only against an ended turn: a turn cannot end while its request is open, so that request was
+        # answered, and letting it through painted a finished chat yellow and reopened its turn. Against a
+        # working state a parallel request may still be open, and the merge below arbitrates it. A quota stop
+        # ends a turn like any stop, so a newer turn outranks it.
         _raw_started = existing.get("event_started_ms")
         existing_started_ms = _raw_started if isinstance(_raw_started, (int, float)) and not isinstance(_raw_started, bool) else 0
         event_started_ms = max(hook_started_ms, existing_started_ms)
-        if existing_state and existing_started_ms > hook_started_ms and state not in {"awaiting_input", "quota_exceeded"}:
+        if (existing_state and existing_started_ms > hook_started_ms
+                and (state != "awaiting_input" or existing_state in {"stopped", "quota_exceeded"})):
             for _key, _value in (("hidden_text", hidden_text), ("secrets", secrets), ("sensitive_paths", sensitive_paths),
                                  ("policy", policy)):
                 if _value:
@@ -2057,7 +2079,8 @@ final class AgentHookInstaller: ObservableObject {
                     existing.pop(_key, None)
             try:
                 _turn = carried_turn(existing, sighting_ms)
-                if _turn and hook_event in TURN_DONE_EVENTS:
+                # Never into a turn that started after this event did: the call belongs to the turn before.
+                if _turn and _turn["turn_started_ms"] <= hook_started_ms and hook_event in TURN_DONE_EVENTS:
                     counted_call(_turn, sighting_ms)
                     for _key in TURN_KEYS:
                         existing.pop(_key, None)
@@ -2993,10 +3016,12 @@ final class AgentHookInstaller: ObservableObject {
     /// back to the user and the script goes, so the first launch of v49 hands back every takeover an
     /// earlier Kannu made.
     private func syncClaudeUsageStatusLine(userToggled: Bool) {
+        // A failure shows under Editor hooks, beside the toggle, as a failed hook install does.
         guard Defaults[.claudeStatusLineUsage] else {
             do {
                 try Self.stripClaudeUsageStatusLine()
             } catch {
+                lastError = "\(AgentHookProvider.claude.displayName): \(error.localizedDescription)"
                 Self.logger.error("usage status line not handed back: \(error.localizedDescription, privacy: .public)")
             }
             return
@@ -3006,6 +3031,7 @@ final class AgentHookInstaller: ObservableObject {
         do {
             try Self.installClaudeUsageStatusLine()
         } catch {
+            lastError = "\(AgentHookProvider.claude.displayName): \(error.localizedDescription)"
             Self.logger.error("usage status line not installed: \(error.localizedDescription, privacy: .public)")
         }
     }
