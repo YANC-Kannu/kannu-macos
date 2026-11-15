@@ -151,6 +151,16 @@ final class TasksManager: ObservableObject, TaskSourceHost {
     /// reading tasks.json. Set before the first touch. While set, nothing is saved, synced, observed
     /// or asked of macOS, so a snapshot never writes the user's file.
     static var snapshotFile: TasksFile?
+
+    /// DEBUG snapshot boards only: swaps the fixture between boards, so one snapshot run can draw boards from different
+    /// fixtures (Time to log's). Only while `snapshotFile` is set, so it never touches a real list, and nothing is saved.
+    func replaceSnapshot(with file: TasksFile) {
+        guard Self.snapshotFile != nil else { return }
+        Self.snapshotFile = file
+        tasks = file.tasks
+        drafts = file.drafts
+        tagColors = file.tagColors
+    }
     #endif
 
     private init() {

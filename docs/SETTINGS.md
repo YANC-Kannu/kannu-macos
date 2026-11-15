@@ -558,12 +558,17 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   (Local tasks and each source with how many tasks it holds and a › to its page) and Tag colours, folded.
 - **A task's page, wide** (layout-proposal D1; above, "Section rules"): from 1,224 pt of panel a task opened from the
   list shows beside it, and its card wears the selected ring; narrower it takes the list's place under "‹ Tasks", and
-  widening the window past the width with it open scrolls the list to its row.
+  widening the window past the width with it open scrolls the list to its row. In the list's column, Time to log's
+  cards stack, what would be logged over the length, the comment and the answers, as the notch's do.
 - **Boards**: `tasksWindow`, `tasksTask`, `tasksDone` and `tasksArchived` draw Tasks at the window's first size: the
   list, a task opened from it in the list's place, and the Done and Archived tabs; `tasksWide` and `tasksWideTask` at
   a 14-inch full screen (1,512 × 982): the list with no task open, and with one beside it. Fixture tasks only
   (`TasksManager.snapshotFile`), never this Mac's; the switches come from this Mac's settings, so the boards run with
-  `-enableTasks '<true/>'`. `tasks` draws the page whole at the narrowest panel.
+  `-enableTasks '<true/>'`. `tasks` draws the page whole at the narrowest panel. `tasksTimeToLog` and
+  `tasksWideTimeToLog` draw one entry waiting in Time to log, at the window's first size and at the 14-inch full
+  screen, a row and then stacked in the list's column, from a fixture of their own
+  (`DebugSnapshotFixtures.tasksFileWithTimeToLog`, swapped in by `TasksManager.replaceSnapshot(with:)`); they run with
+  `-jiraSiteHost example.test` too, or the card says Jira isn't connected.
 - **Notes** leads with the notes in one card, pinned first and then the latest edit first, as the notch's Notes tab
   lists them, in a lazy list (above, "Pages and sections"). A row is the note's colour (a pin in that colour when it is
   pinned, as the notch marks one, in a column a list row's icon wide, so the titles share an edge), its title and a
@@ -1041,7 +1046,12 @@ section describes it, it does not define it.
     list's width with the inset on each side; the item's page is a `SettingsPage` with no inset of
     its own, so the list's trailing inset is the gap, and its scroll view runs to the panel's edge.
     The first page is the layout's first child at both widths, so crossing the width keeps it,
-    scrolled where it was. The item opened shows selected in the list (the one selected look, a 2-pt
+    scrolled where it was. The column tells what it holds that it is one (`settingsInListColumn`):
+    a row whose controls fill a settings column does not fit 360 pt, and a row wider than the
+    column is not clipped alone, it widens the whole column, which runs under the item's page. Such
+    a row stacks in the column, its label over its controls, with one style at both widths, so
+    crossing the width keeps what is typed in it: Time to log's card, with the notch's
+    `StackedCardStyle`. The item opened shows selected in the list (the one selected look, a 2-pt
     ring, and `isSelected` for VoiceOver, on a task's card or a note's row, each named for its
     item); with none open, its place says so. Pages below the first (a source's, a project's, a
     task opened from them) are the in-tab swap at every width. A search or deep link lands on the
