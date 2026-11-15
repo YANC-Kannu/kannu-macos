@@ -53,7 +53,8 @@ struct LogTimeCards: View {
 }
 
 /// The Time to log card, stacked to fit the notch: what would be logged on top, then the length,
-/// the comment and the answers, trailing. In Brain the same card is a Form row.
+/// the comment and the answers, trailing. In Brain the same card is a row, and stacks like this in
+/// the list's column beside a task's page (`TimeToLogSection`).
 struct StackedCardStyle: LabeledContentStyle {
     func makeBody(configuration: Configuration) -> some View {
         VStack(alignment: .leading, spacing: 8) {
