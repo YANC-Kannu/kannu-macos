@@ -39,9 +39,17 @@ final class SettingsListDetailRulesTests: XCTestCase {
             || (layoutCode + fitsCode).components(separatedBy: "ListDetailLayout.showsPageBeside(").count - 1 != 1 {
             problems.append("the layout is not chosen by the width function, from one measurement")
         }
-        let columns = #"HStack\(alignment: \.top, spacing: 0\) \{\s*first\(\)\s*\.frame\(width: showsBeside \? inset \+ ListDetailLayout\.listWidth \+ inset : nil\)\s*if showsBeside \{\s*beside\(\)\s*\.environment\(\\\.settingsPageInset, 0\)\s*\.frame\(maxWidth: \.infinity, alignment: \.leading\)"#
+        let column = #"first\(\)\s*\.frame\(width: showsBeside \? inset \+ ListDetailLayout\.listWidth \+ inset : nil\)"#
+        let told = #"\s*\.environment\(\\\.settingsInListColumn, showsBeside\)"#
+        let columns = #"HStack\(alignment: \.top, spacing: 0\) \{\s*"# + column + "(?:" + told + ")?"
+            + #"\s*if showsBeside \{\s*beside\(\)\s*\.environment\(\\\.settingsPageInset, 0\)\s*\.frame\(maxWidth: \.infinity, alignment: \.leading\)"#
         if SettingsDesignSystemRulesTests.matches(of: columns, in: layoutCode).count != 1 {
             problems.append("the list and the item's page are not laid out by the function's widths, the list first")
+        }
+        // The list's column says it is one, so a row it cannot hold stacks there rather than running past it (Time to
+        // log's card, which `testARowTooWideForTheListsColumnStacksThere` holds).
+        if SettingsDesignSystemRulesTests.matches(of: column + told, in: layoutCode).count != 1 {
+            problems.append("the list's column is not told it is one, so a row too wide for it is clipped there")
         }
         for (name, code) in [("the layout", layoutCode), ("the measurement", fitsCode)] {
             for banned in ["minWidth:", "ViewThatFits", ".inspector("] where code.contains(banned) {
@@ -64,11 +72,51 @@ final class SettingsListDetailRulesTests: XCTestCase {
         SettingsDesignSystemRulesTests.assertCaught([
             (".frame(width: showsBeside ? inset + ListDetailLayout.listWidth + inset : nil)",
              ".frame(minWidth: showsBeside ? inset + ListDetailLayout.listWidth + inset : 0)"),
+            ("                .environment(\\.settingsInListColumn, showsBeside)\n", ""),
+            (".environment(\\.settingsInListColumn, showsBeside)", ".environment(\\.settingsInListColumn, false)"),
             ("                    .environment(\\.settingsPageInset, 0)\n", ""),
             ("        HStack(alignment: .top, spacing: 0) {", "        ViewThatFits {\n        HStack(alignment: .top, spacing: 0) {"),
             ("                    .frame(maxWidth: .infinity, alignment: .leading)\n",
              "                    .frame(maxWidth: .infinity, alignment: .leading)\n                    .inspector(isPresented: .constant(true)) { EmptyView() }\n"),
         ], in: layout) { Self.layoutProblems(layout: $0, fits: fits) }
+    }
+
+    private static let timeToLogPath = "Kannu/components/Settings/TimeToLogSection.swift"
+
+    /// Time to log's card is a row whose fields and answers fill a settings column, wider than the list's 360 pt, so in the
+    /// list's column it stacks, as the notch draws it; the root's row everywhere else. One style at both widths, deciding
+    /// inside, so crossing the width keeps the card and what is typed in it.
+    static func stackingProblems(in section: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(section)
+        var problems: [String] = []
+        if !code.contains("@Environment(\\.settingsInListColumn) private var inListColumn")
+            || SettingsDesignSystemRulesTests.matches(of: #"WorklogDraftCard\(draft: draft\)\s*\.labeledContentStyle\(WorklogCardStyle\(stacked: inListColumn\)\)"#, in: code).count != 1 {
+            problems.append("Time to log's cards do not follow the list's column, so in it they run past its edge")
+        }
+        // A card built in two branches is two cards: crossing the width would rebuild it and lose what is typed.
+        if code.components(separatedBy: "WorklogDraftCard(draft: draft)").count - 1 != 1 {
+            problems.append("a draft's card is built in more than one place, so crossing the width rebuilds it")
+        }
+        let decides = #"if stacked \{\s*StackedCardStyle\(\)\.makeBody\(configuration: configuration\)\s*\} else \{\s*SettingsLabeledContentStyle\(\)\.makeBody\(configuration: configuration\)\s*\}"#
+        if SettingsDesignSystemRulesTests.matches(of: decides, in: code).count != 1 {
+            problems.append("the card is not the notch's stack in the column and the root's row elsewhere, in one style")
+        }
+        return problems
+    }
+
+    func testARowTooWideForTheListsColumnStacksThere() throws {
+        let section = try Self.source(Self.timeToLogPath)
+        XCTAssertEqual(Self.stackingProblems(in: section), [])
+        SettingsDesignSystemRulesTests.assertCaught([
+            ("\n                        .labeledContentStyle(WorklogCardStyle(stacked: inListColumn))", ""),
+            ("WorklogCardStyle(stacked: inListColumn)", "WorklogCardStyle(stacked: false)"),
+            ("@Environment(\\.settingsInListColumn) private var inListColumn", "@State private var inListColumn = false"),
+            ("StackedCardStyle().makeBody(configuration: configuration)", "SettingsLabeledContentStyle().makeBody(configuration: configuration)"),
+            // A card built in two branches is two cards: crossing the width would lose what is typed.
+            ("                    WorklogDraftCard(draft: draft)\n                        .labeledContentStyle(WorklogCardStyle(stacked: inListColumn))\n",
+             "                    if inListColumn {\n                        WorklogDraftCard(draft: draft).labeledContentStyle(StackedCardStyle())\n"
+                + "                    } else {\n                        WorklogDraftCard(draft: draft)\n                    }\n"),
+        ], in: section) { Self.stackingProblems(in: $0) }
     }
 
     private static func source(_ path: String) throws -> String {

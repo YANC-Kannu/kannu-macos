@@ -26,7 +26,8 @@ import SwiftUI
 /// its own, so the list's trailing inset is the gap, and its scroll view runs to the panel's edge. Two scroll views, so
 /// the item's page stays put while the list scrolls. The first page is the stack's first child at both widths, so
 /// crossing the width keeps it, scrolled where it was. No `minWidth:` (SwiftUI's size bridge would clamp the window to
-/// it, docs/REGRESSIONS.md entry 17), no `ViewThatFits` (it builds every layout it tries) and no `.inspector`.
+/// it, docs/REGRESSIONS.md entry 17), no `ViewThatFits` (it builds every layout it tries) and no `.inspector`. The first
+/// page is told when it stands in the list's column (`settingsInListColumn`), so a row it cannot hold stacks there.
 struct SettingsListDetail<First: View, Beside: View>: View {
     /// Whether the item's page shows beside the first page; false, the first page has the panel to itself.
     let showsBeside: Bool
@@ -38,6 +39,7 @@ struct SettingsListDetail<First: View, Beside: View>: View {
         HStack(alignment: .top, spacing: 0) {
             first()
                 .frame(width: showsBeside ? inset + ListDetailLayout.listWidth + inset : nil)
+                .environment(\.settingsInListColumn, showsBeside)
             if showsBeside {
                 beside()
                     // The list's own trailing inset is the space between the two.

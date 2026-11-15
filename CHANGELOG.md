@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - Fit Time to log's card in Brain › Tasks' list column at full screen
+- **Developer label:** Brain › Tasks at a 14-inch full screen clips the Time to log card: "1 waitin", "Comment (o…"
+  and a cut ⋯ (found on the launch video's `videoTimeToLog` board)
+- **Agent label:** Claude Code (Opus 5.5) — the card stacked in the list's column, the column's flag that says so,
+  rule tests, and two DEBUG boards that draw the card at both widths
+- **Changes:**
+  - From 1,224 pt of panel (a 14-inch Mac in full screen) Brain › Tasks puts the list in a 360-pt column beside a
+    task's page. Time to log's card is a row whose length and comment fields and Log to Jira, Not Now and ⋯ need more
+    than that, and a row wider than the column widens the whole column, so the card read "1 waitin" and "Comment (o…",
+    its ⋯ was cut, and the list ran under the task's page. There the card now stacks, what would be logged over the
+    fields and the answers, as the notch's popover draws it (`StackedCardStyle`). At the window's first size it is
+    the same row as before.
+  - `SettingsListDetail` tells its first child whether it stands in the list's column (`settingsInListColumn`, an
+    environment value, false by default, in `SettingsInListColumnKey.swift`, since a design-system file declares one
+    type). `TimeToLogSection` lays out its cards with one style, `WorklogCardStyle`,
+    that stacks there and is the root's row elsewhere, so crossing the width keeps the card and what is typed in it.
+  - `SettingsListDetailRulesTests` holds the column's flag and the card's one style, each with planted offenders;
+    `BrainShellRulesTests` pins the new full-screen board.
+  - DEBUG boards: `tasksTimeToLog` and `tasksWideTimeToLog` draw one entry waiting, at the window's first size and at
+    the 14-inch full screen, from `DebugSnapshotFixtures.tasksFileWithTimeToLog` (the fixture's Jira task with a
+    numeric issue id on example.test, and a 1h 15m draft). A DEBUG seam, `TasksManager.replaceSnapshot(with:)`, swaps
+    that fixture in for the two boards only. They run with `-jiraSiteHost example.test`.
+  - docs/SETTINGS.md: the list-detail rule says what the column tells its rows, and Tasks' boards list the two new ones.
+
 ### 2026-11-14 - Kannu 2.0.0, build 12, for the first beta
 - **Developer label:** Kannu 2.0 release prep, the version for `v2.0.0-beta.1`, release-2-0 task 3.1 (David: "Yes,
   start it", 2026-11-14)

@@ -434,14 +434,15 @@ final class BrainShellRulesTests: XCTestCase {
     // MARK: - The boards
 
     /// Each board is the only headless view of its state. Brain › Tasks' are the whole window at its first
-    /// size and at a 14-inch full screen, where a task's page shows beside the list (layout-proposal D1). The
-    /// deep link's row is below the fold, or a dead `scrollTo` draws the same picture, and the run scrolls at
-    /// once, or an animated scroll never moves.
+    /// size and at a 14-inch full screen, where a task's page shows beside the list (layout-proposal D1) and
+    /// Time to log's card stacks in the list's column. The deep link's row is below the fold, or a dead
+    /// `scrollTo` draws the same picture, and the run scrolls at once, or an animated scroll never moves.
     private static func boardProblems(in snapshots: String) -> [String] {
         ["(\"shell\", AnyView(", "(\"shellSettings\", AnyView(", "(\"shellWide\", AnyView(", "(\"shellDeepLink\", AnyView(",
          "(\"shellSearch\", AnyView(", "(\"shellSearchList\", AnyView(",
          "let fullScreen14 = NSSize(width: 1512, height: 982)",
          "(\"tasksWideTask\", fullScreen14, [.task(DebugSnapshotFixtures.localTaskID)], .active)",
+         "(\"tasksWideTimeToLog\", fullScreen14)",
          "SettingsTab.general.highlightID(for: \"Always show on non-notch displays\")",
          "SettingsHighlightCoordinator.snapshotScrollsAtOnce = true",
          "width: size.width, into: request.directory, fixedHeight: size.height",
