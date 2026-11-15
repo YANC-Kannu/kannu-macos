@@ -563,3 +563,28 @@ struct AgentHookLayout: Equatable {
         return nil
     }
 }
+
+/// The one error line under Editor hooks, and which job wrote it. A status line success clears only
+/// the status line's own failure (hook v49). Matching by message cleared a hook install's error that
+/// read the same, as both do for a `settings.json` Kannu cannot parse.
+struct HookErrorLine: Equatable {
+    private(set) var message: String?
+    private(set) var fromStatusLine = false
+
+    /// A hook install or uninstall: nil as it starts, then its error if it fails.
+    mutating func setHookResult(_ message: String?) {
+        self.message = message
+        fromStatusLine = false
+    }
+
+    mutating func statusLineFailed(_ message: String) {
+        self.message = message
+        fromStatusLine = true
+    }
+
+    mutating func statusLineSucceeded() {
+        guard fromStatusLine else { return }
+        message = nil
+        fromStatusLine = false
+    }
+}

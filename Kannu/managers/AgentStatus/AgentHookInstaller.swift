@@ -43,7 +43,9 @@ final class AgentHookInstaller: ObservableObject {
     static let shared = AgentHookInstaller()
 
     @Published private(set) var installedProviders: Set<AgentHookProvider> = []
-    @Published private(set) var lastError: String?
+    /// The error line under Editor hooks, and which job wrote it (`HookErrorLine`).
+    @Published private(set) var errorLine = HookErrorLine()
+    var lastError: String? { errorLine.message }
 
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "AgentHookInstaller")
 
@@ -104,8 +106,6 @@ final class AgentHookInstaller: ObservableObject {
     }
 
     private var statusLineObserver: AnyCancellable?
-    /// The message `reportStatusLine` last put in `lastError`, so a later success clears its own.
-    private var statusLineError: String?
 
     func isInstalled(_ provider: AgentHookProvider) -> Bool {
         installedProviders.contains(provider)
@@ -120,7 +120,7 @@ final class AgentHookInstaller: ObservableObject {
     }
 
     func install(_ provider: AgentHookProvider) {
-        lastError = nil
+        errorLine.setHookResult(nil)
         do {
             try FileManager.default.createDirectory(
                 at: Self.statusDirectory,
@@ -170,14 +170,14 @@ final class AgentHookInstaller: ObservableObject {
                 }
             }
         } catch {
-            lastError = "\(provider.displayName): \(error.localizedDescription)"
+            errorLine.setHookResult("\(provider.displayName): \(error.localizedDescription)")
             Self.logger.error("hook install failed: \(self.lastError ?? "?", privacy: .public)")
         }
         refresh()
     }
 
     func uninstall(_ provider: AgentHookProvider) {
-        lastError = nil
+        errorLine.setHookResult(nil)
         do {
             let files = Self.layout.files(for: provider)
             // Every file the layout lists, whatever install's write policy: an older Kannu may have
@@ -200,7 +200,7 @@ final class AgentHookInstaller: ObservableObject {
                 Defaults[.claudeStatusLineUsage] = false
             }
         } catch {
-            lastError = "\(provider.displayName): \(error.localizedDescription)"
+            errorLine.setHookResult("\(provider.displayName): \(error.localizedDescription)")
         }
         refresh()
     }
@@ -3049,12 +3049,9 @@ final class AgentHookInstaller: ObservableObject {
     /// does. The next success clears it, and only it: an error a hook install raised since stays.
     private func reportStatusLine(_ error: Error?) {
         if let error {
-            let message = "\(AgentHookProvider.claude.displayName): \(error.localizedDescription)"
-            statusLineError = message
-            lastError = message
-        } else if let shown = statusLineError {
-            if lastError == shown { lastError = nil }
-            statusLineError = nil
+            errorLine.statusLineFailed("\(AgentHookProvider.claude.displayName): \(error.localizedDescription)")
+        } else {
+            errorLine.statusLineSucceeded()
         }
     }
 

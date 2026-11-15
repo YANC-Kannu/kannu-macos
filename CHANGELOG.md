@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - The status line clears only its own error, by source
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix
+- **Changes:**
+  - The Editor hooks error line records which job wrote it (`HookErrorLine` in `AgentHookLayout.swift`), and a
+    status line success clears only a status line failure. The previous fix matched by message, which cleared a
+    hook install's error that read the same. Both do when Kannu cannot parse `settings.json`.
+  - `AgentHookInstaller.lastError` now reads from that line; install and uninstall write through it.
+  - Test: `AgentHookLayoutTests` covers identical messages from a status line failure and a hook install.
+
 ### 2026-11-16 - Answer CodeRabbit's follow-ups on the async Claude hooks
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's two replies to the review fixes, through Auto-fix

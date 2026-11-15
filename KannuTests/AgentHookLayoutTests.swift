@@ -196,6 +196,27 @@ final class AgentHookLayoutTests: XCTestCase {
                        "a status line that does not run Kannu is left alone")
     }
 
+    /// A broken settings.json fails the status line and a hook install with the same words; the status
+    /// line's later success must clear only its own failure, which a message match could not tell apart.
+    func testAStatusLineSuccessClearsOnlyItsOwnError() {
+        let same = "Claude Code: settings.json exists but isn't valid JSON"
+        var line = HookErrorLine()
+        line.statusLineFailed(same)
+        line.setHookResult(nil)          // a hook install starts…
+        line.setHookResult(same)         // …and fails on the same file, in the same words
+        line.statusLineSucceeded()
+        XCTAssertEqual(line.message, same, "the hook install's error stays, though it reads the same")
+
+        line.setHookResult(nil)
+        line.statusLineFailed(same)
+        line.statusLineSucceeded()
+        XCTAssertNil(line.message, "a status line success clears its own failure")
+
+        line.setHookResult("Cursor: permission denied")
+        line.statusLineSucceeded()
+        XCTAssertEqual(line.message, "Cursor: permission denied", "and never a hook install's")
+    }
+
     func testVSCodeTableGainsNotificationButCodexDoesNot() {
         let vscode = AgentHookLayout.vscodeEvents.map(\.event)
         XCTAssertTrue(vscode.contains("Notification"))
