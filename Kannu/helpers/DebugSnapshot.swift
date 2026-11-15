@@ -295,6 +295,21 @@ enum DebugSnapshots {
         }
         TasksSettings.snapshotPath = []
         TasksSettings.snapshotTab = .active
+        // Time to log's card at both widths of the list: a row in the list's place at the window's first size, and stacked
+        // in the list's column at a 14-inch full screen. Run with `-jiraSiteHost example.test` (the argument domain,
+        // nothing written), or the card says Jira isn't connected.
+        let timeToLogBoards: [(name: String, size: NSSize)] = [("tasksTimeToLog", window), ("tasksWideTimeToLog", fullScreen14)]
+        if timeToLogBoards.contains(where: { request.tabs == nil || request.tabs?.contains($0.name) == true }) {
+            TasksManager.shared.replaceSnapshot(with: DebugSnapshotFixtures.tasksFileWithTimeToLog(now: Date()))
+            for board in timeToLogBoards where request.tabs == nil || request.tabs?.contains(board.name) == true {
+                for dark in [false, true] {
+                    await render(AnyView(SettingsView(snapshotTab: .tasks).environmentObject(viewModel)),
+                                 name: board.name + (dark ? "-dark" : "-light"), dark: dark, width: board.size.width,
+                                 into: request.directory, fixedHeight: board.size.height)
+                }
+            }
+            TasksManager.shared.replaceSnapshot(with: DebugSnapshotFixtures.tasksFile(now: Date()))
+        }
         // Brain › Notes with no note and four, and a note's page open (the in-tab swap): one of Kannu's with its image,
         // and one made in Apple Notes; at a 14-inch full screen, four with none open and the one with its image beside
         // the list (layout-proposal D1). The switches drawn under the product are this Mac's, so the boards are run with
@@ -1206,6 +1221,24 @@ enum DebugSnapshotFixtures {
         ]
         return TasksFile(tasks: tasks, drafts: [],
                          tagColors: ["docs": .blue, "urgent": .red, "planning": .purple])
+    }
+
+    /// The Jira site Time to log's boards run with: `-jiraSiteHost example.test`.
+    static let jiraHost = "example.test"
+
+    /// The Tasks fixture with one entry waiting in Time to log (`tasksTimeToLog`, `tasksWideTimeToLog`): the Jira task's
+    /// 1h 15m session, ready to send while the board runs with `-jiraSiteHost example.test`.
+    static func tasksFileWithTimeToLog(now: Date) -> TasksFile {
+        var file = tasksFile(now: now)
+        guard let index = file.tasks.firstIndex(where: { $0.id == jiraTaskID }) else { return file }
+        let started = now.addingTimeInterval(-2 * 3600)
+        let seconds = 75 * 60
+        // A Jira issue's own id is a number: only such a task takes a worklog (`JiraAPI.isIssueID`).
+        file.tasks[index].remote?.remoteID = "10412"
+        file.tasks[index].remote?.hostScope = jiraHost
+        file.tasks[index].segments = [WorkSegment(start: started, end: started.addingTimeInterval(Double(seconds)), origin: .timer)]
+        file.drafts = [WorklogDraft(taskID: jiraTaskID, seconds: seconds, started: started, hostScope: jiraHost)]
+        return file
     }
 
     /// The Usage tab's cards as this Mac shows them: a Max plan at 13 % of its 5-hour window with a
