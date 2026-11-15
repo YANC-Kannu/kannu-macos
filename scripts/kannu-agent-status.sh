@@ -1835,14 +1835,20 @@ ended_on_error = state == "stopped" and (
 # before that leaves the state, the clock, the turn and the verdict as they are, and adds only what it
 # found: its sightings, and its tool call to the turn the call belongs to. A needs-you event is stale
 # only against an ended turn: a turn cannot end while its request is open, so that request was
-# answered, and letting it through painted a finished chat yellow and reopened its turn. Against a
-# working state a parallel request may still be open, and the merge below arbitrates it. A quota stop
-# ends a turn like any stop, so a newer turn outranks it.
+# answered, and letting it through painted a finished chat yellow and reopened its turn. The turn has
+# ended when the file says stopped or quota, and also when it records the turn's end under a held
+# yellow: the 2 s carry keeps the light over the Stop that ended the turn, and the generic PreToolUse
+# of a gated tool derives yellow too. Against a working state a parallel request may still be open,
+# and the merge below arbitrates it. A quota stop ends a turn like any stop, so a newer turn outranks it.
 _raw_started = existing.get("event_started_ms")
 existing_started_ms = _raw_started if isinstance(_raw_started, (int, float)) and not isinstance(_raw_started, bool) else 0
 event_started_ms = max(hook_started_ms, existing_started_ms)
+try:
+    existing_turn_ended = "turn_ended_ms" in carried_turn(existing, sighting_ms)
+except Exception:
+    existing_turn_ended = False
 if (existing_state and existing_started_ms > hook_started_ms
-        and (state != "awaiting_input" or existing_state in {"stopped", "quota_exceeded"})):
+        and (state != "awaiting_input" or existing_turn_ended or existing_state in {"stopped", "quota_exceeded"})):
     for _key, _value in (("hidden_text", hidden_text), ("secrets", secrets), ("sensitive_paths", sensitive_paths),
                          ("policy", policy)):
         if _value:

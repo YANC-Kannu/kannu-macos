@@ -297,6 +297,19 @@ final class HookScriptTests: XCTestCase {
         XCTAssertEqual((json["turn_started_ms"] as? NSNumber)?.int64Value, now + 30_000)
     }
 
+    func testALateGatedToolEventDoesNotReopenATurnTheCarryHeldYellow() throws {
+        // The 2 s carry can keep the light yellow over the Stop that ended the turn
+        // (testAStopHeldYellowByTheUrgentCarryStillEndsTheTurn). The generic PreToolUse of a gated tool
+        // derives yellow too; one that started before that Stop must not reopen the turn.
+        let now = Self.nowMs
+        try writeStatus("o9", state: "awaiting_input", event: "PermissionRequest", tsMs: now,
+                        extra: ["event_started_ms": now + 60_000, "turn_started_ms": now - 5_000, "turn_ended_ms": now])
+        try run(state: "executing", event: "PreToolUse", conversation: "o9", toolName: "ExitPlanMode")
+        let json = try XCTUnwrap(try readJSON("o9"))
+        XCTAssertEqual((json["turn_ended_ms"] as? NSNumber)?.int64Value, now, "the turn stays ended")
+        XCTAssertEqual(json["hook_event"] as? String, "PermissionRequest", "the late event changed nothing")
+    }
+
     func testALaterEventStillWinsAndRecordsWhenItStarted() throws {
         let before = Self.nowMs
         try writeStatus("o4", state: "stopped", event: "Stop", tsMs: before - 5_000, extra: ["event_started_ms": before - 5_000])
