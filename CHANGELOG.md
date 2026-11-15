@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-14 - Kannu 2.0.0, build 12, for the first beta
+- **Developer label:** Kannu 2.0 release prep, the version for `v2.0.0-beta.1`, release-2-0 task 3.1 (David: "Yes,
+  start it", 2026-11-14)
+- **Agent label:** Claude Code (Opus 5.5) — the version and build for 2.0.0 beta 1, and task 3.1 ticked
+- **Changes:**
+  - `MARKETING_VERSION` goes from 1.3.4 to 2.0.0, and `CURRENT_PROJECT_VERSION` from 8 to 12, in both of the app
+    target's configurations.
+  - Build 12 sits above the feed's newest, 1.3.4 at build 8, and above the 1.4.0 betas, builds 9 to 11, as
+    `scripts/RELEASE.md`'s numbering rule asks. 2.0.0 itself takes the last beta's build plus one (task 3.3).
+  - openspec `release-2-0`: task 3.1 is ticked.
+
 ### 2026-11-13 - Welcome people who update to Kannu 2.0 with a What's New window
 - **Developer label:** Kannu 2.0's What's New window, release-2-0 tasks 5.2 to 5.5 (David chose it on 13 Nov, decision 9.2)
 - **Agent label:** Claude Code (Opus 5.5) — the window and when it opens, its strings in 17 languages, its rule tests and
