@@ -217,13 +217,20 @@ struct AgentStatusSettings: View {
                     }
                     .settingsHighlight(id: highlightID("Cursor Hook"))
 
+                    SettingsRow("Live Claude Code limits", description: "Shows live usage limits for Claude Code in a terminal.") {
+                        Defaults.Toggle(key: .claudeStatusLineUsage) {
+                            Text("Live Claude Code limits")
+                        }
+                    }
+                    .settingsHighlight(id: highlightID("Live Claude Code limits"))
+
                     if let error = hookInstaller.lastError {
                         SettingsErrorText(error)
                     }
                 } header: {
                     SettingsSectionHeader("Editor hooks")
                 } footer: {
-                    SettingsFooter("Hooks tell the notch what each tool's agents are doing. Copilot CLI uses the VS Code hook; opencode gets a small plugin.")
+                    SettingsFooter("Hooks tell the notch what each tool's agents are doing. Copilot CLI uses the VS Code hook; opencode gets a small plugin. Live Claude Code limits runs Kannu as Claude Code's status line, then your own; Claude Desktop doesn't need it.")
                 }
 
                 mobileNotificationSections
