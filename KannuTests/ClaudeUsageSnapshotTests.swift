@@ -397,6 +397,27 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
         XCTAssertEqual(ClaudeUsageSnapshot.merged([exact, guessed], now: now)?.sevenDayPercent, 72)
     }
 
+    func testWithNothingLiveTheReadKeepsNoWindowAResetHasPassed() {
+        // CodeRabbit on PR #69: with every copy turned down, the monitor kept the first source whole
+        // so the read counted as a read, and the desktop's pre-reset week was back on the card.
+        let cache = reading("seven_day", 88, resetsIn: -1_800, observedAgo: 3_600)
+        let desktop = reading("seven_day", 72, resetsIn: 3 * 86_400, observedAgo: 7_200, inferred: true)
+        XCTAssertNil(ClaudeUsageSnapshot.merged([desktop, cache], now: now))
+        let read = try? XCTUnwrap(ClaudeUsageSnapshot.mergedOrRead([nil, desktop, cache], now: now))
+        XCTAssertNotNil(read, "the sources still count as read")
+        XCTAssertEqual(read?.isEmpty(now: now), true, "and nothing of the earlier week shows")
+        XCTAssertNil(read?.sevenDayDisplayPercent(now: now))
+        XCTAssertEqual(read?.observedAt, desktop.observedAt)
+        // Nothing live by its own reset: the first source, unchanged, as before.
+        let lapsed = reading("five_hour", 61, resetsIn: -60, observedAgo: 600)
+        XCTAssertEqual(ClaudeUsageSnapshot.mergedOrRead([nil, lapsed], now: now), lapsed)
+        // Something live: exactly `merged`.
+        let live = reading("seven_day", 30, resetsIn: 86_400, observedAgo: 120)
+        XCTAssertEqual(ClaudeUsageSnapshot.mergedOrRead([live, desktop], now: now),
+                       ClaudeUsageSnapshot.merged([live, desktop], now: now))
+        XCTAssertNil(ClaudeUsageSnapshot.mergedOrRead([nil, nil], now: now))
+    }
+
     func testMergeAnEarlyResetReplacesTheOlderValueWithTheFresherOne() {
         // The five-hour window reset early: the older reading's reset is still an hour off, and a
         // fresher one, from another source, already shows the new window.

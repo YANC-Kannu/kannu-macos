@@ -4,6 +4,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - The Claude card's empty fallback keeps no reading a reset has passed
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #69, through Auto-fix
+- **Changes:**
+  - With nothing live, the monitor kept the first usage source whole so the read counted as a read. Since
+    `selections` drops readings a reset has passed, that source could hold one, and the pre-reset percentage went
+    back on the card. `ClaudeUsageSnapshot.mergedOrRead` keeps the source with every window still live by its own
+    reset taken off; the monitor calls it.
+  - Tests: `ClaudeUsageSnapshotTests.testWithNothingLiveTheReadKeepsNoWindowAResetHasPassed`, and
+    `ClaudeUsageReadRulesTests.testTheCardNeverFallsBackToASourceRestoredWhole` pins the monitor's call.
+
 ### 2026-11-17 - The Claude card shows the fresh limit after an early reset
 - **Developer label:** "Kannu still shows the Claude weekly limit from before its reset"
 - **Agent label:** Claude Code (Opus 5.5) — usage-reset lane of the 2.0 release

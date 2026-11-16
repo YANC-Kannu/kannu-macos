@@ -685,10 +685,11 @@ final class CursorAgentStatusMonitor: ObservableObject {
         var organizations = organizations
         organizations.claudeCodeUnverified = card.claudeCodeOrganizationUnverified
         let sources = card.sources
-        // Nothing live anywhere: keep the best parsed-but-lapsed snapshot rather than nil, so
+        // Nothing live anywhere: keep a parsed snapshot with nothing to show rather than nil, so
         // shouldRefresh treats the sources as read; with nothing at all it retries once a minute
-        // (`emptyRetryInterval`), never on every rescan tick.
-        let first = ClaudeUsageSnapshot.merged(sources, now: now) ?? sources.compactMap { $0 }.first
+        // (`emptyRetryInterval`), never on every rescan tick. Never a source restored whole: its
+        // windows may be ones a reset has passed since (`mergedOrRead`).
+        let first = ClaudeUsageSnapshot.mergedOrRead(sources, now: now)
         let snapshot = card.showsClaudeCodeOrganization ? ofClaudeCode(first, organizations) : first
         let second = ofClaudeCode(card.secondCardSources.flatMap { ClaudeUsageSnapshot.merged($0, now: now) }, organizations)
         let hint = ClaudeUsageSnapshot.hint(

@@ -377,6 +377,21 @@ struct ClaudeUsageSnapshot: Equatable {
         return ClaudeUsageSnapshot(windows: windows, observedAt: observedAt)
     }
 
+    /// `merged`, or — when it finds nothing live — the first source, kept so the monitor counts the
+    /// sources as read (`shouldRefresh`'s `hasSnapshot`, retried every `emptyRetryInterval`), with
+    /// every window still live by its own reset taken off. With nothing live by its own reset that is
+    /// the source unchanged, as before; since `selections` drops readings a reset has passed, a
+    /// source can hold such a window and still yield nothing, and restoring it whole put the
+    /// pre-reset percentage back on the card (CodeRabbit on PR #69).
+    static func mergedOrRead(_ sources: [ClaudeUsageSnapshot?], now: Date) -> ClaudeUsageSnapshot? {
+        if let merged = merged(sources, now: now) { return merged }
+        guard let first = sources.compactMap({ $0 }).first else { return nil }
+        let live = Set(first.displayWindows(now: now).map(\.key))
+        return ClaudeUsageSnapshot(windows: first.windows.filter { !live.contains($0.key) }, observedAt: first.observedAt,
+                                   organizationUUID: first.organizationUUID, readingScope: first.readingScope,
+                                   planName: first.planName)
+    }
+
     /// Whose usage Claude Code's cache holds, as far as a read can tell.
     /// `ClaudeCachedUsage.cacheOwner(weeklyReset:claudeCode:resets:)` decides it.
     enum CacheOwner: Equatable {
