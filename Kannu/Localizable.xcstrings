@@ -6528,6 +6528,112 @@
         }
       }
     },
+    "A sound and a shimmer across the notch when an agent turns yellow, on the lock screen too." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت ووميض عبر الشق عندما يتحول وكيل إلى الأصفر، وعلى شاشة القفل أيضًا."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zvuk a třpyt přes notch, když agent zežloutne, i na zamčené obrazovce."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Ton und ein Schimmer über die Notch, wenn ein Agent gelb wird, auch auf dem Sperrbildschirm."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A sound and a shimmer across the notch when an agent turns yellow, on the lock screen too."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un sonido y un destello sobre el notch cuando un agente se pone en amarillo, también en la pantalla bloqueada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un son et un reflet sur l’encoche quand un agent passe au jaune, même sur l’écran verrouillé."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hang és csillogás a notchon, amikor egy ügynök sárgára vált, a zárolási képernyőn is."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un suono e un luccichio sul notch quando un agente diventa giallo, anche nella schermata di blocco."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "에이전트가 노란색으로 바뀌면 소리와 함께 노치에 반짝임이 지나갑니다. 잠금 화면에서도 마찬가지입니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Een geluid en een glinstering over de inkeping als een agent geel wordt, ook op het vergrendelscherm."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dźwięk i błysk na notchu, gdy agent zmieni kolor na żółty, także na ekranie blokady."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um som e um brilho no notch quando um agente fica amarelo, também na tela de bloqueio."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук и блик по вырезу, когда агент становится жёлтым, в том числе на экране блокировки."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เสียงและแสงวาบผ่านรอยบากเมื่อเอเจนต์เปลี่ยนเป็นสีเหลือง รวมถึงบนหน้าจอล็อกด้วย"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir ajan sarıya döndüğünde bir ses ve çentik boyunca bir parıltı, kilit ekranında da."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук і відблиск по вирізу, коли агент стає жовтим, зокрема на екрані блокування."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体变为黄色时播放声音，并在刘海上划过一道光，锁屏时也会。"
+          }
+        }
+      }
+    },
     "About" : {
       "comment" : "merge:ko:alt='정보'",
       "localizations" : {
@@ -10778,6 +10884,218 @@
         }
       }
     },
+    "Alert sound" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "صوت التنبيه"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zvuk upozornění"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweiston"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alert sound"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sonido del aviso"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Son de l’alerte"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jelzőhang"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suono dell’avviso"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "알림 소리"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meldingsgeluid"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dźwięk alertu"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Som do alerta"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук сигнала"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เสียงเตือน"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uyarı sesi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Звук сигналу"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提醒声音"
+          }
+        }
+      }
+    },
+    "Alert when an agent needs you" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "التنبيه عندما يحتاجك وكيل"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upozornit, když vás agent potřebuje"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hinweis, wenn ein Agent dich braucht"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alert when an agent needs you"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avisar cuando un agente te necesite"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerter quand un agent a besoin de vous"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jelzés, ha egy ügynöknek szüksége van rád"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avvisa quando un agente ha bisogno di te"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "에이전트가 나를 필요로 할 때 알림"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waarschuwen als een agent je nodig heeft"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Powiadamiaj, gdy agent cię potrzebuje"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alertar quando um agente precisar de você"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сигнал, когда агенту нужен ответ"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เตือนเมื่อเอเจนต์ต้องการคุณ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir ajan sana ihtiyaç duyduğunda uyar"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сигнал, коли агенту потрібна ваша відповідь"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "智能体需要你时提醒"
+          }
+        }
+      }
+    },
     "Alignment" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -13694,6 +14012,112 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "附件"
+          }
+        }
+      }
+    },
+    "Attention alert" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تنبيه الانتباه"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Upozornění na pozornost"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufmerksamkeitshinweis"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attention alert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aviso de atención"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerte d’attention"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Figyelemfelhívás"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avviso di attenzione"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "주의 알림"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aandachtsmelding"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alert uwagi"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alerta de atenção"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сигнал внимания"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "การเตือนให้สนใจ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dikkat uyarısı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сигнал уваги"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提醒注意"
           }
         }
       }
@@ -66671,6 +67095,112 @@
     "On-demand" : {
 
     },
+    "One alert each time an agent starts waiting, however many start at once. With Reduce Motion on, the notch glows instead of shimmering." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تنبيه واحد في كل مرة يبدأ فيها وكيل بالانتظار، مهما كان عدد الوكلاء الذين يبدؤون معًا. عند تشغيل تقليل الحركة، يتوهج الشق بدلًا من الوميض."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedno upozornění pokaždé, když agent začne čekat, bez ohledu na to, kolik jich začne najednou. Se zapnutým Omezit pohyb notch místo třpytu svítí."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Hinweis, sobald ein Agent zu warten beginnt, egal wie viele gleichzeitig. Mit „Bewegung reduzieren“ leuchtet die Notch, statt zu schimmern."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One alert each time an agent starts waiting, however many start at once. With Reduce Motion on, the notch glows instead of shimmering."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un aviso cada vez que un agente empieza a esperar, aunque empiecen varios a la vez. Con Reducir movimiento activado, el notch brilla en lugar de destellar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une alerte chaque fois qu’un agent se met à attendre, même si plusieurs le font en même temps. Avec Réduire les animations, l’encoche s’illumine au lieu de scintiller."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Egy jelzés minden alkalommal, amikor egy ügynök várakozni kezd, akárhány kezd egyszerre. Bekapcsolt Mozgás csökkentése mellett a notch csillogás helyett világít."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un avviso ogni volta che un agente inizia ad attendere, anche se più agenti iniziano insieme. Con Riduci movimento attivo, il notch si illumina invece di luccicare."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "에이전트가 대기하기 시작할 때마다 한 번 알립니다. 여러 에이전트가 동시에 대기해도 한 번입니다. 동작 줄이기가 켜져 있으면 노치가 반짝이는 대신 빛납니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eén melding telkens als een agent begint te wachten, hoeveel er ook tegelijk beginnen. Met Verminder beweging aan gloeit de inkeping in plaats van te glinsteren."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jeden alert za każdym razem, gdy agent zaczyna czekać, bez względu na to, ilu zacznie naraz. Przy włączonej opcji Ogranicz ruch notch świeci zamiast migotać."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Um alerta cada vez que um agente começa a esperar, não importa quantos comecem ao mesmo tempo. Com Reduzir Movimento ativado, o notch acende em vez de cintilar."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Один сигнал каждый раз, когда агент начинает ждать, сколько бы агентов ни начали одновременно. При включённом «Уменьшении движения» вырез светится вместо блика."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เตือนหนึ่งครั้งทุกครั้งที่เอเจนต์เริ่มรอ ไม่ว่าจะเริ่มพร้อมกันกี่ตัว เมื่อเปิดลดการเคลื่อนไหว รอยบากจะเรืองแสงแทนการวาบ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bir ajan her beklemeye başladığında, aynı anda kaç tanesi başlarsa başlasın tek bir uyarı. Hareketi Azalt açıkken çentik parıldamak yerine ışıldar."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Один сигнал щоразу, коли агент починає чекати, скільки б агентів не почали одночасно. Коли ввімкнено «Зменшення руху», виріз світиться замість відблиску."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每当有智能体开始等待时提醒一次，无论同时有多少个。开启“减弱动态效果”后，刘海会静态发光，而不是划过光芒。"
+          }
+        }
+      }
+    },
     "One more push if an agent is still waiting." : {
       "localizations" : {
         "ar" : {
@@ -71459,6 +71989,112 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Düşük pil uyarı sesini çal"
+          }
+        }
+      }
+    },
+    "Play sound" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تشغيل الصوت"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Přehrát zvuk"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ton abspielen"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play sound"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reproducir sonido"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Écouter le son"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hang lejátszása"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riproduci suono"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "소리 재생"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geluid afspelen"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Odtwórz dźwięk"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tocar som"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Воспроизвести звук"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เล่นเสียง"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sesi çal"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Відтворити звук"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放声音"
           }
         }
       }

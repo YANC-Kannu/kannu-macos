@@ -73,6 +73,12 @@ final class AgentStatusNotificationBridge: ObservableObject {
         CursorAgentStatusMonitor.shared.$sessions
             .sink { [weak self] sessions in self?.handleWaitReminders(sessions) }
             .store(in: &cancellables)
+        // The attention alert follows the same per-session yellows, on the Mac itself: its own
+        // switch, never the mobile one. `@Published` hands the sink the new list.
+        AttentionAlertManager.shared.start()
+        CursorAgentStatusMonitor.shared.$sessions
+            .sink { sessions in AttentionAlertManager.shared.handle(sessions) }
+            .store(in: &cancellables)
         Defaults.publisher(.agentWaitReminderMinutes, options: [])
             .sink { [weak self] _ in
                 Task { @MainActor in self?.handleWaitReminders(CursorAgentStatusMonitor.shared.sessions) }
@@ -89,6 +95,7 @@ final class AgentStatusNotificationBridge: ObservableObject {
         waitReminder = AgentWaitReminder()
         cancellables.removeAll()
         lastNotifiedState = nil
+        AttentionAlertManager.shared.stop()
     }
 
     // MARK: - Still waiting on you

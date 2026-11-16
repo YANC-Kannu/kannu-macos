@@ -105,9 +105,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // (one registration, one id; no entry: a search for the tab finds it by name).
         // 2026-11-13: Agents gains "Live Claude Code limits" (one entry, one row): Claude Code's status
         // line became opt-in with hook v49, and this row is where a terminal user turns it on.
-        XCTAssertEqual(inventory.entries.count, 245, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 276, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 270, "distinct registered ids")
+        // 2026-11-17: Agents gains the attention alert (David's 2.0 beta.2 ask): "Alert when an agent
+        // needs you" and "Alert sound", two entries, two rows, two ids.
+        XCTAssertEqual(inventory.entries.count, 247, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 278, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 272, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

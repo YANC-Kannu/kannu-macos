@@ -784,6 +784,9 @@ struct ContentView: View {
             if shouldShowFullNotchShimmer {
                 NotchShimmerView(cornerRadius: closedNotchShimmerCornerRadius)
             }
+            // An agent turned yellow: one shimmer, or a still glow under Reduce Motion. A leaf that
+            // draws nothing between alerts; this view does not observe it.
+            AttentionAlertOverlay()
         }
     }
 

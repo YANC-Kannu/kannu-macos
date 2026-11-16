@@ -1429,6 +1429,10 @@ extension Defaults.Keys {
     /// Smart caffeinate: keep the Mac awake automatically while any agent run is active.
     /// While on, the manual switch is hidden from the notch panel and its value is ignored.
     static let smartCaffeinate = Key<Bool>("smartCaffeinate", default: false)
+    /// Attention alert: a sound and a shimmer across the notch when an agent turns yellow, on the
+    /// lock screen too. Off by default (`AttentionAlertManager`).
+    static let attentionAlertEnabled = Key<Bool>("attentionAlertEnabled", default: false)
+    static let attentionAlertSound = Key<AttentionAlertSound>("attentionAlertSound", default: .glass)
 
     // MARK: Agent Status Mobile Notifications
     static let enableAgentStatusMobileNotifications = Key<Bool>("enableAgentStatusMobileNotifications", default: false)

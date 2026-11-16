@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - A sound and a notch shimmer when an agent turns yellow
+- **Developer label:** Attention alert for 2.0 beta.2: "yellow only, and the lock screen included"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, from the 2.0 release coordinator's brief
+- **Changes:**
+  - New attention alert, off by default (`attentionAlertEnabled`): when a visible agent session turns
+    `awaitingInput`, Kannu plays a named macOS system sound (`attentionAlertSound`, Glass by default) and runs
+    one shimmer across the notch. It alerts once per session per yellow episode, and once for sessions that
+    turn yellow within 3 seconds of each other (`AttentionAlertTracker` in `AttentionAlert.swift`).
+  - `AttentionAlertManager` is fed by the session subscription `AgentStatusNotificationBridge` already holds,
+    so it starts inside `continueLaunch()`. It stays silent until the Terms and onboarding are done, and for
+    10 seconds after start, so a relaunch never alerts for a wait that was already open.
+  - `AttentionAlertOverlay` draws in the notch's body fill and on the lock-screen pill
+    (`LockScreenLiveActivityOverlay`), the only Kannu window shown while the Mac is locked. The shimmer is two
+    1-second sweeps with a finite `repeatCount`; under Reduce Motion it is a still glow in the awaiting-input
+    colour. No timer and no `TimelineView`.
+  - Brain › Agents gains an Attention alert section: the switch, a sound picker and Play sound. Both rows have
+    search entries, and six new strings are in all 17 languages.
+  - DEBUG boards `attentionAlert` (the setting rows) and `attentionAlertFlash` (the notch and the lock-screen
+    pill: no alert, the shimmer at two points, the glow).
+  - OpenSpec change `add-attention-alert` with the new `agent-status` capability.
+  - Tests: `AttentionAlertTests` (episodes, several at once, recorded-not-announced, gates, Reduce Motion,
+    sounds) and `AttentionAlertRulesTests` (off by default, started only from `continueLaunch()`, every gate,
+    where it draws, ends by itself, against planted offenders); `SettingsHighlightInventoryTests` counts +2.
+
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix
