@@ -741,7 +741,6 @@ struct NotchHomeView: View {
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
-    @ObservedObject private var extensionNotchExperienceManager = ExtensionNotchExperienceManager.shared
     let albumArtNamespace: Namespace.ID
     
     var body: some View {
@@ -755,30 +754,15 @@ struct NotchHomeView: View {
 
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 20) {
-            if Defaults[.enableMinimalisticUI] {
-                if let overridePayload = minimalisticOverridePayload {
-                    ExtensionMinimalisticExperienceView(
-                        payload: overridePayload,
-                        albumArtNamespace: albumArtNamespace
-                    )
-                } else {
-                    MinimalisticMusicPlayerView(albumArtNamespace: albumArtNamespace)
-                }
-            } else {
-                // Home tab: Now Playing (inactive placeholder until media starts)
-                MusicPlayerView(albumArtNamespace: albumArtNamespace)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // Home tab: Now Playing (inactive placeholder until media starts)
+            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .transition(.opacity.animation(.smooth.speed(0.9))
             .combined(with: .blurReplace.animation(.smooth.speed(0.9)))
             .combined(with: .move(edge: .top)))
         .blur(radius: vm.notchState == .closed ? 30 : 0)
-        .padding(Defaults[.enableMinimalisticUI] ? 0 : 8) //Putting the main padding for home view here for consistency
-    }
-
-    private var minimalisticOverridePayload: ExtensionNotchExperiencePayload? {
-        extensionNotchExperienceManager.minimalisticReplacementPayload()
+        .padding(8) //Putting the main padding for home view here for consistency
     }
 }
 
@@ -868,7 +852,7 @@ struct MusicSliderView: View {
             }
             .fontWeight(.medium)
             .foregroundColor(timeLabelColor)
-            .font(.system(size: 11, weight: .medium, design: .default).monospacedDigit())
+            .font(SettingsTheme.font(size: 11, weight: .medium).monospacedDigit())
         }
     }
 
@@ -953,7 +937,7 @@ struct MusicSliderView: View {
     }
 
     private var inlineLabelFont: Font {
-        .system(size: 11, weight: .medium, design: .default).monospacedDigit()
+        SettingsTheme.font(size: 11, weight: .medium).monospacedDigit()
     }
 
     private var sliderFrameHeight: CGFloat {
@@ -1233,11 +1217,11 @@ struct MediaOutputSelectorPopover: View {
 
             HStack {
                 Text("Output volume")
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundColor(.secondary)
                 Spacer()
                 Text(volumePercentage)
-                    .font(.caption)
+                    .font(SettingsTheme.font(size: 10))
                     .foregroundColor(.secondary)
             }
         }
@@ -1246,12 +1230,12 @@ struct MediaOutputSelectorPopover: View {
     private var devicesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Output devices")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundColor(.secondary)
 
             if routeManager.devices.isEmpty {
                 Text("No audio outputs available")
-                    .font(.callout)
+                    .font(SettingsTheme.font(size: 12))
                     .foregroundColor(.secondary)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1321,12 +1305,12 @@ struct AirPlaySelectorPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("AirPlay")
-                .font(.caption)
+                .font(SettingsTheme.font(size: 10))
                 .foregroundColor(.secondary)
 
             if airPlayManager.devices.isEmpty {
                 Text("No AirPlay devices found")
-                    .font(.callout)
+                    .font(SettingsTheme.font(size: 12))
                     .foregroundColor(.secondary)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity, alignment: .leading)

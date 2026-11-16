@@ -51,8 +51,6 @@ struct ExtensionNotchExperiencePayload: Identifiable, Hashable, Codable {
     var priority: AtollLiveActivityPriority { descriptor.priority }
 
     var hasTabConfiguration: Bool { descriptor.tab != nil }
-
-    var hasMinimalisticConfiguration: Bool { descriptor.minimalistic != nil }
 }
 
 enum ExtensionValidationError: LocalizedError, Equatable {

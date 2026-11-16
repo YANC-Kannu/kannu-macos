@@ -31,7 +31,7 @@ struct ClipboardHistoryPopover: View {
                     .foregroundColor(.white)
                     .font(.system(size: 16, weight: .medium))
                 Text("Clipboard History")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(SettingsTheme.font(size: 14, weight: .medium))
                     .foregroundColor(.white)
                 
                 Spacer()
@@ -89,10 +89,10 @@ struct ClipboardHistoryPopover: View {
                 .font(.system(size: 24))
                 .foregroundColor(.gray)
             Text("No clipboard history")
-                .font(.system(size: 12))
+                .font(SettingsTheme.font(size: 12))
                 .foregroundColor(.gray)
             Text("Copy something to get started")
-                .font(.system(size: 10))
+                .font(SettingsTheme.font(size: 10))
                 .foregroundColor(.gray.opacity(0.7))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -131,20 +131,20 @@ struct ClipboardItemRow: View {
             // Content
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.preview)
-                    .font(.system(size: 11))
+                    .font(SettingsTheme.font(size: 11))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 
                 HStack {
                     Text(item.type.displayName)
-                        .font(.system(size: 9))
+                        .font(SettingsTheme.font(size: 9))
                         .foregroundColor(.gray)
                     
                     Spacer()
                     
                     Text(timeAgoString(from: item.timestamp))
-                        .font(.system(size: 9))
+                        .font(SettingsTheme.font(size: 9))
                         .foregroundColor(.gray)
                 }
             }

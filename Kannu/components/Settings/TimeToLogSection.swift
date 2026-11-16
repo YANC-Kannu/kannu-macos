@@ -30,16 +30,18 @@ import SwiftUI
 /// Keep local only, Never ask to log and Open in Jira / GitLab. A card that cannot be sent
 /// from here — not connected, another site, a read-only GitLab token — says why and offers Keep
 /// local only. Rows only, in the `SettingsComponents` shapes (docs/SETTINGS.md); issue keys and
-/// server reasons render verbatim.
+/// server reasons render verbatim. In the list's column beside a task's page (layout-proposal D1), 360 pt
+/// wide, a card's row does not fit, so there the cards stack, as the notch's do.
 struct TimeToLogSection: View {
     @ObservedObject private var manager = TasksManager.shared
+    @Environment(\.settingsInListColumn) private var inListColumn
 
     private func highlightID(_ title: String) -> String { "tasks-\(title)" }
 
     var body: some View {
         let open = manager.openDrafts
         if !open.isEmpty {
-            Section {
+            SettingsSection {
                 LabeledContent {
                     SettingsValueText(open.count == 1 ? String(localized: "1 waiting") : String(localized: "\(open.count) waiting"))
                 } label: {
@@ -49,6 +51,7 @@ struct TimeToLogSection: View {
 
                 ForEach(open) { draft in
                     WorklogDraftCard(draft: draft)
+                        .labeledContentStyle(WorklogCardStyle(stacked: inListColumn))
                 }
             } header: {
                 SettingsSectionHeader("Time to log")
@@ -59,11 +62,28 @@ struct TimeToLogSection: View {
     }
 }
 
+/// How Brain lays out a Time to log card: the root's row, or, in the list's column, where the row's
+/// fields and answers would run past the column's edge, stacked as the notch draws it
+/// (`StackedCardStyle`). One style at both widths, deciding inside, so crossing the width keeps the
+/// card and what is typed in it.
+private struct WorklogCardStyle: LabeledContentStyle {
+    let stacked: Bool
+
+    @ViewBuilder
+    func makeBody(configuration: Configuration) -> some View {
+        if stacked {
+            StackedCardStyle().makeBody(configuration: configuration)
+        } else {
+            SettingsLabeledContentStyle().makeBody(configuration: configuration)
+        }
+    }
+}
+
 /// One Time to log entry, wherever Kannu asks about it: here, and in the notch's Tasks popover
 /// ("Log time?"). It works out whether the entry can be sent from here and where Open in… goes,
 /// then draws `WorklogDraftRow` — so both places show one card, with one set of answers and one
-/// path to `TasksManager.confirmWorklog`. The card is a `LabeledContent`: a Form lays it out as a
-/// row, and the popover stacks it with a `LabeledContentStyle` of its own.
+/// path to `TasksManager.confirmWorklog`. The card is a `LabeledContent`: Brain lays it out as a
+/// row, and the popover, like Brain's list column, stacks it with a `LabeledContentStyle` of its own.
 struct WorklogDraftCard: View {
     @ObservedObject private var manager = TasksManager.shared
     @Default(.jiraSiteHost) private var jiraSiteHost
@@ -94,20 +114,6 @@ struct WorklogDraftCard: View {
     }
 }
 
-/// The notch's hook into a Time to log card's fields: called with the entry and whether one of its
-/// fields has focus, so the notch can stay open while the user types (`vm.setAutoCloseSuppression`
-/// under the entry's id). Nil in Brain, whose window stays open on its own.
-private struct WorklogFieldFocusKey: EnvironmentKey {
-    static let defaultValue: ((UUID, Bool) -> Void)? = nil
-}
-
-extension EnvironmentValues {
-    var worklogFieldFocus: ((UUID, Bool) -> Void)? {
-        get { self[WorklogFieldFocusKey.self] }
-        set { self[WorklogFieldFocusKey.self] = newValue }
-    }
-}
-
 /// One entry's card: a row whose label says what would be logged where, and whose trailing column
 /// holds the fields and the answers.
 private struct WorklogDraftRow: View {
@@ -125,7 +131,6 @@ private struct WorklogDraftRow: View {
     @State private var durationText: String
     @State private var comment: String
     @FocusState private var focusedField: Field?
-    @Environment(\.worklogFieldFocus) private var reportFieldFocus
 
     init(draft: WorklogDraft, task: TaskItem?, availability: WorklogDrafts.Availability, openLink: Link?) {
         self.draft = draft
@@ -156,13 +161,6 @@ private struct WorklogDraftRow: View {
                 card
             }
         }
-        .onChange(of: focusedField) { _, field in
-            reportFieldFocus?(draft.id, field != nil)
-        }
-        // A sent entry, or one whose length changed, is drawn again from scratch (`.id`).
-        .onDisappear {
-            reportFieldFocus?(draft.id, false)
-        }
     }
 
     // MARK: - The card
@@ -174,14 +172,14 @@ private struct WorklogDraftRow: View {
                     HStack(spacing: SettingsMetrics.rowContent) {
                         // No .onSubmit: Return confirms the length, never sends it. Only Log does.
                         TextField("Length", text: $durationText, prompt: Text(verbatim: "1h 15m"))
-                            .labelsHidden()
-                            .disabled(isSending)
                             .focused($focusedField, equals: .length)
+                            .settingsField(isFocused: focusedField == .length)
+                            .disabled(isSending)
                         if source == .jira {
                             TextField("Comment", text: $comment, prompt: Text("Comment (optional)"))
-                                .labelsHidden()
-                                .disabled(isSending)
                                 .focused($focusedField, equals: .comment)
+                                .settingsField(isFocused: focusedField == .comment)
+                                .disabled(isSending)
                         }
                     }
                 }

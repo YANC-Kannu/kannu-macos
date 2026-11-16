@@ -27,46 +27,47 @@ struct OnboardingFinishView: View {
     let onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: SettingsTheme.sectionLabelGap) {
             Spacer()
 
             Image(systemName: "sparkles")
                 .font(.system(size: 60))
-                .foregroundColor(.accentColor)
+                .foregroundStyle(SettingsTheme.accentStrong)
                 .padding()
+                .accessibilityHidden(true)
 
             Text("You're All Set!")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+                .font(SettingsTheme.pageTitle)
+                .foregroundStyle(SettingsTheme.ink)
+                .textSelection(.enabled)
+                .accessibilityAddTraits(.isHeader)
 
             Text("You can now enjoy the app. If you want to tweak things further, you can always open Brain.")
-                .font(.body)
-                .foregroundColor(.secondary)
+                .font(SettingsTheme.body)
+                .foregroundStyle(SettingsTheme.inkSecondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding(.horizontal, SettingsTheme.pageInset)
+
             Spacer()
             Spacer()
 
-            VStack(spacing: 12) {
+            // A sheet's buttons: trailing, the other choice before the verb, which Return presses.
+            HStack(spacing: SettingsMetrics.rowContent) {
                 Button(action: onOpenSettings) {
                     Label("Customize in Brain", systemImage: "brain")
-                        .controlSize(.large)
                 }
-                .controlSize(.large)
 
                 Button("Finish", action: onFinish)
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+                    .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
             }
-            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.horizontal, SettingsTheme.pageInset)
         }
+        .padding(.vertical, SettingsTheme.sectionGap)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
-                .ignoresSafeArea()
-        )
     }
 }
 

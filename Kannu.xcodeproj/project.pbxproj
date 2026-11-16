@@ -23,6 +23,7 @@
 		AA100000000000000000F004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000F003 /* LICENSE */; };
 		AA100000000000000000F006 /* NOTICE in Resources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000F005 /* NOTICE */; };
 		AA100000000000000000F008 /* TermsOfUse.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000F007 /* TermsOfUse.swift */; };
+		AA100000000000000000F00A /* WhatsNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000F009 /* WhatsNew.swift */; };
 		7E8840D72E9A346700C5CB8C /* Dog waiting.json in Resources */ = {isa = PBXBuildFile; fileRef = 7E8840D62E9A346700C5CB8C /* Dog waiting.json */; };
 		7E8840D92E9A347000C5CB8C /* Moody Dog.json in Resources */ = {isa = PBXBuildFile; fileRef = 7E8840D82E9A347000C5CB8C /* Moody Dog.json */; };
 		7E8840DB2E9A347800C5CB8C /* Orange Cat Peeping.json in Resources */ = {isa = PBXBuildFile; fileRef = 7E8840DA2E9A347800C5CB8C /* Orange Cat Peeping.json */; };
@@ -117,11 +118,13 @@
 		AA10000000000000000005AD /* TaskFormDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AC /* TaskFormDraft.swift */; };
 		AA10000000000000000005AB /* TaskSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000005AA /* TaskSearch.swift */; };
 		AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A0 /* TaskTagEditing.swift */; };
+		AA1000000000000000000A11 /* TaskQuickAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000A10 /* TaskQuickAdd.swift */; };
 		AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000003A0 /* TimerComposerMetrics.swift */; };
 		AA10000000000000000004A3 /* TimerSidePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A2 /* TimerSidePage.swift */; };
 		AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A4 /* TasksHeaderVisibility.swift */; };
 		AA10000000000000000004A7 /* TaskColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000004A6 /* TaskColor.swift */; };
 		AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BA /* ClipboardCapturePolicy.swift */; };
+		AA1000000000000000000C11 /* ClipboardDataCleanup.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000C10 /* ClipboardDataCleanup.swift */; };
 		AA10000000000000000000BF /* ClaudeCloudRelaySetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BE /* ClaudeCloudRelaySetup.swift */; };
 		AA10000000000000000000BD /* ClaudeCloudRelay.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000BC /* ClaudeCloudRelay.swift */; };
 		AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */; };
@@ -135,6 +138,7 @@
 		AA1000000000000000000097 /* OSDSuppressionDecision.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000096 /* OSDSuppressionDecision.swift */; };
 		AA1000000000000000000099 /* ListeningModeNotificationFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000098 /* ListeningModeNotificationFilter.swift */; };
 		AA100000000000000000009B /* MediaRemoteAdapterOwnership.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009A /* MediaRemoteAdapterOwnership.swift */; };
+		AA10000000000000000009E3 /* HookInputLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000009E2 /* HookInputLeftovers.swift */; };
 		AA100000000000000000009D /* UsageWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009C /* UsageWindows.swift */; };
 		AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000C8 /* JSONLUsageCache.swift */; };
 		AA1000000000000000000921 /* CursorComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000920 /* CursorComposerStore.swift */; };
@@ -154,6 +158,8 @@
 		AA1000000000000000000971 /* BuiltInNotchSkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000970 /* BuiltInNotchSkin.swift */; };
 		AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000972 /* NotchSkinPrompt.swift */; };
 		AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000974 /* SettingsSearchRanking.swift */; };
+		AA1000000000000000000983 /* SettingsSelectNavigation.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000982 /* SettingsSelectNavigation.swift */; };
+		AA1000000000000000000B41 /* ListDetailLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B40 /* ListDetailLayout.swift */; };
 		AA1000000000000000000977 /* LaunchPermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000976 /* LaunchPermissions.swift */; };
 		AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000980 /* AppleNotesMergePolicy.swift */; };
 		AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000978 /* ScreenCapturePolicy.swift */; };
@@ -184,6 +190,7 @@
 		AA100000000000000000F003 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; name = LICENSE; path = LICENSE; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000F005 /* NOTICE */ = {isa = PBXFileReference; lastKnownFileType = text; name = NOTICE; path = NOTICE; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000F007 /* TermsOfUse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TermsOfUse.swift; path = Kannu/models/TermsOfUse.swift; sourceTree = SOURCE_ROOT; };
+		AA100000000000000000F009 /* WhatsNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WhatsNew.swift; path = Kannu/models/WhatsNew.swift; sourceTree = SOURCE_ROOT; };
 		7E8840D62E9A346700C5CB8C /* Dog waiting.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Dog waiting.json"; sourceTree = "<group>"; };
 		7E8840D82E9A347000C5CB8C /* Moody Dog.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Moody Dog.json"; sourceTree = "<group>"; };
 		7E8840DA2E9A347800C5CB8C /* Orange Cat Peeping.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "Orange Cat Peeping.json"; sourceTree = "<group>"; };
@@ -277,11 +284,13 @@
 		AA10000000000000000005AC /* TaskFormDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskFormDraft.swift; path = Kannu/managers/Tasks/TaskFormDraft.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000005AA /* TaskSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskSearch.swift; path = Kannu/managers/Tasks/TaskSearch.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A0 /* TaskTagEditing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskTagEditing.swift; path = Kannu/managers/Tasks/TaskTagEditing.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000A10 /* TaskQuickAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskQuickAdd.swift; path = Kannu/managers/Tasks/TaskQuickAdd.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000003A0 /* TimerComposerMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerComposerMetrics.swift; path = Kannu/sizing/TimerComposerMetrics.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A2 /* TimerSidePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TimerSidePage.swift; path = Kannu/managers/TimerSidePage.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A4 /* TasksHeaderVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TasksHeaderVisibility.swift; path = Kannu/managers/Tasks/TasksHeaderVisibility.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000004A6 /* TaskColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = TaskColor.swift; path = Kannu/managers/Tasks/TaskColor.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000BA /* ClipboardCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardCapturePolicy.swift; path = Kannu/managers/ClipboardCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000C10 /* ClipboardDataCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardDataCleanup.swift; path = Kannu/managers/ClipboardDataCleanup.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000BE /* ClaudeCloudRelaySetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeCloudRelaySetup.swift; path = Kannu/managers/AgentStatus/ClaudeCloudRelaySetup.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000BC /* ClaudeCloudRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeCloudRelay.swift; path = Kannu/managers/AgentStatus/ClaudeCloudRelay.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000B6 /* ClipboardPanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClipboardPanelPlacement.swift; path = Kannu/managers/Display/ClipboardPanelPlacement.swift; sourceTree = SOURCE_ROOT; };
@@ -295,6 +304,7 @@
 		AA1000000000000000000096 /* OSDSuppressionDecision.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = OSDSuppressionDecision.swift; path = Kannu/managers/OSDSuppressionDecision.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000098 /* ListeningModeNotificationFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ListeningModeNotificationFilter.swift; path = Kannu/managers/ListeningModeNotificationFilter.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009A /* MediaRemoteAdapterOwnership.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = MediaRemoteAdapterOwnership.swift; path = Kannu/managers/MediaRemoteAdapterOwnership.swift; sourceTree = SOURCE_ROOT; };
+		AA10000000000000000009E2 /* HookInputLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HookInputLeftovers.swift; path = Kannu/managers/AgentStatus/HookInputLeftovers.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009C /* UsageWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UsageWindows.swift; path = Kannu/managers/LLMUsage/UsageWindows.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000C8 /* JSONLUsageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = JSONLUsageCache.swift; path = Kannu/managers/LLMUsage/JSONLUsageCache.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000920 /* CursorComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CursorComposerStore.swift; path = Kannu/managers/AgentStatus/CursorComposerStore.swift; sourceTree = SOURCE_ROOT; };
@@ -314,6 +324,8 @@
 		AA1000000000000000000970 /* BuiltInNotchSkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = BuiltInNotchSkin.swift; path = Kannu/models/BuiltInNotchSkin.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000972 /* NotchSkinPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NotchSkinPrompt.swift; path = Kannu/models/NotchSkinPrompt.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000974 /* SettingsSearchRanking.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsSearchRanking.swift; path = Kannu/helpers/SettingsSearchRanking.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000982 /* SettingsSelectNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SettingsSelectNavigation.swift; path = Kannu/helpers/SettingsSelectNavigation.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B40 /* ListDetailLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ListDetailLayout.swift; path = Kannu/helpers/ListDetailLayout.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000976 /* LaunchPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchPermissions.swift; path = Kannu/models/LaunchPermissions.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000980 /* AppleNotesMergePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleNotesMergePolicy.swift; path = Kannu/managers/AppleNotesMergePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000978 /* ScreenCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenCapturePolicy.swift; path = Kannu/helpers/ScreenCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
@@ -787,11 +799,13 @@
 				AA10000000000000000005AD /* TaskFormDraft.swift in Sources */,
 				AA10000000000000000005AB /* TaskSearch.swift in Sources */,
 				AA10000000000000000004A1 /* TaskTagEditing.swift in Sources */,
+				AA1000000000000000000A11 /* TaskQuickAdd.swift in Sources */,
 				AA10000000000000000003A1 /* TimerComposerMetrics.swift in Sources */,
 				AA10000000000000000004A3 /* TimerSidePage.swift in Sources */,
 				AA10000000000000000004A5 /* TasksHeaderVisibility.swift in Sources */,
 				AA10000000000000000004A7 /* TaskColor.swift in Sources */,
 				AA10000000000000000000BB /* ClipboardCapturePolicy.swift in Sources */,
+				AA1000000000000000000C11 /* ClipboardDataCleanup.swift in Sources */,
 				AA10000000000000000000BF /* ClaudeCloudRelaySetup.swift in Sources */,
 				AA10000000000000000000BD /* ClaudeCloudRelay.swift in Sources */,
 				AA10000000000000000000B7 /* ClipboardPanelPlacement.swift in Sources */,
@@ -799,6 +813,7 @@
 				AA10000000000000000002B1 /* KeychainWritePlan.swift in Sources */,
 				AA10000000000000000006B1 /* KeychainInteractionGate.swift in Sources */,
 				AA100000000000000000F008 /* TermsOfUse.swift in Sources */,
+				AA100000000000000000F00A /* WhatsNew.swift in Sources */,
 				AA10000000000000000000B3 /* AgentSecurityFindingGroup.swift in Sources */,
 				AA10000000000000000000B5 /* SecurityFindingAcknowledgement.swift in Sources */,
 				AA1000000000000000000093 /* GitHubIssue.swift in Sources */,
@@ -806,6 +821,7 @@
 				AA1000000000000000000097 /* OSDSuppressionDecision.swift in Sources */,
 				AA1000000000000000000099 /* ListeningModeNotificationFilter.swift in Sources */,
 				AA100000000000000000009B /* MediaRemoteAdapterOwnership.swift in Sources */,
+				AA10000000000000000009E3 /* HookInputLeftovers.swift in Sources */,
 				AA100000000000000000009D /* UsageWindows.swift in Sources */,
 				AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */,
 				AA1000000000000000000921 /* CursorComposerStore.swift in Sources */,
@@ -825,6 +841,8 @@
 				AA1000000000000000000971 /* BuiltInNotchSkin.swift in Sources */,
 				AA1000000000000000000973 /* NotchSkinPrompt.swift in Sources */,
 				AA1000000000000000000975 /* SettingsSearchRanking.swift in Sources */,
+				AA1000000000000000000983 /* SettingsSelectNavigation.swift in Sources */,
+				AA1000000000000000000B41 /* ListDetailLayout.swift in Sources */,
 				AA1000000000000000000977 /* LaunchPermissions.swift in Sources */,
 				AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */,
 				AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */,
@@ -1025,7 +1043,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Kannu/Preview Content\"";
 				DEVELOPMENT_TEAM = 3Z7WX43G8Q;
@@ -1065,7 +1083,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 1.3.4;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kannu.app.dev;
 				PRODUCT_NAME = Kannu;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1095,7 +1113,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 12;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"Kannu/Preview Content\"";
 				DEVELOPMENT_TEAM = S2WWHQQH2V;
@@ -1135,7 +1153,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.6;
-				MARKETING_VERSION = 1.3.4;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kannu.app;
 				PRODUCT_NAME = Kannu;
 				PROVISIONING_PROFILE_SPECIFIER = "";

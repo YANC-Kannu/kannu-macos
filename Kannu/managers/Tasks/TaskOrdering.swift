@@ -27,7 +27,8 @@ import Foundation
 /// it was.
 ///
 /// Which active tasks are on screen is `listed`: the connected baseline (`connectedFilter`),
-/// narrowed by a view's own filter — the Task list's filters in Brain, Show in notch in the notch.
+/// narrowed by a view's own filter — the Task list's filters in Brain, Show in notch and its Tag
+/// filter in the notch.
 /// Its default lists every active task.
 enum TaskOrdering {
     typealias Listed = (TaskItem) -> Bool
@@ -46,12 +47,22 @@ enum TaskOrdering {
         }
     }
 
-    /// A view's own filter by source — the notch's Show in notch (`tasksPopoverShowLocal` and the
-    /// rest): the sources it hides. It changes nothing but what that view shows: compose it with the
-    /// connected baseline (`active(_:listed:)` on `TasksManager.activeTasks`). The task being timed
-    /// always passes.
-    static func viewFilter(hidden: Set<TaskSource>, alwaysListed: UUID?) -> Listed {
-        { task in task.id == alwaysListed || !hidden.contains(task.source) }
+    /// A view's own filter — the notch's Show in notch (`tasksPopoverShowLocal` and the rest), the
+    /// sources it hides, and its Tag filter (`tasksNotchTagFilter`), one tag or `TaskFacets.anyTag`,
+    /// matched as Brain's Tag filter matches (`TaskFacets.matches`). It changes nothing but what that
+    /// view shows: compose it with the connected baseline (`active(_:listed:)` on
+    /// `TasksManager.activeTasks`). The task being timed always passes.
+    static func viewFilter(hidden: Set<TaskSource>, tag: String = TaskFacets.anyTag, alwaysListed: UUID?) -> Listed {
+        { task in
+            task.id == alwaysListed
+                || (!hidden.contains(task.source) && TaskFacets.matches(task, filter: TaskFilter(tag: tag)))
+        }
+    }
+
+    /// The notch's Tag filter once `task` has been added there: the same tag when the task has it,
+    /// none when it does not, so a new task never vanishes as it is made.
+    static func tagFilter(_ tag: String, afterAdding task: TaskItem) -> String {
+        TaskFacets.matches(task, filter: TaskFilter(tag: tag)) ? tag : TaskFacets.anyTag
     }
 
     /// The tasks in the task order, top first.

@@ -56,7 +56,8 @@ final class LaunchGateRulesTests: XCTestCase {
     }
 
     /// The pre-gate part of the launch may start only the invariants. Anything that installs hooks,
-    /// starts a monitor or builds a window belongs in `continueLaunch()`.
+    /// starts a monitor or builds a window belongs in `continueLaunch()`. Geist needs no launch work at
+    /// all: the system activates it from `ATSApplicationFontsPath` (`GeistBundleRulesTests`).
     func testNothingElseStartsBeforeTheGate() throws {
         let source = try Self.appDelegate()
         let launch = Self.code(try XCTUnwrap(Self.body(ofFunction: "applicationDidFinishLaunching", in: source)))
@@ -67,7 +68,7 @@ final class LaunchGateRulesTests: XCTestCase {
                           "autoEnableLaunchAtLogin", "showOnboardingWindow", "LockScreenWeatherManager",
                           "SystemHUDManager", "configureProviderDefaultsIfNeeded", "installTopMenuItems",
                           "UNUserNotificationCenter", "requestAuthorization", "TasksManager", "TaskFileStore",
-                          "launchDidContinue"] {
+                          "launchDidContinue", "CTFontManager"] {
             XCTAssertFalse(preGate.contains(forbidden), "\(forbidden) now runs before the Terms of Use are accepted")
         }
         // The one exception, a delegate that asks nothing: testTheReminderDelegateIsInstalledBeforeTheGate.
@@ -143,6 +144,42 @@ final class LaunchGateRulesTests: XCTestCase {
         let delegateClass = try XCTUnwrap(source.range(of: "class AppDelegate:"))
         let head = String(source[appStruct.lowerBound..<delegateClass.lowerBound])
         XCTAssertFalse(Self.code(head).contains("init() {"), "KannuApp has an init again — it runs before the gate")
+    }
+
+    /// The one in-memory registration that keeps AppKit from adding a second Enter Full Screen (`MenuBarRulesTests`). It
+    /// writes nothing and asks nothing.
+    private static let registration = "UserDefaults.standard.register(defaults: [\"NSFullScreenMenuItemEverywhere\": false])"
+
+    /// `applicationWillFinishLaunching` runs before `applicationDidFinishLaunching`, so before the terms are checked, and
+    /// no other clause here reads it. Its body, comments aside, is that one registration.
+    static func willFinishProblems(in source: String) -> [String] {
+        guard let will = body(ofFunction: "applicationWillFinishLaunching", in: source),
+              let open = will.range(of: "{"), let close = will.range(of: "}", options: .backwards) else {
+            return ["applicationWillFinishLaunching cannot be read"]
+        }
+        let statements = code(String(will[open.upperBound..<close.lowerBound])).components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        return statements == [registration] ? [] : ["applicationWillFinishLaunching does work before the Terms of Use are checked"]
+    }
+
+    func testWillFinishLaunchingOnlyRegistersADefault() throws {
+        let source = try Self.appDelegate()
+        XCTAssertNotNil(Self.body(ofFunction: "applicationWillFinishLaunching", in: source),
+                        "applicationWillFinishLaunching went away — this pin is vacuous")
+        XCTAssertEqual(Self.willFinishProblems(in: source), [])
+        let line = "        \(Self.registration)\n"
+        // Work beside the registration, or a write in its place: either runs before the gate.
+        let work = source.replacingOccurrences(of: line, with: line + "        AgentHookInstaller.shared.install(.claude)\n")
+        let write = source.replacingOccurrences(of: Self.registration,
+                                                with: "UserDefaults.standard.set(false, forKey: \"NSFullScreenMenuItemEverywhere\")")
+        for planted in [work, write] {
+            XCTAssertNotEqual(planted, source, "the plant must change the source")
+            XCTAssertEqual(Self.willFinishProblems(in: planted), ["applicationWillFinishLaunching does work before the Terms of Use are checked"])
+        }
+        // A comment is not work.
+        let commented = source.replacingOccurrences(of: line, with: "        // Registered, not written.\n" + line)
+        XCTAssertNotEqual(commented, source, "the plant must change the source")
+        XCTAssertEqual(Self.willFinishProblems(in: commented), [])
     }
 
     func testTheLegalDocumentsShipInsideTheApp() throws {

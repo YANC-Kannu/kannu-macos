@@ -95,6 +95,16 @@ final class TaskFacetsTests: XCTestCase {
                        "with the other filters, not instead of them")
     }
 
+    /// All tasks' Find takes `#tag` (Stage 5): the tag or label as a whole, never the word in a title.
+    func testFindTakesAHashTag() {
+        let tasks = [jira("PROJ-2", tags: ["docs"]), local("Write the docs"), local("Docs site", tags: ["docsite"])]
+        func found(_ query: String) -> [String] {
+            tasks.filter { Facets.matches($0, filter: TaskFilter(query: query)) }.map(\.title)
+        }
+        XCTAssertEqual(found("#docs"), ["PROJ-2"])
+        XCTAssertEqual(found("docs"), ["PROJ-2", "Write the docs", "Docs site"], "the plain word, anywhere, as before")
+    }
+
     // MARK: - Project
 
     func testTheProjectComesFromTheKey() {
@@ -187,6 +197,19 @@ final class TaskFacetsTests: XCTestCase {
         XCTAssertTrue(TaskFilter(tag: "x").isNarrowing)
     }
 
+    /// A Tag filter pick finds a label as it finds an own tag: by the name the row shows, ignoring
+    /// case, never a longer tag that begins with it.
+    func testTheTagFilterFindsALabelAsATag() {
+        let tasks = [TaskItem(source: .gitlab, title: "Fix", remote: remote("g/a#1", labels: ["workflow::doing", "Backend"])),
+                     local("Write", tags: ["backend"]), local("Plan", tags: ["backend-ops"])]
+        func titles(_ tag: String) -> [String] {
+            tasks.filter { Facets.matches($0, filter: TaskFilter(tag: tag)) }.map(\.title)
+        }
+        XCTAssertEqual(titles("backend"), ["Fix", "Write"], "a label or an own tag, ignoring case")
+        XCTAssertEqual(titles("Doing"), ["Fix"], "a scoped label by its value")
+        XCTAssertEqual(titles("back"), [])
+    }
+
     /// Brain's New Task opens a new task's page when All tasks' filters would hide it: a new local
     /// task shows under no filter and Local, never under Jira, a tag it lacks, or a Find it misses.
     func testANewLocalTaskShowsOnlyUnderFiltersThatAdmitIt() {
@@ -229,6 +252,21 @@ final class TaskFacetsTests: XCTestCase {
         XCTAssertEqual(counts.inProgress, 2)
     }
 
+    /// The Tag filter offers labels as tags too, and each choice finds its tasks; `tags(in:)`, which
+    /// tag suggestions read, stays the user's own.
+    func testTheTagFilterOffersLabelsTooAndTagsInStaysOwn() {
+        let tasks = [local("Write", tags: ["writing", "Urgent"]), local("Review", tags: ["urgent", "alpha"]),
+                     TaskItem(source: .gitlab, title: "Fix", remote: remote("g/a#1", labels: ["workflow::doing", "Backend", "URGENT"])),
+                     TaskItem(source: .jira, title: "Ship", remote: remote("A-1", labels: ["backend"]))]
+        XCTAssertEqual(Facets.filterTags(in: tasks), ["alpha", "Backend", "doing", "Urgent", "writing"],
+                       "own tags and labels, a scoped one by its value: first spelling, sorted, once each")
+        XCTAssertEqual(Facets.tags(in: tasks), ["alpha", "Urgent", "writing"], "own tags only")
+        XCTAssertEqual(Facets.filterTags(in: []), [])
+        for tag in Facets.filterTags(in: tasks) {
+            XCTAssertFalse(tasks.filter { Facets.matches($0, filter: TaskFilter(tag: tag)) }.isEmpty, "\(tag) finds its tasks")
+        }
+    }
+
     func testTheFiltersListOnlyTheRowsTheyMatch() {
         // On screen with Source Jira and Status To Do: A-1, C-3. B-2 is in progress, w is local.
         let list = [jira("A-1", category: "new"), local("w"), jira("B-2", category: "indeterminate"), jira("C-3", category: "new")]
@@ -244,6 +282,23 @@ final class TaskFacetsTests: XCTestCase {
         XCTAssertEqual(TaskItem.cleanedTags([String(repeating: "a", count: 40)]), [String(repeating: "a", count: 24)])
         XCTAssertEqual(TaskItem.cleanedTags((1...15).map { "t\($0)" }).count, TaskItem.maxTags)
         XCTAssertEqual(TaskItem.parsedTags("writing, #urgent,,Writing"), ["writing", "urgent"])
+    }
+
+    /// Labels count as tags (David, 2026-11-01). A task shows its own tags first, in the user's
+    /// order, then its labels in the server's, a scoped one by its value. A name shows once, compared
+    /// ignoring case as own tags are (`TaskItem.cleanedTags`), so accents still count.
+    func testATaskShowsItsOwnTagsThenItsLabelsOnceEach() {
+        let labels = ["workflow::sprint_backlog", "backend", "bug", "priority::high", "severity::HIGH"]
+        let task = TaskItem(source: .gitlab, title: "Fix", remote: remote("g/a#1", labels: labels), tags: ["today", "Backend"])
+        XCTAssertEqual(Facets.displayTags(of: task), ["today", "Backend", "sprint_backlog", "bug", "high"],
+                       "own first; a label that reads as an earlier name, whatever its case, shows once, first spelling kept")
+        XCTAssertEqual(Facets.displayTags(of: local("Write", tags: ["writing", "urgent"])), ["writing", "urgent"],
+                       "a local task: its own tags")
+        XCTAssertEqual(Facets.displayTags(of: TaskItem(source: .jira, title: "Ship", remote: remote("A-1", labels: ["ops", "OPS"]))),
+                       ["ops"], "no own tags: the labels, once each")
+        XCTAssertEqual(Facets.displayTags(of: jira("A-1")), [], "a file written before labels")
+        XCTAssertEqual(Facets.displayTags(of: TaskItem(source: .jira, title: "Order", remote: remote("A-2", labels: ["Café"]),
+                                                       tags: ["cafe"])), ["cafe", "Café"], "accents count")
     }
 
     // MARK: - Coding

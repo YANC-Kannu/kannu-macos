@@ -70,4 +70,37 @@ final class UsageWindowsTests: XCTestCase {
         let now = Date(timeIntervalSince1970: 1_757_000_000)
         XCTAssertTrue(UsageWindows.shouldScan(modifiedAt: now.addingTimeInterval(86400), now: now))
     }
+
+    // MARK: - The week the total covers
+
+    func testAKnownWeeklyResetMakesTheWeekThePlansOwn() {
+        // Claude's weekly limit resets at a fixed time. Two days after a reset, the plan's week is those
+        // two days, not the last seven: rolling, it counted 2.27 B tokens against 205 M since the reset.
+        let now = Date(timeIntervalSince1970: 1_757_000_000)
+        let reset = now.addingTimeInterval(5 * 86400)
+        let week = UsageWindows.weekWindow(now: now, weeklyResetsAt: reset)
+        XCTAssertEqual(week.start, now.addingTimeInterval(-2 * 86400))
+        XCTAssertTrue(week.followsPlan)
+        XCTAssertGreaterThanOrEqual(week.start, now.addingTimeInterval(-UsageWindows.week),
+                                    "inside the rolling week the cache keeps")
+    }
+
+    func testWithoutAUsableResetTheWeekIsTheLastSevenDays() {
+        let now = Date(timeIntervalSince1970: 1_757_000_000)
+        let rolling = UsageWindows.Week(start: now.addingTimeInterval(-UsageWindows.week), followsPlan: false)
+        XCTAssertEqual(UsageWindows.weekWindow(now: now, weeklyResetsAt: nil), rolling)
+        XCTAssertEqual(UsageWindows.weekWindow(now: now, weeklyResetsAt: now.addingTimeInterval(-60)), rolling,
+                       "a reset already past cannot describe this week")
+        XCTAssertEqual(UsageWindows.weekWindow(now: now, weeklyResetsAt: now), rolling)
+        XCTAssertEqual(UsageWindows.weekWindow(now: now, weeklyResetsAt: now.addingTimeInterval(9 * 86400)), rolling,
+                       "more than a week away is not this week's reset")
+    }
+
+    func testAResetJustOverAWeekAwayStartsTheWeekNoLaterThanNow() {
+        // The server's clock running a little ahead of this Mac's.
+        let now = Date(timeIntervalSince1970: 1_757_000_000)
+        let week = UsageWindows.weekWindow(now: now, weeklyResetsAt: now.addingTimeInterval(UsageWindows.week + 60))
+        XCTAssertEqual(week.start, now)
+        XCTAssertTrue(week.followsPlan)
+    }
 }

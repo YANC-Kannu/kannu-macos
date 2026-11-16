@@ -53,6 +53,10 @@ struct ExtensionDescriptorValidator {
         guard descriptor.isValid else {
             throw ExtensionValidationError.invalidDescriptor("Missing mandatory fields")
         }
+        // A tab is the only thing Kannu renders since the minimalistic mode went.
+        guard descriptor.tab != nil else {
+            throw ExtensionValidationError.invalidDescriptor("A notch experience needs a tab")
+        }
         if let durationHint = descriptor.durationHint {
             guard durationHint > 0, durationHint <= 21_600 else {
                 throw ExtensionValidationError.invalidDescriptor("Duration hint must be between 0 and 6 hours")

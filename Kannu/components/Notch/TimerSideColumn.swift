@@ -25,8 +25,8 @@ import SwiftUI
 ///
 /// - **Tasks**, with tasks and the timer on: a toolbar (search, the Show in notch filter, Refresh,
 ///   Time to log) level with the session name field, then the task order
-///   (`TasksManager.activeTasks`), each row with its title, key, "42m of 2h" and ▶. The header's
-///   Tasks button hides while this page can show (`TasksHeaderVisibility`);
+///   (`TasksManager.activeTasks`), each row with its title, key, "42m of 2h", its tags and ▶. The
+///   header's Tasks button hides while this page can show (`TasksHeaderVisibility`);
 /// - **Presets**, with Show presets in the notch tab on: the preset cards, as before.
 ///
 /// The page fills the column from the session name field's line down to the tab's bottom line.
@@ -156,7 +156,7 @@ struct TimerSideColumn: View {
                 .buttonStyle(.plain)
             }
         }
-        .font(.system(size: 11, weight: .semibold))
+        .font(SettingsTheme.font(size: 11, weight: .semibold))
         .frame(height: M.sidePagerHeight)
         .accessibilityRepresentation {
             Picker(String(localized: "Timer column"), selection: pageSelection) {
@@ -194,7 +194,7 @@ struct TimerSideColumn: View {
     private var presetsPage: some View {
         if presets.isEmpty {
             Text("Configure presets in Brain to see them here.")
-                .font(.system(size: 12))
+                .font(SettingsTheme.font(size: 12))
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(14)
@@ -246,13 +246,15 @@ extension TimerSidePage {
 ///
 /// - **The rail** (`rail`), an overlay hung into the gap between the composer and the page, where
 ///   the divider was: search, which opens a field at the top of the page that narrows the list as
-///   the user types (`TaskSearch`); the Show in notch filter (`TaskSourceMenu`, the popover's own,
-///   with Show all, Connect and Manage tasks…); Refresh, while Jira or GitLab syncs, whose tooltip
-///   says when each last synced; and Time to log, a clock with Kannu's yellow "needs your input"
-///   dot, while an entry asks. An overlay takes no room, so the gap stays the divider's 41 pt and
+///   the user types (`TaskSearch`; `#tag` finds a tag); the Show in notch filter (`TaskSourceMenu`,
+///   the popover's own, with its Tag submenu, Show all, Connect and Manage tasks…); Refresh, while
+///   Jira or GitLab syncs, whose tooltip says when each last synced; and Time to log, a clock with
+///   Kannu's yellow "needs your input" dot, while an entry asks. An overlay takes no room, so the gap stays the divider's 41 pt and
 ///   nothing moves when the page changes.
 /// - **The list**: the task order as it stands (`TasksManager.activeTasks`), narrowed by Show in
-///   notch and the search, so the first row is what the user ordered first. The whole page tall,
+///   notch, its Tag filter and the search, so the first row is what the user ordered first. Each row
+///   shows its caption whole with its first tag and "+N" when they fit, else one "+N" for all its
+///   tags, before which only the time gives way (`TaskTagChips`). The whole page tall,
 ///   ending where Start and Reset do. A row expands into its card (`TimerTaskDetail`), and the
 ///   clock opens the Time to log cards (`TimerLogTimePage`); the rail stays beside both.
 ///
@@ -291,15 +293,8 @@ private struct TimerTasksPage: View {
     /// Whether the search field shows at the top of the page.
     @State private var isSearching = false
     @FocusState private var searchFocused: Bool
-    /// `@State`, so the release names the token that was set.
-    @State private var searchEditingToken = UUID()
     /// Whether the Time to log cards have replaced the list.
     @State private var showsLogTime = false
-    /// The entries whose card has a focused field; each holds the notch open under its own id.
-    @State private var focusedDrafts: Set<UUID> = []
-    /// A menu opened here (the filter, a Time to log card's ⋯) is a window of its own: the pointer
-    /// leaves the notch to use it, so the notch stays open while a menu tracks.
-    @State private var menuTrackingToken = UUID()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let maxLogCards = 3
@@ -332,32 +327,17 @@ private struct TimerTasksPage: View {
         .onChange(of: asking.isEmpty) { _, isEmpty in
             if isEmpty { showsLogTime = false }
         }
-        .onChange(of: searchFocused) { _, isFocused in
-            vm.setAutoCloseSuppression(isFocused, token: searchEditingToken)
-        }
-        // A click into another app leaves a field focused in a window that is no longer key: drop
-        // it, which lets the notch auto-close again.
+        // A click into another app leaves a field focused in a window that is no longer key: drop it.
+        // The notch closes on where the pointer is (`ContentView.closeWhenPointerLeaves`), never
+        // on a field's focus, and a menu opened here is waited for there.
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { note in
             guard note.object is KannuWindow else { return }
             searchFocused = false
-            releaseDraftFocus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didBeginTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(true, token: menuTrackingToken)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSMenu.didEndTrackingNotification)) { _ in
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
         }
         // The latest order, as the Tasks popover does it: a source syncs only when its last sync is
         // over 5 minutes old and no rate limit runs, and never with the Keychain dialog.
         .onAppear {
             manager.syncAllIfStale()
-        }
-        // Closing the notch or switching tabs removes this view without a focus change.
-        .onDisappear {
-            vm.setAutoCloseSuppression(false, token: searchEditingToken)
-            vm.setAutoCloseSuppression(false, token: menuTrackingToken)
-            releaseDraftFocus()
         }
     }
 
@@ -398,7 +378,6 @@ private struct TimerTasksPage: View {
                 .transition(.opacity)
             } else if showsLog {
                 TimerLogTimePage(asking: asking, maxCards: Self.maxLogCards, width: width, height: height, close: closeLogTime)
-                    .environment(\.worklogFieldFocus, draftFocusChanged)
                     .transition(.opacity)
             }
         }
@@ -415,13 +394,20 @@ private struct TimerTasksPage: View {
     /// (`TaskSourcePreferences.hiddenInNotch`).
     private var isFiltered: Bool { preferences.isNarrowing }
 
-    /// Show in notch over the connected baseline, as the popover has it. The task being timed always
-    /// passes.
+    /// Show in notch and its Tag filter over the connected baseline, as the popover has them. The task
+    /// being timed always passes.
     private var notchFilter: TaskOrdering.Listed {
-        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)
+        TaskOrdering.viewFilter(hidden: preferences.hiddenInNotch, tag: preferences.tagFilter, alwaysListed: manager.timing?.taskID)
     }
 
-    /// Show all: every source back in the notch.
+    /// The Tag submenu's choices: the tags of every task Show in notch lists, whatever tag is picked,
+    /// so a choice never vanishes from its own menu.
+    private var tagChoices: [String] {
+        TaskFacets.filterTags(in: TaskOrdering.active(manager.activeTasks, listed: TaskOrdering.viewFilter(
+            hidden: preferences.hiddenInNotch, alwaysListed: manager.timing?.taskID)))
+    }
+
+    /// Show all: every source back in the notch, and no Tag filter.
     private func showAllSources() {
         preferences.showAll()
     }
@@ -467,25 +453,7 @@ private struct TimerTasksPage: View {
     }
 
     private func closeLogTime() {
-        releaseDraftFocus()
         animate { showsLogTime = false }
-    }
-
-    /// A Time to log card's field gained or lost focus (`worklogFieldFocus`).
-    private func draftFocusChanged(_ draftID: UUID, _ isFocused: Bool) {
-        if isFocused {
-            focusedDrafts.insert(draftID)
-        } else {
-            focusedDrafts.remove(draftID)
-        }
-        vm.setAutoCloseSuppression(isFocused, token: draftID)
-    }
-
-    private func releaseDraftFocus() {
-        for draftID in focusedDrafts {
-            vm.setAutoCloseSuppression(false, token: draftID)
-        }
-        focusedDrafts.removeAll()
     }
 
     // MARK: - Rail
@@ -509,7 +477,7 @@ private struct TimerTasksPage: View {
             }
             .zIndex(4)
             railSlot {
-                TaskSourceMenu(openBrain: { $0.open() }, style: .rail)
+                TaskSourceMenu(openBrain: { $0.open() }, tags: tagChoices, style: .rail)
             }
             .zIndex(3)
             if !manager.syncStates.isEmpty {
@@ -618,7 +586,7 @@ private struct TimerTasksPage: View {
                 .foregroundStyle(.secondary)
             TextField(String(localized: "Search tasks"), text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
+                .font(SettingsTheme.font(size: 12, weight: .medium))
                 .focused($searchFocused)
                 .onSubmit { searchFocused = false }
                 .onExitCommand(perform: closeSearch)
@@ -684,10 +652,12 @@ private struct TimerTasksPage: View {
         .frame(height: rowsHeight)
     }
 
-    /// Key and title on one line, "42m of 2h" under it, then ▶. The text is a button of its own:
-    /// clicking it expands the task into its card, in the column's own frame.
+    /// Key and title on one line, "42m of 2h" and the tags under it, then a local task's done tick
+    /// and ▶. The text is a button of its own: clicking it expands the task into its card, in the
+    /// column's own frame.
     private func row(_ task: TaskItem, tooltipEdge: HoverTooltipEdge) -> some View {
         let progress = TaskTimeMath.progress(tracked: manager.trackedSeconds(of: task), estimate: task.effectiveEstimateSeconds)
+        let isTicked = manager.doneTicks.isTicked(task.id)
         return HStack(spacing: 8) {
             Button {
                 expand(task)
@@ -696,16 +666,30 @@ private struct TimerTasksPage: View {
                 // both lines slide into view while the row is hovered — one hover for the row.
                 let isHovered = hoveredRowID == task.id
                 VStack(alignment: .leading, spacing: 1) {
-                    HoverRevealText(task.title, font: .system(size: 12, weight: .semibold), isActive: isHovered)
-                    HoverRevealText(
-                        (Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
-                            + overText(progress.over))
-                            .font(.system(size: 11, weight: .medium)),
-                        isActive: isHovered
-                    )
-                    .foregroundStyle(.secondary)
+                    HoverRevealText(task.title, font: SettingsTheme.font(size: 12, weight: .semibold), isActive: isHovered)
+                    // The caption, then the tags that fit beside it, the one the search found first; the
+                    // caption wins (`TaskTagChips`). The line is a chip tall in every row, tags or not,
+                    // so every row's title sits on the same line.
+                    TaskTagChips(tags: TaskSearch.chipTags(of: task, query: searchText),
+                                 foundFirst: !TaskSearch.foundTags(of: task, query: searchText).isEmpty) {
+                        // The overtime never shortens: on a short line the time before it gives way.
+                        HStack(spacing: 0) {
+                            HoverRevealText(
+                                Text(verbatim: [TaskDetailSummary.shortKey(for: task), progress.text].compactMap { $0 }.joined(separator: " · "))
+                                    .font(SettingsTheme.font(size: 11, weight: .medium)),
+                                isActive: isHovered
+                            )
+                            overText(progress.over)
+                                .font(SettingsTheme.font(size: 11, weight: .medium))
+                                .fixedSize()
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(height: M.sideTaskCaptionHeight)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Ticked done and waiting out the undo window.
+                .opacity(isTicked ? 0.45 : 1)
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     if hovering {
@@ -717,18 +701,28 @@ private struct TimerTasksPage: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint(Text(verbatim: String(localized: "Shows the task's details")))
-            Button {
-                start(task)
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 10, weight: .semibold))
-                    .padding(6)
-                    .contentShape(Circle())
+            // The tick by ▶ itself (David, 2026-10-29), left of it so ▶ keeps its place in every
+            // row; apart enough that neither is clicked for the other.
+            HStack(spacing: 6) {
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: isTicked, isEnabled: manager.isReady,
+                                 tooltipEdge: tooltipEdge) {
+                        manager.toggleDone(task.id)
+                    }
+                }
+                Button {
+                    start(task)
+                } label: {
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 10, weight: .semibold))
+                        .padding(6)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!manager.isReady)
+                .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
+                .hoverTooltip(String(localized: "Start timing"), edge: tooltipEdge)
             }
-            .buttonStyle(.plain)
-            .disabled(!manager.isReady)
-            .accessibilityLabel(Text(verbatim: String(localized: "Start timing \(task.title)")))
-            .hoverTooltip(String(localized: "Start timing"), edge: tooltipEdge)
         }
         .padding(.horizontal, 10)
         .frame(height: M.sideTaskRowHeight)
@@ -782,7 +776,7 @@ private struct TimerTasksPage: View {
                     .buttonStyle(.link)
             }
         }
-        .font(.system(size: 12, weight: .medium))
+        .font(SettingsTheme.font(size: 12, weight: .medium))
         .lineLimit(1)
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -812,7 +806,7 @@ private struct TimerLogTimePage: View {
         VStack(alignment: .leading, spacing: M.sideToolbarSpacing) {
             HStack(spacing: 6) {
                 Text("Log time?")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(SettingsTheme.font(size: 12, weight: .semibold))
                 Spacer(minLength: 0)
                 Button(action: close) {
                     Image(systemName: "xmark")
@@ -904,7 +898,7 @@ private struct TimerLinkedMRsPage: View {
             .hoverTooltip(String(localized: "Back"), edge: .below)
 
             Text("Linked merge requests")
-                .font(.system(size: 12, weight: .semibold))
+                .font(SettingsTheme.font(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
 
@@ -928,7 +922,7 @@ private struct TimerLinkedMRsPage: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("Loading…")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(SettingsTheme.font(size: 12, weight: .medium))
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 10)
@@ -950,13 +944,13 @@ private struct TimerLinkedMRsPage: View {
     private func note(_ text: String, retry: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(verbatim: text)
-                .font(.system(size: 11, weight: .medium))
+                .font(SettingsTheme.font(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             if retry {
                 Button(String(localized: "Try Again")) { attempt += 1 }
                     .buttonStyle(.link)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
             }
         }
         .padding(.horizontal, 10)
@@ -973,7 +967,7 @@ private struct TimerLinkedMRsPage: View {
                         // GitLab has more than one page of them: the issue lists them all.
                         Button(String(localized: "More on GitLab")) { NSWorkspace.shared.open(url) }
                             .buttonStyle(.link)
-                            .font(.system(size: 11, weight: .medium))
+                            .font(SettingsTheme.font(size: 11, weight: .medium))
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.horizontal, 10)
                     }
@@ -1003,9 +997,9 @@ private struct TimerLinkedMRsPage: View {
                     .frame(width: 7, height: 7)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
-                    HoverRevealText(item.title, font: .system(size: 12, weight: .semibold), isActive: hoveredID == item.id)
+                    HoverRevealText(item.title, font: SettingsTheme.font(size: 12, weight: .semibold), isActive: hoveredID == item.id)
                     Text(verbatim: caption)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(SettingsTheme.font(size: 11, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -1190,7 +1184,7 @@ private struct TimerTaskDetail: View {
             // plain glass still took its width and indented the title past the chips.
             HStack(alignment: .top, spacing: 6) {
                 // Two lines; a longer title slides up into view while hovered, then settles.
-                HoverRevealText(summary.title, font: .system(size: 13, weight: .semibold), lines: 2)
+                HoverRevealText(summary.title, font: SettingsTheme.font(size: 13, weight: .semibold), lines: 2)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button {
@@ -1305,7 +1299,7 @@ private struct TimerTaskDetail: View {
     /// Muted, not an alert: nothing is wrong with a task that has not been started.
     private func noteText(_ note: String) -> some View {
         Text(verbatim: note)
-            .font(.system(size: 11, weight: .medium))
+            .font(SettingsTheme.font(size: 11, weight: .medium))
             .foregroundStyle(.tertiary)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -1366,7 +1360,7 @@ private struct TimerTaskDetail: View {
         if confirmsDelete {
             HStack(spacing: 6) {
                 Text("Delete? Its recorded time goes too.")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(SettingsTheme.font(size: 11, weight: .medium))
                     .lineLimit(2)
                 Spacer(minLength: 0)
                 Button(String(localized: "Keep")) {
@@ -1391,10 +1385,19 @@ private struct TimerTaskDetail: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(!manager.isReady)
+                // Done, a local task's, by Start itself (David, 2026-10-29): it leaves the task
+                // order once the undo window runs out, and the card collapses on its own, as for
+                // Archive.
+                if TaskDoneTicks.canTick(task) {
+                    TaskDoneTick(title: task.title, isTicked: manager.doneTicks.isTicked(task.id),
+                                 isEnabled: manager.isReady, size: 12) {
+                        manager.toggleDone(task.id)
+                    }
+                }
                 // Only once there is something to say: "No estimate" beside every untimed
                 // GitLab issue was noise.
                 if summary.showsTime {
-                    HoverRevealText(timeText(summary).font(.system(size: 11, weight: .medium)))
+                    HoverRevealText(timeText(summary).font(SettingsTheme.font(size: 11, weight: .medium)))
                         .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
@@ -1495,13 +1498,13 @@ private struct FactCell: View {
                 .frame(width: 12)
                 .accessibilityHidden(true)
             if opens {
-                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium), isActive: false)
+                HoverRevealText(fact.text, font: SettingsTheme.font(size: 11, weight: .medium), isActive: false)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 8, weight: .bold))
                     .accessibilityHidden(true)
             } else {
                 // Clipped at the column's width, it slides into view while hovered.
-                HoverRevealText(fact.text, font: .system(size: 11, weight: .medium))
+                HoverRevealText(fact.text, font: SettingsTheme.font(size: 11, weight: .medium))
             }
         }
         .foregroundStyle(fact.isAlert ? Color.orange : Color.secondary)
@@ -1530,7 +1533,7 @@ private struct TimerPresetCard: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(preset.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(SettingsTheme.font(size: 14, weight: .semibold))
                         .lineLimit(1)
                     Text(preset.formattedDuration)
                         .font(.caption.monospaced())

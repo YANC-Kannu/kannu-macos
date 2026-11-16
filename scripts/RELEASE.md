@@ -8,7 +8,7 @@ Triggered only by pushing a `v*` tag. The workflow archives with Developer ID, n
 
 ### One-time: GitHub secrets
 
-Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
+Add at **Settings → Secrets and variables → Actions** on `YANC-Kannu/kannu-macos`:
 
 | Secret | Description |
 |--------|-------------|
@@ -23,13 +23,13 @@ Add at **Settings → Secrets and variables → Actions** on `libinmv/kannu`:
 Example (run locally after exporting your `.p12`):
 
 ```bash
-gh secret set APPLE_CERTIFICATE --repo libinmv/kannu < <(base64 -i ~/path/to/cert.p12)
-gh secret set APPLE_CERTIFICATE_PASSWORD --repo libinmv/kannu
-gh secret set KEYCHAIN_PASSWORD --repo libinmv/kannu
-gh secret set APPLE_TEAM_ID --repo libinmv/kannu --body "S2WWHQQH2V"
-gh secret set APPLE_ID --repo libinmv/kannu
-gh secret set APPLE_NOTARIZATION_PASSWORD --repo libinmv/kannu
-gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo libinmv/kannu < ~/path/to/eddsa_private.key
+gh secret set APPLE_CERTIFICATE --repo YANC-Kannu/kannu-macos < <(base64 -i ~/path/to/cert.p12)
+gh secret set APPLE_CERTIFICATE_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set KEYCHAIN_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_TEAM_ID --repo YANC-Kannu/kannu-macos --body "S2WWHQQH2V"
+gh secret set APPLE_ID --repo YANC-Kannu/kannu-macos
+gh secret set APPLE_NOTARIZATION_PASSWORD --repo YANC-Kannu/kannu-macos
+gh secret set SPARKLE_EDDSA_PRIVATE_KEY --repo YANC-Kannu/kannu-macos < ~/path/to/eddsa_private.key
 ```
 
 ### Release day
@@ -92,7 +92,7 @@ Without `--publish` / `--push-appcast`, the script only builds `build/Kannu.<ver
 ### What the manual script does
 
 1. Verifies the exported app is code-signed
-2. Creates `build/Kannu.<version>.dmg` via [`create-dmg.sh`](create-dmg.sh)
+2. Creates `build/Kannu.<version>.dmg` via [`create-dmg.sh`](create-dmg.sh), with a temporary `dmgbuild` venv (needs Python 3.10+)
 3. Sparkle-signs the DMG and merges [`Updates/appcast.xml`](../Updates/appcast.xml) via [`export-sparkle-update.sh`](export-sparkle-update.sh)
 4. Optionally runs `gh release create` and pushes the appcast to `main`
 
@@ -109,18 +109,49 @@ and in the GitHub release title (`Kannu 1.3.0 — Heimdall`). The list, in order
 |---|---|
 | 1.2.0 | Argus |
 | 1.3.0 | Heimdall |
-| next | Horus |
-| then | Vigil, Sentinel |
+| 2.0.0 | Horus |
+| next | Vigil |
+| then | Sentinel |
 
 Pick the next name for what the release actually does, not just for its turn in the list — the list
 is the shortlist, not a queue. Argus, all eyes, suited a release that only watched; Heimdall, who
-keeps watch at Bifröst and refuses passage, suited the one that added the agent policy. If a release
-does not fit the next name on the list, take one further down or add a watcher to it.
+keeps watch at Bifröst and refuses passage, suited the one that added the agent policy; Horus, one
+eye, suited 2.0's one-eye logo and a notch that closes like an eye. If a release does not fit the
+next name on the list, take one further down or add a watcher to it.
 
 The name lives in one place: `ReleaseInfo.codename` in `Kannu/models/Constants.swift`. Both release
 paths grep that line for the title, so bump it there and nowhere else. 1.0.0 shipped as "Fiji", the
 last of the island names inherited from Atoll (Maldives → Bora Bora → Seychelles → Fiji); that chain
 is not continued.
+
+## The install window
+
+Opening the DMG shows a paper-coloured window with the app icon, an arrow and the Applications folder.
+[`create-dmg.sh`](create-dmg.sh) builds it with [`dmgbuild`](https://dmgbuild.readthedocs.io), using the
+layout in [`dmg-settings.py`](dmg-settings.py). `dmgbuild` writes that layout straight into the volume's
+`.DS_Store`, so there is no Finder scripting, no window on the build machine and no Automation prompt,
+which is what lets it run the same on CI.
+
+`dmgbuild` is a build-time tool and nothing of it ships in the app. [`dmg-requirements.txt`](dmg-requirements.txt)
+pins it and its two dependencies by hash, and [`install-dmgbuild.sh`](install-dmgbuild.sh) installs those
+wheels into a temporary venv. It needs Python 3.10 or newer, which `/usr/bin/python3` is not: the release
+workflow sets up its own, and a local build needs one on `PATH` (`brew install python`).
+`build-dmg.sh`, `manual-release.sh` and the release workflow all set up the venv themselves; calling
+`create-dmg.sh` directly needs `dmgbuild` on `PATH` first, and says how if it is not.
+
+The app icon, the `logo2` image, `.github/assets/kannu-logo.png`, the volume icon and the window's
+background are all drawn by one script, and the outputs are committed:
+
+```bash
+swift scripts/brand/generate-brand-assets.swift
+```
+
+If you move the icons, change `InstallWindow` in that script and `icon_locations` and `window_rect` in
+`dmg-settings.py` together: the script draws the heading and arrow around those positions. Instrument
+Serif is under the SIL Open Font License ([`brand/OFL.txt`](brand/OFL.txt)), and only the generator reads it.
+
+To read a built DMG's layout without opening a window, attach it with `hdiutil attach -nobrowse` and read
+the volume's `.DS_Store` with the `ds_store` package from that venv.
 
 ## Verify signing
 
@@ -141,6 +172,8 @@ CI pipeline: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 
 Scripts:
 
+- [`create-dmg.sh`](create-dmg.sh) — styled DMG via `dmgbuild` and [`dmg-settings.py`](dmg-settings.py), then signs it
+- [`install-dmgbuild.sh`](install-dmgbuild.sh) — pinned `dmgbuild` into a temporary venv
 - [`notarize-dmg.sh`](notarize-dmg.sh) — `notarytool submit` + staple
 - [`export-sparkle-update.sh`](export-sparkle-update.sh) — Sparkle-sign DMG + appcast
 - [`manual-release.sh`](manual-release.sh) — local release helper

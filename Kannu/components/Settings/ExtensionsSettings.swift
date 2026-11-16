@@ -40,7 +40,7 @@ struct ExtensionsSettingsView: View {
     }
     
     var body: some View {
-        Form {
+        SettingsPage {
             globalTogglesSection
             
             if authManager.isExtensionsFeatureEnabled {
@@ -48,7 +48,7 @@ struct ExtensionsSettingsView: View {
             }
         }
         .navigationTitle("Extensions")
-        .alert("Remove Extension", isPresented: $showingRemoveConfirmation, presenting: selectedEntry) { entry in
+        .alert("Remove extension", isPresented: $showingRemoveConfirmation, presenting: selectedEntry) { entry in
             Button("Cancel", role: .cancel) { }
             Button("Remove", role: .destructive) {
                 authManager.removeEntry(bundleIdentifier: entry.bundleIdentifier)
@@ -60,7 +60,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var globalTogglesSection: some View {
-        Section {
+        SettingsSection {
             Defaults.Toggle(String(localized:"Enable third-party extensions"), key: .enableThirdPartyExtensions)
                 .settingsHighlight(id: highlightID("Enable third-party extensions"))
             
@@ -78,7 +78,6 @@ struct ExtensionsSettingsView: View {
                 if Defaults[.enableExtensionNotchExperiences] {
                     // One row each; they used to share a single packed row.
                     Defaults.Toggle(String(localized:"Show extension tabs"), key: .enableExtensionNotchTabs)
-                    Defaults.Toggle(String(localized:"Allow minimalistic overrides"), key: .enableExtensionNotchMinimalisticOverrides)
                     Defaults.Toggle(String(localized:"Allow interactive web content"), key: .enableExtensionNotchInteractiveWebViews)
                 }
                 
@@ -86,7 +85,7 @@ struct ExtensionsSettingsView: View {
                     .settingsHighlight(id: highlightID("Enable extension diagnostics logging"))
             }
         } header: {
-            SettingsSectionHeader("Global Settings")
+            SettingsSectionHeader("Global settings")
         } footer: {
             if Defaults[.enableThirdPartyExtensions] {
                 SettingsFooter("Third-party apps using Extension Kit can display live activities, lock screen widgets, and dedicated notch experiences. Toggle features above or manage individual app permissions below.")
@@ -97,7 +96,7 @@ struct ExtensionsSettingsView: View {
     }
     
     private var authorizedAppsSection: some View {
-        Section {
+        SettingsSection {
             if authManager.entries.isEmpty {
                 // An empty state is a card, not a row: it is the one place in this section that
                 // may pad and centre itself.
@@ -107,21 +106,25 @@ struct ExtensionsSettingsView: View {
                         .foregroundStyle(.secondary.opacity(0.5))
                         .accessibilityHidden(true)
 
+                    // An empty state's type, as on Agents: its title a card title, its line the body's size.
                     Text("No extensions yet")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(SettingsTheme.cardTitle)
+                        .foregroundStyle(SettingsTheme.ink)
                         .textSelection(.enabled)
 
                     Text("Apps using Extension Kit will appear here once they request permission")
-                        .settingsDescriptionStyle()
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
                 if authManager.entries.count > 3 {
-                    TextField("Search extensions...", text: $searchText)
-                        .textFieldStyle(.roundedBorder)
+                    TextField("Search extensions...", text: $searchText, prompt: Text("Search extensions..."))
+                        .settingsField()
                 }
                 
                 ForEach(filteredEntries) { entry in
@@ -133,7 +136,7 @@ struct ExtensionsSettingsView: View {
             }
         } header: {
             HStack {
-                SettingsSectionHeader("App Permissions")
+                SettingsSectionHeader("App permissions")
                 Spacer()
                 if !authManager.entries.isEmpty {
                     Text("\(authManager.entries.count) \(authManager.entries.count == 1 ? "app" : "apps")")
@@ -144,7 +147,7 @@ struct ExtensionsSettingsView: View {
         } footer: {
             if !authManager.entries.isEmpty {
                 SettingsFooterStack {
-                    Text("Permission States:")
+                    Text("Permission states")
                         .font(.subheadline.weight(.semibold))
 
                     HStack(spacing: 16) {
@@ -253,7 +256,7 @@ private struct ExtensionEntryRow: View {
             // Status info
             VStack(alignment: .leading, spacing: SettingsMetrics.footerStack) {
                 HStack(spacing: SettingsMetrics.rowContent) {
-                    Text("Status:")
+                    Text("Status")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -272,12 +275,12 @@ private struct ExtensionEntryRow: View {
                 }
                 
                 if let lastActivity = entry.lastActivityAt {
-                    infoRow(label: "Last Activity", value: formatDate(lastActivity))
+                    infoRow(label: "Last activity", value: formatDate(lastActivity))
                 }
                 
                 if let deniedReason = entry.lastDeniedReason {
                     VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                        Text("Last Denied Reason:")
+                        Text("Last denied reason")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .textSelection(.enabled)
@@ -304,19 +307,17 @@ private struct ExtensionEntryRow: View {
             // Actions
             actionButtons
         }
-        .padding(SettingsMetrics.cardPadding)
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .settingsCalloutCard()
     }
     
     private var scopeToggles: some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text("Allowed Features")
+            Text("Allowed features")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
             
-            Toggle("Live Activities", isOn: Binding(
+            Toggle("Live activities", isOn: Binding(
                 get: { entry.allowedScopes.contains(.liveActivities) },
                 set: { enabled in
                     var newScopes = entry.allowedScopes
@@ -330,7 +331,7 @@ private struct ExtensionEntryRow: View {
             ))
             .disabled(!authManager.areLiveActivitiesEnabled)
             
-            Toggle("Lock Screen Widgets", isOn: Binding(
+            Toggle("Lock screen widgets", isOn: Binding(
                 get: { entry.allowedScopes.contains(.lockScreenWidgets) },
                 set: { enabled in
                     var newScopes = entry.allowedScopes
@@ -344,7 +345,7 @@ private struct ExtensionEntryRow: View {
             ))
             .disabled(!authManager.areLockScreenWidgetsEnabled)
 
-            Toggle("Notch Experiences", isOn: Binding(
+            Toggle("Notch experiences", isOn: Binding(
                 get: { entry.allowedScopes.contains(.notchExperiences) },
                 set: { enabled in
                     var newScopes = entry.allowedScopes
@@ -362,7 +363,7 @@ private struct ExtensionEntryRow: View {
     
     private func rateLimitInfo(record: ExtensionRateLimitRecord) -> some View {
         VStack(alignment: .leading, spacing: SettingsMetrics.rowContent) {
-            Text("Recent Activity (last 5 minutes)")
+            Text("Recent activity (last 5 minutes)")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
@@ -370,7 +371,7 @@ private struct ExtensionEntryRow: View {
             HStack(spacing: 20) {
                 if !record.activityTimestamps.isEmpty {
                     VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                        Text("Live Activities")
+                        Text("Live activities")
                             .settingsDescriptionStyle()
                         Text("\(record.activityTimestamps.count)")
                             .font(.subheadline.monospacedDigit())
@@ -380,7 +381,7 @@ private struct ExtensionEntryRow: View {
                 
                 if !record.widgetTimestamps.isEmpty {
                     VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                        Text("Widget Updates")
+                        Text("Widget updates")
                             .settingsDescriptionStyle()
                         Text("\(record.widgetTimestamps.count)")
                             .font(.subheadline.monospacedDigit())
@@ -390,7 +391,7 @@ private struct ExtensionEntryRow: View {
 
                 if !record.notchExperienceTimestamps.isEmpty {
                     VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                        Text("Notch Experiences")
+                        Text("Notch experiences")
                             .settingsDescriptionStyle()
                         Text("\(record.notchExperienceTimestamps.count)")
                             .font(.subheadline.monospacedDigit())
@@ -399,10 +400,9 @@ private struct ExtensionEntryRow: View {
                 }
             }
             
-            Button("Reset Rate Limits") {
+            Button("Reset rate limits") {
                 authManager.resetRateLimits(for: entry.bundleIdentifier)
             }
-            .buttonStyle(.bordered)
             .controlSize(.small)
         }
     }
@@ -411,31 +411,27 @@ private struct ExtensionEntryRow: View {
         HStack(spacing: SettingsMetrics.rowContent) {
             switch entry.status {
             case .pending:
+                // The standard style: a card's buttons are never `.primary` (docs/SETTINGS.md).
                 Button("Authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 
                 Button("Deny") {
                     authManager.deny(bundleIdentifier: entry.bundleIdentifier, reason: "Denied by user")
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
                 
             case .authorized:
-                Button("Revoke Access") {
+                Button("Revoke access", role: .destructive) {
                     authManager.revoke(bundleIdentifier: entry.bundleIdentifier, reason: "Revoked by user")
                 }
-                .buttonStyle(.bordered)
                 .controlSize(.small)
-                .tint(.orange)
                 
             case .denied, .revoked:
                 Button("Re-authorize") {
                     authManager.authorize(bundleIdentifier: entry.bundleIdentifier, appName: entry.appName)
                 }
-                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
             
@@ -443,35 +439,40 @@ private struct ExtensionEntryRow: View {
             
             resetMenu
 
-            Button("Remove") {
+            Button("Remove", role: .destructive) {
                 onRemove()
             }
-            .buttonStyle(.bordered)
             .controlSize(.small)
-            .tint(.red)
         }
     }
 
     private var resetMenu: some View {
         Menu {
-            Button("Reset Live Activities") {
+            Button("Reset live activities") {
                 liveActivityManager.dismissAll(for: entry.bundleIdentifier)
             }
             .disabled(!hasLiveActivities)
 
-            Button("Reset Lock Screen Widgets") {
+            Button("Reset lock screen widgets") {
                 widgetManager.dismissAll(for: entry.bundleIdentifier)
             }
             .disabled(!hasWidgets)
 
-            Button("Reset Notch Experiences") {
+            Button("Reset notch experiences") {
                 notchExperienceManager.dismissAll(for: entry.bundleIdentifier)
             }
             .disabled(!hasNotchExperiences)
         } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise.circle")
+            // Our button takes the native indicator away, so the label draws its own chevron.
+            HStack(spacing: SettingsMetrics.iconGap) {
+                Label("Reset", systemImage: "arrow.counterclockwise.circle")
+                Image(systemName: "chevron.down")
+                    .accessibilityHidden(true)
+            }
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(SettingsButtonStyle())
+        .menuIndicator(.hidden)
         .controlSize(.small)
     }
 
@@ -524,13 +525,13 @@ extension ExtensionsSettingsView {
                                         status: .denied, grantedAt: granted,
                                         lastDeniedReason: "Asked for lock screen widgets 40 times in five minutes."),
         ]
-        return AnyView(Form {
-            Section {
+        return AnyView(SettingsPage {
+            SettingsSection {
                 ForEach(entries) { entry in
                     ExtensionEntryRow(entry: entry, onRemove: {}, initiallyExpanded: entry.status == .denied)
                 }
             } header: {
-                SettingsSectionHeader("App Permissions")
+                SettingsSectionHeader("App permissions")
             }
         })
     }
