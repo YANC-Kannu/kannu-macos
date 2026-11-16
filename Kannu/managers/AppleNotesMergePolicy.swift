@@ -104,6 +104,9 @@ enum AppleNotesMergePolicy {
     ///   `dropMissing` says it goes regardless (a note made in Notes, outside a folder-only sync's
     ///   folder: the setting says its copy leaves, and an edit is pushed to Notes as it is made).
     /// - Notes the sync imported, and notes created meanwhile, are kept.
+    /// - A note not edited since the snapshot takes the synced copy, through `carry`, which brings over
+    ///   what Kannu changes without touching the date (tags and pins): set while the sync ran, they
+    ///   would otherwise be put back to the snapshot's.
     static func reconcile<Note>(
         current: [Note],
         merged: [Note],
@@ -111,7 +114,8 @@ enum AppleNotesMergePolicy {
         id: (Note) -> UUID,
         modified: (Note) -> Date,
         keep: (_ current: Note, _ merged: Note) -> Note,
-        dropMissing: (_ current: Note) -> Bool = { _ in false }
+        dropMissing: (_ current: Note) -> Bool = { _ in false },
+        carry: (_ current: Note, _ merged: Note) -> Note = { _, merged in merged }
     ) -> [Note] {
         let currentById = Dictionary(current.map { (id($0), $0) }, uniquingKeysWith: { first, _ in first })
         let mergedIds = Set(merged.map(id))
@@ -124,7 +128,7 @@ enum AppleNotesMergePolicy {
                 continue
             }
             guard let now = currentById[noteId] else { continue }
-            result.append(modified(now) == before ? note : keep(now, note))
+            result.append(modified(now) == before ? carry(now, note) : keep(now, note))
         }
         for note in current where !mergedIds.contains(id(note)) {
             if dropMissing(note) { continue }

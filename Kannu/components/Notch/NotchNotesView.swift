@@ -30,6 +30,8 @@ struct NotchNotesView: View {
     @Default(.enableAppleNotesSync) var enableAppleNotesSync
     @Default(.appleNotesSyncScope) var appleNotesSyncScope
     @Default(.enableWisprFlowMeetings) var enableWisprFlowMeetings
+    @Default(.wisprMeetingTags) var wisprMeetingTags
+    @Default(.enableNoteColorFiltering) var enableNoteColorFiltering
     @ObservedObject private var wisprMeetings = WisprFlowMeetingsManager.shared
 
     @State private var selectedNoteId: UUID?
@@ -46,6 +48,15 @@ struct NotchNotesView: View {
     @State private var editorNoteId: UUID?
     /// Made from the clipboard and not saved yet: no autosave, and leaving drops it.
     @State private var editorIsDraft = false
+    /// The open note's tags (`NoteTagsRow`), written as they are edited, never as a note opens.
+    @State private var editorTags: [String] = []
+    /// What is typed in "Add tag" and not added yet: Done, back and the notch closing add it.
+    @State private var editorTagDraft = ""
+    /// Where the open note's tags are kept, decided as it opens: a saved (or about to be saved) note,
+    /// or a Wispr Flow meeting by its meeting id.
+    @State private var editorTagTarget: TagTarget = .note(UUID())
+    /// The title as the note opened: a `#word` already in it stays in the title (`takeTitleTags`).
+    @State private var editorTitleAtOpen = ""
     @State private var autoSaveTask: Task<Void, Never>?
     @State private var scrollSuppressionToken = UUID()
     @State private var isSuppressingScroll = false
@@ -83,12 +94,18 @@ struct NotchNotesView: View {
                             onOpenInNotes: openEditorNoteInNotes,
                             onDelete: editorStoredNote == nil ? nil : deleteEditorNote,
                             deletesInAppleNotes: editorIsReadOnly && !editorIsWisprMeeting,
-                            opensInWisprFlow: editorIsWisprMeeting
+                            opensInWisprFlow: editorIsWisprMeeting,
+                            tags: editorTags,
+                            tagDraft: $editorTagDraft,
+                            onTagsEdited: tagsEdited,
+                            onCommitTitle: takeTitleTags
                         )
                         .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
                     } else {
                         NoteListView(
                             notes: listNotes,
+                            // Beside the clipboard a card's title has no room to share with a chip.
+                            showsCardTags: !showSplitView,
                             onSelect: selectNote,
                             onCreate: createNote,
                             onDeleteItem: { NotesManager.shared.delete($0) },
@@ -144,7 +161,9 @@ struct NotchNotesView: View {
             updateScrollSuppression(for: false)
             // The notch closing keeps an edit and drops a draft, as "< Notes" does.
             if isEditing && !editorIsDraft {
+                commitTagEdits()
                 persistNote()
+                keepNewNoteInView()
             }
             coordinator.notesLayoutState = .list
         }
@@ -166,7 +185,13 @@ struct NotchNotesView: View {
         .onChange(of: editorContent) { _, _ in
             scheduleAutoSave()
         }
-        .onChange(of: editorTitle) { _, _ in
+        .onChange(of: editorTitle) { previous, title in
+            // A `#word` leaves the title for the tags once a space typed at the end ends it. Only a space
+            // just added at the end: a title that merely ends in one must not take a `#` typed elsewhere
+            // in it, or the half-typed word after it.
+            if title.count == previous.count + 1, title.hasPrefix(previous), let last = title.last, last.isWhitespace {
+                takeTitleTags()
+            }
             scheduleAutoSave()
         }
         .onChange(of: editorColorIndex) { _, _ in
@@ -178,10 +203,78 @@ struct NotchNotesView: View {
 
     private var isEditing: Bool { isEditingNewNote || selectedNoteId != nil }
 
-    /// Kannu's notes, then Wispr Flow's meeting summaries while that setting is on. Only the list
-    /// sees the meetings: every write below goes to `savedNotes` through `NotesManager`.
+    /// Kannu's notes, then Wispr Flow's meeting summaries while that setting is on, each with the tags
+    /// Kannu keeps for it by meeting id. Only the list sees the meetings: every write below goes through
+    /// `NotesManager`.
     private var listNotes: [NoteItem] {
-        enableWisprFlowMeetings ? savedNotes + wisprMeetings.notes : savedNotes
+        guard enableWisprFlowMeetings else { return savedNotes }
+        return savedNotes + wisprMeetings.notes.map { meeting in
+            var tagged = meeting
+            tagged.tags = wisprMeetingTags[meeting.wisprMeetingId ?? ""] ?? []
+            return tagged
+        }
+    }
+
+    /// Where an open note's tags go.
+    private enum TagTarget: Equatable {
+        /// A note in `savedNotes`, or one about to be: `setTags` waits for its first save.
+        case note(UUID)
+        /// A Wispr Flow meeting, by its meeting id (`wisprMeetingTags`).
+        case meeting(String)
+    }
+
+    /// The notch filter as it applies now, for what "+" starts a note with.
+    private var effectiveFilter: NoteFilter {
+        NoteFilter.stored.effective(offering: NoteFilter.sourceChoices(listNotes.map(\.filterFacets)),
+                                    colorFiltering: enableNoteColorFiltering)
+    }
+
+    /// A tag added or removed in the editor, kept at once where the open note's tags live.
+    private func tagsEdited(_ tags: [String]) {
+        editorTags = tags
+        switch editorTagTarget {
+        case .note(let id): NotesManager.shared.setTags(tags, forNote: id)
+        case .meeting(let meetingId): NotesManager.shared.setTags(tags, forWisprMeeting: meetingId)
+        }
+    }
+
+    /// What "Add tag" still holds, added as Return would add it, so leaving the editor never loses it.
+    private func commitPendingTag() {
+        let typed = editorTagDraft
+        editorTagDraft = ""
+        guard TaskTagEditing.cleaned(typed) != nil else { return }
+        let suggestions = TaskTagEditing.suggestions(for: typed, existing: SharedTags.inUse(), current: editorTags)
+        guard let pick = TaskTagEditing.returnPick(for: typed, in: suggestions) else { return }
+        tagsEdited(TaskTagEditing.adding(pick.tag, to: editorTags))
+    }
+
+    /// `#word`s typed into the title since the note opened become tags (`TaskQuickAdd.takingNewTags`):
+    /// a space after one, Return, leaving the title, Done, back and the notch closing. Never from the
+    /// autosave, which would take "#ac" half typed, and never on a read-only note, whose title is not
+    /// a field. A word the title had when it opened stays: Apple Notes' own `#tag`s survive a sync.
+    private func takeTitleTags() {
+        guard isEditing, !editorIsReadOnly else { return }
+        let taken = TaskQuickAdd.takingNewTags(from: editorTitle, openedWith: editorTitleAtOpen,
+                                               room: TaskItem.maxTags - editorTags.count)
+        guard !taken.tags.isEmpty else { return }
+        editorTitle = taken.title
+        tagsEdited(TaskItem.cleanedTags(editorTags + taken.tags))
+    }
+
+    /// Both before a save: the title's `#word`s, then a tag still being typed.
+    private func commitTagEdits() {
+        takeTitleTags()
+        commitPendingTag()
+    }
+
+    /// A note just made never vanishes from the list it was made in: each part of the notch filter it
+    /// fails is cleared (`NoteFilter.keeping`). Only for a new note that was saved; not on delete.
+    private func keepNewNoteInView() {
+        guard isEditingNewNote, let id = editorNoteId, Defaults[.savedNotes].contains(where: { $0.id == id }) else { return }
+        let made = NoteFilter.Facets(source: .kannu, tags: editorTags, colorIndex: editorColorIndex)
+        // Only parts that apply now: a colour kept while colour filtering is off, or a source not offered,
+        // hides nothing, so it stays for when it does.
+        NoteFilter.stored = NoteFilter.stored.keeping(made, activeAs: effectiveFilter)
     }
 
     /// The open note is a Wispr Flow meeting, or was made in Notes while sync reads the whole
@@ -216,8 +309,15 @@ struct NotchNotesView: View {
     }
 
     private func handlePaste() {
-        guard !editorIsReadOnly else { return }
         let pasteboard = NSPasteboard.general
+        // A read-only note's text and image are not edited here, but its tags are: text goes to the
+        // field that has focus ("Add tag"), and nothing else is taken.
+        if editorIsReadOnly {
+            if pasteboard.string(forType: .string) != nil {
+                NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+            }
+            return
+        }
         
         // Check for file URLs first (higher quality source than icons)
         if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: nil) as? [URL] {
@@ -271,10 +371,11 @@ struct NotchNotesView: View {
         editorTitle = ""
         editorContent = content
         editorImageData = imageData
-        editorColorIndex = 0
+        editorColorIndex = effectiveFilter.newNoteColorIndex ?? 0
         editorNoteId = UUID()
         editorIsDraft = true
         editorIsWisprMeeting = false
+        openTags(of: nil)
         isEditingNewNote = true
     }
     
@@ -282,10 +383,11 @@ struct NotchNotesView: View {
         editorTitle = ""
         editorContent = ""
         editorImageData = nil
-        editorColorIndex = 0 // Default Yellow
+        editorColorIndex = effectiveFilter.newNoteColorIndex ?? 0 // Yellow, or the colour filtered on
         editorNoteId = UUID()
         editorIsDraft = false
         editorIsWisprMeeting = false
+        openTags(of: nil)
         isEditingNewNote = true
     }
     
@@ -297,8 +399,23 @@ struct NotchNotesView: View {
         editorNoteId = note.id
         editorIsDraft = false
         editorIsWisprMeeting = note.isWisprMeeting
+        openTags(of: note)
         selectedNoteId = note.id
         isEditingNewNote = false
+    }
+
+    /// The tag state for a note opening, `nil` for a new one: it starts with the tag filtered on, so it
+    /// is listed. Writes nothing: only an edit does (`tagsEdited`).
+    private func openTags(of note: NoteItem?) {
+        editorTagDraft = ""
+        editorTitleAtOpen = note?.title ?? ""
+        if let note {
+            editorTags = note.tags
+            editorTagTarget = note.wisprMeetingId.map(TagTarget.meeting) ?? .note(note.id)
+        } else {
+            editorTags = effectiveFilter.newNoteTags
+            editorTagTarget = .note(editorNoteId ?? UUID())
+        }
     }
 
     /// Saves the editor's note. `NotesManager` writes nothing when nothing changed, so opening a note
@@ -313,6 +430,8 @@ struct NotchNotesView: View {
             imageData: editorImageData,
             colorIndex: editorColorIndex
         ))
+        // A new note's tags, once its first save has made it; no change for one already saved.
+        NotesManager.shared.setTags(editorTags, forNote: id)
     }
 
     private func scheduleAutoSave() {
@@ -330,14 +449,18 @@ struct NotchNotesView: View {
 
     /// Done: the one way a draft is saved.
     private func saveNote() {
+        commitTagEdits()
         persistNote()
+        keepNewNoteInView()
         closeEditor()
     }
 
     /// "< Notes": an edit is kept, a draft is dropped.
     private func cancelEdit() {
         if !editorIsDraft {
+            commitTagEdits()
             persistNote()
+            keepNewNoteInView()
         }
         closeEditor()
     }
@@ -598,6 +721,8 @@ struct NoteListView: View {
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject private var appleNotesSync = AppleNotesSyncManager.shared
     let notes: [NoteItem]
+    /// Cards show "#first +N" after the title; not in split view, where a card is too narrow.
+    var showsCardTags = true
     let onSelect: (NoteItem) -> Void
     let onCreate: () -> Void
     let onDeleteItem: (NoteItem) -> Void
@@ -611,25 +736,35 @@ struct NoteListView: View {
     @Default(.enableCreateFromClipboard) var enableCreateFromClipboard
     @Default(.enableAppleNotesSync) var enableAppleNotesSync
     @Default(.appleNotesSyncScope) var appleNotesSyncScope
+    /// The filter, kept so the list comes back filtered after a note, a close or a relaunch (`NoteFilter`).
+    @Default(.notesNotchSourceFilter) var sourceFilter
+    @Default(.notesNotchTagFilter) var tagFilter
+    @Default(.notesNotchColorFilter) var colorFilter
     
     @State private var searchText = ""
-    @State private var selectedColorFilter: Int? = nil
     @State private var isSearchExpanded = false
     @State private var suppressionToken = UUID()
     @State private var isSuppressing = false
     @State private var showClearNotesAlert = false
     @State private var autoCloseToken = UUID()
 
-    var sortedNotes: [NoteItem] {
-        var filtered = searchText.isEmpty ? notes : notes.filter { 
+    /// What the filter reads from each listed note, once per redraw.
+    private var facets: [NoteFilter.Facets] { notes.map(\.filterFacets) }
+
+    /// The kept filter as it applies now: a source not offered is every source, and the colour sleeps
+    /// while colour filtering is off (`NoteFilter.effective`).
+    private func effective(offering sources: [NoteSource]) -> NoteFilter {
+        NoteFilter(source: sourceFilter, tag: tagFilter, colorIndex: colorFilter)
+            .effective(offering: sources, colorFiltering: enableNoteColorFiltering)
+    }
+
+    func sortedNotes(_ filter: NoteFilter) -> [NoteItem] {
+        let searched = searchText.isEmpty ? notes : notes.filter { 
             $0.title.localizedCaseInsensitiveContains(searchText) || 
             $0.content.localizedCaseInsensitiveContains(searchText)
         }
-        
-        if let colorIndex = selectedColorFilter {
-            // A Wispr Flow meeting has no colour of its own, so no colour filter shows it.
-            filtered = filtered.filter { !$0.isWisprMeeting && $0.colorIndex == colorIndex }
-        }
+        // A Wispr Flow meeting has no colour of its own, so no colour filter shows it.
+        let filtered = filter.isNarrowing ? searched.filter { filter.matches($0.filterFacets) } : searched
         
         return filtered.sorted { 
             if $0.isPinned != $1.isPinned {
@@ -642,13 +777,49 @@ struct NoteListView: View {
     /// The notes stored in Kannu: what Clear Notes reaches. Wispr Flow's meetings are only shown.
     private var storedNotes: [NoteItem] { notes.filter { !$0.isWisprMeeting } }
 
-    /// The magnifying glass opens search and/or the colour filter, whichever is enabled.
-    private var searchToggleTooltip: String {
-        enableNoteSearch ? String(localized: "Search Notes") : String(localized: "Filter Notes")
+    /// The note's tags for its card, the one filtered on first, so the chip shown is that tag.
+    private func chipTags(_ note: NoteItem, _ filter: NoteFilter) -> [String] {
+        filter.tag == TaskFacets.anyTag ? note.tags : TaskTagEditing.movingToFront(filter.tag, in: note.tags)
+    }
+
+    /// Show all: every source, tag and colour.
+    private func showAll() {
+        NoteFilter.stored = .all
+    }
+
+    /// "Filtered · Show all", while the filter narrows the list, so nothing seems missing (the Tasks
+    /// popover's line). On its own line: in split view the header has no room for it.
+    private var filteredLine: some View {
+        HStack(spacing: 4) {
+            Text("Filtered")
+                .foregroundStyle(.secondary)
+            Text(verbatim: "·")
+                .foregroundStyle(.secondary)
+            Button(String(localized: "Show all"), action: showAll)
+                .buttonStyle(.link)
+            Spacer(minLength: 0)
+        }
+        .font(SettingsTheme.font(size: 11, weight: .medium))
+    }
+
+    /// Why the list is empty: no notes at all, a search, or the filter.
+    private func emptyState(_ filter: NoteFilter) -> (symbol: String, text: String) {
+        if notes.isEmpty { return ("note.text", String(localized: "No notes yet")) }
+        if !searchText.isEmpty { return ("magnifyingglass", String(localized: "No results found")) }
+        if filter.isNarrowing { return ("line.3.horizontal.decrease", String(localized: "No notes match the filter")) }
+        return ("note.text", String(localized: "No notes yet"))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let facets = facets
+        let sources = NoteFilter.sourceChoices(facets)
+        let filter = effective(offering: sources)
+        let tagChoices = filter.tagChoices(facets)
+        let sortedNotes = sortedNotes(filter)
+        // Something to pick, or a filter to clear.
+        let showsFilterMenu = !sources.isEmpty || !tagChoices.isEmpty
+            || (enableNoteColorFiltering && !notes.isEmpty) || filter.isNarrowing
+        return VStack(spacing: 0) {
             // Header. The "+" is the panel's one filled control and stands alone at the header's right end, the
             // top-right power point of the panel's golden triangle; the rest are plain glyphs grouped before it, and
             // nothing in the header is red or yellow, which in the notch mean an agent stopped or needs input.
@@ -682,7 +853,21 @@ struct NoteListView: View {
                 Spacer()
 
                 HStack(spacing: 2) {
-                    if enableNoteSearch || enableNoteColorFiltering {
+                    // First: it comes and goes, and pushes nothing to its right.
+                    if showsFilterMenu {
+                        NoteFilterMenu(
+                            sources: sources,
+                            tags: tagChoices,
+                            showsColors: enableNoteColorFiltering,
+                            isNarrowing: filter.isNarrowing,
+                            source: Binding(get: { filter.source }, set: { sourceFilter = $0 }),
+                            tag: Binding(get: { filter.tag }, set: { tagFilter = $0 }),
+                            colorIndex: Binding(get: { filter.colorIndex }, set: { colorFilter = $0 }),
+                            showAll: showAll
+                        )
+                    }
+
+                    if enableNoteSearch {
                         Button(action: {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 isSearchExpanded.toggle()
@@ -692,8 +877,8 @@ struct NoteListView: View {
                                         tint: isSearchExpanded ? SettingsTheme.accent : nil)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .hoverTooltip(searchToggleTooltip, edge: .below)
-                        .accessibilityLabel(searchToggleTooltip)
+                        .hoverTooltip(String(localized: "Search Notes"), edge: .below)
+                        .accessibilityLabel(String(localized: "Search Notes"))
                     }
 
                     if enableCreateFromClipboard {
@@ -734,6 +919,12 @@ struct NoteListView: View {
             .padding(.top, 8)
             .padding(.bottom, isSearchExpanded ? 4 : 2)
 
+            if filter.isNarrowing {
+                filteredLine
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+            }
+
             if isSearchExpanded {
                 VStack(spacing: 6) {
                     if enableNoteSearch && !notes.isEmpty {
@@ -761,59 +952,19 @@ struct NoteListView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                         .padding(.horizontal, 16)
                     }
-                    
-                    if enableNoteColorFiltering && !notes.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) { // Reduced from 8
-                                Button(action: { selectedColorFilter = nil }) {
-                                    Text("All")
-                                        .font(SettingsTheme.font(size: 10, weight: .medium))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 3)
-                                        .background(selectedColorFilter == nil ? Color.blue.opacity(0.3) : notchForeground.opacity(0.1))
-                                        .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                
-                                ForEach(0..<NoteItem.colors.count, id: \.self) { index in
-                                    Circle()
-                                        .fill(NoteItem.colors[index])
-                                        .frame(width: 14, height: 14)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(notchForeground, lineWidth: selectedColorFilter == index ? 2 : 0)
-                                                .padding(-2)
-                                        )
-                                        .onTapGesture {
-                                            withAnimation {
-                                                selectedColorFilter = (selectedColorFilter == index) ? nil : index
-                                            }
-                                        }
-                                        // `.above`: an earlier sibling in the VStack draws
-                                        // underneath, while the notes grid below draws on top.
-                                        .hoverTooltip(NoteItem.colorNames[index], edge: .above)
-                                        .accessibilityLabel(NoteItem.colorNames[index])
-                                        .accessibilityAddTraits(.isButton)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                        // A ScrollView clips both axes; without this the bubble is swallowed.
-                        // The row is ~150pt against its 160pt maximum, so nothing scrolls today.
-                        .scrollClipDisabled()
-                    }
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .padding(.bottom, 10)
             }
             if sortedNotes.isEmpty {
+                let empty = emptyState(filter)
                 VStack {
                     Spacer()
                     HStack(spacing: 8) {
-                        Image(systemName: searchText.isEmpty ? "note.text" : "magnifyingglass")
+                        Image(systemName: empty.symbol)
                             .font(.system(size: 16))
                             .foregroundStyle(.secondary.opacity(0.4))
-                        Text(searchText.isEmpty ? "No notes yet" : "No results found")
+                        Text(empty.text)
                             .font(SettingsTheme.font(size: 12, weight: .medium))
                             .foregroundStyle(.secondary.opacity(0.8))
                     }
@@ -834,7 +985,8 @@ struct NoteListView: View {
                                     onDelete: { onDeleteItem(note) },
                                     onTogglePin: { onTogglePin(note) },
                                     isCompact: useGrid,
-                                    deletesInAppleNotes: note.isReadOnlyMirror(syncEnabled: enableAppleNotesSync, scope: appleNotesSyncScope)
+                                    deletesInAppleNotes: note.isReadOnlyMirror(syncEnabled: enableAppleNotesSync, scope: appleNotesSyncScope),
+                                    chipTags: showsCardTags ? chipTags(note, filter) : []
                                 )
                                 .contentShape(Rectangle())
                                 .onTapGesture {
@@ -919,6 +1071,10 @@ struct NoteRow: View {
     /// A note made in Notes and shown read-only: deleting it here sends it to Recently Deleted in
     /// Notes as well, so the trash asks first.
     var deletesInAppleNotes = false
+    /// The note's tags, in the order to show them (the one filtered on first): "#first +N" after the
+    /// title, which wins when the card is narrow (`TaskTagChips`). Neutral chips: the bar is the card's
+    /// one colour.
+    var chipTags: [String] = []
     @State private var confirmDelete = false
     /// Holds the notch open while the delete confirmation shows.
     @State private var autoCloseToken = UUID()
@@ -975,10 +1131,12 @@ struct NoteRow: View {
                                 .font(.system(size: isCompact ? 7 : 8))
                                 .foregroundStyle(notchForeground.opacity(0.55))
                         }
-                        Text(shownTitle)
-                            .font(SettingsTheme.font(size: isCompact ? 12 : 14, weight: .semibold))
-                            .foregroundStyle(notchForeground)
-                            .lineLimit(1)
+                        TaskTagChips(tags: chipTags) {
+                            Text(shownTitle)
+                                .font(SettingsTheme.font(size: isCompact ? 12 : 14, weight: .semibold))
+                                .foregroundStyle(notchForeground)
+                                .lineLimit(1)
+                        }
                     }
                     
                     Text(shownPreview.isEmpty ? String(localized: "No content") : shownPreview)
@@ -1176,11 +1334,18 @@ struct NoteEditorView: View {
     /// A Wispr Flow meeting's summary: read-only, and the open action goes to Wispr Flow instead of
     /// Notes. It has no colour of its own, so the colour picker is hidden.
     let opensInWisprFlow: Bool
+    /// The note's tags, and the row that edits them (`NoteTagsRow`); no row when `onTagsEdited` is nil.
+    let tags: [String]
+    @Binding var tagDraft: String
+    let onTagsEdited: (([String]) -> Void)?
+    /// Return in the title, or the title losing focus: its new `#word`s become tags.
+    let onCommitTitle: () -> Void
+    @FocusState private var isTitleFocused: Bool
     @State private var confirmDelete = false
     /// Holds the notch open while the delete confirmation shows.
     @State private var autoCloseToken = UUID()
 
-    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false, opensInWisprFlow: Bool = false) {
+    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false, opensInWisprFlow: Bool = false, tags: [String] = [], tagDraft: Binding<String> = .constant(""), onTagsEdited: (([String]) -> Void)? = nil, onCommitTitle: @escaping () -> Void = {}) {
         self._title = title
         self._content = content
         self._imageData = imageData
@@ -1193,6 +1358,10 @@ struct NoteEditorView: View {
         self.onDelete = onDelete
         self.deletesInAppleNotes = deletesInAppleNotes
         self.opensInWisprFlow = opensInWisprFlow
+        self.tags = tags
+        self._tagDraft = tagDraft
+        self.onTagsEdited = onTagsEdited
+        self.onCommitTitle = onCommitTitle
     }
 
     @FocusState private var isContentFocused: Bool
@@ -1252,8 +1421,10 @@ struct NoteEditorView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
             }
-            .padding(16)
-            
+            // 12 pt above and below, not 16: back some of the tag row's line for the text.
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+
             // Title & Color Picker Row
             HStack(alignment: .center, spacing: 12) {
                 if isReadOnly {
@@ -1265,6 +1436,11 @@ struct NoteEditorView: View {
                     TextField("Title", text: $title)
                         .font(SettingsTheme.font(size: 17, weight: .bold))
                         .textFieldStyle(.plain)
+                        .focused($isTitleFocused)
+                        .onSubmit(onCommitTitle)
+                        .onChange(of: isTitleFocused) { _, focused in
+                            if !focused { onCommitTitle() }
+                        }
                 }
                 
                 Spacer()
@@ -1305,8 +1481,14 @@ struct NoteEditorView: View {
             }
             .padding(.leading, 16)
             .padding(.trailing, 4)
-            .padding(.bottom, 8)
-            
+            .padding(.bottom, onTagsEdited == nil ? 8 : 4)
+
+            // The note's tags, one line: Kannu's alone, so a read-only note takes them too.
+            if let onTagsEdited {
+                NoteTagsRow(tags: tags, typed: $tagDraft, onEdit: onTagsEdited)
+                    .padding(.bottom, 6)
+            }
+
             Divider()
                 .background(editorForeground.opacity(0.1))
 

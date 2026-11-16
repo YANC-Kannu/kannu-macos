@@ -21,12 +21,17 @@ import XCTest
 /// Wispr Flow's meeting summaries are shown in the notch's Notes and never stored by Kannu: not in `savedNotes`, so
 /// never pushed to Apple Notes, never cleared by Clear Notes, never kept after Wispr deletes them. The notch's editor
 /// saves whatever note is open through `NotesManager.save`, which stores an id it does not know as a new note, so the
-/// guard has to be in the editor's save paths. Each rule is read from the source and checked against planted offenders.
+/// guard has to be in the editor's save paths. The one thing Kannu keeps about a meeting is its tags, by meeting id
+/// (`wisprMeetingTags`, 2026-11-16): a map of tags only, written by `NotesManager` alone, never by the meetings
+/// manager, and a meeting Wispr no longer lists offers its tags nowhere (`SharedTags.inUse`). Each rule is read from
+/// the source and checked against planted offenders.
 final class WisprMeetingsNeverStoredRulesTests: XCTestCase {
 
     private static let managerPath = "Kannu/managers/WisprFlowMeetingsManager.swift"
     private static let notchPath = "Kannu/components/Notch/NotchNotesView.swift"
     private static let modelPath = "Kannu/models/Constants.swift"
+    private static let notesManagerPath = "Kannu/managers/NotesManager.swift"
+    private static let tagsKeyLine = #"static let wisprMeetingTags = Key<[String: [String]]>("wisprMeetingTags", default: [:])"#
 
     private static func source(_ path: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
@@ -46,7 +51,7 @@ final class WisprMeetingsNeverStoredRulesTests: XCTestCase {
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
         var found: [String] = []
-        for name in ["savedNotes", "NotesManager", "AppleNotesSyncManager"] where code.contains(name) {
+        for name in ["savedNotes", "NotesManager", "AppleNotesSyncManager", "wisprMeetingTags"] where code.contains(name) {
             found.append("names \(name)")
         }
         if code.range(of: #"Defaults\[[^\]]+\]\s*=[^=]"#, options: .regularExpression) != nil {
@@ -90,12 +95,38 @@ final class WisprMeetingsNeverStoredRulesTests: XCTestCase {
         XCTAssertEqual(Self.modelViolations(try Self.source(Self.modelPath)), [])
     }
 
+    /// The meeting tags' key holds tags only, by meeting id: never a title or a summary.
+    func testTheMeetingTagsKeyHoldsTagsOnly() throws {
+        XCTAssertTrue(try Self.source(Self.modelPath).contains(Self.tagsKeyLine))
+    }
+
+    /// Only `NotesManager` writes the meeting tags, so the one write path stays one.
+    static func tagWriters(_ sources: [String: String]) -> [String] {
+        sources.filter { $0.value.contains("Defaults[.wisprMeetingTags] =") }.map(\.key).sorted()
+    }
+
+    func testOnlyTheNotesManagerWritesMeetingTags() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let kannu = root.appendingPathComponent("Kannu")
+        var sources: [String: String] = [:]
+        let files = FileManager.default.enumerator(at: kannu, includingPropertiesForKeys: nil)
+        while let url = files?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            sources[url.path.replacingOccurrences(of: root.path + "/", with: "")] = try String(contentsOf: url, encoding: .utf8)
+        }
+        XCTAssertGreaterThan(sources.count, 100, "the walk no longer reaches Kannu/")
+        XCTAssertEqual(Self.tagWriters(sources), [Self.notesManagerPath])
+        XCTAssertEqual(Self.tagWriters(sources.merging([Self.notchPath: "Defaults[.wisprMeetingTags] = [:]"]) { _, plant in plant }),
+                       [Self.notchPath, Self.notesManagerPath].sorted(), "a planted second writer is caught")
+    }
+
     // MARK: - Planted offenders
 
     func testPlantedOffendersAreCaught() throws {
         let manager = try Self.source(Self.managerPath)
         XCTAssertFalse(Self.managerViolations(manager + "\nfunc leak() { Defaults[.savedNotes] = [] }\n").isEmpty)
         XCTAssertFalse(Self.managerViolations(manager + "\nfunc leak() { NotesManager.shared.clearAll() }\n").isEmpty)
+        XCTAssertFalse(Self.managerViolations(manager + "\nfunc leak() { _ = Defaults[.wisprMeetingTags] }\n").isEmpty)
 
         let notch = try Self.source(Self.notchPath)
         let unguarded = notch.replacingOccurrences(of: "guard let id = editorNoteId, !editorIsWisprMeeting else { return }",
@@ -106,8 +137,9 @@ final class WisprMeetingsNeverStoredRulesTests: XCTestCase {
         XCTAssertFalse(Self.notchViolations(unmarked).isEmpty)
 
         let model = try Self.source(Self.modelPath)
-        let encoded = model.replacingOccurrences(of: "appleNotesSyncedAt, madeInAppleNotes\n",
-                                                 with: "appleNotesSyncedAt, madeInAppleNotes, wisprMeetingId\n")
+        // Anchored at the start of the case list, which stays put as fields are added at its end.
+        let encoded = model.replacingOccurrences(of: "case id, title, content, creationDate,",
+                                                 with: "case id, wisprMeetingId, title, content, creationDate,")
         XCTAssertNotEqual(encoded, model, "the planted offender must change the source")
         XCTAssertFalse(Self.modelViolations(encoded).isEmpty)
     }

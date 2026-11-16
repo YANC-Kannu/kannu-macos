@@ -54,6 +54,8 @@ final class NotchFontRulesTests: XCTestCase {
         // 18 symbols, two of them beside medium text (the back chevron, Open in Notes), one a Wispr Flow meeting's
         // waveform, one the header's plain glyphs (`headerGlyph`); the character count, monospaced
         "NotchNotesView.swift": 19,
+        "NoteFilterMenu.swift": 1,           // a symbol: the filter's glyph, beside the header's other glyphs
+        "NoteTagsRow.swift": 2,              // symbols: a tag chip's × and a new tag's +
         "NotchStatsView.swift": 7,           // 3 symbols; 4 weights over the theme's font, which pick Geist's faces
         // 6 symbols; the three timer readouts, monospaced black; the running timer's name and its rename field, 20 pt
         // in a 24 pt line that Geist's 26 pt line overfills (three lines); the status badge's AppKit measure; a weight

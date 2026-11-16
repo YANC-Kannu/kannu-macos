@@ -87,6 +87,41 @@ enum TaskQuickAdd {
         parse(text, now: Date(timeIntervalSinceReferenceDate: 0), calendar: Calendar(identifier: .gregorian)).title
     }
 
+    /// A note's title with the `#tag` words that were not in it when the note opened taken out, and
+    /// those tags (cleaned, in typed order). A word already there when it opened stays: a title pulled
+    /// from Apple Notes may carry Notes' own `#tag`, and taking it would delete that tag in Notes on the
+    /// next push. Counted as a multiset ignoring case, so a second `#acme` typed beside one already there
+    /// is taken. `@` words stay, since a note has no reminder. Words are taken only while `room` is left
+    /// (`TaskItem.maxTags` less the note's tags), so none vanishes past the cap. The title keeps its own
+    /// spacing where nothing was taken; where a word is taken, its neighbours close up with one space,
+    /// and a trailing space stays, so typing carries on.
+    static func takingNewTags(from title: String, openedWith original: String, room: Int) -> (title: String, tags: [String]) {
+        guard room > 0, title.contains("#") else { return (title, []) }
+        var already: [String: Int] = [:]
+        // By tag name, so "#acme," and "#acme" are the same tag either way round.
+        for word in original.split(whereSeparator: { $0.isWhitespace }) {
+            if let name = tag(in: word) { already[name.lowercased(), default: 0] += 1 }
+        }
+        var kept: [Substring] = []
+        var taken: [String] = []
+        for word in title.split(whereSeparator: { $0.isWhitespace }) {
+            if let name = tag(in: word), taken.count < room {
+                let key = name.lowercased()
+                if let left = already[key], left > 0 {
+                    already[key] = left - 1
+                } else {
+                    taken.append(name)
+                    continue
+                }
+            }
+            kept.append(word)
+        }
+        guard !taken.isEmpty else { return (title, []) }
+        var result = kept.joined(separator: " ")
+        if let last = title.last, last.isWhitespace, !result.isEmpty { result.append(" ") }
+        return (result, TaskItem.cleanedTags(taken))
+    }
+
     /// The `#tag` and `@time` words alone, as typed.
     static func tokens(of text: String) -> [String] {
         parse(text, now: Date(timeIntervalSinceReferenceDate: 0), calendar: Calendar(identifier: .gregorian))
