@@ -578,6 +578,25 @@ final class CursorAgentStatusMonitor: ObservableObject {
         let secondOrganization: ClaudeUsageSnapshot?
         let hint: ClaudeUsageSnapshot.Hint?
         let organizations: ClaudeUsageOrganizations
+        /// Each card's per-window source decision, for the log (`logClaudeUsageDecisions`).
+        let decisions: [(key: String, signature: String, line: String)]
+    }
+
+    /// The last logged decision per card and window: a decision is logged when it changes, not on
+    /// every read that only moves a percentage.
+    private var loggedClaudeUsageDecisions: [String: String] = [:]
+
+    /// Logs which source won each window of each card and why — times and percentages only, never
+    /// an organization, account or token. Read it with
+    /// `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" AND category == "ClaudeUsage"'`.
+    private func logClaudeUsageDecisions(_ decisions: [(key: String, signature: String, line: String)]) {
+        var current: [String: String] = [:]
+        for decision in decisions {
+            current[decision.key] = decision.signature
+            guard loggedClaudeUsageDecisions[decision.key] != decision.signature else { continue }
+            ClaudeUsageRefresh.log.notice("Usage source \(decision.line, privacy: .public)")
+        }
+        loggedClaudeUsageDecisions = current
     }
 
     /// Applies one read. A statusline-only read merges with the other sources as last read; a
@@ -606,6 +625,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
         if load.snapshot != claudeUsage { claudeUsage = load.snapshot }
         if load.secondOrganization != claudeSecondOrganizationUsage { claudeSecondOrganizationUsage = load.secondOrganization }
         if load.hint != claudeUsageHint { claudeUsageHint = load.hint }
+        logClaudeUsageDecisions(load.decisions)
     }
 
     /// Settles Claude Code's organization after one of Kannu's own fetches
@@ -679,7 +699,23 @@ final class CursorAgentStatusMonitor: ObservableObject {
             showsClaudeCodeOrganization: card.showsClaudeCodeOrganization,
             now: now
         )
-        return ClaudeUsageLoad(snapshot: snapshot, secondOrganization: second, hint: hint, organizations: organizations)
+        func labels(_ list: [ClaudeUsageSnapshot?]) -> [String] {
+            list.map { source in
+                guard let source else { return "none" }
+                if source == statusline { return "statusline" }
+                if source == cache { return "cache" }
+                return source == desktop ? "desktop" : "source"
+            }
+        }
+        var decisions: [(key: String, signature: String, line: String)] = []
+        for (name, list) in [("first card", sources), ("second card", card.secondCardSources ?? [])] {
+            for selection in ClaudeUsageSnapshot.selections(list, now: now) {
+                let log = ClaudeUsageSnapshot.selectionLog(selection, labels: labels(list))
+                decisions.append(("\(name)|\(selection.key)", log.signature, "\(name), \(log.line)"))
+            }
+        }
+        return ClaudeUsageLoad(snapshot: snapshot, secondOrganization: second, hint: hint, organizations: organizations,
+                               decisions: decisions)
     }
 
     /// A snapshot of Claude Code's own organization while Claude Desktop is on another, saying whose

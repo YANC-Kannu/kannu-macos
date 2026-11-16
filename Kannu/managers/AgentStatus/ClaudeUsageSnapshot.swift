@@ -196,10 +196,128 @@ struct ClaudeUsageSnapshot: Equatable {
         displayWindows(now: now).isEmpty
     }
 
-    /// Combines several sources one window key at a time: each key is taken from the source whose
-    /// live copy (per `displayWindows`) was observed most recently; source order (statusline,
-    /// cache, desktop history) only breaks ties. One lapsed window in a good source therefore
-    /// neither hides that source's live siblings nor blocks a lesser source from covering the gap.
+    /// One source's copy of one window, as `selections` weighed it.
+    struct Candidate: Equatable {
+        enum Outcome: String {
+            /// The newest live copy: it goes on the card.
+            case won
+            /// Live, but another source read the window more recently, or as recently from a source
+            /// earlier in the list.
+            case older
+            /// Past its own reset or its `notAfter`.
+            case lapsed
+            /// Live by its own reset, but read before an exact reset another source saw pass: the
+            /// window it describes has rolled over since, early or on time.
+            case resetSince = "reset since"
+        }
+        /// The source's index in the list given, missing sources included.
+        let source: Int
+        let observedAt: Date
+        let percent: Double
+        let outcome: Outcome
+    }
+
+    /// How one window key was decided across the sources.
+    struct Selection: Equatable {
+        let key: String
+        /// Every source's copy of the window, in source order.
+        let candidates: [Candidate]
+        /// The latest exact reset of this window that has passed, as any source reported it.
+        let resetSeen: Date?
+
+        /// The index of the source whose copy goes on the card; nil when none is live.
+        var winner: Int? { candidates.first { $0.outcome == .won }?.source }
+    }
+
+    /// Decides each window key across the sources: the newest live reading wins, whatever its
+    /// source; equal times go to the source earlier in the list. A reading taken before an exact
+    /// reset that any source has seen pass is out, even while its own reset is still ahead: that
+    /// is how an early reset shows (2026-11-16 — the weekly limit reset early, and Claude Desktop's
+    /// sample from before it stayed on the card at its old percentage, by a reset it had inferred).
+    /// Windows run back to back, so a reading taken before a window's end lies in that window or
+    /// an earlier one. An inferred reset is a guess and clears nothing; a reset from before the
+    /// reading was taken says nothing about it (the statusline file is rewritten with the last
+    /// headers it saw, so its stamp can postdate its own reset).
+    ///
+    /// The sources of one call are one organization's (`cardSources`), or the resets would not
+    /// be comparable. Pure in its inputs.
+    static func selections(_ sources: [ClaudeUsageSnapshot?], now: Date) -> [Selection] {
+        let indexed = sources.enumerated().compactMap { index, source in source.map { (index, $0) } }
+        var resetSeen: [String: Date] = [:]
+        for (_, source) in indexed {
+            for window in source.windows where !window.resetIsInferred {
+                guard let reset = window.resetsAt, reset <= now else { continue }
+                resetSeen[window.key] = max(resetSeen[window.key] ?? reset, reset)
+            }
+        }
+        var keys: [String] = []
+        var copies: [String: [(source: Int, observedAt: Date, percent: Double, live: Bool)]] = [:]
+        for (index, source) in indexed {
+            let live = Set(source.displayWindows(now: now).map(\.key))
+            for window in source.windows {
+                if copies[window.key] == nil { keys.append(window.key) }
+                copies[window.key, default: []].append(
+                    (index, window.observedAt ?? source.observedAt, window.percent, live.contains(window.key)))
+            }
+        }
+        return keys.map { key in
+            let entries = copies[key] ?? []
+            let seen = resetSeen[key]
+            var outcomes = entries.map { entry -> Candidate.Outcome in
+                guard entry.live else { return .lapsed }
+                if let seen, entry.observedAt < seen { return .resetSince }
+                return .older
+            }
+            var best: Int?
+            for (offset, entry) in entries.enumerated() where outcomes[offset] == .older {
+                if let best, entries[best].observedAt >= entry.observedAt { continue }
+                best = offset
+            }
+            if let best { outcomes[best] = .won }
+            let candidates = zip(entries, outcomes).map { entry, outcome in
+                Candidate(source: entry.source, observedAt: entry.observedAt, percent: entry.percent, outcome: outcome)
+            }
+            return Selection(key: key, candidates: candidates, resetSeen: seen)
+        }
+    }
+
+    /// One log line for a selection, and a signature that changes only when the decision does —
+    /// which source won, and what became of each other copy — so a reading that only moves its
+    /// percentage logs nothing new. Times and percentages only: `labels` names each source by its
+    /// index (statusline, cache, desktop), never an organization or an account.
+    static func selectionLog(_ selection: Selection, labels: [String]) -> (signature: String, line: String) {
+        func label(_ index: Int) -> String { labels.indices.contains(index) ? labels[index] : "source \(index)" }
+        func percent(_ value: Double) -> String {
+            value.rounded() == value ? "\(Int(value))%" : String(format: "%.1f%%", value)
+        }
+        func time(_ date: Date) -> String { date.formatted(.iso8601) }
+        let live = selection.candidates.filter { $0.outcome == .won || $0.outcome == .older }
+        let winner = live.first { $0.outcome == .won }
+        let why: String
+        if live.count <= 1 {
+            why = "only live reading"
+        } else if live.contains(where: { $0.outcome == .older && $0.observedAt == winner?.observedAt }) {
+            why = "tie, earlier source"
+        } else {
+            why = "newest"
+        }
+        let parts = selection.candidates.map { candidate -> String in
+            let outcome = candidate.outcome == .won ? "won (\(why); " : "\(candidate.outcome.rawValue) ("
+            return "\(label(candidate.source)) \(outcome)observed \(time(candidate.observedAt)), "
+                + "\(percent(candidate.percent)))"
+        }
+        var line = "\(selection.key): " + (winner == nil ? "none live; " : "") + parts.joined(separator: "; ")
+        if let seen = selection.resetSeen { line += "; reset seen \(time(seen))" }
+        let signature = ([selection.key] + selection.candidates.map { "\(label($0.source)):\($0.outcome.rawValue)" })
+            .joined(separator: "|")
+        return (signature, line)
+    }
+
+    /// Combines several sources one window key at a time, as `selections` decides each key: the
+    /// newest live reading, whatever its source; source order (statusline, cache, desktop history)
+    /// only breaks ties; a reading an exact reset has passed since is dropped. One lapsed window in
+    /// a good source therefore neither hides that source's live siblings nor blocks a lesser
+    /// source from covering the gap.
     ///
     /// Freshness, not rank, because "live" only means the reset has not passed: a weekly window
     /// fetched six days ago is still live for the rest of its week, and ranking by source let it
@@ -219,31 +337,30 @@ struct ClaudeUsageSnapshot: Equatable {
     /// sample, so it lands minutes after the server's; taken by freshness it displaced the API's
     /// own reset on every read, the countdown moved, and the usage-alert push key — which is the
     /// reset — treated the same window as a new instance and pushed it twice. The fresher percent
-    /// still wins; its reset is borrowed from the highest-ranked live source that has an exact one.
+    /// still wins; its reset is borrowed from the highest-ranked live source that has an exact one —
+    /// never from a copy a reset has passed since, whose reset is an earlier window's.
     ///
     /// Returns nil when nothing is live anywhere. Pure in its inputs, so repeated merges of
     /// unchanged files compare equal and do not republish.
     static func merged(_ sources: [ClaudeUsageSnapshot?], now: Date) -> ClaudeUsageSnapshot? {
-        let present = sources.compactMap { $0 }
-        var exactResets: [String: Date] = [:]
-        for source in present {
-            for window in source.displayWindows(now: now) where !window.resetIsInferred {
-                if let reset = window.resetsAt, exactResets[window.key] == nil { exactResets[window.key] = reset }
-            }
-        }
-        // Winner per key: newest observedAt, ties to the earlier (higher-ranked) source.
         var winnerIndex: [String: Int] = [:]
-        for (index, source) in present.enumerated() {
-            for window in source.displayWindows(now: now) {
-                if let current = winnerIndex[window.key], present[current].observedAt >= source.observedAt {
-                    continue
-                }
-                winnerIndex[window.key] = index
+        var cleared: [String: Set<Int>] = [:]
+        for selection in selections(sources, now: now) {
+            winnerIndex[selection.key] = selection.winner
+            cleared[selection.key] = Set(selection.candidates.filter { $0.outcome == .resetSince }.map(\.source))
+        }
+        var exactResets: [String: Date] = [:]
+        for (index, source) in sources.enumerated() {
+            guard let source else { continue }
+            for window in source.displayWindows(now: now)
+            where !window.resetIsInferred && cleared[window.key]?.contains(index) != true {
+                if let reset = window.resetsAt, exactResets[window.key] == nil { exactResets[window.key] = reset }
             }
         }
         var windows: [Window] = []
         var observedAt: Date?
-        for (index, source) in present.enumerated() {
+        for (index, source) in sources.enumerated() {
+            guard let source else { continue }
             for window in source.displayWindows(now: now) where winnerIndex[window.key] == index {
                 var taken = window
                 if taken.resetIsInferred, let exact = exactResets[taken.key] {

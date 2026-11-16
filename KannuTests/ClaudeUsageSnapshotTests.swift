@@ -344,9 +344,106 @@ final class ClaudeUsageSnapshotTests: XCTestCase {
     }
 
     func testMergeALapsedFresherWindowStillLosesToALiveOlderOne() {
+        // The statusline file is rewritten with the last headers it saw, so its stamp can postdate
+        // its own reset. A reset from before the live reading was taken says nothing about it.
         let olderLive = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 40, resetsIn: 300)], observedAt: now.addingTimeInterval(-3_000))
-        let fresherLapsed = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 90, resetsIn: -1)], observedAt: now)
+        let fresherLapsed = ClaudeUsageSnapshot(windows: [window("five_hour", pct: 90, resetsIn: -4_000)], observedAt: now)
         XCTAssertEqual(ClaudeUsageSnapshot.merged([fresherLapsed, olderLive], now: now)?.fiveHourPercent, 40)
+    }
+
+    // MARK: - Newest reading per window, across sources (2026-11-16)
+
+    private func reading(_ key: String, _ percent: Double, resetsIn seconds: TimeInterval?, observedAgo: TimeInterval,
+                         inferred: Bool = false) -> ClaudeUsageSnapshot {
+        ClaudeUsageSnapshot(windows: [.init(key: key, percent: percent, resetsAt: seconds.map { now.addingTimeInterval($0) },
+                                            resetIsInferred: inferred)],
+                            observedAt: now.addingTimeInterval(-observedAgo))
+    }
+
+    func testMergeTheNewerReadingWinsWhateverItsSource() {
+        let cacheOld = reading("seven_day", 62, resetsIn: 2 * 86_400, observedAgo: 10 * 3_600)
+        let desktopNew = reading("seven_day", 7, resetsIn: nil, observedAgo: 600)
+        let cacheNew = reading("seven_day", 7, resetsIn: 2 * 86_400, observedAgo: 600)
+        let desktopOld = reading("seven_day", 62, resetsIn: nil, observedAgo: 10 * 3_600)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([nil, cacheOld, desktopNew], now: now)?.sevenDayPercent, 7)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([nil, cacheNew, desktopOld], now: now)?.sevenDayPercent, 7)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([desktopNew, cacheOld], now: now)?.sevenDayPercent, 7, "source order is no rank")
+        let selection = ClaudeUsageSnapshot.selections([nil, cacheOld, desktopNew], now: now).first
+        XCTAssertEqual(selection?.winner, 2)
+        XCTAssertEqual(selection?.candidates.map(\.outcome), [.older, .won])
+        let line = selection.map { ClaudeUsageSnapshot.selectionLog($0, labels: ["statusline", "cache", "desktop"]).line }
+        XCTAssertEqual(line, "seven_day: cache older (observed 2026-08-29T00:40:00Z, 62%); "
+                       + "desktop won (newest; observed 2026-08-29T10:30:00Z, 7%)")
+    }
+
+    func testMergeAnEarlyResetClearsAnOlderReadingBeforeItsOwnReset() {
+        // The week reset early, at 06:30. The cache saw that reset (its window has lapsed since);
+        // Claude Desktop's sample from before it still claims days of its week, by a reset it
+        // inferred. Seen to reset after the sample was taken, that value is from an earlier week.
+        let cache = reading("seven_day", 88, resetsIn: -1_800, observedAgo: 3_600)
+        let desktop = reading("seven_day", 72, resetsIn: 3 * 86_400, observedAgo: 7_200, inferred: true)
+        XCTAssertEqual(desktop.sevenDayDisplayPercent(now: now), 72, "live by its own reset")
+        XCTAssertNil(ClaudeUsageSnapshot.merged([nil, cache, desktop], now: now), "nothing left to show")
+        let selection = ClaudeUsageSnapshot.selections([nil, cache, desktop], now: now).first
+        XCTAssertNil(selection?.winner)
+        XCTAssertEqual(selection?.candidates.map(\.outcome), [.lapsed, .resetSince])
+        XCTAssertEqual(selection?.resetSeen, now.addingTimeInterval(-1_800))
+        // Read after that reset, the sample is the new week's, and stays.
+        let after = reading("seven_day", 3, resetsIn: 3 * 86_400, observedAgo: 600, inferred: true)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([nil, cache, after], now: now)?.sevenDayPercent, 3)
+        // An inferred reset is a guess, and proves nothing: it clears nothing.
+        let guessed = reading("seven_day", 88, resetsIn: -1_800, observedAgo: 3_600, inferred: true)
+        let exact = reading("seven_day", 72, resetsIn: 3 * 86_400, observedAgo: 7_200)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([exact, guessed], now: now)?.sevenDayPercent, 72)
+    }
+
+    func testMergeAnEarlyResetReplacesTheOlderValueWithTheFresherOne() {
+        // The five-hour window reset early: the older reading's reset is still an hour off, and a
+        // fresher one, from another source, already shows the new window.
+        let before = reading("five_hour", 64, resetsIn: 3_600, observedAgo: 3 * 3_600)
+        let fresh = reading("five_hour", 2, resetsIn: 4 * 3_600 + 1_800, observedAgo: 300)
+        let merged = ClaudeUsageSnapshot.merged([before, fresh], now: now)
+        XCTAssertEqual(merged?.fiveHourPercent, 2)
+        XCTAssertEqual(merged?.fiveHourResetsAt, now.addingTimeInterval(4 * 3_600 + 1_800))
+        XCTAssertEqual(merged?.window("five_hour")?.observedAt, now.addingTimeInterval(-300))
+    }
+
+    func testMergeEqualTimesGoToTheEarlierSourceEveryTime() {
+        let a = reading("seven_day", 30, resetsIn: 86_400, observedAgo: 120)
+        let b = reading("seven_day", 31, resetsIn: 86_400, observedAgo: 120)
+        for _ in 0..<3 {
+            XCTAssertEqual(ClaudeUsageSnapshot.merged([a, b], now: now)?.sevenDayPercent, 30)
+            XCTAssertEqual(ClaudeUsageSnapshot.merged([b, a], now: now)?.sevenDayPercent, 31)
+        }
+        let selection = ClaudeUsageSnapshot.selections([nil, a, b], now: now).first
+        XCTAssertEqual(selection?.winner, 1)
+        XCTAssertEqual(selection.map { ClaudeUsageSnapshot.selectionLog($0, labels: ["statusline", "cache", "desktop"]).signature },
+                       "seven_day|cache:won|desktop:older")
+        XCTAssertEqual(selection.map { ClaudeUsageSnapshot.selectionLog($0, labels: []).line.contains("won (tie, earlier source;") },
+                       true)
+    }
+
+    func testMergeHandlesAMissingSource() {
+        let cache = reading("seven_day", 30, resetsIn: 86_400, observedAgo: 120)
+        XCTAssertEqual(ClaudeUsageSnapshot.merged([nil, cache, nil], now: now)?.sevenDayPercent, 30)
+        XCTAssertEqual(ClaudeUsageSnapshot.selections([nil, cache, nil], now: now).first?.winner, 1,
+                       "indices are the list's, missing sources included")
+        XCTAssertNil(ClaudeUsageSnapshot.merged([nil, nil, nil], now: now))
+        XCTAssertTrue(ClaudeUsageSnapshot.selections([nil, nil], now: now).isEmpty)
+    }
+
+    func testTheSelectionLogSaysWhoWonAndWhyInTimesAndPercentsOnly() {
+        let cache = reading("seven_day", 88, resetsIn: -1_800, observedAgo: 3_600)
+        let desktop = reading("seven_day", 72, resetsIn: 3 * 86_400, observedAgo: 7_200, inferred: true)
+        let statusline = reading("seven_day", 4, resetsIn: 7 * 86_400, observedAgo: 60)
+        let selection = try? XCTUnwrap(ClaudeUsageSnapshot.selections([statusline, cache, desktop], now: now).first)
+        let log = selection.map { ClaudeUsageSnapshot.selectionLog($0, labels: ["statusline", "cache", "desktop"]) }
+        XCTAssertEqual(log?.line,
+                       "seven_day: statusline won (only live reading; observed 2026-08-29T10:39:00Z, 4%); "
+                       + "cache lapsed (observed 2026-08-29T09:40:00Z, 88%); "
+                       + "desktop reset since (observed 2026-08-29T08:40:00Z, 72%); "
+                       + "reset seen 2026-08-29T10:10:00Z")
+        XCTAssertEqual(log?.signature, "seven_day|statusline:won|cache:lapsed|desktop:reset since")
     }
 
     func testMergeIsNilWhenNothingIsLiveAnywhere() {
