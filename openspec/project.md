@@ -71,8 +71,9 @@ staged and uncommitted.
 - Don't wait on a review or CI before starting the next piece. Each PR-state change still needs David's yes.
 
 ### Where agent sessions start
-The hook script names each agent session's project after the folder the agent runs in: its first workspace root, or
-Claude Code's `cwd`. An agent also loads that folder's instructions, hooks and settings. So:
+Kannu names each agent session's project after the folder the agent runs in: its first workspace root, or Claude
+Code's `cwd`, and for a Claude Desktop worktree, the repository it was cut from (`ProjectNameRules`). An agent also
+loads that folder's instructions, hooks and settings. So:
 - A coordinating chat runs in this repository's own checkout, never in another project's folder.
 - Each lane gets its own git worktree first (`git worktree add --no-track -b <branch> <path> <base>`), and its session
   then starts with that worktree as its folder.

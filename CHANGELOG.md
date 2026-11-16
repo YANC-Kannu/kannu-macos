@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
+- **Developer label:** "Make project-name detection observable, and fix its two known bugs"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
+- **Changes:**
+  - `ProjectNameRules.projectName(forWorkingDirectory:)` (new, Foundation-only) names a chat's project after its
+    folder, except under `<repo>/.claude/worktrees/<name>`, a Claude Desktop worktree, which is named `<repo>`. The
+    hook file reader, Claude's passive session record and the Claude/Codex transcript fallback all go through it. The
+    hook script is unchanged.
+  - Cursor project slugs decode against the folders that exist, so `acme-api` stays `acme-api` instead of `api`. The
+    fallback encodes the home folder the way Cursor does, so a home with a dot or underscore matches its slug. Kannu
+    never lists a home folder that raises a privacy prompt, or `/Volumes`.
+  - New `ProjectName` log category (`com.kannu.app`): one line per change, with the agent, source, session id, chosen
+    name and rule public and the paths private.
+  - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
+    folders, and the Cursor slug decoder.
+
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix

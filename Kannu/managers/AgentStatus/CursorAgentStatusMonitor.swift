@@ -1385,10 +1385,24 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 continue
             }
             let chatName = preferredHookChatName(from: json)
-            let projectName = normalizedProjectName(
-                json["project"] as? String ?? json["project_name"] as? String ?? json["workspace_name"] as? String
-            )
             let hookCwd = (json["cwd"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            // The hook script writes the folder name of its workdir (`workspace_roots[0]`, else
+            // `cwd`) and the workdir itself as `cwd`. The name is re-derived from that path here, so
+            // the rules live in Swift (`ProjectNameRules`), not in the script: a Claude Desktop
+            // worktree is named after its repository, not its random folder.
+            let projectResolution: ProjectNameRules.Resolution? = hookCwd
+                .flatMap(ProjectNameRules.resolution(forWorkingDirectory:))
+                ?? normalizedProjectName(
+                    json["project"] as? String ?? json["project_name"] as? String ?? json["workspace_name"] as? String
+                ).map { ProjectNameRules.Resolution(name: $0, rule: .hookProjectField) }
+            let projectName = projectResolution?.name
+            ProjectNameLog.record(
+                agent: providerKey,
+                source: .hookFile,
+                sessionID: conversationID,
+                cwd: hookCwd,
+                resolution: projectResolution
+            )
             let ageMs = nowMs - tsMs
             let resolved = AgentTrafficLightMapper.resolveHookState(
                 rawState: state,
@@ -1458,9 +1472,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
         for path in paths {
             let sessionID = CursorTranscriptParser.sessionID(from: path)
             ids.insert(sessionID)
-            let projectName = CursorTranscriptParser.displayProjectName(
-                fromSlug: CursorTranscriptParser.projectSlug(from: path)
-            )
+            let projectName = CursorTranscriptParser.displayProjectName(forTranscript: path)
             if let projectName {
                 projectNamesBySessionID[sessionID] = projectName
             }
@@ -2008,9 +2020,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
         let paths = CursorTranscriptParser.listRecentTranscriptPaths(maxAgeMinutes: maxAgeMinutes)
         for path in paths {
             let sessionID = CursorTranscriptParser.sessionID(from: path)
-            guard let projectName = CursorTranscriptParser.displayProjectName(
-                fromSlug: CursorTranscriptParser.projectSlug(from: path)
-            ) else { continue }
+            guard let projectName = CursorTranscriptParser.displayProjectName(forTranscript: path) else { continue }
             projectBySessionID[sessionID] = projectName
         }
         return projectBySessionID
@@ -2163,13 +2173,16 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 AgentSessionLogParser.displayChatName(from: $0, provider: .claude)
             }
 
-            let projectName: String?
-            if let cwd = json["cwd"] as? String {
-                let base = URL(fileURLWithPath: cwd).lastPathComponent
-                projectName = base.isEmpty ? nil : base
-            } else {
-                projectName = nil
-            }
+            let passiveCwd = (json["cwd"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            let projectResolution = passiveCwd.flatMap(ProjectNameRules.resolution(forWorkingDirectory:))
+            let projectName = projectResolution?.name
+            ProjectNameLog.record(
+                agent: "claude",
+                source: .claudeSessionRecord,
+                sessionID: sessionId,
+                cwd: passiveCwd,
+                resolution: projectResolution
+            )
 
             var session = AgentSessionStatus(
                 id: "claude-\(sessionId)",
