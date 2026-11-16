@@ -2,7 +2,50 @@
 
 Thank you for your interest in contributing to Kannu! We welcome contributions from everyone—developers, designers, testers, and documentation writers. Please read the following guidelines to help us maintain a collaborative and high-quality project.
 
+## Setup checklist
+
+Do these in order on a fresh clone. Each step names the check that proves it worked.
+
+1. **Clone, then switch to `development`.** The default branch, `main`, is the release branch and lags behind
+   the agent setup and the specs. Skipping the LFS smudge keeps older refs' LFS pointers from failing the clone
+   (see [Development Setup](#development-setup)):
+
+   ```bash
+   GIT_LFS_SKIP_SMUDGE=1 git clone <your-fork-url> kannu
+   cd kannu
+   git checkout development
+   ```
+
+2. **Install the git hooks** with `./scripts/install-git-hooks.sh`, then check that `git config core.hooksPath`
+   prints `.githooks`. CI runs the hook only on the committed tree, so only your local hook checks that each
+   commit carries its CHANGELOG entry.
+3. **Create the `Kannu Dev` code-signing identity** once, as
+   [AGENTS.md, "Build, test, and run"](AGENTS.md#build-test-and-run) describes, and check that
+   `security find-identity -v -p codesigning` lists it. A stable identity keeps macOS privacy grants
+   (Accessibility and others) across rebuilds; ad-hoc signing loses them on every build.
+4. **Run the unit tests**, in a derived-data folder of their own:
+   `xcodebuild test -project Kannu.xcodeproj -scheme KannuTests -destination "platform=macOS" -derivedDataPath .build-tests`
+5. **Build the app** (Debug, unsigned, to check that it compiles):
+   `xcodebuild -project Kannu.xcodeproj -scheme Kannu -configuration Debug CODE_SIGNING_ALLOWED=NO build`.
+   AGENTS.md gives the signed variant that you can launch.
+6. **Check OpenSpec** (needs Node.js 20.19 or later):
+   `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 list`. Always use this pinned form, and never run
+   `openspec init` or `openspec update`; [AGENTS.md](AGENTS.md) says why.
+
+**Building in Xcode instead of the command line:** the project file names the maintainers' Apple teams, so
+Automatic signing fails for anyone else. Under the Kannu target's Signing & Capabilities, set Team to your own
+(or to None, with `Kannu Dev` as the certificate), and don't commit that change to `Kannu.xcodeproj`.
+
+**Which file each agent tool reads:**
+- **Claude Code:** `CLAUDE.md`, which imports `AGENTS.md`, plus `.claude/settings.json` (shared permissions),
+  `.claude/commands/openspec/` and `.claude/skills/`. Personal settings go in `.claude/settings.local.json` and
+  personal notes in `CLAUDE.local.md`; both are git-ignored.
+- **Codex:** `AGENTS.md` and `.agents/skills/`.
+- **Cursor:** `AGENTS.md`, `.cursor/rules/` and `.cursor/skills/`.
+- **GitHub Copilot, Aider and Windsurf:** `AGENTS.md`.
+
 ## Table of Contents
+- [Setup checklist](#setup-checklist)
 - [How to Contribute](#how-to-contribute)
 - [Code of Conduct](#code-of-conduct)
 - [Development Setup](#development-setup)
