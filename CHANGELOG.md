@@ -11,9 +11,13 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 - **Changes:**
   - `.githooks/pre-commit` refuses a commit whose staged added lines, author or committer match the untracked list in
     `<git-common-dir>/info/kannu-denylist` (one case-insensitive string per line, `#` for comments). It names the
-    files, never the matched text. With no list there is no check, so nothing changes for other contributors.
+    files, never the matched text. With no list there is no check, so nothing changes for other contributors. It
+    runs before the merge exemption, so a conflict resolution is checked too, and reads staged paths NUL-delimited
+    and literally, so a quoted or non-ASCII path is not skipped.
   - New `.githooks/pre-push` refuses to publish commits whose author, committer, message or added lines match the same
-    list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back.
+    list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back. What the server
+    already has comes from the server itself (`git ls-remote`), never from this clone's remote-tracking refs, which
+    in a clone that missed the rewrite still reach the old commits.
   - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
     made-up data only, and the list and both hooks are named there.
   - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.
