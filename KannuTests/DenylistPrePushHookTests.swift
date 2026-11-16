@@ -133,6 +133,18 @@ final class DenylistPrePushHookTests: XCTestCase {
                        "a list that exists but cannot be read must refuse, never count as empty")
     }
 
+    func testAnUnsearchableListFolderRefusesThePush() throws {
+        try XCTSkipIf(getuid() == 0, "root can search any folder whatever its permissions")
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        let clean = try commit("more.md", "nothing to refuse here\n", message: "clean work")
+        let folder = try denylist().deletingLastPathComponent()
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: folder.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: folder.path) }
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: clean), 1,
+                       "a folder that cannot be searched hides whether there is a list, so the push is refused")
+    }
+
     func testAListWithOnlyCommentsIsNoCheck() throws {
         let server = try bareRepository("server")
         let old = try commit("notes.md", "mentions \(Self.refused)\n", message: "old work")

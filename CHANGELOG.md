@@ -19,10 +19,12 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     already has comes from the server the push goes to (`git ls-remote` on the push URL, not the remote's fetch
     URL), never from this clone's remote-tracking refs, which in a clone that missed the rewrite still reach the old
     commits. Both hooks scan the raw objects being committed or pushed (no textconv, no replacement refs) and fail
-    closed: a git or grep error, or a list that exists but cannot be read, refuses instead of passing as clean.
+    closed: a git or grep error, a list that exists but cannot be read, or a list folder that cannot be searched
+    refuses instead of passing as clean.
   - New `KannuTests/DenylistPrePushHookTests` runs the real pre-push hook against throwaway repositories: a commit
     reachable only from a stale tracking ref, a remote whose fetch and push URLs differ, a replacement ref, a textconv
-    filter that fails or prints nothing, an unreadable list, a list with only comments, a clean push, and no list.
+    filter that fails or prints nothing, an unreadable list, an unsearchable list folder, a list with only comments,
+    a clean push, and no list.
   - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
     made-up data only, and the list and both hooks are named there.
   - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.

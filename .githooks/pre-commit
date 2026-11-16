@@ -10,7 +10,13 @@ set -euo pipefail
 # text, which would otherwise end up in logs and transcripts.
 # It fails closed: every git step writes a file outside any condition, so an error stops the hook
 # (set -e) instead of reading as "no match", and grep's own errors refuse the commit too.
-denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
+deny_dir="$(git rev-parse --git-common-dir)/info"
+denylist="${deny_dir}/kannu-denylist"
+# A missing list is no check, but a folder that cannot be searched hides whether there is one, so it refuses.
+if [[ -e "${deny_dir}" && ! ( -d "${deny_dir}" && -x "${deny_dir}" ) ]]; then
+  echo "ERROR: cannot look for the denylist in ${deny_dir}; refusing the commit."
+  exit 1
+fi
 if [[ -s "${denylist}" ]]; then
   deny_work="$(mktemp -d)"
   trap 'rm -rf "${deny_work}"' EXIT

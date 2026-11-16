@@ -11,7 +11,13 @@ set -euo pipefail
 # substituted history, possibly clean, while the pack carries the original commits.
 export GIT_NO_REPLACE_OBJECTS=1
 
-denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
+list_dir="$(git rev-parse --git-common-dir)/info"
+denylist="${list_dir}/kannu-denylist"
+# A missing list is no check, but a folder that cannot be searched hides whether there is one, so it refuses.
+if [[ -e "${list_dir}" && ! ( -d "${list_dir}" && -x "${list_dir}" ) ]]; then
+  echo "ERROR: cannot look for the denylist in ${list_dir}; refusing to push." >&2
+  exit 1
+fi
 [[ -s "${denylist}" ]] || exit 0
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
