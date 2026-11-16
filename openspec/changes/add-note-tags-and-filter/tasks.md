@@ -21,5 +21,5 @@
 - [x] 4.1 `NoteFilterTests`, `NoteTagsRulesTests`, and additions to `TaskFacetsTests`, `TaskQuickAddTests`, `AppleNotesMergePolicyTests` and `WisprMeetingsNeverStoredRulesTests`
 - [x] 4.2 Pins: `NotchFontRulesTests`, `TimerSideColumnRulesTests`
 - [x] 4.3 docs/SETTINGS.md, CHANGELOG.md
-- [ ] 4.4 `openspec validate add-note-tags-and-filter --strict` (the CLI is not installed on the authoring Mac)
+- [x] 4.4 `openspec validate --all --strict` (0.23.0)
 - [ ] 4.5 Archive after merge
