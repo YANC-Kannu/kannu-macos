@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - One primary control and one colour per card in the notch's Notes
+- **Developer label:** "I don't like the design here, review that based on golden triangle rules" (David, 2026-11-16,
+  on a screenshot of the notch's Notes over a red skin)
+- **Agent label:** Claude Code (Opus 5.5) — the golden-triangle review, the header and card changes, a display-text
+  helper and its tests
+- **Changes:**
+  - Review: the open panel is about 732 by 226 pt, so its golden-triangle power points sit about 9 % in from each
+    corner. The top-right one held five equal filled circles with a red trash beside "+"; the top-left card, where the
+    eye lands first, read "Untitled Note"; previews repeated their titles and stopped at the first line break; seven
+    accent uses, yellow and red among them (Kannu's needs-input and stopped), gave the eye nothing to follow; and a
+    textured skin's streaks ran under the translucent cards.
+  - Header: "+" is the one filled control (ink), alone at the right end. Search, Create from Clipboard and Clear
+    Notes are plain glyphs grouped before it; the trash is neutral, and the alert's Delete stays the red one. Sync
+    is the Apple logo beside the title, which turns while it runs, so its separate circle is gone. The search and
+    sync tints are `SettingsTheme.accent` instead of blue and yellow.
+  - Cards: `NoteDisplayText` (Foundation only, in the test target) shows a note left as "Untitled Note" by its first
+    line, drops a first line that repeats the title, strips Markdown heading and bullet markers, and joins lines so
+    one line fills the card, reading at most 600 characters. Display only; no stored note changes.
+  - Cards: the bar is the card's one colour. Pins and the border are neutral, Copy's checkmark is white, pinned cards
+    sit a step brighter, and a scrim of the notch's fill sits under each card, so its text keeps contrast over a skin.
+  - Unchanged: the grid, its columns and gutters, the fades, and every scroll owner and suppression token.
+  - `NoteDisplayTextTests` covers titles, previews, markers and the read limit with made-up notes.
+    `NotchFontRulesTests` pins 19 system-font lines in `NotchNotesView`: the header's four glyph fonts are one now.
+
 ### 2026-11-16 - Wispr Flow's meeting summaries in the notch's Notes, read-only
 - **Developer label:** "I have Wispr Flow installed, see if we can connect that notes to Kannu notes" (David,
   2026-11-16; meeting summaries only, as a read-only mirror)
