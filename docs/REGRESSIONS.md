@@ -240,6 +240,32 @@ reads fd 3. Rules:
 `HookScriptTests` v48 group (normal run, the no-`python3` exit, two failing steps, three kinds of
 kill; again under `/usr/bin/python3` 3.9) and `HookInputLeftoversTests`.
 
+**v49 addendum (2026-11-13): Claude runs most of Kannu's hooks async, so state follows start times.**
+A user asked why Kannu runs on every prompt. Every Claude group blocked: Claude waited for the hook
+once per prompt and twice per tool call, a measured 160–200 ms a run, and 44 runs on one Mac hit the
+10-second timeout. Since v49 the installer marks a group `"async": true` unless Kannu may have to
+answer in it (`AgentHookLayout.claudeHookIsAsync`). Stop, StopFailure, SubagentStop and SessionEnd
+always block, and so does every group that turns the light yellow (PermissionRequest, the gated
+PreToolUse, Notification's needs-input group), so its write lands before the user can answer.
+PreToolUse blocks while the enforce marker is present, and the hidden-text note events block while
+the warn marker is present. Claude ignores an async hook's decision, so a set changed on one side only
+leaves an answer Claude never reads. Async hooks keep no order between events, which every earlier
+version could assume. Rules:
+- `event_started_ms` rides every write path, as the v39 turn keys do. An event that started before
+  the one behind the file's state changes nothing but its sightings, and its tool call count in the
+  turn the call belongs to, never in a turn that started after it.
+- A needs-you event is stale only against an ended turn: `stopped`, `quota_exceeded`, or a file that
+  records `turn_ended_ms` under a held yellow (the 2 s carry keeps the light over the Stop that ended
+  the turn, and the generic PreToolUse of a gated tool derives yellow too). A turn cannot end with its
+  request open, so that request was answered. CodeRabbit's review of the first cut found an async
+  PermissionRequest landing after the Stop, painting the chat yellow and reopening its turn.
+  Against a working state, a parallel request may still be open; let it through, and the 2 s merge
+  arbitrates it (entry 12). A quota stop is stale against a newer turn like any stop.
+- Keep `signal.alarm(10)`: Claude enforces no timeout on an async hook.
+
+Guards: the `HookScriptTests` out-of-order group, and `AgentHookLayoutTests`, which pins the blocking
+sets to the script's `HT_NOTE_EVENTS` and `POLICY_DENY_EVENTS`.
+
 ---
 
 ## 2. The active-state staleness window must exceed the longest tool call
