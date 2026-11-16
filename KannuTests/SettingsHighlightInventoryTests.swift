@@ -103,9 +103,10 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // one id more).
         // 2026-11-11: Notes' gear lands on its first settings row, Enable Notes, which registers an id
         // (one registration, one id; no entry: a search for the tab finds it by name).
-        XCTAssertEqual(inventory.entries.count, 244, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 275, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 269, "distinct registered ids")
+        // 2026-11-16: Notes gains Show Wispr Flow meeting summaries (one entry, one row, one id).
+        XCTAssertEqual(inventory.entries.count, 245, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 276, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 270, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

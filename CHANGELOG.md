@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - Wispr Flow's meeting summaries in the notch's Notes, read-only
+- **Developer label:** "I have Wispr Flow installed, see if we can connect that notes to Kannu notes" (David,
+  2026-11-16; meeting summaries only, as a read-only mirror)
+- **Agent label:** Claude Code (Opus 5.5) — a read-only reader for Wispr Flow's local database, the mirror in the
+  notch's Notes, a Notes setting, store tests and rule tests
+- **Changes:**
+  - `WisprFlowMeetingsStore` (Foundation and SQLite only, in the test target) reads the Notetaker's summaries from
+    `~/Library/Application Support/Wispr Flow/flow.sqlite` with `mode=ro`: live meetings with a summary, newest first,
+    at most 50. It never uses `immutable=1`, which would miss what Wispr has not yet checkpointed from its WAL. It
+    checks every column it reads first, so a schema change in Wispr hides the source instead of guessing.
+  - `WisprFlowMeetingsManager` holds the meetings in memory as `NoteItem`s with a `wisprMeetingId`, read off the main
+    actor as the Notes tab appears and on its sync button. No timer, no file watcher, and nothing reads Wispr's files
+    until the setting is on. The log says counts and error cases, never a title or a summary.
+  - The notch's Notes list shows them after Kannu's notes: a waveform glyph, a neutral bar, Copy only (the Markdown
+    summary). Opened, a meeting is read-only with Open in Wispr Flow and no colour picker. The editor's save and
+    autosave return before saving a meeting, Clear Notes counts and reaches only Kannu's notes, and the colour filter
+    leaves meetings out.
+  - `NoteItem.wisprMeetingId` is not in `CodingKeys`: a meeting is never stored, so never pushed to Apple Notes.
+  - Brain › Notes › Wispr Flow: "Show Wispr Flow meeting summaries", off by default, shown while Wispr Flow is
+    installed or the switch is on, with its search entry.
+  - `WisprFlowMeetingsStoreTests` reads made-up meetings from an uncheckpointed WAL and covers deletion, empty
+    summaries, order, the limit, dates, a missing file, table or column, and a file that is not a database.
+    `WisprMeetingsNeverStoredRulesTests` holds the editor's guards, the manager's storing nothing and the unencoded
+    id, each against planted offenders.
+  - Pins moved: `NotchFontRulesTests` counts the waveform's symbol font (22 in `NotchNotesView`), and
+    `SettingsHighlightInventoryTests` counts the new row and its search entry.
+
 ### 2026-11-16 - Fit Time to log's card in Brain › Tasks' list column at full screen
 - **Developer label:** Brain › Tasks at a 14-inch full screen clips the Time to log card: "1 waitin", "Comment (o…"
   and a cut ⋯ (found on the launch video's `videoTimeToLog` board)

@@ -816,6 +816,13 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     /// Made in Notes, not in Kannu (`AppleNotesMergePolicy.madeInAppleNotes`). Nil until a sync
     /// decides; a note made in the notch is `false` from the start.
     var madeInAppleNotes: Bool? = nil
+    /// A Wispr Flow meeting's id: this note is that meeting's summary, read from Wispr each time the
+    /// Notes tab appears (`WisprFlowMeetingsManager`). Never stored, so it is not in `CodingKeys`: a
+    /// meeting is shown and copied, never saved, synced to Apple Notes or edited here.
+    var wisprMeetingId: String? = nil
+
+    /// A Wispr Flow meeting's summary, shown read-only (`wisprMeetingId`).
+    var isWisprMeeting: Bool { wisprMeetingId != nil }
     
     // Internal property for migration
     private enum CodingKeys: String, CodingKey {
@@ -833,7 +840,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         imageFileName: String? = nil,
         appleNotesId: String? = nil,
         appleNotesSyncedAt: Date? = nil,
-        madeInAppleNotes: Bool? = nil
+        madeInAppleNotes: Bool? = nil,
+        wisprMeetingId: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -846,6 +854,7 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         self.appleNotesId = appleNotesId
         self.appleNotesSyncedAt = appleNotesSyncedAt
         self.madeInAppleNotes = madeInAppleNotes
+        self.wisprMeetingId = wisprMeetingId
     }
     
     init(from decoder: Decoder) throws {
@@ -1583,6 +1592,9 @@ extension Defaults.Keys {
     static let appleNotesSyncScope = Key<AppleNotesSyncScope>("appleNotesSyncScope", default: .kannuFolder)
     /// Set once the scope has been decided for this install (`NotesManager.migrateSyncScopeIfNeeded`).
     static let appleNotesSyncScopeMigrated = Key<Bool>("appleNotesSyncScopeMigrated", default: false)
+    /// Shows Wispr Flow's Notetaker meeting summaries in the notch's Notes, read-only. Off until the
+    /// user turns it on, and nothing reads Wispr's files before then (`WisprFlowMeetingsManager`).
+    static let enableWisprFlowMeetings = Key<Bool>("enableWisprFlowMeetings", default: false)
 
     // MARK: Tasks Feature
     // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),
