@@ -1718,6 +1718,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     breaking the real controller eight ways.
   - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
 
+### 2026-10-31 - SonarCloud CI, Dependabot for GitHub Actions (#8)
+- **Developer label:** Setup SonarCloud, Snyk, and CodeRabbit (#8)
+- **Agent label:** SonarCloud macOS workflow, dependabot.yml, sonar-project.properties
+- **Changes:**
+  - Added `.github/workflows/sonarcloud.yml` (macOS runner, `SonarSource/sonarqube-scan-action@v7`,
+    `SONAR_TOKEN` + PR decoration via `GITHUB_TOKEN`; skips fork PRs without secrets).
+  - Added root `sonar-project.properties` for org `yanc-kannu`, project `YANC-Kannu_kannu-macos`,
+    sources `Kannu` + `scripts`, tests `KannuTests`, exclusions for assets and the mirrored
+    `Kannu/Kannu` tree.
+  - Added `.github/dependabot.yml` for weekly grouped bumps to GitHub Actions pins in workflows.
+  - Pinned SonarCloud workflow actions to full commit SHAs; dropped the unused Xcode setup step
+    (the scanner job does not compile the app).
+
 ### 2026-10-30 - The Settings highlight stops pulsing once it clears
 - **Developer label:** "Check CPU report"
 - **Agent label:** Claude Code (Opus 5.5) — the highlight's pulse is bounded, the stuck animation it left behind a closed Brain window is gone, and a rules test keeps `.repeatForever` out of Settings
