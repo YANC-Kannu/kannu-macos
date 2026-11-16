@@ -15,7 +15,10 @@ denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
 [[ -s "${denylist}" ]] || exit 0
 work="$(mktemp -d)"
 trap 'rm -rf "${work}"' EXIT
-grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${work}/patterns" || true
+# 1 means the list has no names, which is no check; any other failure (an unreadable list) refuses.
+list_rc=0
+grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${work}/patterns" || list_rc=$?
+if (( list_rc > 1 )); then echo "ERROR: could not read the denylist (${denylist}); refusing to push." >&2; exit 1; fi
 [[ -s "${work}/patterns" ]] || exit 0
 
 # 0: the file holds a listed name; 1: it does not. Anything else is a failed scan, which refuses the push.

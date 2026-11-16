@@ -14,7 +14,10 @@ denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
 if [[ -s "${denylist}" ]]; then
   deny_work="$(mktemp -d)"
   trap 'rm -rf "${deny_work}"' EXIT
-  grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${deny_work}/patterns" || true
+  # 1 means the list has no names, which is no check; any other failure (an unreadable list) refuses.
+  deny_rc=0
+  grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${deny_work}/patterns" || deny_rc=$?
+  if (( deny_rc > 1 )); then echo "ERROR: could not read the denylist (${denylist}); refusing the commit."; exit 1; fi
   if [[ -s "${deny_work}/patterns" ]]; then
     # The objects being committed, not what replacement refs (refs/replace/*) would substitute.
     export GIT_NO_REPLACE_OBJECTS=1

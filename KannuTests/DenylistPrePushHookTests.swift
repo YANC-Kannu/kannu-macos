@@ -121,6 +121,26 @@ final class DenylistPrePushHookTests: XCTestCase {
         XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: clean), 0)
     }
 
+    func testAnUnreadableListRefusesThePush() throws {
+        try XCTSkipIf(getuid() == 0, "root can read a file whatever its permissions")
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        let clean = try commit("more.md", "nothing to refuse here\n", message: "clean work")
+        let list = try denylist()
+        try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: list.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: list.path) }
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: clean), 1,
+                       "a list that exists but cannot be read must refuse, never count as empty")
+    }
+
+    func testAListWithOnlyCommentsIsNoCheck() throws {
+        let server = try bareRepository("server")
+        let old = try commit("notes.md", "mentions \(Self.refused)\n", message: "old work")
+        try "# no names yet\n".write(to: denylist(), atomically: true, encoding: .utf8)
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: old), 0,
+                       "a readable list with no names is no check, like no list at all")
+    }
+
     func testWithoutAListThereIsNoCheck() throws {
         let server = try bareRepository("server")
         let old = try commit("notes.md", "mentions \(Self.refused)\n", message: "old work")
