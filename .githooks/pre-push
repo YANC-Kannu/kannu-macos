@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Refuses to publish commits that carry real work data: an author, committer, message or added line
+# that matches the local denylist, <git-common-dir>/info/kannu-denylist (see .githooks/pre-commit and
+# AGENTS.md, Security and privacy). It also stops a branch made from the history this repo had before
+# its 2026-11-16 rewrite from putting the old commits back. No file, no check.
+set -euo pipefail
+
+denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
+[[ -s "${denylist}" ]] || exit 0
+deny_patterns="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" || true)"
+[[ -n "${deny_patterns}" ]] || exit 0
+# grep reads all its input: -q would exit on the first match, the writer would die of SIGPIPE, and
+# pipefail would turn that match into a failure, so a hit would pass as clean.
+denied() { grep -i -F -f <(printf '%s\n' "${deny_patterns}") >/dev/null; }
+
+remote="$1"
+zero="0000000000000000000000000000000000000000"
+status=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ "${local_sha}" == "${zero}" ]] && continue        # a deletion publishes nothing
+  if [[ "${remote_sha}" != "${zero}" ]] && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+    commits="$(git rev-list "${remote_sha}..${local_sha}")"
+  else
+    commits="$(git rev-list "${local_sha}" --not --remotes="${remote}")"
+  fi
+  for c in ${commits}; do
+    if git show -s --format='%an <%ae>%n%cn <%ce>%n%B' "${c}" | denied \
+      || git show --format= -U0 --no-color --no-ext-diff "${c}" | awk '/^\+\+\+ (b\/|\/dev\/null)/ {next} /^\+/ {print}' | denied; then
+      echo "ERROR: pushing ${local_ref} would publish $(git rev-parse --short "${c}"), which matches the local denylist (${denylist})." >&2
+      status=1
+    fi
+  done
+done
+exit "${status}"

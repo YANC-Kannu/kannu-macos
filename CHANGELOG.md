@@ -4,6 +4,21 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - Pre-commit and pre-push checks against a local list of names never to publish
+- **Developer label:** Made-up data only in fixtures, tests and examples, enforced by the hooks
+- **Agent label:** Claude Code (Opus 5.5) — a denylist check in the pre-commit hook, a new pre-push hook, an AGENTS.md
+  rule, and two CHANGELOG commit references updated after the 2026-11-16 history rewrite
+- **Changes:**
+  - `.githooks/pre-commit` refuses a commit whose staged added lines, author or committer match the untracked list in
+    `<git-common-dir>/info/kannu-denylist` (one case-insensitive string per line, `#` for comments). It names the
+    files, never the matched text. With no list there is no check, so nothing changes for other contributors.
+  - New `.githooks/pre-push` refuses to publish commits whose author, committer, message or added lines match the same
+    list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back.
+  - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
+    made-up data only, and the list and both hooks are named there.
+  - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.
+    Citations of commits from the earlier repository are unchanged, since those commits still exist there.
+
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix
@@ -1363,7 +1378,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ### 2026-11-02 - Act on CodeRabbit's second review of #11
 - **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
-- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads
+- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of d4af1954, the rest answered in their threads
 - **Changes:**
   - Marking a task done, or starting it, cancels a pending done tick, so the end of its undo window
     no longer marks it done a second time or stops a timer just started.
@@ -1617,7 +1632,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 - **Agent label:** Claude Code (Opus 5.5) — the task form's focus holds the notch again, under the pointer-based close
 - **Changes:**
   - `TimerTaskForm` holds the notch while one of its fields has focus, so an edit survives the pointer
-    leaving the notch. `9352cf35` had removed this hold along with the timer tab's others.
+    leaving the notch. `9315a0eb` had removed this hold along with the timer tab's others.
   - The hold ends when the focus goes, the form goes or the notch's window stops being key, and
     `ContentView.closeWhenPointerLeaves` then closes the notch if the pointer is gone. Menus still
     hold nothing in the form, and the other timer-tab fields stay without a hold.

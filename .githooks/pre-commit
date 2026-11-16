@@ -5,6 +5,36 @@ if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   exit 0
 fi
 
+# --- Local denylist -----------------------------------------------------------
+# Real work data never lands in this public repo: fixtures, tests, comments and CHANGELOG lines use
+# made-up data only (AGENTS.md, Security and privacy). The names to refuse live in an untracked,
+# local file, so the list itself is never published: <git-common-dir>/info/kannu-denylist, one
+# case-insensitive fixed string per line, # for comments. No file, no check. The report names files,
+# never the matched text, which would otherwise end up in logs and transcripts.
+denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
+if [[ -s "${denylist}" ]]; then
+  deny_patterns="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" || true)"
+  if [[ -n "${deny_patterns}" ]]; then
+    added_lines() { awk '/^\+\+\+ (b\/|\/dev\/null)/ {next} /^\+/ {print}'; }
+    # grep reads all its input: -q would exit on the first match, the writer would die of SIGPIPE, and
+    # pipefail would turn that match into a failure, so a hit would pass as clean.
+    denied() { grep -i -F -f <(printf '%s\n' "${deny_patterns}") >/dev/null; }
+    deny_files=""
+    while IFS= read -r f; do
+      if git diff --cached -U0 --no-color --no-ext-diff -- "$f" | added_lines | denied; then deny_files+="  ${f}"$'\n'; fi
+    done < <(git diff --cached --name-only --diff-filter=ACMR)
+    deny_ident=""
+    if { git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT; } 2>/dev/null | denied; then deny_ident=1; fi
+    if [[ -n "${deny_files}" || -n "${deny_ident}" ]]; then
+      echo "ERROR: this commit matches the local denylist (${denylist})."
+      if [[ -n "${deny_files}" ]]; then printf 'Added lines in:\n%s' "${deny_files}"; fi
+      if [[ -n "${deny_ident}" ]]; then echo "The author or committer identity matches it too (check user.email)."; fi
+      echo "Use made-up data instead (acme, example.com, PROJ-123): AGENTS.md, Security and privacy."
+      exit 1
+    fi
+  fi
+fi
+
 # --- Hook-script mirror drift -------------------------------------------------
 # AgentHookInstaller.swift embeds the authoritative hook script;
 # scripts/kannu-agent-status.sh is a generated mirror that install-cursor-hooks.sh
