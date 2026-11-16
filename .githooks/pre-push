@@ -3,27 +3,43 @@
 # that matches the local denylist, <git-common-dir>/info/kannu-denylist (see .githooks/pre-commit and
 # AGENTS.md, Security and privacy). It also stops a branch made from the history this repo had before
 # its 2026-11-16 rewrite from putting the old commits back. No file, no check.
+#
+# It fails closed: every git step writes a file outside any condition, so an error stops the hook
+# (set -e) instead of reading as "no match", and grep's own errors refuse the push too.
 set -euo pipefail
+# The objects the push will transfer: replacement refs (refs/replace/*) would show rev-list and log a
+# substituted history, possibly clean, while the pack carries the original commits.
+export GIT_NO_REPLACE_OBJECTS=1
 
 denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
 [[ -s "${denylist}" ]] || exit 0
-deny_patterns="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" || true)"
-[[ -n "${deny_patterns}" ]] || exit 0
-# grep reads all its input: -q would exit on the first match, the writer would die of SIGPIPE, and
-# pipefail would turn that match into a failure, so a hit would pass as clean.
-denied() { grep -i -F -f <(printf '%s\n' "${deny_patterns}") >/dev/null; }
+work="$(mktemp -d)"
+trap 'rm -rf "${work}"' EXIT
+grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${work}/patterns" || true
+[[ -s "${work}/patterns" ]] || exit 0
+
+# 0: the file holds a listed name; 1: it does not. Anything else is a failed scan, which refuses the push.
+matches() {
+  local rc=0
+  grep -i -F -q -f "${work}/patterns" -- "$1" || rc=$?
+  if (( rc > 1 )); then echo "ERROR: the denylist scan failed (grep exit ${rc}); refusing to push." >&2; exit 1; fi
+  return "${rc}"
+}
 # The added lines of a diff, each file's header (from "diff --git" or --cc to its first hunk) skipped whole.
 added_lines() { awk '/^diff --(git|cc|combined) /{h=1} /^@@/{h=0; next} h{next} /^\+/{print}'; }
+# Raw content only: no external diff and no textconv, which could fail or rewrite what is scanned.
+diff_options=(--format= -p --cc -U0 --no-color --no-ext-diff --no-textconv)
+meta_format='%an <%ae>%n%cn <%ce>%n%B'
 
 push_url="${2:-$1}"
 zero="0000000000000000000000000000000000000000"
 
 # What the server already has, read from the server the push goes to: the tips of its branches and tags
 # that this clone also holds. That is $2, the URL git pushes to; the remote's name ($1) would read its
-# fetch URL, which can name another server. Local remote-tracking refs are never used for this. In a clone that missed the
-# 2026-11-16 rewrite they still point at the old history, and excluding what they reach would hide
-# exactly the commits this hook exists to stop. If the server cannot be read, nothing is excluded and
-# every commit the push reaches is scanned.
+# fetch URL, which can name another server. Local remote-tracking refs are never used for this. In a clone
+# that missed the 2026-11-16 rewrite they still point at the old history, and excluding what they reach
+# would hide exactly the commits this hook exists to stop. If the server cannot be read, nothing is
+# excluded and every commit the push reaches is scanned.
 server_has=()
 while read -r sha ref; do
   case "${ref}" in *'^{}') continue ;; esac
@@ -36,22 +52,24 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # remote_sha is the server's own value for this ref (from the push itself), so what it reaches is
   # already there.
   if [[ "${remote_sha}" != "${zero}" ]] && git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
-    commits="$(git rev-list "${local_sha}" "^${remote_sha}" ${server_has[@]+"${server_has[@]}"})"
+    git rev-list "${local_sha}" "^${remote_sha}" ${server_has[@]+"${server_has[@]}"} > "${work}/commits"
   else
-    commits="$(git rev-list "${local_sha}" ${server_has[@]+"${server_has[@]}"})"
+    git rev-list "${local_sha}" ${server_has[@]+"${server_has[@]}"} > "${work}/commits"
   fi
-  [[ -n "${commits}" ]] || continue
+  [[ -s "${work}/commits" ]] || continue
   # One pass over all of them first; only a hit pays for naming the commits one by one.
-  if ! { printf '%s\n' ${commits} | git log --stdin --no-walk=unsorted --format='%an <%ae>%n%cn <%ce>%n%B' | denied; } \
-    && ! { printf '%s\n' ${commits} | git log --stdin --no-walk=unsorted --format= -p --cc -U0 --no-color --no-ext-diff | added_lines | denied; }; then
-    continue
-  fi
-  for c in ${commits}; do
-    if git show -s --format='%an <%ae>%n%cn <%ce>%n%B' "${c}" | denied \
-      || git show --format= --cc -U0 --no-color --no-ext-diff "${c}" | added_lines | denied; then
+  git log --stdin --no-walk=unsorted --format="${meta_format}" < "${work}/commits" > "${work}/meta"
+  git log --stdin --no-walk=unsorted "${diff_options[@]}" < "${work}/commits" > "${work}/diff"
+  added_lines < "${work}/diff" > "${work}/added"
+  if ! matches "${work}/meta" && ! matches "${work}/added"; then continue; fi
+  while read -r c; do
+    git show -s --format="${meta_format}" "${c}" > "${work}/one-meta"
+    git show "${diff_options[@]}" "${c}" > "${work}/one-diff"
+    added_lines < "${work}/one-diff" > "${work}/one-added"
+    if matches "${work}/one-meta" || matches "${work}/one-added"; then
       echo "ERROR: pushing ${local_ref} would publish $(git rev-parse --short "${c}"), which matches the local denylist (${denylist})." >&2
       status=1
     fi
-  done
+  done < "${work}/commits"
 done
 exit "${status}"

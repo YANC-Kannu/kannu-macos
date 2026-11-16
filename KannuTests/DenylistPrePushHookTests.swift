@@ -22,8 +22,10 @@ import XCTest
 /// `.githooks/pre-push` refuses to publish commits that match the local denylist
 /// (`<git-common-dir>/info/kannu-denylist`). What it treats as already published must come from the server the
 /// push goes to: never from local remote-tracking refs, which in a clone that missed a history rewrite still reach
-/// the old commits, and never from a remote's fetch URL when its push URL names another server. Each test builds
-/// throwaway repositories and runs the real hook with the arguments and input git gives it.
+/// the old commits, and never from a remote's fetch URL when its push URL names another server. What it scans must
+/// be what the push transfers: not a replacement ref's substitute, and not a textconv filter's rendering, which can
+/// fail or print nothing. Each test builds throwaway repositories and runs the real hook with the arguments and
+/// input git gives it.
 final class DenylistPrePushHookTests: XCTestCase {
     private static let hook = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()   // KannuTests/
@@ -82,6 +84,34 @@ final class DenylistPrePushHookTests: XCTestCase {
         try git(["remote", "set-url", "--push", "split", pushServer.path], in: work)
         XCTAssertEqual(try runHook(remote: "split", url: pushServer.path, pushing: old), 1,
                        "what the fetch server has says nothing about the server this push goes to")
+    }
+
+    func testSeesThroughAReplacementRef() throws {
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        try git(["checkout", "-q", "-b", "old"], in: work)
+        let old = try commit("notes.md", "mentions \(Self.refused)\n", message: "old work")
+        try git(["checkout", "-q", "main"], in: work)
+        try git(["checkout", "-q", "-b", "decoy"], in: work)
+        let decoy = try commit("notes.md", "nothing to refuse here\n", message: "decoy")
+        try git(["replace", old, decoy], in: work)   // refs/replace shows the decoy in the old commit's place
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: old), 1,
+                       "the push transfers the original commit, whatever a replacement ref shows")
+    }
+
+    func testATextconvFilterCanNeitherBreakNorHideTheScan() throws {
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        try git(["checkout", "-q", "-b", "old"], in: work)
+        let old = try commit("notes.md", "mentions \(Self.refused)\n", message: "old work")
+        try "*.md diff=opaque\n".write(to: work.appendingPathComponent(".git/info/attributes"),
+                                      atomically: true, encoding: .utf8)
+        try git(["config", "diff.opaque.textconv", "false"], in: work)
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: old), 1,
+                       "a failing textconv must not turn into a clean scan: raw content is what gets pushed")
+        try git(["config", "diff.opaque.textconv", "true"], in: work)
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: old), 1,
+                       "a textconv that prints nothing must not hide the line")
     }
 
     func testAllowsACleanPush() throws {

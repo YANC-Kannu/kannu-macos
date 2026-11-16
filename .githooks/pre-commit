@@ -8,26 +8,39 @@ set -euo pipefail
 # case-insensitive fixed string per line, # for comments. No file, no check. It runs before the merge
 # exemption below, so a conflict resolution is checked too. The report names files, never the matched
 # text, which would otherwise end up in logs and transcripts.
+# It fails closed: every git step writes a file outside any condition, so an error stops the hook
+# (set -e) instead of reading as "no match", and grep's own errors refuse the commit too.
 denylist="$(git rev-parse --git-common-dir)/info/kannu-denylist"
 if [[ -s "${denylist}" ]]; then
-  deny_patterns="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" || true)"
-  if [[ -n "${deny_patterns}" ]]; then
+  deny_work="$(mktemp -d)"
+  trap 'rm -rf "${deny_work}"' EXIT
+  grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${deny_work}/patterns" || true
+  if [[ -s "${deny_work}/patterns" ]]; then
+    # The objects being committed, not what replacement refs (refs/replace/*) would substitute.
+    export GIT_NO_REPLACE_OBJECTS=1
+    # 0: the file holds a listed name; 1: it does not. Anything else is a failed scan.
+    deny_matches() {
+      local rc=0
+      grep -i -F -q -f "${deny_work}/patterns" -- "$1" || rc=$?
+      if (( rc > 1 )); then echo "ERROR: the denylist scan failed (grep exit ${rc}); refusing the commit."; exit 1; fi
+      return "${rc}"
+    }
     # The added lines of a diff. A file's header, from its "diff --git" (or --cc) line to its first hunk,
     # is skipped whole, so a quoted or unusual path in it is never read as an added line.
     added_lines() { awk '/^diff --(git|cc|combined) /{h=1} /^@@/{h=0; next} h{next} /^\+/{print}'; }
-    # grep reads all its input: -q would exit on the first match, the writer would die of SIGPIPE, and
-    # pipefail would turn that match into a failure, so a hit would pass as clean.
-    denied() { grep -i -F -f <(printf '%s\n' "${deny_patterns}") >/dev/null; }
     deny_files=""
     # NUL-delimited and literal: a quoted path (core.quotePath) or one that reads as pathspec magic
-    # would otherwise name the wrong file, and its added lines would go unchecked.
+    # would otherwise name the wrong file. T covers a symlink that became a file. Raw content only:
+    # no external diff and no textconv, which could fail or rewrite what is scanned.
+    git diff --cached --name-only -z --diff-filter=ACMRT > "${deny_work}/paths"
     while IFS= read -r -d '' f; do
-      if git --literal-pathspecs diff --cached -U0 --no-color --no-ext-diff -- "$f" | added_lines | denied; then
-        deny_files+="  ${f}"$'\n'
-      fi
-    done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+      git --literal-pathspecs diff --cached -U0 --no-color --no-ext-diff --no-textconv -- "$f" > "${deny_work}/diff"
+      added_lines < "${deny_work}/diff" > "${deny_work}/added"
+      if deny_matches "${deny_work}/added"; then deny_files+="  ${f}"$'\n'; fi
+    done < "${deny_work}/paths"
+    { git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT; } > "${deny_work}/ident"
     deny_ident=""
-    if { git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT; } 2>/dev/null | denied; then deny_ident=1; fi
+    if deny_matches "${deny_work}/ident"; then deny_ident=1; fi
     if [[ -n "${deny_files}" || -n "${deny_ident}" ]]; then
       echo "ERROR: this commit matches the local denylist (${denylist})."
       if [[ -n "${deny_files}" ]]; then printf 'Added lines in:\n%s' "${deny_files}"; fi

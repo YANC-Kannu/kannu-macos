@@ -13,14 +13,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `<git-common-dir>/info/kannu-denylist` (one case-insensitive string per line, `#` for comments). It names the
     files, never the matched text. With no list there is no check, so nothing changes for other contributors. It
     runs before the merge exemption, so a conflict resolution is checked too, and reads staged paths NUL-delimited
-    and literally, so a quoted or non-ASCII path is not skipped.
+    and literally, so a quoted or non-ASCII path is not skipped, and scans type changes (a symlink become a file).
   - New `.githooks/pre-push` refuses to publish commits whose author, committer, message or added lines match the same
     list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back. What the server
     already has comes from the server the push goes to (`git ls-remote` on the push URL, not the remote's fetch
     URL), never from this clone's remote-tracking refs, which in a clone that missed the rewrite still reach the old
-    commits.
+    commits. Both hooks scan the raw objects being committed or pushed (no textconv, no replacement refs) and fail
+    closed: a git or grep error refuses instead of passing as clean.
   - New `KannuTests/DenylistPrePushHookTests` runs the real pre-push hook against throwaway repositories: a commit
-    reachable only from a stale tracking ref, a remote whose fetch and push URLs differ, a clean push, and no list.
+    reachable only from a stale tracking ref, a remote whose fetch and push URLs differ, a replacement ref, a textconv
+    filter that fails or prints nothing, a clean push, and no list.
   - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
     made-up data only, and the list and both hooks are named there.
   - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.
