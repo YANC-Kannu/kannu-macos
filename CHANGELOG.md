@@ -55,6 +55,78 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Pins moved: `NotchFontRulesTests` counts the waveform's symbol font (22 in `NotchNotesView`), and
     `SettingsHighlightInventoryTests` counts the new row and its search entry.
 
+### 2026-11-16 - The status line clears only its own error, by source
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix
+- **Changes:**
+  - The Editor hooks error line records which job wrote it (`HookErrorLine` in `AgentHookLayout.swift`), and a
+    status line success clears only a status line failure. The previous fix matched by message, which cleared a
+    hook install's error that read the same. Both do when Kannu cannot parse `settings.json`.
+  - `AgentHookInstaller.lastError` now reads from that line; install and uninstall write through it.
+  - Test: `AgentHookLayoutTests` covers identical messages from a status line failure and a hook install.
+
+### 2026-11-16 - Answer CodeRabbit's follow-ups on the async Claude hooks
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's two replies to the review fixes, through Auto-fix
+- **Changes:**
+  - The hook script treats a turn as ended when the file records `turn_ended_ms`, not only when it says
+    stopped. The 2 s carry can keep the light yellow over the Stop that ended the turn, and a late generic
+    PreToolUse for a gated tool (it derives yellow too) got past the stale check and reopened the turn.
+  - "Live Claude Code limits": the next successful status line change clears the status line's own error. An
+    error a hook install raised since stays.
+  - Test: `HookScriptTests` covers a late gated-tool event that leaves a carry-held ended turn ended.
+
+### 2026-11-16 - Answer CodeRabbit's review of the async Claude hooks
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — the four findings of CodeRabbit's first review of the async hooks, through Auto-fix
+- **Changes:**
+  - The groups that turn the light yellow block again: PermissionRequest, the gated PreToolUse, and Notification's
+    needs-input group. They run only when Claude asks the user something. Async, a PermissionRequest that finished
+    after the approval, the tool and the Stop painted a finished chat yellow.
+  - The hook script's stale check: a needs-you event that started before an ended turn is stale, because a turn
+    cannot end while its request is open; before, it got through, painted the chat yellow and reopened the turn (a
+    PermissionRequest counts as a wake event). Against a working state it still gets through, since a parallel
+    request may still be open. A quota stop is now stale against a newer turn, like any stop.
+  - A late tool call is no longer counted into a turn that started after it.
+  - "Live Claude Code limits": a failure to install or hand back the status line shows under Editor hooks, not
+    only in the log.
+  - `AgentHookInstaller.swift` gains the project's GPL header.
+  - Tests: the blocking groups include the needs-you ones. Four new `HookScriptTests` cases: an answered request
+    that cannot reopen an ended turn, an older quota stop that cannot end a newer turn, a late call that is not
+    counted into the next turn, and an open request that outlives a newer tool event.
+
+### 2026-11-13 - Claude no longer waits on Kannu's hooks, and the status line is opt-in
+- **Developer label:** "what is an artifact the is getting called to kannu app in every prompt, a user complained about that" — then "can this be avoided"
+- **Agent label:** Claude Code (Opus 5.5) — traced the complaint, made the hooks async with a stale-event guard (hook v49), made the status line opt-in, tests
+- **Changes:**
+  - Claude Code hooks: all 15 Kannu groups used to block, so Claude waited on Kannu once per prompt and twice per
+    tool call. On one Mac that was a median 160–200 ms a run over about 76,000 runs, and 44 runs hit the 10-second
+    timeout. Groups are now `"async": true` except the ones where Kannu may answer: Stop, StopFailure,
+    SubagentStop and SessionEnd always block, PreToolUse blocks while "Block matching tool calls" is on, and the
+    note events block while "Tell the agent when hidden text is found" is on. Which groups block follows the
+    marker files the script reads, and turning either setting on or off re-merges the hooks
+    (`AgentHookInstaller.refreshClaudeHookModes`). The merge is now `AgentHookLayout.mergingClaudeGroups`.
+  - Hook script v49: async hooks keep no order, so a PostToolUse could land after the Stop and turn a finished
+    chat green. Each write records `event_started_ms`. An event that started before the one behind the file's
+    state keeps the state, clock, turn and verdict, and adds only its sightings and its tool call (`counted_call`,
+    now shared with `next_turn`). A needs-you or quota event is never dropped. `signal.alarm(10)` ends the script,
+    because Claude enforces no timeout on async hooks.
+  - Status line: Kannu no longer takes over Claude Code's `statusLine` on every install and every hook-version
+    bump. A new toggle, "Live Claude Code limits" (Agents › Editor hooks, off by default, `claudeStatusLineUsage`),
+    controls it; how it works is in the section's footer, per the row-copy rule in `docs/SETTINGS.md`. While it is
+    off, launch hands back a status line an earlier Kannu took over (the user's chained
+    command, or none) and removes the usage script. When it is on, the takeover keeps the user's `padding`,
+    `refreshInterval` and `hideVimModeIndicator`. Uninstalling the Claude hooks turns it off. A `settings.json`
+    Kannu cannot parse keeps its status line and the script it runs. Claude Desktop users see no change: Desktop
+    never runs a status line, and Kannu reads its own usage history.
+  - The reported "artifact": no Kannu release writes a file per prompt. Hooks write one status file per chat, and
+    the per-chat `.lock` files some Macs still hold were left by hooks older than v30.
+  - Tests: `AgentHookLayoutTests` covers the blocking split for every combination of the two settings, the merge,
+    the blocking sets pinned to the script's own, and the status line takeover and hand-back. `HookScriptTests`
+    covers a late PostToolUse that keeps a finished turn and still counts its call, urgent states that outlive an
+    older tool event, a needs-you event that is never stale, a later event that still wins, and a SessionStart that
+    lost the race to the first prompt. `SettingsHighlightInventoryTests` counts the new row and its search entry.
+
 ### 2026-11-16 - Fit Time to log's card in Brain › Tasks' list column at full screen
 - **Developer label:** Brain › Tasks at a 14-inch full screen clips the Time to log card: "1 waitin", "Comment (o…"
   and a cut ⋯ (found on the launch video's `videoTimeToLog` board)
@@ -1696,6 +1768,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Test: `SettingsAnimationRulesTests` pins all of this, checked against planted offenders and by
     breaking the real controller eight ways.
   - `docs/REGRESSIONS.md` entry 22 gains a dated addendum, and its Danger zones row is rewritten.
+
+### 2026-10-31 - SonarCloud CI, Dependabot for GitHub Actions (#8)
+- **Developer label:** Setup SonarCloud, Snyk, and CodeRabbit (#8)
+- **Agent label:** SonarCloud macOS workflow, dependabot.yml, sonar-project.properties
+- **Changes:**
+  - Added `.github/workflows/sonarcloud.yml` (macOS runner, `SonarSource/sonarqube-scan-action@v7`,
+    `SONAR_TOKEN` + PR decoration via `GITHUB_TOKEN`; skips fork PRs without secrets).
+  - Added root `sonar-project.properties` for org `yanc-kannu`, project `YANC-Kannu_kannu-macos`,
+    sources `Kannu` + `scripts`, tests `KannuTests`, exclusions for assets and the mirrored
+    `Kannu/Kannu` tree.
+  - Added `.github/dependabot.yml` for weekly grouped bumps to GitHub Actions pins in workflows.
+  - Pinned SonarCloud workflow actions to full commit SHAs; dropped the unused Xcode setup step
+    (the scanner job does not compile the app).
 
 ### 2026-10-30 - The Settings highlight stops pulsing once it clears
 - **Developer label:** "Check CPU report"
