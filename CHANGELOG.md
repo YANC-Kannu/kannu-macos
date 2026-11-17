@@ -31,6 +31,34 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Pins moved: `NotchFontRulesTests` counts the waveform's symbol font (22 in `NotchNotesView`), and
     `SettingsHighlightInventoryTests` counts the new row and its search entry.
 
+### 2026-11-17 - Keep project-name slug decoding off files, symbolic links and public logs
+- **Developer label:** "Fix CodeRabbit's findings on PR #68"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release, Auto-fix
+- **Changes:**
+  - A Cursor slug decode now reads folders through `ProjectNameRules.slugDecodableFolders(in:homeDirectory:)`, moved
+    from `CursorTranscriptParser` into the tested file. It returns only real folders: a file named like the project
+    can no longer win the match, and a symbolic link is never followed into a privacy-prompting folder.
+  - A slug that cannot be decoded and is not under the home folder gets the new rule `cursor-slug-unresolved`, and the
+    `ProjectName` log prints its name private, because the whole slug spells out a folder path.
+  - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
+  - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
+
+### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
+- **Developer label:** "Make project-name detection observable, and fix its two known bugs"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
+- **Changes:**
+  - `ProjectNameRules.projectName(forWorkingDirectory:)` (new, Foundation-only) names a chat's project after its
+    folder, except under `<repo>/.claude/worktrees/<name>`, a Claude Desktop worktree, which is named `<repo>`. The
+    hook file reader, Claude's passive session record and the Claude/Codex transcript fallback all go through it. The
+    hook script is unchanged.
+  - Cursor project slugs decode against the folders that exist, so `acme-api` stays `acme-api` instead of `api`. The
+    fallback encodes the home folder the way Cursor does, so a home with a dot or underscore matches its slug. Kannu
+    never lists a home folder that raises a privacy prompt, or `/Volumes`.
+  - New `ProjectName` log category (`com.kannu.app`): one line per change, with the agent, source, session id, chosen
+    name and rule public and the paths private.
+  - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
+    folders, and the Cursor slug decoder.
+
 ### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
 - **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
 - **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of
