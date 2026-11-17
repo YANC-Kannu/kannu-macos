@@ -83,15 +83,12 @@ private struct TrafficLightStyleCard: View {
         let shape = RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous)
         Button(action: onTap) {
             HStack(spacing: SettingsMetrics.cardPadding) {
-                // A real notch preview: same view the closed notch draws, on the same dark
-                // background, showing the "agent is running" state.
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.black)
-                    AgentTrafficLightDots(style: style, state: .executing)
-                }
-                .frame(width: 76, height: 34)
-                .accessibilityHidden(true)
+                // A real notch preview: the sideways pill the closed notch draws, the "agent is
+                // running" dot left of the housing and a symbol stand-in for the agent's app icon right
+                // of it. Still, like Brain's preview: nothing breathes here.
+                // Classic's three dots make the widest preview (148 pt): both cards share its width.
+                AgentPillLayoutPreview(style: style, layout: .sideways)
+                    .frame(width: 148, height: 34)
 
                 // A label inside the card's button, so it stays unselectable: selectable text swallows the click.
                 VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {

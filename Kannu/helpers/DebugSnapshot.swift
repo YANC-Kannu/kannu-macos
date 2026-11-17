@@ -387,6 +387,12 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("notch") == true {
             await render(AnyView(notchBoard), name: "notch-dots", dark: true, width: 360, into: request.directory, scale: 4)
         }
+        if request.tabs == nil || request.tabs?.contains("closedAgentPill") == true {
+            // Marketing's source of truth for the sideways pill (the video and the site match its pixels): 1 pt
+            // is 2 px at this scale. Fixtures only, and symbol stand-ins for every app icon.
+            await render(AnyView(closedAgentPillBoard), name: "closedAgentPill", dark: true, width: 1440,
+                         into: request.directory, scale: 2, background: Color(white: 0.16))
+        }
         if request.tabs == nil || request.tabs?.contains("notchFills") == true {
             // Notch content on fills that flip its text, set up the way ContentView does: a light
             // scheme inside the always-dark notch window. Black is the before/after control.
@@ -1096,6 +1102,149 @@ enum DebugSnapshots {
                 }
             }
         }
+    }
+
+    /// The closed agent light on every display kind, from fixtures: the sideways pill on a notched MacBook
+    /// (Classic and Minimal, working, waiting and stopped, with the shield once), the centred dots that a
+    /// display without a notch and the Dynamic Island keep, the lock-screen pill before and during a reveal,
+    /// the band below the notch (`AgentPillLayout.belowNotch`), and the sideways pill on the Horns skin.
+    /// Every icon is a symbol stand-in (`AgentProviderIconView.symbolsOnly`). Each row's caption carries its
+    /// measured size, so the video and the site can match it without opening the code.
+    private static var closedAgentPillBoard: some View {
+        let closedHeight: CGFloat = 32
+        let housing: CGFloat = 185
+        let states: [(name: String, state: AgentTrafficLightState, icon: AgentProviderIconSource)] = [
+            ("working", .executing, .claude),
+            ("waiting", .awaitingInput, .cursor),
+            ("stopped", .stopped, .codex),
+        ]
+        let notch = NotchShape(topCornerRadius: cornerRadiusInsets.closed.top,
+                               bottomCornerRadius: cornerRadiusInsets.closed.bottom)
+        let bandHeight = physicalNotchAgentTrafficLightHeight(screenName: "kannu-board-no-screen",
+                                                              closedNotchHeight: closedHeight)
+        let bandOffset = physicalNotchAgentTrafficLightVerticalOffset(expandedHeight: bandHeight,
+                                                                      closedNotchHeight: closedHeight,
+                                                                      screenName: "kannu-board-no-screen")
+        let lockModel = LockScreenLiveActivityOverlayModel()
+        lockModel.scale = 1
+        lockModel.opacity = 1
+        let hornsSkin = NSImage(named: "notch-skin-horns")
+        // `ContentView.mainLayoutBase` pads the closed notch's content by this on each side before it paints
+        // the body, so the black shape is the content plus twice this.
+        let bodyPadding = cornerRadiusInsets.closed.bottom
+
+        func caption(_ text: String) -> some View {
+            Text(verbatim: text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.75))
+        }
+        func sideways(_ style: AgentTrafficLightStyle, _ state: AgentTrafficLightState, _ icon: AgentProviderIconSource,
+                      shield: Bool = false) -> ClosedAgentPillLayout {
+            ClosedAgentPillLayout(closedHeight: closedHeight, housingWidth: housing, dotCount: style.pillDotCount,
+                                  showsShield: shield)
+        }
+        func pill(_ style: AgentTrafficLightStyle, _ state: AgentTrafficLightState, _ icon: AgentProviderIconSource,
+                  shield: Bool = false) -> some View {
+            AgentSidewaysPillRow(layout: sideways(style, state, icon, shield: shield), iconSource: icon,
+                                 symbolsOnly: true, accessibilityLabel: "") {
+                AgentTrafficLightDots(style: style, state: state)
+            }
+        }
+        func size(_ layout: ClosedAgentPillLayout) -> String {
+            "body \(Int(layout.width + 2 * bodyPadding)) × \(Int(layout.closedHeight)) pt (content \(Int(layout.width)), wings \(Int(layout.wingWidth)), housing \(Int(layout.housingWidth)), icon \(Int(layout.iconSize)), dot 10)"
+        }
+
+        return VStack(alignment: .leading, spacing: 22) {
+            ForEach([AgentTrafficLightStyle.classic, .minimal], id: \.self) { style in
+                VStack(alignment: .leading, spacing: 8) {
+                    caption("Notched MacBook, beside the notch (default), \(style.rawValue): \(size(sideways(style, .executing, .claude)))")
+                    HStack(alignment: .top, spacing: 20) {
+                        ForEach(states.indices, id: \.self) { index in
+                            VStack(alignment: .leading, spacing: 4) {
+                                pill(style, states[index].state, states[index].icon)
+                                    .padding(.horizontal, bodyPadding)
+                                    .background(notch.fill(Color.black))
+                                caption(states[index].name)
+                            }
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                caption("With a high finding: the shield beside the dot, \(size(sideways(.minimal, .executing, .claude, shield: true)))")
+                pill(.minimal, .executing, .claude, shield: true)
+                    .padding(.horizontal, bodyPadding)
+                    .background(notch.fill(Color.black))
+            }
+            ForEach([false, true], id: \.self) { island in
+                VStack(alignment: .leading, spacing: 8) {
+                    caption(island ? "Dynamic Island (no notch): centred dots, unchanged" : "Display without a notch: centred dots, unchanged")
+                    HStack(spacing: 14) {
+                        ForEach([AgentTrafficLightStyle.classic, .minimal], id: \.self) { style in
+                            ForEach(states.indices, id: \.self) { index in
+                                AgentTrafficLightDots(style: style, state: states[index].state)
+                                    .frame(width: housing, height: closedHeight)
+                                    .padding(.horizontal, bodyPadding)
+                                    .background {
+                                        if island {
+                                            DynamicIslandPillShape(cornerRadius: max(closedHeight / 2, dynamicIslandPillCornerRadiusInsets.closed))
+                                                .fill(Color.black)
+                                        } else {
+                                            notch.fill(Color.black)
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                caption("Lock screen pill: the lock icon, then during a reveal the lit dot and the icon (window size unchanged)")
+                HStack(spacing: 20) {
+                    LockScreenLiveActivityOverlay(model: lockModel, animator: LockIconAnimator(initiallyLocked: true),
+                                                  notchSize: CGSize(width: housing, height: closedHeight))
+                    ForEach(states.indices, id: \.self) { index in
+                        LockScreenLiveActivityOverlay(model: lockModel, animator: LockIconAnimator(initiallyLocked: true),
+                                                      notchSize: CGSize(width: housing, height: closedHeight),
+                                                      agentPreview: AgentLockPillPreview(state: states[index].state,
+                                                                                         iconSource: states[index].icon))
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                caption("Below the notch (Brain › Agents › Advanced): the band, body \(Int(housing + 2 * bodyPadding)) × \(Int(bandHeight)) pt, dots \(Int(bandOffset)) pt below centre")
+                HStack(spacing: 20) {
+                    ForEach([AgentTrafficLightStyle.classic, .minimal], id: \.self) { style in
+                        AgentTrafficLightDots(style: style, state: .executing)
+                            .offset(y: bandOffset)
+                            .frame(width: housing, height: bandHeight)
+                            .padding(.horizontal, bodyPadding)
+                            .background(notch.fill(Color.black))
+                    }
+                }
+            }
+            if let hornsSkin {
+                VStack(alignment: .leading, spacing: 8) {
+                    caption("On the Horns skin (predates the pill; being redrawn): the dot and the icon sit on its decorated ends")
+                    HStack(spacing: 20) {
+                        ForEach(states.indices, id: \.self) { index in
+                            let layout = sideways(.minimal, states[index].state, states[index].icon)
+                            pill(.minimal, states[index].state, states[index].icon)
+                                .padding(.horizontal, bodyPadding)
+                                .background {
+                                    Image(nsImage: hornsSkin)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: layout.width + 2 * bodyPadding, height: layout.closedHeight)
+                                        .clipShape(notch)
+                                }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// A page below Brain › Tasks' first, as the tab draws it: the back row bare on the panel, the page under it.
