@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

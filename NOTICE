@@ -4,6 +4,10 @@ This product includes software derived from the boring.notch project,
 modified and adapted for Kannu (കണ്ണ്). The boring.notch project
 is licensed under the GNU General Public License v3.0.
 
+This product also includes software from Atoll
+(https://github.com/Ebullioscopic/Atoll), licensed under the GNU GPL v3.0,
+itself derived from boring.notch.
+
 See the LICENSE file for the full GPL v3 text.
 
 This product bundles the Geist and Geist Mono fonts, Copyright 2024 The

@@ -2,6 +2,7 @@
  * Kannu (കണ്ണ്)
  * Original work Copyright (C) 2026 ZephyrCodesStuff (https://github.com/ZephyrCodesStuff/rtaudio)
  * Modified work Copyright (C) 2026 Kannu Contributors
+ * Modified work Copyright (C) 2026 Atoll Contributors
  *
  * Objective-C bridge to expose C++ AudioProcessor to Swift.
  *

@@ -2,6 +2,7 @@
  * Kannu (കണ്ണ്)
  * Original work Copyright (C) 2026 ZephyrCodesStuff (https://github.com/ZephyrCodesStuff/rtaudio)
  * Modified work Copyright (C) 2026 Kannu Contributors
+ * Modified work Copyright (C) 2026 Atoll Contributors
  *
  * Real-time audio processor using Accelerate framework for efficient RMS
  * and biquad filtering.

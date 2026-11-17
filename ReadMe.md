@@ -10,9 +10,6 @@ notch shows them at a glance. *Kannu* (കണ്ണ്) means eye in Malayalam.
 This project is licensed under GPL v3. See [LICENSE](LICENSE) and [NOTICE](NOTICE) for upstream
 attribution.
 
-Kannu is a fork of [Atoll](https://github.com/Ebullioscopic/Atoll), which itself builds on the
-broader macOS notch lineage including [Boring.Notch](https://github.com/TheBoredTeam/boring.notch).
-
 ## What's inside
 
 ### Brain
@@ -79,9 +76,6 @@ broader macOS notch lineage including [Boring.Notch](https://github.com/TheBored
 - Media controls, live activities, lock screen widgets, stats, timers, notes, clipboard and shelf.
 - **Keyboard shortcuts are off by default:** turn them on in **Brain › Settings › Shortcuts** when
   you want hotkeys.
-
-Calendar, terminal and color picker features from the Atoll/Boring.Notch lineage are removed in
-this fork.
 
 ## Requirements
 
@@ -211,9 +205,6 @@ shells for Windows 11 and Linux.
 
 GPL v3: see [LICENSE](LICENSE).
 
-## Acknowledgments
+## Credits
 
-Kannu is a fork of [Atoll](https://github.com/Ebullioscopic/Atoll) and inherits its architecture,
-notch interaction patterns, and many features from that project. Atoll and Kannu both trace back to
-[Boring.Notch](https://github.com/TheBoredTeam/boring.notch) and other open-source macOS notch
-projects listed in upstream documentation.
+Kannu began as a fork of Atoll, which derives from boring.notch; both are GPL-3.0.

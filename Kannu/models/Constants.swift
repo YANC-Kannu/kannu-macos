@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * Originally from boring.notch project
  * Modified and adapted for Kannu (കണ്ണ്)
@@ -1894,8 +1895,8 @@ extension Defaults.Keys {
 /// (`scripts/manual-release.sh` and `.github/workflows/release.yml` grep the `static let codename` declaration, so keep its
 /// shape). Kannu names releases after watchers — the app's job is to watch your
 /// agents — one per feature release: Argus (1.2.0), Heimdall (1.3.0), Horus (2.0.0), then Vigil, Sentinel.
-/// 1.0.0 shipped as "Fiji", the tail of the Atoll island chain this fork inherited; that was not a
-/// scheme choice and is not continued.
+/// 1.0.0 shipped as "Fiji", the tail of an earlier island-name chain; that was not a scheme choice
+/// and is not continued.
 ///
 /// The name is picked for what the release does, not just for its turn in the list. Argus was many
 /// eyes — 1.2.0 only watched. Heimdall keeps watch at Bifröst *and refuses passage*, which is the

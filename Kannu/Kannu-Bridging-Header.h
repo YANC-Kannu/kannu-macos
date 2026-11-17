@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * Swift bridging header for Objective-C/C++ code.
  *
