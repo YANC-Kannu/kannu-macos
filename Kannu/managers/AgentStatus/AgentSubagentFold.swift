@@ -111,6 +111,20 @@ extension AgentTrafficLightMapper {
         }
     }
 
+    /// Whether Claude Code says this session is busy right now: a turn running or work it started
+    /// still going. `busy` only — `waiting` is a prompt on screen and `shell` a background command,
+    /// neither of which is the agent at work. Read only while the process is alive. Keeps an aged
+    /// `executing`/`thinking` hook session green (`holdsActiveRun`).
+    static func claudeBusy(status: String?) -> Bool {
+        status == "busy"
+    }
+
+    /// Whether Claude Code says a prompt or dialog is up. Corroborates a hook's yellow
+    /// (`awaitingInputOutlivesStaleCap`), never creates one: yellow originates from hooks only.
+    static func claudeRecordWaiting(status: String?) -> Bool {
+        status == "waiting"
+    }
+
     /// When a fresh `idle` stops counting as ongoing; nil once it has (or for any other status).
     /// The monitor rescans then, since nothing else may write.
     static func claudeIdleGraceEndMs(status: String?, statusUpdatedAtMs: Int64?, nowMs: Int64) -> Int64? {

@@ -4,6 +4,30 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Claude Desktop chats: a question is yellow, busy stays green
+- **Developer label:** "yellow detection and green detection persistence is not good now in kannu, what happened to that, for claude"
+- **Agent label:** Claude Code (Opus 5.5) — Claude detection lane, from the 18 Nov plan David approved for beta.2
+- **Changes:**
+  - Hook v50. A blocking Claude `PreToolUse` group for Claude Desktop's next-step question tool
+    (`mcp__ccd_turn__wrap_up`, one constant: `AgentHookLayout.claudeQuestionTool` and the script's `QUESTION_TOOL`)
+    marks the turn `question_open` when its `ask` is not empty, changing no state. A `Stop`, or a `StopFailure`
+    other than a rate limit, on that turn writes `awaiting_input` instead of `stopped`; `UserPromptSubmit` and
+    `UserPromptExpansion` clear it; `SessionEnd` keeps the file, marked `process_ended`. The mirror is regenerated, the
+    version migration reinstalls the hook, and the cloud relay leaves the group out.
+  - `AgentSessionLogParser`: a `.questionOpen` tail verdict (the newest question newer than the newest real prompt),
+    widening the read window once to find it. The passive side reads it as a finished turn.
+  - The question yellow is held while that verdict stands, live process or not, for at most 12 h from the `Stop`
+    (`holdsOpenQuestion`, `questionHoldMs`), in `holdsAwaitingInput` and `awaitingInputOutlivesStaleCap`; the
+    reconciler no longer demotes a held question. A dead process's transcript is read from the hook's
+    `transcript_path`. Claude's record `waiting`, with a live process, holds a hook yellow and never makes one.
+  - `claudeBusy`: Claude's record `busy`, with a live process, keeps an aged `executing` or `thinking` hook session
+    green (`holdsActiveRun`, in `resolveHookState` and the reconciler). The 360 s window is unchanged.
+  - An `AgentState` log (`com.kannu.app`): one line per real colour change, with the raw state, hook event, tail
+    verdict, record status and question hold. No names, paths or prompt text.
+  - Tests in `HookScriptTests`, `AgentHookLayoutTests`, `AgentSessionLogParserTests`, `RegressionGuardTests` and
+    `ClaudeReconcilerTests`. Docs: `docs/AGENT-HOOKS.md` (new), REGRESSIONS entries 2 and 12 addenda,
+    `docs/CLOUD-SESSIONS.md`, a beta 2 notes draft, and the OpenSpec change `fix-claude-desktop-detection`.
+
 ### 2026-11-17 - Kannu alarm fades out when the attention flash ends
 - **Developer label:** "Fade at ~2.4 s"
 - **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answer on #70's Kannu alarm

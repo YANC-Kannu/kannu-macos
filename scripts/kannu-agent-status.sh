@@ -1,6 +1,6 @@
 #!/bin/bash
 # Installed by Kannu: reports AI agent status for the notch traffic light.
-# KANNU_HOOK_SCRIPT_VERSION=49
+# KANNU_HOOK_SCRIPT_VERSION=50
 # Usage: kannu-agent-status.sh <state> <provider> [hook_event] [matcher_key]
 #        (hook JSON arrives on stdin)
 
@@ -1225,6 +1225,18 @@ TURN_MAX_BG_AGENTS = 999
 # v47: how Claude Code's prompt starts when it hands the model a finished background task's result.
 TURN_NOTIFICATION_PREFIX = "<task-notification>"
 
+# v50: a Claude Desktop Code-tab turn can end on the desktop's own next-step question: an internal MCP
+# tool the desktop app hands the CLI, whose non-empty `ask` is a question to the user. Notification and
+# PermissionRequest never fire there, so its Stop was the turn's only word and painted a waiting chat
+# red. The question group (PreToolUse, matcher QUESTION_TOOL, blocking) marks the turn question_open; a
+# Stop or StopFailure on such a turn writes awaiting_input instead of stopped; the next prompt clears
+# it; SessionEnd keeps the file (process_ended) rather than deleting a question nobody has answered.
+# Kannu's copy of the name is AgentHookLayout.claudeQuestionTool. If the desktop renames the tool, the
+# light falls back to the red it showed before v50, never to something worse.
+QUESTION_TOOL = "mcp__ccd_turn__wrap_up"
+QUESTION_MATCHER_KEY = "question"
+QUESTION_CLEAR_EVENTS = {"UserPromptSubmit", "UserPromptExpansion"}
+
 def turn_path(value):
     # Claude's main transcript only: under ~/.claude/projects, a .jsonl, never a subagent's.
     # Kannu checks the same rule again before it reads the file.
@@ -1621,6 +1633,38 @@ elif hook_event in {"SessionEnd", "sessionEnd"}:
 
 status_file = status_dir / f"{provider}-{conversation_id}.json"
 
+# v50: the question group records only that this turn asked the user something. State, clock and event
+# order stay as they are: the generic PreToolUse group for the same call does everything else. A host
+# that ignores matchers (VS Code) runs this group for every tool, so the tool name decides.
+if hook_matcher == QUESTION_MATCHER_KEY:
+    _ask = tool_input.get("ask") if isinstance(tool_input, dict) else None
+    if (provider == "claude" and hook_event == "PreToolUse" and tool == QUESTION_TOOL and not parent_id
+            and not foreign_host and isinstance(_ask, str) and _ask.strip()):
+        try:
+            _q_lock = open(status_dir / ".kannu-status.lock", "a")
+            fcntl.flock(_q_lock.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            _q_lock = None
+        try:
+            _q_now = int(time.time() * 1000)
+            try:
+                _q_file = json.loads(status_file.read_text()) if status_file.exists() else {}
+            except Exception:
+                _q_file = None
+            # An unreadable file is left alone; a missing one gets the state the generic group writes.
+            if isinstance(_q_file, dict):
+                if not isinstance(_q_file.get("state"), str) or not _q_file.get("state"):
+                    _q_file = {"state": "executing", "ts": _q_now, "provider": provider, "hook_event": hook_event}
+                _q_file["question_open"] = True
+                _q_file["question_ms"] = _q_now
+                _q_file.pop("process_ended", None)
+                write_status(status_file, _q_file)
+        except Exception:
+            # A full disk or a path replaced by a directory must not cost the allow line.
+            pass
+    emit()
+    raise SystemExit(0)
+
 # v34: scanned before the directory lock below (it serialises every session's hooks; this is
 # the only non-trivial CPU work in the script).
 hidden_off = os.path.exists(str(status_dir / HT_OFF_MARKER))
@@ -1706,10 +1750,25 @@ if hook_event == "SessionStart" and str(data.get("source", "")) in {"compact", "
 # The session is gone: drop the card outright rather than leaving a terminal state to
 # age out. Passive detection cannot resurrect it because the process has exited too.
 if state == "session_end":
-    try:
-        status_file.unlink()
-    except Exception:
-        pass
+    # v50: except a question nobody has answered. The desktop app ends the CLI minutes after a turn, and
+    # the chat still waits on the user: the file stays, marked process_ended, and Kannu holds its yellow
+    # on the transcript's evidence (REGRESSIONS entry 12). The next prompt rewrites it.
+    _kept = False
+    if provider == "claude":
+        try:
+            _ended = json.loads(status_file.read_text()) if status_file.exists() else None
+            if (isinstance(_ended, dict) and _ended.get("question_open") is True
+                    and str(_ended.get("state", "")) == "awaiting_input"):
+                _ended["process_ended"] = True
+                write_status(status_file, _ended)
+                _kept = True
+        except Exception:
+            _kept = False
+    if not _kept:
+        try:
+            status_file.unlink()
+        except Exception:
+            pass
     # Legacy per-conversation lock files from script versions < 30. Nothing locks them
     # any more, so removing one cannot strand a concurrent hook; this just stops them
     # accumulating on upgraded installs.
@@ -1728,6 +1787,15 @@ if status_file.exists():
         existing_state = str(existing.get("state", ""))
     except Exception:
         existing = {}
+if not isinstance(existing, dict):
+    existing = {}
+    existing_state = ""
+
+# v50: the turn ended on a question (QUESTION_TOOL above): it waits on the user, so yellow, not red.
+# A quota stop stays a quota stop.
+question_open = existing.get("question_open") is True and hook_event not in QUESTION_CLEAR_EVENTS
+if provider == "claude" and state == "stopped" and hook_event in {"Stop", "StopFailure"} and question_open and not parent_id:
+    state = "awaiting_input"
 
 # Permission checks bypassed: Claude sends permission_mode on every hook (bypassPermissions);
 # Codex hooks carry approval_policy when present. Sticky for the session — once seen, kept —
@@ -2055,6 +2123,13 @@ if terminal[0]:
 payload.update(turn)
 if transcript:
     payload["transcript_path"] = transcript
+# v50: carried like the turn until a prompt clears it; process_ended never is (a new write means a
+# live process).
+if question_open:
+    payload["question_open"] = True
+    _raw_q_ms = existing.get("question_ms")
+    if isinstance(_raw_q_ms, int) and not isinstance(_raw_q_ms, bool):
+        payload["question_ms"] = _raw_q_ms
 try:
     write_status(status_file, payload)
 except Exception:

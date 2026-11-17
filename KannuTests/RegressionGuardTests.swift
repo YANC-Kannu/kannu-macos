@@ -88,6 +88,90 @@ final class RegressionGuardTests: XCTestCase {
         XCTAssertFalse(M.isAwaitingInputRawState("executing"))
     }
 
+    // MARK: - Entry 12 addendum (2026-11-18): a turn that ended with a question is not done
+
+    func testAQuestionYellowIsHeldWithoutAProcessForTwelveHours() {
+        typealias M = AgentTrafficLightMapper
+        let hour: Int64 = 3_600_000
+        for alive in [true, false] {
+            XCTAssertTrue(M.holdsAwaitingInput(provider: "claude", processAlive: alive, tail: .questionOpen,
+                                               cursorPendingApproval: false, question: true, ageMs: hour),
+                          "held at 1 h, process alive: \(alive)")
+            XCTAssertTrue(M.awaitingInputOutlivesStaleCap(provider: "claude", processAlive: alive, tail: .questionOpen,
+                                                          question: true, ageMs: hour))
+        }
+        XCTAssertTrue(M.holdsOpenQuestion(question: true, tail: .questionOpen, ageMs: 12 * hour))
+        XCTAssertFalse(M.holdsOpenQuestion(question: true, tail: .questionOpen, ageMs: 12 * hour + 1), "12 h is the end")
+        let expired = M.resolveHookState(rawState: "awaiting_input", ageMs: 12 * hour + 1, collapseMs: 5_000, inactiveMs: 5_000,
+                                         holdAwaitingInput: M.holdsOpenQuestion(question: true, tail: .questionOpen, ageMs: 12 * hour + 1))
+        XCTAssertEqual(expired.state, .inactive)
+        XCTAssertFalse(expired.visible)
+        XCTAssertFalse(M.awaitingInputOutlivesStaleCap(provider: "claude", processAlive: false, tail: .questionOpen,
+                                                       question: true, ageMs: 12 * hour + 1), "past 12 h the file goes")
+    }
+
+    func testAQuestionIsHeldOnlyWhileTheTranscriptSaysItIsOpen() {
+        typealias M = AgentTrafficLightMapper
+        for tail: AgentSessionLogParser.ClaudeTailState? in [.turnFinished, .working, .toolInFlight, .unknown, nil] {
+            XCTAssertFalse(M.holdsOpenQuestion(question: true, tail: tail, ageMs: 60_000), "\(String(describing: tail))")
+        }
+        XCTAssertFalse(M.holdsAwaitingInput(provider: "claude", processAlive: false, tail: .questionOpen,
+                                            cursorPendingApproval: false, question: false, ageMs: 60_000),
+                       "the transcript corroborates a question yellow; it never makes another yellow one")
+        XCTAssertTrue(M.isQuestionYellow(rawState: "awaiting_input", hookFile: ["question_open": true]))
+        XCTAssertFalse(M.isQuestionYellow(rawState: "awaiting_input", hookFile: ["question_open": "true"]), "untrusted input")
+        XCTAssertFalse(M.isQuestionYellow(rawState: "stopped", hookFile: ["question_open": true]), "yellow comes from the hook")
+        XCTAssertFalse(M.isQuestionYellow(rawState: "executing", hookFile: ["question_open": true]))
+    }
+
+    func testClaudesWaitingRecordCorroboratesAHookYellowAndNeverMakesOne() {
+        typealias M = AgentTrafficLightMapper
+        XCTAssertTrue(M.holdsAwaitingInput(provider: "claude", processAlive: true, tail: .turnFinished,
+                                           cursorPendingApproval: false, recordWaiting: true))
+        XCTAssertFalse(M.holdsAwaitingInput(provider: "claude", processAlive: false, tail: .turnFinished,
+                                            cursorPendingApproval: false, recordWaiting: true), "a dead process waits on nobody")
+        XCTAssertTrue(M.claudeRecordWaiting(status: "waiting"))
+        XCTAssertFalse(M.claudeRecordWaiting(status: "busy"))
+        // The hold is a parameter of the yellow raw state only: no other raw state turns yellow on it.
+        for raw in ["stopped", "executing", "thinking", "idle"] {
+            let resolved = M.resolveHookState(rawState: raw, ageMs: 1_000, collapseMs: 5_000, inactiveMs: 5_000,
+                                              holdAwaitingInput: true)
+            XCTAssertNotEqual(resolved.state, .awaitingInput, raw)
+        }
+        // Nor does a passive verdict: an open question reads as a finished turn.
+        let passive = M.passiveClaudeState(tail: .init(state: .questionOpen, recordTimestamp: Date(timeIntervalSince1970: 1_000)),
+                                           jsonlMtime: nil, fallbackTsMs: 1_000_000,
+                                           now: Date(timeIntervalSince1970: 1_001), collapseMs: 5_000, inactiveMs: 5_000)
+        XCTAssertEqual(passive.state, .stopped)
+    }
+
+    // MARK: - Entry 2 addendum (2026-11-18): Claude's busy record is evidence of work
+
+    func testClaudesBusyRecordHoldsAnAgedRunGreen() {
+        typealias M = AgentTrafficLightMapper
+        let thirtyMinutes: Int64 = 1_800_000
+        for raw in ["executing", "thinking"] {
+            let hold = M.holdsActiveRun(provider: "claude", rawState: raw, processAlive: true, recordBusy: M.claudeBusy(status: "busy"))
+            let resolved = M.resolveHookState(rawState: raw, ageMs: thirtyMinutes, collapseMs: 5_000, inactiveMs: 5_000,
+                                              holdActiveRun: hold)
+            XCTAssertTrue(resolved.state.showsGreenTrafficLight, "\(raw) at 30 min, busy")
+            XCTAssertTrue(resolved.visible)
+        }
+        for status in ["idle", "waiting", "shell", "", "BUSY"] {
+            let hold = M.holdsActiveRun(provider: "claude", rawState: "executing", processAlive: true,
+                                        recordBusy: M.claudeBusy(status: status))
+            let resolved = M.resolveHookState(rawState: "executing", ageMs: thirtyMinutes, collapseMs: 5_000, inactiveMs: 5_000,
+                                              holdActiveRun: hold)
+            XCTAssertFalse(resolved.state.showsGreenTrafficLight, "\(status): entry 2's 360 s still rules")
+        }
+        XCTAssertFalse(M.holdsActiveRun(provider: "claude", rawState: "executing", processAlive: false, recordBusy: true))
+        XCTAssertFalse(M.holdsActiveRun(provider: "claude", rawState: "stopped", processAlive: true, recordBusy: true))
+        XCTAssertFalse(M.holdsActiveRun(provider: "claude", rawState: "awaiting_input", processAlive: true, recordBusy: true))
+        XCTAssertFalse(M.holdsActiveRun(provider: "cursor", rawState: "executing", processAlive: true, recordBusy: true))
+        XCTAssertEqual(M.resolveHookState(rawState: "executing", ageMs: 360_000, collapseMs: 5_000, inactiveMs: 5_000).state,
+                       .executing, "the window itself is unchanged")
+    }
+
     func testOnlyACorroboratedClaudePromptOutlivesTheStaleCap() {
         typealias M = AgentTrafficLightMapper
         XCTAssertTrue(M.awaitingInputOutlivesStaleCap(provider: "claude", processAlive: true, tail: .toolInFlight))

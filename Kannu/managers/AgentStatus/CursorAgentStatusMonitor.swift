@@ -340,6 +340,18 @@ final class CursorAgentStatusMonitor: ObservableObject {
     /// Subagent conversations folded into their parent on the last hook parse (v38 `parent_id`).
     private var foldedSubagentConversationIDs: Set<String> = []
 
+    /// Claude question yellows the last hook parse held (`holdsOpenQuestion`, hook v50), for the
+    /// reconciler: neither a finished passive twin nor a dead process demotes them.
+    private var heldQuestionConversationIDs: Set<String> = []
+
+    /// What the last hook parse saw per conversation, for the AgentState log line: the hook event
+    /// behind the file's state and the transcript tail verdict it was judged with.
+    private var hookEvidenceByConversationID: [String: (hookEvent: String, tail: String)] = [:]
+
+    /// One line per real colour change of a card, with its evidence (subsystem `com.kannu.app`,
+    /// category `AgentState`). Read it with `/usr/bin/log show --predicate 'category == "AgentState"'`.
+    private static let stateLogger = os.Logger(subsystem: "com.kannu.app", category: "AgentState")
+
     /// Rescans when a fresh Claude `idle` stops counting as ongoing
     /// (`AgentTrafficLightMapper.claudeIdleGraceEndMs`): nothing may write then, and without it a
     /// chat whose background agents all finished stayed lit until the 30 s poll. Its own task, so
@@ -391,7 +403,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
             allowBackingDelete: !hooksOnly,
             liveClaudeTails: liveClaudeTails,
             cursorPendingApprovalIDs: cursorPendingApprovalIDs,
-            claudeWorkOngoingIDs: claudeWork.ongoingIDs
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs,
+            claudeBusyIDs: claudeWork.busyIDs,
+            claudeWaitingIDs: claudeWork.waitingIDs
         )
         // Extracted to AgentTrafficLightMapper.reconcileClaudeSessions (pure, tested):
         // this merge has regressed repeatedly while it lived inline here, unreachable by
@@ -403,7 +417,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
             collapseMs: Int64(collapseSeconds) * 1_000,
             inactiveMs: Int64(inactiveSeconds) * 1_000,
             nowMs: Int64(now.timeIntervalSince1970 * 1000),
-            claudeWorkOngoingIDs: claudeWork.ongoingIDs
+            claudeWorkOngoingIDs: claudeWork.ongoingIDs,
+            claudeBusyIDs: claudeWork.busyIDs,
+            heldQuestionIDs: heldQuestionConversationIDs
         )
 
         let transcriptAnalysis: [String: TranscriptAnalysis]
@@ -469,6 +485,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
         let resolvedSessions = retention.sessions
 
         let sortedSessions = resolvedSessions.sorted { $0.updatedAt > $1.updatedAt }
+        if sessions != sortedSessions {
+            logColourChanges(from: sessions, to: sortedSessions, recordStatusByID: claudeWork.recordStatusByID)
+        }
         if sessions != sortedSessions {
             // A subagent's tool call only moves its chat's count: publish, but no reveal pulse.
             let pulse = AgentTrafficLightMapper.pulseRelevantChange(from: sessions, to: sortedSessions)
@@ -1250,7 +1269,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
         allowBackingDelete: Bool = true,
         liveClaudeTails: [String: AgentSessionLogParser.ClaudeTailState] = [:],
         cursorPendingApprovalIDs: Set<String> = [],
-        claudeWorkOngoingIDs: Set<String> = []
+        claudeWorkOngoingIDs: Set<String> = [],
+        claudeBusyIDs: Set<String> = [],
+        claudeWaitingIDs: Set<String> = []
     ) -> [AgentSessionStatus] {
         let directory = AgentHookInstaller.statusDirectory
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -1312,6 +1333,14 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 && claudeWorkOngoingIDs.contains(conversationID)
         }
 
+        var heldQuestions = Set<String>()
+        var evidence: [String: (hookEvent: String, tail: String)] = [:]
+        defer {
+            heldQuestionConversationIDs = heldQuestions
+            hookEvidenceByConversationID = evidence
+        }
+        func providerKeyIsClaude(_ provider: String) -> Bool { provider.lowercased() == "claude" }
+
         // For the stale-cap rule below: which chats a recently written subagent file names, and
         // which chats have an open turn (since when).
         var freshSubagentParentKeys = Set<String>()
@@ -1346,23 +1375,51 @@ final class CursorAgentStatusMonitor: ObservableObject {
             }
 
             // A prompt nobody has answered keeps its yellow only while evidence says the wait
-            // is still open (REGRESSIONS entry 12). `claudeTail` exists only for a Claude process
-            // that is alive this rescan.
-            let claudeTail = liveClaudeTails[conversationID]
+            // is still open (REGRESSIONS entry 12). `liveClaudeTails` holds a verdict only for a
+            // Claude process that is alive this rescan.
+            let processAlive = liveClaudeTails[conversationID] != nil
+            var claudeTail = liveClaudeTails[conversationID]
+            // Hook v50: a question yellow outlives its process (the desktop app ends the CLI minutes
+            // after the turn), so its transcript is read from the path the hook recorded. Cached
+            // against the file's mtime and size, so a quiet question costs a stat per rescan.
+            let isQuestion = providerKeyIsClaude(provider)
+                && AgentTrafficLightMapper.isQuestionYellow(rawState: state, hookFile: json)
+            if isQuestion, claudeTail == nil, let path = hookFile.turn?.transcriptPath {
+                claudeTail = AgentSessionLogParser.claudeTailState(at: URL(fileURLWithPath: path)).state
+            }
+            let hookAgeMs = nowMs - tsMs
+            let recordWaiting = claudeWaitingIDs.contains(conversationID)
             let holdsYellow = AgentTrafficLightMapper.holdsAwaitingInput(
                 provider: provider,
-                processAlive: claudeTail != nil,
+                processAlive: processAlive,
                 tail: claudeTail,
-                cursorPendingApproval: cursorPendingApprovalIDs.contains(conversationID)
+                cursorPendingApproval: cursorPendingApprovalIDs.contains(conversationID),
+                question: isQuestion,
+                ageMs: hookAgeMs,
+                recordWaiting: recordWaiting
             )
             // A corroborated Claude prompt outlives the stale cap. Its file ends by SessionEnd
-            // (the hook deletes it), a newer event, or the process dying — the next rescan then
-            // finds no live tail and this guard deletes it. Every other provider keeps the cap;
-            // for the hook-only ones it is the end of their yellow.
+            // (the hook deletes it, except a question's), a newer event, the evidence going (the
+            // process dying, the question answered, its 12 h passing) — the next rescan then finds
+            // no hold and this guard deletes it. Every other provider keeps the cap; for the
+            // hook-only ones it is the end of their yellow.
             let awaitingOutlivesCap = AgentTrafficLightMapper.isAwaitingInputRawState(state)
                 && AgentTrafficLightMapper.awaitingInputOutlivesStaleCap(
-                    provider: provider, processAlive: claudeTail != nil, tail: claudeTail
+                    provider: provider, processAlive: processAlive, tail: claudeTail,
+                    question: isQuestion, ageMs: hookAgeMs, recordWaiting: recordWaiting
                 )
+            if isQuestion, AgentTrafficLightMapper.holdsOpenQuestion(question: true, tail: claudeTail, ageMs: hookAgeMs) {
+                heldQuestions.insert(conversationID)
+            }
+            // Claude's record says busy: an aged executing/thinking file stays green (entry 2 addendum).
+            let holdsActive = AgentTrafficLightMapper.holdsActiveRun(
+                provider: provider, rawState: state, processAlive: processAlive,
+                recordBusy: claudeBusyIDs.contains(conversationID)
+            )
+            if providerKeyIsClaude(provider) {
+                evidence[conversationID] = (Self.loggableToken(json["hook_event"] as? String),
+                                            claudeTail.map { String(describing: $0) } ?? "none")
+            }
             // A silent chat mid-workflow (or mid long Bash call) keeps its file, and with it the
             // request's turn; so do its subagents' files while that turn is open.
             let providerKey = provider.lowercased()
@@ -1375,7 +1432,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
             let activeOutlivesCap = AgentTrafficLightMapper.hookFileOutlivesStaleCap(
                 provider: provider,
                 rawState: state,
-                processAlive: claudeTail != nil,
+                processAlive: processAlive,
                 namedByFreshSubagent: freshSubagentParentKeys.contains(providerKey + "|" + conversationID),
                 subagentOfOpenTurn: subagentOfOpenTurn,
                 backgroundWork: hookFile.turn.map { hasBackgroundWork(provider, conversationID, $0) } ?? false
@@ -1446,7 +1503,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 ageMs: ageMs,
                 collapseMs: collapseMs,
                 inactiveMs: inactiveMs,
-                holdAwaitingInput: holdsYellow
+                holdAwaitingInput: holdsYellow,
+                holdActiveRun: holdsActive
             )
 
             var session = AgentSessionStatus(
@@ -2077,15 +2135,18 @@ final class CursorAgentStatusMonitor: ObservableObject {
         /// hook parser needs to keep an unanswered prompt yellow (REGRESSIONS entry 12).
         liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState],
         /// Live conversations whose record says Claude's work goes on (busy, waiting, or a fresh
-        /// idle), and when the earliest fresh idle stops counting.
-        claudeWork: (ongoingIDs: Set<String>, graceEndMs: Int64?)
+        /// idle), and when the earliest fresh idle stops counting. Of those, the ones whose record
+        /// says `busy` (`claudeBusy`: holds an aged hook green) and `waiting` (`claudeRecordWaiting`:
+        /// corroborates a hook yellow), and every live record's status, for the AgentState log.
+        claudeWork: (ongoingIDs: Set<String>, busyIDs: Set<String>, waitingIDs: Set<String>,
+                     recordStatusByID: [String: String], graceEndMs: Int64?)
     ) {
         let sessionsDir = AgentSessionLogParser.claudeSessionsDirectory
         guard FileManager.default.fileExists(atPath: sessionsDir.path),
               let files = try? FileManager.default.contentsOfDirectory(
                 at: sessionsDir,
                 includingPropertiesForKeys: [.contentModificationDateKey]
-              ) else { return ([], [], [:], ([], nil)) }
+              ) else { return ([], [], [:], ([], [], [], [:], nil)) }
         refreshDesktopSessionIndexIfNeeded()
 
         let staleMs = Int64(staleMinutes) * 60_000
@@ -2103,6 +2164,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
         var liveConversationIDs: Set<String> = []
         var liveTailByConversationID: [String: AgentSessionLogParser.ClaudeTailState] = [:]
         var workOngoingIDs: Set<String> = []
+        var busyIDs: Set<String> = []
+        var waitingIDs: Set<String> = []
+        var recordStatusByID: [String: String] = [:]
         var idleGraceEndMs: Int64? = nil
 
         for file in files where file.pathExtension == "json" {
@@ -2138,6 +2202,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 if AgentTrafficLightMapper.claudeWorkOngoing(status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
                     workOngoingIDs.insert(sessionId)
                 }
+                if AgentTrafficLightMapper.claudeBusy(status: status) { busyIDs.insert(sessionId) }
+                if AgentTrafficLightMapper.claudeRecordWaiting(status: status) { waitingIDs.insert(sessionId) }
+                recordStatusByID[sessionId] = Self.loggableToken(status)
                 if let graceEnd = AgentTrafficLightMapper.claudeIdleGraceEndMs(
                     status: status, statusUpdatedAtMs: statusUpdatedAtMs, nowMs: nowMs) {
                     idleGraceEndMs = min(idleGraceEndMs ?? graceEnd, graceEnd)
@@ -2255,7 +2322,36 @@ final class CursorAgentStatusMonitor: ObservableObject {
         // reconciler's `processDead ||` short-circuit bypasses the timestamp guard — flashing
         // red at the moment the user submits a prompt.
         return (results, deadPIDConversationIDs.subtracting(liveConversationIDs), liveTailByConversationID,
-                (workOngoingIDs, idleGraceEndMs))
+                (workOngoingIDs, busyIDs, waitingIDs, recordStatusByID, idleGraceEndMs))
+    }
+
+    /// A value from an untrusted file, fit for a log line: up to 32 letters, digits and
+    /// underscores, or "none".
+    private static func loggableToken(_ value: String?) -> String {
+        let token = String((value ?? "").unicodeScalars.filter {
+            ("a"..."z").contains($0) || ("A"..."Z").contains($0) || ("0"..."9").contains($0) || $0 == "_"
+        }.prefix(32).map(Character.init))
+        return token.isEmpty ? "none" : token
+    }
+
+    /// Logs each card whose colour changed (`AgentTrafficLightMapper.colourChanges`): changes only,
+    /// never per scan. Provider, a short session id, from and to, and the evidence — the hook event
+    /// behind the file, the transcript tail verdict, Claude's record status, the raw state. No
+    /// names, paths or prompt text.
+    private func logColourChanges(from old: [AgentSessionStatus], to new: [AgentSessionStatus],
+                                  recordStatusByID: [String: String]) {
+        for change in AgentTrafficLightMapper.colourChanges(from: old, to: new) {
+            let shortID = String(change.conversationID.prefix(8))
+            let hook = hookEvidenceByConversationID[change.conversationID]
+            let raw = Self.loggableToken(change.session?.rawState)
+            let held = heldQuestionConversationIDs.contains(change.conversationID) ? "held" : "no"
+            Self.stateLogger.log("""
+                \(change.provider, privacy: .public) \(shortID, privacy: .public) \(change.from, privacy: .public) -> \(change.to, privacy: .public) \
+                raw=\(raw, privacy: .public) hook=\(hook?.hookEvent ?? "none", privacy: .public) \
+                tail=\(hook?.tail ?? "none", privacy: .public) record=\(recordStatusByID[change.conversationID] ?? "none", privacy: .public) \
+                question=\(held, privacy: .public)
+                """)
+        }
     }
 
     /// The on-disk transcript of a Claude conversation, for features that act on a whole chat

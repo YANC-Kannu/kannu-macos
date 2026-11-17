@@ -5,6 +5,70 @@ final class AgentSessionLogParserTests: XCTestCase {
 
     private func line(_ json: String) -> String { json + "\n" }
 
+    // MARK: - Claude Desktop's end-of-turn question (hook v50)
+
+    private func questionTurn(ask: String = "Commit it?") -> String {
+        line(#"{"type":"user","timestamp":"2026-11-18T10:00:00.000Z","message":{"role":"user","content":"fix PROJ-123"}}"#)
+            + line(#"{"type":"assistant","timestamp":"2026-11-18T10:01:00.000Z","message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_q","name":"mcp__ccd_turn__wrap_up","input":{"recap":"Staged.","ask":"\#(ask)"}}]}}"#)
+            + line(#"{"type":"user","timestamp":"2026-11-18T10:01:01.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_q","content":"ok"}]}}"#)
+            + line(#"{"type":"attachment","attachment":{"kind":"x"}}"#)
+            + line(#"{"type":"assistant","timestamp":"2026-11-18T10:01:05.000Z","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Staged for acme_corporation/applications/orders-api."}]}}"#)
+            + line(#"{"type":"last-prompt","lastPrompt":"","leafUuid":"abc"}"#)
+    }
+
+    func testATurnThatEndedOnAQuestionIsQuestionOpen() {
+        let result = AgentSessionLogParser.claudeTailState(fromTailText: questionTurn())
+        XCTAssertEqual(result.state, .questionOpen)
+        XCTAssertNotNil(result.recordTimestamp, "aged like a finished turn, from its last record")
+        XCTAssertEqual(AgentSessionLogParser.questionVerdict(inTailText: questionTurn()), true)
+    }
+
+    func testTheNextPromptAnswersTheQuestion() {
+        let text = questionTurn()
+            + line(#"{"type":"user","timestamp":"2026-11-18T10:05:00.000Z","message":{"role":"user","content":"yes"}}"#)
+            + line(#"{"type":"assistant","timestamp":"2026-11-18T10:06:00.000Z","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}"#)
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: text).state, .turnFinished)
+        let interrupted = questionTurn()
+            + line(#"{"type":"user","timestamp":"2026-11-18T10:05:00.000Z","message":{"role":"user","content":"[Request interrupted by user]"}}"#)
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: interrupted).state, .turnFinished)
+    }
+
+    func testAnEmptyAskOrAnotherToolIsNoQuestion() {
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: questionTurn(ask: " ")).state, .turnFinished)
+        let other = questionTurn().replacingOccurrences(of: "mcp__ccd_turn__wrap_up", with: "AskUserQuestion")
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: other).state, .turnFinished)
+    }
+
+    func testOnlyAFinishedTurnCanHoldAQuestion() {
+        // Work after the question: the agent is running, whatever it asked.
+        let working = questionTurn()
+            + line(#"{"type":"assistant","timestamp":"2026-11-18T10:02:00.000Z","message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"toolu_b","name":"Bash","input":{"command":"ls"}}]}}"#)
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: working).state, .toolInFlight)
+        // A turn that died on the API keeps its error verdict.
+        let failed = questionTurn()
+            + line(#"{"type":"assistant","timestamp":"2026-11-18T10:02:00.000Z","isApiErrorMessage":true,"apiErrorStatus":529,"message":{"stop_reason":"stop_sequence","content":[{"type":"text","text":"Overloaded"}]}}"#)
+        let result = AgentSessionLogParser.claudeTailState(fromTailText: failed)
+        XCTAssertEqual(result.state, .turnFinished)
+        XCTAssertNotNil(result.runError)
+    }
+
+    func testAWindowWithoutTheQuestionOrAPromptIsUndecided() {
+        let tail = line(#"{"type":"assistant","timestamp":"2026-11-18T10:01:05.000Z","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Done."}]}}"#)
+        XCTAssertNil(AgentSessionLogParser.questionVerdict(inTailText: tail), "widen the window once")
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(fromTailText: tail).state, .turnFinished)
+    }
+
+    func testAQuestionBeyondTheFirstWindowIsFound() throws {
+        // A bookkeeping record between the question and the turn's last words, wider than the first
+        // 16 KB window: that window decides "finished" and sees no question, so the reader widens once.
+        let wide = String(repeating: "x", count: 40_000)
+        let lines = questionTurn().split(separator: "\n").map(String.init).map {
+            $0.contains(#""kind":"x""#) ? #"{"type":"attachment","attachment":{"kind":"x","body":"\#(wide)"}}"# : $0
+        }
+        let url = try transcript(lines)
+        XCTAssertEqual(AgentSessionLogParser.claudeTailState(at: url).state, .questionOpen)
+    }
+
     // MARK: - user records
 
     func testTrailingUserPromptIsWorking() {

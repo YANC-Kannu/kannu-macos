@@ -224,6 +224,104 @@ final class HookScriptTests: XCTestCase {
         }
     }
 
+    // MARK: - Claude Desktop's end-of-turn question (v50)
+
+    private static let questionInput: [String: Any] = [
+        "recap": "The orders-api fix is staged.", "ask": "Commit it?", "actions": [["label": "Commit"]]
+    ]
+
+    /// The question group as the installer registers it: matcher-scoped, key "question".
+    private func askQuestion(_ conversation: String, ask: String? = "Commit it?") throws {
+        var input = Self.questionInput
+        input["ask"] = ask
+        try run(state: "executing", event: "PreToolUse", conversation: conversation,
+                toolName: AgentHookLayout.claudeQuestionTool, extra: ["tool_input": input], matcher: "question")
+    }
+
+    func testATurnThatEndsOnAQuestionIsYellowUntilThePrompt() throws {
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q1", extra: ["prompt": "fix PROJ-123"])
+        try askQuestion("q1")
+        try run(state: "executing", event: "PreToolUse", conversation: "q1", toolName: AgentHookLayout.claudeQuestionTool,
+                extra: ["tool_input": Self.questionInput])
+        try run(state: "thinking", event: "PostToolUse", conversation: "q1", toolName: AgentHookLayout.claudeQuestionTool)
+        try run(state: "stopped", event: "Stop", conversation: "q1")
+        var json = try XCTUnwrap(try readJSON("q1"))
+        XCTAssertEqual(json["state"] as? String, "awaiting_input", "a turn that ended on a question waits on the user")
+        XCTAssertEqual(json["hook_event"] as? String, "Stop")
+        XCTAssertEqual(json["question_open"] as? Bool, true)
+        XCTAssertNotNil(json["turn_ended_ms"], "the turn still ended")
+        XCTAssertNil(json["ended_on_error"])
+
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q1", extra: ["prompt": "yes"])
+        json = try XCTUnwrap(try readJSON("q1"))
+        XCTAssertEqual(json["state"] as? String, "thinking")
+        XCTAssertNil(json["question_open"], "the answer clears it")
+        try run(state: "stopped", event: "Stop", conversation: "q1")
+        XCTAssertEqual(try readState("q1"), "stopped", "the next turn ends red unless it asks again")
+    }
+
+    func testTheQuestionGroupMarksTheTurnAndChangesNothingElse() throws {
+        let now = Self.nowMs
+        try writeStatus("q2", state: "executing", event: "PreToolUse", tsMs: now - 1_000,
+                        extra: ["event_started_ms": now - 1_000, "turn_started_ms": now - 9_000])
+        let out = try run(state: "executing", event: "PreToolUse", conversation: "q2",
+                          toolName: AgentHookLayout.claudeQuestionTool, extra: ["tool_input": Self.questionInput],
+                          matcher: "question")
+        XCTAssertEqual(out, #"{"permission":"allow","continue":true}"#)
+        let json = try XCTUnwrap(try readJSON("q2"))
+        XCTAssertEqual(json["state"] as? String, "executing")
+        XCTAssertEqual((json["ts"] as? NSNumber)?.int64Value, now - 1_000, "the clock is untouched")
+        XCTAssertEqual((json["event_started_ms"] as? NSNumber)?.int64Value, now - 1_000, "so is the event order")
+        XCTAssertEqual(json["question_open"] as? Bool, true)
+        // The generic group for the same call, landing after it (async), carries the mark.
+        try run(state: "executing", event: "PreToolUse", conversation: "q2", toolName: AgentHookLayout.claudeQuestionTool,
+                extra: ["tool_input": Self.questionInput])
+        XCTAssertEqual(try readJSON("q2")?["question_open"] as? Bool, true)
+    }
+
+    func testOnlyANonEmptyAskFromTheQuestionToolIsAQuestion() throws {
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q3", extra: ["prompt": "go"])
+        try askQuestion("q3", ask: "  ")
+        try askQuestion("q3", ask: nil)
+        // VS Code ignores matchers, so the group also runs for every other tool.
+        try run(state: "executing", event: "PreToolUse", conversation: "q3", toolName: "Bash",
+                extra: ["tool_input": ["ask": "not a question", "command": "ls"]], matcher: "question")
+        try run(state: "stopped", event: "Stop", conversation: "q3")
+        let json = try XCTUnwrap(try readJSON("q3"))
+        XCTAssertEqual(json["state"] as? String, "stopped")
+        XCTAssertNil(json["question_open"])
+    }
+
+    func testSessionEndKeepsAnUnansweredQuestion() throws {
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q4", extra: ["prompt": "go"])
+        try askQuestion("q4")
+        try run(state: "stopped", event: "Stop", conversation: "q4")
+        try run(state: "session_end", event: "SessionEnd", conversation: "q4")
+        let json = try XCTUnwrap(try readJSON("q4"), "the desktop ending the CLI is not an answer")
+        XCTAssertEqual(json["state"] as? String, "awaiting_input")
+        XCTAssertEqual(json["process_ended"] as? Bool, true)
+        // A resumed process's prompt rewrites it, and the mark goes with the answer.
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q4", extra: ["prompt": "yes"])
+        let after = try XCTUnwrap(try readJSON("q4"))
+        XCTAssertNil(after["process_ended"])
+        XCTAssertNil(after["question_open"])
+
+        try run(state: "stopped", event: "Stop", conversation: "q5")
+        try run(state: "session_end", event: "SessionEnd", conversation: "q5")
+        XCTAssertNil(try readJSON("q5"), "a session with no open question still goes")
+    }
+
+    func testAQuotaStopOnAQuestionTurnStaysAQuotaStop() throws {
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q6", extra: ["prompt": "go"])
+        try askQuestion("q6")
+        try run(state: "stopped", event: "StopFailure", conversation: "q6", extra: ["error": "rate_limit"])
+        XCTAssertEqual(try readState("q6"), "quota_exceeded")
+        try run(state: "thinking", event: "UserPromptSubmit", conversation: "q7", extra: ["prompt": "go"])
+        try askQuestion("q7")
+        try run(state: "stopped", event: "StopFailure", conversation: "q7", extra: ["error": "server_error"])
+        XCTAssertEqual(try readState("q7"), "awaiting_input", "any other failure still left the question asked")
+    }
+
     // MARK: - Out-of-order events (v49: Claude runs most of Kannu's hooks async)
 
     func testAToolEventThatStartedBeforeTheStopDoesNotRepaintIt() throws {

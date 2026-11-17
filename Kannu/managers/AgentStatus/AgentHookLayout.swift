@@ -232,6 +232,10 @@ struct AgentHookLayout: Equatable {
         // state from tool_name as a backstop. A host that ignores matchers (VS Code) runs this
         // group for every tool, so the script honours the key only for these tools (v45).
         ("PreToolUse", "ExitPlanMode|AskUserQuestion", "gated", "awaiting_input"),
+        // v50: Claude Desktop's end-of-turn question (`claudeQuestionTool`). The group only marks the
+        // turn `question_open`; the state argument is the no-python fallback's, the same as the
+        // generic group's. A Stop on that turn is then yellow (hook script, `QUESTION_TOOL`).
+        ("PreToolUse", claudeQuestionTool, claudeQuestionMatcherKey, "executing"),
         ("PreToolUse", nil, "", "executing"),
         // `thinking`, matching what the script derives for this event and what
         // `claudeStyleEvents` passes. The argument is only a fallback for the no-python
@@ -252,6 +256,17 @@ struct AgentHookLayout: Equatable {
         ("SubagentStop", nil, "", "stopped"),
         ("SessionEnd", nil, "", "session_end")
     ]
+
+    /// Claude Desktop's end-of-turn question tool (hook v50). The desktop app's Code tab hands the CLI
+    /// this internal MCP tool and the model calls it as the turn's last act; a non-empty `ask` in its
+    /// input is a question to the user. It is not a documented API: if the desktop renames it, the
+    /// question group matches nothing and a waiting chat falls back to red, as before v50, never worse.
+    /// The hook script carries the same name as `QUESTION_TOOL` (`HookScriptTests` pins the pair), and
+    /// `AgentSessionLogParser` reads it from the transcript for the `.questionOpen` tail verdict.
+    static let claudeQuestionTool = "mcp__ccd_turn__wrap_up"
+
+    /// The matcher key that tells the script a group is the question group (`QUESTION_MATCHER_KEY`).
+    static let claudeQuestionMatcherKey = "question"
 
     /// The subset that defines "Claude hooks are installed". Kept intentionally small so the
     /// table above can grow without invalidating existing installs — see `checkInstalled`.
@@ -277,8 +292,13 @@ struct AgentHookLayout: Equatable {
     /// A group that turns the light yellow (`awaiting_input`) blocks too, so its write lands before the
     /// user can answer and Claude moves on. Async, a PermissionRequest that finished after the approval,
     /// the tool and the Stop painted a finished turn yellow. These run only when Claude asks the user.
-    static func claudeHookIsAsync(event: String, state: String, enforcePolicy: Bool, warnAgent: Bool) -> Bool {
+    ///
+    /// The question group (v50) blocks too: its mark must be on disk before the turn's Stop reads it,
+    /// and an async PreToolUse can land after that Stop. Once per question, so cheap.
+    static func claudeHookIsAsync(event: String, state: String, enforcePolicy: Bool, warnAgent: Bool,
+                                  matcherKey: String = "") -> Bool {
         if claudeBlockingEvents.contains(event) || state == "awaiting_input" { return false }
+        if matcherKey == claudeQuestionMatcherKey { return false }
         if enforcePolicy && event == "PreToolUse" { return false }
         if warnAgent && claudeHiddenTextNoteEvents.contains(event) { return false }
         return true
@@ -296,7 +316,8 @@ struct AgentHookLayout: Equatable {
             var handler: [String: Any] = ["type": "command",
                                           "command": "\(script.path) \(entry.state) claude \(entry.event)\(matcherArg)",
                                           "timeout": 10]
-            if claudeHookIsAsync(event: entry.event, state: entry.state, enforcePolicy: enforcePolicy, warnAgent: warnAgent) {
+            if claudeHookIsAsync(event: entry.event, state: entry.state, enforcePolicy: enforcePolicy, warnAgent: warnAgent,
+                                 matcherKey: entry.matcherKey) {
                 handler["async"] = true
             }
             var group: [String: Any] = ["hooks": [handler]]

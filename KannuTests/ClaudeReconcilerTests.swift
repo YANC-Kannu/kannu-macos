@@ -49,7 +49,9 @@ final class ClaudeReconcilerTests: XCTestCase {
     private func reconcile(
         hooks: [AgentSessionStatus],
         passive: [AgentSessionStatus],
-        dead: Set<String> = []
+        dead: Set<String> = [],
+        busy: Set<String> = [],
+        heldQuestions: Set<String> = []
     ) -> [AgentSessionStatus] {
         AgentTrafficLightMapper.reconcileClaudeSessions(
             hookSessions: hooks,
@@ -57,7 +59,9 @@ final class ClaudeReconcilerTests: XCTestCase {
             deadPIDConversationIDs: dead,
             collapseMs: 60_000,
             inactiveMs: 120_000,
-            nowMs: 2_000_000
+            nowMs: 2_000_000,
+            claudeBusyIDs: busy,
+            heldQuestionIDs: heldQuestions
         )
     }
 
@@ -111,6 +115,55 @@ final class ClaudeReconcilerTests: XCTestCase {
                               updatedAt: Date(timeIntervalSince1970: 1_950))
         XCTAssertEqual(reconcile(hooks: [hook], passive: [passive], dead: ["conv-1"])[0].displayState, .stopped)
         XCTAssertFalse(reconcile(hooks: [hook], passive: [], dead: ["conv-1"])[0].displayState.isActiveRun)
+    }
+
+    func testAHeldQuestionSurvivesItsFinishedTwinAndItsProcessEnding() {
+        // Hook v50: the turn ended on a question. The passive twin reads that turn as finished,
+        // with a newer record, and the desktop app ends the CLI minutes later. Neither is an answer.
+        let hook = session(rawState: "awaiting_input", display: .awaitingInput,
+                           updatedAt: Date(timeIntervalSince1970: 1_000), desktopSessionID: nil)
+        let passive = session(rawState: "stopped", display: .stopped,
+                              updatedAt: Date(timeIntervalSince1970: 1_950), desktopSessionID: "local_x")
+        let live = reconcile(hooks: [hook], passive: [passive], heldQuestions: ["conv-1"])[0]
+        XCTAssertEqual(live.displayState, .awaitingInput)
+        XCTAssertEqual(live.desktopSessionID, "local_x", "entry 7: still carries what the twin knows")
+        XCTAssertEqual(reconcile(hooks: [hook], passive: [], dead: ["conv-1"], heldQuestions: ["conv-1"])[0].displayState,
+                       .awaitingInput)
+        XCTAssertEqual(reconcile(hooks: [hook], passive: [passive])[0].displayState, .stopped,
+                       "a yellow the parser did not hold still demotes as before")
+    }
+
+    func testClaudesBusyRecordKeepsAnAgedRunGreen() {
+        // Thirty minutes into one tool: the hook file is old, the tail's working verdict has gone
+        // idle, and Claude's own record says busy.
+        let hook = session(rawState: "executing", display: .executing, updatedAt: Date(timeIntervalSince1970: 200))
+        let quiet = session(rawState: "idle", display: .inactive, updatedAt: Date(timeIntervalSince1970: 1_900))
+        XCTAssertEqual(reconcile(hooks: [hook], passive: [quiet], busy: ["conv-1"])[0].displayState, .executing)
+        XCTAssertEqual(reconcile(hooks: [hook], passive: [quiet])[0].displayState, .inactive, "not busy: demoted as before")
+        XCTAssertNotEqual(reconcile(hooks: [hook], passive: [quiet], dead: ["conv-1"], busy: ["conv-1"])[0].displayState,
+                          .executing, "a dead process is never busy")
+        // Aged out of the ladder (invisible), a busy session is lit again from its raw state.
+        let aged = session(rawState: "thinking", display: .inactive, updatedAt: Date(timeIntervalSince1970: 200), visible: false)
+        let lit = reconcile(hooks: [aged], passive: [quiet], busy: ["conv-1"])[0]
+        XCTAssertEqual(lit.displayState, .thinking)
+        XCTAssertTrue(lit.isVisible)
+        // Busy never touches a yellow or a stop.
+        let yellow = session(rawState: "awaiting_input", display: .awaitingInput)
+        XCTAssertEqual(reconcile(hooks: [yellow], passive: [], busy: ["conv-1"])[0].displayState, .awaitingInput)
+    }
+
+    func testTheLogNamesOnlyRealColourChanges() {
+        typealias M = AgentTrafficLightMapper
+        let green = session(rawState: "executing", display: .executing)
+        let thinking = session(rawState: "thinking", display: .thinking)
+        XCTAssertTrue(M.colourChanges(from: [green], to: [thinking]).isEmpty, "executing and thinking are both green")
+        let yellow = session(rawState: "awaiting_input", display: .awaitingInput)
+        let change = M.colourChanges(from: [green], to: [yellow])
+        XCTAssertEqual(change.map { "\($0.from)>\($0.to)" }, ["green>yellow"])
+        XCTAssertEqual(M.colourChanges(from: [], to: [yellow]).map(\.from), ["hidden"])
+        XCTAssertEqual(M.colourChanges(from: [yellow], to: []).map(\.to), ["hidden"])
+        let hidden = session(rawState: "stopped", display: .inactive, visible: false)
+        XCTAssertTrue(M.colourChanges(from: [hidden], to: []).isEmpty, "a hidden card going is no change")
     }
 
     func testAgedYellowIsNotPromotedByPassiveActivity() {

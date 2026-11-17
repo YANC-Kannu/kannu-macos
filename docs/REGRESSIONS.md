@@ -289,6 +289,17 @@ same lesson on the yellow light: its clock became the only exit, and a true yell
 **Guard — exists.** `RegressionGuardTests.testHookOnlyProviderMidToolCallStaysActiveAt*`.
 Verified to fail when the default is set back to `15_000`.
 
+**2026-11-18 addendum — Claude's `busy` is evidence of work.** A Claude Desktop Code-tab chat can
+think or run one tool for many minutes with no hook event. Past 360 s its green rested on the passive
+tail alone, whose `.working` lasts 600 s from the last record, so a long stretch went dim while Claude's
+own record, `~/.claude/sessions/<pid>.json`, said `busy` the whole time — read, but used only for
+background agents. Now `busy` (`claudeBusy`), with a live process, keeps an `executing` or `thinking`
+hook session green (`holdsActiveRun`: `resolveHookState`'s `holdActiveRun`, and the reconciler's busy
+arm ahead of the demote arm). `waiting`, `shell` and `idle` do not count. The 360 s window is
+unchanged and still rules everything else: this adds evidence, it does not lengthen a clock. Guards:
+`RegressionGuardTests.testClaudesBusyRecordHoldsAnAgedRunGreen`,
+`ClaudeReconcilerTests.testClaudesBusyRecordKeepsAnAgedRunGreen`.
+
 ---
 
 ## 3. `.unknown` on a live process means working, never idle
@@ -1076,6 +1087,31 @@ target — manual check: the waiting session's file survives past 30 min in `~/.
 
 **Never** fix a false yellow by shortening `awaitingInputStaleMs` or by refreshing `ts` in the
 script. Add or remove evidence.
+
+**2026-11-18 addendum — a turn that ended with a question is not done.** Claude Desktop's Code tab ends
+a turn with its own next-step question (`mcp__ccd_turn__wrap_up` with a non-empty `ask`). Neither
+`Notification` nor `PermissionRequest` fires there, so the turn's `Stop` wrote `stopped`: a chat waiting
+on its user showed red (measured: 320 such turns in two days, a live chat red for 4+ minutes while its
+question waited). Minutes later the desktop app ended the CLI, `SessionEnd` deleted the file, and the
+card vanished while still waiting. Hook v50: a blocking question group marks the turn `question_open`;
+a `Stop` on that turn writes `awaiting_input`; the next prompt clears it; `SessionEnd` keeps the file,
+marked `process_ended`. The hold still follows evidence, not a longer clock: the transcript tail's
+`.questionOpen` verdict (the newest question newer than the newest real prompt) holds a question yellow
+with or without a live process, for at most 12 h from the Stop (`holdsOpenQuestion`,
+`questionHoldMs`), and exempts its file from the stale cap the same way. The reconciler no longer
+demotes a held question for its finished passive twin or a dead process. Claude's record `waiting`,
+with a live process, corroborates any hook yellow too. Yellow still originates from hooks only: the
+verdict reads as a finished turn on the passive side, and `waiting` never makes a chat yellow.
+Guards: `HookScriptTests` "v50" group, `AgentSessionLogParserTests` question cases,
+`RegressionGuardTests.testAQuestionYellowIsHeldWithoutAProcessForTwelveHours`,
+`…testAQuestionIsHeldOnlyWhileTheTranscriptSaysItIsOpen`,
+`…testClaudesWaitingRecordCorroboratesAHookYellowAndNeverMakesOne`,
+`ClaudeReconcilerTests.testAHeldQuestionSurvivesItsFinishedTwinAndItsProcessEnding`,
+`AgentHookLayoutTests.testTheQuestionToolIsOneNameInTheLayoutAndTheScript`. Still **missing**: the
+monitor reads a dead question's transcript from the hook's `transcript_path`, which the logic target
+cannot reach — manual check: a Code-tab chat ending on a question stays yellow after its CLI exits.
+Every colour change is now logged (`com.kannu.app` / `AgentState`, `docs/AGENT-HOOKS.md`), so the next
+report can be read from the log instead of reconstructed.
 
 ---
 

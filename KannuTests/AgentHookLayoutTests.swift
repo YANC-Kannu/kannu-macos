@@ -76,6 +76,7 @@ final class AgentHookLayoutTests: XCTestCase {
             "UserPromptSubmit|-||thinking",
             "UserPromptExpansion|-||thinking",
             "PreToolUse|ExitPlanMode|AskUserQuestion|gated|awaiting_input",
+            "PreToolUse|mcp__ccd_turn__wrap_up|question|executing",
             "PreToolUse|-||executing",
             "PostToolUse|-||thinking",
             "PostToolUseFailure|-||thinking",
@@ -96,12 +97,15 @@ final class AgentHookLayoutTests: XCTestCase {
         // One name per group: "event" for a generic group, "event/matcherKey" for a matcher-scoped one.
         func blocking(enforce: Bool, warn: Bool) -> Set<String> {
             Set(AgentHookLayout.claudeHookEntries.filter {
-                !AgentHookLayout.claudeHookIsAsync(event: $0.event, state: $0.state, enforcePolicy: enforce, warnAgent: warn)
+                !AgentHookLayout.claudeHookIsAsync(event: $0.event, state: $0.state, enforcePolicy: enforce, warnAgent: warn,
+                                                   matcherKey: $0.matcherKey)
             }.map { $0.matcherKey.isEmpty ? $0.event : "\($0.event)/\($0.matcherKey)" })
         }
-        // The end of a turn or a session, and every group that turns the light yellow.
+        // The end of a turn or a session, every group that turns the light yellow, and (v50) the
+        // question group, whose mark the turn's Stop must find on disk.
         let always: Set<String> = ["Stop", "StopFailure", "SubagentStop", "SessionEnd",
-                                   "PermissionRequest", "PreToolUse/gated", "Notification/needs_input"]
+                                   "PermissionRequest", "PreToolUse/gated", "PreToolUse/question",
+                                   "Notification/needs_input"]
         let notes: Set<String> = ["PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit"]
         XCTAssertEqual(blocking(enforce: false, warn: false), always, "by default nothing else blocks")
         XCTAssertEqual(blocking(enforce: true, warn: false), always.union(["PreToolUse"]), "a deny needs PreToolUse answered")
@@ -122,12 +126,15 @@ final class AgentHookLayoutTests: XCTestCase {
                 .filter { ($0["command"] as? String)?.contains(AgentHookLayout.scriptName) == true }
         }
         let preToolUse = try XCTUnwrap(once["PreToolUse"] as? [[String: Any]])
-        XCTAssertEqual(preToolUse.count, 3, "the user's group, then Kannu's gated and generic ones")
+        XCTAssertEqual(preToolUse.count, 4, "the user's group, then Kannu's gated, question and generic ones")
         XCTAssertEqual((preToolUse.first?["hooks"] as? [[String: Any]])?.first?["command"] as? String, "/usr/local/bin/guard")
         XCTAssertEqual(kannuHandlers(once, "PreToolUse").map { $0["command"] as? String }, [
             "/Users/u/.claude/kannu-agent-status.sh awaiting_input claude PreToolUse gated",
+            "/Users/u/.claude/kannu-agent-status.sh executing claude PreToolUse question",
             "/Users/u/.claude/kannu-agent-status.sh executing claude PreToolUse"
         ])
+        XCTAssertEqual(preToolUse[2]["matcher"] as? String, AgentHookLayout.claudeQuestionTool)
+        XCTAssertNil(kannuHandlers(once, "PreToolUse")[1]["async"], "the question mark must land before the turn's Stop")
         XCTAssertTrue(kannuHandlers(once, "PostToolUse").allSatisfy { $0["async"] as? Bool == true })
         XCTAssertNil(kannuHandlers(once, "PreToolUse").first?["async"], "the gated group turns the light yellow: it blocks")
         XCTAssertEqual(kannuHandlers(once, "PreToolUse").last?["async"] as? Bool, true)
@@ -136,7 +143,7 @@ final class AgentHookLayoutTests: XCTestCase {
         XCTAssertEqual(kannuHandlers(once, "Stop").count, 1)
 
         let enforced = AgentHookLayout.mergingClaudeGroups(into: once, script: script, enforcePolicy: true, warnAgent: false)
-        XCTAssertEqual(kannuHandlers(enforced, "PreToolUse").count, 2)
+        XCTAssertEqual(kannuHandlers(enforced, "PreToolUse").count, 3)
         XCTAssertTrue(kannuHandlers(enforced, "PreToolUse").allSatisfy { $0["async"] == nil },
                       "Claude ignores a deny from an async hook")
         XCTAssertTrue(kannuHandlers(enforced, "PostToolUse").allSatisfy { $0["async"] as? Bool == true })
@@ -165,6 +172,24 @@ final class AgentHookLayoutTests: XCTestCase {
         .deletingLastPathComponent()   // KannuTests/
         .deletingLastPathComponent()   // repo root
         .appendingPathComponent("scripts/kannu-agent-status.sh")
+
+    // MARK: - Claude Desktop's question (hook v50)
+
+    /// One name, three readers: the installer's matcher, the script's `QUESTION_TOOL` and the
+    /// transcript tail verdict. A rename on one side only would leave the question red.
+    func testTheQuestionToolIsOneNameInTheLayoutAndTheScript() throws {
+        let script = try String(contentsOf: Self.mirrorScriptURL, encoding: .utf8)
+        XCTAssertTrue(script.contains("\nQUESTION_TOOL = \"\(AgentHookLayout.claudeQuestionTool)\"\n"))
+        XCTAssertTrue(script.contains("\nQUESTION_MATCHER_KEY = \"\(AgentHookLayout.claudeQuestionMatcherKey)\"\n"))
+        XCTAssertTrue(script.contains("# KANNU_HOOK_SCRIPT_VERSION=50\n"), "v50 carries the question")
+    }
+
+    func testTheCloudRelayLeavesTheQuestionGroupOut() {
+        // The group only marks Kannu's local status file; the relay sends a colour and has none.
+        XCTAssertFalse(ClaudeCloudRelaySetup.relayHookEntries.contains { $0.matcherKey == AgentHookLayout.claudeQuestionMatcherKey })
+        XCTAssertFalse(ClaudeCloudRelaySetup.hooksJSON().contains(AgentHookLayout.claudeQuestionTool))
+        XCTAssertTrue(ClaudeCloudRelaySetup.relayHookEntries.contains { $0.matcherKey == "gated" })
+    }
 
     // MARK: - Claude's usage status line (opt-in, hook v49)
 
