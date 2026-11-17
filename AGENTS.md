@@ -134,6 +134,13 @@ is the one AppKit/SwiftUI file, for its geometry tests).
 
 Kannu runs locally. Treat process inspection, shell commands, filesystem access, agent output, terminal state, credentials, environment variables, permissions, and network access as security-sensitive. Least privilege; native APIs; no arbitrary command execution or unnecessary privileges. Never expose secrets in logs — use OSLog appropriately and never log sensitive user data.
 
+Fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use made-up data only:
+`acme_corporation/applications/orders-api`, `example.com`, `PROJ-123`, "Dana Example". Never a real task, ticket,
+project path, person or company from the maintainer's own connected accounts, not even as the motivating example
+for a bug: describe the real case in words. A maintainer can list names to refuse in an untracked
+`.git/info/kannu-denylist`, one per line. `.githooks/pre-commit` then rejects staged lines and commit identities
+that match it, and `.githooks/pre-push` rejects pushed commits that do.
+
 ## Commit and PR guidelines
 
 `CONTRIBUTING.md` has the full process; PRs target `development`, one concern each. Work too large
