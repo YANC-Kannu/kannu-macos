@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - The coverage converter takes no arguments, and scripts leave the coverage count
+- **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
+  the scan never ran tests or read a coverage report
+- **Agent label:** Claude Code (Opus 5.5) — the two causes of #71's own failing SonarCloud gate
+- **Changes:**
+  - `scripts/xccov-to-sonar.py` drops its command-line arguments: it reads `TestResults.xcresult` and writes
+    `sonar-coverage.xml` from the repository root. Sonar flagged argparse input reaching `xcrun` and `open()` as two
+    major vulnerabilities (pythonsecurity:S8705, S8707). Output on #63's result bundle is byte-identical.
+  - `sonar.coverage.exclusions` adds `scripts/**`. Nothing measures coverage for the Python and shell scripts, so
+    their new lines read 0% and failed the 80% condition on any PR that touched one.
+  - #71's first run imported coverage for 128 files, 88.2% overall. The earlier estimate for #63 is corrected: a
+    changed Swift file outside the test target counts as uncovered, so #63 should read about 58%
+    (`WisprFlowMeetingsStore.swift` 67 of 73, `WisprFlowMeetingsManager.swift` 0 of 41, `Constants.swift` 0 of 1).
+
 ### 2026-11-17 - SonarCloud reads real coverage from the KannuTests run
 - **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
   the scan never ran tests or read a coverage report
