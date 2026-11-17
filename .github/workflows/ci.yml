@@ -15,6 +15,33 @@ on:
       - 'super/**'
 
 jobs:
+  checks:
+    # Cheap repo checks that need no Mac: the pinned OpenSpec CLI validates every spec and change,
+    # and the pre-commit hook runs its invariant checks on the checked-out tree. Nothing is staged in
+    # a checkout, so the hook's CHANGELOG check cannot fire here; it still needs the local hook.
+    name: OpenSpec and hook
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set Up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Validate OpenSpec
+        env:
+          OPENSPEC_TELEMETRY: '0'
+        run: npx -y @fission-ai/openspec@0.23.0 validate --all --strict --no-interactive
+
+      - name: Run Pre-commit Hook
+        run: bash .githooks/pre-commit
+
   build:
     name: Build
     strategy:

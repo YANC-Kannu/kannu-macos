@@ -55,6 +55,119 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Pins moved: `NotchFontRulesTests` counts the waveform's symbol font (22 in `NotchNotesView`), and
     `SettingsHighlightInventoryTests` counts the new row and its search entry.
 
+### 2026-11-17 - Keep project-name slug decoding off files, symbolic links and public logs
+- **Developer label:** "Fix CodeRabbit's findings on PR #68"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release, Auto-fix
+- **Changes:**
+  - A Cursor slug decode now reads folders through `ProjectNameRules.slugDecodableFolders(in:homeDirectory:)`, moved
+    from `CursorTranscriptParser` into the tested file. It returns only real folders: a file named like the project
+    can no longer win the match, and a symbolic link is never followed into a privacy-prompting folder.
+  - A slug that cannot be decoded and is not under the home folder gets the new rule `cursor-slug-unresolved`, and the
+    `ProjectName` log prints its name private, because the whole slug spells out a folder path.
+  - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
+  - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
+
+### 2026-11-17 - The Claude card's empty fallback keeps no reading a reset has passed
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #69, through Auto-fix
+- **Changes:**
+  - With nothing live, the monitor kept the first usage source whole so the read counted as a read. Since
+    `selections` drops readings a reset has passed, that source could hold one, and the pre-reset percentage went
+    back on the card. `ClaudeUsageSnapshot.mergedOrRead` keeps the source with every window still live by its own
+    reset taken off; the monitor calls it.
+  - Tests: `ClaudeUsageSnapshotTests.testWithNothingLiveTheReadKeepsNoWindowAResetHasPassed`, and
+    `ClaudeUsageReadRulesTests.testTheCardNeverFallsBackToASourceRestoredWhole` pins the monitor's call.
+
+### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
+- **Developer label:** "Make project-name detection observable, and fix its two known bugs"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
+- **Changes:**
+  - `ProjectNameRules.projectName(forWorkingDirectory:)` (new, Foundation-only) names a chat's project after its
+    folder, except under `<repo>/.claude/worktrees/<name>`, a Claude Desktop worktree, which is named `<repo>`. The
+    hook file reader, Claude's passive session record and the Claude/Codex transcript fallback all go through it. The
+    hook script is unchanged.
+  - Cursor project slugs decode against the folders that exist, so `acme-api` stays `acme-api` instead of `api`. The
+    fallback encodes the home folder the way Cursor does, so a home with a dot or underscore matches its slug. Kannu
+    never lists a home folder that raises a privacy prompt, or `/Volumes`.
+  - New `ProjectName` log category (`com.kannu.app`): one line per change, with the agent, source, session id, chosen
+    name and rule public and the paths private.
+  - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
+    folders, and the Cursor slug decoder.
+
+### 2026-11-17 - The Claude card shows the fresh limit after an early reset
+- **Developer label:** "Kannu still shows the Claude weekly limit from before its reset"
+- **Agent label:** Claude Code (Opus 5.5) — usage-reset lane of the 2.0 release
+- **Changes:**
+  - `ClaudeCachedUsage.attributeRun`: a run whose cache contradicts the last known organization's week now goes to
+    the organization `~/.claude.json` names, when that is another one whose week the cache does not contradict
+    (`movedOrganization`), and remembers its resets. Before, every run after Claude Code changed organization ended
+    "contradicted" and the fresh cache went on no card.
+  - `ClaudeUsageSnapshot.selections`: per window, the newest live reading wins whatever its source, ties go to the
+    earlier source, and a reading taken before an exact reset any source has seen pass is dropped, even while its own
+    reset is ahead. `merged` is built on it and never borrows a reset from a dropped copy.
+  - `CursorAgentStatusMonitor` logs each card's per-window decision when it changes (`Usage source …`, category
+    `ClaudeUsage`): times and percentages only.
+  - Tests: an end-to-end replay from made-up `.claude.json` and desktop history files, both sides of the new
+    attribution rule, and merge tests for newest-wins, an early reset, equal times and a missing source.
+  - `docs/REGRESSIONS.md` entry 8 gets its 2026-11-17 addendum; OpenSpec change `fix-usage-reset-staleness` adds the
+    `usage` capability.
+
+### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
+- **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
+- **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of
+  `development` at 75e62b24, plus the `add-contributor-agent-setup` proposal for the rest
+- **Changes:**
+  - `.claude/settings.json` no longer pre-approves `git push`. It allows only `git status`, `diff`, `log` and `show`,
+    the KannuTests run, the pinned OpenSpec `list` and `validate`, and `bash .githooks/pre-commit`.
+  - `CLAUDE.md` makes the `caveman` style skill optional. The ART contract stays first and `@AGENTS.md` last.
+  - `openspec/project.md`: the hold rule asks for a maintainer's explicit yes, and the release owner's for tags and
+    releases; the specs describe `development`; the feed line reflects #3 and the 1.x bridge; the new rulesets on
+    `development` and `super/**` are described.
+  - `AGENTS.md` gains a short note on the pinned OpenSpec CLI, outside the managed block, and no longer says that no
+    CI job runs the hook. The Claude OpenSpec commands use the pinned CLI and drop the `openspec update` hint.
+  - CI gains an ubuntu job that runs the pinned `openspec validate --all --strict --no-interactive` and
+    `bash .githooks/pre-commit` on the checkout. The macOS Build jobs are unchanged.
+  - `.gitignore` covers `marketing/`, `*.local.md`, `.claude/worktrees/` and `.claude/settings.local.json`.
+  - `CONTRIBUTING.md` opens with a Setup checklist: clone and switch to `development`, hooks, the `Kannu Dev`
+    identity, KannuTests, the Debug build and the pinned `openspec list`, plus Xcode signing for contributors and
+    which file each agent tool reads.
+  - New OpenSpec change `add-contributor-agent-setup` (proposal only) records the after-2.0 backlog: as-built specs
+    for the agent monitor and other shipped features, a doctor script, merge resolvers, shared skills, Cursor and
+    Copilot commands, a PR template and CODEOWNERS, wider hook source paths, a cloud setup, and splitting
+    `release-2-0`'s deltas.
+  - `release-2-0`'s `tasks.md` and `handoff.md` record that #55 (a522db02) and #9 (75e62b24) merged, so #55 ships in
+    2.0.
+
+### 2026-11-16 - Pre-commit and pre-push checks against a local list of names never to publish
+- **Developer label:** Made-up data only in fixtures, tests and examples, enforced by the hooks
+- **Agent label:** Claude Code (Opus 5.5) — a denylist check in the pre-commit hook, a new pre-push hook, their tests,
+  an AGENTS.md rule, and two CHANGELOG commit references updated after the 2026-11-16 history rewrite
+- **Changes:**
+  - `.githooks/pre-commit` refuses a commit whose staged added lines, author or committer match the untracked list in
+    `<git-common-dir>/info/kannu-denylist` (one case-insensitive string per line, `#` for comments). It names the
+    files, never the matched text. With no list there is no check, so nothing changes for other contributors. It
+    runs before the merge exemption, so a conflict resolution is checked too; it reads staged paths NUL-delimited and
+    literally, so a quoted or non-ASCII path is not skipped; and it scans type changes (a symlink become a file).
+  - New `.githooks/pre-push` refuses to publish commits whose author, committer, message or added lines match the same
+    list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back. What the server
+    already has comes from the server the push goes to (`git ls-remote` on the push URL, not the remote's fetch
+    URL), never from this clone's remote-tracking refs, which in a clone that missed the rewrite still reach the old
+    commits.
+  - Both hooks scan the raw objects being committed or pushed: no textconv, no replacement refs, `--text` so a file an
+    attribute marks `-diff` still shows its added lines, and (pre-push) `--root` so an orphan root shows its content
+    with `log.showRoot=false`. Both fail closed: a git or grep error, a list that exists but cannot be read, or a list
+    folder that cannot be searched refuses instead of passing as clean.
+  - New `KannuTests/DenylistPrePushHookTests` runs the real pre-push hook against throwaway repositories: a commit
+    reachable only from a stale tracking ref, a remote whose fetch and push URLs differ, a replacement ref, a textconv
+    filter that fails or prints nothing, a file marked `-diff`, an orphan root with root diffs off, an unreadable
+    list, an unsearchable list folder, a list with only comments, a clean push, and no list.
+  - New `KannuTests/DenylistPreCommitHookTests` runs the full pre-commit hook the same way: a file marked `-diff`, a
+    path git would quote, a symlink that became a file, a conflict resolution, a matching identity, and a clean change.
+  - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
+    made-up data only, and the list and both hooks are named there.
+  - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.
+    Citations of commits from the earlier repository are unchanged, since those commits still exist there.
+
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix
@@ -1414,7 +1527,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ### 2026-11-02 - Act on CodeRabbit's second review of #11
 - **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
-- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads
+- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of d4af1954, the rest answered in their threads
 - **Changes:**
   - Marking a task done, or starting it, cancels a pending done tick, so the end of its undo window
     no longer marks it done a second time or stops a timer just started.
@@ -1668,7 +1781,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 - **Agent label:** Claude Code (Opus 5.5) — the task form's focus holds the notch again, under the pointer-based close
 - **Changes:**
   - `TimerTaskForm` holds the notch while one of its fields has focus, so an edit survives the pointer
-    leaving the notch. `9352cf35` had removed this hold along with the timer tab's others.
+    leaving the notch. `9315a0eb` had removed this hold along with the timer tab's others.
   - The hold ends when the focus goes, the form goes or the notch's window stops being key, and
     `ContentView.closeWhenPointerLeaves` then closes the notch if the pointer is gone. Menus still
     hold nothing in the form, and the other timer-tab fields stay without a hold.

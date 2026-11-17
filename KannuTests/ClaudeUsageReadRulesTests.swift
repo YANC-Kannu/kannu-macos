@@ -104,6 +104,17 @@ final class ClaudeUsageReadRulesTests: XCTestCase {
         XCTAssertFalse(refresh.contains("otherOrganization"))
     }
 
+    /// CodeRabbit on PR #69: the first card's fallback restored a source whole when `merged` found
+    /// nothing live, and a reading a reset had passed since went back on the card. The fallback is
+    /// `ClaudeUsageSnapshot.mergedOrRead`, which `ClaudeUsageSnapshotTests` covers.
+    func testTheCardNeverFallsBackToASourceRestoredWhole() throws {
+        let merge = try Self.body(of: "private static func mergeClaudeUsage(",
+                                  in: Self.source(Self.monitorPath))
+        XCTAssertTrue(merge.contains("ClaudeUsageSnapshot.mergedOrRead(sources, now: now)"))
+        XCTAssertFalse(merge.contains("sources.compactMap { $0 }.first"), "a source restored whole")
+        XCTAssertFalse(merge.contains("?? sources"), "a source restored whole")
+    }
+
     func testTheCardReadsTheMonitorNotTheFiles() throws {
         let provider = try Self.source("Kannu/managers/LLMUsage/ClaudeUsageProvider.swift")
         let apply = try Self.body(of: "private func applyRateLimitWindows(", in: provider)
