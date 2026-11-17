@@ -4,6 +4,25 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Build 13 and one set of beta 2 notes, with the 2.0.0 notes caught up
+- **Developer label:** Prepare 2.0.0 beta 2 for release
+- **Agent label:** Release prep: build 13, beta.2 notes, 2.0.0 notes catch-up
+- **Changes:**
+  - `CURRENT_PROJECT_VERSION` is 13 in both configurations of `Kannu.xcodeproj/project.pbxproj`, above beta.1's 12.
+    `MARKETING_VERSION` stays 2.0.0.
+  - `docs/release-notes/2.0.0-beta.2.md` is one document in beta.1's shape, replacing the two lane drafts and the
+    leftover HTML comment: New since beta 1 (the sideways pill, the attention alert, Wispr Flow's meeting summaries,
+    the notch Notes redesign, note tags and the Filter menu), Fixed since beta 1 (non-blocking Claude hooks, Claude
+    Desktop's Code tab, project names, the Claude card after an early reset, Time to log at full screen), What
+    changes when you update (the status line hand-back among them), Please try, Going back and Reporting.
+  - `docs/release-notes/2.0.0.md` gains #55's line (non-blocking Claude hooks, the opt-in status line) and the 2.0
+    features it was silent on: the attention alert, Claude Desktop's Code tab and project names under Agents and
+    usage, the early-reset fix in the Claude usage line, the Notes redesign and Wispr Flow under The notch, and
+    note tags under Tags. What changes when you update says the status line is handed back.
+  - `openspec/changes/release-2-0/tasks.md`: 8.1 and 8.4 ticked from the coordinator's handoff, 1.7's stale "not
+    written yet" fixed, and a section 11 for beta 2 (build 13 and the notes ticked; the install, David's Mac checks
+    and the `v2.0.0-beta.2` tag open).
+
 ### 2026-11-18 - Claude Desktop chats: a question is yellow, busy stays green
 - **Developer label:** "yellow detection and green detection persistence is not good now in kannu, what happened to that, for claude"
 - **Agent label:** Claude Code (Opus 5.5) — Claude detection lane, from the 18 Nov plan David approved for beta.2
