@@ -73,16 +73,33 @@ final class AttentionAlertManager: ObservableObject {
         alert()
     }
 
-    /// The setting's preview button, and the alert itself.
+    /// The setting's preview button, and the alert itself. None plays nothing.
     func playSound(_ sound: AttentionAlertSound) {
-        guard let player = NSSound(named: NSSound.Name(sound.rawValue)) else { return }
-        // `NSSound(named:)` hands back one shared instance per name: restart it if it is still playing.
-        player.stop()
-        player.play()
+        switch sound.playback {
+        case .silent:
+            return
+        case .bundled(let name, let fileExtension):
+            // Once, never looped. A second press restarts it rather than playing over it.
+            bundledSound?.stop()
+            bundledSound = bundledPlayer.play(fileName: name, fileExtension: fileExtension)
+        case .system(let name):
+            guard let player = NSSound(named: NSSound.Name(name)) else { return }
+            // `NSSound(named:)` hands back one shared instance per name: restart it if it is still playing.
+            player.stop()
+            player.play()
+        }
     }
+
+    private let bundledPlayer = AudioPlayer()
+    private var bundledSound: NSSound?
 
     private func alert() {
         playSound(Defaults[.attentionAlertSound])
+        // Locked, the notch windows are hidden. With the lock-screen live activity on its pill is already
+        // there and the overlay shimmers it; with it off, the pill shows for this one flash.
+        if LockScreenManager.shared.isLocked {
+            LockScreenLiveActivityWindowManager.shared.flashForAttentionAlert(duration: AttentionAlertTracker.flashDuration)
+        }
         flashCount += 1
         let visual = AttentionAlertVisual.forReduceMotion(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         withAnimation(.easeOut(duration: 0.2)) {

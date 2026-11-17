@@ -130,11 +130,41 @@ final class AttentionAlertTests: XCTestCase {
 
     // MARK: - Sounds
 
-    func testEverySoundIsAMacOSSystemSound() {
-        XCTAssertEqual(AttentionAlertSound.allCases.count, 14)
-        for sound in AttentionAlertSound.allCases {
-            XCTAssertTrue(FileManager.default.fileExists(atPath: "/System/Library/Sounds/\(sound.rawValue).aiff"),
-                          "\(sound.rawValue) is not in /System/Library/Sounds")
+    func testThePickerListsNoneThenKannuAlarmThenTheMacOSSounds() {
+        XCTAssertEqual(AttentionAlertSound.allCases.map(\.rawValue), [
+            "none", "kannuAlarm",
+            "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi",
+            "Submarine", "Tink",
+        ])
+    }
+
+    /// `Defaults` stores the raw value: a sound saved by the first version of #70 must still load.
+    func testStoredSystemSoundsStillLoad() {
+        XCTAssertEqual(AttentionAlertSound(rawValue: "Glass"), .glass)
+        XCTAssertEqual(AttentionAlertSound(rawValue: "Submarine"), .submarine)
+        XCTAssertEqual(AttentionAlertSound(rawValue: "Tink"), .tink)
+    }
+
+    func testNoneIsSilentAndKannuAlarmIsTheTimersFile() {
+        XCTAssertEqual(AttentionAlertSound.none.playback, .silent)
+        XCTAssertEqual(AttentionAlertSound.kannuAlarm.playback, .bundled(name: "timer", fileExtension: "mp3"))
+        XCTAssertEqual(AttentionAlertSound.glass.playback, .system(name: "Glass"))
+    }
+
+    func testEverySystemSoundIsInSystemLibrarySounds() {
+        let system = AttentionAlertSound.allCases.compactMap { sound -> String? in
+            if case .system(let name) = sound.playback { return name }
+            return nil
         }
+        XCTAssertEqual(system.count, 14)
+        for name in system {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: "/System/Library/Sounds/\(name).aiff"),
+                          "\(name) is not in /System/Library/Sounds")
+        }
+    }
+
+    func testTheKannuAlarmFileIsBundled() {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Kannu/timer.mp3").path))
     }
 }

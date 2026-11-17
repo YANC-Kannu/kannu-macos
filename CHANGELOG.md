@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - The attention alert gets None, Kannu's alarm, and a pill on the lock screen
+- **Developer label:** "keep the macOS sounds and add Kannu's own", "add None to the picker", "Show the pill for the alert"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answers to #70's open questions 1 to 3
+- **Changes:**
+  - The alert's sound picker lists None, then Kannu alarm, then the 14 macOS sounds. None plays nothing, so the alert
+    is the shimmer alone, and Play sound is off for it. Kannu alarm plays the timer's `timer.mp3` once through
+    `AudioPlayer`; only the timer's own alarm loops. Stored values are unchanged, so a saved "Glass" still loads,
+    and Glass stays the default.
+  - `AudioPlayer.play` returns the sound it started (nil when the file is missing, where it used to force-unwrap), so
+    a second press restarts the alarm instead of playing over it.
+  - Locked with the lock-screen live activity off, the alert now shows the lock-screen pill for its flash
+    (`LockScreenLiveActivityWindowManager.flashForAttentionAlert`): the same `present` path with the live-activity
+    guard lifted for that call alone, hidden after `AttentionAlertTracker.flashDuration` by one `Task.sleep` that
+    unlocking cancels. With the live activity on nothing changes.
+  - A hide's delayed `orderOut` now checks that no `present` ran since, so a pill shown again within the 0.82 s
+    collapse (the next alert, a lock) is not taken off screen.
+  - "None" and "Kannu alarm" in all 17 languages; the `agent-status` spec delta gains four scenarios.
+  - Tests: `AttentionAlertTests` (picker order, stored values, None silent, Kannu alarm's file) and
+    `AttentionAlertRulesTests` (the forced pill only while locked, one sleep, cancelled on unlock, the orderOut
+    guard; None and the alarm's single play).
+
 ### 2026-11-17 - A sound and a notch shimmer when an agent turns yellow
 - **Developer label:** Attention alert for 2.0 beta.2: "yellow only, and the lock screen included"
 - **Agent label:** Claude Code (Opus 5.5) — attention alert lane, from the 2.0 release coordinator's brief

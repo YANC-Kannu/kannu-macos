@@ -29,6 +29,10 @@ class LockScreenLiveActivityWindowManager {
     private var window: NSWindow?
     private var hasDelegated = false
     private var hideTask: Task<Void, Never>?
+    /// The attention alert's one sleep while the pill shows only for it (live activity off). Cancelled on unlock.
+    private var attentionFlashTask: Task<Void, Never>?
+    /// Bumped by every `present`, so a hide's delayed `orderOut` never removes a pill shown again since.
+    private var presentGeneration = 0
     private var hostingView: NSHostingView<LockScreenLiveActivityOverlay>?
     private let overlayModel = LockScreenLiveActivityOverlayModel()
     private let overlayAnimator = LockIconAnimator(initiallyLocked: LockScreenManager.shared.isLocked)
@@ -171,11 +175,13 @@ class LockScreenLiveActivityWindowManager {
         print("[\(timestamp())] LockScreenLiveActivityWindowManager: realigned window due to \(reason)")
     }
 
-    private func present(notchSize: CGSize, on screen: NSScreen) {
-        guard Defaults[.enableLockScreenLiveActivity] else {
+    /// `forAttentionAlert` lifts the live-activity guard for one call: `flashForAttentionAlert` only.
+    private func present(notchSize: CGSize, on screen: NSScreen, forAttentionAlert: Bool = false) {
+        guard Defaults[.enableLockScreenLiveActivity] || forAttentionAlert else {
             hideImmediately()
             return
         }
+        presentGeneration += 1
 
         let windowSize = windowSize(for: notchSize)
         let window = ensureWindow(windowSize: windowSize, screen: screen)
@@ -236,8 +242,36 @@ class LockScreenLiveActivityWindowManager {
         print("[\(timestamp())] LockScreenLiveActivityWindowManager: showing locked state")
     }
 
+    /// The attention alert while the Mac is locked and the lock-screen live activity is off: no pill is on
+    /// screen, so it shows for one flash and goes. One sleep, cancelled on unlock: no timer and no repeat.
+    /// With the live activity on, the pill is already there and the alert's overlay shimmers it.
+    func flashForAttentionAlert(duration: TimeInterval) {
+        guard LockScreenManager.shared.isLocked, !Defaults[.enableLockScreenLiveActivity] else { return }
+        guard let context = lockContext() else { return }
+        hideTask?.cancel()
+        attentionFlashTask?.cancel()
+
+        overlayAnimator.update(isLocked: true, animated: false)
+        overlayModel.scale = 1
+        overlayModel.opacity = 1
+        present(notchSize: context.notchSize, on: context.screen, forAttentionAlert: true)
+
+        attentionFlashTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(duration))
+            guard let self, !Task.isCancelled else { return }
+            self.attentionFlashTask = nil
+            self.hideWithAnimation()
+        }
+    }
+
+    private func cancelAttentionFlash() {
+        attentionFlashTask?.cancel()
+        attentionFlashTask = nil
+    }
+
     func showUnlockAndScheduleHide() {
         hideTask?.cancel()
+        cancelAttentionFlash()
         guard let context = lockContext() else { return }
 
         overlayModel.scale = 1
@@ -259,6 +293,7 @@ class LockScreenLiveActivityWindowManager {
     func hideImmediately() {
         hideTask?.cancel()
         hideTask = nil
+        cancelAttentionFlash()
 
         hideWithAnimation()
     }
@@ -284,7 +319,10 @@ class LockScreenLiveActivityWindowManager {
             window.animator().alphaValue = 0
         }
 
+        let generation = presentGeneration
         DispatchQueue.main.asyncAfter(deadline: .now() + LockScreenAnimationTimings.unlockCollapse + 0.02) {
+            // A pill presented again since (the next alert's flash, a lock) stays.
+            guard self.presentGeneration == generation else { return }
             window.orderOut(nil)
             self.currentNotchSize = nil
         }

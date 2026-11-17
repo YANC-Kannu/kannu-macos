@@ -153,6 +153,51 @@ final class AttentionAlertRulesTests: XCTestCase {
         XCTAssertTrue(overlay.contains("case .glow: glow"))
     }
 
+    // MARK: - The sound
+
+    func testNonePlaysNothingAndKannuAlarmPlaysOnceThroughAudioPlayer() throws {
+        let manager = Self.code(try Self.source("Kannu/managers/AgentStatus/AttentionAlertManager.swift"))
+        let play = try XCTUnwrap(Self.body(ofFunction: "playSound", in: manager))
+        XCTAssertTrue(play.contains("case .silent:\n            return"), "None plays nothing")
+        XCTAssertTrue(play.contains("bundledPlayer.play(fileName: name, fileExtension: fileExtension)"))
+        for loop in ["numberOfLoops", ".loops", "loops = true"] {
+            XCTAssertFalse(play.contains(loop), "the Kannu alarm plays once: only the timer's own alarm loops")
+        }
+        let settings = try Self.source("Kannu/components/Settings/AgentStatusSettings.swift")
+        XCTAssertTrue(settings.contains(".disabled(attentionAlertSound == .none)"), "Play sound is off for None")
+    }
+
+    // MARK: - The pill while locked with the live activity off
+
+    func testThePillShowsForTheAlertOnlyWhileLockedAndGoesAfterOneSleep() throws {
+        let window = Self.code(try Self.source("Kannu/managers/LockScreenLiveActivityWindowManager.swift"))
+        let flash = try XCTUnwrap(Self.body(ofFunction: "flashForAttentionAlert", in: window))
+        XCTAssertTrue(flash.contains("guard LockScreenManager.shared.isLocked, !Defaults[.enableLockScreenLiveActivity] else { return }"),
+                      "only while locked, and only when the live activity has no pill up")
+        XCTAssertTrue(flash.contains("present(notchSize: context.notchSize, on: context.screen, forAttentionAlert: true)"))
+        XCTAssertEqual(flash.components(separatedBy: "Task.sleep").count - 1, 1, "one sleep")
+        for banned in ["Timer.", "repeatForever", "asyncAfter"] {
+            XCTAssertFalse(flash.contains(banned), banned)
+        }
+        // Nothing else lifts the live-activity guard.
+        XCTAssertEqual(window.components(separatedBy: "forAttentionAlert: true").count - 1, 1)
+
+        // Unlocking cancels the pending hide, on both unlock paths.
+        let unlock = try XCTUnwrap(Self.body(ofFunction: "showUnlockAndScheduleHide", in: window))
+        XCTAssertTrue(unlock.contains("cancelAttentionFlash()"))
+        let hide = try XCTUnwrap(Self.body(ofFunction: "hideImmediately", in: window))
+        XCTAssertTrue(hide.contains("cancelAttentionFlash()"))
+
+        // A hide's delayed orderOut never removes a pill presented since.
+        let hideWithAnimation = try XCTUnwrap(Self.body(ofFunction: "hideWithAnimation", in: window))
+        XCTAssertTrue(hideWithAnimation.contains("guard self.presentGeneration == generation else { return }"))
+
+        let manager = Self.code(try Self.source("Kannu/managers/AgentStatus/AttentionAlertManager.swift"))
+        let alert = try XCTUnwrap(Self.body(ofFunction: "alert", in: manager))
+        XCTAssertTrue(alert.contains("if LockScreenManager.shared.isLocked {"))
+        XCTAssertTrue(alert.contains("flashForAttentionAlert(duration: AttentionAlertTracker.flashDuration)"))
+    }
+
     // MARK: - The setting
 
     func testTheSettingRowsAndTheirSearchEntriesShareIDs() throws {

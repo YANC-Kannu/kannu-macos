@@ -7,13 +7,15 @@ David decided on 16 Nov that 2.0's beta.2 gets a local attention alert: a short 
 when an agent turns yellow, also while the Mac is locked. Yellow only.
 
 ## What Changes
-- A new **attention alert**, off by default. When a visible agent session enters `awaitingInput`, Kannu plays a named
-  system sound and runs one shimmer across the notch.
+- A new **attention alert**, off by default. When a visible agent session enters `awaitingInput`, Kannu plays a sound
+  and runs one shimmer across the notch. The sound is None (shimmer only), Kannu alarm (the timer's `timer.mp3`, played
+  once) or one of the 14 macOS system sounds; Glass is the default.
 - **One alert per session per yellow episode.** A session that stays yellow never alerts again. Leaving yellow and
   coming back is a new episode. Several sessions that turn yellow together give one alert.
 - **The lock screen.** While the Mac is locked, the main notch windows are hidden and the only Kannu window there is
   the lock-screen pill (`LockScreenLiveActivityOverlay`, a black pill with the lock icon). The shimmer draws on that
-  pill as well as on the notch.
+  pill as well as on the notch. With the lock-screen live activity off there is no pill, so the alert shows it for the
+  flash alone (`LockScreenLiveActivityWindowManager.flashForAttentionAlert`).
 - **Reduce Motion** turns the shimmer into a static glow. The shimmer is a bounded, two-sweep animation, with no
   repeating timer and no `TimelineView`.
 - **Nothing before the Terms and onboarding.** The alert's source starts inside `continueLaunch()`, and it stays silent
@@ -32,5 +34,7 @@ when an agent turns yellow, also while the Mac is locked. Yellow only.
   - `Kannu/ContentView.swift` (the overlay in the notch's body fill);
   - `Kannu/components/LockScreen/LockScreenLiveActivityOverlay.swift` (the overlay on the lock-screen pill);
   - `Kannu/components/Settings/AgentStatusSettings.swift` and `SettingsView.swift` (the row and its search entry);
+  - `Kannu/managers/LockScreenLiveActivityWindowManager.swift` (the pill for the alert, live activity off);
+  - `Kannu/helpers/AudioPlayer.swift` (returns the sound it plays, so the alarm can be restarted);
   - `Kannu/models/Constants.swift`, `Kannu/Localizable.xcstrings`, `Kannu/helpers/DebugSnapshot.swift`.
 - No change to the hook script, the state ladder or the monitor.

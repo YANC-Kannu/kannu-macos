@@ -31,9 +31,22 @@ enum AttentionAlertVisual: Equatable {
     }
 }
 
-/// The macOS system sounds in `/System/Library/Sounds`, by the name `NSSound(named:)` takes. The same
-/// fourteen ship from macOS 14 to 27. They are proper names, shown as macOS shows them.
+/// What an alert sound is, to play it.
+enum AttentionAlertPlayback: Equatable {
+    /// None: the shimmer alone.
+    case silent
+    /// A file in the app bundle, played once.
+    case bundled(name: String, fileExtension: String)
+    /// A macOS system sound, by the name `NSSound(named:)` takes.
+    case system(name: String)
+}
+
+/// The alert's sound: None, Kannu's own alarm, then the macOS system sounds in `/System/Library/Sounds`.
+/// The fourteen system sounds ship from macOS 14 to 27; their raw values are what `Defaults` stores, so they
+/// never change (a saved "Glass" still loads). They are proper names, shown as macOS shows them.
 enum AttentionAlertSound: String, CaseIterable, Identifiable {
+    case none
+    case kannuAlarm
     case basso = "Basso"
     case blow = "Blow"
     case bottle = "Bottle"
@@ -51,8 +64,23 @@ enum AttentionAlertSound: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// The sound's own name. Not catalog text: macOS shows these names untranslated too.
-    var localizedName: String { rawValue }
+    /// None and Kannu alarm are catalog text. A system sound shows its own name, untranslated, as macOS does.
+    var localizedName: String {
+        switch self {
+        case .none: return String(localized: "None")
+        case .kannuAlarm: return String(localized: "Kannu alarm")
+        default: return rawValue
+        }
+    }
+
+    /// Kannu alarm is the timer's own `timer.mp3`, played once here: only the timer's alarm loops.
+    var playback: AttentionAlertPlayback {
+        switch self {
+        case .none: return .silent
+        case .kannuAlarm: return .bundled(name: "timer", fileExtension: "mp3")
+        default: return .system(name: rawValue)
+        }
+    }
 }
 
 /// One alert per session per yellow episode.

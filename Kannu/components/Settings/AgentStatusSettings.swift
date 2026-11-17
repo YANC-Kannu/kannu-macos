@@ -270,6 +270,7 @@ struct AgentStatusSettings: View {
                     Button("Play sound") {
                         AttentionAlertManager.shared.playSound(attentionAlertSound)
                     }
+                    .disabled(attentionAlertSound == .none)
                 }
             }
             .settingsHighlight(id: highlightID("Alert sound"))
@@ -580,9 +581,27 @@ extension AgentStatusSettings {
         })
     }
 
-    /// DEBUG snapshot harness: the attention alert's setting rows.
+    /// DEBUG snapshot harness: the attention alert's setting rows, then, from a fixture that leaves the stored
+    /// choice alone, the sound row with None picked (Play sound off) and the picker's choices in menu order.
     static func snapshotAttentionAlertRows() -> AnyView {
-        AnyView(SettingsPage { AgentStatusSettings().attentionAlertSection })
+        AnyView(SettingsPage {
+            AgentStatusSettings().attentionAlertSection
+            SettingsSection {
+                SettingsRow("Alert sound") {
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        SettingsSelect("Alert sound", selection: .constant(AttentionAlertSound.none),
+                                       options: AttentionAlertSound.allCases, optionTitle: \.localizedName)
+                        Button("Play sound") {}
+                            .disabled(true)
+                    }
+                }
+                Text(verbatim: AttentionAlertSound.allCases.map(\.localizedName).joined(separator: " · "))
+                    .settingsDescriptionStyle()
+            } header: {
+                // A `String`, not a literal: the literal overload would make this a catalog key.
+                SettingsSectionHeader(String(describing: "Fixture: None picked, and the menu's order"))
+            }
+        })
     }
 
 }

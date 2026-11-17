@@ -910,7 +910,8 @@ enum DebugSnapshots {
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.
     /// The attention alert's flash, from a fixture and with no agent: the closed notch's body as
-    /// `ContentView.notchBodyFill` paints it, and the real lock-screen pill. No alert (the look before),
+    /// `ContentView.notchBodyFill` paints it, and the real lock-screen pill, which shows the same with the lock-screen
+    /// live activity on or, for the flash alone, off (`flashForAttentionAlert`). No alert (the look before),
     /// the shimmer at two points of its sweep, and Reduce Motion's still glow.
     private static var attentionAlertFlashBoard: some View {
         let notch = CGSize(width: 185, height: 32)

@@ -24,7 +24,12 @@ import Foundation
 import AppKit
 
 class AudioPlayer {
-    func play(fileName: String, fileExtension: String) {
-        NSSound(contentsOf:Bundle.main.url(forResource: fileName, withExtension: fileExtension)!, byReference: false)?.play()
+    /// Plays a bundled file once. Returns the sound so a caller can stop it; nil when the file is missing.
+    @discardableResult
+    func play(fileName: String, fileExtension: String) -> NSSound? {
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension),
+              let sound = NSSound(contentsOf: url, byReference: false) else { return nil }
+        sound.play()
+        return sound
     }
 }
