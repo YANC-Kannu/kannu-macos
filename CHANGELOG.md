@@ -32,6 +32,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
     folders, and the Cursor slug decoder.
 
+### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
+- **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
+- **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of
+  `development` at 75e62b24, plus the `add-contributor-agent-setup` proposal for the rest
+- **Changes:**
+  - `.claude/settings.json` no longer pre-approves `git push`. It allows only `git status`, `diff`, `log` and `show`,
+    the KannuTests run, the pinned OpenSpec `list` and `validate`, and `bash .githooks/pre-commit`.
+  - `CLAUDE.md` makes the `caveman` style skill optional. The ART contract stays first and `@AGENTS.md` last.
+  - `openspec/project.md`: the hold rule asks for a maintainer's explicit yes, and the release owner's for tags and
+    releases; the specs describe `development`; the feed line reflects #3 and the 1.x bridge; the new rulesets on
+    `development` and `super/**` are described.
+  - `AGENTS.md` gains a short note on the pinned OpenSpec CLI, outside the managed block, and no longer says that no
+    CI job runs the hook. The Claude OpenSpec commands use the pinned CLI and drop the `openspec update` hint.
+  - CI gains an ubuntu job that runs the pinned `openspec validate --all --strict --no-interactive` and
+    `bash .githooks/pre-commit` on the checkout. The macOS Build jobs are unchanged.
+  - `.gitignore` covers `marketing/`, `*.local.md`, `.claude/worktrees/` and `.claude/settings.local.json`.
+  - `CONTRIBUTING.md` opens with a Setup checklist: clone and switch to `development`, hooks, the `Kannu Dev`
+    identity, KannuTests, the Debug build and the pinned `openspec list`, plus Xcode signing for contributors and
+    which file each agent tool reads.
+  - New OpenSpec change `add-contributor-agent-setup` (proposal only) records the after-2.0 backlog: as-built specs
+    for the agent monitor and other shipped features, a doctor script, merge resolvers, shared skills, Cursor and
+    Copilot commands, a PR template and CODEOWNERS, wider hook source paths, a cloud setup, and splitting
+    `release-2-0`'s deltas.
+  - `release-2-0`'s `tasks.md` and `handoff.md` record that #55 (a522db02) and #9 (75e62b24) merged, so #55 ships in
+    2.0.
+
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's reply on the status line error, through Auto-fix

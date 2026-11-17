@@ -27,7 +27,8 @@ Three pillars:
   `xcodebuild test -project Kannu.xcodeproj -scheme KannuTests -destination "platform=macOS" -derivedDataPath .build-tests`
 - GitHub `YANC-Kannu/kannu-macos`, which is **public**. The default branch is `main`, and day-to-day work goes to
   `development`. CI builds and tests every push to `main` and `development`, and every PR into them or into
-  `super/**`. A `v*` tag runs `.github/workflows/release.yml`.
+  `super/**`. The same events run one ubuntu job that validates OpenSpec with the pinned CLI and runs
+  `.githooks/pre-commit` on the checkout. A `v*` tag runs `.github/workflows/release.yml`.
 - The OpenSpec CLI is pinned at **0.23.0**. Run it through npx, with telemetry off:
   `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 <command>`, for example `list` or
   `validate --strict --no-interactive`. 0.23.0 is the last release with this layout: this file, `openspec/AGENTS.md`
@@ -37,12 +38,15 @@ Three pillars:
 ## Project Conventions
 
 ### The hold rule
-Nothing is committed, pushed, merged, retargeted, marked ready, tagged or released without David's yes in the current
-chat turn. One yes covers one shipment. A plan, a document or an earlier yes is not that yes. Finished work waits,
-staged and uncommitted.
+Nothing is committed, pushed, merged, retargeted, marked ready, tagged or released without a maintainer's explicit yes
+in the current turn. Tags and releases need the release owner's yes. One yes covers one shipment. A plan, a document or
+an earlier yes is not that yes. Finished work waits, staged and uncommitted. (On your own fork, the maintainer is you.)
 
 ### Branches and PRs
 - PRs target `development`; `main` is the release branch.
+- GitHub rulesets enforce this. `development` takes changes only through a PR, merged with a merge commit, once both
+  Build checks (`Build (macos-15)` and `Build (macos-26)`) are green; it cannot be force-pushed or deleted. `super/**`
+  branches cannot be force-pushed.
 - Work too large for one review ships as stacked supers (AGENTS.md, "Stacked super PRs"):
   - Each stage is a `super/<name>` branch, with a PR onto the super below it. The bottom super targets `development`.
   - Small child PRs merge into their super with a merge commit once CI is green.
@@ -68,7 +72,7 @@ staged and uncommitted.
   - fix what the PR broke, plus any one-line fix;
   - answer the rest in one PR comment and record them as follow-ups;
   - merge once the latest commit is reviewed and every note is answered.
-- Don't wait on a review or CI before starting the next piece. Each PR-state change still needs David's yes.
+- Don't wait on a review or CI before starting the next piece. Each PR-state change still needs a maintainer's yes.
 
 ### Where agent sessions start
 Kannu names each agent session's project after the folder the agent runs in: its first workspace root, or Claude
@@ -136,26 +140,26 @@ A click resolves where it goes in its action, never in `body`.
 - Build numbers only go up.
 
 ## Domain Context
-- **Specs describe the redesign as built.** `openspec/specs/` describes the behaviour on the Brain redesign stack:
-  - `super/brain-6-around` holds Stages 4 to 6 on top of `development`.
-  - It reaches `development` through PRs #42, #43 and #52.
-  - Until they merge, some files the specs cite exist only on the supers.
+- **Specs describe `development` as built.** The Brain redesign stack (PRs #42, #43 and #52) merged into `development`
+  on 2026-11-13, so every file the specs cite exists there. Deltas still waiting in `openspec/changes/` describe work
+  that is planned or merged but not yet archived; read them alongside the main specs.
 - **Brain is the main window,** opened from the notch and the menu bar. Its code lives under
   `Kannu/components/Settings/`, for historical reasons; `docs/SETTINGS.md` explains the naming rules.
 
 ## Important Constraints
 - Nothing runs before the Terms of Use are accepted. No permission dialog appears before onboarding's Permissions
   step (AGENTS.md, "Known traps").
-- No `v*` tag and no release without David's yes. Never stage `marketing/`. Never type or commit a secret.
+- No `v*` tag and no release without the release owner's yes. Never stage `marketing/`. Never type or commit a secret.
 - `CLAUDE.md` keeps the ART framework first and `@AGENTS.md` as its last line (`ChangelogRuleDocsTests`). Never run
   `/init`.
-- **0.23.0's `openspec update` and `openspec init` also write their block into `CLAUDE.md`.** After running either,
-  restore it with `git checkout -- CLAUDE.md`. Keep only the block in AGENTS.md.
+- **Never run 0.23.0's `openspec update` or `openspec init` here:** both also write their block into `CLAUDE.md`. If
+  one runs, restore it with `git checkout -- CLAUDE.md`. Keep only the block in AGENTS.md.
 - A cloud session cannot build, test, install or notarize the app. Those run on a Mac or in CI.
 
 ## External Dependencies
 - GitHub Actions for CI and releases, CodeRabbit for PR review, Apple notarization, and Sparkle with its appcast.
-- **The update feed:** installed copies read `libinmv/kannu`'s `Updates/appcast.xml` until PR #3 repoints
-  `SUFeedURL`. The release change covers the bridge.
+- **The update feed:** since PR #3, `SUFeedURL` points at this repository's `Updates/appcast.xml` on `main`. Copies
+  already installed from 1.x still read `libinmv/kannu`'s `Updates/appcast.xml`, so they reach 2.0.0 only through the
+  release change's one-time bridge (`release-2-0`, task 7.4).
 - The task sources' APIs: Jira Cloud, GitLab, GitHub, Linear and Todoist, plus EventKit for Apple Reminders
   (`docs/TASK-SOURCES.md`).
