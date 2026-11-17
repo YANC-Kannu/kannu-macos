@@ -20,7 +20,8 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 - [x] 1.5 #43: retarget it to `development`, mark it ready and merge it. [David] Merged as a711fece.
 - [x] 1.6 #52: the same, once its review is answered and #56 is in. [David] Merged as d7d839d3.
 - [x] 1.7 After the stack lands, check that every file the specs cite exists on `development`, and fix any stale
-  path. [Cloud] All 48 cited paths exist, except section 4's release notes, which are not written yet.
+  path. [Cloud] All 48 cited paths exist. Section 4's release notes, missing at that check, are written since
+  (4.2, 4.3).
 
 ## 2. Land #3 and bridge the feed
 - [x] 2.1 Catch #3 (`chore/repoint-yanc-kannu`) up with `development`, run its gates, and merge it. [Mac] [David]
@@ -87,7 +88,7 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 ## 8. Launch video, "A day in the notch" (45 s at 16:9, plus a 15 s cut at 9:16)
 The storyboard, shot list and prompts live only on David's Mac, in the untracked `marketing/kannu-2-0-day/`, and are
 never committed (David, 2026-11-13). `marketing/` is never staged.
-- [ ] 8.1 In a local session, write the storyboard and shot list into `marketing/kannu-2-0-day/`, with one prompt per
+- [x] 8.1 In a local session, write the storyboard and shot list into `marketing/kannu-2-0-day/`, with one prompt per
   shot, for seven beats from morning to night:
   1. A dark desk; the eye in the notch opens.
   2. Agents running; Brain › Agents full screen.
@@ -99,10 +100,12 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 
   UI shots are image-to-video from real 2.0 frames (snapshot boards from fixtures, never real data), with the UI held
   still, as the July ad's prompts did. Atmosphere shots (the desk, a day of light) are text-to-video. Higgsfield makes
-  the shots only; the cut, captions, music and the day-clock overlay are done in David's editor. [Mac]
+  the shots only; the cut, captions, music and the day-clock overlay are done in David's editor. [Mac] Done on
+  13 Nov, per the coordinator's handoff: 16 shots (45 s at 16:9, and a 15 s cut at 9:16 that reuses 9), 16 prompts
+  and the frames list, in `marketing/kannu-2-0-day/`.
 - [ ] 8.2 David approves the shot list. [David]
 - [ ] 8.3 Render the UI frames the shot list names, as snapshot boards from fixtures. [Mac]
-- [ ] 8.4 Authorize the higgsfield MCP through `/mcp`. [David]
+- [x] 8.4 Authorize the higgsfield MCP through `/mcp`. [David] Connected, per the coordinator's handoff.
 - [ ] 8.5 Generate the shots in batches, each on David's yes, because every generation spends credits. [David]
 - [ ] 8.6 Assemble the cut, and David signs it off before release day. [David]
 
@@ -134,3 +137,15 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
   - the three wording fixes from #42's second review;
   - onboarding's uncatalogued strings (49 of 77).
 - [ ] 10.3 Review follow-ups. Each is in `handoff.md`, with its file and why it waits.
+
+## 11. Beta 2 (a 7.2 fix release)
+- [x] 11.1 Set `CURRENT_PROJECT_VERSION` to 13 in both configurations of `Kannu.xcodeproj/project.pbxproj`. [Cloud]
+  Set in the beta.2 release-prep change; build 13 sits above beta.1's 12.
+- [x] 11.2 Write `docs/release-notes/2.0.0-beta.2.md` in beta.1's shape, covering everything merged since beta.1, and
+  catch `2.0.0.md` up (9.7's #55 line among them). [Cloud] Written in the same change.
+- [ ] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
+- [ ] 11.4 David's Mac checks on that install: beta.2's "Please try" list, and the live checks its changes left open
+  (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4,
+  `update-sideways-agent-pill` 4.6, `fix-claude-desktop-detection` 3.4). [Mac] [David]
+- [ ] 11.5 Tag `v2.0.0-beta.2` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
+  unchanged. [CI] [David]
