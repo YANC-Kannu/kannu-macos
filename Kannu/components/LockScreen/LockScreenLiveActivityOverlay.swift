@@ -28,6 +28,8 @@ struct LockScreenLiveActivityOverlay: View {
 	@ObservedObject var animator: LockIconAnimator
 	let notchSize: CGSize
 	var isDynamicIslandMode: Bool = false
+	/// Snapshot boards only: a pinned attention flash instead of the live one.
+	var attentionPreview: AttentionAlertPreview? = nil
 
 	private var indicatorSize: CGFloat {
 		max(0, notchSize.height - 12)
@@ -70,6 +72,9 @@ struct LockScreenLiveActivityOverlay: View {
 		.frame(width: notchSize.width + (indicatorSize * 2), height: notchSize.height)
 		.padding(.horizontal, horizontalPadding)
 		.background(Color.black)
+		// While locked the notch windows are hidden and this pill is the only Kannu window on
+		// screen, so the attention alert draws here too.
+		.overlay { AttentionAlertOverlay(preview: attentionPreview) }
 		.clipShape(
 			isDynamicIslandMode
 				? AnyShape(DynamicIslandPillShape(

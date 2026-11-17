@@ -172,6 +172,35 @@ final class NotesManager {
         Defaults[.savedNotes] = notes
     }
 
+    // MARK: - Tags
+
+    /// A saved note's tags, cleaned (`TaskItem.cleanedTags`). Kannu's only, as a pin is: nothing is
+    /// pushed to Apple Notes and the note keeps its date, so tagging never moves it in the list or
+    /// rewrites its Apple note. Nothing happens for a note not saved yet (its first save sets them) or
+    /// when the tags are unchanged.
+    func setTags(_ tags: [String], forNote id: UUID) {
+        var notes = Defaults[.savedNotes]
+        guard let index = notes.firstIndex(where: { $0.id == id }) else { return }
+        let cleaned = TaskItem.cleanedTags(tags)
+        guard notes[index].tags != cleaned else { return }
+        notes[index].tags = cleaned
+        Defaults[.savedNotes] = notes
+    }
+
+    /// A Wispr Flow meeting's tags, by its meeting id: the one thing Kannu keeps about a meeting, never
+    /// its title or summary, which are read from Wispr each time. No tags removes the entry.
+    func setTags(_ tags: [String], forWisprMeeting meetingId: String) {
+        let cleaned = TaskItem.cleanedTags(tags)
+        var byMeeting = Defaults[.wisprMeetingTags]
+        guard (byMeeting[meetingId] ?? []) != cleaned else { return }
+        if cleaned.isEmpty {
+            byMeeting.removeValue(forKey: meetingId)
+        } else {
+            byMeeting[meetingId] = cleaned
+        }
+        Defaults[.wisprMeetingTags] = byMeeting
+    }
+
     // MARK: - Apple Notes
 
     /// Runs a two-way sync and applies its result to the notes as they are when it finishes, not to
@@ -203,7 +232,15 @@ final class NotesManager {
                 },
                 // Folder-only: a note made in Notes that the sync left out leaves, even if edited
                 // during the sync, as the setting promises.
-                dropMissing: { note in scope == .kannuFolder && note.madeInAppleNotes == true }
+                dropMissing: { note in scope == .kannuFolder && note.madeInAppleNotes == true },
+                // Tags and pins are Kannu's alone and never move a note's date, so one set while the
+                // sync ran must win over the snapshot's.
+                carry: { now, synced in
+                    var carried = synced
+                    carried.tags = now.tags
+                    carried.isPinned = now.isPinned
+                    return carried
+                }
             )
             // The result is applied first (it may hold ids of notes the sync just created in Notes),
             // then a scope changed meanwhile gets its own sync; Settings' call was refused while this

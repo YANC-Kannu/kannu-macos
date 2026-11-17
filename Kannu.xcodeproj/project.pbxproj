@@ -142,6 +142,9 @@
 		AA100000000000000000009D /* UsageWindows.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009C /* UsageWindows.swift */; };
 		AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000C8 /* JSONLUsageCache.swift */; };
 		AA1000000000000000000921 /* CursorComposerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000920 /* CursorComposerStore.swift */; };
+		AA1000000000000000000B01 /* WisprFlowMeetingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B02 /* WisprFlowMeetingsStore.swift */; };
+		AA1000000000000000000B03 /* NoteDisplayText.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B04 /* NoteDisplayText.swift */; };
+		AA1000000000000000000B05 /* NoteFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B06 /* NoteFilter.swift */; };
 		AA1000000000000000000923 /* CursorPlanUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000922 /* CursorPlanUsage.swift */; };
 		AA100000000000000000009F /* AgentExecutionClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA100000000000000000009E /* AgentExecutionClock.swift */; };
 		AA10000000000000000000A8 /* PolicySighting.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10000000000000000000A7 /* PolicySighting.swift */; };
@@ -163,6 +166,8 @@
 		AA1000000000000000000977 /* LaunchPermissions.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000976 /* LaunchPermissions.swift */; };
 		AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000980 /* AppleNotesMergePolicy.swift */; };
 		AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000978 /* ScreenCapturePolicy.swift */; };
+		AA1000000000000000000B53 /* AttentionAlert.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000B52 /* AttentionAlert.swift */; };
+		AA1000000000000000000E72 /* ProjectNameRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000E71 /* ProjectNameRules.swift */; };
 		F910B9C812C7AEFE2293F7D2 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A9C58195E197C19F691DA62 /* Cocoa.framework */; };
 /* End PBXBuildFile section */
 
@@ -308,6 +313,9 @@
 		AA100000000000000000009C /* UsageWindows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UsageWindows.swift; path = Kannu/managers/LLMUsage/UsageWindows.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000C8 /* JSONLUsageCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = JSONLUsageCache.swift; path = Kannu/managers/LLMUsage/JSONLUsageCache.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000920 /* CursorComposerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CursorComposerStore.swift; path = Kannu/managers/AgentStatus/CursorComposerStore.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B02 /* WisprFlowMeetingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = WisprFlowMeetingsStore.swift; path = Kannu/managers/WisprFlowMeetingsStore.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B04 /* NoteDisplayText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NoteDisplayText.swift; path = Kannu/models/NoteDisplayText.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B06 /* NoteFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = NoteFilter.swift; path = Kannu/models/NoteFilter.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000922 /* CursorPlanUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CursorPlanUsage.swift; path = Kannu/managers/LLMUsage/Quota/CursorPlanUsage.swift; sourceTree = SOURCE_ROOT; };
 		AA100000000000000000009E /* AgentExecutionClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AgentExecutionClock.swift; path = Kannu/managers/AgentStatus/AgentExecutionClock.swift; sourceTree = SOURCE_ROOT; };
 		AA10000000000000000000A7 /* PolicySighting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PolicySighting.swift; path = Kannu/managers/AgentStatus/PolicySighting.swift; sourceTree = SOURCE_ROOT; };
@@ -329,6 +337,8 @@
 		AA1000000000000000000976 /* LaunchPermissions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LaunchPermissions.swift; path = Kannu/models/LaunchPermissions.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000980 /* AppleNotesMergePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleNotesMergePolicy.swift; path = Kannu/managers/AppleNotesMergePolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000978 /* ScreenCapturePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenCapturePolicy.swift; path = Kannu/helpers/ScreenCapturePolicy.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000B52 /* AttentionAlert.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AttentionAlert.swift; path = Kannu/managers/AgentStatus/AttentionAlert.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000E71 /* ProjectNameRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProjectNameRules.swift; path = Kannu/managers/AgentStatus/ProjectNameRules.swift; sourceTree = SOURCE_ROOT; };
 		DAA671E7B1B26733F02166C5 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		F4C1DD09EC134302938E84F6 /* MediaRemoteAdapter.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaRemoteAdapter.framework; path = Frameworks/MediaRemoteAdapter.framework; sourceTree = SOURCE_ROOT; };
 		F54406E72CD4987A00C7AFD9 /* Kannu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kannu.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -825,6 +835,9 @@
 				AA100000000000000000009D /* UsageWindows.swift in Sources */,
 				AA10000000000000000000C9 /* JSONLUsageCache.swift in Sources */,
 				AA1000000000000000000921 /* CursorComposerStore.swift in Sources */,
+				AA1000000000000000000B01 /* WisprFlowMeetingsStore.swift in Sources */,
+				AA1000000000000000000B03 /* NoteDisplayText.swift in Sources */,
+				AA1000000000000000000B05 /* NoteFilter.swift in Sources */,
 				AA1000000000000000000923 /* CursorPlanUsage.swift in Sources */,
 				AA100000000000000000009F /* AgentExecutionClock.swift in Sources */,
 				AA10000000000000000000A8 /* PolicySighting.swift in Sources */,
@@ -846,6 +859,8 @@
 				AA1000000000000000000977 /* LaunchPermissions.swift in Sources */,
 				AA1000000000000000000981 /* AppleNotesMergePolicy.swift in Sources */,
 				AA1000000000000000000979 /* ScreenCapturePolicy.swift in Sources */,
+				AA1000000000000000000B53 /* AttentionAlert.swift in Sources */,
+				AA1000000000000000000E72 /* ProjectNameRules.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -249,7 +249,11 @@ final class TimerSideColumnRulesTests: XCTestCase {
         XCTAssertTrue(form.contains("GoldenRow(spacing: 10) {"), "Add and Add & Start in the golden ratio")
         // David: the notch did not offer existing tags. Brain's own suggestions, as chips that
         // never take the field's focus and never wrap.
-        XCTAssertTrue(form.contains("draft.tagSuggestions(existing: TaskFacets.tags(in: manager.tasks))"))
+        // Kannu's one set of tags, tasks' and notes' (David, 2026-11-16), read as the field gains focus,
+        // never in the body: every saved note on each keystroke was the alternative.
+        XCTAssertTrue(form.contains("draft.tagSuggestions(existing: tagVocabulary)"))
+        XCTAssertTrue(form.contains("if field == .tags, previous != .tags { tagVocabulary = SharedTags.inUse() }"))
+        XCTAssertFalse(form.contains("TaskFacets.tags(in: manager.tasks)"), "suggestions are the shared set, not tasks' alone")
         XCTAssertTrue(form.contains(".focusable(false)"), "a chip must not take the tags field's focus")
         XCTAssertTrue(form.contains("ViewThatFits(in: .horizontal)"), "chips that do not fit are left off, never wrapped")
         XCTAssertTrue(form.contains("draft.completeTag(pick.tag)"))

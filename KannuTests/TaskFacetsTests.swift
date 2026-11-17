@@ -386,4 +386,12 @@ final class TaskFacetsTests: XCTestCase {
         XCTAssertEqual(second.tasks.first?.tags, ["mine"], "and keeps the user's tags")
         XCTAssertEqual(second.updated, 1)
     }
+
+    // MARK: - One vocabulary for tasks and notes
+
+    func testFirstSpellingsKeepsEachTagOnceIgnoringCaseAndSorts() {
+        XCTAssertEqual(TaskFacets.firstSpellings(["acme", "Review", "ACME", "docs", "review"]), ["acme", "docs", "Review"],
+                       "the first spelling of each, sorted ignoring case: a note's #Acme and a task's #acme are one tag")
+        XCTAssertEqual(TaskFacets.firstSpellings([]), [])
+    }
 }

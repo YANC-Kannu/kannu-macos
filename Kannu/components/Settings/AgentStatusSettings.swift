@@ -40,6 +40,7 @@ struct AgentStatusSettings: View {
     @Default(.agentAwaitingInputColor) var agentAwaitingInputColor
     @Default(.agentStoppedColor) var agentStoppedColor
     @Default(.smartCaffeinate) var smartCaffeinate
+    @Default(.attentionAlertSound) var attentionAlertSound
     @Default(.enableAgentStatusMobileNotifications) var enableMobileNotifications
     @Default(.agentStatusNotificationProvider) var notificationProvider
     @Default(.agentStatusNtfyTopic) var ntfyTopic
@@ -144,6 +145,8 @@ struct AgentStatusSettings: View {
                     SettingsFooter("The yellow light is most reliable when hooks are installed.")
                 }
 
+                attentionAlertSection
+
                 SettingsSection {
                     SettingsRow("Smart caffeinate", description: "Keeps the Mac awake while agents run.") {
                         Defaults.Toggle(key: .smartCaffeinate) {
@@ -245,6 +248,37 @@ struct AgentStatusSettings: View {
             accessibilityPermission.refreshStatus()
         }
         .navigationTitle("Agents")
+    }
+
+    // MARK: - Attention alert
+
+    /// The Mac's own alert when an agent turns yellow: on or off, and which system sound. The sound
+    /// can be previewed whether or not the alert is on.
+    private var attentionAlertSection: some View {
+        SettingsSection {
+            SettingsRow("Alert when an agent needs you",
+                        description: "A sound and a shimmer across the notch when an agent turns yellow, on the lock screen too.") {
+                Defaults.Toggle(key: .attentionAlertEnabled) {
+                    Text("Alert when an agent needs you")
+                }
+            }
+            .settingsHighlight(id: highlightID("Alert when an agent needs you"))
+            SettingsRow("Alert sound") {
+                HStack(spacing: SettingsMetrics.rowContent) {
+                    SettingsSelect("Alert sound", selection: $attentionAlertSound,
+                                   options: AttentionAlertSound.allCases, optionTitle: \.localizedName)
+                    Button("Play sound") {
+                        AttentionAlertManager.shared.playSound(attentionAlertSound)
+                    }
+                    .disabled(attentionAlertSound == .none)
+                }
+            }
+            .settingsHighlight(id: highlightID("Alert sound"))
+        } header: {
+            SettingsSectionHeader("Attention alert")
+        } footer: {
+            SettingsFooter("One alert each time an agent starts waiting, however many start at once. With Reduce Motion on, the notch glows instead of shimmering.")
+        }
     }
 
     // MARK: - Mobile notifications
@@ -544,6 +578,29 @@ extension AgentStatusSettings {
         return AnyView(SettingsPage {
             SettingsSection { settings.notificationDeliveryRows } header: { SettingsSectionHeader("Mobile notifications") }
             settings.notificationEventsSection
+        })
+    }
+
+    /// DEBUG snapshot harness: the attention alert's setting rows, then, from a fixture that leaves the stored
+    /// choice alone, the sound row with None picked (Play sound off) and the picker's choices in menu order.
+    static func snapshotAttentionAlertRows() -> AnyView {
+        AnyView(SettingsPage {
+            AgentStatusSettings().attentionAlertSection
+            SettingsSection {
+                SettingsRow("Alert sound") {
+                    HStack(spacing: SettingsMetrics.rowContent) {
+                        SettingsSelect("Alert sound", selection: .constant(AttentionAlertSound.none),
+                                       options: AttentionAlertSound.allCases, optionTitle: \.localizedName)
+                        Button("Play sound") {}
+                            .disabled(true)
+                    }
+                }
+                Text(verbatim: AttentionAlertSound.allCases.map(\.localizedName).joined(separator: " · "))
+                    .settingsDescriptionStyle()
+            } header: {
+                // A `String`, not a literal: the literal overload would make this a catalog key.
+                SettingsSectionHeader(String(describing: "Fixture: None picked, and the menu's order"))
+            }
         })
     }
 

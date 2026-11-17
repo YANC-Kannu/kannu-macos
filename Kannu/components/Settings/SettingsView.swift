@@ -992,6 +992,7 @@ struct SettingsView: View {
             // Notes
             SettingsSearchEntry(tab: .notes, title: "Sync with Apple Notes", keywords: ["apple notes", "notes app", "icloud", "two-way", "sync"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
             SettingsSearchEntry(tab: .notes, title: "Notes to sync", keywords: ["kannu folder", "whole account", "all notes", "import", "scope"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
+            SettingsSearchEntry(tab: .notes, title: "Show Wispr Flow meeting summaries", keywords: ["wispr", "wispr flow", "meetings", "notetaker", "summary", "summaries"], highlightID: SettingsTab.notes.highlightID(for: "Show Wispr Flow meeting summaries")),
 
             // Timer
             SettingsSearchEntry(tab: .timer, title: "Enable timer feature", keywords: ["timer", "enable"], highlightID: SettingsTab.timer.highlightID(for: "Enable timer feature")),
@@ -1081,6 +1082,8 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .agentStatus, title: "Show a red light when no agents are running", keywords: ["red", "light", "idle", "no agents", "stopped", "indicator", "always"], highlightID: SettingsTab.agentStatus.highlightID(for: "Show a red light when no agents are running")),
             SettingsSearchEntry(tab: .agentStatus, title: "Reset traffic light colors", keywords: ["reset", "color", "traffic", "light", "default"], highlightID: SettingsTab.agentStatus.highlightID(for: "Reset traffic light colors")),
             SettingsSearchEntry(tab: .agentStatus, title: "Editor hooks", keywords: ["agent", "cursor", "vscode", "copilot", "copilot cli", "codex", "claude", "antigravity", "gemini", "gemini cli", "qwen", "opencode", "plugin", "hook", "install", "integration"], highlightID: SettingsTab.agentStatus.highlightID(for: "Cursor Hook")),
+            SettingsSearchEntry(tab: .agentStatus, title: "Alert when an agent needs you", keywords: ["attention", "alert", "sound", "chime", "shimmer", "yellow", "waiting", "lock screen", "notify"], highlightID: SettingsTab.agentStatus.highlightID(for: "Alert when an agent needs you")),
+            SettingsSearchEntry(tab: .agentStatus, title: "Alert sound", keywords: ["attention", "alert", "sound", "chime", "tone", "glass", "ping", "preview"], highlightID: SettingsTab.agentStatus.highlightID(for: "Alert sound")),
             SettingsSearchEntry(tab: .agentStatus, title: "Live Claude Code limits", keywords: ["status line", "statusline", "usage", "limits", "5-hour", "weekly", "rate limit", "claude code", "terminal"], highlightID: SettingsTab.agentStatus.highlightID(for: "Live Claude Code limits")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Connect ADR", keywords: ["adr", "uber", "security", "discovery", "sensor", "connect", "install", "uv", "pipx"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Connect ADR")),
             SettingsSearchEntry(tab: .agentSecurity, title: "Security findings", keywords: ["security", "agent security", "finding", "mcp", "unpinned", "plaintext", "undeclared", "acknowledge", "snooze", "shield"], highlightID: SettingsTab.agentSecurity.highlightID(for: "Security findings")),

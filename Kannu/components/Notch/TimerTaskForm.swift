@@ -68,6 +68,9 @@ struct TimerTaskForm: View {
     /// The pointer is on the tag chips: they stay while a click lands, even if the field lets go of
     /// focus on the way.
     @State private var chipsHovered = false
+    /// Kannu's tags in use, tasks' and notes' (`SharedTags.inUse()`), read as the tags field gains
+    /// focus: computing them in the body read every saved note on each keystroke.
+    @State private var tagVocabulary: [String] = []
     /// The title's typed search (a new task only). Closed on the opening title, so the matches
     /// just seen under the session bar do not open again at once.
     @State private var titleSuggestions: TaskSuggestionState
@@ -164,6 +167,7 @@ struct TimerTaskForm: View {
         }
         .onChange(of: focused) { previous, field in
             vm.setAutoCloseSuppression(field != nil, token: editingToken)
+            if field == .tags, previous != .tags { tagVocabulary = SharedTags.inUse() }
             // Leaving the estimate: "90m" reads back as "1h 30m".
             if previous == .estimate, field != .estimate { draft.settleEstimateText() }
             // Into another field: the title's list goes (a click on it keeps it while hovered).
@@ -500,9 +504,10 @@ struct TimerTaskForm: View {
 
     // MARK: - Tags in use
 
-    /// Brain's suggestions for the tag being typed, among every task's tags (`TaskFacets.tags`).
+    /// Brain's suggestions for the tag being typed, among Kannu's tags in use, tasks' and notes'
+    /// (`tagVocabulary`, read as the field gains focus).
     private var tagPicks: [TaskTagEditing.Suggestion] {
-        draft.tagSuggestions(existing: TaskFacets.tags(in: manager.tasks))
+        draft.tagSuggestions(existing: tagVocabulary)
     }
 
     private var showsTagChips: Bool {

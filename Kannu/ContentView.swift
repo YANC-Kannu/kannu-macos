@@ -784,6 +784,9 @@ struct ContentView: View {
             if shouldShowFullNotchShimmer {
                 NotchShimmerView(cornerRadius: closedNotchShimmerCornerRadius)
             }
+            // An agent turned yellow: one shimmer, or a still glow under Reduce Motion. A leaf that
+            // draws nothing between alerts; this view does not observe it.
+            AttentionAlertOverlay()
         }
     }
 
@@ -978,6 +981,11 @@ struct ContentView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .sharingDidFinish)) { _ in
                 closeWhenPointerLeaves(.sharingFinished)
+            }
+            // Each attention flash brings a hidden island out (`revealForAttentionFlash`). A
+            // subscription, not an observation: ContentView does not re-render on the flash.
+            .onReceive(AttentionAlertManager.shared.$flash.compactMap { $0?.id }.removeDuplicates()) { _ in
+                revealForAttentionFlash()
             }
             // A menu (a Picker's, a ⋯, the filter) is a window of its own, often reaching below the
             // notch: the close paths wait while one tracks.
@@ -2437,6 +2445,26 @@ struct ContentView: View {
                 agentLightDeadline = lightDeadline
                 revealHoldDeadline = holdDeadline
             }
+        }
+        armRevealCountdown()
+    }
+
+    /// An attention alert fired: pull a hidden island out and relight the light for at least the
+    /// flash, whatever the aggregate light did. A second session turning yellow while another is
+    /// already yellow alerts without changing the light, so `noteAgentActivityPulse` (which re-arms
+    /// only on a published light change) would leave a hide-until-hover island, and the flash on it,
+    /// off screen. Deadlines only move later; the countdown restores the usual hiding after.
+    private func revealForAttentionFlash() {
+        guard hideUntilHoverAppliesHere || isPhysicalNotchScreen, enableAgentStatusFeature else { return }
+        let deadline = Date().addingTimeInterval(max(notchRevealHoldSeconds, AttentionAlertTracker.flashDuration))
+        let extend = {
+            if (agentLightDeadline ?? .distantPast) < deadline { agentLightDeadline = deadline }
+            if (revealHoldDeadline ?? .distantPast) < deadline { revealHoldDeadline = deadline }
+        }
+        if isRevealHoldActive {
+            extend()
+        } else {
+            withAnimation(vm.animation) { extend() }
         }
         armRevealCountdown()
     }

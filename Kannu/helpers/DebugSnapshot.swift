@@ -152,6 +152,12 @@ enum DebugSnapshots {
         if request.tabs == nil || request.tabs?.contains("notifications") == true {
             boards.append(("notifications", AgentStatusSettings.snapshotNotificationRows()))
         }
+        if request.tabs == nil || request.tabs?.contains("attentionAlert") == true {
+            boards.append(("attentionAlert", AgentStatusSettings.snapshotAttentionAlertRows()))
+        }
+        if request.tabs == nil || request.tabs?.contains("attentionAlertFlash") == true {
+            boards.append(("attentionAlertFlash", AnyView(attentionAlertFlashBoard)))
+        }
         if request.tabs == nil || request.tabs?.contains("displays") == true {
             boards.append(("displays", GeneralSettings.snapshotPerDisplayRows()))
         }
@@ -903,6 +909,42 @@ enum DebugSnapshots {
 
     /// The shared Settings components beside the native controls they replace, enabled and disabled,
     /// and the finding rows collapsed and expanded.
+    /// The attention alert's flash, from a fixture and with no agent: the closed notch's body as
+    /// `ContentView.notchBodyFill` paints it, and the real lock-screen pill, which shows the same with the lock-screen
+    /// live activity on or, for the flash alone, off (`flashForAttentionAlert`). No alert (the look before),
+    /// the shimmer at two points of its sweep, and Reduce Motion's still glow.
+    private static var attentionAlertFlashBoard: some View {
+        let notch = CGSize(width: 185, height: 32)
+        let pill = LockScreenLiveActivityOverlayModel()
+        pill.scale = 1
+        pill.opacity = 1
+        let frames: [(title: String, preview: AttentionAlertPreview?)] = [
+            ("No alert", nil),
+            ("Shimmer, a third of the way across", AttentionAlertPreview(visual: .shimmer, phase: 0.35)),
+            ("Shimmer, two thirds of the way across", AttentionAlertPreview(visual: .shimmer, phase: 0.65)),
+            ("Reduce Motion: a still glow", AttentionAlertPreview(visual: .glow, phase: 0)),
+        ]
+        return VStack(alignment: .leading, spacing: 18) {
+            ForEach(frames.indices, id: \.self) { index in
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(verbatim: frames[index].title)
+                        .font(.caption)
+                    ZStack {
+                        Color.black
+                        AttentionAlertOverlay(preview: frames[index].preview)
+                    }
+                    .frame(width: notch.width + 60, height: notch.height)
+                    .clipShape(NotchShape(topCornerRadius: cornerRadiusInsets.closed.top,
+                                          bottomCornerRadius: cornerRadiusInsets.closed.bottom))
+                    LockScreenLiveActivityOverlay(model: pill, animator: LockIconAnimator(initiallyLocked: true),
+                                                  notchSize: notch, attentionPreview: frames[index].preview)
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private static var componentsBoard: some View {
         SettingsPage {
             SettingsSection {

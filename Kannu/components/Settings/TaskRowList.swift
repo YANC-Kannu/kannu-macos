@@ -166,9 +166,9 @@ struct TaskRowCards: View {
             context.sheet.wrappedValue = .addTime(taskID: task.id, title: task.title)
         }
         Button("Add Tags") {
-            // The tags in use, read at the press.
+            // Kannu's tags in use, tasks' and notes', read at the press.
             context.sheet.wrappedValue = .tags(taskID: task.id, title: task.title, current: task.tags,
-                                               existing: TaskFacets.tags(in: TasksManager.shared.tasks))
+                                               existing: SharedTags.inUse())
         }
         if task.source == .local {
             Button("Schedule") {

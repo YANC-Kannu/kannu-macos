@@ -1,6 +1,67 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Local denylist -----------------------------------------------------------
+# Real work data never lands in this public repo: fixtures, tests, comments and CHANGELOG lines use
+# made-up data only (AGENTS.md, Security and privacy). The names to refuse live in an untracked,
+# local file, so the list itself is never published: <git-common-dir>/info/kannu-denylist, one
+# case-insensitive fixed string per line, # for comments. No file, no check. It runs before the merge
+# exemption below, so a conflict resolution is checked too. The report names files, never the matched
+# text, which would otherwise end up in logs and transcripts.
+# It fails closed: every git step writes a file outside any condition, so an error stops the hook
+# (set -e) instead of reading as "no match", and grep's own errors refuse the commit too.
+deny_dir="$(git rev-parse --git-common-dir)/info"
+denylist="${deny_dir}/kannu-denylist"
+# A missing list is no check, but a folder that cannot be searched hides whether there is one, so it refuses.
+if [[ -e "${deny_dir}" && ! ( -d "${deny_dir}" && -x "${deny_dir}" ) ]]; then
+  echo "ERROR: cannot look for the denylist in ${deny_dir}; refusing the commit."
+  exit 1
+fi
+if [[ -s "${denylist}" ]]; then
+  deny_work="$(mktemp -d)"
+  trap 'rm -rf "${deny_work}"' EXIT
+  # 1 means the list has no names, which is no check; any other failure (an unreadable list) refuses.
+  deny_rc=0
+  grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "${denylist}" > "${deny_work}/patterns" || deny_rc=$?
+  if (( deny_rc > 1 )); then echo "ERROR: could not read the denylist (${denylist}); refusing the commit."; exit 1; fi
+  if [[ -s "${deny_work}/patterns" ]]; then
+    # The objects being committed, not what replacement refs (refs/replace/*) would substitute.
+    export GIT_NO_REPLACE_OBJECTS=1
+    # 0: the file holds a listed name; 1: it does not. Anything else is a failed scan.
+    deny_matches() {
+      local rc=0
+      grep -i -F -q -f "${deny_work}/patterns" -- "$1" || rc=$?
+      if (( rc > 1 )); then echo "ERROR: the denylist scan failed (grep exit ${rc}); refusing the commit."; exit 1; fi
+      return "${rc}"
+    }
+    # The added lines of a diff. A file's header, from its "diff --git" (or --cc) line to its first hunk,
+    # is skipped whole, so a quoted or unusual path in it is never read as an added line.
+    added_lines() { awk '/^diff --(git|cc|combined) /{h=1} /^@@/{h=0; next} h{next} /^\+/{print}'; }
+    deny_files=""
+    # NUL-delimited and literal: a quoted path (core.quotePath) or one that reads as pathspec magic
+    # would otherwise name the wrong file. T covers a symlink that became a file. Raw content only:
+    # no external diff and no textconv, which could fail or rewrite what is scanned, and --text, so a
+    # file an attribute marks -diff or binary still shows its added lines.
+    git diff --cached --name-only -z --diff-filter=ACMRT > "${deny_work}/paths"
+    while IFS= read -r -d '' f; do
+      git --literal-pathspecs diff --cached -U0 --no-color --no-ext-diff --no-textconv --text -- "$f" > "${deny_work}/diff"
+      added_lines < "${deny_work}/diff" > "${deny_work}/added"
+      if deny_matches "${deny_work}/added"; then deny_files+="  ${f}"$'\n'; fi
+    done < "${deny_work}/paths"
+    { git var GIT_AUTHOR_IDENT; git var GIT_COMMITTER_IDENT; } > "${deny_work}/ident"
+    deny_ident=""
+    if deny_matches "${deny_work}/ident"; then deny_ident=1; fi
+    if [[ -n "${deny_files}" || -n "${deny_ident}" ]]; then
+      echo "ERROR: this commit matches the local denylist (${denylist})."
+      if [[ -n "${deny_files}" ]]; then printf 'Added lines in:\n%s' "${deny_files}"; fi
+      if [[ -n "${deny_ident}" ]]; then echo "The author or committer identity matches it too (check user.email)."; fi
+      echo "Use made-up data instead (acme, example.com, PROJ-123): AGENTS.md, Security and privacy."
+      exit 1
+    fi
+  fi
+fi
+
+# Merges skip every check below; the denylist above has already run.
 if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
   exit 0
 fi

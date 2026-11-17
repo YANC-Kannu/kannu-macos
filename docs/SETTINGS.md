@@ -205,10 +205,12 @@ What keeps the system font, pinned per file with why in `NotchFontRulesTests`:
 
 - **Symbols.** `.system` sizes an SF Symbol; it is not type. A symbol inside text under the token takes its weight
   from Geist's face, and reads Medium as regular (measured: SemiBold draws semibold), so a symbol beside medium text
-  has its own `.system` font: Notes' back chevron, Open in Notes and Add a reminder.
+  has its own `.system` font: Notes' back chevron, Open in Notes and Add a reminder. Notes' Filter glyph
+  (`NoteFilterMenu`) and the editor's tag chips' × and + (`NoteTagsRow`) are symbols too.
 - **Monospaced text:** the timer's three readouts (black), a task's key and tracked clock, a preset's length, the
   note's character count and the digit field. Geist Mono ships Regular only.
-- **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line, and by AppKit's ruler Geist's 10 pt line is
+- **The tag chip (`SideChip`).** It sits in a row's 16 pt caption line (and, since 2026-11-16, after a note card's
+  title in the notch's Notes, as "#first +N"), and by AppKit's ruler Geist's 10 pt line is
   13 against the system's 12, so a chip would be 17. SwiftUI lays out both faces' 10 pt line at 13.
 - **The music player's title, artist and lyrics.** The title decides whether to scroll by measuring its width with
   an AppKit text style (`MusicTitleMarqueeView`), so it moves when that view takes the theme's font. The Agents tab's
@@ -569,6 +571,10 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   screen, a row and then stacked in the list's column, from a fixture of their own
   (`DebugSnapshotFixtures.tasksFileWithTimeToLog`, swapped in by `TasksManager.replaceSnapshot(with:)`); they run with
   `-jiraSiteHost example.test` too, or the card says Jira isn't connected.
+- **Notes and tags (2026-11-16).** Notes carry tags, Kannu's alone, set in the notch's note editor (a one-line tag row
+  under the title, and `#word`s typed into a title); Brain › Notes does not show them yet. They are the same set as
+  tasks' (`SharedTags`): a task's tag field suggests a note's tag, and the other way round. "Enable color filtering"
+  now adds Colour to the notch's Filter menu (Source, Tag, Colour, Show all), in place of the colour-chip row.
 - **Notes** leads with the notes in one card, pinned first and then the latest edit first, as the notch's Notes tab
   lists them, in a lazy list (above, "Pages and sections"). A row is the note's colour (a pin in that colour when it is
   pinned, as the notch marks one, in a column a list row's icon wide, so the titles share an edge), its title and a
