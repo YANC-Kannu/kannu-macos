@@ -292,9 +292,12 @@ enum AgentTrafficLightMapper {
         collapseMs: Int64,
         inactiveMs: Int64,
         nowMs: Int64,
-        claudeWorkOngoingIDs: Set<String> = []
+        claudeWorkOngoingIDs: Set<String> = [],
+        claudeBusyIDs: Set<String> = [],
+        heldQuestionIDs: Set<String> = []
     ) -> [AgentSessionStatus] {
         guard !passiveSessions.isEmpty || !deadPIDConversationIDs.isEmpty || !claudeWorkOngoingIDs.isEmpty
+                || !claudeBusyIDs.isEmpty || !heldQuestionIDs.isEmpty
         else { return hookSessions }
 
         let passiveByConversationID = Dictionary(
@@ -344,6 +347,30 @@ enum AgentTrafficLightMapper {
                 // passive-only, like hostPID — fills in when the hook side has none.
                 repaired = repaired.carryingExtras(from: passive)
                 return repaired
+            }
+
+            // A question yellow the parser held (`holdsOpenQuestion`): the turn ended on a question
+            // the transcript says is still unanswered. Its passive twin reads that same turn as
+            // finished, and the desktop app ends the CLI minutes later; neither is an answer, so
+            // neither demotes it (REGRESSIONS entry 12, 2026-11-18 addendum).
+            if heldQuestionIDs.contains(session.conversationID), session.displayState == .awaitingInput {
+                return inheritingPassiveData(session)
+            }
+
+            // Claude's own record says the session is busy (`holdsActiveRun`, live process only):
+            // a hook file still reporting work is not demoted by a quiet tail or promoted only on
+            // passive activity. Its own active state stands (REGRESSIONS entry 2, 2026-11-18 addendum).
+            let busy = !processDead && claudeBusyIDs.contains(session.conversationID) && session.hasActiveRawState
+            if busy {
+                let state: AgentTrafficLightState
+                if session.displayState.showsGreenTrafficLight {
+                    state = session.displayState
+                } else if let passive, passive.displayState.showsGreenTrafficLight {
+                    state = passive.displayState
+                } else {
+                    state = session.rawState.lowercased() == "executing" ? .executing : .thinking
+                }
+                return inheritingPassiveData(session.withDisplayState(state, visible: true))
             }
 
             // Background work: the turn ended with agents still running and Claude's own record
@@ -532,10 +559,13 @@ enum AgentTrafficLightMapper {
         collapseMs: Int64,
         inactiveMs: Int64,
         activeStaleMs: Int64 = 360_000,
-        holdAwaitingInput: Bool = false
+        holdAwaitingInput: Bool = false,
+        holdActiveRun: Bool = false
     ) -> (state: AgentTrafficLightState, visible: Bool) {
+        // `holdActiveRun`: Claude's own record says the session is busy (`holdsActiveRun`), so the
+        // 360 s window (REGRESSIONS entry 2) is not the only evidence of work.
         switch rawState.lowercased() {
-        case "executing" where ageMs <= activeStaleMs:
+        case "executing" where ageMs <= activeStaleMs || holdActiveRun:
             return (.executing, true)
         case "awaiting_input", "awaitinginput", "awaiting":
             // Held: live evidence says the prompt is still open (`holdsAwaitingInput`), so the
@@ -543,7 +573,7 @@ enum AgentTrafficLightMapper {
             // can corroborate — REGRESSIONS entry 12.
             if holdAwaitingInput || ageMs <= awaitingInputStaleMs { return (.awaitingInput, true) }
             return (.inactive, false)
-        case "thinking" where ageMs <= activeStaleMs:
+        case "thinking" where ageMs <= activeStaleMs || holdActiveRun:
             return (.thinking, true)
         case "idle":
             // Session opened but nothing running yet — show a dim card, no lit traffic light.
@@ -580,14 +610,55 @@ enum AgentTrafficLightMapper {
     }
 
     /// Disk rule: may this awaiting_input hook file outlive the stale cap? Claude only — the one
-    /// provider whose liveness Kannu can see. A live process whose transcript tail still shows the
-    /// tool_use with no result is a prompt nobody has answered.
+    /// provider whose liveness Kannu can see. Three kinds of evidence say the prompt is still open:
+    /// - a live process whose transcript tail still shows the tool_use with no result;
+    /// - a question yellow (hook v50: the turn ended on Claude Desktop's question) whose transcript
+    ///   still shows that question unanswered (`.questionOpen`), live process or not — the desktop
+    ///   app ends the CLI minutes after the turn — for up to `questionHoldMs` (`holdsOpenQuestion`);
+    /// - a live process whose own record says `waiting` (Claude's word that a prompt is up).
+    /// Each corroborates a yellow the hooks wrote; none ever creates one.
     static func awaitingInputOutlivesStaleCap(
         provider: String,
         processAlive: Bool,
-        tail: AgentSessionLogParser.ClaudeTailState?
+        tail: AgentSessionLogParser.ClaudeTailState?,
+        question: Bool = false,
+        ageMs: Int64 = 0,
+        recordWaiting: Bool = false
     ) -> Bool {
-        provider.lowercased() == "claude" && processAlive && tail == .toolInFlight
+        guard provider.lowercased() == "claude" else { return false }
+        if processAlive && tail == .toolInFlight { return true }
+        if holdsOpenQuestion(question: question, tail: tail, ageMs: ageMs) { return true }
+        return processAlive && recordWaiting
+    }
+
+    /// How long a question yellow is held without an answer: the working day it was asked in, and
+    /// the night after it. Past this the file falls to inactive and the stale cap deletes it.
+    static let questionHoldMs: Int64 = 12 * 60 * 60 * 1000
+
+    /// A question yellow (`question`: the hook file says `question_open` under `awaiting_input`) is
+    /// held while the transcript still shows the question unanswered, for up to `questionHoldMs`
+    /// from the Stop that wrote it. With or without a live process.
+    static func holdsOpenQuestion(question: Bool, tail: AgentSessionLogParser.ClaudeTailState?, ageMs: Int64) -> Bool {
+        question && tail == .questionOpen && ageMs <= questionHoldMs
+    }
+
+    /// Whether a hook file's yellow is a question yellow (hook v50): `awaiting_input` with a literal
+    /// `question_open: true`. Untrusted input: anything else is not.
+    static func isQuestionYellow(rawState: String, hookFile json: [String: Any]) -> Bool {
+        isAwaitingInputRawState(rawState) && (json["question_open"] as? Bool) == true
+    }
+
+    /// Display and disk rule for a silent Claude hook session: an `executing` or `thinking` file
+    /// past `activeStaleMs` stays active while its process is alive and Claude's own record says
+    /// `busy` (`claudeBusy`). A single long tool or a long thinking stretch fires no hook for
+    /// minutes; Claude's record is the evidence that it is still at work. Entry 2's 360 s stays the
+    /// rule for every other case.
+    static func holdsActiveRun(provider: String, rawState: String, processAlive: Bool, recordBusy: Bool) -> Bool {
+        guard provider.lowercased() == "claude", processAlive, recordBusy else { return false }
+        switch rawState.lowercased() {
+        case "executing", "thinking": return true
+        default: return false
+        }
     }
 
     /// Does the process holding a session record's pid still belong to that session? The record is
@@ -647,6 +718,40 @@ enum AgentTrafficLightMapper {
         }
     }
 
+    // MARK: - Colour changes, for the AgentState log
+
+    /// The colour a card shows, as the log names it: green, yellow, red, dim (a visible inactive
+    /// card) or hidden. Executing and thinking are both green, so a switch between them is no change.
+    static func logColour(_ session: AgentSessionStatus?) -> String {
+        guard let session, session.isVisible else { return "hidden" }
+        switch session.displayState {
+        case .executing, .thinking: return "green"
+        case .awaitingInput: return "yellow"
+        case .stopped: return "red"
+        case .inactive: return "dim"
+        }
+    }
+
+    /// One card per conversation whose colour changed between two published lists, newest list
+    /// order. A card that appears or goes counts (from or to "hidden"); one that stays hidden does not.
+    static func colourChanges(from old: [AgentSessionStatus], to new: [AgentSessionStatus])
+        -> [(session: AgentSessionStatus?, conversationID: String, provider: String, from: String, to: String)] {
+        let before = Dictionary(latestSessions(old).map { ($0.conversationID, $0) }, uniquingKeysWith: { first, _ in first })
+        let after = latestSessions(new)
+        let afterIDs = Set(after.map(\.conversationID))
+        var changes: [(session: AgentSessionStatus?, conversationID: String, provider: String, from: String, to: String)] = []
+        for session in after {
+            let from = logColour(before[session.conversationID])
+            let to = logColour(session)
+            if from != to { changes.append((session, session.conversationID, session.provider, from, to)) }
+        }
+        for session in latestSessions(old) where !afterIDs.contains(session.conversationID) {
+            let from = logColour(session)
+            if from != "hidden" { changes.append((nil, session.conversationID, session.provider, from, "hidden")) }
+        }
+        return changes
+    }
+
     /// Display rule: does this hook's awaiting_input keep its yellow past the 5-minute window?
     /// Yellow still originates from hooks only — evidence here can corroborate one, never claim
     /// one. Hook-only providers hold because nothing can corroborate or refute; a newer event or
@@ -656,11 +761,15 @@ enum AgentTrafficLightMapper {
         provider: String,
         processAlive: Bool,
         tail: AgentSessionLogParser.ClaudeTailState?,
-        cursorPendingApproval: Bool
+        cursorPendingApproval: Bool,
+        question: Bool = false,
+        ageMs: Int64 = 0,
+        recordWaiting: Bool = false
     ) -> Bool {
         switch provider.lowercased() {
         case "claude":
-            return awaitingInputOutlivesStaleCap(provider: provider, processAlive: processAlive, tail: tail)
+            return awaitingInputOutlivesStaleCap(provider: provider, processAlive: processAlive, tail: tail,
+                                                 question: question, ageMs: ageMs, recordWaiting: recordWaiting)
         case "cursor":
             return cursorPendingApproval
         case "vscode", "codex", "antigravity", "copilot", "gemini", "qwen", "opencode":
@@ -716,7 +825,9 @@ enum AgentTrafficLightMapper {
                 return ("idle", .inactive, true, fallbackTsMs)
             }
             return ("thinking", .thinking, true, fallbackTsMs)
-        case .turnFinished:
+        case .turnFinished, .questionOpen:
+            // An open question is a finished turn here: passive evidence never claims yellow. It
+            // only corroborates the hook's question yellow (`holdsAwaitingInput`).
             let stopMs = tail.recordTimestamp.map { Int64($0.timeIntervalSince1970 * 1000) } ?? fallbackTsMs
             let lifecycle = resolveHookState(
                 rawState: "stopped",

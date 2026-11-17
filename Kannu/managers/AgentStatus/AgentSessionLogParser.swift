@@ -420,6 +420,11 @@ enum AgentSessionLogParser {
     enum ClaudeTailState {
         case toolInFlight   // assistant proposed a tool and no result has landed yet
         case turnFinished   // assistant ended its turn — nothing is running
+        /// The turn ended, and its last question to the user is still unanswered: the newest
+        /// Claude Desktop question (`AgentHookLayout.claudeQuestionTool` with a non-empty `ask`) is
+        /// newer than the newest real user prompt. Nothing is running, exactly as `.turnFinished`;
+        /// it only corroborates the hook's question yellow (`holdsAwaitingInput`), never claims one.
+        case questionOpen
         case working        // a tool result or a fresh user prompt; the agent owes a response
         case unknown
     }
@@ -529,6 +534,11 @@ enum AgentSessionLogParser {
             // resulted now demotes a live session via the reconciler's demote arm.
             guard let text = readTrailingLines(at: url, limit: limit) else { continue }
             result = claudeTailState(fromTailText: text)
+            // A finished turn whose window shows neither its question nor a later prompt: widen once.
+            if result.state == .turnFinished, result.runError == nil, limit < questionWindowLimit,
+               fileSize.map({ limit < $0 }) ?? true, questionVerdict(inTailText: text) == nil {
+                continue
+            }
             if result.state != .unknown { break }
             if let fileSize, limit >= fileSize { break }
         }
@@ -542,8 +552,56 @@ enum AgentSessionLogParser {
         return result
     }
 
-    /// Pure core of `claudeTailState(at:)` — classifies the newest conversational record.
+    /// Pure core of `claudeTailState(at:)` — classifies the newest conversational record. A clean
+    /// `.turnFinished` becomes `.questionOpen` when the turn's question is still open
+    /// (`hasOpenQuestion`).
     static func claudeTailState(fromTailText text: String) -> ClaudeTailResult {
+        let result = claudeBaseTailState(fromTailText: text)
+        guard result.state == .turnFinished, result.runError == nil, questionVerdict(inTailText: text) == true else {
+            return result
+        }
+        return ClaudeTailResult(state: .questionOpen, recordTimestamp: result.recordTimestamp)
+    }
+
+    /// Whether the newest Claude Desktop question in the tail is newer than the newest real user
+    /// prompt — a `user` record that is not a tool result (an Esc interrupt counts: the user acted).
+    /// Bookkeeping records are skipped, as in the tail verdict. nil when the text reaches neither, so
+    /// `claudeTailState(at:)` may widen the window once (up to `questionWindowLimit`); a question no
+    /// window reaches is no question, and the light falls back to red, never to a false yellow.
+    static func questionVerdict(inTailText text: String) -> Bool? {
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true).reversed() {
+            guard let data = line.data(using: .utf8),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = json["type"] as? String else { continue }
+            let content = (json["message"] as? [String: Any])?["content"]
+            switch type {
+            case "user":
+                if isClaudeInterruptRecord(json["message"] as? [String: Any]) { return false }
+                let blocks = content as? [[String: Any]] ?? []
+                // A tool result can carry text blocks beside it; it is still the tool's, not the user's.
+                let isToolResult = blocks.contains { ($0["type"] as? String) == "tool_result" }
+                if !isToolResult { return false }
+            case "assistant":
+                for block in content as? [[String: Any]] ?? []
+                where (block["type"] as? String) == "tool_use"
+                    && (block["name"] as? String) == AgentHookLayout.claudeQuestionTool {
+                    let ask = (block["input"] as? [String: Any])?["ask"] as? String
+                    if let ask, !ask.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return true }
+                }
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    /// How far `claudeTailState(at:)` widens a finished turn's window to find its question. The
+    /// question is the turn's last tool call, so it sits a few records before the end; the bound keeps
+    /// a finished chat with no question to one wider read per transcript change.
+    static let questionWindowLimit = 262_144
+
+    /// The newest conversational record's verdict, before the question check.
+    private static func claudeBaseTailState(fromTailText text: String) -> ClaudeTailResult {
         // Whether the deciding record is also the newest line in the file. A skipped line,
         // bookkeeping or a torn concurrent write, means mtime no longer vouches for the
         // deciding record; a torn write completes and reclassifies within one rescan.

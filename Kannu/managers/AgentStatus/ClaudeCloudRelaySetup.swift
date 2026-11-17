@@ -41,9 +41,12 @@ enum ClaudeCloudRelaySetup {
     /// its own file, which is how a chat stays green while its background agents run.
     static let excludedEvents: Set<String> = ["SubagentStart", "SubagentStop"]
 
-    /// The rows of `AgentHookLayout.claudeHookEntries` the relay installs.
+    /// The rows of `AgentHookLayout.claudeHookEntries` the relay installs. Not the question group
+    /// (hook v50): it only marks Kannu's local status file, which the relay has none of.
     static var relayHookEntries: [(event: String, matcher: String?, matcherKey: String, state: String)] {
-        AgentHookLayout.claudeHookEntries.filter { !excludedEvents.contains($0.event) }
+        AgentHookLayout.claudeHookEntries.filter {
+            !excludedEvents.contains($0.event) && $0.matcherKey != AgentHookLayout.claudeQuestionMatcherKey
+        }
     }
 
     static func hooksJSON() -> String {
