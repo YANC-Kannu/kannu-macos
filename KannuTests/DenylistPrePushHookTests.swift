@@ -114,6 +114,28 @@ final class DenylistPrePushHookTests: XCTestCase {
                        "a textconv that prints nothing must not hide the line")
     }
 
+    func testScansAFileMarkedNotForDiffing() throws {
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        try "*.json -diff\n".write(to: work.appendingPathComponent(".git/info/attributes"),
+                                  atomically: true, encoding: .utf8)
+        try git(["checkout", "-q", "-b", "old"], in: work)
+        let old = try commit("fixture.json", "{\"note\": \"\(Self.refused)\"}\n", message: "old work")
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: old), 1,
+                       "an attribute that marks a text file -diff must not hide its added lines")
+    }
+
+    func testScansAnOrphanRootEvenWhenRootDiffsAreOff() throws {
+        let server = try bareRepository("server")
+        try git(["push", "-q", server.path, "main"], in: work)
+        try git(["config", "log.showRoot", "false"], in: work)
+        try git(["checkout", "-q", "--orphan", "lone"], in: work)
+        try git(["rm", "-q", "-r", "--cached", "."], in: work)
+        let root = try commit("notes.md", "mentions \(Self.refused)\n", message: "a fresh root")
+        XCTAssertEqual(try runHook(remote: "origin", url: server.path, pushing: root), 1,
+                       "log.showRoot=false must not hide what an orphan root commit adds")
+    }
+
     func testAllowsACleanPush() throws {
         let server = try bareRepository("server")
         try git(["push", "-q", server.path, "main"], in: work)

@@ -36,8 +36,10 @@ matches() {
 }
 # The added lines of a diff, each file's header (from "diff --git" or --cc to its first hunk) skipped whole.
 added_lines() { awk '/^diff --(git|cc|combined) /{h=1} /^@@/{h=0; next} h{next} /^\+/{print}'; }
-# Raw content only: no external diff and no textconv, which could fail or rewrite what is scanned.
-diff_options=(--format= -p --cc -U0 --no-color --no-ext-diff --no-textconv)
+# Raw content only: no external diff and no textconv, which could fail or rewrite what is scanned;
+# --text, so a file an attribute marks -diff or binary still shows its added lines; and --root, so an
+# orphan root commit shows its content even with log.showRoot=false.
+diff_options=(--format= -p --cc -U0 --no-color --no-ext-diff --no-textconv --text --root)
 meta_format='%an <%ae>%n%cn <%ce>%n%B'
 
 push_url="${2:-$1}"

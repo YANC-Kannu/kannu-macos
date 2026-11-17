@@ -40,10 +40,11 @@ if [[ -s "${denylist}" ]]; then
     deny_files=""
     # NUL-delimited and literal: a quoted path (core.quotePath) or one that reads as pathspec magic
     # would otherwise name the wrong file. T covers a symlink that became a file. Raw content only:
-    # no external diff and no textconv, which could fail or rewrite what is scanned.
+    # no external diff and no textconv, which could fail or rewrite what is scanned, and --text, so a
+    # file an attribute marks -diff or binary still shows its added lines.
     git diff --cached --name-only -z --diff-filter=ACMRT > "${deny_work}/paths"
     while IFS= read -r -d '' f; do
-      git --literal-pathspecs diff --cached -U0 --no-color --no-ext-diff --no-textconv -- "$f" > "${deny_work}/diff"
+      git --literal-pathspecs diff --cached -U0 --no-color --no-ext-diff --no-textconv --text -- "$f" > "${deny_work}/diff"
       added_lines < "${deny_work}/diff" > "${deny_work}/added"
       if deny_matches "${deny_work}/added"; then deny_files+="  ${f}"$'\n'; fi
     done < "${deny_work}/paths"
