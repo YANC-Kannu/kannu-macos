@@ -649,100 +649,81 @@ struct NoteListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
+            // Header. The "+" is the panel's one filled control and stands alone at the header's right end, the
+            // top-right power point of the panel's golden triangle; the rest are plain glyphs grouped before it, and
+            // nothing in the header is red or yellow, which in the notch mean an agent stopped or needs input.
             HStack {
                 Text("Notes")
                     .font(SettingsTheme.font(size: 16, weight: .semibold))
                     .foregroundStyle(notchForeground)
 
                 if enableAppleNotesSync {
-                    Image(systemName: appleNotesSync.isSyncing ? "arrow.triangle.2.circlepath" : "apple.logo")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(appleNotesSync.isSyncing ? .yellow : notchForeground.opacity(0.45))
-                        .rotationEffect(.degrees(appleNotesSync.isSyncing ? 360 : 0))
-                        .animation(
-                            appleNotesSync.isSyncing
-                                ? .linear(duration: 1).repeatForever(autoreverses: false)
-                                : .default,
-                            value: appleNotesSync.isSyncing
-                        )
-                }
-                
-                Spacer()
-                
-                if enableAppleNotesSync {
+                    // The sync's state and its button in one: the Apple logo, or the arrows turning while it runs.
                     Button(action: onSync) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 13))
-                            .frame(width: 16, height: 16)
-                            .foregroundStyle(appleNotesSync.isSyncing ? .yellow : notchForeground.opacity(0.6))
-                            .padding(5)
-                            .background(notchForeground.opacity(0.1))
-                            .clipShape(Circle())
+                        Image(systemName: appleNotesSync.isSyncing ? "arrow.triangle.2.circlepath" : "apple.logo")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(appleNotesSync.isSyncing ? SettingsTheme.accent : notchForeground.opacity(0.45))
+                            .rotationEffect(.degrees(appleNotesSync.isSyncing ? 360 : 0))
+                            .animation(
+                                appleNotesSync.isSyncing
+                                    ? .linear(duration: 1).repeatForever(autoreverses: false)
+                                    : .default,
+                                value: appleNotesSync.isSyncing
+                            )
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(appleNotesSync.isSyncing)
                     .hoverTooltip(String(localized: "Sync with Apple Notes"), edge: .below)
                     .accessibilityLabel(String(localized: "Sync with Apple Notes"))
                 }
-
-                if enableNoteSearch || enableNoteColorFiltering {
-                    Button(action: { 
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            isSearchExpanded.toggle()
-                        }
-                    }) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: isSearchExpanded ? .bold : .medium))
-                            .symbolVariant(isSearchExpanded ? .circle.fill : .none)
-                            .frame(width: 16, height: 16) // Fixed frame to stabilize
-                            .foregroundStyle(isSearchExpanded ? .blue : notchForeground.opacity(0.6))
-                            .padding(5)
-                            .background(notchForeground.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .hoverTooltip(searchToggleTooltip, edge: .below)
-                    .accessibilityLabel(searchToggleTooltip)
-                }
-
-                if enableCreateFromClipboard {
-                    Button(action: onCreateFromClipboard) {
-                        Image(systemName: "doc.on.clipboard")
-                            .font(.system(size: 13))
-                            .frame(width: 16, height: 16)
-                            .foregroundStyle(notchForeground.opacity(0.6))
-                            .padding(5)
-                            .background(notchForeground.opacity(0.1))
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .hoverTooltip(String(localized: "Create from Clipboard"), edge: .below)
-                    .accessibilityLabel(String(localized: "Create from Clipboard"))
-                }
                 
-                if !storedNotes.isEmpty {
-                    Button(action: { showClearNotesAlert = true }) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 14))
-                            .frame(width: 16, height: 16)
-                            .foregroundStyle(.red)
-                            .padding(5)
-                            .background(notchForeground.opacity(0.1))
-                            .clipShape(Circle())
+                Spacer()
+
+                HStack(spacing: 2) {
+                    if enableNoteSearch || enableNoteColorFiltering {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                                isSearchExpanded.toggle()
+                            }
+                        }) {
+                            headerGlyph("magnifyingglass", weight: isSearchExpanded ? .bold : .medium,
+                                        tint: isSearchExpanded ? SettingsTheme.accent : nil)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(searchToggleTooltip, edge: .below)
+                        .accessibilityLabel(searchToggleTooltip)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .hoverTooltip(String(localized: "Clear Notes"), edge: .below)
-                    .accessibilityLabel(String(localized: "Clear Notes"))
+
+                    if enableCreateFromClipboard {
+                        Button(action: onCreateFromClipboard) {
+                            headerGlyph("doc.on.clipboard")
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Create from Clipboard"), edge: .below)
+                        .accessibilityLabel(String(localized: "Create from Clipboard"))
+                    }
+
+                    if !storedNotes.isEmpty {
+                        // Neutral here: the alert it opens is where Delete is red.
+                        Button(action: { showClearNotesAlert = true }) {
+                            headerGlyph("trash")
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .hoverTooltip(String(localized: "Clear Notes"), edge: .below)
+                        .accessibilityLabel(String(localized: "Clear Notes"))
+                    }
                 }
+                .padding(.trailing, 10)
 
                 Button(action: onCreate) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
                         .frame(width: 16, height: 16)
-                        .foregroundStyle(notchForeground)
+                        .foregroundStyle(notchFill ?? .black)
                         .padding(5)
-                        .background(notchForeground.opacity(0.1))
+                        .background(notchForeground.opacity(0.9))
                         .clipShape(Circle())
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -897,6 +878,15 @@ struct NoteListView: View {
         }
     }
 
+    /// A secondary header control: a plain glyph, no circle, so only "+" reads as a button from across the panel.
+    private func headerGlyph(_ systemName: String, weight: Font.Weight = .medium, tint: Color? = nil) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: weight))
+            .foregroundStyle(tint ?? notchForeground.opacity(0.55))
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+    }
+
     private func updateSuppression(for hovering: Bool) {
         guard hovering != isSuppressing else { return }
         isSuppressing = hovering
@@ -920,6 +910,7 @@ struct NoteListView: View {
 
 struct NoteRow: View {
     @EnvironmentObject var vm: KannuViewModel
+    @Environment(\.notchFill) private var notchFill
     @Environment(\.notchForeground) private var notchForeground
     let note: NoteItem
     let onDelete: () -> Void
@@ -947,6 +938,16 @@ struct NoteRow: View {
         note.isPinned ? String(localized: "Unpin Note") : String(localized: "Pin Note")
     }
 
+    /// The title the card shows: a note left as "Untitled Note" shows its first line instead (`NoteDisplayText`).
+    private var shownTitle: String {
+        NoteDisplayText.title(title: note.title, content: note.content, untitled: String(localized: "Untitled Note"))
+    }
+
+    /// The text after that title on one line, without a first line that only says the title again.
+    private var shownPreview: String {
+        NoteDisplayText.preview(title: shownTitle, content: note.content)
+    }
+
     /// The note's colour, or a neutral bar for a Wispr Flow meeting, which has none of its own.
     private var barColor: Color {
         note.isWisprMeeting ? notchForeground.opacity(0.3) : note.color
@@ -969,17 +970,18 @@ struct NoteRow: View {
                                 .foregroundStyle(notchForeground.opacity(0.55))
                                 .accessibilityLabel(String(localized: "From Wispr Flow"))
                         } else if note.isPinned {
+                            // Neutral: the bar is the card's one colour.
                             Image(systemName: "pin.fill")
                                 .font(.system(size: isCompact ? 7 : 8))
-                                .foregroundStyle(note.color)
+                                .foregroundStyle(notchForeground.opacity(0.55))
                         }
-                        Text(note.title)
+                        Text(shownTitle)
                             .font(SettingsTheme.font(size: isCompact ? 12 : 14, weight: .semibold))
                             .foregroundStyle(notchForeground)
                             .lineLimit(1)
                     }
                     
-                    Text(note.content.isEmpty ? "No content" : note.content)
+                    Text(shownPreview.isEmpty ? String(localized: "No content") : shownPreview)
                         .font(SettingsTheme.font(size: isCompact ? 10 : 12))
                         .foregroundStyle(notchForeground.opacity(0.7))
                         .lineLimit(isCompact ? 1 : 2)
@@ -995,12 +997,18 @@ struct NoteRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(notchForeground.opacity(isHovered ? 0.12 : 0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(barColor.opacity(0.2), lineWidth: 1)
-                )
+            ZStack {
+                // A calm surface under the text whatever the skin: a textured skin's streaks ran under the
+                // translucent card and took the preview's contrast. Over a plain fill this is that fill.
+                RoundedRectangle(cornerRadius: 12)
+                    .fill((notchFill ?? .black).opacity(0.45))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(notchForeground.opacity(isHovered ? 0.14 : (note.isPinned ? 0.11 : 0.08)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(notchForeground.opacity(0.06), lineWidth: 1)
+                    )
+            }
         )
         .clipShape(RoundedRectangle(cornerRadius: 12)) // Ensure everything stays inside the frame
         .overlay(alignment: .trailing) {
@@ -1046,7 +1054,7 @@ struct NoteRow: View {
                         }) {
                             Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
                                 .font(.system(size: isCompact ? 9 : 11))
-                                .foregroundStyle(isCopied ? .green : .white)
+                                .foregroundStyle(.white)
                                 .padding(isCompact ? 5 : 6)
                                 .background(Color.white.opacity(0.2))
                                 .clipShape(Circle())
