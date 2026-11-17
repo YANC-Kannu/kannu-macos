@@ -22,7 +22,7 @@ import SwiftUI
 /// The attention alert drawn over a notch's body: the notch's fill (`ContentView.notchBodyFill`) and the
 /// lock-screen pill (`LockScreenLiveActivityOverlay`), each of which clips it to its own shape. A leaf:
 /// it observes only `AttentionAlertManager`, which publishes twice per alert, and draws nothing between
-/// alerts.
+/// alerts. `ContentView` also subscribes to the flash's id, without observing, to reveal a hidden island.
 struct AttentionAlertOverlay: View {
     /// Snapshot boards only: draw this flash, pinned, instead of following the manager.
     var preview: AttentionAlertPreview? = nil

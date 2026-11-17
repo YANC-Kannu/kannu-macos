@@ -118,6 +118,23 @@ final class AttentionAlertRulesTests: XCTestCase {
         XCTAssertLessThan(overlay.lowerBound, clip.lowerBound, "the pill clips the alert to its shape")
     }
 
+    /// CodeRabbit on #70: a second session turning yellow while another already is alerts without
+    /// changing the aggregate light, and the reveal re-arms only on a light change, so a hide-until-hover
+    /// island kept the flash off screen. Each flash reveals it, without observing the manager or
+    /// touching the activity latch (docs/REGRESSIONS.md entry 10).
+    func testEachFlashRevealsAHiddenIsland() throws {
+        let content = Self.code(try Self.source("Kannu/ContentView.swift"))
+        XCTAssertTrue(content.contains(".onReceive(AttentionAlertManager.shared.$flash.compactMap { $0?.id }.removeDuplicates()) { _ in\n                revealForAttentionFlash()"))
+        XCTAssertFalse(content.contains("@ObservedObject private var attention"), "a subscription, not an observation")
+        let reveal = try XCTUnwrap(Self.body(ofFunction: "revealForAttentionFlash", in: content))
+        for step in ["agentLightDeadline = deadline", "revealHoldDeadline = deadline", "armRevealCountdown()",
+                     "AttentionAlertTracker.flashDuration"] {
+            XCTAssertTrue(reveal.contains(step), step)
+        }
+        XCTAssertFalse(reveal.contains("lastRevealedLightState"), "independent of the light's transitions")
+        XCTAssertFalse(reveal.contains("consumeActivityPulseWasHeartbeatOnly"), "the latch keeps its one consumer")
+    }
+
     // MARK: - Ends by itself; Reduce Motion
 
     /// Every way a flash could keep ticking with nothing on screen (docs/REGRESSIONS.md entry 22).

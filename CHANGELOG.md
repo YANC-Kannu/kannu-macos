@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Each attention flash brings a hidden island out
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #70, through Auto-fix
+- **Changes:**
+  - A second session turning yellow while another already was alerted without changing the aggregate light, and
+    the island's reveal re-arms only on a light change, so with hide-until-hover the flash ran off screen (and with
+    the sound set to None the alert was invisible). `ContentView.revealForAttentionFlash` now pulls the island out
+    and relights the light for at least the flash on every alert, moving the reveal deadlines only later; the
+    usual countdown hides it again. A subscription to the flash's id, not an observation, and the activity latch
+    keeps its single consumer.
+  - Test: `AttentionAlertRulesTests.testEachFlashRevealsAHiddenIsland`.
+
 ### 2026-11-17 - The attention alert gets None, Kannu's alarm, and a pill on the lock screen
 - **Developer label:** "keep the macOS sounds and add Kannu's own", "add None to the picker", "Show the pill for the alert"
 - **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answers to #70's open questions 1 to 3
