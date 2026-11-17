@@ -272,7 +272,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
         newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
         
-        // If elapsedTime is provided use it,
+        // Match boring.notch behavior: if elapsedTime is provided use it,
         // if this update is a diff keep the previous currentTime, otherwise default to 0.
         newPlaybackState.currentTime = payload.elapsedTime ?? (diff ? self.playbackState.currentTime : 0)
 
