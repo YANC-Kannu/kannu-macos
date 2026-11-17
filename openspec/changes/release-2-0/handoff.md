@@ -31,17 +31,17 @@ note answered.
   errors, use `gh api -X PUT repos/YANC-Kannu/kannu-macos/pulls/<n>/merge -f merge_method=merge`, on the same yes.
   Never use it to get around a refusal.
 ## Outside the stack
-The states are what `gh` reported at 14:00 UTC. Where a PR conflicts, the files named are a `git merge-tree` forecast
-against d7d839d3.
+The states are what `gh` reported at 14:00 UTC on 13 Nov, except #55's and #9's, which `gh pr view` reported on
+16 Nov. Where a PR conflicts, the files named are a `git merge-tree` forecast against d7d839d3.
 
 | PR | What | State |
 |---|---|---|
 | #57 | OpenSpec, with this change | merged as 385070c8 (13:18 UTC) |
-| #55 | Kannu no longer holds up every Claude prompt | ready; CONFLICTING, in CHANGELOG, `SettingsView.swift` and `SettingsHighlightInventoryTests.swift`; waits until after 2.0 (9.7) |
+| #55 | Kannu no longer holds up every Claude prompt | merged as a522db02 (2026-11-16, 14:22 UTC), so it ships in 2.0 (9.7) |
 | #3 | Points Kannu at `YANC-Kannu/kannu-macos`: the feed, CI and docs | merged as e69311ea (14:02 UTC) |
 | #58 | Says where agent sessions start, in `openspec/project.md` | merged as 1145e7b5 (14:47 UTC) |
 | #14 | 1.4.0 gets the real Bluetooth HUD videos, not Git LFS pointers | ready; CLEAN; into `release/1.4.0` |
-| #9 | SonarCloud CI and Dependabot | ready; GitHub still computing (CONFLICTING before) |
+| #9 | SonarCloud CI and Dependabot | merged as 75e62b24 (2026-11-16, 16:31 UTC) |
 | #4 | Imports `main` from `libinmv/kannu` | ready; BLOCKED; into `main` |
 
 ## The release copy
@@ -58,7 +58,7 @@ The [Cloud] writing tasks are on `docs/release-2-0-copy`. It was cut from `devel
 - task 2.3 ticked: all seven release secrets exist, by name.
 
 David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcome window (9.2), and #55 after 2.0
-(9.7).
+(9.7). #55 has since merged into `development` (16 Nov), so it ships in 2.0 and the 2.0.0 notes need a line for it.
 
 ## The installed checkpoint
 - **Installed on David's Mac** on 2026-11-12 at 23:44 UTC: a local combined build of all three supers on
@@ -76,8 +76,9 @@ David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcom
 1. **The Mac checks**, F1 first (below). The stack landed first, on David's yes, so they now run on the final install
    from `development` (section 6).
 2. **The decisions** left in `tasks.md` section 9: the feed bridge, new features, AGENTS.md's overview,
-   `release/1.4.0`, and OpenSpec 2.x. Decided 2026-11-13: the codename is Horus, 2.0 adds What's New, #55 waits until
-   after 2.0, and the video's storyboard stays on David's Mac and is never committed.
+   `release/1.4.0`, and OpenSpec 2.x. Decided 2026-11-13: the codename is Horus, 2.0 adds What's New, and the video's
+   storyboard stays on David's Mac and is never committed. #55, first held until after 2.0, merged on 16 Nov and ships
+   in 2.0 (9.7).
 3. **The version PR** (2.0.0, build 12, task 3.1): a yes to merge it.
    - Then the final install from `development` (6.1).
    - Then the Mac checks (6.2), with What's New on an updated install and on a fresh account.
