@@ -32,6 +32,10 @@ broader macOS notch lineage including [Boring.Notch](https://github.com/TheBored
 - **Agent status traffic light:** green while an agent thinks or works, yellow while it waits for
   you (an approval card, say), red when it stops. Editor hooks and transcript polling feed one light
   in the notch, across every session, for Claude Code, Cursor, Codex, VS Code, Antigravity and more.
+- **Beside the notch:** on a MacBook with a notch, each change slides the light out to the left of
+  the notch and the agent's app icon to the right, for a few seconds, ahead of music or a running
+  timer, which come back when it goes. Below the notch, the 1.x band, is under Brain › Agents ›
+  Traffic light › Advanced. A display without a notch shows the light in the middle.
 - **Make the light yours:** Classic (all three lights, the inactive ones dimmed) or Minimal (only the
   lit one), with a colour for each state from a curated palette. Two states can never share a
   colour, so the lights stay readable with red-green colour blindness.
@@ -175,7 +179,8 @@ write to `~/.kannu/agent-status/`.
 1. Launch Kannu, accept the Terms of Use, and finish onboarding.
 2. Open **Brain** from the brain icon in the notch, or with ⌘,. On **Agents**, install the hook for
    the editors you use.
-3. Run an AI agent: the closed notch shows its traffic light, and Brain › Agents shows the chat.
+3. Run an AI agent: each change shows its light beside the closed notch, with the agent's app icon
+   on the other side, and Brain › Agents shows the chat.
 4. Optionally, turn on **Enable tasks** in **Brain › Tasks** and **Add a source**.
 5. Optionally, pick or upload a notch skin under **Brain › Settings › Appearance › Notch skin** (see
    [docs/NOTCH-SKINS.md](docs/NOTCH-SKINS.md)).

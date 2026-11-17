@@ -16,11 +16,21 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import Defaults
 import SwiftUI
 
 final class LockScreenLiveActivityOverlayModel: ObservableObject {
 	@Published var scale: CGFloat = 0.6
 	@Published var opacity: Double = 0
+	/// The attention alert presented this pill for its flash (`flashForAttentionAlert`): it carries the
+	/// sideways pill's dot and icon for as long as it shows. Reset by the next lock or unlock.
+	@Published var showsAgentForAlert = false
+}
+
+/// A pinned sideways reveal on the lock-screen pill, for snapshot boards.
+struct AgentLockPillPreview: Equatable {
+	let state: AgentTrafficLightState
+	let iconSource: AgentProviderIconSource?
 }
 
 struct LockScreenLiveActivityOverlay: View {
@@ -30,6 +40,16 @@ struct LockScreenLiveActivityOverlay: View {
 	var isDynamicIslandMode: Bool = false
 	/// Snapshot boards only: a pinned attention flash instead of the live one.
 	var attentionPreview: AttentionAlertPreview? = nil
+	/// Snapshot boards only: a pinned agent reveal instead of the live one.
+	var agentPreview: AgentLockPillPreview? = nil
+
+	/// The light's mirror, never the monitor (docs/REGRESSIONS.md entry 10): only a state switch is read here,
+	/// and `AgentTrafficLightIndicator` draws the dot and icon.
+	@ObservedObject private var agentLight = CursorAgentStatusMonitor.shared.projection
+	@Default(.agentPillLayout) private var agentPillLayout
+	@Default(.enableAgentStatusFeature) private var enableAgentStatusFeature
+	/// The sideways reveal on this pill: set by a state switch while locked, cleared by one sleep.
+	@State private var agentRevealDeadline: Date?
 
 	private var indicatorSize: CGFloat {
 		max(0, notchSize.height - 12)
@@ -53,22 +73,28 @@ struct LockScreenLiveActivityOverlay: View {
 
     @State private var isHovering: Bool = false
 
+	/// The sideways pill on the lock screen: during a reveal (a state switch while locked, or the attention
+	/// alert's flash), the dot stands where the lock icon was and the agent's app icon fills the other wing;
+	/// then the lock icon returns. Only while the lock icon is fully locked, so unlocking still animates it.
+	/// Below the notch (`AgentPillLayout.belowNotch`) leaves this pill as it was.
+	private var showsAgent: Bool {
+		if agentPreview != nil { return true }
+		guard agentPillLayout == .sideways, enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
+			  animator.progress >= 0.999 else { return false }
+		return agentRevealDeadline != nil || model.showsAgentForAlert
+	}
+
 	var body: some View {
-		HStack(spacing: 0) {
-			Color.clear
-				.overlay(alignment: .leading) {
-					LockIconProgressView(progress: animator.progress)
-						.frame(width: indicatorSize, height: indicatorSize)
-				}
-				.frame(width: indicatorSize, height: notchSize.height)
-
-			Rectangle()
-				.fill(.clear)
-				.frame(width: notchSize.width, height: notchSize.height)
-
-			Color.clear
-				.frame(width: indicatorSize, height: notchSize.height)
+		ZStack {
+			if showsAgent {
+				agentRow
+					.transition(.opacity)
+			} else {
+				lockRow
+					.transition(.opacity)
+			}
 		}
+		.animation(.easeInOut(duration: 0.2), value: showsAgent)
 		.frame(width: notchSize.width + (indicatorSize * 2), height: notchSize.height)
 		.padding(.horizontal, horizontalPadding)
 		.background(Color.black)
@@ -99,6 +125,52 @@ struct LockScreenLiveActivityOverlay: View {
                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .default)
             }
         }
+		.onChange(of: agentLight.trafficLightState) { _, _ in armAgentReveal() }
+		.onChange(of: agentLight.shouldShowTrafficLight) { _, _ in armAgentReveal() }
+		// One sleep per reveal, never a timer: the dot hands back to the lock icon by itself.
+		.task(id: agentRevealDeadline) {
+			guard let deadline = agentRevealDeadline else { return }
+			try? await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow)))
+			if !Task.isCancelled { agentRevealDeadline = nil }
+		}
+	}
+
+	private var lockRow: some View {
+		HStack(spacing: 0) {
+			Color.clear
+				.overlay(alignment: .leading) {
+					LockIconProgressView(progress: animator.progress)
+						.frame(width: indicatorSize, height: indicatorSize)
+				}
+				.frame(width: indicatorSize, height: notchSize.height)
+
+			Rectangle()
+				.fill(.clear)
+				.frame(width: notchSize.width, height: notchSize.height)
+
+			Color.clear
+				.frame(width: indicatorSize, height: notchSize.height)
+		}
+	}
+
+	@ViewBuilder
+	private var agentRow: some View {
+		if let agentPreview {
+			AgentLockPillRow(wingWidth: indicatorSize, housingWidth: notchSize.width, height: notchSize.height,
+							 iconSource: agentPreview.iconSource, symbolsOnly: true, accessibilityLabel: "") {
+				AgentTrafficLightDots(style: .minimal, state: agentPreview.state)
+			}
+		} else {
+			AgentTrafficLightIndicator(placement: .lockPill(wingWidth: indicatorSize, housingWidth: notchSize.width,
+															height: notchSize.height))
+		}
+	}
+
+	/// A switch of the published light while locked starts the same 7 s reveal the notch uses.
+	private func armAgentReveal() {
+		guard agentPillLayout == .sideways, enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
+			  LockScreenManager.shared.isLocked else { return }
+		agentRevealDeadline = Date().addingTimeInterval(notchRevealHoldSeconds)
 	}
 }
 

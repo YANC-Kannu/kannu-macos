@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - The agent light sits beside the notch
+- **Developer label:** "the pill doesnt grow downwards, instead extends side ways and shows the icon of app on right side and dot on the left side"
+- **Agent label:** Claude Code (Opus 5.5) — sideways agent pill lane, from the approved plan's design and step 2
+- **Changes:**
+  - On a notched MacBook the closed agent light is now a sideways pill at the closed height, with no band below the
+    housing: the dots (Classic three, Minimal one) in a left wing, the primary session's app icon in a right wing,
+    both wings `max(dots, icon) + 12` pt (`ClosedAgentPillLayout`, Foundation only, in the logic test target). The
+    icon is `closed height − 12` pt and never scales or pulses; a pending high finding shows the shield beside the dot.
+  - `AgentTrafficLightIndicator` draws every placement (centred, beside the notch, the lock pill), so it stays the
+    one view that observes the monitor.
+  - Priority without stacking: while the 7 s reveal is live the sideways pill takes the closed notch ahead of music
+    and a running timer; after it they return with no light in their centre, and neither keeps the light lit.
+  - The lock-screen pill shows the lit dot in place of the lock icon and the app icon opposite during a reveal while
+    locked, and on the attention alert's flash; its window keeps its size.
+  - New setting `agentPillLayout` (`AgentPillLayout`), default Beside the notch for everyone, updaters included; Below
+    the notch keeps the band exactly as before. It lives in Brain › Agents › Traffic light › Advanced ("Agent light
+    position"), with a search entry on the disclosure and a still preview of the chosen layout.
+  - Reduce Motion fades the wings instead of sliding them; VoiceOver reads "Agent status: working, Claude Code".
+  - Onboarding step 4's cards preview the sideways pill with a symbol stand-in icon.
+  - The notch-skin prompt asks for a dark corridor through the middle, where the dot and the icon sit;
+    docs/NOTCH-SKINS.md notes that Horns predates the pill and gives the prompt for its redraw.
+  - New strings, and the four "Agent status: …" labels, in all 17 languages.
+  - DEBUG board `closedAgentPill`: sideways × Classic and Minimal × working, waiting and stopped, the shield,
+    notchless and Dynamic Island, the lock pill, the band, and Horns, with symbol stand-ins and measured sizes.
+  - Tests: `ClosedAgentPillLayoutTests`, `ClosedAgentPillRulesTests`; inventory counts 249/280/274; a
+    `NotchSkinTests` assertion for the corridor.
+  - Docs: OpenSpec change `update-sideways-agent-pill`, docs/SETTINGS.md, docs/ADR.md, ReadMe.md, the 2.0.0 notes
+    and new 2.0.0 beta 2 notes.
+
 ### 2026-11-18 - The coverage converter takes no arguments, and scripts leave the coverage count
 - **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
   the scan never ran tests or read a coverage report

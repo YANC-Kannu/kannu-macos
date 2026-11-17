@@ -36,6 +36,7 @@ struct AgentStatusSettings: View {
     @Default(.agentInactiveDisplaySeconds) var agentInactiveDisplaySeconds
     @Default(.showAgentStoppedIndicator) var showAgentStoppedIndicator
     @Default(.agentTrafficLightStyle) var agentTrafficLightStyle
+    @Default(.agentPillLayout) var agentPillLayout
     @Default(.agentActiveColor) var agentActiveColor
     @Default(.agentAwaitingInputColor) var agentAwaitingInputColor
     @Default(.agentStoppedColor) var agentStoppedColor
@@ -106,7 +107,7 @@ struct AgentStatusSettings: View {
                     .settingsHighlight(id: highlightID("Traffic light style"))
                     // Live preview using the same view the notch draws, so this can't drift.
                     LabeledContent("Preview") {
-                        AgentTrafficLightStylePreview(style: agentTrafficLightStyle)
+                        AgentTrafficLightStylePreview(style: agentTrafficLightStyle, layout: agentPillLayout)
                     }
                     stateColorRow(
                         key: .agentActiveColor,
@@ -139,6 +140,18 @@ struct AgentStatusSettings: View {
                         )
                     }
                     .settingsHighlight(id: highlightID("Reset traffic light colors"))
+
+                    // Where the light sits on a notched MacBook: beside the notch since 2.0, or the 1.x band
+                    // below it. Needed rarely, so it waits here; its search entry lands on this disclosure.
+                    DisclosureGroup {
+                        SettingsRow("Agent light position", description: agentPillLayout.description) {
+                            SettingsSelect("Agent light position", selection: $agentPillLayout,
+                                           options: AgentPillLayout.allCases, optionTitle: \.localizedName)
+                        }
+                    } label: {
+                        SettingsRowLabel("Advanced", description: "Where the light sits on a MacBook with a notch.")
+                    }
+                    .settingsHighlight(id: highlightID("Traffic light advanced"))
                 } header: {
                     SettingsSectionHeader("Traffic light")
                 } footer: {
@@ -488,11 +501,12 @@ struct AgentStatusSettings: View {
 /// so the rest of the Agents tab does not re-render on every rescan and a hidden Brain does no work.
 private struct AgentTrafficLightStylePreview: View {
     let style: AgentTrafficLightStyle
+    var layout: AgentPillLayout = .sideways
     @ObservedObject private var visibility = BrainVisibility.shared
     @State private var state: AgentTrafficLightState = .inactive
 
     var body: some View {
-        AgentTrafficLightDots(style: style, state: state == .inactive ? .executing : state)
+        AgentPillLayoutPreview(style: style, layout: layout, state: state == .inactive ? .executing : state)
             .onAppear { state = CursorAgentStatusMonitor.shared.trafficLightState }
             .task(id: visibility.isOnScreen) {
                 guard visibility.isOnScreen else { return }

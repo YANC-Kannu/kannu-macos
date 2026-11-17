@@ -77,10 +77,21 @@ enum AgentProviderIconCache {
 struct AgentProviderIconView: View {
     let source: AgentProviderIconSource
     var size: CGFloat = 24
+    /// Draws the provider's SF Symbol on a tile instead of the installed app's icon: snapshot boards,
+    /// onboarding and previews, which never show another company's logo and never read this Mac's apps.
+    var symbolsOnly = false
 
     var body: some View {
         Group {
-            if let icon = AgentProviderIconCache.icon(for: source) {
+            if symbolsOnly {
+                ZStack {
+                    RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
+                        .fill(source.standInTileColor)
+                    Image(systemName: source.symbolFallback)
+                        .font(.system(size: size * 0.55, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            } else if let icon = AgentProviderIconCache.icon(for: source) {
                 Image(nsImage: icon)
                     .resizable()
                     .scaledToFit()
@@ -174,6 +185,17 @@ extension AgentProviderIconSource {
         case .qwen: return Color(red: 0.42, green: 0.33, blue: 0.93)
         case .opencode: return .primary
         case .unknown: return .secondary
+        }
+    }
+
+    /// The tile behind the symbol stand-in: the provider's colour, or a neutral grey where that colour is
+    /// the text colour (it would vanish under the white symbol).
+    var standInTileColor: Color {
+        switch self {
+        case .cursor, .opencode, .unknown:
+            return Color(white: 0.32)
+        default:
+            return symbolColor.opacity(0.9)
         }
     }
 

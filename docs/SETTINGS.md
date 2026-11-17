@@ -1018,7 +1018,11 @@ section describes it, it does not define it.
 - A section that mixes everyday controls with rarely-needed ones may tuck the rare rows into one
   `DisclosureGroup` labelled **Advanced** (collapsed by default), keeping the section glanceable.
   Rows inside it carry no highlight ids; their search entries point at the disclosure's own id,
-  so search always lands on something visible (the ADR scans section is the model).
+  so search always lands on something visible (the ADR scans section is the model). Brain › Agents ›
+  Traffic light has the second: **Agent light position**, Beside the notch (the 2.0 default, the dot
+  left of the notch and the agent's app icon right of it) or Below the notch (the 1.x band). Its entry
+  lands on the disclosure (`Traffic light advanced`), and the section's Preview draws the chosen
+  position, still: plain dots and a symbol stand-in for the icon, nothing that repeats.
 - A sub-page is an in-tab view swap (Brain has no navigation stack): a row with an Open button
   ("40 open ›") swaps the tab's content, and the sub-page starts with a back row. The same rule
   applies: its rows carry no highlight ids, their search entries land on the row that opens it,

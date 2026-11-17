@@ -126,6 +126,8 @@ struct ContentView: View {
     @Default(.notchSkinScrimOpacity) private var notchSkinScrimOpacity
     @Default(.notchFillColor) private var notchFillColor
     @Default(.enableAgentStatusFeature) private var enableAgentStatusFeature
+    @Default(.agentPillLayout) private var agentPillLayout
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Default(.selectedIdleAnimation) private var selectedIdleAnimation
     
     // Dynamic sizing based on view type and graph count with smooth transitions
@@ -452,16 +454,38 @@ struct ContentView: View {
                                                   available: Double(available)))
     }
 
+    /// The sideways agent pill (`AgentPillLayout.sideways`, the 2.0 default) applies on a notched MacBook
+    /// only: the light beside the housing at the closed height, with no band below. Displays without a
+    /// notch, the Dynamic Island among them, keep their centred dots whatever the setting says.
+    private var usesSidewaysAgentPill: Bool {
+        agentPillLayout == .sideways && isPhysicalNotchScreen
+    }
+
+    /// How the reveal moves the closed notch. Under Reduce Motion the sideways pill's wings fade in and out
+    /// (its transition) instead of sliding (the notch's width animating); every other case is unchanged.
+    private var agentRevealAnimation: Animation? {
+        usesSidewaysAgentPill && reduceMotion ? nil : vm.animation
+    }
+
+    /// The light's own transition. The sideways pill fades under Reduce Motion; the band keeps its blur.
+    private var agentLightTransition: AnyTransition {
+        usesSidewaysAgentPill && reduceMotion
+            ? .opacity.animation(.easeInOut(duration: 0.2))
+            : AnyTransition(.blurReplace).animation(.interactiveSpring(dampingFraction: 1.2))
+    }
+
     private var shouldExpandPhysicalNotchForAgent: Bool {
         // `showAgentTrafficLight` implies enableAgentStatusFeature && the monitor's
         // shouldShowTrafficLight (upstream's conditions) plus the hide-until-hover reveal
         // window — keeping expansion tied to whether a light is actually being drawn. On
         // physical-notch screens hide-until-hover never applies, so this is equivalent to
-        // upstream's check there, with one source of truth instead of two.
+        // upstream's check there, with one source of truth instead of two. The sideways pill
+        // grows no band, so nothing expands for it.
         isPhysicalNotchScreen
             && vm.notchState == .closed
             && showAgentTrafficLight
             && !vm.hideOnClosed
+            && !usesSidewaysAgentPill
     }
 
     private var physicalNotchAgentHeight: CGFloat {
@@ -526,7 +550,11 @@ struct ContentView: View {
         // shared snapshot — testing `isPlaying` alone missed the paused-but-still-shown pill,
         // which is exactly when the blink was visible. A running timer is the same kind of
         // container: the light sits in its centre for as long as it runs.
-        if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
+        // The sideways pill does not stack: it takes the notch from music and the timer for the
+        // reveal, then they come back with no light in their centre, so neither holds it lit.
+        if !usesSidewaysAgentPill {
+            if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
+        }
         // A pending high finding is a cue in its own right. With no agent activity there is no
         // deadline and no hover, and the shield the Settings copy promises ("stays beside the
         // traffic light until you acknowledge") never appeared on a notched Mac.
@@ -1341,6 +1369,10 @@ struct ContentView: View {
                       } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked && !timerOwnsClosedNotch {
                           InlineHUD(type: .constant(.capsLock), value: .constant(1.0), icon: .constant(""), hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
+                      } else if usesSidewaysAgentPill && agentLightDeadline != nil && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
+                          // Sideways: an agent's state switch takes the closed notch for the reveal,
+                          // ahead of music and a running timer, which come back when it ends.
+                          sidewaysAgentPill()
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
                           // While music plays, MusicLiveActivity embeds the traffic light in its
                           // center (agent hover → agent status; wings keep media art/spectrum).
@@ -1362,12 +1394,13 @@ struct ContentView: View {
                                 },
                                 onHoverAgentCenter: { hovering in
                                     handleRegionHoverOpen(hovering, focus: .agentStatus)
-                                }
+                                },
+                                sideways: usesSidewaysAgentPill
                             )
-                            .transition(.blurReplace.animation(.interactiveSpring(dampingFraction: 1.2)))
+                            .transition(agentLightTransition)
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
                           TimerLiveActivity(
-                              agentLight: showAgentTrafficLight
+                              agentLight: showAgentTrafficLight && !usesSidewaysAgentPill
                                   ? TimerAgentLight(
                                       expandedHeight: shouldExpandPhysicalNotchForAgent ? physicalNotchAgentHeight : nil,
                                       verticalOffset: physicalNotchAgentVerticalOffset
@@ -1590,6 +1623,24 @@ struct ContentView: View {
         .frame(width: contentWidth, height: outerHeight, alignment: .center)
     }
 
+    /// The sideways pill while it takes the notch from music or a running timer: the same light the
+    /// standalone branch draws, at the closed height and with no band.
+    private func sidewaysAgentPill() -> some View {
+        AgentTrafficLightLiveActivity(
+            isHovering: isHovering,
+            gestureProgress: gestureProgress,
+            onTapSecurityPill: {
+                openNotch(focus: .agentStatus)
+            },
+            onHoverAgentCenter: { hovering in
+                handleRegionHoverOpen(hovering, focus: .agentStatus)
+            },
+            sideways: true
+        )
+        .id("closed-agent-pill")
+        .transition(agentLightTransition)
+    }
+
     @ViewBuilder
     private func MusicLiveActivity(secondary preResolvedSecondary: MusicSecondaryLiveActivity? = nil) -> some View {
         let secondary = preResolvedSecondary ?? resolveMusicSecondaryLiveActivity()
@@ -1659,7 +1710,8 @@ struct ContentView: View {
                         : notchContentHeight
                 )
                 .overlay {
-                    if showAgentTrafficLight {
+                    // Sideways, the light never sits in the music's centre: it takes the notch instead.
+                    if showAgentTrafficLight && !usesSidewaysAgentPill {
                         AgentTrafficLightIndicator()
                             .offset(y: physicalNotchAgentVerticalOffset)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2441,7 +2493,7 @@ struct ContentView: View {
             agentLightDeadline = lightDeadline
             revealHoldDeadline = holdDeadline
         } else {
-            withAnimation(vm.animation) {
+            withAnimation(agentRevealAnimation) {
                 agentLightDeadline = lightDeadline
                 revealHoldDeadline = holdDeadline
             }
@@ -2464,7 +2516,7 @@ struct ContentView: View {
         if isRevealHoldActive {
             extend()
         } else {
-            withAnimation(vm.animation) { extend() }
+            withAnimation(agentRevealAnimation) { extend() }
         }
         armRevealCountdown()
     }
@@ -2503,7 +2555,7 @@ struct ContentView: View {
                 return
             }
 
-            withAnimation(self.vm.animation) {
+            withAnimation(self.agentRevealAnimation) {
                 self.revealHoldDeadline = nil
                 self.agentLightDeadline = nil
             }

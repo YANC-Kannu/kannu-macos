@@ -225,6 +225,7 @@ class LockScreenLiveActivityWindowManager {
         let collapsedScale = LockScreenLiveActivityOverlay.collapsedScale(for: context.notchSize, isDynamicIslandMode: isDynamicIslandMode)
 
         overlayAnimator.update(isLocked: true)
+        overlayModel.showsAgentForAlert = false
         overlayModel.scale = collapsedScale
         overlayModel.opacity = 0
 
@@ -252,6 +253,8 @@ class LockScreenLiveActivityWindowManager {
         attentionFlashTask?.cancel()
 
         overlayAnimator.update(isLocked: true, animated: false)
+        // Sideways, the flash carries the agent's dot and icon (the pill shows only for it).
+        overlayModel.showsAgentForAlert = Defaults[.agentPillLayout] == .sideways
         overlayModel.scale = 1
         overlayModel.opacity = 1
         present(notchSize: context.notchSize, on: context.screen, forAttentionAlert: true)
@@ -267,6 +270,7 @@ class LockScreenLiveActivityWindowManager {
     private func cancelAttentionFlash() {
         attentionFlashTask?.cancel()
         attentionFlashTask = nil
+        overlayModel.showsAgentForAlert = false
     }
 
     func showUnlockAndScheduleHide() {
