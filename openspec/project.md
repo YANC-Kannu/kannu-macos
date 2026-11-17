@@ -28,7 +28,9 @@ Three pillars:
 - GitHub `YANC-Kannu/kannu-macos`, which is **public**. The default branch is `main`, and day-to-day work goes to
   `development`. CI builds and tests every push to `main` and `development`, and every PR into them or into
   `super/**`. The same events run one ubuntu job that validates OpenSpec with the pinned CLI and runs
-  `.githooks/pre-commit` on the checkout. A `v*` tag runs `.github/workflows/release.yml`.
+  `.githooks/pre-commit` on the checkout. A `v*` tag runs `.github/workflows/release.yml`. SonarCloud
+  (`.github/workflows/sonarcloud.yml`, skipped for fork PRs) runs KannuTests with coverage on macos-15 and scans with
+  the report `scripts/xccov-to-sonar.py` writes from that run.
 - The OpenSpec CLI is pinned at **0.23.0**. Run it through npx, with telemetry off:
   `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 <command>`, for example `list` or
   `validate --strict --no-interactive`. 0.23.0 is the last release with this layout: this file, `openspec/AGENTS.md`
