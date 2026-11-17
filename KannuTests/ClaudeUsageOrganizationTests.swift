@@ -186,15 +186,107 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
         XCTAssertEqual(new.resets?.weekly, utc("2026-11-01T12:00:00Z"))
     }
 
-    func testAContradictedLastKnownOrganizationIsNeitherKeptNorTaught() {
+    func testAContradictedLastKnownOrganizationWithNoOtherInTheFileIsNeitherKeptNorTaught() {
+        let resets = ["team": Resets(weekly: utc("2026-11-03T05:00:00Z"), reportedAt: utc("2026-10-28T06:19:15Z")),
+                      "max": Resets(weekly: utc("2026-10-28T00:00:00Z"), reportedAt: utc("2026-10-27T10:00:04Z"))]
+        func attribution(fileNames organization: String?) -> ClaudeCachedUsage.RunAttribution {
+            ClaudeCachedUsage.attributeRun(
+                run(started: "2026-10-28T08:29:18Z", organization: organization, profileAt: "2026-10-28T06:20:47Z",
+                    cacheAt: "2026-10-28T08:29:20Z", weekly: "2026-11-05T12:00:00Z"),
+                lastKnown: "team", resets: resets)
+        }
+        for named in [nil, "team", "max"] {
+            let result = attribution(fileNames: named)
+            XCTAssertNil(result.organization, "the cache is not Team's, and nothing says whose it is (\(named ?? "nil"))")
+            XCTAssertNil(result.resets, "so nothing is remembered under anyone")
+            XCTAssertEqual(result.evidence, .contradicted)
+        }
+    }
+
+    /// Measured 2026-11-16: Claude Code had moved from Team to Max, and every one of Kannu's runs
+    /// since ended "contradicted". Max's week was never remembered, the profile in the file was a day
+    /// old, so the run learned nothing — and the next run the same. Its fresh cache went on no card.
+    func testAContradictedLastKnownOrganizationYieldsToTheFilesOtherOrganization() {
         let resets = ["team": Resets(weekly: utc("2026-11-03T05:00:00Z"), reportedAt: utc("2026-10-28T06:19:15Z"))]
         let attribution = ClaudeCachedUsage.attributeRun(
             run(started: "2026-10-28T08:29:18Z", organization: "max", profileAt: "2026-10-28T06:20:47Z",
                 cacheAt: "2026-10-28T08:29:20Z", weekly: "2026-11-04T00:00:00Z"),
             lastKnown: "team", resets: resets)
-        XCTAssertNil(attribution.organization, "the cache is not Team's, and nothing says whose it is")
-        XCTAssertNil(attribution.resets, "so nothing is remembered under anyone")
-        XCTAssertEqual(attribution.evidence, .contradicted)
+        XCTAssertEqual(attribution.organization, "max", "the cache is not Team's, and the file names Max")
+        XCTAssertEqual(attribution.evidence, .movedOrganization)
+        XCTAssertEqual(attribution.resets?.weekly, utc("2026-11-04T00:00:00Z"), "and Max's week is learned")
+        // A cache the run did not write proves nothing: the last known one stands, as before.
+        let unwritten = ClaudeCachedUsage.attributeRun(
+            run(started: "2026-10-28T08:29:18Z", organization: "max", profileAt: "2026-10-28T06:20:47Z",
+                cacheAt: "2026-10-28T06:19:15Z", weekly: "2026-11-04T00:00:00Z"),
+            lastKnown: "team", resets: resets)
+        XCTAssertEqual(unwritten.organization, "team")
+        XCTAssertEqual(unwritten.evidence, .lastKnown)
+    }
+
+    /// The 2026-11-16 report from the two sources' own shapes: the weekly limit reset early, Claude
+    /// Code's cache had the fresh week, and the card still showed Claude Desktop's sample from before
+    /// the reset. Made-up organizations, times and percentages throughout.
+    func testAnEarlyResetReachesTheCardOnceTheRunLearnsClaudeCodesOrganization() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let statusline = directory.appendingPathComponent("claude-usage.json")
+        let config = directory.appendingPathComponent(".claude.json")
+        let desktop = directory.appendingPathComponent("plan-usage-history.json")
+        let max = "org-acme-max", team = "org-acme-team"
+        func ms(_ text: String) -> NSNumber { NSNumber(value: utc(text).timeIntervalSince1970 * 1000) }
+        // Claude Desktop is on Max; its newest sample is from before the early reset.
+        try write(["version": 2, "samples": [
+            ["t": ms("2026-11-12T09:00:00Z"), "org": team, "u": ["fh": NSNumber(value: 0), "sd": NSNumber(value: 41)]],
+            ["t": ms("2026-11-15T20:00:00Z"), "org": max, "u": ["fh": NSNumber(value: 50), "sd": NSNumber(value: 88)]],
+            ["t": ms("2026-11-16T03:00:00Z"), "org": max, "u": ["fh": NSNumber(value: 30), "sd": NSNumber(value: 72)]]
+        ]], to: desktop)
+        // Kannu's run at 07:00 wrote Claude Code's cache: Max's fresh week, on Max's Wednesday anchor.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max,
+                                    "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-14T20:00:00Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-16T07:00:04Z"),
+                       "utilization": [
+                           "five_hour": ["utilization": NSNumber(value: 40), "resets_at": "2026-11-16T11:00:00.000000+00:00"],
+                           "seven_day": ["utilization": NSNumber(value: 6), "resets_at": "2026-11-18T00:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        // Kannu last recorded Claude Code on Team, whose week ends Tuesday 05:00Z.
+        var resets = [team: Resets(weekly: utc("2026-11-10T05:00:00Z"), reportedAt: utc("2026-11-09T12:00:00Z"))]
+        let now = utc("2026-11-16T07:05:00Z")
+        func card(recorded: String) throws -> ClaudeUsageSnapshot? {
+            let full = try XCTUnwrap(ClaudeUsageSources.read(ClaudeUsageSources.Request(
+                statuslineURL: statusline, configURL: config, desktopURL: desktop, now: now,
+                recordedOrganization: recorded, resets: resets)).full)
+            let sources = ClaudeUsageSnapshot.cardSources(
+                statusline: nil, cache: full.config.snapshot, desktop: full.desktop,
+                desktopOrganization: full.desktopOrganization, claudeCodeOrganization: full.claudeCodeOrganization,
+                cacheOwner: full.cacheOwner, now: now)
+            return ClaudeUsageSnapshot.merged(sources.sources, now: now)
+        }
+
+        // Before the run is attributed: the cache contradicts Team's week, so it goes on no card.
+        XCTAssertEqual(try card(recorded: team)?.sevenDayPercent, 72, "the stale sample is all the card has")
+
+        // The run: the file's profile is two days old, the cache Max's.
+        let context = ClaudeCachedUsage.read(from: config).context
+        XCTAssertEqual(context.organizationUUID, max)
+        let attribution = ClaudeCachedUsage.attributeRun(
+            ClaudeCachedUsage.RunRead(context: context, started: utc("2026-11-16T06:59:58Z"),
+                                      readAt: utc("2026-11-16T07:00:06Z")),
+            lastKnown: team, resets: resets)
+        XCTAssertEqual(attribution.organization, max)
+        XCTAssertEqual(attribution.evidence, .movedOrganization)
+        resets[max] = try XCTUnwrap(attribution.resets)
+
+        // After it: one organization, and the newest reading of each window wins.
+        let after = try XCTUnwrap(try card(recorded: max))
+        XCTAssertEqual(after.sevenDayPercent, 6)
+        XCTAssertEqual(after.sevenDayResetsAt, utc("2026-11-18T00:00:00Z"))
+        XCTAssertEqual(after.fiveHourPercent, 40)
+        XCTAssertEqual(after.window("seven_day")?.observedAt, utc("2026-11-16T07:00:04Z"))
     }
 
     func testOnlyACacheTheRunWroteIsRemembered() {

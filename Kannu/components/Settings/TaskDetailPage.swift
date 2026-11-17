@@ -141,7 +141,7 @@ struct TaskDetailPage: View {
             LabeledContent {
                 Button("Add Tags") {
                     context.sheet.wrappedValue = .tags(taskID: task.id, title: task.title, current: task.tags,
-                                                       existing: TaskFacets.tags(in: manager.tasks))
+                                                       existing: SharedTags.inUse())
                 }
             } label: {
                 VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {

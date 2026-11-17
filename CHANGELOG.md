@@ -74,6 +74,166 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     sounds) and `AttentionAlertRulesTests` (off by default, started only from `continueLaunch()`, every gate,
     where it draws, ends by itself, against planted offenders); `SettingsHighlightInventoryTests` counts +2.
 
+### 2026-11-16 - Tags on notes, shared with tasks, and one Filter menu in the notch's Notes
+- **Developer label:** "where do i see wispr flow notes, I need provision in ui to tag a note and tags will be system
+  wide concept, i need to filter by tags here and source too, it should be simple" (David, 2026-11-16)
+- **Agent label:** Claude Code (Opus 5.5) — the shared tag set, note tags and sources, the notch's Filter menu and
+  tag row, the sync's tag-and-pin carry, tests, an OpenSpec change and docs
+- **Changes:**
+  - `NoteItem.tags`: cleaned by tasks' one rule (`TaskItem.cleanedTags`), decoded lossily, encoded only when not
+    empty, so an untagged note saves as before. Kannu's alone: never written into an Apple note.
+  - A Wispr Flow meeting's tags are kept by its meeting id (`wisprMeetingTags`), the one thing Kannu keeps about a
+    meeting. The notch's list joins them in; the meetings manager is untouched.
+  - `NotesManager.setTags(_:forNote:)` and `setTags(_:forWisprMeeting:)` are the one write path. They push nothing
+    and keep the note's date, so tagging never reorders the list or rewrites an Apple note.
+  - `AppleNotesMergePolicy.reconcile` takes a `carry`, and the sync carries tags and pins over its synced copy. A
+    tag set while a sync ran used to be put back; so did a pin, which is fixed with it.
+  - `SharedTags.inUse()`: tasks' tags (Tasks on), saved notes' tags, and those of the Wispr Flow meetings listed now.
+    The task form, New Task, a task's page and a row's Add Tags suggest it, read on focus or at the press, never per
+    redraw. Labels stay tasks' alone. `SharedTags.colors()` reads tasks.json's tag colours, so with Tasks off, tags
+    draw uncoloured.
+  - `NoteSource` (Kannu, Apple Notes, Wispr Flow) is where a note was made. A note made in Kannu stays Kannu's when
+    synced, so with the default Kannu-folder scope every synced note is Kannu's.
+  - `NoteFilter` (Foundation only, in the test target): source, tag and colour, the effective filter (a source not
+    offered is every source, the colour sleeps while colour filtering is off), choices, new-note defaults, and
+    `keeping`.
+  - The notch's Notes header gets `NoteFilterMenu`, a native menu first in the glyph group:
+    - Source (with two or more sources listed), Tag, Colour (with "Enable color filtering"), and Show all;
+    - kept in `notesNotchSourceFilter`, `notesNotchTagFilter` and `notesNotchColorFilter`;
+    - a plain glyph that turns bold and accent while narrowing, with no hold of its own.
+    The magnifying glass only searches, and the colour-chip row is gone.
+  - A "Filtered · Show all" line shows under the header while the filter narrows. The empty list says "No notes
+    match the filter".
+  - "+" and clipboard drafts while filtered start the note with the filtered tag and colour. A part that applies and
+    that a saved new note fails is cleared, so it never vanishes from the list it was made in; a part that sleeps
+    (a source not offered, a colour with colour filtering off) stays.
+  - The notch note editor gets `NoteTagsRow`: the note's tags as chips (a click removes one), an "Add tag" field, and
+    the shared suggestions while it has focus. A tag still typed is added on Done, back and close. Read-only notes take
+    tags too. A read-only note's Cmd+V reaches only the focused field.
+  - A `#word` typed into a title becomes a tag (`TaskQuickAdd.takingNewTags`): once a space typed at the title's end
+    ends it, on Return, when the title loses focus, and on Done, back or close. Never from the autosave, never on a
+    read-only note. A word the title opened with stays, compared by tag name so punctuation after it changes nothing,
+    and Apple Notes' own tags survive.
+  - Note cards show "#first +N" after the title (`TaskTagChips`), the filtered tag first, in neutral chips; not in
+    split view beside the clipboard, where a card's title has no room to share.
+  - Notes' search still matches text only, not `#tag`; that and Brain › Notes' tags are follow-ups.
+  - Tests:
+    - `NoteFilterTests` and `NoteTagsRulesTests`, each rule with planted offenders;
+    - additions to `TaskFacetsTests`, `TaskQuickAddTests` and `AppleNotesMergePolicyTests`;
+    - `WisprMeetingsNeverStoredRulesTests` re-anchors its plant and holds the meeting-tags key and its one writer.
+    Pins: `NotchFontRulesTests` (`NoteFilterMenu` 1, `NoteTagsRow` 2) and `TimerSideColumnRulesTests` (the
+    focus-time vocabulary).
+  - `openspec/changes/add-note-tags-and-filter` (tags: one set; notes: tags, sources, the Filter menu, title words),
+    and docs/SETTINGS.md.
+
+### 2026-11-16 - One primary control and one colour per card in the notch's Notes
+- **Developer label:** "I don't like the design here, review that based on golden triangle rules" (David, 2026-11-16,
+  on a screenshot of the notch's Notes over a red skin)
+- **Agent label:** Claude Code (Opus 5.5) — the golden-triangle review, the header and card changes, a display-text
+  helper and its tests
+- **Changes:**
+  - Review: the open panel is about 732 by 226 pt, so its golden-triangle power points sit about 9 % in from each
+    corner. The top-right one held five equal filled circles with a red trash beside "+"; the top-left card, where the
+    eye lands first, read "Untitled Note"; previews repeated their titles and stopped at the first line break; seven
+    accent uses, yellow and red among them (Kannu's needs-input and stopped), gave the eye nothing to follow; and a
+    textured skin's streaks ran under the translucent cards.
+  - Header: "+" is the one filled control (ink), alone at the right end. Search, Create from Clipboard and Clear
+    Notes are plain glyphs grouped before it; the trash is neutral, and the alert's Delete stays the red one. Sync
+    is the Apple logo beside the title, which turns while it runs, so its separate circle is gone. The search and
+    sync tints are `SettingsTheme.accent` instead of blue and yellow.
+  - Cards: `NoteDisplayText` (Foundation only, in the test target) shows a note left as "Untitled Note" by its first
+    line, drops a first line that repeats the title, strips Markdown heading and bullet markers, and joins lines so
+    one line fills the card, reading at most 600 characters. Display only; no stored note changes.
+  - Cards: the bar is the card's one colour. Pins and the border are neutral, Copy's checkmark is white, pinned cards
+    sit a step brighter, and a scrim of the notch's fill sits under each card, so its text keeps contrast over a skin.
+  - Unchanged: the grid, its columns and gutters, the fades, and every scroll owner and suppression token.
+  - `NoteDisplayTextTests` covers titles, previews, markers and the read limit with made-up notes.
+    `NotchFontRulesTests` pins 19 system-font lines in `NotchNotesView`: the header's four glyph fonts are one now.
+
+### 2026-11-16 - Wispr Flow's meeting summaries in the notch's Notes, read-only
+- **Developer label:** "I have Wispr Flow installed, see if we can connect that notes to Kannu notes" (David,
+  2026-11-16; meeting summaries only, as a read-only mirror)
+- **Agent label:** Claude Code (Opus 5.5) — a read-only reader for Wispr Flow's local database, the mirror in the
+  notch's Notes, a Notes setting, store tests and rule tests
+- **Changes:**
+  - `WisprFlowMeetingsStore` (Foundation and SQLite only, in the test target) reads the Notetaker's summaries from
+    `~/Library/Application Support/Wispr Flow/flow.sqlite` with `mode=ro`: live meetings with a summary, newest first,
+    at most 50. It never uses `immutable=1`, which would miss what Wispr has not yet checkpointed from its WAL. It
+    checks every column it reads first, so a schema change in Wispr hides the source instead of guessing.
+  - `WisprFlowMeetingsManager` holds the meetings in memory as `NoteItem`s with a `wisprMeetingId`, read off the main
+    actor as the Notes tab appears and on its sync button. No timer, no file watcher, and nothing reads Wispr's files
+    until the setting is on. The log says counts and error cases, never a title or a summary.
+  - The notch's Notes list shows them after Kannu's notes: a waveform glyph, a neutral bar, Copy only (the Markdown
+    summary). Opened, a meeting is read-only with Open in Wispr Flow and no colour picker. The editor's save and
+    autosave return before saving a meeting, Clear Notes counts and reaches only Kannu's notes, and the colour filter
+    leaves meetings out.
+  - `NoteItem.wisprMeetingId` is not in `CodingKeys`: a meeting is never stored, so never pushed to Apple Notes.
+  - Brain › Notes › Wispr Flow: "Show Wispr Flow meeting summaries", off by default, shown while Wispr Flow is
+    installed or the switch is on, with its search entry.
+  - `WisprFlowMeetingsStoreTests` reads made-up meetings from an uncheckpointed WAL and covers deletion, empty
+    summaries, order, the limit, dates, a missing file, table or column, and a file that is not a database.
+    `WisprMeetingsNeverStoredRulesTests` holds the editor's guards, the manager's storing nothing and the unencoded
+    id, each against planted offenders.
+  - Pins moved: `NotchFontRulesTests` counts the waveform's symbol font (22 in `NotchNotesView`), and
+    `SettingsHighlightInventoryTests` counts the new row and its search entry.
+
+### 2026-11-17 - Keep project-name slug decoding off files, symbolic links and public logs
+- **Developer label:** "Fix CodeRabbit's findings on PR #68"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release, Auto-fix
+- **Changes:**
+  - A Cursor slug decode now reads folders through `ProjectNameRules.slugDecodableFolders(in:homeDirectory:)`, moved
+    from `CursorTranscriptParser` into the tested file. It returns only real folders: a file named like the project
+    can no longer win the match, and a symbolic link is never followed into a privacy-prompting folder.
+  - A slug that cannot be decoded and is not under the home folder gets the new rule `cursor-slug-unresolved`, and the
+    `ProjectName` log prints its name private, because the whole slug spells out a folder path.
+  - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
+  - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
+
+### 2026-11-17 - The Claude card's empty fallback keeps no reading a reset has passed
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #69, through Auto-fix
+- **Changes:**
+  - With nothing live, the monitor kept the first usage source whole so the read counted as a read. Since
+    `selections` drops readings a reset has passed, that source could hold one, and the pre-reset percentage went
+    back on the card. `ClaudeUsageSnapshot.mergedOrRead` keeps the source with every window still live by its own
+    reset taken off; the monitor calls it.
+  - Tests: `ClaudeUsageSnapshotTests.testWithNothingLiveTheReadKeepsNoWindowAResetHasPassed`, and
+    `ClaudeUsageReadRulesTests.testTheCardNeverFallsBackToASourceRestoredWhole` pins the monitor's call.
+
+### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
+- **Developer label:** "Make project-name detection observable, and fix its two known bugs"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
+- **Changes:**
+  - `ProjectNameRules.projectName(forWorkingDirectory:)` (new, Foundation-only) names a chat's project after its
+    folder, except under `<repo>/.claude/worktrees/<name>`, a Claude Desktop worktree, which is named `<repo>`. The
+    hook file reader, Claude's passive session record and the Claude/Codex transcript fallback all go through it. The
+    hook script is unchanged.
+  - Cursor project slugs decode against the folders that exist, so `acme-api` stays `acme-api` instead of `api`. The
+    fallback encodes the home folder the way Cursor does, so a home with a dot or underscore matches its slug. Kannu
+    never lists a home folder that raises a privacy prompt, or `/Volumes`.
+  - New `ProjectName` log category (`com.kannu.app`): one line per change, with the agent, source, session id, chosen
+    name and rule public and the paths private.
+  - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
+    folders, and the Cursor slug decoder.
+
+### 2026-11-17 - The Claude card shows the fresh limit after an early reset
+- **Developer label:** "Kannu still shows the Claude weekly limit from before its reset"
+- **Agent label:** Claude Code (Opus 5.5) — usage-reset lane of the 2.0 release
+- **Changes:**
+  - `ClaudeCachedUsage.attributeRun`: a run whose cache contradicts the last known organization's week now goes to
+    the organization `~/.claude.json` names, when that is another one whose week the cache does not contradict
+    (`movedOrganization`), and remembers its resets. Before, every run after Claude Code changed organization ended
+    "contradicted" and the fresh cache went on no card.
+  - `ClaudeUsageSnapshot.selections`: per window, the newest live reading wins whatever its source, ties go to the
+    earlier source, and a reading taken before an exact reset any source has seen pass is dropped, even while its own
+    reset is ahead. `merged` is built on it and never borrows a reset from a dropped copy.
+  - `CursorAgentStatusMonitor` logs each card's per-window decision when it changes (`Usage source …`, category
+    `ClaudeUsage`): times and percentages only.
+  - Tests: an end-to-end replay from made-up `.claude.json` and desktop history files, both sides of the new
+    attribution rule, and merge tests for newest-wins, an early reset, equal times and a missing source.
+  - `docs/REGRESSIONS.md` entry 8 gets its 2026-11-17 addendum; OpenSpec change `fix-usage-reset-staleness` adds the
+    `usage` capability.
+
 ### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
 - **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
 - **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of
@@ -99,6 +259,36 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `release-2-0`'s deltas.
   - `release-2-0`'s `tasks.md` and `handoff.md` record that #55 (a522db02) and #9 (75e62b24) merged, so #55 ships in
     2.0.
+
+### 2026-11-16 - Pre-commit and pre-push checks against a local list of names never to publish
+- **Developer label:** Made-up data only in fixtures, tests and examples, enforced by the hooks
+- **Agent label:** Claude Code (Opus 5.5) — a denylist check in the pre-commit hook, a new pre-push hook, their tests,
+  an AGENTS.md rule, and two CHANGELOG commit references updated after the 2026-11-16 history rewrite
+- **Changes:**
+  - `.githooks/pre-commit` refuses a commit whose staged added lines, author or committer match the untracked list in
+    `<git-common-dir>/info/kannu-denylist` (one case-insensitive string per line, `#` for comments). It names the
+    files, never the matched text. With no list there is no check, so nothing changes for other contributors. It
+    runs before the merge exemption, so a conflict resolution is checked too; it reads staged paths NUL-delimited and
+    literally, so a quoted or non-ASCII path is not skipped; and it scans type changes (a symlink become a file).
+  - New `.githooks/pre-push` refuses to publish commits whose author, committer, message or added lines match the same
+    list, so a branch cut before the 2026-11-16 history rewrite cannot put the old commits back. What the server
+    already has comes from the server the push goes to (`git ls-remote` on the push URL, not the remote's fetch
+    URL), never from this clone's remote-tracking refs, which in a clone that missed the rewrite still reach the old
+    commits.
+  - Both hooks scan the raw objects being committed or pushed: no textconv, no replacement refs, `--text` so a file an
+    attribute marks `-diff` still shows its added lines, and (pre-push) `--root` so an orphan root shows its content
+    with `log.showRoot=false`. Both fail closed: a git or grep error, a list that exists but cannot be read, or a list
+    folder that cannot be searched refuses instead of passing as clean.
+  - New `KannuTests/DenylistPrePushHookTests` runs the real pre-push hook against throwaway repositories: a commit
+    reachable only from a stale tracking ref, a remote whose fetch and push URLs differ, a replacement ref, a textconv
+    filter that fails or prints nothing, a file marked `-diff`, an orphan root with root diffs off, an unreadable
+    list, an unsearchable list folder, a list with only comments, a clean push, and no list.
+  - New `KannuTests/DenylistPreCommitHookTests` runs the full pre-commit hook the same way: a file marked `-diff`, a
+    path git would quote, a symlink that became a file, a conflict resolution, a matching identity, and a clean change.
+  - `AGENTS.md`, Security and privacy: fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use
+    made-up data only, and the list and both hooks are named there.
+  - Two older entries cited commits of this repository by their pre-rewrite hashes; they now cite the rewritten ones.
+    Citations of commits from the earlier repository are unchanged, since those commits still exist there.
 
 ### 2026-11-16 - The status line clears only its own error, by source
 - **Developer label:** "Turn on Auto-fix"
@@ -1459,7 +1649,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ### 2026-11-02 - Act on CodeRabbit's second review of #11
 - **Developer label:** "please merge super mr's afgter code rabbit review is done and covered"
-- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of 1fd4385d, the rest answered in their threads
+- **Agent label:** Claude Code (Opus 5.5) — the valid findings from #11's review of d4af1954, the rest answered in their threads
 - **Changes:**
   - Marking a task done, or starting it, cancels a pending done tick, so the end of its undo window
     no longer marks it done a second time or stops a timer just started.
@@ -1713,7 +1903,7 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 - **Agent label:** Claude Code (Opus 5.5) — the task form's focus holds the notch again, under the pointer-based close
 - **Changes:**
   - `TimerTaskForm` holds the notch while one of its fields has focus, so an edit survives the pointer
-    leaving the notch. `9352cf35` had removed this hold along with the timer tab's others.
+    leaving the notch. `9315a0eb` had removed this hold along with the timer tab's others.
   - The hold ends when the focus goes, the form goes or the notch's window stops being key, and
     `ContentView.closeWhenPointerLeaves` then closes the notch if the pointer is gone. Menus still
     hold nothing in the form, and the other timer-tab fields stay without a hold.

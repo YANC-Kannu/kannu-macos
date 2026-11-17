@@ -166,4 +166,24 @@ final class AppleNotesMergePolicyTests: XCTestCase {
                                dropMissing: { $0.remoteId == "r" || $0.remoteId == "f" })
         XCTAssertEqual(result, [returned, mine])
     }
+
+    /// Tags and pins are Kannu's alone and never move a note's date: set while a sync runs, they must
+    /// not be put back to the snapshot's when the note takes the synced copy.
+    func testATagSetDuringTheSyncSurvivesTheSyncedCopy() {
+        struct Tagged: Equatable { var id: UUID; var text: String; var modified: Date; var tags: [String] }
+        let id = UUID()
+        let before = Tagged(id: id, text: "a", modified: at(0), tags: [])
+        let tagged = Tagged(id: id, text: "a", modified: at(0), tags: ["acme"])
+        let synced = Tagged(id: id, text: "from Notes", modified: at(9), tags: [])
+        let result = AppleNotesMergePolicy.reconcile(
+            current: [tagged], merged: [synced], snapshot: [id: before.modified],
+            id: \.id, modified: \.modified, keep: { now, _ in now },
+            carry: { now, merged in var carried = merged; carried.tags = now.tags; return carried })
+        XCTAssertEqual(result, [Tagged(id: id, text: "from Notes", modified: at(9), tags: ["acme"])],
+                       "the synced text wins, and the tag set meanwhile stays")
+        XCTAssertEqual(AppleNotesMergePolicy.reconcile(
+            current: [tagged], merged: [synced], snapshot: [id: before.modified],
+            id: \.id, modified: \.modified, keep: { now, _ in now }), [synced],
+                       "without a carry the synced copy is taken whole, as before")
+    }
 }

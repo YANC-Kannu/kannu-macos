@@ -344,6 +344,15 @@ enum AgentSessionLogParser {
     }
 
     static func displayProjectName(from path: URL, provider: AgentSessionLogProvider) -> String? {
+        projectResolution(from: path, provider: provider)?.resolution?.name
+    }
+
+    /// The transcript's first recorded working directory and the project name `ProjectNameRules`
+    /// gives it (a Claude Desktop worktree is named after its repository).
+    static func projectResolution(
+        from path: URL,
+        provider: AgentSessionLogProvider
+    ) -> (cwd: String, resolution: ProjectNameRules.Resolution?)? {
         guard let text = readLeadingLines(at: path) else { return nil }
         for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
             guard let data = line.data(using: .utf8),
@@ -351,8 +360,7 @@ enum AgentSessionLogParser {
                   let cwd = projectWorkingDirectory(from: json, provider: provider) else {
                 continue
             }
-            let basename = URL(fileURLWithPath: cwd).lastPathComponent
-            return basename.isEmpty ? nil : basename
+            return (cwd, ProjectNameRules.resolution(forWorkingDirectory: cwd))
         }
         return nil
     }
@@ -364,8 +372,17 @@ enum AgentSessionLogParser {
     ) -> [String: String] {
         var results: [String: String] = [:]
         for path in listRecentSessionPaths(provider: provider, maxAgeMinutes: maxAgeMinutes, now: now) {
-            guard let projectName = displayProjectName(from: path, provider: provider) else { continue }
-            results[sessionID(from: path, provider: provider)] = projectName
+            guard let found = projectResolution(from: path, provider: provider) else { continue }
+            let id = sessionID(from: path, provider: provider)
+            ProjectNameLog.record(
+                agent: provider.rawValue,
+                source: .transcript,
+                sessionID: id,
+                cwd: found.cwd,
+                resolution: found.resolution
+            )
+            guard let projectName = found.resolution?.name else { continue }
+            results[id] = projectName
         }
         return results
     }

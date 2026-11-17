@@ -816,10 +816,31 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
     /// Made in Notes, not in Kannu (`AppleNotesMergePolicy.madeInAppleNotes`). Nil until a sync
     /// decides; a note made in the notch is `false` from the start.
     var madeInAppleNotes: Bool? = nil
+    /// A Wispr Flow meeting's id: this note is that meeting's summary, read from Wispr each time the
+    /// Notes tab appears (`WisprFlowMeetingsManager`). Never stored, so it is not in `CodingKeys`: a
+    /// meeting is shown and copied, never saved, synced to Apple Notes or edited here.
+    var wisprMeetingId: String? = nil
+
+    /// A Wispr Flow meeting's summary, shown read-only (`wisprMeetingId`).
+    var isWisprMeeting: Bool { wisprMeetingId != nil }
+    /// Kannu's only: never written to Apple Notes or Wispr Flow. Cleaned by `TaskItem.cleanedTags`, the
+    /// one tag rule tasks keep too, and set only through `NotesManager.setTags`. A Wispr Flow meeting's
+    /// tags are kept by its meeting id (`wisprMeetingTags`) and joined in by the notch's list.
+    var tags: [String] = []
+
+    /// Where the note was made (`NoteSource`).
+    var source: NoteSource {
+        NoteSource(wisprMeetingId: wisprMeetingId, appleNotesId: appleNotesId, madeInAppleNotes: madeInAppleNotes)
+    }
+
+    /// What the notch's Notes filter reads. A Wispr Flow meeting has no colour of its own.
+    var filterFacets: NoteFilter.Facets {
+        NoteFilter.Facets(source: source, tags: tags, colorIndex: isWisprMeeting ? nil : colorIndex)
+    }
     
     // Internal property for migration
     private enum CodingKeys: String, CodingKey {
-        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId, appleNotesSyncedAt, madeInAppleNotes
+        case id, title, content, creationDate, modificationDate, colorIndex, isPinned, imageFileName, imageData, appleNotesId, appleNotesSyncedAt, madeInAppleNotes, tags
     }
     
     init(
@@ -833,7 +854,9 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         imageFileName: String? = nil,
         appleNotesId: String? = nil,
         appleNotesSyncedAt: Date? = nil,
-        madeInAppleNotes: Bool? = nil
+        madeInAppleNotes: Bool? = nil,
+        wisprMeetingId: String? = nil,
+        tags: [String] = []
     ) {
         self.id = id
         self.title = title
@@ -846,6 +869,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         self.appleNotesId = appleNotesId
         self.appleNotesSyncedAt = appleNotesSyncedAt
         self.madeInAppleNotes = madeInAppleNotes
+        self.wisprMeetingId = wisprMeetingId
+        self.tags = TaskItem.cleanedTags(tags)
     }
     
     init(from decoder: Decoder) throws {
@@ -860,6 +885,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         appleNotesId = try container.decodeIfPresent(String.self, forKey: .appleNotesId)
         appleNotesSyncedAt = try container.decodeIfPresent(Date.self, forKey: .appleNotesSyncedAt)
         madeInAppleNotes = try container.decodeIfPresent(Bool.self, forKey: .madeInAppleNotes)
+        // Lossy, as tasks' tags are: a bad value costs this note its tags, never the whole saved list.
+        tags = TaskItem.cleanedTags((try? container.decodeIfPresent([String].self, forKey: .tags)) ?? [])
         
         // Migration logic: if imageData exists but imageFileName doesn't, save it to disk
         if let data = try container.decodeIfPresent(Data.self, forKey: .imageData) {
@@ -885,6 +912,8 @@ struct NoteItem: Codable, Identifiable, Defaults.Serializable, Hashable {
         try container.encodeIfPresent(appleNotesId, forKey: .appleNotesId)
         try container.encodeIfPresent(appleNotesSyncedAt, forKey: .appleNotesSyncedAt)
         try container.encodeIfPresent(madeInAppleNotes, forKey: .madeInAppleNotes)
+        // An untagged note encodes as it did before tags.
+        try container.encodeIfPresent(tags.isEmpty ? nil : tags, forKey: .tags)
     }
 
     /// Shown, never edited: a note made in Notes while sync reads the whole account. Kannu would
@@ -1591,6 +1620,19 @@ extension Defaults.Keys {
     static let appleNotesSyncScope = Key<AppleNotesSyncScope>("appleNotesSyncScope", default: .kannuFolder)
     /// Set once the scope has been decided for this install (`NotesManager.migrateSyncScopeIfNeeded`).
     static let appleNotesSyncScopeMigrated = Key<Bool>("appleNotesSyncScopeMigrated", default: false)
+    /// Shows Wispr Flow's Notetaker meeting summaries in the notch's Notes, read-only. Off until the
+    /// user turns it on, and nothing reads Wispr's files before then (`WisprFlowMeetingsManager`).
+    static let enableWisprFlowMeetings = Key<Bool>("enableWisprFlowMeetings", default: false)
+    /// Tags on Wispr Flow meetings, by Wispr's meeting id: the one thing Kannu keeps about a meeting,
+    /// never its title or summary. Written only by `NotesManager.setTags(_:forWisprMeeting:)`.
+    static let wisprMeetingTags = Key<[String: [String]]>("wisprMeetingTags", default: [:])
+    /// The notch Notes tab's filter (`NoteFilter`), kept so the list comes back filtered. Nil is every
+    /// source; a source the menu does not offer counts as every source.
+    static let notesNotchSourceFilter = Key<NoteSource?>("notesNotchSourceFilter", default: nil)
+    /// `TaskFacets.anyTag` is every tag.
+    static let notesNotchTagFilter = Key<String>("notesNotchTagFilter", default: TaskFacets.anyTag)
+    /// Nil is every colour; it applies only while "Enable color filtering" is on.
+    static let notesNotchColorFilter = Key<Int?>("notesNotchColorFilter", default: nil)
 
     // MARK: Tasks Feature
     // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),
@@ -1871,6 +1913,24 @@ extension DisplayPlacement: Defaults.Serializable {}
 
 /// The Task list's filters live in the logic test target too (`TaskFacets.swift`).
 extension TaskSourceFilter: Defaults.Serializable {}
+extension NoteSource: Defaults.Serializable {}
+
+extension NoteFilter {
+    /// The notch Notes tab's filter as kept in Defaults. A set writes only the parts that changed, so a
+    /// Show all with nothing set publishes nothing.
+    static var stored: NoteFilter {
+        get {
+            NoteFilter(source: Defaults[.notesNotchSourceFilter],
+                       tag: Defaults[.notesNotchTagFilter],
+                       colorIndex: Defaults[.notesNotchColorFilter])
+        }
+        set {
+            if Defaults[.notesNotchSourceFilter] != newValue.source { Defaults[.notesNotchSourceFilter] = newValue.source }
+            if Defaults[.notesNotchTagFilter] != newValue.tag { Defaults[.notesNotchTagFilter] = newValue.tag }
+            if Defaults[.notesNotchColorFilter] != newValue.colorIndex { Defaults[.notesNotchColorFilter] = newValue.colorIndex }
+        }
+    }
+}
 extension TaskStatusFilter: Defaults.Serializable {}
 /// `TaskColor.swift` is in the logic test target as well.
 extension TaskColor: Defaults.Serializable {}

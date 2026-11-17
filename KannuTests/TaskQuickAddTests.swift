@@ -323,4 +323,48 @@ final class TaskQuickAddTests: XCTestCase {
         XCTAssertTrue(TaskSearch.matches(tagged, query: "#work"))
         XCTAssertFalse(TaskSearch.matches(TaskItem(title: "Plan the week"), query: "#work"))
     }
+
+    // MARK: - A note's title
+
+    func testANewHashWordInANotesTitleBecomesATag() {
+        let taken = TaskQuickAdd.takingNewTags(from: "Plan #acme ", openedWith: "", room: 10)
+        XCTAssertEqual(taken.title, "Plan ", "the trailing space stays, so typing carries on")
+        XCTAssertEqual(taken.tags, ["acme"])
+    }
+
+    func testAHashWordTheTitleOpenedWithStays() {
+        let taken = TaskQuickAdd.takingNewTags(from: "Groceries #home extra #acme", openedWith: "Groceries #home", room: 10)
+        XCTAssertEqual(taken.title, "Groceries #home extra", "Apple Notes' own #home is never taken")
+        XCTAssertEqual(taken.tags, ["acme"])
+    }
+
+    func testASecondCopyOfAWordAlreadyThereIsTakenIgnoringCase() {
+        let taken = TaskQuickAdd.takingNewTags(from: "#Acme notes #acme", openedWith: "#acme notes", room: 10)
+        XCTAssertEqual(taken.title, "#Acme notes")
+        XCTAssertEqual(taken.tags, ["acme"])
+    }
+
+    func testOnlyTagWordsAreTaken() {
+        let title = "Call @noon about #123 and a@b.com"
+        let taken = TaskQuickAdd.takingNewTags(from: title, openedWith: "", room: 10)
+        XCTAssertEqual(taken.title, title, "a note has no reminder, and #123 is an issue number")
+        XCTAssertEqual(taken.tags, [])
+    }
+
+    func testNoWordIsTakenPastTheRoomLeft() {
+        let taken = TaskQuickAdd.takingNewTags(from: "Plan #acme #docs", openedWith: "", room: 1)
+        XCTAssertEqual(taken.title, "Plan #docs", "past the cap a word stays in the title instead of vanishing")
+        XCTAssertEqual(taken.tags, ["acme"])
+        XCTAssertEqual(TaskQuickAdd.takingNewTags(from: "Plan #acme", openedWith: "", room: 0).title, "Plan #acme")
+    }
+
+    func testATagTheTitleOpenedWithStaysWhateverPunctuationFollowsIt() {
+        XCTAssertEqual(TaskQuickAdd.takingNewTags(from: "Roadmap #acme, Q3 ", openedWith: "Roadmap #acme", room: 10).tags, [],
+                       "a comma typed after Apple Notes' own #acme never makes it new")
+        XCTAssertEqual(TaskQuickAdd.takingNewTags(from: "Roadmap #acme ", openedWith: "Roadmap #acme,", room: 10).tags, [])
+    }
+
+    func testATitleWithNothingToTakeIsUnchanged() {
+        XCTAssertEqual(TaskQuickAdd.takingNewTags(from: "  Spaced   title ", openedWith: "", room: 10).title, "  Spaced   title ")
+    }
 }

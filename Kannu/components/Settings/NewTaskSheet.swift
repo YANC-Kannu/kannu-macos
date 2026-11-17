@@ -47,6 +47,8 @@ struct NewTaskSheet: View {
     @Default(.enableTimerFeature) private var enableTimerFeature
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focused: Field?
+    /// Kannu's tags in use, tasks' and notes' (`SharedTags.inUse()`), read once as the sheet appears.
+    @State private var tagVocabulary: [String] = []
 
     private enum Field: Hashable {
         case title
@@ -58,7 +60,7 @@ struct NewTaskSheet: View {
     /// A tag half-typed: Return completes it, so Add gives up the Return key meanwhile.
     private var isTypingTag: Bool { focused == .tags && !draft.tagFragment.isEmpty }
     private var tagOffers: [TaskTagEditing.Suggestion] {
-        draft.tagSuggestions(existing: TaskFacets.tags(in: manager.tasks))
+        draft.tagSuggestions(existing: tagVocabulary)
     }
 
     var body: some View {
@@ -137,6 +139,7 @@ struct NewTaskSheet: View {
             manager.checkReminderPermission()
             // A reminder kept from an earlier New Task that has passed since: the next whole hour.
             newTask.draft.movePassedReminder(now: Date(), calendar: .current)
+            tagVocabulary = SharedTags.inUse()
             focused = .title
         }
     }

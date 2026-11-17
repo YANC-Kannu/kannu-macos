@@ -296,8 +296,9 @@ enum TaskFacets {
         firstSpellings(tasks.flatMap(displayTags(of:)))
     }
 
-    /// Each tag once, by its first spelling (compared ignoring case), sorted ignoring case.
-    private static func firstSpellings(_ tags: [String]) -> [String] {
+    /// Each tag once, by its first spelling (compared ignoring case), sorted ignoring case. Shared with
+    /// notes: Kannu's one vocabulary of tags (`SharedTags`, `NoteFilter.tagChoices`).
+    static func firstSpellings(_ tags: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
         for tag in tags where seen.insert(tag.lowercased()).inserted {
