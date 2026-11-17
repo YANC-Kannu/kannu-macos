@@ -73,7 +73,8 @@ enum AttentionAlertSound: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Kannu alarm is the timer's own `timer.mp3`, played once here: only the timer's alarm loops.
+    /// Kannu alarm is the timer's own `timer.mp3`, never looped here (only the timer's alarm loops) and cut
+    /// to the flash: it fades out and stops at `AttentionAlertTracker.flashDuration`.
     var playback: AttentionAlertPlayback {
         switch self {
         case .none: return .silent
@@ -98,6 +99,10 @@ struct AttentionAlertTracker: Equatable {
     static let quietStart: TimeInterval = 10
     /// How long a flash stays on the notch. The shimmer's sweeps finish inside it.
     static let flashDuration: TimeInterval = 2.4
+    /// Kannu alarm is a 12 s file: it fades over this long and stops as the flash ends.
+    static let alarmFadeDuration: TimeInterval = 0.4
+    /// When the Kannu alarm starts to fade, so it is silent exactly at `flashDuration`.
+    static var alarmFadeStart: TimeInterval { flashDuration - alarmFadeDuration }
 
     private(set) var yellow: Set<String> = []
     private(set) var lastAlertAt: Date?

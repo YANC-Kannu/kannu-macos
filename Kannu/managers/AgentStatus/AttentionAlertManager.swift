@@ -17,6 +17,7 @@
  */
 
 import AppKit
+import AVFoundation
 import Defaults
 import SwiftUI
 
@@ -56,6 +57,7 @@ final class AttentionAlertManager: ObservableObject {
     func stop() {
         clearTask?.cancel()
         clearTask = nil
+        stopAlarm()
         flash = nil
         tracker = AttentionAlertTracker()
         quietUntil = .distantFuture
@@ -79,9 +81,7 @@ final class AttentionAlertManager: ObservableObject {
         case .silent:
             return
         case .bundled(let name, let fileExtension):
-            // Once, never looped. A second press restarts it rather than playing over it.
-            bundledSound?.stop()
-            bundledSound = bundledPlayer.play(fileName: name, fileExtension: fileExtension)
+            playAlarm(name: name, fileExtension: fileExtension)
         case .system(let name):
             guard let player = NSSound(named: NSSound.Name(name)) else { return }
             // `NSSound(named:)` hands back one shared instance per name: restart it if it is still playing.
@@ -90,8 +90,39 @@ final class AttentionAlertManager: ObservableObject {
         }
     }
 
-    private let bundledPlayer = AudioPlayer()
-    private var bundledSound: NSSound?
+    private var alarmPlayer: AVAudioPlayer?
+    private var alarmFadeTask: Task<Void, Never>?
+
+    /// Kannu alarm: the timer's 12 s file, cut to the flash. It plays once at full volume, fades over
+    /// `alarmFadeDuration` from `alarmFadeStart`, and stops at `flashDuration`, in one task that the next
+    /// play (an alert, Play sound) cancels and restarts. `NSSound` has no fade; `TimerManager` uses
+    /// `AVAudioPlayer` for the same file.
+    private func playAlarm(name: String, fileExtension: String) {
+        stopAlarm()
+        guard let url = Bundle.main.url(forResource: name, withExtension: fileExtension),
+              let player = try? AVAudioPlayer(contentsOf: url) else { return }
+        player.numberOfLoops = 0
+        player.volume = 1
+        player.play()
+        alarmPlayer = player
+        alarmFadeTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(AttentionAlertTracker.alarmFadeStart))
+            guard !Task.isCancelled else { return }
+            player.setVolume(0, fadeDuration: AttentionAlertTracker.alarmFadeDuration)
+            try? await Task.sleep(for: .seconds(AttentionAlertTracker.alarmFadeDuration))
+            guard !Task.isCancelled else { return }
+            player.stop()
+            self?.alarmPlayer = nil
+            self?.alarmFadeTask = nil
+        }
+    }
+
+    private func stopAlarm() {
+        alarmFadeTask?.cancel()
+        alarmFadeTask = nil
+        alarmPlayer?.stop()
+        alarmPlayer = nil
+    }
 
     private func alert() {
         playSound(Defaults[.attentionAlertSound])

@@ -172,14 +172,26 @@ final class AttentionAlertRulesTests: XCTestCase {
 
     // MARK: - The sound
 
-    func testNonePlaysNothingAndKannuAlarmPlaysOnceThroughAudioPlayer() throws {
+    func testNonePlaysNothingAndKannuAlarmStopsWhenTheFlashEnds() throws {
         let manager = Self.code(try Self.source("Kannu/managers/AgentStatus/AttentionAlertManager.swift"))
         let play = try XCTUnwrap(Self.body(ofFunction: "playSound", in: manager))
         XCTAssertTrue(play.contains("case .silent:\n            return"), "None plays nothing")
-        XCTAssertTrue(play.contains("bundledPlayer.play(fileName: name, fileExtension: fileExtension)"))
-        for loop in ["numberOfLoops", ".loops", "loops = true"] {
-            XCTAssertFalse(play.contains(loop), "the Kannu alarm plays once: only the timer's own alarm loops")
+        XCTAssertTrue(play.contains("playAlarm(name: name, fileExtension: fileExtension)"))
+
+        // David: "Fade at ~2.4 s". Once, faded, stopped by the flash's end, restarted by the next play.
+        let alarm = try XCTUnwrap(Self.body(ofFunction: "playAlarm", in: manager))
+        XCTAssertTrue(alarm.hasPrefix("{\n        stopAlarm()"), "a new play cancels the pending fade first")
+        XCTAssertTrue(alarm.contains("player.numberOfLoops = 0"), "never looped")
+        XCTAssertTrue(alarm.contains("player.volume = 1"), "a restart is at full volume")
+        XCTAssertTrue(alarm.contains("Task.sleep(for: .seconds(AttentionAlertTracker.alarmFadeStart))"))
+        XCTAssertTrue(alarm.contains("player.setVolume(0, fadeDuration: AttentionAlertTracker.alarmFadeDuration)"))
+        XCTAssertTrue(alarm.contains("player.stop()"))
+        XCTAssertEqual(alarm.components(separatedBy: "Task {").count - 1, 1, "one task per play")
+        for banned in ["Timer.", "repeatForever", "asyncAfter", "numberOfLoops = -1"] {
+            XCTAssertFalse(alarm.contains(banned), banned)
         }
+        let stop = try XCTUnwrap(Self.body(ofFunction: "stopAlarm", in: manager))
+        XCTAssertTrue(stop.contains("alarmFadeTask?.cancel()") && stop.contains("alarmPlayer?.stop()"))
         let settings = try Self.source("Kannu/components/Settings/AgentStatusSettings.swift")
         XCTAssertTrue(settings.contains(".disabled(attentionAlertSound == .none)"), "Play sound is off for None")
     }

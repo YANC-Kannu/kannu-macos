@@ -163,6 +163,14 @@ final class AttentionAlertTests: XCTestCase {
         }
     }
 
+    /// David: "Fade at ~2.4 s". The fade ends exactly when the flash does.
+    func testTheKannuAlarmIsSilentWhenTheFlashEnds() {
+        XCTAssertEqual(AttentionAlertTracker.alarmFadeStart + AttentionAlertTracker.alarmFadeDuration,
+                       AttentionAlertTracker.flashDuration, accuracy: 0.0001)
+        XCTAssertGreaterThan(AttentionAlertTracker.alarmFadeStart, 1.5, "most of the flash at full volume")
+        XCTAssertEqual(AttentionAlertTracker.alarmFadeStart, 2.0, accuracy: 0.0001)
+    }
+
     func testTheKannuAlarmFileIsBundled() {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.appendingPathComponent("Kannu/timer.mp3").path))

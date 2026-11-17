@@ -23,6 +23,11 @@ disabled while None is chosen. Settings search SHALL land on the switch's row.
 - **WHEN** the sound is Kannu alarm and an agent turns yellow
 - **THEN** Kannu plays `timer.mp3` once, never looped
 
+#### Scenario: Kannu alarm fades out when the flash ends
+- **WHEN** the sound is Kannu alarm and an alert plays it
+- **THEN** it plays at full volume, fades out over its last 0.4 seconds, and is silent when the flash ends at about
+  2.4 seconds; a new alert or Play sound restarts it at full volume
+
 ### Requirement: One alert per session per yellow episode
 With the alert on, Kannu SHALL alert when a visible, non-simulated agent session enters `awaitingInput`. A session
 that stays yellow SHALL NOT alert again. A session that leaves yellow (or stops being visible) and turns yellow again

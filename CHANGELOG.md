@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Kannu alarm fades out when the attention flash ends
+- **Developer label:** "Fade at ~2.4 s"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answer on #70's Kannu alarm
+- **Changes:**
+  - The attention alert's Kannu alarm no longer plays the whole 12.3 s `timer.mp3`. It plays through
+    `AVAudioPlayer` (as `TimerManager` does; `NSSound` has no fade) at full volume, fades over 0.4 s from 2.0 s
+    and stops at `AttentionAlertTracker.flashDuration`, 2.4 s, as the shimmer ends. One task per play; the next
+    alert or Play sound cancels it and restarts the clip at full volume. None and the macOS sounds are unchanged.
+  - `AudioPlayer` is back as it was on `development`: the alarm no longer goes through it.
+  - Spec scenario "Kannu alarm fades out when the flash ends"; tests pin the fade ending exactly at
+    `flashDuration` (`AttentionAlertTests`) and the single cancellable task, no loop and no timer
+    (`AttentionAlertRulesTests`).
+
 ### 2026-11-17 - Each attention flash brings a hidden island out
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #70, through Auto-fix

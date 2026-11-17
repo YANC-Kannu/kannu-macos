@@ -26,6 +26,7 @@ Nothing is committed, pushed or opened as a PR without David's yes in the curren
 - [x] 4.2 The pill shows for the alert while locked with the lock-screen live activity off: one sleep, cancelled on
   unlock.
 - [x] 4.3 Spec scenarios, tests, strings in all 17 languages, the CHANGELOG entry and the boards.
+- [x] 4.4 Kannu alarm fades out and stops as the flash ends, about 2.4 s ("Fade at ~2.4 s").
 
 ## 5. Gates
 - [x] 5.1 Rule tests: off by default; one alert per episode, several sessions at once included; Reduce Motion's static

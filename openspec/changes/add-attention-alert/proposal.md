@@ -9,7 +9,7 @@ when an agent turns yellow, also while the Mac is locked. Yellow only.
 ## What Changes
 - A new **attention alert**, off by default. When a visible agent session enters `awaitingInput`, Kannu plays a sound
   and runs one shimmer across the notch. The sound is None (shimmer only), Kannu alarm (the timer's `timer.mp3`, played
-  once) or one of the 14 macOS system sounds; Glass is the default.
+  once and faded out as the flash ends) or one of the 14 macOS system sounds; Glass is the default.
 - **One alert per session per yellow episode.** A session that stays yellow never alerts again. Leaving yellow and
   coming back is a new episode. Several sessions that turn yellow together give one alert.
 - **The lock screen.** While the Mac is locked, the main notch windows are hidden and the only Kannu window there is
@@ -35,6 +35,5 @@ when an agent turns yellow, also while the Mac is locked. Yellow only.
   - `Kannu/components/LockScreen/LockScreenLiveActivityOverlay.swift` (the overlay on the lock-screen pill);
   - `Kannu/components/Settings/AgentStatusSettings.swift` and `SettingsView.swift` (the row and its search entry);
   - `Kannu/managers/LockScreenLiveActivityWindowManager.swift` (the pill for the alert, live activity off);
-  - `Kannu/helpers/AudioPlayer.swift` (returns the sound it plays, so the alarm can be restarted);
   - `Kannu/models/Constants.swift`, `Kannu/Localizable.xcstrings`, `Kannu/helpers/DebugSnapshot.swift`.
 - No change to the hook script, the state ladder or the monitor.
