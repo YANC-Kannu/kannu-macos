@@ -1,0 +1,237 @@
+/*
+ * Kannu (കണ്ണ്)
+ * Copyright (C) 2024-2026 Kannu Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
+
+import XCTest
+
+/// The sideways agent pill (David, 2026-11-18): on a notched MacBook the light sits beside the housing
+/// with the agent's app icon opposite, it shows only on a state switch, and while it shows it takes the
+/// closed notch from music and a running timer, which then return with no light in their centre. The
+/// band below the notch stays as `AgentPillLayout.belowNotch`, unchanged. The closed notch is one
+/// if/else-if chain in a SwiftUI view with no unit surface, so these rules read the source, each
+/// checked against a planted offender.
+final class ClosedAgentPillRulesTests: XCTestCase {
+    private static let contentViewPath = "Kannu/ContentView.swift"
+    private static let activityPath = "Kannu/components/AgentStatus/AgentTrafficLightLiveActivity.swift"
+    private static let lockPillPath = "Kannu/components/LockScreen/LockScreenLiveActivityOverlay.swift"
+    private static let lockManagerPath = "Kannu/managers/LockScreenLiveActivityWindowManager.swift"
+    private static let constantsPath = "Kannu/models/Constants.swift"
+
+    // MARK: - Priority, no stacking
+
+    func testTheSidewaysPillComesBeforeMusicAndTheTimer() throws {
+        XCTAssertEqual(Self.priorityProblems(in: try Self.read(Self.contentViewPath)), [])
+    }
+
+    func testAChainWithMusicFirstIsCaught() {
+        let planted = """
+                      } else if canShowMusicDuringExpansion && musicPairingEligible {
+                          MusicLiveActivity(secondary: musicSecondary)
+                      } else if usesSidewaysAgentPill && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight {
+                          sidewaysAgentPill()
+                      } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
+                          TimerLiveActivity(
+            """
+        XCTAssertEqual(Self.priorityProblems(in: planted), [
+            "the sideways pill is not drawn ahead of the music pill",
+            "the sideways pill's branch is not held to the reveal window",
+            "the sideways pill ignores the fullscreen hide (!vm.hideOnClosed)",
+        ])
+    }
+
+    func testMusicAndTheTimerCarryNoLightSideways() throws {
+        XCTAssertEqual(Self.stackingProblems(in: try Self.read(Self.contentViewPath)), [])
+    }
+
+    func testTheStackedLightIsCaught() {
+        let planted = """
+            private var showAgentTrafficLight: Bool {
+                if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
+                return agentLightDeadline != nil || isHovering
+            }
+                .overlay {
+                    if showAgentTrafficLight {
+                        AgentTrafficLightIndicator()
+                    }
+                }
+                          TimerLiveActivity(
+                              agentLight: showAgentTrafficLight
+                                  ? TimerAgentLight(
+            """
+        XCTAssertEqual(Self.stackingProblems(in: planted), [
+            "music or a timer still holds the light lit in sideways mode",
+            "the music pill draws the light in its centre in sideways mode",
+            "the timer draws the light in its centre in sideways mode",
+        ])
+    }
+
+    // MARK: - The legacy band
+
+    func testTheBandIsUnchangedBelowTheNotch() throws {
+        let content = try Self.read(Self.contentViewPath)
+        let uses = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var usesSidewaysAgentPill: Bool", in: content))
+        XCTAssertTrue(uses.contains("agentPillLayout == .sideways && isPhysicalNotchScreen"),
+                      "sideways must apply on a notched MacBook only: notchless and island displays keep their dots")
+        let expand = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var shouldExpandPhysicalNotchForAgent: Bool", in: content))
+        XCTAssertTrue(expand.contains("!usesSidewaysAgentPill"), "the sideways pill must grow no band")
+        XCTAssertTrue(expand.contains("!vm.hideOnClosed"))
+
+        let activity = try Self.read(Self.activityPath)
+        XCTAssertTrue(activity.contains("var sideways = false"), "the band must stay the activity's default")
+        let band = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var bandBody: some View", in: activity))
+        XCTAssertTrue(band.contains("SecurityAlertPill("), "the shield-and-title pill stays with the band")
+        XCTAssertTrue(band.contains(".frame(width: contentWidth, height: notchContentHeight)"))
+
+        let constants = try Self.read(Self.constantsPath)
+        XCTAssertTrue(constants.contains("Key<AgentPillLayout>(\"agentPillLayout\", default: .sideways)"),
+                      "sideways is the default for everyone, updaters included")
+    }
+
+    // MARK: - The icon
+
+    func testTheIconNeverMoves() throws {
+        let activity = try Self.read(Self.activityPath)
+        for type in ["struct AgentPillIcon", "struct AgentSidewaysPillRow", "struct AgentLockPillRow"] {
+            let body = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: type, in: activity), "\(type) is gone")
+            XCTAssertEqual(Self.motion(in: body), [], "\(type) animates; the icon must stay still (CHANGELOG 2026-08-19)")
+        }
+    }
+
+    func testAPulsingIconIsCaught() {
+        let planted = """
+                AgentProviderIconView(source: source, size: size)
+                    .scaleEffect(isPulsing ? 1.3 : 1.0)
+                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isPulsing)
+            """
+        XCTAssertEqual(Self.motion(in: planted), ["scaleEffect", "repeatForever", ".animation("])
+    }
+
+    /// Every placement is drawn by the one view that observes the monitor (`ClosedNotchObservationTests`
+    /// pins the count): the icon and the dots follow the same session, and the lock pill reads the mirror.
+    func testOneObserverDrawsEveryPlacement() throws {
+        let activity = try Self.read(Self.activityPath)
+        let indicator = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "struct AgentTrafficLightIndicator: View", in: activity))
+        for placement in ["case let .beside(", "case let .lockPill(", "AgentSidewaysPillRow(", "AgentLockPillRow("] {
+            XCTAssertTrue(indicator.contains(placement), "the indicator no longer draws \(placement)")
+        }
+        let lock = try Self.read(Self.lockPillPath)
+        XCTAssertTrue(lock.contains("AgentTrafficLightIndicator(placement: .lockPill("))
+        XCTAssertTrue(lock.contains("@ObservedObject private var agentLight = CursorAgentStatusMonitor.shared.projection"))
+    }
+
+    // MARK: - Reduce Motion
+
+    func testReduceMotionFadesTheWings() throws {
+        let content = try Self.read(Self.contentViewPath)
+        let animation = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var agentRevealAnimation: Animation?", in: content))
+        XCTAssertTrue(animation.contains("usesSidewaysAgentPill && reduceMotion ? nil : vm.animation"),
+                      "under Reduce Motion the notch must not slide its wings out")
+        let transition = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var agentLightTransition: AnyTransition", in: content))
+        XCTAssertTrue(transition.contains("? .opacity"), "under Reduce Motion the wings fade")
+        // Every reveal and collapse moves through it: the pulse, the attention flash and the expiry.
+        let uses = content.components(separatedBy: "withAnimation(agentRevealAnimation)").count - 1
+            + content.components(separatedBy: "withAnimation(self.agentRevealAnimation)").count - 1
+        XCTAssertEqual(uses, 3)
+        XCTAssertFalse(content.contains("withAnimation(vm.animation) {\n                agentLightDeadline"),
+                       "a reveal still animates with vm.animation directly")
+        let helper = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private func sidewaysAgentPill()", in: content))
+        XCTAssertTrue(helper.contains(".transition(agentLightTransition)"))
+    }
+
+    func testNothingNewRepeats() throws {
+        for path in [Self.activityPath, Self.lockPillPath, "Kannu/sizing/ClosedAgentPillLayout.swift"] {
+            // Code only: the comments name what was removed.
+            let text = try Self.read(path).components(separatedBy: "\n")
+                .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }.joined(separator: "\n")
+            XCTAssertFalse(text.contains(".repeatForever"), "\(path) repeats forever (docs/REGRESSIONS.md entry 22)")
+            XCTAssertFalse(text.contains("TimelineView"), "\(path) runs a clock")
+        }
+    }
+
+    // MARK: - The lock-screen pill
+
+    func testTheLockPillRevealsOnASwitchWhileLockedAndOnTheFlash() throws {
+        let lock = try Self.read(Self.lockPillPath)
+        let arm = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private func armAgentReveal()", in: lock))
+        for clause in ["agentPillLayout == .sideways", "enableAgentStatusFeature", "LockScreenManager.shared.isLocked",
+                       "notchRevealHoldSeconds"] {
+            XCTAssertTrue(arm.contains(clause), "the lock pill's reveal lost \(clause)")
+        }
+        XCTAssertTrue(lock.contains(".onChange(of: agentLight.trafficLightState)"), "a switch no longer arms it")
+        XCTAssertTrue(lock.contains("try? await Task.sleep"), "one sleep ends the reveal")
+
+        let manager = try Self.read(Self.lockManagerPath)
+        XCTAssertTrue(manager.contains("guard Defaults[.enableLockScreenLiveActivity] || forAttentionAlert else {"),
+                      "the pill follows the lock-screen live activity setting, the attention flash aside")
+        let flash = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "func flashForAttentionAlert(duration: TimeInterval)", in: manager))
+        XCTAssertTrue(flash.contains("overlayModel.showsAgentForAlert = Defaults[.agentPillLayout] == .sideways"),
+                      "the attention flash no longer carries the dot and icon")
+        let size = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private func windowSize(for notchSize: CGSize) -> CGSize", in: manager))
+        XCTAssertTrue(size.contains("let totalWidth = notchSize.width + (indicatorWidth * 2) + (horizontalPadding * 2)"),
+                      "the lock pill's window must keep its size: the reveal draws inside its wings (entry 17)")
+    }
+
+    // MARK: - Rules
+
+    static func priorityProblems(in text: String) -> [String] {
+        var problems: [String] = []
+        let lines = text.components(separatedBy: "\n")
+        let pill = lines.firstIndex { $0.trimmingCharacters(in: .whitespaces) == "sidewaysAgentPill()" }
+        let music = lines.firstIndex { $0.contains("MusicLiveActivity(secondary: musicSecondary)") }
+        let timer = lines.firstIndex { $0.contains("TimerLiveActivity(") }
+        guard let pill else { return ["the sideways pill is not in the chain"] }
+        if let music, music < pill { problems.append("the sideways pill is not drawn ahead of the music pill") }
+        if let timer, timer < pill { problems.append("the sideways pill is not drawn ahead of the timer") }
+        let condition = lines[..<pill].last { $0.contains("} else if ") } ?? ""
+        if !condition.contains("usesSidewaysAgentPill") {
+            problems.append("the sideways pill's branch is not sideways-only")
+        }
+        if !condition.contains("agentLightDeadline != nil") {
+            problems.append("the sideways pill's branch is not held to the reveal window")
+        }
+        if !condition.contains("!vm.hideOnClosed") {
+            problems.append("the sideways pill ignores the fullscreen hide (!vm.hideOnClosed)")
+        }
+        return problems
+    }
+
+    static func stackingProblems(in text: String) -> [String] {
+        var problems: [String] = []
+        let light = ClosedNotchTimerRulesTests.body(after: "private var showAgentTrafficLight: Bool", in: text) ?? ""
+        if !light.contains("if !usesSidewaysAgentPill {\n            if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }") {
+            problems.append("music or a timer still holds the light lit in sideways mode")
+        }
+        if !text.contains("if showAgentTrafficLight && !usesSidewaysAgentPill {\n                        AgentTrafficLightIndicator()") {
+            problems.append("the music pill draws the light in its centre in sideways mode")
+        }
+        if !text.contains("agentLight: showAgentTrafficLight && !usesSidewaysAgentPill") {
+            problems.append("the timer draws the light in its centre in sideways mode")
+        }
+        return problems
+    }
+
+    /// Any motion applied in `text`.
+    static func motion(in text: String) -> [String] {
+        ["scaleEffect", "repeatForever", ".animation(", "withAnimation", "TimelineView", "symbolEffect", "phaseAnimator",
+         "keyframeAnimator", "rotationEffect"].filter(text.contains)
+    }
+
+    private static func read(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
+}

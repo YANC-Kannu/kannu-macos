@@ -1448,6 +1448,9 @@ extension Defaults.Keys {
     /// Closed-notch traffic light shape. Defaults to `.classic` so existing installs keep the
     /// three-dot look they already have — only fresh installs are asked to choose in onboarding.
     static let agentTrafficLightStyle = Key<AgentTrafficLightStyle>("agentTrafficLightStyle", default: .classic)
+    /// Where the closed light sits on a notched MacBook. Sideways for everyone, updaters included
+    /// (David, 2026-11-18); the key is new, so nothing migrates. `.belowNotch` is the 1.x band.
+    static let agentPillLayout = Key<AgentPillLayout>("agentPillLayout", default: .sideways)
     /// Traffic-light state colors, chosen from the curated palette. Defaults reproduce the
     /// classic green/yellow/red exactly; the Settings picker prevents two states sharing one.
     static let agentActiveColor = Key<AgentTrafficLightPaletteColor>("agentActiveColor", default: .green)

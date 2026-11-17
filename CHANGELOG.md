@@ -28,6 +28,67 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     `ClaudeReconcilerTests`. Docs: `docs/AGENT-HOOKS.md` (new), REGRESSIONS entries 2 and 12 addenda,
     `docs/CLOUD-SESSIONS.md`, a beta 2 notes draft, and the OpenSpec change `fix-claude-desktop-detection`.
 
+### 2026-11-18 - The agent light sits beside the notch
+- **Developer label:** "the pill doesnt grow downwards, instead extends side ways and shows the icon of app on right side and dot on the left side"
+- **Agent label:** Claude Code (Opus 5.5) — sideways agent pill lane, from the approved plan's design and step 2
+- **Changes:**
+  - On a notched MacBook the closed agent light is now a sideways pill at the closed height, with no band below the
+    housing: the dots (Classic three, Minimal one) in a left wing, the primary session's app icon in a right wing,
+    both wings `max(dots, icon) + 12` pt (`ClosedAgentPillLayout`, Foundation only, in the logic test target). The
+    icon is `closed height − 12` pt and never scales or pulses; a pending high finding shows the shield beside the dot.
+  - `AgentTrafficLightIndicator` draws every placement (centred, beside the notch, the lock pill), so it stays the
+    one view that observes the monitor.
+  - Priority without stacking: while the 7 s reveal is live the sideways pill takes the closed notch ahead of music
+    and a running timer; after it they return with no light in their centre, and neither keeps the light lit.
+  - The lock-screen pill shows the lit dot in place of the lock icon and the app icon opposite during a reveal while
+    locked, and on the attention alert's flash; its window keeps its size.
+  - New setting `agentPillLayout` (`AgentPillLayout`), default Beside the notch for everyone, updaters included; Below
+    the notch keeps the band exactly as before. It lives in Brain › Agents › Traffic light › Advanced ("Agent light
+    position"), with a search entry on the disclosure and a still preview of the chosen layout.
+  - Reduce Motion fades the wings instead of sliding them; VoiceOver reads "Agent status: working, Claude Code".
+  - Onboarding step 4's cards preview the sideways pill with a symbol stand-in icon.
+  - The notch-skin prompt asks for a dark corridor through the middle, where the dot and the icon sit;
+    docs/NOTCH-SKINS.md notes that Horns predates the pill and gives the prompt for its redraw.
+  - New strings, and the four "Agent status: …" labels, in all 17 languages.
+  - DEBUG board `closedAgentPill`: sideways × Classic and Minimal × working, waiting and stopped, the shield,
+    notchless and Dynamic Island, the lock pill, the band, and Horns, with symbol stand-ins and measured sizes.
+  - Tests: `ClosedAgentPillLayoutTests`, `ClosedAgentPillRulesTests`; inventory counts 249/280/274; a
+    `NotchSkinTests` assertion for the corridor.
+  - Docs: OpenSpec change `update-sideways-agent-pill`, docs/SETTINGS.md, docs/ADR.md, ReadMe.md, the 2.0.0 notes
+    and new 2.0.0 beta 2 notes.
+
+### 2026-11-18 - The coverage converter takes no arguments, and scripts leave the coverage count
+- **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
+  the scan never ran tests or read a coverage report
+- **Agent label:** Claude Code (Opus 5.5) — the two causes of #71's own failing SonarCloud gate
+- **Changes:**
+  - `scripts/xccov-to-sonar.py` drops its command-line arguments: it reads `TestResults.xcresult` and writes
+    `sonar-coverage.xml` from the repository root. Sonar flagged argparse input reaching `xcrun` and `open()` as two
+    major vulnerabilities (pythonsecurity:S8705, S8707). Output on #63's result bundle is byte-identical.
+  - `sonar.coverage.exclusions` adds `scripts/**`. Nothing measures coverage for the Python and shell scripts, so
+    their new lines read 0% and failed the 80% condition on any PR that touched one.
+  - #71's first run imported coverage for 128 files, 88.2% overall. The earlier estimate for #63 is corrected: a
+    changed Swift file outside the test target counts as uncovered, so #63 should read about 58%
+    (`WisprFlowMeetingsStore.swift` 67 of 73, `WisprFlowMeetingsManager.swift` 0 of 41, `Constants.swift` 0 of 1).
+
+### 2026-11-17 - SonarCloud reads real coverage from the KannuTests run
+- **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
+  the scan never ran tests or read a coverage report
+- **Agent label:** Claude Code (Opus 5.5) — coverage for the SonarCloud workflow, measured on #63's head first
+- **Changes:**
+  - `.github/workflows/sonarcloud.yml` selects `latest-stable` Xcode (`maxim-lobanov/setup-xcode`, pinned by SHA at
+    v1.7.0), runs KannuTests with `-enableCodeCoverage YES` into `TestResults.xcresult`, and converts it before the
+    scan. The fork-PR skip and the pinned checkout and scan actions are unchanged.
+  - New `scripts/xccov-to-sonar.py` turns the result bundle into SonarQube generic coverage XML with one
+    `xccov view --archive --json` call. It keeps files under `Kannu/` only, and fails rather than upload an empty
+    report.
+  - `sonar-project.properties` sets `sonar.coverageReportPaths=sonar-coverage.xml`; `.gitignore` ignores that file.
+  - `sonar.coverage.exclusions=Kannu/components/**`: SwiftUI views are still scanned but no longer counted for
+    coverage, since they get no unit tests. The gate's 80% new-code coverage condition, set in SonarCloud, stays.
+  - Measured locally on #63's head: `WisprFlowMeetingsStore.swift` 92% of its lines. #63's new code reads about 48%
+    with views excluded, because `WisprFlowMeetingsManager.swift` and `Constants.swift` are not in the test target.
+  - `openspec/project.md` describes the SonarCloud job.
+
 ### 2026-11-17 - Kannu alarm fades out when the attention flash ends
 - **Developer label:** "Fade at ~2.4 s"
 - **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answer on #70's Kannu alarm

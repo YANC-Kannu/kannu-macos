@@ -43,6 +43,8 @@ final class NotchSkinTests: XCTestCase {
         XCTAssertTrue(text.contains("1920 × 600 pixels, landscape, PNG."))
         XCTAssertTrue(text.contains("No text, letters, logos, watermarks, interface elements, people or faces."))
         XCTAssertTrue(text.contains("middle 60% of the width"))
+        // The sideways agent pill (2.0) puts the light and the app icon at the closed strip's two ends.
+        XCTAssertTrue(text.contains("Keep a calm, dark horizontal corridor through the middle of the image, from the left edge to the right edge, from about 180 to 420 pixels down."))
         XCTAssertFalse(text.contains("\\"), "a line continuation leaked into the copied text")
     }
 

@@ -108,9 +108,12 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // 2026-11-16: Notes gains Show Wispr Flow meeting summaries (one entry, one row, one id).
         // 2026-11-17: Agents gains the attention alert (David's 2.0 beta.2 ask): "Alert when an agent
         // needs you" and "Alert sound", two entries, two rows, two ids.
-        XCTAssertEqual(inventory.entries.count, 248, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 279, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 273, "distinct registered ids")
+        // 2026-11-18: Agents › Traffic light gains an Advanced disclosure holding "Agent light position"
+        // (beside the notch, the 2.0 default, or the band below it): one entry, landing on the disclosure,
+        // and the disclosure's one row and one id.
+        XCTAssertEqual(inventory.entries.count, 249, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 280, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 274, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

@@ -59,6 +59,35 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
     }
 }
 
+/// Where the agent light sits in a notched MacBook's closed notch. Sideways is the 2.0 default for
+/// everyone: the dot left of the housing and the agent's app icon right of it, at the closed height.
+/// Below the notch is the band 1.x drew, kept in Brain › Agents › Advanced. Displays without a notch
+/// draw the centred dots either way.
+enum AgentPillLayout: String, CaseIterable, Defaults.Serializable, Identifiable {
+    case sideways
+    case belowNotch
+
+    var id: String { rawValue }
+
+    var localizedName: String {
+        switch self {
+        case .sideways:
+            return String(localized: "Beside the notch")
+        case .belowNotch:
+            return String(localized: "Below the notch")
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .sideways:
+            return String(localized: "The light sits left of the notch and the agent's app icon right of it, for a few seconds after each change.")
+        case .belowNotch:
+            return String(localized: "A band below the notch holds the light, and it stays in the music and timer pills.")
+        }
+    }
+}
+
 /// How Brain's window looks. The window alone: the notch stays dark whatever this says.
 enum BrainAppearance: String, CaseIterable, Defaults.Serializable, Identifiable {
     case system
