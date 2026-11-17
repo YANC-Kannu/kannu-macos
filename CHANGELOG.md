@@ -4,6 +4,58 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-16 - Tags on notes, shared with tasks, and one Filter menu in the notch's Notes
+- **Developer label:** "where do i see wispr flow notes, I need provision in ui to tag a note and tags will be system
+  wide concept, i need to filter by tags here and source too, it should be simple" (David, 2026-11-16)
+- **Agent label:** Claude Code (Opus 5.5) — the shared tag set, note tags and sources, the notch's Filter menu and
+  tag row, the sync's tag-and-pin carry, tests, an OpenSpec change and docs
+- **Changes:**
+  - `NoteItem.tags`: cleaned by tasks' one rule (`TaskItem.cleanedTags`), decoded lossily, encoded only when not
+    empty, so an untagged note saves as before. Kannu's alone: never written into an Apple note.
+  - A Wispr Flow meeting's tags are kept by its meeting id (`wisprMeetingTags`), the one thing Kannu keeps about a
+    meeting. The notch's list joins them in; the meetings manager is untouched.
+  - `NotesManager.setTags(_:forNote:)` and `setTags(_:forWisprMeeting:)` are the one write path. They push nothing
+    and keep the note's date, so tagging never reorders the list or rewrites an Apple note.
+  - `AppleNotesMergePolicy.reconcile` takes a `carry`, and the sync carries tags and pins over its synced copy. A
+    tag set while a sync ran used to be put back; so did a pin, which is fixed with it.
+  - `SharedTags.inUse()`: tasks' tags (Tasks on), saved notes' tags, and those of the Wispr Flow meetings listed now.
+    The task form, New Task, a task's page and a row's Add Tags suggest it, read on focus or at the press, never per
+    redraw. Labels stay tasks' alone. `SharedTags.colors()` reads tasks.json's tag colours, so with Tasks off, tags
+    draw uncoloured.
+  - `NoteSource` (Kannu, Apple Notes, Wispr Flow) is where a note was made. A note made in Kannu stays Kannu's when
+    synced, so with the default Kannu-folder scope every synced note is Kannu's.
+  - `NoteFilter` (Foundation only, in the test target): source, tag and colour, the effective filter (a source not
+    offered is every source, the colour sleeps while colour filtering is off), choices, new-note defaults, and
+    `keeping`.
+  - The notch's Notes header gets `NoteFilterMenu`, a native menu first in the glyph group:
+    - Source (with two or more sources listed), Tag, Colour (with "Enable color filtering"), and Show all;
+    - kept in `notesNotchSourceFilter`, `notesNotchTagFilter` and `notesNotchColorFilter`;
+    - a plain glyph that turns bold and accent while narrowing, with no hold of its own.
+    The magnifying glass only searches, and the colour-chip row is gone.
+  - A "Filtered · Show all" line shows under the header while the filter narrows. The empty list says "No notes
+    match the filter".
+  - "+" and clipboard drafts while filtered start the note with the filtered tag and colour. A part that applies and
+    that a saved new note fails is cleared, so it never vanishes from the list it was made in; a part that sleeps
+    (a source not offered, a colour with colour filtering off) stays.
+  - The notch note editor gets `NoteTagsRow`: the note's tags as chips (a click removes one), an "Add tag" field, and
+    the shared suggestions while it has focus. A tag still typed is added on Done, back and close. Read-only notes take
+    tags too. A read-only note's Cmd+V reaches only the focused field.
+  - A `#word` typed into a title becomes a tag (`TaskQuickAdd.takingNewTags`): once a space typed at the title's end
+    ends it, on Return, when the title loses focus, and on Done, back or close. Never from the autosave, never on a
+    read-only note. A word the title opened with stays, compared by tag name so punctuation after it changes nothing,
+    and Apple Notes' own tags survive.
+  - Note cards show "#first +N" after the title (`TaskTagChips`), the filtered tag first, in neutral chips; not in
+    split view beside the clipboard, where a card's title has no room to share.
+  - Notes' search still matches text only, not `#tag`; that and Brain › Notes' tags are follow-ups.
+  - Tests:
+    - `NoteFilterTests` and `NoteTagsRulesTests`, each rule with planted offenders;
+    - additions to `TaskFacetsTests`, `TaskQuickAddTests` and `AppleNotesMergePolicyTests`;
+    - `WisprMeetingsNeverStoredRulesTests` re-anchors its plant and holds the meeting-tags key and its one writer.
+    Pins: `NotchFontRulesTests` (`NoteFilterMenu` 1, `NoteTagsRow` 2) and `TimerSideColumnRulesTests` (the
+    focus-time vocabulary).
+  - `openspec/changes/add-note-tags-and-filter` (tags: one set; notes: tags, sources, the Filter menu, title words),
+    and docs/SETTINGS.md.
+
 ### 2026-11-16 - One primary control and one colour per card in the notch's Notes
 - **Developer label:** "I don't like the design here, review that based on golden triangle rules" (David, 2026-11-16,
   on a screenshot of the notch's Notes over a red skin)

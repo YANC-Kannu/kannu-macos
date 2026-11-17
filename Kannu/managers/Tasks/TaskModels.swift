@@ -356,7 +356,8 @@ struct TaskItem: Codable, Identifiable, Equatable {
     static let maxTagLength = 24
 
     /// Tags as Kannu keeps them: one line each, without a leading "#", at most `maxTagLength`
-    /// characters, the first spelling of each (compared ignoring case), at most `maxTags`.
+    /// characters, the first spelling of each (compared ignoring case), at most `maxTags`. Kannu's one
+    /// tag rule: notes' tags are cleaned here too (`NoteItem.tags`, `NotesManager.setTags`).
     static func cleanedTags(_ raw: [String]) -> [String] {
         var seen = Set<String>()
         var result: [String] = []
