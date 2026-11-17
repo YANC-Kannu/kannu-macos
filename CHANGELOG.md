@@ -4,6 +4,76 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Kannu alarm fades out when the attention flash ends
+- **Developer label:** "Fade at ~2.4 s"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answer on #70's Kannu alarm
+- **Changes:**
+  - The attention alert's Kannu alarm no longer plays the whole 12.3 s `timer.mp3`. It plays through
+    `AVAudioPlayer` (as `TimerManager` does; `NSSound` has no fade) at full volume, fades over 0.4 s from 2.0 s
+    and stops at `AttentionAlertTracker.flashDuration`, 2.4 s, as the shimmer ends. One task per play; the next
+    alert or Play sound cancels it and restarts the clip at full volume. None and the macOS sounds are unchanged.
+  - `AudioPlayer` is back as it was on `development`: the alarm no longer goes through it.
+  - Spec scenario "Kannu alarm fades out when the flash ends"; tests pin the fade ending exactly at
+    `flashDuration` (`AttentionAlertTests`) and the single cancellable task, no loop and no timer
+    (`AttentionAlertRulesTests`).
+
+### 2026-11-17 - Each attention flash brings a hidden island out
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of #70, through Auto-fix
+- **Changes:**
+  - A second session turning yellow while another already was alerted without changing the aggregate light, and
+    the island's reveal re-arms only on a light change, so with hide-until-hover the flash ran off screen (and with
+    the sound set to None the alert was invisible). `ContentView.revealForAttentionFlash` now pulls the island out
+    and relights the light for at least the flash on every alert, moving the reveal deadlines only later; the
+    usual countdown hides it again. A subscription to the flash's id, not an observation, and the activity latch
+    keeps its single consumer.
+  - Test: `AttentionAlertRulesTests.testEachFlashRevealsAHiddenIsland`.
+
+### 2026-11-17 - The attention alert gets None, Kannu's alarm, and a pill on the lock screen
+- **Developer label:** "keep the macOS sounds and add Kannu's own", "add None to the picker", "Show the pill for the alert"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, David's answers to #70's open questions 1 to 3
+- **Changes:**
+  - The alert's sound picker lists None, then Kannu alarm, then the 14 macOS sounds. None plays nothing, so the alert
+    is the shimmer alone, and Play sound is off for it. Kannu alarm plays the timer's `timer.mp3` once through
+    `AudioPlayer`; only the timer's own alarm loops. Stored values are unchanged, so a saved "Glass" still loads,
+    and Glass stays the default.
+  - `AudioPlayer.play` returns the sound it started (nil when the file is missing, where it used to force-unwrap), so
+    a second press restarts the alarm instead of playing over it.
+  - Locked with the lock-screen live activity off, the alert now shows the lock-screen pill for its flash
+    (`LockScreenLiveActivityWindowManager.flashForAttentionAlert`): the same `present` path with the live-activity
+    guard lifted for that call alone, hidden after `AttentionAlertTracker.flashDuration` by one `Task.sleep` that
+    unlocking cancels. With the live activity on nothing changes.
+  - A hide's delayed `orderOut` now checks that no `present` ran since, so a pill shown again within the 0.82 s
+    collapse (the next alert, a lock) is not taken off screen.
+  - "None" and "Kannu alarm" in all 17 languages; the `agent-status` spec delta gains four scenarios.
+  - Tests: `AttentionAlertTests` (picker order, stored values, None silent, Kannu alarm's file) and
+    `AttentionAlertRulesTests` (the forced pill only while locked, one sleep, cancelled on unlock, the orderOut
+    guard; None and the alarm's single play).
+
+### 2026-11-17 - A sound and a notch shimmer when an agent turns yellow
+- **Developer label:** Attention alert for 2.0 beta.2: "yellow only, and the lock screen included"
+- **Agent label:** Claude Code (Opus 5.5) — attention alert lane, from the 2.0 release coordinator's brief
+- **Changes:**
+  - New attention alert, off by default (`attentionAlertEnabled`): when a visible agent session turns
+    `awaitingInput`, Kannu plays a named macOS system sound (`attentionAlertSound`, Glass by default) and runs
+    one shimmer across the notch. It alerts once per session per yellow episode, and once for sessions that
+    turn yellow within 3 seconds of each other (`AttentionAlertTracker` in `AttentionAlert.swift`).
+  - `AttentionAlertManager` is fed by the session subscription `AgentStatusNotificationBridge` already holds,
+    so it starts inside `continueLaunch()`. It stays silent until the Terms and onboarding are done, and for
+    10 seconds after start, so a relaunch never alerts for a wait that was already open.
+  - `AttentionAlertOverlay` draws in the notch's body fill and on the lock-screen pill
+    (`LockScreenLiveActivityOverlay`), the only Kannu window shown while the Mac is locked. The shimmer is two
+    1-second sweeps with a finite `repeatCount`; under Reduce Motion it is a still glow in the awaiting-input
+    colour. No timer and no `TimelineView`.
+  - Brain › Agents gains an Attention alert section: the switch, a sound picker and Play sound. Both rows have
+    search entries, and six new strings are in all 17 languages.
+  - DEBUG boards `attentionAlert` (the setting rows) and `attentionAlertFlash` (the notch and the lock-screen
+    pill: no alert, the shimmer at two points, the glow).
+  - OpenSpec change `add-attention-alert` with the new `agent-status` capability.
+  - Tests: `AttentionAlertTests` (episodes, several at once, recorded-not-announced, gates, Reduce Motion,
+    sounds) and `AttentionAlertRulesTests` (off by default, started only from `continueLaunch()`, every gate,
+    where it draws, ends by itself, against planted offenders); `SettingsHighlightInventoryTests` counts +2.
+
 ### 2026-11-16 - Tags on notes, shared with tasks, and one Filter menu in the notch's Notes
 - **Developer label:** "where do i see wispr flow notes, I need provision in ui to tag a note and tags will be system
   wide concept, i need to filter by tags here and source too, it should be simple" (David, 2026-11-16)
