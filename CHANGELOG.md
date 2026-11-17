@@ -16,6 +16,17 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
   - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
 
+### 2026-11-17 - The Claude card's empty fallback keeps no reading a reset has passed
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #69, through Auto-fix
+- **Changes:**
+  - With nothing live, the monitor kept the first usage source whole so the read counted as a read. Since
+    `selections` drops readings a reset has passed, that source could hold one, and the pre-reset percentage went
+    back on the card. `ClaudeUsageSnapshot.mergedOrRead` keeps the source with every window still live by its own
+    reset taken off; the monitor calls it.
+  - Tests: `ClaudeUsageSnapshotTests.testWithNothingLiveTheReadKeepsNoWindowAResetHasPassed`, and
+    `ClaudeUsageReadRulesTests.testTheCardNeverFallsBackToASourceRestoredWhole` pins the monitor's call.
+
 ### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
 - **Developer label:** "Make project-name detection observable, and fix its two known bugs"
 - **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
@@ -31,6 +42,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     name and rule public and the paths private.
   - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
     folders, and the Cursor slug decoder.
+
+### 2026-11-17 - The Claude card shows the fresh limit after an early reset
+- **Developer label:** "Kannu still shows the Claude weekly limit from before its reset"
+- **Agent label:** Claude Code (Opus 5.5) — usage-reset lane of the 2.0 release
+- **Changes:**
+  - `ClaudeCachedUsage.attributeRun`: a run whose cache contradicts the last known organization's week now goes to
+    the organization `~/.claude.json` names, when that is another one whose week the cache does not contradict
+    (`movedOrganization`), and remembers its resets. Before, every run after Claude Code changed organization ended
+    "contradicted" and the fresh cache went on no card.
+  - `ClaudeUsageSnapshot.selections`: per window, the newest live reading wins whatever its source, ties go to the
+    earlier source, and a reading taken before an exact reset any source has seen pass is dropped, even while its own
+    reset is ahead. `merged` is built on it and never borrows a reset from a dropped copy.
+  - `CursorAgentStatusMonitor` logs each card's per-window decision when it changes (`Usage source …`, category
+    `ClaudeUsage`): times and percentages only.
+  - Tests: an end-to-end replay from made-up `.claude.json` and desktop history files, both sides of the new
+    attribution rule, and merge tests for newest-wins, an early reset, equal times and a missing source.
+  - `docs/REGRESSIONS.md` entry 8 gets its 2026-11-17 addendum; OpenSpec change `fix-usage-reset-staleness` adds the
+    `usage` capability.
 
 ### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
 - **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
