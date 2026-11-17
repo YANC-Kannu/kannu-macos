@@ -36,6 +36,9 @@ struct NotesSettingsView: View {
     @Default(.enableNotes) private var enableNotes
     @Default(.enableAppleNotesSync) private var enableAppleNotesSync
     @Default(.appleNotesSyncScope) private var appleNotesSyncScope
+    @Default(.enableWisprFlowMeetings) private var enableWisprFlowMeetings
+    /// Looked up once: the Wispr Flow section shows when the app is installed, or while its switch is on.
+    private static let wisprFlowInstalled = WisprFlowMeetingsManager.isInstalled
     @State private var confirmNarrowingScope = false
     /// What the page shows from the saved notes and the sync, the list, a note's page and these settings alike: a copy,
     /// never the notes or the sync manager themselves, which the page used to observe whole. Read as the page appears
@@ -297,6 +300,22 @@ struct NotesSettingsView: View {
                 SettingsFooterStack {
                     SettingsFooter("Notes made in Kannu go to the Kannu folder in Notes.")
                     SettingsFooter("macOS asks once before Kannu can control Notes.")
+                }
+            }
+
+            if Self.wisprFlowInstalled || enableWisprFlowMeetings {
+                SettingsSection {
+                    Defaults.Toggle(key: .enableWisprFlowMeetings) {
+                        Text("Show Wispr Flow meeting summaries")
+                    }
+                    .settingsHighlight(id: highlightID("Show Wispr Flow meeting summaries"))
+                } header: {
+                    SettingsSectionHeader("Wispr Flow")
+                } footer: {
+                    SettingsFooterStack {
+                        SettingsFooter("Summaries from Wispr Flow's Notetaker show in the notch's Notes, read-only.")
+                        SettingsFooter("Kannu reads them from this Mac and never changes them. Edit them in Wispr Flow.")
+                    }
                 }
             }
         }

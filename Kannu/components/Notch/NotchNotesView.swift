@@ -29,8 +29,13 @@ struct NotchNotesView: View {
     @Default(.enableClipboardManager) var enableClipboardManager
     @Default(.enableAppleNotesSync) var enableAppleNotesSync
     @Default(.appleNotesSyncScope) var appleNotesSyncScope
-    
+    @Default(.enableWisprFlowMeetings) var enableWisprFlowMeetings
+    @ObservedObject private var wisprMeetings = WisprFlowMeetingsManager.shared
+
     @State private var selectedNoteId: UUID?
+    /// The open note is a Wispr Flow meeting's summary: shown, never saved (`NoteItem.wisprMeetingId`).
+    /// Kept as state, not looked up, so a refresh that drops the meeting cannot make it savable.
+    @State private var editorIsWisprMeeting = false
     @State private var isEditingNewNote = false
     
     // Editor State
@@ -77,19 +82,23 @@ struct NotchNotesView: View {
                             isReadOnly: editorIsReadOnly,
                             onOpenInNotes: openEditorNoteInNotes,
                             onDelete: editorStoredNote == nil ? nil : deleteEditorNote,
-                            deletesInAppleNotes: editorIsReadOnly
+                            deletesInAppleNotes: editorIsReadOnly && !editorIsWisprMeeting,
+                            opensInWisprFlow: editorIsWisprMeeting
                         )
                         .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .move(edge: .trailing)))
                     } else {
                         NoteListView(
-                            notes: savedNotes,
+                            notes: listNotes,
                             onSelect: selectNote,
                             onCreate: createNote,
                             onDeleteItem: { NotesManager.shared.delete($0) },
                             onClearAll: { NotesManager.shared.clearAll() },
                             onTogglePin: { NotesManager.shared.togglePin($0) },
                             onCreateFromClipboard: createNoteFromClipboard,
-                            onSync: { NotesManager.shared.syncWithAppleNotes() }
+                            onSync: {
+                                NotesManager.shared.syncWithAppleNotes()
+                                WisprFlowMeetingsManager.shared.refresh()
+                            }
                         )
                         .transition(.asymmetric(insertion: .move(edge: .leading), removal: .move(edge: .leading)))
                     }
@@ -120,11 +129,16 @@ struct NotchNotesView: View {
         .onAppear {
             updateLayoutState()
             NotesManager.shared.syncWithAppleNotes()
+            WisprFlowMeetingsManager.shared.refresh()
         }
         .onChange(of: enableAppleNotesSync) { _, isEnabled in
             if isEnabled {
                 NotesManager.shared.syncWithAppleNotes()
             }
+        }
+        .onChange(of: enableWisprFlowMeetings) { _, _ in
+            // On: read the meetings. Off: empty the list.
+            WisprFlowMeetingsManager.shared.refresh()
         }
         .onDisappear {
             updateScrollSuppression(for: false)
@@ -164,13 +178,25 @@ struct NotchNotesView: View {
 
     private var isEditing: Bool { isEditingNewNote || selectedNoteId != nil }
 
-    /// The open note was made in Notes and sync reads the whole account: shown, not edited.
+    /// Kannu's notes, then Wispr Flow's meeting summaries while that setting is on. Only the list
+    /// sees the meetings: every write below goes to `savedNotes` through `NotesManager`.
+    private var listNotes: [NoteItem] {
+        enableWisprFlowMeetings ? savedNotes + wisprMeetings.notes : savedNotes
+    }
+
+    /// The open note is a Wispr Flow meeting, or was made in Notes while sync reads the whole
+    /// account: shown, not edited.
     private var editorIsReadOnly: Bool {
+        if editorIsWisprMeeting { return true }
         guard let id = selectedNoteId, let note = savedNotes.first(where: { $0.id == id }) else { return false }
         return note.isReadOnlyMirror(syncEnabled: enableAppleNotesSync, scope: appleNotesSyncScope)
     }
 
     private func openEditorNoteInNotes() {
+        if editorIsWisprMeeting {
+            WisprFlowMeetingsManager.shared.openWisprFlow()
+            return
+        }
         guard let id = selectedNoteId, let note = savedNotes.first(where: { $0.id == id }) else { return }
         NotesManager.shared.openInNotes(note)
     }
@@ -248,6 +274,7 @@ struct NotchNotesView: View {
         editorColorIndex = 0
         editorNoteId = UUID()
         editorIsDraft = true
+        editorIsWisprMeeting = false
         isEditingNewNote = true
     }
     
@@ -258,6 +285,7 @@ struct NotchNotesView: View {
         editorColorIndex = 0 // Default Yellow
         editorNoteId = UUID()
         editorIsDraft = false
+        editorIsWisprMeeting = false
         isEditingNewNote = true
     }
     
@@ -268,14 +296,16 @@ struct NotchNotesView: View {
         editorColorIndex = note.colorIndex
         editorNoteId = note.id
         editorIsDraft = false
+        editorIsWisprMeeting = note.isWisprMeeting
         selectedNoteId = note.id
         isEditingNewNote = false
     }
-    
+
     /// Saves the editor's note. `NotesManager` writes nothing when nothing changed, so opening a note
-    /// and going back no longer moves it to the top of the list.
+    /// and going back no longer moves it to the top of the list. A Wispr Flow meeting is never saved:
+    /// its id is not in `savedNotes`, so a save would store it as a new note of Kannu's.
     private func persistNote() {
-        guard let id = editorNoteId else { return }
+        guard let id = editorNoteId, !editorIsWisprMeeting else { return }
         NotesManager.shared.save(NotesManager.Draft(
             id: id,
             title: editorTitle,
@@ -286,7 +316,7 @@ struct NotchNotesView: View {
     }
 
     private func scheduleAutoSave() {
-        guard isEditing, !editorIsDraft else { return }
+        guard isEditing, !editorIsDraft, !editorIsWisprMeeting else { return }
 
         autoSaveTask?.cancel()
         autoSaveTask = Task {
@@ -345,6 +375,7 @@ struct NotchNotesView: View {
         isEditingNewNote = false
         selectedNoteId = nil
         editorIsDraft = false
+        editorIsWisprMeeting = false
         // Tiny delay to clear state after animation
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             editorTitle = ""
@@ -596,7 +627,8 @@ struct NoteListView: View {
         }
         
         if let colorIndex = selectedColorFilter {
-            filtered = filtered.filter { $0.colorIndex == colorIndex }
+            // A Wispr Flow meeting has no colour of its own, so no colour filter shows it.
+            filtered = filtered.filter { !$0.isWisprMeeting && $0.colorIndex == colorIndex }
         }
         
         return filtered.sorted { 
@@ -606,6 +638,9 @@ struct NoteListView: View {
             return $0.modificationDate > $1.modificationDate
         }
     }
+
+    /// The notes stored in Kannu: what Clear Notes reaches. Wispr Flow's meetings are only shown.
+    private var storedNotes: [NoteItem] { notes.filter { !$0.isWisprMeeting } }
 
     /// The magnifying glass opens search and/or the colour filter, whichever is enabled.
     private var searchToggleTooltip: String {
@@ -686,7 +721,7 @@ struct NoteListView: View {
                     .accessibilityLabel(String(localized: "Create from Clipboard"))
                 }
                 
-                if !notes.isEmpty {
+                if !storedNotes.isEmpty {
                     Button(action: { showClearNotesAlert = true }) {
                         Image(systemName: "trash")
                             .font(.system(size: 14))
@@ -876,7 +911,7 @@ struct NoteListView: View {
         if counts.inAppleNotes > 0 {
             message += " " + String(localized: "\(counts.inAppleNotes) of them also move to Recently Deleted in Apple Notes.")
         }
-        if counts.removed < notes.count {
+        if counts.removed < storedNotes.count {
             message += " " + String(localized: "Notes made in Apple Notes stay.")
         }
         return message
@@ -912,18 +947,28 @@ struct NoteRow: View {
         note.isPinned ? String(localized: "Unpin Note") : String(localized: "Pin Note")
     }
 
+    /// The note's colour, or a neutral bar for a Wispr Flow meeting, which has none of its own.
+    private var barColor: Color {
+        note.isWisprMeeting ? notchForeground.opacity(0.3) : note.color
+    }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             HStack(spacing: isCompact ? 8 : 12) {
                 // Color Indicator
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(note.color)
+                    .fill(barColor)
                     .frame(width: isCompact ? 3 : 4)
                     .padding(.vertical, isCompact ? 4 : 2)
-                
+
                 VStack(alignment: .leading, spacing: isCompact ? 1 : 4) {
                     HStack(spacing: 4) {
-                        if note.isPinned {
+                        if note.isWisprMeeting {
+                            Image(systemName: "waveform")
+                                .font(.system(size: isCompact ? 8 : 9, weight: .semibold))
+                                .foregroundStyle(notchForeground.opacity(0.55))
+                                .accessibilityLabel(String(localized: "From Wispr Flow"))
+                        } else if note.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: isCompact ? 7 : 8))
                                 .foregroundStyle(note.color)
@@ -954,7 +999,7 @@ struct NoteRow: View {
                 .fill(notchForeground.opacity(isHovered ? 0.12 : 0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(note.color.opacity(0.2), lineWidth: 1)
+                        .stroke(barColor.opacity(0.2), lineWidth: 1)
                 )
         )
         .clipShape(RoundedRectangle(cornerRadius: 12)) // Ensure everything stays inside the frame
@@ -962,7 +1007,8 @@ struct NoteRow: View {
             HStack(spacing: 8) {
                 if isHovered {
                     HStack(spacing: isCompact ? 3 : 4) {
-                        if enableNotePinning {
+                        // A Wispr Flow meeting is only shown: Copy, no pin and no trash.
+                        if enableNotePinning && !note.isWisprMeeting {
                             Button(action: onTogglePin) {
                                 Image(systemName: note.isPinned ? "pin.slash.fill" : "pin.fill")
                                     .font(.system(size: isCompact ? 9 : 11))
@@ -1009,19 +1055,21 @@ struct NoteRow: View {
                         .hoverTooltip(String(localized: "Copy"), edge: .below)
                         .accessibilityLabel(String(localized: "Copy"))
 
-                        Button(action: {
-                            if deletesInAppleNotes { confirmDelete = true } else { onDelete() }
-                        }) {
-                            Image(systemName: "trash")
-                                .font(.system(size: isCompact ? 9 : 11))
-                                .foregroundStyle(.red)
-                                .padding(isCompact ? 5 : 6)
-                                .background(Color.white.opacity(0.2))
-                                .clipShape(Circle())
+                        if !note.isWisprMeeting {
+                            Button(action: {
+                                if deletesInAppleNotes { confirmDelete = true } else { onDelete() }
+                            }) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: isCompact ? 9 : 11))
+                                    .foregroundStyle(.red)
+                                    .padding(isCompact ? 5 : 6)
+                                    .background(Color.white.opacity(0.2))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .hoverTooltip(String(localized: "Delete Note"), edge: .below)
+                            .accessibilityLabel(String(localized: "Delete Note"))
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .hoverTooltip(String(localized: "Delete Note"), edge: .below)
-                        .accessibilityLabel(String(localized: "Delete Note"))
                     }
                     .padding(.horizontal, isCompact ? 6 : 8)
                     .padding(.vertical, isCompact ? 2 : 3)
@@ -1117,11 +1165,14 @@ struct NoteEditorView: View {
     /// A note made in Notes: deleting it sends it to Recently Deleted there too, so the trash asks
     /// first, as the list row's does.
     let deletesInAppleNotes: Bool
+    /// A Wispr Flow meeting's summary: read-only, and the open action goes to Wispr Flow instead of
+    /// Notes. It has no colour of its own, so the colour picker is hidden.
+    let opensInWisprFlow: Bool
     @State private var confirmDelete = false
     /// Holds the notch open while the delete confirmation shows.
     @State private var autoCloseToken = UUID()
 
-    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false) {
+    init(title: Binding<String>, content: Binding<String>, imageData: Binding<Data?>, colorIndex: Binding<Int>, onSave: @escaping () -> Void, onCancel: @escaping () -> Void, isNew: Bool, isReadOnly: Bool = false, onOpenInNotes: @escaping () -> Void = {}, onDelete: (() -> Void)? = nil, deletesInAppleNotes: Bool = false, opensInWisprFlow: Bool = false) {
         self._title = title
         self._content = content
         self._imageData = imageData
@@ -1133,6 +1184,7 @@ struct NoteEditorView: View {
         self.onOpenInNotes = onOpenInNotes
         self.onDelete = onDelete
         self.deletesInAppleNotes = deletesInAppleNotes
+        self.opensInWisprFlow = opensInWisprFlow
     }
 
     @FocusState private var isContentFocused: Bool
@@ -1157,7 +1209,7 @@ struct NoteEditorView: View {
                 if isReadOnly {
                     Button(action: onOpenInNotes) {
                         Label {
-                            Text("Open in Notes")
+                            Text(opensInWisprFlow ? String(localized: "Open in Wispr Flow") : String(localized: "Open in Notes"))
                         } icon: {
                             Image(systemName: "arrow.up.forward.app")
                                 .font(.system(size: 12, weight: .medium))
@@ -1166,7 +1218,8 @@ struct NoteEditorView: View {
                             .foregroundStyle(editorForeground.opacity(0.8))
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .hoverTooltip(String(localized: "Edit this note in Notes"), edge: .below)
+                    .hoverTooltip(opensInWisprFlow ? String(localized: "Edit this summary in Wispr Flow")
+                                                   : String(localized: "Edit this note in Notes"), edge: .below)
                     .padding(.trailing, 8)
                 }
 
@@ -1208,37 +1261,39 @@ struct NoteEditorView: View {
                 
                 Spacer()
                 
-                // Color Picker
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(0..<NoteItem.colors.count, id: \.self) { index in
-                            Circle()
-                                .fill(NoteItem.colors[index])
-                                .frame(width: 16, height: 16)
-                                .overlay(
-                                    Circle()
-                                        .stroke(editorForeground, lineWidth: colorIndex == index ? 2 : 0)
-                                        .padding(-2)
-                                )
-                                .onTapGesture {
-                                    withAnimation {
-                                        colorIndex = index
+                // Color picker: none for a Wispr Flow meeting, which has no colour of its own.
+                if !opensInWisprFlow {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(0..<NoteItem.colors.count, id: \.self) { index in
+                                Circle()
+                                    .fill(NoteItem.colors[index])
+                                    .frame(width: 16, height: 16)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(editorForeground, lineWidth: colorIndex == index ? 2 : 0)
+                                            .padding(-2)
+                                    )
+                                    .onTapGesture {
+                                        withAnimation {
+                                            colorIndex = index
+                                        }
                                     }
-                                }
-                                // `.above`: the toolbar is an earlier VStack sibling and draws
-                                // underneath; the editor below would draw over a `.below` bubble.
-                                .hoverTooltip(NoteItem.colorNames[index], edge: .above)
-                                .accessibilityLabel(NoteItem.colorNames[index])
-                                .accessibilityAddTraits(.isButton)
+                                    // `.above`: the toolbar is an earlier VStack sibling and draws
+                                    // underneath; the editor below would draw over a `.below` bubble.
+                                    .hoverTooltip(NoteItem.colorNames[index], edge: .above)
+                                    .accessibilityLabel(NoteItem.colorNames[index])
+                                    .accessibilityAddTraits(.isButton)
+                            }
                         }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 4)
                     }
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 4)
+                    // A ScrollView clips both axes; without this the bubble is swallowed.
+                    // The row is ~144pt against its 160pt maximum, so nothing scrolls today.
+                    .scrollClipDisabled()
+                    .frame(maxWidth: 160)
                 }
-                // A ScrollView clips both axes; without this the bubble is swallowed.
-                // The row is ~144pt against its 160pt maximum, so nothing scrolls today.
-                .scrollClipDisabled()
-                .frame(maxWidth: 160)
             }
             .padding(.leading, 16)
             .padding(.trailing, 4)

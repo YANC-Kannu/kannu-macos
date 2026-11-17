@@ -992,6 +992,7 @@ struct SettingsView: View {
             // Notes
             SettingsSearchEntry(tab: .notes, title: "Sync with Apple Notes", keywords: ["apple notes", "notes app", "icloud", "two-way", "sync"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
             SettingsSearchEntry(tab: .notes, title: "Notes to sync", keywords: ["kannu folder", "whole account", "all notes", "import", "scope"], highlightID: SettingsTab.notes.highlightID(for: "Sync with Apple Notes")),
+            SettingsSearchEntry(tab: .notes, title: "Show Wispr Flow meeting summaries", keywords: ["wispr", "wispr flow", "meetings", "notetaker", "summary", "summaries"], highlightID: SettingsTab.notes.highlightID(for: "Show Wispr Flow meeting summaries")),
 
             // Timer
             SettingsSearchEntry(tab: .timer, title: "Enable timer feature", keywords: ["timer", "enable"], highlightID: SettingsTab.timer.highlightID(for: "Enable timer feature")),
