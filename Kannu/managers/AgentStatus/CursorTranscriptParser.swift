@@ -145,25 +145,39 @@ enum CursorTranscriptParser {
         return slug.isEmpty ? nil : slug
     }
 
-    static func displayProjectName(fromSlug slug: String?) -> String? {
-        guard let slug else { return nil }
-        let trimmed = slug.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        if trimmed.hasPrefix("var-") { return nil }
-        if trimmed.allSatisfy(\.isNumber) { return nil }
-
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let homePrefix = home.replacingOccurrences(of: "/", with: "-")
-        if trimmed.hasPrefix(homePrefix + "-") {
-            let suffix = String(trimmed.dropFirst(homePrefix.count + 1))
-            let parts = suffix.split(separator: "-", omittingEmptySubsequences: true)
-            if let last = parts.last {
-                return String(last)
-            }
+    /// The project a transcript belongs to, decoded from its project folder's slug, and logged to
+    /// the `ProjectName` category against the transcript's session id.
+    static func displayProjectName(forTranscript path: URL) -> String? {
+        let slug = projectSlug(from: path)
+        let resolution = projectResolution(fromSlug: slug)
+        if slug != nil {
+            ProjectNameLog.record(
+                agent: "cursor",
+                source: .transcript,
+                sessionID: sessionID(from: path),
+                cwd: nil,
+                resolution: resolution
+            )
         }
+        return resolution?.name
+    }
 
-        return trimmed
+    /// Decoding lists folders, so each slug is decoded once per launch. A slug names one path for
+    /// good; a project folder created later than its first decode keeps the guess until relaunch.
+    private static var slugResolutionCache: [String: ProjectNameRules.Resolution?] = [:]
+
+    private static func projectResolution(fromSlug slug: String?) -> ProjectNameRules.Resolution? {
+        guard let slug else { return nil }
+        if let cached = slugResolutionCache[slug] { return cached }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let resolution = ProjectNameRules.cursorProjectName(
+            fromSlug: slug,
+            homeDirectory: home,
+            contentsOfDirectory: { ProjectNameRules.slugDecodableFolders(in: $0, homeDirectory: home) }
+        )
+        if slugResolutionCache.count >= 256 { slugResolutionCache.removeAll() }
+        slugResolutionCache[slug] = .some(resolution)
+        return resolution
     }
 
     static func analyze(path: URL) -> TranscriptAnalysis {

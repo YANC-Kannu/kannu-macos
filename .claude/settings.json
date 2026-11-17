@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git push*)"
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(xcodebuild test -project Kannu.xcodeproj -scheme KannuTests*)",
+      "Bash(OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 list*)",
+      "Bash(OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 validate*)",
+      "Bash(bash .githooks/pre-commit)"
     ]
   }
 }

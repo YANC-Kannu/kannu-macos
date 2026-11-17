@@ -18,7 +18,8 @@ tool-specific file — this repo has already paid twice for one rule living in t
   a file the instruction failed to name.
 - **`scripts/install-git-hooks.sh`** — run once after cloning, then confirm with
   `git config core.hooksPath`, which must print `.githooks`. If it prints nothing, the pre-commit gate
-  is not running locally — and **no CI job runs the hook**, so nothing else will catch you.
+  is not running locally. CI runs the hook only on the committed tree, where nothing is staged, so it
+  **never checks that a commit carried its CHANGELOG entry**: nothing else will catch you.
 - **`.agents/skills/kannu-senior-contributor/SKILL.md`** — how to match existing conventions here and
   how to prepare a commit.
 
@@ -40,6 +41,12 @@ Use `@/openspec/AGENTS.md` to learn:
 Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
+
+**OpenSpec CLI.** Run it only in its pinned form, with telemetry off:
+`OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 <command>` (for example `list`, or
+`validate --all --strict --no-interactive`, which CI also runs). Never run `openspec init` or `openspec update`:
+0.23.0 writes its managed block into `CLAUDE.md` as well. If that happens, restore it with
+`git checkout -- CLAUDE.md`. `openspec/project.md` holds the rest of the OpenSpec context.
 
 ## Project overview
 

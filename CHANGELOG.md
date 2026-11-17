@@ -4,6 +4,60 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Keep project-name slug decoding off files, symbolic links and public logs
+- **Developer label:** "Fix CodeRabbit's findings on PR #68"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release, Auto-fix
+- **Changes:**
+  - A Cursor slug decode now reads folders through `ProjectNameRules.slugDecodableFolders(in:homeDirectory:)`, moved
+    from `CursorTranscriptParser` into the tested file. It returns only real folders: a file named like the project
+    can no longer win the match, and a symbolic link is never followed into a privacy-prompting folder.
+  - A slug that cannot be decoded and is not under the home folder gets the new rule `cursor-slug-unresolved`, and the
+    `ProjectName` log prints its name private, because the whole slug spells out a folder path.
+  - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
+  - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
+
+### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
+- **Developer label:** "Make project-name detection observable, and fix its two known bugs"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release
+- **Changes:**
+  - `ProjectNameRules.projectName(forWorkingDirectory:)` (new, Foundation-only) names a chat's project after its
+    folder, except under `<repo>/.claude/worktrees/<name>`, a Claude Desktop worktree, which is named `<repo>`. The
+    hook file reader, Claude's passive session record and the Claude/Codex transcript fallback all go through it. The
+    hook script is unchanged.
+  - Cursor project slugs decode against the folders that exist, so `acme-api` stays `acme-api` instead of `api`. The
+    fallback encodes the home folder the way Cursor does, so a home with a dot or underscore matches its slug. Kannu
+    never lists a home folder that raises a privacy prompt, or `/Volumes`.
+  - New `ProjectName` log category (`com.kannu.app`): one line per change, with the agent, source, session id, chosen
+    name and rule public and the paths private.
+  - Test: `ProjectNameRulesTests` covers plain, worktree, nested, trailing-slash, root and non-worktree `.claude`
+    folders, and the Cursor slug decoder.
+
+### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
+- **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
+- **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of
+  `development` at 75e62b24, plus the `add-contributor-agent-setup` proposal for the rest
+- **Changes:**
+  - `.claude/settings.json` no longer pre-approves `git push`. It allows only `git status`, `diff`, `log` and `show`,
+    the KannuTests run, the pinned OpenSpec `list` and `validate`, and `bash .githooks/pre-commit`.
+  - `CLAUDE.md` makes the `caveman` style skill optional. The ART contract stays first and `@AGENTS.md` last.
+  - `openspec/project.md`: the hold rule asks for a maintainer's explicit yes, and the release owner's for tags and
+    releases; the specs describe `development`; the feed line reflects #3 and the 1.x bridge; the new rulesets on
+    `development` and `super/**` are described.
+  - `AGENTS.md` gains a short note on the pinned OpenSpec CLI, outside the managed block, and no longer says that no
+    CI job runs the hook. The Claude OpenSpec commands use the pinned CLI and drop the `openspec update` hint.
+  - CI gains an ubuntu job that runs the pinned `openspec validate --all --strict --no-interactive` and
+    `bash .githooks/pre-commit` on the checkout. The macOS Build jobs are unchanged.
+  - `.gitignore` covers `marketing/`, `*.local.md`, `.claude/worktrees/` and `.claude/settings.local.json`.
+  - `CONTRIBUTING.md` opens with a Setup checklist: clone and switch to `development`, hooks, the `Kannu Dev`
+    identity, KannuTests, the Debug build and the pinned `openspec list`, plus Xcode signing for contributors and
+    which file each agent tool reads.
+  - New OpenSpec change `add-contributor-agent-setup` (proposal only) records the after-2.0 backlog: as-built specs
+    for the agent monitor and other shipped features, a doctor script, merge resolvers, shared skills, Cursor and
+    Copilot commands, a PR template and CODEOWNERS, wider hook source paths, a cloud setup, and splitting
+    `release-2-0`'s deltas.
+  - `release-2-0`'s `tasks.md` and `handoff.md` record that #55 (a522db02) and #9 (75e62b24) merged, so #55 ships in
+    2.0.
+
 ### 2026-11-16 - Pre-commit and pre-push checks against a local list of names never to publish
 - **Developer label:** Made-up data only in fixtures, tests and examples, enforced by the hooks
 - **Agent label:** Claude Code (Opus 5.5) — a denylist check in the pre-commit hook, a new pre-push hook, their tests,

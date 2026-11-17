@@ -116,8 +116,9 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [x] 9.5 Where the storyboard and prompts live: on David's Mac only, never committed (David, 2026-11-13). A cloud
   session cannot write there, so the storyboard is a local task (8.1).
 - [ ] 9.6 AGENTS.md's "Project overview" and the pivot (4.4, 4.5).
-- [x] 9.7 Whether #55 (Claude hooks no longer hold up a prompt; ready, into `development`) ships in 2.0. Decided: it
-  waits until after 2.0 (David, 2026-11-13), so the 2.0.0 notes leave it out.
+- [x] 9.7 Whether #55 (Claude hooks no longer hold up a prompt) ships in 2.0. It does: #55 merged into `development`
+  on 2026-11-16 as a522db02, which replaces the 2026-11-13 decision to hold it until after 2.0. A 2.0 cut from
+  `development` includes it, so the 2.0.0 notes need a line for it (4.3's file).
 - [ ] 9.8 What happens to `release/1.4.0` and #14 now that 2.0 supersedes 1.4.0.
 - [ ] 9.9 Moving OpenSpec to 2.x, which keeps project context in `openspec/config.yaml` and retires this layout.
 
