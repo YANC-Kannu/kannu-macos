@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - SonarCloud reads real coverage from the KannuTests run
+- **Developer label:** SonarCloud's gate fails every PR that adds Swift with "0.0% Coverage on New Code", because
+  the scan never ran tests or read a coverage report
+- **Agent label:** Claude Code (Opus 5.5) — coverage for the SonarCloud workflow, measured on #63's head first
+- **Changes:**
+  - `.github/workflows/sonarcloud.yml` selects `latest-stable` Xcode (`maxim-lobanov/setup-xcode`, pinned by SHA at
+    v1.7.0), runs KannuTests with `-enableCodeCoverage YES` into `TestResults.xcresult`, and converts it before the
+    scan. The fork-PR skip and the pinned checkout and scan actions are unchanged.
+  - New `scripts/xccov-to-sonar.py` turns the result bundle into SonarQube generic coverage XML with one
+    `xccov view --archive --json` call. It keeps files under `Kannu/` only, and fails rather than upload an empty
+    report.
+  - `sonar-project.properties` sets `sonar.coverageReportPaths=sonar-coverage.xml`; `.gitignore` ignores that file.
+  - `sonar.coverage.exclusions=Kannu/components/**`: SwiftUI views are still scanned but no longer counted for
+    coverage, since they get no unit tests. The gate's 80% new-code coverage condition, set in SonarCloud, stays.
+  - Measured locally on #63's head: `WisprFlowMeetingsStore.swift` 92% of its lines. #63's new code reads about 48%
+    with views excluded, because `WisprFlowMeetingsManager.swift` and `Constants.swift` are not in the test target.
+  - `openspec/project.md` describes the SonarCloud job.
+
 ### 2026-11-16 - A fresh clone gets the working agent setup, and OpenSpec is checked in CI
 - **Developer label:** Contributor and agent setup: quick wins in 2.0, the rest as an after-2.0 OpenSpec proposal
 - **Agent label:** Claude Code (Opus 5.5) — the 2.0 quick wins from the OpenSpec and agent-setup audit of

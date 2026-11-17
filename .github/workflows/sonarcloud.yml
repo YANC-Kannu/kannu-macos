@@ -27,6 +27,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Select Xcode Version
+        # Same Xcode as ci.yml's Build job, so coverage comes from the toolchain the tests already pass on.
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1.7.0
+        with:
+          xcode-version: latest-stable
+
+      - name: Unit Tests With Coverage
+        # KannuTests is the pure logic target ci.yml already runs. Without a coverage report Sonar reads
+        # every new Swift line as uncovered, so its new-code coverage condition fails by construction.
+        # derivedData sits under .build-coverage, which sonar.exclusions (**/.build*/**) keeps out of the scan.
+        run: |
+          xcodebuild test \
+            -project Kannu.xcodeproj \
+            -scheme KannuTests \
+            -destination "platform=macOS" \
+            -derivedDataPath .build-coverage \
+            -enableCodeCoverage YES \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Convert Coverage For Sonar
+        run: python3 -I scripts/xccov-to-sonar.py TestResults.xcresult sonar-coverage.xml
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2 # v7
         env:
