@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -948,8 +949,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Creates or removes the status item to match `isStatusItemNeeded`. The eye is the
-    /// brand (Kannu is Malayalam for "eye"; the app icon is the same pair of eyes) — the
-    /// mountain the fork inherited from Atoll is gone. Left click toggles the notch;
+    /// brand (Kannu is Malayalam for "eye"; the app icon is the same pair of eyes), not the
+    /// old mountain glyph. Left click toggles the notch;
     /// right-click or option-click shows the menu.
     func syncStatusItem(visible: Bool) {
         if !visible {

@@ -121,8 +121,8 @@ next name on the list, take one further down or add a watcher to it.
 
 The name lives in one place: `ReleaseInfo.codename` in `Kannu/models/Constants.swift`. Both release
 paths grep that line for the title, so bump it there and nowhere else. 1.0.0 shipped as "Fiji", the
-last of the island names inherited from Atoll (Maldives → Bora Bora → Seychelles → Fiji); that chain
-is not continued.
+last of an earlier chain of island names (Maldives → Bora Bora → Seychelles → Fiji); that chain is
+not continued.
 
 ## The install window
 

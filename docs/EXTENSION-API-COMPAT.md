@@ -1,4 +1,4 @@
-# Atoll to Kannu Compatibility Migration Plan
+# Legacy `atoll.*` extension method names
 
 This document defines a non-breaking path to migrate extension protocol naming
 from `atoll.*` to `kannu.*` while preserving existing extension clients.

@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -422,31 +423,31 @@ struct NotchStatsView: View {
     }
 }
 
-// Unified Stats Card Component - handles both single and dual data types, matches boring.notch sizing
+// Unified Stats Card Component - handles both single and dual data types
 struct UnifiedStatsCard: View {
     @Environment(\.notchForeground) private var notchForeground
     let graphData: GraphData
     @State private var isHovered = false
     
     var body: some View {
-        VStack(spacing: 3) { // Match boring.notch spacing
+        VStack(spacing: 3) { // Compact card spacing
             // Header - consistent across all card types
             HStack(spacing: 4) {
                 Image(systemName: graphData.icon)
                     .foregroundStyle(graphData.color)
-                    .font(.caption) // Match boring.notch font size
+                    .font(.caption) // Compact card font size
                 
                 Text(graphData.title)
-                    .font(SettingsTheme.font(size: 10)) // Match boring.notch font size
+                    .font(SettingsTheme.font(size: 10)) // Compact card font size
                     .fontWeight(.medium)
                     .foregroundStyle(notchForeground.opacity(0.8))
                 
                 Spacer()
                 
-                // Show value on right for single graphs like boring.notch
+                // Show value on right for single graphs
                 if let singleData = graphData as? SingleGraphData {
                     Text(singleData.value)
-                        .font(SettingsTheme.font(size: 10)) // Match boring.notch font size
+                        .font(SettingsTheme.font(size: 10)) // Compact card font size
                         .fontWeight(.bold)
                         .foregroundStyle(notchForeground)
                 }
@@ -485,7 +486,7 @@ struct UnifiedStatsCard: View {
                     )
                 }
             }
-            .frame(height: 36) // Match boring.notch exactly - reduced from 50
+            .frame(height: 36) // Compact graph height - reduced from 50
             
             // Click hint - shown for graphs that open popovers
             if graphData.rankingType != nil {
@@ -496,7 +497,7 @@ struct UnifiedStatsCard: View {
                     .animation(.easeInOut(duration: 0.2), value: isHovered)
             }
         }
-        .padding(8) // Match boring.notch padding - reduced from 10
+        .padding(8) // Compact card padding - reduced from 10
         .background(
             RoundedRectangle(cornerRadius: 8)
                 .fill(notchForeground.opacity(0.08))

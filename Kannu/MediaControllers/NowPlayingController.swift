@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * Originally from boring.notch project
  * Modified and adapted for Kannu (കണ്ണ്)
@@ -271,7 +272,7 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         newPlaybackState.album = payload.album ?? (diff ? self.playbackState.album : "")
         newPlaybackState.duration = payload.duration ?? (diff ? self.playbackState.duration : 0)
         
-        // Match boring.notch behavior: if elapsedTime is provided use it,
+        // If elapsedTime is provided use it,
         // if this update is a diff keep the previous currentTime, otherwise default to 0.
         newPlaybackState.currentTime = payload.elapsedTime ?? (diff ? self.playbackState.currentTime : 0)
 

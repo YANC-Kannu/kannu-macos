@@ -1,6 +1,7 @@
 /*
  * Kannu (കണ്ണ്)
  * Copyright (C) 2024-2026 Kannu Contributors
+ * Copyright (C) 2024-2026 Atoll Contributors
  *
  * Unified audio visualizer that conditionally uses real-time audio spectrum
  * or the original animated spectrum based on user preference.

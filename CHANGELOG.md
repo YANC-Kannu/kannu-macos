@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Upstream copyright notices restored, other mentions quieter
+- **Developer label:** "we donot have to specifically mention atoll or dynamic notch apps epxlicitly outside in git or in website right, please see where we have to mention that according to liscense requirements and modify that to keep that less evident"
+- **Agent label:** Claude Code (Opus 5.5) — upstream notices lane, Part A of the 18 Nov plan David approved
+- **Changes:**
+  - Restored `Copyright (C) 2024-2026 Atoll Contributors` under the Kannu copyright line in the 253 source files
+    that still exist from the July rebrand that dropped it, including the six audio files' "Modified work" line.
+    Additions only: no header line was removed or reordered. `IdleAnimationView.swift`, whose header that rebrand
+    deleted outright, gets the standard GPL header back with both lines.
+  - `COPYRIGHT_ASSETS` names Atoll's assets again; `NOTICE` adds that the product includes software from Atoll
+    (GPL-3.0), itself derived from boring.notch. NOTICE is already the in-app Acknowledgements.
+  - ReadMe: the fork sentence near the top and the removed-features line go; the Acknowledgments paragraph
+    becomes a one-line Credits section at the end.
+  - Comments that only narrated history are reworded neutrally (`KannuApp.swift`, `Constants.swift`,
+    `NowPlayingController.swift`, `NotchStatsView.swift`, `scripts/RELEASE.md`, `AGENTS.md`).
+  - `docs/ATOLL_TO_KANNU_MIGRATION_PLAN.md` is now `docs/EXTENSION-API-COMPAT.md`, retitled "Legacy `atoll.*`
+    extension method names", content unchanged.
+  - The unreferenced, stale `Quit boring.notch` string key is deleted from `Localizable.xcstrings`; `.gitignore`
+    gets a neutral comment over its local reference folders, paths unchanged.
+  - Kept, because renaming them breaks extensions or users: the `atoll.*` RPC namespace and `legacyPrefix`,
+    `AtollExtensionKit`, the legacy hook markers and the Notes sync regex.
+
 ### 2026-11-18 - Claude Desktop chats: a question is yellow, busy stays green
 - **Developer label:** "yellow detection and green detection persistence is not good now in kannu, what happened to that, for claude"
 - **Agent label:** Claude Code (Opus 5.5) — Claude detection lane, from the 18 Nov plan David approved for beta.2
