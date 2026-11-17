@@ -165,8 +165,14 @@ enum ClaudeCachedUsage {
             case weeklyReset
             /// Nothing new: the organization Kannu knew before the run.
             case lastKnown
-            /// The cache the run wrote resets off the last known organization's anchor, and on no
-            /// other remembered one: whose it is cannot be said.
+            /// The cache the run wrote resets off the last known organization's anchor and on no
+            /// other remembered one, and the file names another organization whose week nothing
+            /// contradicts: Claude Code has moved to it. Its profile is older than the run, so it
+            /// counts only once the cache has ruled the last known organization out.
+            case movedOrganization
+            /// The cache the run wrote resets off the last known organization's anchor, on no
+            /// other remembered one, and the file names no other organization it could be:
+            /// whose it is cannot be said.
             case contradicted
             /// Nothing was ever recorded: the file's organization is all there is (as before).
             case configOnly
@@ -193,6 +199,13 @@ enum ClaudeCachedUsage {
     /// process's. With no anchor matching, such a profile yields to a different last known
     /// organization the cache does not contradict. The last known one itself contradicted stands:
     /// that is an organization whose week moved, and the run learns the new one.
+    ///
+    /// With no profile from the run, a cache that contradicts the last known organization goes to
+    /// the organization the file names, when that is another one and the cache does not contradict
+    /// its week (`movedOrganization`). Measured 2026-11-16: Claude Code had moved from Team to Max,
+    /// the run fetches no profile, and Max's week was never remembered, so every run ended
+    /// "contradicted", learned nothing, and the fresh cache went on no card while the desktop's
+    /// sample from before an early reset stayed on it.
     static func attributeRun(_ run: RunRead, lastKnown: String?,
                              resets: [String: OrganizationResets]) -> RunAttribution {
         let window = run.started.addingTimeInterval(-runWindowSlack)...run.readAt.addingTimeInterval(runWindowSlack)
@@ -218,9 +231,13 @@ enum ClaudeCachedUsage {
         } else if let matched {
             attribution = RunAttribution(organization: matched, evidence: .weeklyReset)
         } else if let lastKnown {
-            attribution = contradicts(lastKnown)
-                ? RunAttribution(organization: nil, evidence: .contradicted)
-                : RunAttribution(organization: lastKnown, evidence: .lastKnown)
+            if !contradicts(lastKnown) {
+                attribution = RunAttribution(organization: lastKnown, evidence: .lastKnown)
+            } else if let inConfig = context.organizationUUID, inConfig != lastKnown, !contradicts(inConfig) {
+                attribution = RunAttribution(organization: inConfig, evidence: .movedOrganization)
+            } else {
+                attribution = RunAttribution(organization: nil, evidence: .contradicted)
+            }
         } else if let inConfig = context.organizationUUID {
             attribution = RunAttribution(organization: inConfig, evidence: .configOnly)
         }

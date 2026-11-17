@@ -18,7 +18,8 @@ tool-specific file — this repo has already paid twice for one rule living in t
   a file the instruction failed to name.
 - **`scripts/install-git-hooks.sh`** — run once after cloning, then confirm with
   `git config core.hooksPath`, which must print `.githooks`. If it prints nothing, the pre-commit gate
-  is not running locally — and **no CI job runs the hook**, so nothing else will catch you.
+  is not running locally. CI runs the hook only on the committed tree, where nothing is staged, so it
+  **never checks that a commit carried its CHANGELOG entry**: nothing else will catch you.
 - **`.agents/skills/kannu-senior-contributor/SKILL.md`** — how to match existing conventions here and
   how to prepare a commit.
 
@@ -40,6 +41,12 @@ Use `@/openspec/AGENTS.md` to learn:
 Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
+
+**OpenSpec CLI.** Run it only in its pinned form, with telemetry off:
+`OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 <command>` (for example `list`, or
+`validate --all --strict --no-interactive`, which CI also runs). Never run `openspec init` or `openspec update`:
+0.23.0 writes its managed block into `CLAUDE.md` as well. If that happens, restore it with
+`git checkout -- CLAUDE.md`. `openspec/project.md` holds the rest of the OpenSpec context.
 
 ## Project overview
 
@@ -126,6 +133,13 @@ is the one AppKit/SwiftUI file, for its geometry tests).
 ## Security and privacy
 
 Kannu runs locally. Treat process inspection, shell commands, filesystem access, agent output, terminal state, credentials, environment variables, permissions, and network access as security-sensitive. Least privilege; native APIs; no arbitrary command execution or unnecessary privileges. Never expose secrets in logs — use OSLog appropriately and never log sensitive user data.
+
+Fixtures, tests, doc comments, CHANGELOG examples and snapshot boards use made-up data only:
+`acme_corporation/applications/orders-api`, `example.com`, `PROJ-123`, "Dana Example". Never a real task, ticket,
+project path, person or company from the maintainer's own connected accounts, not even as the motivating example
+for a bug: describe the real case in words. A maintainer can list names to refuse in an untracked
+`.git/info/kannu-denylist`, one per line. `.githooks/pre-commit` then rejects staged lines and commit identities
+that match it, and `.githooks/pre-push` rejects pushed commits that do.
 
 ## Commit and PR guidelines
 

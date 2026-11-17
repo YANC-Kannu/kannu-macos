@@ -184,3 +184,11 @@ __pycache__/
 # Throwaway derivedData paths. The glob is the point: a one-off verification build should never
 # need a .gitignore edit, and .build-leak/ once got staged because it did.
 .build-*/
+
+# Local-only files that a fresh clone must never stage. Marketing material stays on the maintainer's
+# machine; *.local.md holds personal agent notes (CLAUDE.local.md included); Claude Code keeps its
+# per-session worktrees and personal permission rules under .claude/.
+marketing/
+*.local.md
+.claude/worktrees/
+.claude/settings.local.json
