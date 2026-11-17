@@ -30,7 +30,8 @@ A chat whose folder is `<repo>/.claude/worktrees/<name>`, or any folder below it
 When a Cursor chat is named from its `~/.cursor/projects/<slug>` folder, Kannu SHALL decode the slug against the
 folders that exist, so that a project whose name holds a `-`, `.` or `_` keeps its whole name. Decoding SHALL list at
 most 48 folders and SHALL never list a home folder whose first read raises a macOS privacy prompt, or anything under
-`/Volumes`. When decoding fails, Kannu SHALL fall back to the slug's last word after the home folder, encoding the home
+`/Volumes`. Decoding SHALL match only real folders: never a file, and never a symbolic link, whose target a path check
+cannot see. When decoding fails, Kannu SHALL fall back to the slug's last word after the home folder, encoding the home
 folder the way Cursor does.
 
 #### Scenario: A hyphenated project
@@ -41,10 +42,17 @@ folder the way Cursor does.
 - **WHEN** the home folder is `/Users/alice.smith`, the slug is `Users-alice-smith-acme`, and decoding fails
 - **THEN** its card's project is `acme`, not the whole slug
 
+#### Scenario: A file that shares the project's slug
+- **WHEN** a Cursor chat's slug is `Users-alice-code-acme-api`, `/Users/alice/code/acme-api` is a file and
+  `/Users/alice/code/acme/api` is a folder
+- **THEN** its card's project is `api`
+
 ### Requirement: Project naming is observable
 Kannu SHALL log each project-name resolution to subsystem `com.kannu.app`, category `ProjectName`, once each time a
 session's chosen name or its inputs change. Each line SHALL carry the agent, the source, the session id, the chosen
-name and the rule that chose it as public fields, and the working directory and workspace roots as private fields.
+name and the rule that chose it as public fields, and the working directory and workspace roots as private fields. A
+name that is a whole undecoded Cursor slug (`rule=cursor-slug-unresolved`) spells out a folder path, so it SHALL be
+private too.
 
 #### Scenario: Watching a worktree chat get its name
 - **WHEN** a user runs `/usr/bin/log stream --predicate 'subsystem == "com.kannu.app" AND category == "ProjectName"'`

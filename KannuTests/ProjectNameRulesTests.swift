@@ -57,6 +57,20 @@ final class ProjectNameRulesTests: XCTestCase {
         XCTAssertEqual(ProjectNameRules.projectName(forWorkingDirectory: "file:///Users/alice/code/acme-api"), "acme-api")
     }
 
+    func testAFileURLIsDecodedBeforeItIsNamed() {
+        // `file:///Users/alice/code/acme%20api` is the folder `/Users/alice/code/acme api`.
+        XCTAssertEqual(ProjectNameRules.projectName(forWorkingDirectory: "file:///Users/alice/code/acme%20api"), "acme api")
+        XCTAssertEqual(ProjectNameRules.projectName(forWorkingDirectory: "file:///Users/alice/code/acme%20api/"), "acme api")
+        XCTAssertEqual(
+            ProjectNameRules.projectName(
+                forWorkingDirectory: "file:///Users/alice/code/acme%20api/.claude/worktrees/brave-otter-7f3a"
+            ),
+            "acme api"
+        )
+        // An ordinary path keeps a literal percent sign.
+        XCTAssertEqual(ProjectNameRules.projectName(forWorkingDirectory: "/Users/alice/code/acme%20api"), "acme%20api")
+    }
+
     func testTheRootAndAnEmptyPathHaveNoName() {
         XCTAssertNil(ProjectNameRules.projectName(forWorkingDirectory: "/"))
         XCTAssertNil(ProjectNameRules.projectName(forWorkingDirectory: "///"))
@@ -149,6 +163,14 @@ final class ProjectNameRulesTests: XCTestCase {
         XCTAssertEqual(cursorName("empty-window")?.name, "empty-window")
     }
 
+    func testAWholeSlugFallbackIsMarkedUnresolved() {
+        // Not under the home folder and not decodable: the whole slug is the name. It spells out a
+        // folder path, so its rule tells the log to keep the name private.
+        XCTAssertEqual(cursorName("Volumes-Backup-acme-api"),
+                       ProjectNameRules.Resolution(name: "Volumes-Backup-acme-api", rule: .cursorSlugUnresolved))
+        XCTAssertEqual(cursorName("empty-window")?.rule, .cursorSlugUnresolved)
+    }
+
     func testACursorHomeWithADotOrUnderscoreStillMatchesItsSlug() {
         // Cursor writes `/Users/alice.smith` as `Users-alice-smith`. The old decoder encoded only
         // the slashes, so the home never matched and the card showed the whole slug.
@@ -181,7 +203,57 @@ final class ProjectNameRulesTests: XCTestCase {
             homeDirectory: "/Users/alice",
             contentsOfDirectory: { _ in listings += 1; return ["a", "a-a"] }
         )
-        XCTAssertEqual(result?.rule, .cursorSlugGuess)
+        XCTAssertEqual(result?.rule, .cursorSlugUnresolved)
         XCTAssertLessThanOrEqual(listings, 48)
+    }
+
+    // MARK: - Folders a slug decode may read
+
+    /// A scratch folder tree on disk: `code/acme/api` (a folder), `code/acme-api` (a file),
+    /// `code/acme-web` (a symbolic link to `elsewhere/acme-web`), `Documents/acme` and `Documents-old/acme`.
+    private func makeDiskTree() throws -> String {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProjectNameRulesTests-\(UUID().uuidString)").path
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: root + "/code/acme/api", withIntermediateDirectories: true)
+        try fm.createDirectory(atPath: root + "/elsewhere/acme-web", withIntermediateDirectories: true)
+        try fm.createDirectory(atPath: root + "/Documents/acme", withIntermediateDirectories: true)
+        try fm.createDirectory(atPath: root + "/Documents-old/acme", withIntermediateDirectories: true)
+        XCTAssertTrue(fm.createFile(atPath: root + "/code/acme-api", contents: Data("not a folder".utf8)))
+        try fm.createSymbolicLink(atPath: root + "/code/acme-web", withDestinationPath: root + "/elsewhere/acme-web")
+        addTeardownBlock { try? fm.removeItem(atPath: root) }
+        return root
+    }
+
+    func testASlugDecodeReadsOnlyRealFolders() throws {
+        let root = try makeDiskTree()
+        // The file and the symbolic link are left out: neither can be followed into.
+        XCTAssertEqual(ProjectNameRules.slugDecodableFolders(in: root + "/code", homeDirectory: root), ["acme"])
+    }
+
+    func testASlugDecodeNeverChoosesAFileOverTheFolderItNames() throws {
+        // `code/acme-api` (a file) and `code/acme/api` (the project) share the slug `code-acme-api`.
+        // Longest-first would pick the file if the listing offered it.
+        let root = try makeDiskTree()
+        let result = ProjectNameRules.cursorProjectName(
+            fromSlug: "code-acme-api",
+            homeDirectory: "/Users/alice",
+            contentsOfDirectory: { path in
+                ProjectNameRules.slugDecodableFolders(in: path == "/" ? root : root + path, homeDirectory: root)
+            }
+        )
+        XCTAssertEqual(result, ProjectNameRules.Resolution(name: "api", rule: .cursorSlugFolder))
+    }
+
+    func testASlugDecodeNeverReadsAPromptingFolderOrAnotherDisk() throws {
+        let root = try makeDiskTree()
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: root + "/Documents", homeDirectory: root))
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: root + "/Documents/acme", homeDirectory: root))
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: root + "/Documents", homeDirectory: root + "/"))
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: "/Volumes", homeDirectory: root))
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: "/Volumes/Backup", homeDirectory: root))
+        XCTAssertNil(ProjectNameRules.slugDecodableFolders(in: root + "/missing", homeDirectory: root))
+        // A folder whose name merely starts with a prompting folder's name is ordinary.
+        XCTAssertEqual(ProjectNameRules.slugDecodableFolders(in: root + "/Documents-old", homeDirectory: root), ["acme"])
     }
 }

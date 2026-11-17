@@ -31,6 +31,9 @@ enum ProjectNameRule: String {
     case cursorSlugFolder = "cursor-slug-folder"
     /// A Cursor project slug that could not be decoded: the old best guess (its last word).
     case cursorSlugGuess = "cursor-slug-guess"
+    /// A Cursor project slug that could not be decoded and is not under the home folder: the whole
+    /// slug is the name. It spells out the folder path, so the log keeps it private.
+    case cursorSlugUnresolved = "cursor-slug-unresolved"
     /// Nothing to name the project from.
     case none = "none"
 }
@@ -73,7 +76,13 @@ enum ProjectNameRules {
     private static func pathComponents(_ path: String) -> [String] {
         var trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("file://") {
-            trimmed = String(trimmed.dropFirst("file://".count))
+            // A file URL escapes its path (`acme%20api`); the folder is `acme api`.
+            if let url = URL(string: trimmed), url.isFileURL {
+                trimmed = url.path
+            } else {
+                let stripped = String(trimmed.dropFirst("file://".count))
+                trimmed = stripped.removingPercentEncoding ?? stripped
+            }
         }
         return trimmed.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
     }
@@ -122,7 +131,7 @@ enum ProjectNameRules {
                 }
             }
         }
-        return Resolution(name: trimmed, rule: .cursorSlugGuess)
+        return Resolution(name: trimmed, rule: .cursorSlugUnresolved)
     }
 
     /// The slug Cursor would give `path`.
@@ -163,6 +172,35 @@ enum ProjectNameRules {
     private static func encodedComponent(_ name: String) -> String {
         String(name.map { $0.isASCII && ($0.isLetter || $0.isNumber) ? $0 : "-" })
     }
+
+    /// Home folders whose first read raises a macOS privacy prompt. Kannu must not raise a
+    /// permission dialog to name a card (AGENTS.md, "No permission dialog before onboarding's
+    /// Permissions step"), so a slug under one of them falls back to the guess.
+    static let promptingHomeFolders = ["Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures"]
+
+    /// The folders in `directory` a slug decode may descend into, or nil for a directory it must
+    /// not read: `/Volumes` (another disk) and the prompting home folders. Only real folders are
+    /// returned. A file cannot be a project folder, and a symbolic link is never followed, because
+    /// its target can be a prompting folder that no path check here would see.
+    static func slugDecodableFolders(in directory: String, homeDirectory home: String,
+                                     fileManager: FileManager = .default) -> [String]? {
+        if directory == "/Volumes" || directory.hasPrefix("/Volumes/") { return nil }
+        let homePath = home.hasSuffix("/") ? String(home.dropLast()) : home
+        for folder in promptingHomeFolders {
+            let protected = homePath + "/" + folder
+            if directory == protected || directory.hasPrefix(protected + "/") { return nil }
+        }
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
+        guard let entries = try? fileManager.contentsOfDirectory(
+            at: URL(fileURLWithPath: directory, isDirectory: true),
+            includingPropertiesForKeys: keys
+        ) else { return nil }
+        return entries.compactMap { entry in
+            guard let values = try? entry.resourceValues(forKeys: Set(keys)),
+                  values.isDirectory == true, values.isSymbolicLink != true else { return nil }
+            return entry.lastPathComponent
+        }
+    }
 }
 
 /// The `ProjectName` log: one line each time a chat's project name, or what it was named from,
@@ -172,7 +210,9 @@ enum ProjectNameRules {
 /// account name and folder layout, so they are `.private`. Public: the agent, the source and the
 /// rule (fixed vocabularies), the session id (an id the agent generated, not user content, and the only way to
 /// match a line to a card), and the chosen name, which is one folder name the notch already shows
-/// on screen, and without which the log could not show that a label matches its folder.
+/// on screen, and without which the log could not show that a label matches its folder. The one
+/// exception is `cursor-slug-unresolved`, whose name is a whole slug, a folder path with dashes
+/// for slashes: it is private like the paths.
 enum ProjectNameLog {
     private static let logger = os.Logger(subsystem: "com.kannu.app", category: "ProjectName")
     private static let lock = NSLock()
@@ -209,6 +249,12 @@ enum ProjectNameLog {
         }
         lock.unlock()
         guard changed else { return }
+        if resolution?.rule == .cursorSlugUnresolved {
+            logger.notice(
+                "agent=\(agent, privacy: .public) source=\(source.rawValue, privacy: .public) session=\(sessionID, privacy: .public) name=\(name, privacy: .private) rule=\(rule, privacy: .public) cwd=\(cwdText, privacy: .private) workspace_roots=\(roots, privacy: .private)"
+            )
+            return
+        }
         logger.notice(
             "agent=\(agent, privacy: .public) source=\(source.rawValue, privacy: .public) session=\(sessionID, privacy: .public) name=\(name, privacy: .public) rule=\(rule, privacy: .public) cwd=\(cwdText, privacy: .private) workspace_roots=\(roots, privacy: .private)"
         )

@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-17 - Keep project-name slug decoding off files, symbolic links and public logs
+- **Developer label:** "Fix CodeRabbit's findings on PR #68"
+- **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release, Auto-fix
+- **Changes:**
+  - A Cursor slug decode now reads folders through `ProjectNameRules.slugDecodableFolders(in:homeDirectory:)`, moved
+    from `CursorTranscriptParser` into the tested file. It returns only real folders: a file named like the project
+    can no longer win the match, and a symbolic link is never followed into a privacy-prompting folder.
+  - A slug that cannot be decoded and is not under the home folder gets the new rule `cursor-slug-unresolved`, and the
+    `ProjectName` log prints its name private, because the whole slug spells out a folder path.
+  - A `file://` working directory is percent-decoded before it is named (`acme%20api` is `acme api`).
+  - Tests for each, the file and symbolic-link cases on a scratch folder tree; the OpenSpec change says the same.
+
 ### 2026-11-17 - Name worktree chats after their repository, and log how every project name is chosen
 - **Developer label:** "Make project-name detection observable, and fix its two known bugs"
 - **Agent label:** Claude Code (Opus 5.5) — project-name lane of the 2.0 release

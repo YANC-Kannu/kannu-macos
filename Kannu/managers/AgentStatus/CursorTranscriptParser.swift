@@ -173,26 +173,11 @@ enum CursorTranscriptParser {
         let resolution = ProjectNameRules.cursorProjectName(
             fromSlug: slug,
             homeDirectory: home,
-            contentsOfDirectory: { listableDirectoryContents($0, home: home) }
+            contentsOfDirectory: { ProjectNameRules.slugDecodableFolders(in: $0, homeDirectory: home) }
         )
         if slugResolutionCache.count >= 256 { slugResolutionCache.removeAll() }
         slugResolutionCache[slug] = .some(resolution)
         return resolution
-    }
-
-    /// Folders whose first read raises a macOS privacy prompt (or that live on another volume) are
-    /// never listed: a slug under one of them falls back to the guess instead. Kannu must not raise
-    /// a permission dialog to name a card (AGENTS.md, "No permission dialog before onboarding's
-    /// Permissions step").
-    private static let promptingHomeFolders = ["Desktop", "Documents", "Downloads", "Library", "Movies", "Music", "Pictures"]
-
-    private static func listableDirectoryContents(_ directory: String, home: String) -> [String]? {
-        if directory == "/Volumes" || directory.hasPrefix("/Volumes/") { return nil }
-        for folder in promptingHomeFolders {
-            let protected = home + "/" + folder
-            if directory == protected || directory.hasPrefix(protected + "/") { return nil }
-        }
-        return try? FileManager.default.contentsOfDirectory(atPath: directory)
     }
 
     static func analyze(path: URL) -> TranscriptAnalysis {
