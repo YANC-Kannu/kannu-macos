@@ -25,7 +25,11 @@ import Foundation
 import AppKit
 
 class AudioPlayer {
-    func play(fileName: String, fileExtension: String) {
-        NSSound(contentsOf:Bundle.main.url(forResource: fileName, withExtension: fileExtension)!, byReference: false)?.play()
+    /// Plays a bundled sound at `volume` (0 to 1). A missing file plays nothing rather than trapping.
+    func play(fileName: String, fileExtension: String, volume: Float = 1) {
+        guard let url = Bundle.main.url(forResource: fileName, withExtension: fileExtension),
+              let sound = NSSound(contentsOf: url, byReference: false) else { return }
+        sound.volume = volume
+        sound.play()
     }
 }

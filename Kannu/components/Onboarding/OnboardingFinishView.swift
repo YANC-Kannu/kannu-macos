@@ -23,27 +23,34 @@
 
 import SwiftUI
 
+/// Onboarding's last step, in Brain's theme: Kannu's eye logo, one line, and a sheet's buttons. Done
+/// closes onboarding and plays the welcome in the notch (`AppDelegate.startWelcome`); Open Brain plays it
+/// too and opens Brain. Nothing here moves: the welcome is the notch's.
 struct OnboardingFinishView: View {
     let onFinish: () -> Void
     let onOpenSettings: () -> Void
+
+    static let logoSize: CGFloat = 72
 
     var body: some View {
         VStack(spacing: SettingsTheme.sectionLabelGap) {
             Spacer()
 
-            Image(systemName: "sparkles")
-                .font(.system(size: 60))
-                .foregroundStyle(SettingsTheme.accentStrong)
-                .padding()
+            Image("logo2")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: Self.logoSize, height: Self.logoSize)
+                .clipShape(RoundedRectangle(cornerRadius: Self.logoSize * 0.22, style: .continuous))
+                .padding(.bottom, SettingsTheme.sectionLabelGap)
                 .accessibilityHidden(true)
 
-            Text("You're All Set!")
+            Text("You're set")
                 .font(SettingsTheme.pageTitle)
                 .foregroundStyle(SettingsTheme.ink)
                 .textSelection(.enabled)
                 .accessibilityAddTraits(.isHeader)
 
-            Text("You can now enjoy the app. If you want to tweak things further, you can always open Brain.")
+            Text("Kannu lives in your notch. Brain is a click away.")
                 .font(SettingsTheme.body)
                 .foregroundStyle(SettingsTheme.inkSecondary)
                 .multilineTextAlignment(.center)
@@ -56,11 +63,9 @@ struct OnboardingFinishView: View {
 
             // A sheet's buttons: trailing, the other choice before the verb, which Return presses.
             HStack(spacing: SettingsMetrics.rowContent) {
-                Button(action: onOpenSettings) {
-                    Label("Customize in Brain", systemImage: "brain")
-                }
+                Button("Open Brain", action: onOpenSettings)
 
-                Button("Finish", action: onFinish)
+                Button("Done", action: onFinish)
                     .buttonStyle(SettingsButtonStyle(.primary))
                     .keyboardShortcut(.defaultAction)
             }

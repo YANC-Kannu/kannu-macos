@@ -133,11 +133,11 @@ final class NotchEyeRulesTests: XCTestCase {
                        "pointer tracking is not resynced on every path, a reversal included")
     }
 
-    /// Right after the hello, before every live activity and HUD.
+    /// Right after onboarding's welcome line, before every live activity and HUD.
     func testTheEyeTakesTheClosedNotchFirst() throws {
         let content = NotchTeardownRulesTests.code(try Self.source("Kannu/ContentView.swift"))
-        let hello = try XCTUnwrap(content.range(of: "HelloAnimation()"), "the hello went away — move this pin")
-        let branch = try XCTUnwrap(content.range(of: "} else if", range: hello.upperBound..<content.endIndex))
+        let welcome = try XCTUnwrap(content.range(of: "NotchWelcomeView()"), "the welcome went away — move this pin")
+        let branch = try XCTUnwrap(content.range(of: "} else if", range: welcome.upperBound..<content.endIndex))
         let line = content[branch.lowerBound...].prefix { $0 != "\n" }
         XCTAssertTrue(line.contains("playsNotchEyeHere"), "the eye is not the closed notch's first branch: \(line)")
         XCTAssertTrue(content.contains("NotchEyeView("), "the closed notch's body never draws the eye")

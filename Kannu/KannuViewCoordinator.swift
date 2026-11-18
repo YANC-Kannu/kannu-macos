@@ -124,14 +124,17 @@ class KannuViewCoordinator: ObservableObject {
     @Published var selectedExtensionExperienceID: String?
     
     
-    /// True until the first hello has played. Since onboarding was versioned it only tells launch
-    /// whether an install predates that (`continueLaunch()`); the hello itself is `helloPending`.
+    /// True until the first welcome has played. Since onboarding was versioned it only tells launch
+    /// whether an install predates that (`continueLaunch()`); the welcome itself is `welcomePending`.
     @AppStorage("firstLaunch") var firstLaunch: Bool = true
-    /// Onboarding's finale is playing: the notch opens on its own, says hello and closes. Set by
-    /// `AppDelegate.startHello()` at onboarding's Finish, cleared by `KannuViewModel.closeHello()`.
-    /// Not stored: it used to be `firstLaunch`, which started the hello at launch, over the
-    /// onboarding window and its permission dialogs.
-    @Published var helloPending = false
+    /// Onboarding's finale is playing: Kannu's eye opens in the closed notch, the notch opens on
+    /// "Welcome to Kannu" (`welcomeShowsLine`) and closes. Set by `AppDelegate.startWelcome()` at
+    /// onboarding's Finish and cleared by the same run, on AppDelegate's clock. Not stored: it used to
+    /// be `firstLaunch`, which started the old hello at launch, over the onboarding window and its
+    /// permission dialogs.
+    @Published var welcomePending = false
+    /// The welcome's line is on screen: every notch window opens on it while this is true.
+    @Published var welcomeShowsLine = false
     /// Show / Hide Notch's eye opening or closing. Written only by
     /// `AppDelegate.applyNotchVisibility`, read by every window's `ContentView`. Not stored: a
     /// launch never plays it.

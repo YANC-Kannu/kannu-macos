@@ -4,6 +4,35 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Kannu's eye and "Welcome to Kannu" replace the hello, with a soft chime
+- **Developer label:** "the hello animation and app launch is terrible please update that also to our standards", then "I meant the final animation and welcoming to the app, that to be cleaner"
+- **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, PR 2 of 2 (steps 8–11 of the 18 Nov plan), stacked on PR 1
+- **Changes:**
+  - Onboarding's finale is `AppDelegate.startWelcome()`, once, on AppDelegate's clock: Done fades the onboarding
+    window out (0.25 s, none under Reduce Motion); Kannu's eye opens in the closed notch with Show Notch's own run
+    (`NotchEyeTimeline`, a fade under Reduce Motion); the notch opens on `NotchWelcomeView`, "Welcome to Kannu" in
+    Geist after an Iris dot, for 1.6 s; then it closes on the notch's own spring. About 2.9 s from the eye to the
+    close. Under Reduce Motion the notch opens and closes without moving and only the line fades.
+  - `HelloAnimation.swift` (boring.notch's rainbow "hello") and `KannuViewModel.closeHello()` are deleted;
+    `helloPending` is now `welcomePending`, with `welcomeShowsLine` for the open notch's line. Timings live in
+    `WelcomeTimeline`, beside `NotchEyeTimeline`.
+  - `.launchPermissionsChanged` no longer posts in the tick onboarding completes: `releaseOnboardingFeatures()`
+    posts it once, when the welcome closes or 3 s after Finish, whichever comes first. `firstLaunch` is cleared
+    by the welcome's end even when no notch is on screen to play it.
+  - The chime plays at volume 0.35, only while a notch window is on screen, and never when macOS's "Play user
+    interface sound effects" is off. `AudioPlayer` takes a volume and no longer force-unwraps a missing file.
+  - Finish is in Brain's theme: Kannu's eye logo, "You're set", "Kannu lives in your notch. Brain is a click
+    away.", Open Brain and Done.
+  - Strings: four new keys in all 17 languages; "Done" completed to 17, its Russian corrected from "Поддержать"
+    (Support) to "Готово"; "You're All Set!" retired.
+  - Tests: `WelcomeRulesTests` (played once, Reduce Motion, nothing repeats, the chime gated and soft, the
+    features after the welcome), each rule against a planted offender; `NotchEyeRulesTests` and
+    `FirstLaunchRulesTests` follow the rename. A `notchWelcome` DEBUG board.
+  - Docs: SETTINGS.md (Onboarding: Finish and the welcome), ReadMe, the 2.0.0 and beta.2 notes, and a line in
+    `release-2-0` §11.
+  - `release-2-0` tasks tidied (David: "Yes, clean it up"): 1.3, 5.5, 6.1, 6.2 and 7.1 are checked as superseded by
+    §11 (beta.2), 5.5's Mac check folded into 11.4; §10's three carried-over items are plain bullets, not gates.
+
 ### 2026-11-18 - One agent light beside the notch, a 16 pt icon, Tasks on by default, onboarding shows the light
 - **Developer label:** "make this layout better and also we dont want the old legacy path, actually remove it, also maybe reduce the logo size a bit on the right side. Also enable tasks by default"
 - **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, PR 1 of 2 (steps 1–7 of the 18 Nov plan)
