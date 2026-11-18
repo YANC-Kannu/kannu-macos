@@ -267,8 +267,10 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
             return ClaudeUsageSnapshot.merged(sources.sources, now: now)
         }
 
-        // Before the run is attributed: the cache contradicts Team's week, so it goes on no card.
-        XCTAssertEqual(try card(recorded: team)?.sevenDayPercent, 72, "the stale sample is all the card has")
+        // Before the run is attributed: the cache contradicts Team's week. Until 2026-11-18 it went on no
+        // card and Desktop's stale 72 % was all the card had; now the read itself gives it to the
+        // organization the file names (its profile predates the cache), Max, on Max's card.
+        XCTAssertEqual(try card(recorded: team)?.sevenDayPercent, 6, "the fresh week, before any run")
 
         // The run: the file's profile is two days old, the cache Max's.
         let context = ClaudeCachedUsage.read(from: config).context
@@ -467,6 +469,213 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
                                                          cacheOwner: .organization("max"), now: now)
         XCTAssertEqual(unverified.sources.compactMap { $0 }, [cache, desktop])
         XCTAssertTrue(unverified.claudeCodeOrganizationUnverified)
+    }
+
+    // MARK: - The freshest reading of the card's organization (2026-11-18)
+
+    func testAnUnrecordedCacheTheFileTiesToDesktopsOrganizationJoinsItsCard() {
+        // A first run: Kannu has recorded no organization yet. The file names Desktop's, so its cache
+        // is that organization's reading; Claude Code's statusline, whose organization is still a
+        // guess, stays off.
+        let statusline = snapshot("five_hour", 12, resetsIn: 3_000)
+        let cache = snapshot("seven_day", 71, resetsIn: 86_400, observedAgo: 1_800)
+        let desktop = snapshot("seven_day", 48, resetsIn: nil, observedAgo: 13 * 3_600)
+        let card = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                   desktopOrganization: "org-acme-max",
+                                                   claudeCodeOrganization: "org-acme-max",
+                                                   claudeCodeOrganizationRecorded: false,
+                                                   cacheNamedOrganization: "org-acme-max", now: now)
+        XCTAssertEqual(card.sources.compactMap { $0 }, [cache, desktop])
+        XCTAssertNil(card.secondCardSources)
+        XCTAssertTrue(card.claudeCodeOrganizationUnverified, "Kannu's own fetch still runs at once to record it")
+        XCTAssertEqual(card.cachePlacement, "cache first card (owner Claude Code's; Claude Code's and Desktop's the same; "
+                       + "Claude Code's unrecorded)", "the log line names no organization")
+        XCTAssertEqual(ClaudeUsageSnapshot.merged(card.sources, now: now)?.sevenDayPercent, 71,
+                       "the 13-hour-old desktop sample loses to the fresher cache")
+        // The file naming another organization than Desktop's keeps it off, as before.
+        let other = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                    desktopOrganization: "org-acme-max",
+                                                    claudeCodeOrganization: "org-acme-team",
+                                                    claudeCodeOrganizationRecorded: false,
+                                                    cacheNamedOrganization: "org-acme-team", now: now)
+        XCTAssertEqual(other.sources.compactMap { $0 }, [desktop])
+        // A profile fetched after the cache names nothing (`organizationNamingCache`): it may be another
+        // process's write-back, as on 2026-10-28.
+        let writtenBack = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                          desktopOrganization: "org-acme-max",
+                                                          claudeCodeOrganization: "org-acme-max",
+                                                          claudeCodeOrganizationRecorded: false, now: now)
+        XCTAssertEqual(writtenBack.sources.compactMap { $0 }, [desktop])
+        // So does a cache whose own week names nobody (`unknown`).
+        let unknown = ClaudeUsageSnapshot.cardSources(statusline: statusline, cache: cache, desktop: desktop,
+                                                      desktopOrganization: "org-acme-max",
+                                                      claudeCodeOrganization: "org-acme-max",
+                                                      claudeCodeOrganizationRecorded: false,
+                                                      cacheOwner: .unknown, cacheNamedOrganization: "org-acme-max", now: now)
+        XCTAssertEqual(unknown.sources.compactMap { $0 }, [desktop])
+        XCTAssertEqual(unknown.cachePlacement, "cache off the cards (owner unknown; Claude Code's and Desktop's the same; "
+                       + "Claude Code's unrecorded)")
+    }
+
+    func testACacheThatRulesOutTheRecordedOrganizationGoesToTheOneTheFileNames() {
+        let resets = ["org-acme-team": Resets(weekly: utc("2026-11-10T05:00:00Z"), reportedAt: utc("2026-11-09T12:00:00Z"))]
+        // Recorded on Team; the cache's week (Wednesday 00:00Z) contradicts Team's (Tuesday 05:00Z).
+        XCTAssertEqual(ClaudeCachedUsage.cacheOwner(weeklyReset: utc("2026-11-18T00:00:00Z"), claudeCode: "org-acme-team",
+                                                    named: "org-acme-max", resets: resets),
+                       .organization("org-acme-max"), "the file names Max, and nothing contradicts it")
+        XCTAssertEqual(ClaudeCachedUsage.cacheOwner(weeklyReset: utc("2026-11-18T00:00:00Z"), claudeCode: "org-acme-team",
+                                                    named: "org-acme-team", resets: resets),
+                       .unknown, "the file names the organization the cache rules out")
+        XCTAssertEqual(ClaudeCachedUsage.cacheOwner(weeklyReset: utc("2026-11-18T00:00:00Z"), claudeCode: "org-acme-team",
+                                                    named: nil, resets: resets), .unknown)
+        var both = resets
+        both["org-acme-max"] = Resets(weekly: utc("2026-11-12T12:00:00Z"), reportedAt: utc("2026-11-09T12:00:00Z"))
+        XCTAssertEqual(ClaudeCachedUsage.cacheOwner(weeklyReset: utc("2026-11-18T00:00:00Z"), claudeCode: "org-acme-team",
+                                                    named: "org-acme-max", resets: both),
+                       .unknown, "the cache contradicts the named organization's week too")
+        // A cache that agrees with the recorded organization stays its own, whatever the file names.
+        XCTAssertEqual(ClaudeCachedUsage.cacheOwner(weeklyReset: utc("2026-11-17T05:00:00Z"), claudeCode: "org-acme-team",
+                                                    named: "org-acme-max", resets: resets), .claudeCode)
+    }
+
+    /// F1 of the 2026-11-18 first-run review, from the two sources' own shapes: no recorded organization,
+    /// Claude Code's file and Claude Desktop's newest sample naming the same one, Desktop's sample hours
+    /// old, the cache fresh. The card showed Desktop's sample as "the only live reading". Then the
+    /// 2026-11-16 shape: a stale recorded organization the cache rules out. Made-up data throughout.
+    func testTheCardShowsTheFreshestReadingOfItsOrganization() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let statusline = directory.appendingPathComponent("claude-usage.json")
+        let config = directory.appendingPathComponent(".claude.json")
+        let desktopURL = directory.appendingPathComponent("plan-usage-history.json")
+        let max = "org-acme-max", team = "org-acme-team"
+        func ms(_ text: String) -> NSNumber { NSNumber(value: utc(text).timeIntervalSince1970 * 1000) }
+        try write(["version": 2, "samples": [
+            ["t": ms("2026-11-17T06:00:00Z"), "org": max, "u": ["fh": NSNumber(value: 20), "sd": NSNumber(value: 44)]],
+            ["t": ms("2026-11-17T10:00:00Z"), "org": max, "u": ["fh": NSNumber(value: 35), "sd": NSNumber(value: 48)]]
+        ]], to: desktopURL)
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-16T20:00:00Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "five_hour": ["utilization": NSNumber(value: 15), "resets_at": "2026-11-18T02:50:00.000000+00:00"],
+                           "seven_day": ["utilization": NSNumber(value: 73), "resets_at": "2026-11-18T00:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let now = utc("2026-11-17T23:00:00Z")
+        func card(recorded: String?, resets: [String: Resets]) throws -> (ClaudeUsageSnapshot.CardSources, ClaudeUsageSnapshot?) {
+            let full = try XCTUnwrap(ClaudeUsageSources.read(ClaudeUsageSources.Request(
+                statuslineURL: statusline, configURL: config, desktopURL: desktopURL, now: now,
+                recordedOrganization: recorded, resets: resets)).full)
+            let sources = ClaudeUsageSnapshot.cardSources(
+                statusline: nil, cache: full.config.snapshot, desktop: full.desktop,
+                desktopOrganization: full.desktopOrganization, claudeCodeOrganization: full.claudeCodeOrganization,
+                claudeCodeOrganizationRecorded: recorded != nil, cacheOwner: full.cacheOwner,
+                cacheNamedOrganization: full.cacheNamedOrganization, now: now)
+            return (sources, ClaudeUsageSnapshot.mergedOrRead(sources.sources, now: now))
+        }
+
+        // First run: nothing recorded, nothing remembered.
+        let (firstRun, shown) = try card(recorded: nil, resets: [:])
+        XCTAssertTrue(firstRun.claudeCodeOrganizationUnverified)
+        XCTAssertEqual(shown?.sevenDayPercent, 73, "the cache, not Desktop's 13-hour-old 48 %")
+        XCTAssertEqual(shown?.fiveHourPercent, 15)
+        XCTAssertEqual(shown?.window("seven_day")?.observedAt, utc("2026-11-17T22:30:00Z"))
+
+        // A stale recorded organization (Team) whose week the cache contradicts.
+        let teamWeek = [team: Resets(weekly: utc("2026-11-10T05:00:00Z"), reportedAt: utc("2026-11-09T12:00:00Z"))]
+        let (stale, staleShown) = try card(recorded: team, resets: teamWeek)
+        XCTAssertNil(stale.secondCardSources)
+        XCTAssertEqual(staleShown?.sevenDayPercent, 73, "the cache is Max's, on Max's card, before any run")
+
+        // Claude Code really on Team, its cache on Team's week: Max's card keeps Desktop's sample alone,
+        // and Team's numbers get a card of their own. Two organizations' bars never merge.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": team, "organizationType": "claude_team",
+                                    "profileFetchedAt": ms("2026-11-16T20:00:00Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 12), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (separate, separateShown) = try card(recorded: team, resets: teamWeek)
+        XCTAssertEqual(separateShown?.sevenDayPercent, 48, "Desktop's own organization, from Desktop")
+        XCTAssertEqual(separate.secondCardSources.flatMap { ClaudeUsageSnapshot.merged($0, now: now) }?.sevenDayPercent, 12)
+        let (unrecordedTeam, unrecordedShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(unrecordedShown?.sevenDayPercent, 48)
+        XCTAssertNil(unrecordedTeam.secondCardSources, "an unverified organization gets no card of its own")
+
+        // The 2026-10-28 shape: the file names Desktop's organization with a profile fetched after the
+        // cache (another process's write-back), and the cache is Team's. It stays off Max's card.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-17T22:31:30Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 0), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (_, writtenBackShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(writtenBackShown?.sevenDayPercent, 48, "Team's zeros never reach Max's card")
+        let (_, staleWrittenBack) = try card(recorded: team, resets: [:])
+        XCTAssertEqual(staleWrittenBack?.sevenDayPercent, 48)
+
+        // CodeRabbit on PR #76, the measured 2026-10-28 order: Max's profile written back *before* the
+        // Team cache. The profile ordering passes; the cache's own week does not agree with Max's
+        // sample from inside that week (0 % after 48 %), so it stays off Max's card.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-17T22:29:40Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 0), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (beforeCache, beforeCacheShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(beforeCacheShown?.sevenDayPercent, 48, "Team's zeros never reach Max's card")
+        XCTAssertTrue(beforeCache.claudeCodeOrganizationUnverified, "Kannu's first fetch settles it")
+
+        // The known limit, kept by David's call (2026-11-18, CodeRabbit's follow-up on PR #76): the same
+        // order with another organization's week running at or above Desktop's sample is
+        // indistinguishable on a fresh install, so Team's 60 % shows on Max's card until Kannu's first
+        // fetch records the organization. Requiring a remembered week instead would bring F1 back on
+        // every fresh install. If this assertion changes, entry 24's residual risk changes with it.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-17T22:29:40Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 60), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (knownLimit, knownLimitShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(knownLimitShown?.sevenDayPercent, 60, "the documented first-run limit")
+        XCTAssertTrue(knownLimit.claudeCodeOrganizationUnverified, "the first fetch still runs at once")
+    }
+
+    func testTheCachesWeekMustAgreeWithDesktopsSample() {
+        func cache(_ percent: Double, resetsIn days: Double, observedAgo: TimeInterval = 600) -> ClaudeUsageSnapshot {
+            ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: percent, resetsAt: now.addingTimeInterval(days * 86_400))],
+                                observedAt: now.addingTimeInterval(-observedAgo))
+        }
+        let desktop = ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: 57, resetsAt: nil, resetIsInferred: true)],
+                                          observedAt: now.addingTimeInterval(-13 * 3_600))
+        XCTAssertTrue(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1), desktop: desktop), "the week went on rising")
+        XCTAssertTrue(ClaudeUsageSnapshot.weekAgrees(cache: cache(56.5, resetsIn: 1), desktop: desktop), "a point of rounding")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(0, resetsIn: 1), desktop: desktop), "another organization's week")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 6.8), desktop: desktop),
+                       "the sample is from before the cache's week: nothing to compare")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1, observedAgo: 14 * 3_600), desktop: desktop),
+                       "a cache older than the sample")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1), desktop: nil))
+        let noReset = ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: 75, resetsAt: nil)], observedAt: now)
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: noReset, desktop: desktop))
     }
 
     // MARK: - The off-main read
