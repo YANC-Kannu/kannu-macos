@@ -2054,7 +2054,9 @@ the behaviour itself is checked by eye on the installed build.
 **Rule:** each Claude card shows, per window, the newest reading of that card's organization,
 whatever its source. When Claude Code's cache is that organization's reading, it goes on that card:
 on its own week's evidence, on Kannu's recorded organization, or because `~/.claude.json` names that
-organization while nothing contradicts it. A reading never joins another organization's card.
+organization while nothing contradicts it. A reading never joins another organization's card on the
+evidence Kannu has; before its first run records Claude Code's organization, that evidence is the file's
+profile and the cache's own week checked against Desktop's sample, so the exception under "Kept" remains.
 
 **Broken twice in three days**, each time by an older Claude Desktop sample left as the card's only
 reading while Claude Code's cache of the same organization was fresh:
@@ -2076,7 +2078,12 @@ still pins that). On 2026-11-17 the profile predated the cache by an hour. With 
 `ClaudeCachedUsage.cacheOwner` takes the organization the file names: a cache
 that rules out the recorded organization goes to it when nothing contradicts its week, on every read,
 not only after a run. `cardSources` puts an unrecorded cache on Desktop's card when the file names
-Desktop's organization and the cache's owner is not unknown. Claude Code's statusline stays off until
+Desktop's organization, the cache's owner is not unknown, and the cache's own week agrees with
+Desktop's newest sample (`ClaudeUsageSnapshot.weekAgrees`: the sample inside the cache's week and
+before it, the cache's percentage at least the sample's). The profile ordering alone was not enough
+(CodeRabbit on #76): on 2026-10-28 the next run's Team cache was fetched 19 s *after* that Max profile,
+and on a fresh install it would have joined Max's card. Its 0 % against Max's 100 % that week fails
+the check; on 2026-11-17 the cache's 75 % against Desktop's 57 % passed. Claude Code's statusline stays off until
 the organization is recorded, because its organization is still the guess. Then `selections` takes
 the newest reading per window. Desktop samples get no age limit of their own: Claude Desktop writes
 them only while its usage panel is in use, so gaps of days are normal, and a limit would blank the
@@ -2087,9 +2094,10 @@ organizations compare, never an id.
 
 **Kept:** the first card follows Claude Desktop's organization (2026-10-18), and two organizations get
 two cards (2026-10-30). The residual risk is entry 8's: every Claude Code process writes the file's
-organization, a desktop-hosted session's included. A profile written back *before* a cache of another
-organization, with no remembered week to check the cache against, would still be read as naming it,
-until Kannu's first run records the real organization, which a first run asks for at once.
+organization, a desktop-hosted session's included. On a fresh install, a profile written back
+*before* a cache of another organization whose week happens to run at or above Desktop's sample would
+still be read as naming it, until Kannu's first run records the real organization. That run starts
+at once when the Usage tab opens.
 
 **Guard.** `ClaudeUsageOrganizationTests.testTheCardShowsTheFreshestReadingOfItsOrganization`
 replays both shapes from made-up files (first run, stale recorded organization) and pins that two

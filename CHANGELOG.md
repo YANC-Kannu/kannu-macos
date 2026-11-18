@@ -4,6 +4,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - An unrecorded Claude cache joins Desktop's card only when its own week agrees
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #76, through Auto-fix
+- **Changes:**
+  - `ClaudeUsageSnapshot.weekAgrees`: while Claude Code's organization is unrecorded, its cache joins Claude
+    Desktop's card only when the cache's weekly percentage is at least Desktop's newest sample from inside the
+    cache's week. The profile ordering alone let a Team cache fetched after a written-back Max profile (the
+    2026-10-28 order) read as Max's on a fresh install. The stale-recorded path, which needs the recorded
+    organization's week contradicted, is unchanged.
+  - Tests: that order end to end, and `weekAgrees`'s cases.
+  - `docs/REGRESSIONS.md` entry 24 states the first-run exception in its rule and the narrower residual risk; the
+    `fix-usage-fresh-reading` spec and its Mac check state the preconditions; the beta.2 and 2.0.0 notes say
+    "account" or "organization", not "plan", since two organizations can share a plan.
+
 ### 2026-11-18 - The Claude card shows the freshest reading of its organization
 - **Developer label:** "Yes, fix first" (F1: the Claude usage card still shows a stale Desktop reading)
 - **Agent label:** Claude Code (Opus 5.5) — usage lane of the 2.0 release, before beta.2

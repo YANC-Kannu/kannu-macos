@@ -13,4 +13,11 @@
 - [x] 3.1 Full KannuTests, and the Debug build with compile activity confirmed.
 - [x] 3.2 `bash .githooks/pre-commit` with a CHANGELOG entry staged.
 - [x] 3.3 `openspec validate --all --strict --no-interactive`.
-- [ ] 3.4 On the Mac, after the hold lifts: on a first run, the card's weekly bar matches `cachedUsageUtilization` within one read, and the log shows `cache placement: cache first card`.
+- [ ] 3.4 On the Mac, after the hold lifts, check a first run. Preconditions:
+  - `oauthAccount.organizationUuid` in `~/.claude.json` names the same organization as Desktop's newest sample;
+  - `profileFetchedAt` is no later than `cachedUsageUtilization.fetchedAtMs`;
+  - the cache's weekly window is live and at or above Desktop's sample from that week.
+
+  Then the card's weekly bar matches `cachedUsageUtilization` within one read, and the log shows
+  `cache placement: cache first card`. If a precondition fails, the card shows Desktop's reading until
+  Kannu's first fetch records the organization, as designed.

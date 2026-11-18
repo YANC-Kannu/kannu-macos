@@ -392,6 +392,21 @@ struct ClaudeUsageSnapshot: Equatable {
                                    planName: first.planName)
     }
 
+    /// Whether the cache's weekly reading can be the same organization's week as Claude Desktop's
+    /// newest sample: the sample lies inside the cache's week and before the cache, and the cache's
+    /// percentage is at least the sample's (a week's usage only rises; one point of rounding).
+    /// False whenever the check cannot run. Measured 2026-10-28: Team's cache at 0 % fetched after a
+    /// Max profile was written back, against Max's sample at 100 % in the same week — another
+    /// organization's. 2026-11-17: the cache at 75 % against Desktop's 57 % from that morning.
+    static func weekAgrees(cache: ClaudeUsageSnapshot?, desktop: ClaudeUsageSnapshot?) -> Bool {
+        guard let cache, let weekly = cache.window(sevenDayKey), let reset = weekly.resetsAt,
+              let desktop, let sample = desktop.window(sevenDayKey) else { return false }
+        let sampledAt = sample.observedAt ?? desktop.observedAt
+        let cacheAt = weekly.observedAt ?? cache.observedAt
+        guard sampledAt >= reset.addingTimeInterval(-7 * 86_400), sampledAt <= cacheAt else { return false }
+        return weekly.percent + 1 >= sample.percent
+    }
+
     /// Whose usage Claude Code's cache holds, as far as a read can tell.
     /// `ClaudeCachedUsage.cacheOwner(weeklyReset:claudeCode:resets:)` decides it.
     enum CacheOwner: Equatable {
@@ -646,7 +661,9 @@ enum ClaudeUsageSources {
         /// Claude Code's organization for this read: the recorded one, else the file's.
         var claudeCodeOrganization: String?
         var cacheOwner: ClaudeUsageSnapshot.CacheOwner
-        /// The organization the file names for its cache (`ClaudeCachedUsage.organizationNamingCache`).
+        /// The organization the file names for its cache (`ClaudeCachedUsage.organizationNamingCache`),
+        /// when it is Claude Desktop's and the cache's own week agrees with Desktop's sample
+        /// (`ClaudeUsageSnapshot.weekAgrees`); nil otherwise.
         var cacheNamedOrganization: String? = nil
         var desktop: ClaudeUsageSnapshot?
         var desktopOrganization: String?
@@ -675,9 +692,14 @@ enum ClaudeUsageSources {
             resets: resetsWithCache(request.resets, context: context, owner: owner,
                                     recordedOrganization: request.recordedOrganization),
             claudeCodeOrganization: claudeCode)
+        // For an unrecorded Claude Code organization the file's word needs the cache's own to agree:
+        // the profile ordering alone let a Team cache fetched after a Max profile written back read
+        // as Max's (the 2026-10-28 sequence; CodeRabbit on PR #76).
+        let joinsDesktop = named != nil && named == desktop.organizationUUID
+            && ClaudeUsageSnapshot.weekAgrees(cache: config.snapshot, desktop: desktop.snapshot)
         return Result(statusline: statusline,
                       full: Full(config: config, claudeCodeOrganization: claudeCode, cacheOwner: owner,
-                                 cacheNamedOrganization: named,
+                                 cacheNamedOrganization: joinsDesktop ? named : nil,
                                  desktop: desktop.snapshot, desktopOrganization: desktop.organizationUUID))
     }
 

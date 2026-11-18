@@ -623,6 +623,41 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
         XCTAssertEqual(writtenBackShown?.sevenDayPercent, 48, "Team's zeros never reach Max's card")
         let (_, staleWrittenBack) = try card(recorded: team, resets: [:])
         XCTAssertEqual(staleWrittenBack?.sevenDayPercent, 48)
+
+        // CodeRabbit on PR #76, the measured 2026-10-28 order: Max's profile written back *before* the
+        // Team cache. The profile ordering passes; the cache's own week does not agree with Max's
+        // sample from inside that week (0 % after 48 %), so it stays off Max's card.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-17T22:29:40Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 0), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (beforeCache, beforeCacheShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(beforeCacheShown?.sevenDayPercent, 48, "Team's zeros never reach Max's card")
+        XCTAssertTrue(beforeCache.claudeCodeOrganizationUnverified, "Kannu's first fetch settles it")
+    }
+
+    func testTheCachesWeekMustAgreeWithDesktopsSample() {
+        func cache(_ percent: Double, resetsIn days: Double, observedAgo: TimeInterval = 600) -> ClaudeUsageSnapshot {
+            ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: percent, resetsAt: now.addingTimeInterval(days * 86_400))],
+                                observedAt: now.addingTimeInterval(-observedAgo))
+        }
+        let desktop = ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: 57, resetsAt: nil, resetIsInferred: true)],
+                                          observedAt: now.addingTimeInterval(-13 * 3_600))
+        XCTAssertTrue(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1), desktop: desktop), "the week went on rising")
+        XCTAssertTrue(ClaudeUsageSnapshot.weekAgrees(cache: cache(56.5, resetsIn: 1), desktop: desktop), "a point of rounding")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(0, resetsIn: 1), desktop: desktop), "another organization's week")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 6.8), desktop: desktop),
+                       "the sample is from before the cache's week: nothing to compare")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1, observedAgo: 14 * 3_600), desktop: desktop),
+                       "a cache older than the sample")
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: cache(75, resetsIn: 1), desktop: nil))
+        let noReset = ClaudeUsageSnapshot(windows: [.init(key: "seven_day", percent: 75, resetsAt: nil)], observedAt: now)
+        XCTAssertFalse(ClaudeUsageSnapshot.weekAgrees(cache: noReset, desktop: desktop))
     }
 
     // MARK: - The off-main read
