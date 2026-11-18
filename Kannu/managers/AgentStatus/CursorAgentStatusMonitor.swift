@@ -590,6 +590,8 @@ final class CursorAgentStatusMonitor: ObservableObject {
         var claudeCodeUnverified = false
         /// Whose usage the cache holds (`ClaudeCachedUsage.cacheOwner`).
         var cacheOwner: ClaudeUsageSnapshot.CacheOwner = .claudeCode
+        /// The organization the file names for its cache (`ClaudeCachedUsage.organizationNamingCache`).
+        var cacheNamed: String?
     }
 
     private struct ClaudeUsageLoad {
@@ -628,6 +630,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 claudeUsageOrganizations.claudeCode = full.claudeCodeOrganization
                 claudeUsageOrganizations.claudeCodeRecorded = recorded
                 claudeUsageOrganizations.cacheOwner = full.cacheOwner
+                claudeUsageOrganizations.cacheNamed = full.cacheNamedOrganization
                 Self.rememberOrganizationType(full.config.context)
             }
             claudeUsageDesktop = full.desktop
@@ -700,7 +703,7 @@ final class CursorAgentStatusMonitor: ObservableObject {
             statusline: statusline, cache: cache, desktop: desktop,
             desktopOrganization: organizations.desktop, claudeCodeOrganization: organizations.claudeCode,
             claudeCodeOrganizationRecorded: organizations.claudeCodeRecorded,
-            cacheOwner: organizations.cacheOwner, now: now)
+            cacheOwner: organizations.cacheOwner, cacheNamedOrganization: organizations.cacheNamed, now: now)
         var organizations = organizations
         organizations.claudeCodeUnverified = card.claudeCodeOrganizationUnverified
         let sources = card.sources
@@ -727,7 +730,9 @@ final class CursorAgentStatusMonitor: ObservableObject {
                 return source == desktop ? "desktop" : "source"
             }
         }
-        var decisions: [(key: String, signature: String, line: String)] = []
+        var decisions: [(key: String, signature: String, line: String)] = [
+            ("cache placement", card.cachePlacement, "cache placement: \(card.cachePlacement)")
+        ]
         for (name, list) in [("first card", sources), ("second card", card.secondCardSources ?? [])] {
             for selection in ClaudeUsageSnapshot.selections(list, now: now) {
                 let log = ClaudeUsageSnapshot.selectionLog(selection, labels: labels(list))

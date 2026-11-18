@@ -143,9 +143,10 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
   Set in the beta.2 release-prep change; build 13 sits above beta.1's 12.
 - [x] 11.2 Write `docs/release-notes/2.0.0-beta.2.md` in beta.1's shape, covering everything merged since beta.1, and
   catch `2.0.0.md` up (9.7's #55 line among them). [Cloud] Written in the same change.
+- [x] 11.x The Claude card shows its organization's freshest reading (F1)
 - [ ] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
 - [ ] 11.4 David's Mac checks on that install: beta.2's "Please try" list, and the live checks its changes left open
-  (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4,
+  (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4, `fix-usage-fresh-reading` 3.4,
   `update-sideways-agent-pill` 4.6, `fix-claude-desktop-detection` 3.4). [Mac] [David]
 - [ ] 11.5 Tag `v2.0.0-beta.2` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
   unchanged. [CI] [David]
