@@ -18,77 +18,69 @@
 
 import XCTest
 
-/// The sideways agent pill's arithmetic: equal wings around the housing, the dots left, one icon right.
+/// The sideways agent pill's arithmetic: equal wings around the housing, one dot left, one icon right.
 final class ClosedAgentPillLayoutTests: XCTestCase {
     typealias L = ClosedAgentPillLayout
 
-    private func pill(height: CGFloat = 32, housing: CGFloat = 185, dots: Int = 1, shield: Bool = false) -> L {
-        L(closedHeight: height, housingWidth: housing, dotCount: dots, showsShield: shield)
+    private func pill(height: CGFloat = 32, housing: CGFloat = 185, shield: Bool = false) -> L {
+        L(closedHeight: height, housingWidth: housing, showsShield: shield)
     }
 
-    func testTheIconIsTheClosedHeightLessTwelve() {
-        XCTAssertEqual(pill(height: 32).iconSize, 20)
-        XCTAssertEqual(pill(height: 38).iconSize, 26)
-        XCTAssertEqual(pill(height: 8).iconSize, 0, "never negative")
+    /// 2026-11-18, David: "reduce the logo size a bit". 16 pt on a 32 pt notch, down from 20.
+    func testTheIconIsTheClosedHeightLessSixteen() {
+        XCTAssertEqual(L.iconInset, 16)
+        XCTAssertEqual(pill(height: 32).iconSize, 16)
+        XCTAssertEqual(pill(height: 38).iconSize, 22)
+        XCTAssertEqual(pill(height: 12).iconSize, 0, "never negative")
+        XCTAssertEqual(L.iconSize(closedHeight: 32), 16, "the lock pill sizes its icon the same way")
     }
 
-    func testTheDotsAreWhatTheBandDraws() {
-        XCTAssertEqual(pill(dots: 1).dotsWidth, 10)
-        XCTAssertEqual(pill(dots: 3).dotsWidth, 42, "three 10 pt dots, two 6 pt gaps")
-        XCTAssertEqual(pill(dots: 0).dotsWidth, 0)
-    }
-
-    /// The plan's figures: about 32 pt a wing for Minimal, 54 pt for Classic, on a 32 pt notch.
+    /// The plan's figures: 28 | housing | 28 on a 32 pt notch.
     func testEachWingFitsTheWiderOfItsContentsPlusPadding() {
-        XCTAssertEqual(pill(height: 32, dots: 1).wingWidth, 32, "the 20 pt icon is wider than one dot")
-        XCTAssertEqual(pill(height: 32, dots: 3).wingWidth, 54, "three dots are wider than the icon")
-        XCTAssertEqual(pill(height: 38, dots: 1).wingWidth, 38)
-        XCTAssertEqual(pill(height: 38, dots: 3).wingWidth, 54)
+        XCTAssertEqual(pill(height: 32).wingWidth, 28, "the 16 pt icon is wider than the 10 pt dot")
+        XCTAssertEqual(pill(height: 32).width, 185 + 56)
+        XCTAssertEqual(pill(height: 38).wingWidth, 34)
+        XCTAssertEqual(pill(height: 24).wingWidth, 22, "the dot is wider than an 8 pt icon")
     }
 
     func testTheShieldWidensBothWingsAndKeepsTheHousingCentred() {
-        let plain = pill(dots: 1)
-        let shielded = pill(dots: 1, shield: true)
-        XCTAssertEqual(shielded.leftContentWidth, 10 + L.shieldSpacing + L.shieldWidth)
+        let plain = pill()
+        let shielded = pill(shield: true)
+        XCTAssertEqual(shielded.leftContentWidth, L.dotSize + L.shieldSpacing + L.shieldWidth)
         XCTAssertEqual(shielded.wingWidth, 38)
         XCTAssertGreaterThan(shielded.width, plain.width)
-        XCTAssertEqual(pill(dots: 0, shield: true).leftContentWidth, L.shieldWidth, "no gap before a shield alone")
     }
 
     func testThePillIsTheHousingAndTwoEqualWings() {
         for height: CGFloat in [0, 24, 32, 37, 38, 44] {
-            for dots in [1, 3] {
-                for shield in [false, true] {
-                    let p = pill(height: height, housing: 185, dots: dots, shield: shield)
-                    XCTAssertEqual(p.width, 185 + 2 * p.wingWidth, accuracy: 1e-9)
-                    // The housing is centred: the icon's wing mirrors the dots' wing.
-                    let housingMid = p.wingWidth + p.housingWidth / 2
-                    XCTAssertEqual(housingMid, p.width / 2, accuracy: 1e-9)
-                }
+            for shield in [false, true] {
+                let p = pill(height: height, housing: 185, shield: shield)
+                XCTAssertEqual(p.width, 185 + 2 * p.wingWidth, accuracy: 1e-9)
+                // The housing is centred: the icon's wing mirrors the dot's wing.
+                let housingMid = p.wingWidth + p.housingWidth / 2
+                XCTAssertEqual(housingMid, p.width / 2, accuracy: 1e-9)
             }
         }
     }
 
     func testTheContentStaysInsideItsWing() {
         for height: CGFloat in [24, 32, 38] {
-            for dots in [1, 3] {
-                for shield in [false, true] {
-                    let p = pill(height: height, dots: dots, shield: shield)
-                    XCTAssertGreaterThanOrEqual(p.leftContentRect.minX, L.wingPadding - 1e-9)
-                    XCTAssertLessThanOrEqual(p.leftContentRect.maxX, p.wingWidth - L.wingPadding + 1e-9)
-                    XCTAssertGreaterThanOrEqual(p.iconRect.minX, p.wingWidth + p.housingWidth + L.wingPadding - 1e-9)
-                    XCTAssertLessThanOrEqual(p.iconRect.maxX, p.width - L.wingPadding + 1e-9)
-                    XCTAssertEqual(p.iconRect.midY, height / 2, accuracy: 1e-9)
-                    XCTAssertEqual(p.leftContentRect.midY, height / 2, accuracy: 1e-9)
-                }
+            for shield in [false, true] {
+                let p = pill(height: height, shield: shield)
+                XCTAssertGreaterThanOrEqual(p.leftContentRect.minX, L.wingPadding - 1e-9)
+                XCTAssertLessThanOrEqual(p.leftContentRect.maxX, p.wingWidth - L.wingPadding + 1e-9)
+                XCTAssertGreaterThanOrEqual(p.iconRect.minX, p.wingWidth + p.housingWidth + L.wingPadding - 1e-9)
+                XCTAssertLessThanOrEqual(p.iconRect.maxX, p.width - L.wingPadding + 1e-9)
+                XCTAssertEqual(p.iconRect.midY, height / 2, accuracy: 1e-9)
+                XCTAssertEqual(p.leftContentRect.midY, height / 2, accuracy: 1e-9)
             }
         }
     }
 
     func testNegativeInputsClampToZero() {
-        let p = L(closedHeight: -4, housingWidth: -10, dotCount: -2, showsShield: false)
+        let p = L(closedHeight: -4, housingWidth: -10, showsShield: false)
         XCTAssertEqual(p.iconSize, 0)
-        XCTAssertEqual(p.dotsWidth, 0)
-        XCTAssertEqual(p.width, 2 * L.wingPadding * 2)
+        XCTAssertEqual(p.housingWidth, 0)
+        XCTAssertEqual(p.width, 2 * (L.dotSize + 2 * L.wingPadding))
     }
 }

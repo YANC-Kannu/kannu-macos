@@ -84,10 +84,9 @@ else already schedules Discovery — Kannu then only reads, and labels those sna
 ## 4. How a high-severity finding gets your attention
 
 - **In the closed notch:** a monochrome shield beside the traffic light — never a fourth light
-  colour. On a notched MacBook the light sits beside the notch by default (2.0), and there the
-  shield is the small glyph in the light's left wing, beside the dot, while the light shows.
-  With the light below the notch (Brain › Agents › Traffic light › Advanced) and on displays
-  without a notch, the shield is a pill with the finding's title that stays until you acknowledge
+  colour. On a notched MacBook the light sits beside the notch (2.0), and there the shield is the
+  small glyph in the light's left wing, beside the dot, while the light shows. Only on displays
+  without a notch is the shield a pill with the finding's title that stays until you acknowledge
   it (default). Brain offers *For 5 seconds, then glyph*, *Glyph only* and *Off*. While a Focus
   mode is on, only the small glyph shows; the pill appears when Focus ends. Clicking the pill
   opens the panel.

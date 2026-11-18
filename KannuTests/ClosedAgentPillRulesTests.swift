@@ -20,8 +20,10 @@ import XCTest
 
 /// The sideways agent pill (David, 2026-11-18): on a notched MacBook the light sits beside the housing
 /// with the agent's app icon opposite, it shows only on a state switch, and while it shows it takes the
-/// closed notch from music and a running timer, which then return with no light in their centre. The
-/// band below the notch stays as `AgentPillLayout.belowNotch`, unchanged. The closed notch is one
+/// closed notch from music and a running timer, which then return with no light in their centre. Since
+/// 2026-11-18 it is the only light on a notched MacBook: the 1.x band below the notch and the Classic
+/// three-dot style are gone (David: "we dont want the old legacy path, actually remove it", "no need
+/// clasic"). Displays without a notch keep their centred light. The closed notch is one
 /// if/else-if chain in a SwiftUI view with no unit surface, so these rules read the source, each
 /// checked against a planted offender.
 final class ClosedAgentPillRulesTests: XCTestCase {
@@ -41,7 +43,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
         let planted = """
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
                           MusicLiveActivity(secondary: musicSecondary)
-                      } else if usesSidewaysAgentPill && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight {
+                      } else if isPhysicalNotchScreen && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight {
                           sidewaysAgentPill()
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
                           TimerLiveActivity(
@@ -69,8 +71,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
                     }
                 }
                           TimerLiveActivity(
-                              agentLight: showAgentTrafficLight
-                                  ? TimerAgentLight(
+                              showsAgentLight: showAgentTrafficLight
             """
         XCTAssertEqual(Self.stackingProblems(in: planted), [
             "music or a timer still holds the light lit in sideways mode",
@@ -79,26 +80,43 @@ final class ClosedAgentPillRulesTests: XCTestCase {
         ])
     }
 
-    // MARK: - The legacy band
+    // MARK: - No band, one light
 
-    func testTheBandIsUnchangedBelowTheNotch() throws {
+    /// The band below a physical notch and the Classic style are gone, with their settings: nothing in the
+    /// app names them, and the centred light stays for displays without a notch and the Dynamic Island.
+    func testNoBandAndOneLight() throws {
+        let sources = try Self.appSources()
+        XCTAssertGreaterThan(sources.count, 100, "the scan read too few files")
+        for (path, text) in sources {
+            for gone in ["AgentPillLayout", "AgentTrafficLightStyle", "physicalNotchAgentTrafficLight",
+                         "shouldExpandPhysicalNotchForAgent", "usesSidewaysAgentPill",
+                         "bandBody", "TimerAgentLight"] where Self.usesWord(gone, in: Self.code(text)) {
+                XCTFail("\(path) still uses \(gone)")
+            }
+        }
+
         let content = try Self.read(Self.contentViewPath)
-        let uses = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var usesSidewaysAgentPill: Bool", in: content))
-        XCTAssertTrue(uses.contains("agentPillLayout == .sideways && isPhysicalNotchScreen"),
-                      "sideways must apply on a notched MacBook only: notchless and island displays keep their dots")
-        let expand = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var shouldExpandPhysicalNotchForAgent: Bool", in: content))
-        XCTAssertTrue(expand.contains("!usesSidewaysAgentPill"), "the sideways pill must grow no band")
-        XCTAssertTrue(expand.contains("!vm.hideOnClosed"))
-
         let activity = try Self.read(Self.activityPath)
-        XCTAssertTrue(activity.contains("var sideways = false"), "the band must stay the activity's default")
-        let band = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var bandBody: some View", in: activity))
-        XCTAssertTrue(band.contains("SecurityAlertPill("), "the shield-and-title pill stays with the band")
-        XCTAssertTrue(band.contains(".frame(width: contentWidth, height: notchContentHeight)"))
+        XCTAssertTrue(activity.contains("var sideways = false"), "the centred light must stay the activity's default")
+        let centred = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var centredBody: some View", in: activity))
+        XCTAssertTrue(centred.contains("SecurityAlertPill("), "the shield-and-title pill stays with the centred light")
+        XCTAssertTrue(centred.contains(".frame(width: contentWidth, height: notchContentHeight)"))
+        XCTAssertTrue(content.contains("sideways: isPhysicalNotchScreen"),
+                      "sideways must apply on a notched MacBook only: notchless and island displays keep their light")
 
+        let dots = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "struct AgentTrafficLightDots: View", in: activity))
+        XCTAssertTrue(dots.contains("if let litColor {\n            dot(litColor)\n        }"), "the light draws more than the lit dot")
+    }
+
+    /// The two stored choices are removed on launch, as the minimalistic UI's keys are.
+    func testTheRemovedChoicesAreCleanedUp() throws {
         let constants = try Self.read(Self.constantsPath)
-        XCTAssertTrue(constants.contains("Key<AgentPillLayout>(\"agentPillLayout\", default: .sideways)"),
-                      "sideways is the default for everyone, updaters included")
+        let migrate = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "static func migrateRemovedAgentLightChoices()", in: constants))
+        XCTAssertTrue(migrate.contains(#"["agentTrafficLightStyle", "agentPillLayout"]"#))
+        XCTAssertTrue(migrate.contains("UserDefaults.standard.removeObject(forKey: key)"))
+        let app = try Self.read("Kannu/KannuApp.swift")
+        XCTAssertTrue(app.contains("Defaults.Keys.migrateRemovedMinimalisticUI()\n        Defaults.Keys.migrateRemovedAgentLightChoices()"),
+                      "the cleanup no longer runs beside the other removed-feature migrations")
     }
 
     // MARK: - The icon
@@ -138,7 +156,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
     func testReduceMotionFadesTheWings() throws {
         let content = try Self.read(Self.contentViewPath)
         let animation = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var agentRevealAnimation: Animation?", in: content))
-        XCTAssertTrue(animation.contains("usesSidewaysAgentPill && reduceMotion ? nil : vm.animation"),
+        XCTAssertTrue(animation.contains("isPhysicalNotchScreen && reduceMotion ? nil : vm.animation"),
                       "under Reduce Motion the notch must not slide its wings out")
         let transition = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private var agentLightTransition: AnyTransition", in: content))
         XCTAssertTrue(transition.contains("? .opacity"), "under Reduce Motion the wings fade")
@@ -167,7 +185,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
     func testTheLockPillRevealsOnASwitchWhileLockedAndOnTheFlash() throws {
         let lock = try Self.read(Self.lockPillPath)
         let arm = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private func armAgentReveal()", in: lock))
-        for clause in ["agentPillLayout == .sideways", "enableAgentStatusFeature", "LockScreenManager.shared.isLocked",
+        for clause in ["enableAgentStatusFeature", "LockScreenManager.shared.isLocked",
                        "notchRevealHoldSeconds"] {
             XCTAssertTrue(arm.contains(clause), "the lock pill's reveal lost \(clause)")
         }
@@ -178,7 +196,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
         XCTAssertTrue(manager.contains("guard Defaults[.enableLockScreenLiveActivity] || forAttentionAlert else {"),
                       "the pill follows the lock-screen live activity setting, the attention flash aside")
         let flash = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "func flashForAttentionAlert(duration: TimeInterval)", in: manager))
-        XCTAssertTrue(flash.contains("overlayModel.showsAgentForAlert = Defaults[.agentPillLayout] == .sideways"),
+        XCTAssertTrue(flash.contains("overlayModel.showsAgentForAlert = true"),
                       "the attention flash no longer carries the dot and icon")
         let size = try XCTUnwrap(ClosedNotchTimerRulesTests.body(after: "private func windowSize(for notchSize: CGSize) -> CGSize", in: manager))
         XCTAssertTrue(size.contains("let totalWidth = notchSize.width + (indicatorWidth * 2) + (horizontalPadding * 2)"),
@@ -197,7 +215,7 @@ final class ClosedAgentPillRulesTests: XCTestCase {
         if let music, music < pill { problems.append("the sideways pill is not drawn ahead of the music pill") }
         if let timer, timer < pill { problems.append("the sideways pill is not drawn ahead of the timer") }
         let condition = lines[..<pill].last { $0.contains("} else if ") } ?? ""
-        if !condition.contains("usesSidewaysAgentPill") {
+        if !condition.contains("isPhysicalNotchScreen") {
             problems.append("the sideways pill's branch is not sideways-only")
         }
         if !condition.contains("agentLightDeadline != nil") {
@@ -212,13 +230,13 @@ final class ClosedAgentPillRulesTests: XCTestCase {
     static func stackingProblems(in text: String) -> [String] {
         var problems: [String] = []
         let light = ClosedNotchTimerRulesTests.body(after: "private var showAgentTrafficLight: Bool", in: text) ?? ""
-        if !light.contains("if !usesSidewaysAgentPill {\n            if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }") {
+        if !light.contains("if isNonNotchScreen {\n            if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }") {
             problems.append("music or a timer still holds the light lit in sideways mode")
         }
-        if !text.contains("if showAgentTrafficLight && !usesSidewaysAgentPill {\n                        AgentTrafficLightIndicator()") {
+        if !text.contains("if showAgentTrafficLight && isNonNotchScreen {\n                        AgentTrafficLightIndicator()") {
             problems.append("the music pill draws the light in its centre in sideways mode")
         }
-        if !text.contains("agentLight: showAgentTrafficLight && !usesSidewaysAgentPill") {
+        if !text.contains("showsAgentLight: showAgentTrafficLight && isNonNotchScreen") {
             problems.append("the timer draws the light in its centre in sideways mode")
         }
         return problems
@@ -228,6 +246,38 @@ final class ClosedAgentPillRulesTests: XCTestCase {
     static func motion(in text: String) -> [String] {
         ["scaleEffect", "repeatForever", ".animation(", "withAnimation", "TimelineView", "symbolEffect", "phaseAnimator",
          "keyframeAnimator", "rotationEffect"].filter(text.contains)
+    }
+
+    /// Every Swift file under `Kannu/`, keyed by its repository path.
+    private static func appSources() throws -> [String: String] {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        var result: [String: String] = [:]
+        let files = FileManager.default.enumerator(at: root.appendingPathComponent("Kannu"), includingPropertiesForKeys: nil)
+        while let url = files?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            result[String(url.path.dropFirst(root.path.count + 1))] = try String(contentsOf: url, encoding: .utf8)
+        }
+        return result
+    }
+
+    /// Whether `word` appears in `text` as a whole identifier: `AgentPillLayout` is not `ClosedAgentPillLayout`.
+    static func usesWord(_ word: String, in text: String) -> Bool {
+        text.range(of: "(?<![A-Za-z0-9_])" + NSRegularExpression.escapedPattern(for: word) + "(?![A-Za-z0-9_])",
+                   options: .regularExpression) != nil
+    }
+
+    func testAWholeWordIsCaughtAndALongerNameIsNot() {
+        XCTAssertTrue(Self.usesWord("AgentPillLayout", in: "@Default(.x) var y: AgentPillLayout"))
+        XCTAssertTrue(Self.usesWord("AgentPillLayout", in: "Key<AgentPillLayout>(\"agentPillLayout\")"))
+        XCTAssertFalse(Self.usesWord("AgentPillLayout", in: "ClosedAgentPillLayout(closedHeight: 32)"))
+        XCTAssertFalse(Self.usesWord("AgentPillLayout", in: "AgentPillLayoutPreview()"))
+    }
+
+    /// Code only: comments may name what was removed.
+    private static func code(_ text: String) -> String {
+        text.components(separatedBy: "\n")
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
     }
 
     private static func read(_ path: String) throws -> String {

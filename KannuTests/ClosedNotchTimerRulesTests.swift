@@ -70,10 +70,8 @@ final class ClosedNotchTimerRulesTests: XCTestCase {
     func testTheTimerDrawsTheLightInItsCentre() throws {
         let text = try Self.read(Self.timerActivityPath)
         let middle = try XCTUnwrap(Self.body(after: "private func middleSectionView()", in: text), "middleSectionView is gone")
-        XCTAssertTrue(middle.contains("if let agentLight") && middle.contains("AgentTrafficLightIndicator()"),
+        XCTAssertTrue(middle.contains("if showsAgentLight") && middle.contains("AgentTrafficLightIndicator()"),
                       "the timer's centre no longer draws the agent light")
-        XCTAssertTrue(middle.contains("agentLight?.expandedHeight ?? notchContentHeight"),
-                      "below a physical notch the centre must take the agent band's height")
     }
 
     /// CodeRabbit on #110: a running timer holds a hide-until-hover island out, which ends the
@@ -152,7 +150,7 @@ final class ClosedNotchTimerRulesTests: XCTestCase {
             problems.append("the timer's branch is not timerOwnsClosedNotch")
         }
         let call = text.range(of: "TimerLiveActivity(").map { String(text[$0.upperBound...].prefix(200)) } ?? ""
-        if !call.contains("agentLight: showAgentTrafficLight") {
+        if !call.contains("showsAgentLight: showAgentTrafficLight") {
             problems.append("the timer does not carry the agent light")
         }
         return problems

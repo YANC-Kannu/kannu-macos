@@ -47,7 +47,6 @@ struct LockScreenLiveActivityOverlay: View {
 	/// The light's mirror, never the monitor (docs/REGRESSIONS.md entry 10): only a state switch is read here,
 	/// and `AgentTrafficLightIndicator` draws the dot and icon.
 	@ObservedObject private var agentLight = CursorAgentStatusMonitor.shared.projection
-	@Default(.agentPillLayout) private var agentPillLayout
 	@Default(.enableAgentStatusFeature) private var enableAgentStatusFeature
 	/// The sideways reveal on this pill: set by a state switch while locked, cleared by one sleep.
 	@State private var agentRevealDeadline: Date?
@@ -77,10 +76,9 @@ struct LockScreenLiveActivityOverlay: View {
 	/// The sideways pill on the lock screen: during a reveal (a state switch while locked, or the attention
 	/// alert's flash), the dot stands where the lock icon was and the agent's app icon fills the other wing;
 	/// then the lock icon returns. Only while the lock icon is fully locked, so unlocking still animates it.
-	/// Below the notch (`AgentPillLayout.belowNotch`) leaves this pill as it was.
 	private var showsAgent: Bool {
 		if agentPreview != nil { return true }
-		guard agentPillLayout == .sideways, enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
+		guard enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
 			  animator.progress >= 0.999 else { return false }
 		return agentRevealDeadline != nil || model.showsAgentForAlert
 	}
@@ -159,7 +157,7 @@ struct LockScreenLiveActivityOverlay: View {
 		if let agentPreview {
 			AgentLockPillRow(wingWidth: indicatorSize, housingWidth: notchSize.width, height: notchSize.height,
 							 iconSource: agentPreview.iconSource, symbolsOnly: true, accessibilityLabel: "") {
-				AgentTrafficLightDots(style: .minimal, state: agentPreview.state)
+				AgentTrafficLightDots(state: agentPreview.state)
 			}
 		} else {
 			AgentTrafficLightIndicator(placement: .lockPill(wingWidth: indicatorSize, housingWidth: notchSize.width,
@@ -169,7 +167,7 @@ struct LockScreenLiveActivityOverlay: View {
 
 	/// A switch of the published light while locked starts the same 7 s reveal the notch uses.
 	private func armAgentReveal() {
-		guard agentPillLayout == .sideways, enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
+		guard enableAgentStatusFeature, agentLight.shouldShowTrafficLight,
 			  LockScreenManager.shared.isLocked else { return }
 		agentRevealDeadline = Date().addingTimeInterval(notchRevealHoldSeconds)
 	}

@@ -6104,112 +6104,6 @@
       },
       "shouldTranslate" : false
     },
-    "A band below the notch holds the light, and it stays in the music and timer pills." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يعرض شريط أسفل الشق الضوء، ويبقى الضوء في شريطي الموسيقى والمؤقت."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Světlo je v pruhu pod notchem a zůstává i v pilulkách hudby a časovače."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ein Band unter der Notch zeigt das Licht, und es bleibt in den Musik- und Timer-Pillen."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A band below the notch holds the light, and it stays in the music and timer pills."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una franja bajo el notch muestra la luz, que permanece en las píldoras de música y temporizador."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Une bande sous l’encoche affiche le voyant, qui reste dans les pastilles de la musique et du minuteur."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A lámpa a notch alatti sávban jelenik meg, és a zene és az időzítő kapszulájában is ott marad."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Una fascia sotto il notch mostra la luce, che resta nelle pillole della musica e del timer."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "노치 아래 띠에 신호등이 표시되며, 음악 및 타이머 알약에도 계속 표시됩니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Een strook onder de inkeping toont het lampje, en het blijft in de muziek- en timerpil staan."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pasek pod notchem pokazuje światło, które pozostaje też w pigułkach muzyki i minutnika."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uma faixa abaixo do notch mostra a luz, que permanece nas pílulas de música e do temporizador."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Полоса под вырезом показывает индикатор, и он остаётся в капсулах музыки и таймера."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "แถบใต้รอยบากแสดงไฟสถานะ และไฟจะคงอยู่ในแคปซูลเพลงและตัวจับเวลา"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çentiğin altındaki bir şerit ışığı gösterir; ışık müzik ve zamanlayıcı haplarında da kalır."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Смуга під вирізом показує індикатор, і він залишається в капсулах музики й таймера."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刘海下方的横条显示指示灯，它也会一直显示在音乐和计时器胶囊中。"
-          }
-        }
-      }
-    },
     "A cheap gpt-4o pass decides whether Claude runs." : {
       "localizations" : {
         "ar" : {
@@ -10098,112 +9992,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "智能体停止后，红灯会保持所选时长，随后指示灯变暗并隐藏。空闲时保持红灯可见会覆盖隐藏和变暗的延迟。"
-          }
-        }
-      }
-    },
-    "Agent light position" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "موضع ضوء الوكيل"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Umístění světla agenta"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Position des Agent-Lichts"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Agent light position"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Posición de la luz del agente"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Position du voyant de l’agent"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Az ügynöklámpa helye"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Posizione della luce dell’agente"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "에이전트 신호등 위치"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Positie van het agentlampje"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Położenie światła agenta"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Posição da luz do agente"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Положение индикатора агента"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ตำแหน่งไฟสถานะเอเจนต์"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ajan ışığının konumu"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Розташування індикатора агента"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "智能体指示灯位置"
           }
         }
       }
@@ -17035,112 +16823,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "行为与样式"
-          }
-        }
-      }
-    },
-    "Below the notch" : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "أسفل الشق"
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pod notchem"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unter der Notch"
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Below the notch"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bajo el notch"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sous l’encoche"
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A notch alatt"
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sotto il notch"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "노치 아래"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Onder de inkeping"
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pod notchem"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abaixo do notch"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Под вырезом"
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ใต้รอยบาก"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çentiğin altında"
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Під вирізом"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "刘海下方"
           }
         }
       }
@@ -49732,6 +49414,112 @@
       },
       "shouldTranslate" : false
     },
+    "It shows for a few seconds after each change, with the agent's app icon across the notch. You can change its colors in Brain." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يظهر لبضع ثوانٍ بعد كل تغيير، مع أيقونة تطبيق الوكيل على الجانب الآخر من الشق. يمكنك تغيير ألوانه في Brain."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zobrazí se na několik sekund po každé změně, s ikonou aplikace agenta na druhé straně notche. Jeho barvy můžete změnit v Brain."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es erscheint nach jeder Änderung für ein paar Sekunden, mit dem App-Symbol des Agenten auf der anderen Seite der Notch. Seine Farben kannst du in Brain ändern."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "It shows for a few seconds after each change, with the agent's app icon across the notch. You can change its colours in Brain."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aparece durante unos segundos tras cada cambio, con el icono de la aplicación del agente al otro lado del notch. Puedes cambiar sus colores en Brain."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il s’affiche quelques secondes après chaque changement, avec l’icône de l’app de l’agent de l’autre côté de l’encoche. Vous pouvez changer ses couleurs dans Brain."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minden változás után néhány másodpercig látható, a notch másik oldalán az ügynök alkalmazásának ikonjával. A színeit a Brain-ben módosíthatod."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compare per qualche secondo dopo ogni cambiamento, con l’icona dell’app dell’agente dall’altro lato del notch. Puoi cambiarne i colori in Brain."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "변경이 있을 때마다 몇 초 동안 표시되며, 노치 반대편에는 에이전트의 앱 아이콘이 함께 나타납니다. 색상은 Brain에서 바꿀 수 있습니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Het verschijnt een paar seconden na elke wijziging, met het app-pictogram van de agent aan de andere kant van de inkeping. Je kunt de kleuren wijzigen in Brain."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pojawia się na kilka sekund po każdej zmianie, z ikoną aplikacji agenta po drugiej stronie notcha. Jego kolory zmienisz w Brain."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ela aparece por alguns segundos após cada mudança, com o ícone do app do agente do outro lado do notch. Você pode mudar as cores dela no Brain."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Он появляется на несколько секунд после каждого изменения, а по другую сторону выреза — значок приложения агента. Цвета можно изменить в Brain."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไฟจะแสดงไม่กี่วินาทีหลังการเปลี่ยนแปลงแต่ละครั้ง พร้อมไอคอนแอปของเอเจนต์อีกฝั่งของรอยบาก คุณเปลี่ยนสีได้ใน Brain"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Her değişiklikten sonra birkaç saniye görünür; ajanın uygulama simgesi çentiğin diğer tarafında yer alır. Renklerini Brain'de değiştirebilirsiniz."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Він з’являється на кілька секунд після кожної зміни, а з іншого боку вирізу — значок додатка агента. Кольори можна змінити в Brain."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每次变化后显示几秒，智能体的应用图标显示在刘海另一侧。你可以在 Brain 中更改它的颜色。"
+          }
+        }
+      }
+    },
     "It was made in Apple Notes, and it also moves to Recently Deleted there." : {
       "localizations" : {
         "ar" : {
@@ -68469,6 +68257,112 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每当有智能体开始等待时提醒一次，无论同时有多少个。开启“减弱动态效果”后，刘海会静态发光，而不是划过光芒。"
+          }
+        }
+      }
+    },
+    "One light beside the notch shows how your AI agents are doing." : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ضوء واحد بجانب الشق يُظهر حال وكلاء الذكاء الاصطناعي لديك."
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedno světlo vedle notche ukazuje, jak si vedou vaši AI agenti."
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Licht neben der Notch zeigt, wie es deinen KI-Agenten geht."
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One light beside the notch shows how your AI agents are doing."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una luz junto al notch muestra cómo van tus agentes de IA."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un voyant à côté de l’encoche indique où en sont vos agents IA."
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Egy lámpa a notch mellett mutatja, hogyan haladnak az AI-ügynökeid."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Una luce accanto al notch mostra come stanno andando i tuoi agenti IA."
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "노치 옆의 신호등 하나로 AI 에이전트의 상태를 보여 줍니다."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eén lampje naast de inkeping laat zien hoe je AI-agents ervoor staan."
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jedno światło obok notcha pokazuje, jak radzą sobie twoje agenty AI."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uma luz ao lado do notch mostra como seus agentes de IA estão indo."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Один индикатор рядом с вырезом показывает, как дела у ваших ИИ-агентов."
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ไฟดวงเดียวข้างรอยบากบอกสถานะของเอเจนต์ AI ของคุณ"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Çentiğin yanındaki tek bir ışık, yapay zekâ ajanlarınızın durumunu gösterir."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Один індикатор поруч із вирізом показує, як справи у ваших ШІ-агентів."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刘海旁的一盏指示灯，告诉你 AI 智能体的状态。"
           }
         }
       }
@@ -97695,112 +97589,6 @@
         }
       }
     },
-    "The light sits left of the notch and the agent's app icon right of it, for a few seconds after each change." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "يظهر الضوء يسار الشق وأيقونة تطبيق الوكيل يمينه، لبضع ثوانٍ بعد كل تغيير."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Světlo je vlevo od notche a ikona aplikace agenta vpravo od něj, vždy na několik sekund po každé změně."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Das Licht sitzt links neben der Notch und das App-Symbol des Agenten rechts daneben, für ein paar Sekunden nach jeder Änderung."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The light sits left of the notch and the agent's app icon right of it, for a few seconds after each change."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La luz aparece a la izquierda del notch y el icono de la aplicación del agente a su derecha, durante unos segundos tras cada cambio."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Le voyant s’affiche à gauche de l’encoche et l’icône de l’app de l’agent à sa droite, pendant quelques secondes après chaque changement."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A lámpa a notch bal oldalán, az ügynök alkalmazásának ikonja a jobb oldalán jelenik meg, minden változás után néhány másodpercig."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "La luce compare a sinistra del notch e l’icona dell’app dell’agente a destra, per qualche secondo dopo ogni cambiamento."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "변경이 있을 때마다 몇 초 동안 노치 왼쪽에 신호등이, 오른쪽에 에이전트의 앱 아이콘이 표시됩니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Het lampje staat links van de inkeping en het app-pictogram van de agent rechts ervan, een paar seconden na elke wijziging."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Światło pojawia się po lewej stronie notcha, a ikona aplikacji agenta po prawej, na kilka sekund po każdej zmianie."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A luz fica à esquerda do notch e o ícone do app do agente à direita, por alguns segundos após cada mudança."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Индикатор появляется слева от выреза, а значок приложения агента — справа, на несколько секунд после каждого изменения."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ไฟสถานะอยู่ทางซ้ายของรอยบากและไอคอนแอปของเอเจนต์อยู่ทางขวา เป็นเวลาไม่กี่วินาทีหลังการเปลี่ยนแปลงแต่ละครั้ง"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Her değişiklikten sonra birkaç saniye boyunca ışık çentiğin solunda, ajanın uygulama simgesi sağında görünür."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Індикатор з’являється ліворуч від вирізу, а значок додатка агента — праворуч, на кілька секунд після кожної зміни."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每次变化后的几秒内，指示灯显示在刘海左侧，智能体的应用图标显示在右侧。"
-          }
-        }
-      }
-    },
     "The notch is the front door. Brain is the room behind it." : {
       "localizations" : {
         "ar" : {
@@ -106912,112 +106700,6 @@
         }
       }
     },
-    "Where the light sits on a MacBook with a notch." : {
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "موضع الضوء على MacBook المزوّد بشق."
-          }
-        },
-        "cs" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Kde je světlo na MacBooku s notchem."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wo das Licht auf einem MacBook mit Notch sitzt."
-          }
-        },
-        "en-GB" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Where the light sits on a MacBook with a notch."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dónde aparece la luz en un MacBook con notch."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Où le voyant s’affiche sur un MacBook avec encoche."
-          }
-        },
-        "hu" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hol jelenik meg a lámpa a notchos MacBookon."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dove compare la luce su un MacBook con notch."
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "노치가 있는 MacBook에서 신호등이 표시되는 위치입니다."
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Waar het lampje staat op een MacBook met inkeping."
-          }
-        },
-        "pl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gdzie pojawia się światło na MacBooku z notchem."
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Onde a luz fica em um MacBook com notch."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Где показывается индикатор на MacBook с вырезом."
-          }
-        },
-        "th" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ตำแหน่งของไฟสถานะบน MacBook ที่มีรอยบาก"
-          }
-        },
-        "tr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Çentikli bir MacBook'ta ışığın nerede durduğu."
-          }
-        },
-        "uk" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Де показується індикатор на MacBook із вирізом."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在带刘海的 MacBook 上指示灯的位置。"
-          }
-        }
-      }
-    },
     "White" : {
       "localizations" : {
         "ko" : {
@@ -108498,6 +108180,112 @@
     "Your agents are taking a coffee break ☕" : {
       "comment" : "A message displayed when the user's agents are on a break.",
       "isCommentAutoGenerated" : true
+    },
+    "Your agents, in the notch" : {
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "وكلاؤك، في الشق"
+          }
+        },
+        "cs" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vaši agenti v notchi"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine Agenten in der Notch"
+          }
+        },
+        "en-GB" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your agents, in the notch"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tus agentes, en el notch"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vos agents, dans l’encoche"
+          }
+        },
+        "hu" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Az ügynökeid a notchban"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I tuoi agenti, nel notch"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "노치 속 에이전트"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je agents, in de inkeping"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Twoje agenty w notchu"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seus agentes, no notch"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваши агенты — в вырезе"
+          }
+        },
+        "th" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "เอเจนต์ของคุณ ในรอยบาก"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajanlarınız çentikte"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ваші агенти — у вирізі"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的智能体，就在刘海里"
+          }
+        }
+      }
     },
     "Your calendar data is only used to show your events and is never shared." : {
       "extractionState" : "stale",

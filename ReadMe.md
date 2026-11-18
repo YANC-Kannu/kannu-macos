@@ -31,11 +31,9 @@ attribution.
   in the notch, across every session, for Claude Code, Cursor, Codex, VS Code, Antigravity and more.
 - **Beside the notch:** on a MacBook with a notch, each change slides the light out to the left of
   the notch and the agent's app icon to the right, for a few seconds, ahead of music or a running
-  timer, which come back when it goes. Below the notch, the 1.x band, is under Brain › Agents ›
-  Traffic light › Advanced. A display without a notch shows the light in the middle.
-- **Make the light yours:** Classic (all three lights, the inactive ones dimmed) or Minimal (only the
-  lit one), with a colour for each state from a curated palette. Two states can never share a
-  colour, so the lights stay readable with red-green colour blindness.
+  timer, which come back when it goes. A display without a notch shows the light in the middle.
+- **Make the light yours:** one lit dot, with a colour for each state from a curated palette. Two
+  states can never share a colour, so the light stays readable with red-green colour blindness.
 - **Usage and quota:** Claude's rate limits in the notch, grouped as Session and Weekly with a
   per-model window, one reset countdown per group, and bar colour driven by the severity the server
   itself reports. Codex, Cursor and Antigravity have their own cards.

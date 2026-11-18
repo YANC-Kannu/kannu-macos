@@ -78,7 +78,7 @@ struct OnboardingView: View {
                 .transition(.opacity)
 
             case .trafficLightStyle:
-                TrafficLightStyleSelectionView(
+                AgentLightShowcaseView(
                     onContinue: {
                         advance(to: .caffeinateChoice)
                     }

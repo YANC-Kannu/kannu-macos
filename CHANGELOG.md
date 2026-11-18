@@ -4,6 +4,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - One agent light beside the notch, a 16 pt icon, Tasks on by default, onboarding shows the light
+- **Developer label:** "make this layout better and also we dont want the old legacy path, actually remove it, also maybe reduce the logo size a bit on the right side. Also enable tasks by default"
+- **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, PR 1 of 2 (steps 1–7 of the 18 Nov plan)
+- **Changes:**
+  - Classic is gone ("no need clasic"): `AgentTrafficLightStyle`, its `agentTrafficLightStyle` key, Brain › Agents'
+    Traffic light style row and its search entry. `AgentTrafficLightDots` draws the one lit dot everywhere, the
+    Agents overview's hero and the DEBUG boards included.
+  - The band below the notch is gone: `AgentPillLayout`, its `agentPillLayout` key, the band's sizing in
+    `matters.swift`, its branches in `ContentView`, `AgentTrafficLightLiveActivity` and `TimerLiveActivity`
+    (`TimerAgentLight` becomes a `showsAgentLight` flag), and the Advanced disclosure with its search entry. A notched
+    MacBook always draws the sideways pill, and the lock-screen pill always takes the dot and icon. Displays without
+    a notch and the Dynamic Island keep the centred light (`bandBody` is now `centredBody`).
+  - `migrateRemovedAgentLightChoices()` removes both stored keys on launch, beside `migrateRemovedMinimalisticUI()`.
+  - The pill's app icon is `closed height − 16`, 16 pt on a 32 pt notch, so a wing is 28 pt; the lock-screen pill's
+    icon follows, in an unchanged window. `ClosedAgentPillLayout` drops its dot count.
+  - `enableTasks` defaults to true, pinned by `TasksOnByDefaultTests`. Turning it on raises no dialog.
+  - Onboarding's light step is a showcase, not a choice: `AgentLightShowcaseView` (was
+    `TrafficLightStyleSelectionView`) shows the real pill at 32 pt with a real housing's ratio in three still rows,
+    a short explanation and Continue, centred, with no empty band. `AgentPillLayoutPreview` is now `AgentPillPreview`
+    and takes a `closedHeight`.
+  - Strings: three new keys in all 17 languages; five retired keys removed from the catalog.
+  - Tests: `ClosedAgentPillLayoutTests` at 16 pt; `ClosedAgentPillRulesTests` pins no band and one light, and the
+    key cleanup; `ClosedNotchTimerRulesTests` follows the flag; the settings inventory drops to 247 / 278 / 272.
+  - Docs: SETTINGS.md (Onboarding, Advanced), ReadMe, ADR.md §4, the 2.0.0 and beta.2 notes, the
+    `update-sideways-agent-pill` delta and tasks, and a line in `release-2-0` §11.
+
 ### 2026-11-18 - Upstream copyright notices restored, other mentions quieter
 - **Developer label:** "we donot have to specifically mention atoll or dynamic notch apps epxlicitly outside in git or in website right, please see where we have to mention that according to liscense requirements and modify that to keep that less evident"
 - **Agent label:** Claude Code (Opus 5.5) — upstream notices lane, Part A of the 18 Nov plan David approved
