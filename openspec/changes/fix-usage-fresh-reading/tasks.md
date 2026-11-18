@@ -15,8 +15,10 @@
 - [x] 3.3 `openspec validate --all --strict --no-interactive`.
 - [ ] 3.4 On the Mac, after the hold lifts, check a first run. Preconditions:
   - `oauthAccount.organizationUuid` in `~/.claude.json` names the same organization as Desktop's newest sample;
-  - `profileFetchedAt` is no later than `cachedUsageUtilization.fetchedAtMs`;
-  - the cache's weekly window is live and at or above Desktop's sample from that week.
+  - `profileFetchedAt` is no later than `cachedUsageUtilization.fetchedAtMs`, within the code's 2 s of slack;
+  - Desktop's newest sample lies inside the cache's week and is no later than the cache;
+  - the cache's weekly window is live, at or above that sample's percentage (the code allows one point below,
+    for rounding).
 
   Then the card's weekly bar matches `cachedUsageUtilization` within one read, and the log shows
   `cache placement: cache first card`. If a precondition fails, the card shows Desktop's reading until
