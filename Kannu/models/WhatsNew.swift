@@ -40,7 +40,7 @@ enum WhatsNew {
     }
 
     /// - Parameters:
-    ///   - isUpgrade: an earlier version ran here, so its hello has played and cleared `firstLaunch`.
+    ///   - isUpgrade: an earlier version ran here, so its finale has played and cleared `firstLaunch`.
     ///   - onboardingComplete: onboarding does not open this launch (`LaunchPermissionManager.isOnboardingComplete`).
     ///   - seenEdition: the edition last seen (`Defaults[.whatsNewSeenEdition]`); 0 when none was.
     static func decision(isUpgrade: Bool, onboardingComplete: Bool, seenEdition: Int) -> Decision {

@@ -878,8 +878,7 @@ sheet does, and paints `SettingsTheme.panel` under every step and under the titl
   The line under the name sits inside the button, so it stays unselectable. A list's cards are `listRowGap` apart, the
   profiles' grid `cardPadding`. A card's notch preview keeps the notch's black and its own colours. YouTube Music's
   GitHub link sits over its card, never inside the card's button.
-- **Its buttons trailing**, the verb `.primary`. Finish's are a sheet's: Customize in Brain, then Finish, which Return
-  presses.
+- **Its buttons trailing**, the verb `.primary`. Finish's are a sheet's: Open Brain, then Done, which Return presses.
 - **The Permissions step keeps one card per permission.** `LaunchPermissionRow` is shared with General's Permissions,
   where it is a row. In both, Allow is the row's primary and Not now quiet (the design review's finding 4). Our own
   styles draw alike in a window that is not key, where a native prominent button turns grey, so the rows need no tint
@@ -893,8 +892,24 @@ sheet does, and paints `SettingsTheme.panel` under every step and under the titl
 
 `SettingsDesignSystemRulesTests` holds the root, the panel, Allow's rank, and no `.borderedProminent` under
 `Onboarding/`. No string changed with the theme: the steps' titles keep their Title Case. Behaviour did not change
-either: when a permission is asked, the welcome music and every gate are `FirstLaunchRulesTests`' and
+either: when a permission is asked, the welcome chime and every gate are `FirstLaunchRulesTests`' and
 `LaunchGateRulesTests`'.
+
+**Finish and the welcome** (since 2026-11-18, replacing boring.notch's rainbow "hello"). Finish centres Kannu's eye
+logo over "You're set" and one line, "Kannu lives in your notch. Brain is a click away.", with Open Brain and Done.
+Done fades the window out (`WelcomeTimeline.windowFade`, none under Reduce Motion), then `AppDelegate.startWelcome`
+plays the welcome once, on its own clock:
+
+- Kannu's eye opens in the closed notch, with Show Notch's own run (`NotchEyeTimeline`; a fade under Reduce Motion).
+- The notch opens on `NotchWelcomeView`, "Welcome to Kannu" in Geist after an Iris dot, holds for
+  `WelcomeTimeline.lineHold` and closes on the notch's own spring. Under Reduce Motion it opens and closes without
+  moving, and only the line fades. About 2.9 s from the eye to the close, and nothing repeats.
+- The chime (`playWelcomeSound`) plays at `WelcomeTimeline.chimeVolume`, only when a notch window is on screen, and
+  never when macOS's "Play user interface sound effects" is off.
+- `.launchPermissionsChanged`, which starts the features onboarding held back, posts when the welcome closes, or
+  `WelcomeTimeline.featureStartCap` after Finish at the latest, never in the tick the welcome begins.
+
+`WelcomeRulesTests` holds each rule, against planted offenders; the `notchWelcome` board draws the line settled.
 
 Every step has a board: `OnboardingView(snapshotStep:)` at the window's size, named from `OnboardingStep`'s cases
 (`onboardingWelcome` to `onboardingFinished`), and `onboardingPermissionsAll`, that step's whole list, which the window

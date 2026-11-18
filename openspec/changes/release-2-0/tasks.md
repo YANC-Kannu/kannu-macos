@@ -14,8 +14,9 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
   `super/brain-6-around` once both Build runners pass. [CI] [David] Merged as 16263d8b.
 - [x] 1.2 Request CodeRabbit's re-review of #52. Read it in full, fix or answer every note (the lean rules), and post
   the replies. [David] Its one note was fixed in 418dee32, and the review after that was clean.
-- [ ] 1.3 David's Mac checks on the installed combined build, F1 (New note's Return) first. The list is in `handoff.md`.
+- [x] 1.3 David's Mac checks on the installed combined build, F1 (New note's Return) first. The list is in `handoff.md`.
   [Mac] [David] The stack landed first, on David's yes, so these checks now run on the final install (section 6).
+  — superseded by §11 (beta.2)
 - [x] 1.4 #42: mark it ready and merge it into `development`, with a merge commit. [David] Merged as 70ab4242.
 - [x] 1.5 #43: retarget it to `development`, mark it ready and merge it. [David] Merged as a711fece.
 - [x] 1.6 #52: the same, once its review is answered and #56 is in. [David] Merged as d7d839d3.
@@ -66,18 +67,20 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 - [x] 5.4 Rule tests: never before the Terms, never on a fresh install, never during onboarding, and shown once.
   Add a DEBUG board from a fixture. [Mac] `WhatsNewTests`, `WhatsNewRulesTests`; boards `whatsNew` and
   `whatsNewLanguages`.
-- [ ] 5.5 Gates: full KannuTests, the Debug build, boards before and after, and the hook. Then a Mac check on an
+- [x] 5.5 Gates: full KannuTests, the Debug build, boards before and after, and the hook. Then a Mac check on an
   updated install and on a fresh user account. [Mac] [David] The gates passed on 2026-11-13: 2,534 tests with 0
   failures, a clean Debug build with no new warning (24, as before), the boards, and the hook. The Mac checks wait.
+  — superseded by §11 (beta.2); Mac check folded into 11.4
 
 ## 6. Final install and Mac checks
-- [ ] 6.1 Build the signed Release app from `development` with everything above, and install it the house way: quit,
-  back up, replace, then verify the binary's date and a symbol. [Mac] [David]
-- [ ] 6.2 David's Mac checks on that install: the checkpoint's list and #56's, both in `handoff.md`. [Mac] [David]
+- [x] 6.1 Build the signed Release app from `development` with everything above, and install it the house way: quit,
+  back up, replace, then verify the binary's date and a symbol. [Mac] [David] — superseded by §11 (beta.2)
+- [x] 6.2 David's Mac checks on that install: the checkpoint's list and #56's, both in `handoff.md`. [Mac] [David]
+  — superseded by §11 (beta.2)
 
 ## 7. Ship
-- [ ] 7.1 Tag `v2.0.0-beta.1` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
-  unchanged. [CI] [David]
+- [x] 7.1 Tag `v2.0.0-beta.1` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
+  unchanged. [CI] [David] — superseded by §11 (beta.2)
 - [ ] 7.2 The fix window: fixes land in `development` and ship as `v2.0.0-beta.N` if needed. [Mac] [David]
 - [ ] 7.3 Tag `v2.0.0`. CI publishes, and commits the appcast to this repository's `main`. [CI] [David]
 - [ ] 7.4 The feed bridge: copy 2.0.0's appcast item into `libinmv/kannu`'s `Updates/appcast.xml`, then read that
@@ -126,17 +129,17 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [ ] 9.9 Moving OpenSpec to 2.x, which keeps project context in `openspec/config.yaml` and retires this layout.
 
 ## 10. Carried over from the redesign (not 2.0 gates unless David makes them one)
-- [ ] 10.1 The audit's leftovers:
+- 10.1 The audit's leftovers:
   - F1 (New note's Return): fix after its Mac check;
   - F2 (looping previews while Brain is unseen): if the Mac check shows a cost;
   - F4 (focus and headings beside the list) and F7 (notch rail recomputes): optional;
   - F10's copy ("Click ›"): with the next strings pass.
-- [ ] 10.2 A strings pass:
+- 10.2 A strings pass:
   - F10's copy;
   - the older wording on Brain's Tasks and Notes pages ("Turn On", "Tag colours");
   - the three wording fixes from #42's second review;
   - onboarding's uncatalogued strings (49 of 77).
-- [ ] 10.3 Review follow-ups. Each is in `handoff.md`, with its file and why it waits.
+- 10.3 Review follow-ups. Each is in `handoff.md`, with its file and why it waits.
 
 ## 11. Beta 2 (a 7.2 fix release)
 - [x] 11.1 Set `CURRENT_PROJECT_VERSION` to 13 in both configurations of `Kannu.xcodeproj/project.pbxproj`. [Cloud]
@@ -145,6 +148,7 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
   catch `2.0.0.md` up (9.7's #55 line among them). [Cloud] Written in the same change.
 - [x] 11.x The Claude card shows its organization's freshest reading (F1)
 - [ ] 11.x Minimal only, legacy band removed, 16 pt icon, Tasks on by default, onboarding light showcase. [Mac] [David]
+- [ ] 11.x Welcome finale: Kannu's eye, 'Welcome to Kannu', a soft chime. [Mac] [David]
 - [ ] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
 - [ ] 11.4 David's Mac checks on that install: beta.2's "Please try" list, and the live checks its changes left open
   (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4, `fix-usage-fresh-reading` 3.4,

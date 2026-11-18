@@ -604,7 +604,7 @@ struct ContentView: View {
     private var shouldPaintClosedNotchBackground: Bool {
         if vm.notchState == .open { return true }
         if vm.hideOnClosed { return false }
-        if coordinator.helloPending { return true }
+        if coordinator.welcomePending { return true }
 
         if idleScheduleManager.isActive || idlePreviewManager.isActive || easterEggManager.isActive {
             return true
@@ -913,17 +913,6 @@ struct ContentView: View {
                 ? -(vm.closedNotchSize.height + pillTopOffset + notchShadowPadding + 10)
                 : 0
             )
-            .onChange(of: coordinator.helloPending) { _, pending in
-                // Onboarding's finale: a single open once Finish is pressed; closeHello() handles
-                // the timed close. It used to open on appear at launch, under the onboarding window.
-                if pending {
-                    runAfter(1) {
-                        withAnimation(vm.animation) {
-                            openNotch()
-                        }
-                    }
-                }
-            }
             .onChange(of: vm.notchState) { _, newState in
                 // Update smart monitoring based on notch state
                 if enableStatsFeature {
@@ -1234,13 +1223,10 @@ struct ContentView: View {
       func NotchLayout() -> some View {
           VStack(alignment: .leading) {
               VStack(alignment: .leading) {
-                  if coordinator.helloPending {
-                      Spacer()
-                      HelloAnimation().frame(width: 200, height: 80).onAppear(perform: {
-                          vm.closeHello()
-                      })
-                      .padding(.top, 40)
-                      Spacer()
+                  if coordinator.welcomeShowsLine && vm.notchState == .open {
+                      // Onboarding's welcome: AppDelegate opens and closes the notch on its own clock.
+                      NotchWelcomeView()
+                          .frame(maxWidth: .infinity, maxHeight: .infinity)
                   } else if playsNotchEyeHere {
                       NotchEyeSpacer(progress: coordinator.notchEye.progress,
                                      fadesOnly: coordinator.notchEye.fadesOnly,
@@ -2329,7 +2315,7 @@ struct ContentView: View {
             && !isMusicHUDDeferredAfterUnlock
             && !isCurrentScreenExpansionVisible
             && (!musicManager.isPlayerIdle || musicManager.bundleIdentifier != nil)
-            && !coordinator.helloPending
+            && !coordinator.welcomePending
     }
 
     private func handleClosedMusicWaveformTapIfNeeded() -> Bool {
@@ -2871,7 +2857,7 @@ struct ContentView: View {
     }
 
     private func shouldPreventAutoClose() -> Bool {
-        coordinator.helloPending || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
+        coordinator.welcomePending || hasAnyActivePopovers() || vm.isAutoCloseSuppressed || SharingStateManager.shared.preventNotchClose
     }
     
     // Helper to prevent rapid haptic feedback

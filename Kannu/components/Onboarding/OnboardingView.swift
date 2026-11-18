@@ -26,7 +26,7 @@ import Defaults
 
 /// The onboarding window's steps, in order. Nothing in it plays a sound or raises a macOS dialog by
 /// itself: `.permissions` asks for each permission only when the user presses Allow, and the
-/// welcome music and the notch's hello wait for Finish. Each step is drawn as a sheet is, on a page's insets: its
+/// welcome chime and the notch's welcome wait for Finish. Each step is drawn as a sheet is, on a page's insets: its
 /// title, a line under it, its cards, then its buttons trailing (docs/SETTINGS.md, "Onboarding").
 enum OnboardingStep: CaseIterable {
     case welcome

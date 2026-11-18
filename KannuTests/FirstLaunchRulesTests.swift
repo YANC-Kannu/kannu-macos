@@ -107,7 +107,7 @@ final class FirstLaunchRulesTests: XCTestCase {
             "Kannu/KannuApp.swift",
             "        if !LaunchPermissionManager.isOnboardingComplete && !AppRuntimeEnvironment.isUITesting {\n            DispatchQueue.main.async {\n                self.showOnboardingWindow()\n            }\n",
             "        if !LaunchPermissionManager.isOnboardingComplete && !AppRuntimeEnvironment.isUITesting {\n            DispatchQueue.main.async {\n                self.showOnboardingWindow()\n            }\n            playWelcomeSound()\n"
-        )), ["the welcome music plays outside startHello()", "continueLaunch() plays the welcome music"])
+        )), ["the welcome music plays outside startWelcome()", "continueLaunch() plays the welcome music"])
 
         XCTAssertEqual(Self.problems(in: planted(
             "Kannu/KannuApp.swift",
@@ -213,14 +213,14 @@ final class FirstLaunchRulesTests: XCTestCase {
         var problems: [String] = []
         let app = sources["Kannu/KannuApp.swift"] ?? ""
 
-        let startHello = body(after: "func startHello() {", in: app) ?? ""
+        let startWelcome = body(after: "func startWelcome() {", in: app) ?? ""
         let musicCalls = app.components(separatedBy: "playWelcomeSound()").count - 1
         let musicDefinitions = app.components(separatedBy: "func playWelcomeSound()").count - 1
-        if !startHello.contains("playWelcomeSound()") || musicCalls - musicDefinitions != 1 {
-            problems.append("the welcome music plays outside startHello()")
+        if !startWelcome.contains("playWelcomeSound()") || musicCalls - musicDefinitions != 1 {
+            problems.append("the welcome music plays outside startWelcome()")
         }
         let continueLaunch = body(after: "private func continueLaunch() {", in: app) ?? ""
-        if continueLaunch.contains("playWelcomeSound()") || continueLaunch.contains("startHello()") {
+        if continueLaunch.contains("playWelcomeSound()") || continueLaunch.contains("startWelcome()") {
             problems.append("continueLaunch() plays the welcome music")
         }
         if continueLaunch.contains("autoEnableLaunchAtLoginIfNeeded()"),

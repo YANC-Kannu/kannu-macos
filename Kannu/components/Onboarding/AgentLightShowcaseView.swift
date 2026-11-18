@@ -55,7 +55,7 @@ struct AgentLightShowcaseView: View {
                     .textSelection(.enabled)
                     .accessibilityAddTraits(.isHeader)
 
-                Text("One light beside the notch shows how your AI agents are doing.")
+                Text("One light in the notch shows how your AI agents are doing.")
                     .font(SettingsTheme.body)
                     .foregroundStyle(SettingsTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -85,7 +85,7 @@ struct AgentLightShowcaseView: View {
                 .background(SettingsTheme.card,
                             in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
 
-                Text("It shows for a few seconds after each change, with the agent's app icon across the notch. You can change its colors in Brain.")
+                Text("It shows for a few seconds after each change. On a MacBook with a notch, the agent's app icon sits across from it. You can change its colors in Brain.")
                     .font(SettingsTheme.body)
                     .foregroundStyle(SettingsTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)

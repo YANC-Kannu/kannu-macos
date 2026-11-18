@@ -393,6 +393,11 @@ enum DebugSnapshots {
             await render(AnyView(closedAgentPillBoard), name: "closedAgentPill", dark: true, width: 1440,
                          into: request.directory, scale: 2, background: Color(white: 0.16))
         }
+        if request.tabs == nil || request.tabs?.contains("notchWelcome") == true {
+            // Onboarding's welcome line in the open notch, settled (`AppDelegate.startWelcome` opens it).
+            await render(AnyView(notchWelcomeBoard), name: "notchWelcome", dark: true, width: 560,
+                         into: request.directory, scale: 2, background: Color(white: 0.16))
+        }
         if request.tabs == nil || request.tabs?.contains("notchFills") == true {
             // Notch content on fills that flip its text, set up the way ContentView does: a light
             // scheme inside the always-dark notch window. Black is the before/after control.
@@ -1100,6 +1105,16 @@ enum DebugSnapshots {
                 }
             }
         }
+    }
+
+    /// The welcome's open notch: the line on the notch's black, at an open notch's size.
+    private static var notchWelcomeBoard: some View {
+        NotchWelcomeView(fadesIn: false)
+            .frame(width: 480, height: 150)
+            .background(NotchShape(topCornerRadius: cornerRadiusInsets.opened.top,
+                                   bottomCornerRadius: cornerRadiusInsets.opened.bottom).fill(Color.black))
+            .environment(\.colorScheme, .dark)
+            .padding(24)
     }
 
     /// The closed agent light on every display kind, from fixtures: the sideways pill on a notched MacBook

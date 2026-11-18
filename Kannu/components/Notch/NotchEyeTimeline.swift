@@ -158,3 +158,31 @@ enum NotchEyeTimeline {
         }
     }
 }
+
+/// Onboarding's welcome, after Finish (`AppDelegate.startWelcome`): the onboarding window fades, Kannu's
+/// eye opens in the closed notch with the eye's own run, the notch opens on "Welcome to Kannu", holds,
+/// and closes. About 2.9 s from the eye to the close, 0.5 s under Reduce Motion plus the hold; played once,
+/// nothing repeats. Pure, so it is tested.
+enum WelcomeTimeline {
+    /// The onboarding window's fade before the eye. None under Reduce Motion.
+    static let windowFade: TimeInterval = 0.25
+    /// The eye's run is waited out with this to spare: `runNotchEye` holds its first frame before it starts.
+    static let eyeMargin: TimeInterval = 0.05
+    /// How long the open notch shows the line.
+    static let lineHold: TimeInterval = 1.6
+    /// The features onboarding held back start when the welcome closes, or this long after Finish
+    /// at the latest.
+    static let featureStartCap: TimeInterval = 3
+    /// The chime's volume: soft (David, 2026-11-18: "soft, once, respectful").
+    static let chimeVolume: Float = 0.35
+
+    /// The eye's run: Show Notch's own, or its fade under Reduce Motion.
+    static func eyeDuration(fadesOnly: Bool) -> TimeInterval {
+        fadesOnly ? NotchEyeTimeline.fadeDuration : NotchEyeTimeline.showDuration
+    }
+
+    /// From the eye's start to the close's start.
+    static func duration(fadesOnly: Bool) -> TimeInterval {
+        eyeDuration(fadesOnly: fadesOnly) + eyeMargin + lineHold
+    }
+}

@@ -167,6 +167,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Times Show / Hide Notch's eye (`NotchEyeTimeline`): a hide tears the windows down only when
     /// it ends. `notchEyeRun` is the run on screen, where a toggle mid-run reverses from.
     private var notchEyeTask: Task<Void, Never>?
+    /// Onboarding's welcome (`startWelcome`): set once, never cleared, so it plays once per launch.
+    private var welcomeTask: Task<Void, Never>?
+    /// `.launchPermissionsChanged` has been posted for onboarding's end (`releaseOnboardingFeatures`).
+    private var onboardingFeaturesReleased = false
     private var notchEyeRun: NotchEyeTimeline.Run?
     private static let notchEyeLog = os.Logger(subsystem: "com.kannu.app", category: "NotchEye")
 
@@ -1101,7 +1105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         launchContinued = true
 
         // Before any singleton reads it: an install from before onboarding was versioned has
-        // already been through it (its hello cleared `firstLaunch`) and answered its permissions,
+        // already been through it (its finale cleared `firstLaunch`) and answered its permissions,
         // so it is marked done with the first version: nothing new asks now, and a later version
         // bump still shows it the new onboarding. Its clipboard files leave ~/Documents.
         let isUpgrade = !coordinator.firstLaunch
@@ -1553,8 +1557,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         syncPointerTracking()
         
         // A fresh install meets onboarding first, and it is silent: every permission is asked on
-        // its Permissions step, one dialog at a time, and the welcome music and the notch's hello
-        // wait for its Finish (`startHello`). They used to start here, together with four
+        // its Permissions step, one dialog at a time, and the welcome chime and the notch's welcome
+        // wait for its Finish (`startWelcome`). They used to start here, together with four
         // permission dialogs. Skipped under UI testing.
         if !LaunchPermissionManager.isOnboardingComplete && !AppRuntimeEnvironment.isUITesting {
             DispatchQueue.main.async {
@@ -1986,24 +1990,108 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    /// The welcome's chime, soft and once (David, 2026-11-18): at `WelcomeTimeline.chimeVolume`, only
+    /// while a notch window is on screen to go with it, and never when macOS's user-interface sound
+    /// effects are off (System Settings › Sound, "Play user interface sound effects").
     func playWelcomeSound() {
-        let audioPlayer = AudioPlayer()
-        audioPlayer.play(fileName: "dynamic", fileExtension: "m4a")
+        guard !notchWindows.isEmpty, paintsClosedNotch, Self.userInterfaceSoundsAreOn() else { return }
+        AudioPlayer().play(fileName: "dynamic", fileExtension: "m4a", volume: WelcomeTimeline.chimeVolume)
     }
 
-    /// Onboarding's finale: the notch opens and says hello, with the welcome music. Only
-    /// onboarding's Finish calls it, once every permission has been asked or put off, so nothing
-    /// plays over a dialog.
-    func startHello() {
-        coordinator.helloPending = true
+    /// macOS's "Play user interface sound effects", read from the global domain: missing means on,
+    /// which is macOS's default.
+    static func userInterfaceSoundsAreOn() -> Bool {
+        (UserDefaults.standard.object(forKey: "com.apple.sound.uiaudio.enabled") as? NSNumber)?.boolValue ?? true
+    }
+
+    /// Onboarding's finale, once: Kannu's eye opens in the closed notch (`NotchEyeTimeline`), the notch
+    /// opens on "Welcome to Kannu" for `WelcomeTimeline.lineHold`, then closes on its standard close,
+    /// with the chime as it starts. Under Reduce Motion the eye only fades and the notch opens and closes
+    /// without moving. Only onboarding's Finish and Open Brain call it, once every permission has been
+    /// asked or put off, so nothing plays over a dialog. The run moves on this object's clock, never on a
+    /// view's completion, and it plays once: a second call while it runs, or after, does nothing.
+    @MainActor
+    func startWelcome() {
+        guard welcomeTask == nil else { return }
+        coordinator.welcomePending = true
         playWelcomeSound()
+        let fadesOnly = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        welcomeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let showsEye = Defaults[.showNotch] && !self.notchWindows.isEmpty && self.paintsClosedNotch
+                && !self.coordinator.notchEye.isAnimating
+            if showsEye {
+                self.notchEyeRun = nil
+                self.coordinator.notchEye = NotchEyeState(phase: .opening, progress: 0, fadesOnly: fadesOnly)
+                let eye = WelcomeTimeline.eyeDuration(fadesOnly: fadesOnly)
+                self.runNotchEye(to: 1, full: eye) { [weak self] in self?.settleNotchEye() }
+                // `runNotchEye` snaps for a frame before it starts, and `settleNotchEye` ends the run at once.
+                try? await Task.sleep(for: .seconds(eye + WelcomeTimeline.eyeMargin))
+            }
+            if showsEye, Defaults[.showNotch], !self.notchWindows.isEmpty {
+                // A notch refuses to open while the eye runs (`KannuViewModel.open`): end a late run first.
+                if self.coordinator.notchEye.isAnimating { self.settleNotchEye() }
+                self.coordinator.welcomeShowsLine = true
+                self.moveWelcomeNotches(open: true, fadesOnly: fadesOnly)
+                try? await Task.sleep(for: .seconds(WelcomeTimeline.lineHold))
+                self.moveWelcomeNotches(open: false, fadesOnly: fadesOnly)
+            }
+            self.coordinator.welcomeShowsLine = false
+            self.coordinator.welcomePending = false
+            self.coordinator.firstLaunch = false
+            self.releaseOnboardingFeatures()
+        }
     }
 
-    /// Marks onboarding done and lets the features it held back start: each one answered on the
-    /// Permissions step now touches its permission without a dialog, and a deferred one stays off.
+    /// Opens or closes every display's notch for the welcome. The views' own open and close springs
+    /// move it; under Reduce Motion it changes without moving and only the line fades.
+    @MainActor
+    private func moveWelcomeNotches(open: Bool, fadesOnly: Bool) {
+        let models = Defaults[.displayPlacement].usesOneWindowPerDisplay ? Array(viewModels.values) : [vm]
+        var still = Transaction()
+        still.disablesAnimations = fadesOnly
+        withTransaction(still) {
+            for model in models where !model.hideOnClosed && model.effectiveClosedNotchHeight > 0 {
+                if open { model.open() } else if model.notchState == .open { model.close() }
+            }
+        }
+    }
+
+    /// Marks onboarding done. The features it held back start a moment later, through
+    /// `releaseOnboardingFeatures()`: when the welcome closes, or `WelcomeTimeline.featureStartCap` after
+    /// Finish at the latest, so they do not all start in the tick the welcome begins.
     private func completeOnboarding() {
         Defaults[.onboardingCompletedVersion] = OnboardingProgress.currentVersion
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(WelcomeTimeline.featureStartCap))
+            self?.releaseOnboardingFeatures()
+        }
+    }
+
+    /// Lets the features onboarding held back start: each one answered on the Permissions step now
+    /// touches its permission without a dialog, and a deferred one stays off. Once, whichever of the
+    /// welcome's close and the cap comes first.
+    @MainActor
+    private func releaseOnboardingFeatures() {
+        guard !onboardingFeaturesReleased else { return }
+        onboardingFeaturesReleased = true
         NotificationCenter.default.post(name: .launchPermissionsChanged, object: nil)
+    }
+
+    /// Fades the onboarding window out before the welcome, so the notch is not playing under it. None
+    /// under Reduce Motion.
+    @MainActor
+    private func fadeOutOnboardingWindow(_ window: NSWindow, then finish: @escaping @MainActor () -> Void) {
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            finish()
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = WelcomeTimeline.windowFade
+            window.animator().alphaValue = 0
+        }, completionHandler: {
+            Task { @MainActor in finish() }
+        })
     }
 
     /// Onboarding's "Open Kannu at login". Registering on the Permissions step puts macOS's "Login
@@ -2110,7 +2198,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             model.close()
             wasOpen = true
         }
-        let moves = animated && !coordinator.helloPending
+        let moves = animated && !coordinator.welcomePending
             && !windowsHiddenForLock && !LockScreenManager.shared.isLocked
         let fadesOnly = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
@@ -2410,19 +2498,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 onFinish: { [weak self] in
                     self?.completeOnboarding()
-                    window.orderOut(nil)
-                    // Command-comma reaches Brain before onboarding ends, and it can be full screen:
-                    // `.accessory` is what a close from there waits to set (docs/REGRESSIONS.md, entry 22).
-                    let brainIsOpen = NSApp.windows.contains { $0.identifier == SettingsWindowController.windowIdentifier && $0.isVisible }
-                    if !brainIsOpen { NSApp.setActivationPolicy(.accessory) }
-                    window.close()
-                    NSApp.deactivate()
-                    self?.startHello()
+                    self?.fadeOutOnboardingWindow(window) {
+                        window.orderOut(nil)
+                        window.alphaValue = 1
+                        // Command-comma reaches Brain before onboarding ends, and it can be full screen:
+                        // `.accessory` is what a close from there waits to set (docs/REGRESSIONS.md, entry 22).
+                        let brainIsOpen = NSApp.windows.contains { $0.identifier == SettingsWindowController.windowIdentifier && $0.isVisible }
+                        if !brainIsOpen { NSApp.setActivationPolicy(.accessory) }
+                        window.close()
+                        NSApp.deactivate()
+                        self?.startWelcome()
+                    }
                 },
                 onOpenSettings: { [weak self] in
                     self?.completeOnboarding()
                     window.close()
-                    self?.startHello()
+                    self?.startWelcome()
                     SettingsWindowController.shared.showWindow()
                 }
             ))
