@@ -133,16 +133,40 @@ enum ClaudeCachedUsage {
     /// weekly anchor its own weekly reset lies on, when exactly one remembered organization's
     /// does; else Claude Code's, unless the reset contradicts Claude Code's remembered anchor.
     /// A desktop-hosted session's `/usage` writes this cache too, with the desktop's numbers.
-    static func cacheOwner(weeklyReset: Date?, claudeCode: String?,
+    ///
+    /// `named` is the organization the file names now (`oauthAccount`). A cache that rules out Claude
+    /// Code's recorded organization goes to it when that is another one whose week the cache does not
+    /// contradict — on every read, the twin of `attributeRun`'s `movedOrganization`. Measured
+    /// 2026-11-16: with Team still recorded and Max's week never remembered, Claude Code's fresh Max
+    /// cache went on no card until a run learned Max, and Claude Desktop's sample from before an early
+    /// reset stood alone on Max's.
+    static func cacheOwner(weeklyReset: Date?, claudeCode: String?, named: String? = nil,
                            resets: [String: OrganizationResets]) -> ClaudeUsageSnapshot.CacheOwner {
         if let matched = organization(onWeeklyAnchorOf: weeklyReset, in: resets) {
             return matched == claudeCode ? .claudeCode : .organization(matched)
         }
-        if let claudeCode, let weeklyReset, let anchor = resets[claudeCode]?.weekly,
-           !onSameWeeklyAnchor(weeklyReset, anchor) {
+        func contradicts(_ organization: String) -> Bool {
+            guard let weeklyReset, let anchor = resets[organization]?.weekly else { return false }
+            return !onSameWeeklyAnchor(weeklyReset, anchor)
+        }
+        if let claudeCode, contradicts(claudeCode) {
+            if let named, named != claudeCode, !contradicts(named) { return .organization(named) }
             return .unknown
         }
         return .claudeCode
+    }
+
+    /// The organization the file names for its cache: `oauthAccount`'s, when its profile was fetched
+    /// no later than the cache (`runWindowSlack`); nil otherwise. Every Claude Code process rewrites
+    /// `oauthAccount`, and a profile fetched after the cache may be another process's write-back —
+    /// measured 2026-10-28: a desktop-hosted session wrote its Max profile 90 s after Claude Code's own
+    /// Team cache, and trusting it put Team's zeros on the Max card. On 2026-11-17 the profile
+    /// (21:34Z) predated the cache (22:33Z), both of the organization Claude Desktop was on.
+    static func organizationNamingCache(_ context: AccountContext) -> String? {
+        guard let organization = context.organizationUUID, let profile = context.profileFetchedAt,
+              let cache = context.cacheFetchedAt,
+              profile <= cache.addingTimeInterval(runWindowSlack) else { return nil }
+        return organization
     }
 
     // MARK: Kannu's own run

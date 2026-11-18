@@ -2049,6 +2049,67 @@ the behaviour itself is checked by eye on the installed build.
 
 ---
 
+## 24. The Claude card shows the freshest reading of its organization
+
+**Rule:** each Claude card shows, per window, the newest reading of that card's organization,
+whatever its source. When Claude Code's cache is that organization's reading, it goes on that card:
+on its own week's evidence, on Kannu's recorded organization, or because `~/.claude.json` names that
+organization while nothing contradicts it. A reading never joins another organization's card on the
+evidence Kannu has; before its first run records Claude Code's organization, that evidence is the file's
+profile and the cache's own week checked against Desktop's sample, so the exception under "Kept" remains.
+
+**Broken twice in three days**, each time by an older Claude Desktop sample left as the card's only
+reading while Claude Code's cache of the same organization was fresh:
+- **2026-11-16, `contradicted`.** Claude Code had moved organization; the recorded one was stale and the
+  new one's week was never remembered. Every run ended "contradicted" and the cache went on no card.
+  Fixed in #69 (entry 8, 2026-11-17 addendum): runs learn `movedOrganization`. The read side
+  stayed blind until a run.
+- **2026-11-18, first run.** On a wiped install nothing was recorded, so `cardSources` kept Claude
+  Code's sources off the card until Kannu's first fetch, unless the cache's own week named Desktop's
+  organization, which needs a remembered anchor a first run cannot have. The file and Desktop's newest
+  sample named the same organization, and the card logged `desktop won (only live reading)` for a
+  sample 13 hours old while the cache was half an hour old.
+
+**Fix (2026-11-18).** The file names the cache's organization only when its profile was fetched no
+later than the cache (`ClaudeCachedUsage.organizationNamingCache`, 2 s slack): on 2026-10-28 a
+desktop-hosted session wrote its Max profile 90 s after Claude Code's own Team cache, and trusting the
+file then put Team's zeros on the Max card (`testAnUnrecordedClaudeCodeOrganizationKeepsItsSourcesOff`
+still pins that). On 2026-11-17 the profile predated the cache by an hour. With that,
+`ClaudeCachedUsage.cacheOwner` takes the organization the file names: a cache
+that rules out the recorded organization goes to it when nothing contradicts its week, on every read,
+not only after a run. `cardSources` puts an unrecorded cache on Desktop's card when the file names
+Desktop's organization, the cache's owner is not unknown, and the cache's own week agrees with
+Desktop's newest sample (`ClaudeUsageSnapshot.weekAgrees`: the sample inside the cache's week and
+before it, the cache's percentage at least the sample's). The profile ordering alone was not enough
+(CodeRabbit on #76): on 2026-10-28 the next run's Team cache was fetched 19 s *after* that Max profile,
+and on a fresh install it would have joined Max's card. Its 0 % against Max's 100 % that week fails
+the check; on 2026-11-17 the cache's 75 % against Desktop's 57 % passed. Claude Code's statusline stays off until
+the organization is recorded, because its organization is still the guess. Then `selections` takes
+the newest reading per window. Desktop samples get no age limit of their own: Claude Desktop writes
+them only while its usage panel is in use, so gaps of days are normal, and a limit would blank the
+only reading a desktop-only user has. The card labels a sample's age, the week's end bounds it, and a
+fresher reading of the same organization beats it. Each change of placement is logged at `notice`
+(category `ClaudeUsage`, `Usage source cache placement: …`): where the cache went and how the
+organizations compare, never an id.
+
+**Kept:** the first card follows Claude Desktop's organization (2026-10-18), and two organizations get
+two cards (2026-10-30). The residual risk is entry 8's: every Claude Code process writes the file's
+organization, a desktop-hosted session's included. On a fresh install, a profile written back
+*before* a cache of another organization whose week happens to run at or above Desktop's sample would
+still be read as naming it, until Kannu's first run records the real organization. That run starts
+at once when the Usage tab opens. David kept this on 2026-11-18 (CodeRabbit's follow-up on #76 asked
+for a remembered weekly anchor instead, which a fresh install never has, so F1 would return on every
+one). `testTheCardShowsTheFreshestReadingOfItsOrganization` pins the limit (Team's 60 % on Max's card
+before the first fetch).
+
+**Guard.** `ClaudeUsageOrganizationTests.testTheCardShowsTheFreshestReadingOfItsOrganization`
+replays both shapes from made-up files (first run, stale recorded organization) and pins that two
+organizations stay on two cards; `testAnUnrecordedCacheTheFileTiesToDesktopsOrganizationJoinsItsCard`
+and `testACacheThatRulesOutTheRecordedOrganizationGoesToTheOneTheFileNames` pin the two rules and
+their refusals.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -2060,7 +2121,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `AgentTrafficLightState.swift` | 18 | The state ladder — staleness thresholds and verdict→colour mapping. Mostly *tuning numbers*, which is exactly how entry 2 happened, how the yellow clock became its only exit (entry 12), and how a demotion came to read as a request ending (entry 15). |
 | `AgentHookInstaller.swift` | 17 | Embedded script + event table + install/uninstall/migration. Grows monotonically; every growth episode has broken `checkInstalled` or a migration (entries 1 and 6). |
 | `ClaudeUsageRefresh.swift`, `ClaudeUsageFetchCommand.swift` (usage spawn) | — | The `/usage` fetch, the sign-in it can start, and the binary they run. Two silent breakages in one day from added flags/env, then a month of a Refresh that ran nothing because Desktop moved its binary (entry 8 and its 2026-10-18 addendum). |
-| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have, and a sample from before an early reset while every run named nobody (entry 8, 2026-10-29, 2026-10-30 and 2026-11-17 addenda). |
+| `ClaudeCachedUsage.swift`, `ClaudeDesktopUsageHistory.swift`, `ClaudeUsageSnapshot.swift` (whose limits) | — | Which organization's numbers the Claude card shows and when they expire. `oauthAccount` flips between organizations, each has its own weekly reset, and a value with no reset still lapses — the card has shown one organization's week past its reset and claimed readings it did not have, and a sample from before an early reset while every run named nobody (entry 8, 2026-10-29, 2026-10-30 and 2026-11-17 addenda; entry 24). |
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
