@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Pin the Claude card's known first-run limit
+- **Developer label:** "Keep F1, note risk"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's follow-up on PR #76, through Auto-fix
+- **Changes:**
+  - `testTheCardShowsTheFreshestReadingOfItsOrganization` pins the limit David kept. On a fresh install, another
+    organization's cache whose week runs at or above Desktop's sample, fetched after a written-back profile,
+    shows on Desktop's card until Kannu's first fetch records the organization. Requiring a remembered weekly
+    anchor instead would bring F1 back on every fresh install.
+  - `docs/REGRESSIONS.md` entry 24 records the decision and the guard.
+
 ### 2026-11-18 - An unrecorded Claude cache joins Desktop's card only when its own week agrees
 - **Developer label:** "Turn on Auto-fix"
 - **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #76, through Auto-fix

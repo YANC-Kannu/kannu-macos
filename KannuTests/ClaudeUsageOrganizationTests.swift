@@ -639,6 +639,24 @@ final class ClaudeUsageOrganizationTests: XCTestCase {
         let (beforeCache, beforeCacheShown) = try card(recorded: nil, resets: [:])
         XCTAssertEqual(beforeCacheShown?.sevenDayPercent, 48, "Team's zeros never reach Max's card")
         XCTAssertTrue(beforeCache.claudeCodeOrganizationUnverified, "Kannu's first fetch settles it")
+
+        // The known limit, kept by David's call (2026-11-18, CodeRabbit's follow-up on PR #76): the same
+        // order with another organization's week running at or above Desktop's sample is
+        // indistinguishable on a fresh install, so Team's 60 % shows on Max's card until Kannu's first
+        // fetch records the organization. Requiring a remembered week instead would bring F1 back on
+        // every fresh install. If this assertion changes, entry 24's residual risk changes with it.
+        try write(["oauthAccount": ["accountUuid": "acct-acme", "organizationUuid": max, "organizationType": "claude_max",
+                                    "profileFetchedAt": ms("2026-11-17T22:29:40Z")],
+                   "cachedUsageUtilization": [
+                       "accountUuid": "acct-acme",
+                       "fetchedAtMs": ms("2026-11-17T22:30:00Z"),
+                       "utilization": [
+                           "seven_day": ["utilization": NSNumber(value: 60), "resets_at": "2026-11-24T05:00:00.000000+00:00"]
+                       ]
+                   ]], to: config)
+        let (knownLimit, knownLimitShown) = try card(recorded: nil, resets: [:])
+        XCTAssertEqual(knownLimitShown?.sevenDayPercent, 60, "the documented first-run limit")
+        XCTAssertTrue(knownLimit.claudeCodeOrganizationUnverified, "the first fetch still runs at once")
     }
 
     func testTheCachesWeekMustAgreeWithDesktopsSample() {

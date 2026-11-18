@@ -2097,7 +2097,10 @@ two cards (2026-10-30). The residual risk is entry 8's: every Claude Code proces
 organization, a desktop-hosted session's included. On a fresh install, a profile written back
 *before* a cache of another organization whose week happens to run at or above Desktop's sample would
 still be read as naming it, until Kannu's first run records the real organization. That run starts
-at once when the Usage tab opens.
+at once when the Usage tab opens. David kept this on 2026-11-18 (CodeRabbit's follow-up on #76 asked
+for a remembered weekly anchor instead, which a fresh install never has, so F1 would return on every
+one). `testTheCardShowsTheFreshestReadingOfItsOrganization` pins the limit (Team's 60 % on Max's card
+before the first fetch).
 
 **Guard.** `ClaudeUsageOrganizationTests.testTheCardShowsTheFreshestReadingOfItsOrganization`
 replays both shapes from made-up files (first run, stale recorded organization) and pins that two
