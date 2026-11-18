@@ -4,6 +4,33 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - The notch finds its display by identity, so two identical monitors stay two
+- **Developer label:** Issue #24, "Use display identity for notch screen selection"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the #24 fix deferred from PR #11's review
+- **Changes:**
+  - Screens are found by `CGDirectDisplayID`, never by `localizedName`, which two identical monitors share:
+    `vm.screen` (a name) is `vm.screenID`; `coordinator.selectedScreen` is `selectedScreenID`; the sizing helpers
+    in `matters.swift`, `ContentView`'s per-screen checks, the battery HUD and sneak-peek targets, the fullscreen
+    verdict (`fullscreenStatus` and `ClosedNotchVisibility`), the music and timer control windows, the Do Not
+    Disturb activity and the lock-screen activity all take or match an id. New `NSScreen.displayID`,
+    `NSScreen.withDisplayID(_:)` and `NSScreen.displayUUID(for:)`.
+  - The open notch's pointer check measures its own display's frame and reads only that display's attached
+    windows. On the second of two identical monitors it measured the first, so the notch closed under the pointer.
+    `NotchInteractionGeometry.openNotchRect` is unchanged.
+  - "A display I choose" stores the display's UUID (`preferredScreenUUID`), which survives the reconnects and
+    reboots a display id may not. The old `preferred_screen_name` carries over: a connected match stores its UUID,
+    an unmatched one falls back to the main display and is kept for a later look. Picking a display also writes
+    the name, for a downgrade. Brain › General › Display lists every display, numbering shared names.
+  - Reconnects: the screen-change check compares display ids (copied as values), so a display back under a new id
+    rebuilds its window, and the choice follows the UUID to the new id.
+  - Tests: `DisplayIdentityTests` (two same-named displays, each display's own pointer frame, the per-display
+    fullscreen verdict, the migration, a reconnect), `DisplayIdentityRulesTests` (no screen found by name in the
+    app's sources, against planted offenders; it flags 19 sites on the tree before this change). The launch-seed
+    and fullscreen-filter pins and `ClosedNotchVisibilityTests` follow the new names.
+  - Docs: the `fix-display-identity` OpenSpec change; REGRESSIONS entry 17 and 23 addenda and the danger-zones row.
+  - Out of scope: the per-display style and "Always show" overrides stay keyed by name, the follow-up
+    GeneralSettings already records.
+
 ### 2026-11-18 - The onboarding light step reads true on displays without a notch
 - **Developer label:** CodeRabbit's second note on #77: "Make the onboarding light copy accurate on displays without a notch"
 - **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, the copy fix promised in the #77 reply, in #78

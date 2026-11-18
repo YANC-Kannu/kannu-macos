@@ -27,9 +27,9 @@ import ServiceManagement
 import SwiftUI
 
 struct GeneralSettings: View {
-    @State private var screens: [String] = NSScreen.screens.compactMap { $0.localizedName }
+    /// Every connected display, by identity. Two identical monitors are two entries here.
+    @State private var displays: [ScreenFacts] = DisplayPlacementRuntime.facts()
     @EnvironmentObject var vm: KannuViewModel
-    @ObservedObject var coordinator = KannuViewCoordinator.shared
     @Default(.showEmojis) var showEmojis
     @Default(.gestureSensitivity) var gestureSensitivity
     @Default(.minimumHoverDuration) var minimumHoverDuration
@@ -40,6 +40,7 @@ struct GeneralSettings: View {
     @Default(.customizePhysicalNotchWidth) var customizePhysicalNotchWidth
     @Default(.notchHeightMode) var notchHeightMode
     @Default(.displayPlacement) var displayPlacement
+    @Default(.preferredScreenUUID) var preferredScreenUUID
     @Default(.screenCaptureVisibility) var screenCaptureVisibility
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
@@ -121,9 +122,10 @@ struct GeneralSettings: View {
                 // mode makes its own search entry land on nothing in every other mode, and the
                 // inventory test reads source text so it cannot catch that.
                 SettingsRow("Display") {
-                    SettingsSelect("Display", selection: $coordinator.preferredScreen, options: screens, optionTitle: { $0 })
+                    SettingsSelect("Display", selection: displayChoice, options: displays.compactMap(\.uuid),
+                                   optionTitle: displayTitle)
                 }
-                .onChange(of: coordinator.preferredScreen) {
+                .onChange(of: preferredScreenUUID) {
                     NotificationCenter.default.post(name: Notification.Name.displayPlacementChanged, object: nil)
                 }
                 .disabled(displayPlacement != .chooseDisplay)
@@ -215,11 +217,11 @@ struct GeneralSettings: View {
         }
         .navigationTitle("General")
         // `NSScreen.screens` is not observable: an `onChange(of:)` of it ran only when something
-        // else redrew the page, and a display coming or going need not. A new `screens` redraws
+        // else redrew the page, and a display coming or going need not. A new `displays` redraws
         // the page, and with it the per-display overrides, which read `NSScreen.screens` too.
-        // On the page, which owns `screens`: the Display row and the per-display overrides both read it.
+        // On the page, which owns `displays`: the Display row and the per-display overrides both read it.
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
-            screens = NSScreen.screens.compactMap { $0.localizedName }
+            displays = DisplayPlacementRuntime.facts()
         }
         .onChange(of: openNotchOnHover) {
             if !openNotchOnHover {
@@ -341,6 +343,32 @@ struct GeneralSettings: View {
     /// identical monitors share one entry, and two rows with one identity made SwiftUI's `ForEach`
     /// undefined. One row for the pair is honest about what the setting can express; keying the
     /// overrides on `CGDirectDisplayID` is the real fix and is recorded as a follow-up.
+    /// The Display row's choice, as the chosen display's UUID. Nothing stored yet reads as the main
+    /// display, which is where "A display I choose" puts Kannu until someone picks.
+    private var displayChoice: Binding<String> {
+        Binding(
+            get: {
+                preferredScreenUUID
+                    ?? displays.first { $0.id == DisplayPlacementRuntime.mainDisplayID() }?.uuid
+                    ?? ""
+            },
+            set: { uuid in
+                guard let display = displays.first(where: { $0.uuid == uuid }) else { return }
+                DisplayPlacementRuntime.choose(display)
+            }
+        )
+    }
+
+    /// A connected display's title, numbered when another shares its name. A chosen display that is
+    /// not connected shows the name stored with it.
+    private func displayTitle(_ uuid: String) -> String {
+        let titles = DisplayPlacementResolver.pickerTitles(displays)
+        if let index = displays.firstIndex(where: { $0.uuid == uuid }) {
+            return titles[index]
+        }
+        return UserDefaults.standard.string(forKey: DisplayPlacementRuntime.legacyPreferredScreenNameKey) ?? ""
+    }
+
     private var overrideDisplays: [(name: String, isBuiltIn: Bool)] {
         var seen = Set<String>()
         return NSScreen.screens

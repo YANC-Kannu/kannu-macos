@@ -28,9 +28,11 @@ import Defaults
 @MainActor
 enum DisplayPlacementRuntime {
 
+    /// The pre-UUID choice, read raw so that it is never registered as a default again.
+    static let legacyPreferredScreenNameKey = "preferred_screen_name"
+
     static func displayID(for screen: NSScreen) -> CGDirectDisplayID? {
-        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
-            .map { CGDirectDisplayID($0.uint32Value) }
+        screen.displayID
     }
 
     static func facts(for screens: [NSScreen] = NSScreen.screens) -> [ScreenFacts] {
@@ -41,9 +43,29 @@ enum DisplayPlacementRuntime {
                 name: screen.localizedName,
                 isBuiltIn: CGDisplayIsBuiltin(id) != 0,
                 hasNotch: screen.safeAreaInsets.top > 0,
-                frame: screen.frame
+                frame: screen.frame,
+                uuid: NSScreen.displayUUID(for: id)
             )
         }
+    }
+
+    /// The chosen display's UUID, carrying an old name-based choice over the first time its
+    /// display is connected (`DisplayPlacementResolver.chosenDisplayUUID` is the rule).
+    static func chosenDisplayUUID(_ screens: [ScreenFacts]) -> String? {
+        let stored = Defaults[.preferredScreenUUID]
+        let legacy = UserDefaults.standard.string(forKey: legacyPreferredScreenNameKey)
+        let chosen = DisplayPlacementResolver.chosenDisplayUUID(storedUUID: stored, legacyName: legacy, screens: screens)
+        if stored == nil, let chosen {
+            Defaults[.preferredScreenUUID] = chosen
+        }
+        return chosen
+    }
+
+    /// Stores a pick from Settings. The name goes along for a downgrade, whose builds read only it.
+    static func choose(_ screen: ScreenFacts) {
+        guard let uuid = screen.uuid else { return }
+        UserDefaults.standard.set(screen.name, forKey: legacyPreferredScreenNameKey)
+        Defaults[.preferredScreenUUID] = uuid
     }
 
     /// The display the pointer is on, or nil when it cannot be placed.
@@ -61,10 +83,13 @@ enum DisplayPlacementRuntime {
 
     /// The displays Kannu should occupy right now.
     static func activeDisplayIDs(mode: DisplayPlacement = Defaults[.displayPlacement]) -> [CGDirectDisplayID] {
-        DisplayPlacementResolver.screensToShowOn(
-            facts(),
+        let screens = facts()
+        let chosenUUID = mode == .chooseDisplay ? chosenDisplayUUID(screens) : nil
+        return DisplayPlacementResolver.screensToShowOn(
+            screens,
             mode: mode,
-            chosenName: KannuViewCoordinator.shared.preferredScreen,
+            chosenUUID: chosenUUID,
+            chosenName: UserDefaults.standard.string(forKey: legacyPreferredScreenNameKey),
             pointerOn: pointerDisplayID(),
             mainScreen: mainDisplayID()
         )
@@ -72,8 +97,7 @@ enum DisplayPlacementRuntime {
 
     /// The single screen Kannu belongs on, for the modes that use one window.
     static func activeScreen(mode: DisplayPlacement = Defaults[.displayPlacement]) -> NSScreen? {
-        guard let id = activeDisplayIDs(mode: mode).first else { return nil }
-        return NSScreen.screens.first { displayID(for: $0) == id }
+        NSScreen.withDisplayID(activeDisplayIDs(mode: mode).first)
     }
 
     static func needsPointerTracking(mode: DisplayPlacement = Defaults[.displayPlacement]) -> Bool {
@@ -89,4 +113,26 @@ extension DisplayPlacement {
     /// this, plugging a second monitor in would move Kannu between two different window lifecycles
     /// mid-flight, which is a worse bug than the one being fixed.
     var usesOneWindowPerDisplay: Bool { self == .allDisplays }
+}
+
+extension NSScreen {
+    /// This screen's live identity, which every lookup matches on. `localizedName` is for people to
+    /// read: two identical monitors share it, and a lookup by it always found the first of the pair.
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
+            .map { CGDirectDisplayID($0.uint32Value) }
+    }
+
+    /// The connected screen with `id`, or nil when that display is gone. Nil in, nil out: a caller
+    /// that wants the main screen for "no screen yet" says so.
+    static func withDisplayID(_ id: CGDirectDisplayID?) -> NSScreen? {
+        guard let id else { return nil }
+        return screens.first { $0.displayID == id }
+    }
+
+    /// The display's UUID, the identity a stored choice keeps across reconnects.
+    static func displayUUID(for id: CGDirectDisplayID) -> String? {
+        guard let uuid = CGDisplayCreateUUIDFromDisplayID(id)?.takeRetainedValue() else { return nil }
+        return CFUUIDCreateString(nil, uuid) as String?
+    }
 }

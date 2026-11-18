@@ -54,7 +54,8 @@ class BatteryStatusViewModel: ObservableObject {
     @Published private(set) var statusText: String = ""
     @Published private(set) var activeTemporaryHUDKind: BatteryTemporaryHUDKind?
     @Published private(set) var activeTemporaryHUDToken: UUID = UUID()
-    @Published private(set) var activeTemporaryHUDTargetScreenName: String?
+    /// The display the temporary battery HUD belongs on, by id; nil shows it on every window.
+    @Published private(set) var activeTemporaryHUDTargetScreenID: CGDirectDisplayID?
     @Published private(set) var activeTemporaryHUDLevelOverride: Int?
     @Published private(set) var activeTemporaryHUDLowPowerModeOverride: Bool?
 
@@ -213,7 +214,7 @@ class BatteryStatusViewModel: ObservableObject {
 
         activeTemporaryHUDKind = kind
         activeTemporaryHUDToken = UUID()
-        activeTemporaryHUDTargetScreenName = resolvedTemporaryHUDTargetScreenName()
+        activeTemporaryHUDTargetScreenID = resolvedTemporaryHUDTargetScreenID()
         activeTemporaryHUDLevelOverride = levelOverride
         activeTemporaryHUDLowPowerModeOverride = lowPowerModeOverride
         coordinator.toggleExpandingView(
@@ -223,46 +224,20 @@ class BatteryStatusViewModel: ObservableObject {
         )
     }
 
-    private func resolvedTemporaryHUDTargetScreenName() -> String? {
+    /// Where the single notch window is (`selectedScreenID`), else the main display, else the first.
+    /// The chosen display is not a separate candidate: `selectedScreenID` is already where the
+    /// placement put the window, the chosen display included.
+    private func resolvedTemporaryHUDTargetScreenID() -> CGDirectDisplayID? {
         if Defaults[.displayPlacement].usesOneWindowPerDisplay {
             return nil
         }
 
-        let preferredNames = [
-            coordinator.selectedScreen,
-            coordinator.preferredScreen,
-            NSScreen.main?.localizedName
-        ]
-        .compactMap { $0 }
-
-        for candidate in preferredNames where NSScreen.screens.contains(where: { $0.localizedName == candidate }) {
+        let candidates = [coordinator.selectedScreenID, NSScreen.main?.displayID].compactMap { $0 }
+        for candidate in candidates where NSScreen.withDisplayID(candidate) != nil {
             return candidate
         }
 
-        return NSScreen.screens.first?.localizedName
-    }
-
-    private func preferredDynamicIslandTargetScreenName() -> String? {
-        let mainScreenName = NSScreen.main?.localizedName
-        let preferredNames = [coordinator.selectedScreen, coordinator.preferredScreen]
-
-        for candidate in preferredNames where shouldUseDynamicIslandMode(for: candidate) {
-            return candidate
-        }
-
-        if let externalDynamicIslandScreen = NSScreen.screens.first(where: {
-            $0.localizedName != mainScreenName && shouldUseDynamicIslandMode(for: $0.localizedName)
-        }) {
-            return externalDynamicIslandScreen.localizedName
-        }
-
-        if let anyDynamicIslandScreen = NSScreen.screens.first(where: {
-            shouldUseDynamicIslandMode(for: $0.localizedName)
-        }) {
-            return anyDynamicIslandScreen.localizedName
-        }
-
-        return nil
+        return NSScreen.screens.first?.displayID
     }
 
     private func handleLowBatteryAlertIfNeeded(previousLevel: Float, newLevel: Float) {

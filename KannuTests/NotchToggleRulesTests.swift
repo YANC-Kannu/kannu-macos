@@ -61,7 +61,7 @@ final class NotchToggleRulesTests: XCTestCase {
         let launch = NotchTeardownRulesTests.code(try XCTUnwrap(
             NotchTeardownRulesTests.body(ofFunction: "continueLaunch", in: app),
             "continueLaunch went away — this pin is now vacuous, update it"))
-        let seed = try XCTUnwrap(launch.range(of: "viewModel.screen = screen.localizedName"), "the launch seed went away")
+        let seed = try XCTUnwrap(launch.range(of: "viewModel.screenID = screen.displayID"), "the launch seed went away")
         let gate = try XCTUnwrap(launch.range(of: "if Defaults[.showNotch] {", range: seed.upperBound..<launch.endIndex),
                                  "launch builds the window without checking showNotch, or checks it before seeding the screen")
         XCTAssertNotNil(launch.range(of: "createKannuWindow(", range: gate.upperBound..<launch.endIndex),

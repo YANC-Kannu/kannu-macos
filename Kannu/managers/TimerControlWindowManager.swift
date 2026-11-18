@@ -206,8 +206,7 @@ final class TimerControlWindowManager {
     }
 
     private func resolveScreen(from viewModel: KannuViewModel) -> NSScreen? {
-        if let screenName = viewModel.screen,
-           let targetScreen = NSScreen.screens.first(where: { $0.localizedName == screenName }) {
+        if let targetScreen = NSScreen.withDisplayID(viewModel.screenID) {
             return targetScreen
         }
         return NSScreen.main

@@ -1000,6 +1000,11 @@ extension Defaults.Keys {
     /// `preferred_screen_name`, which between them could not express "the monitor, while it is
     /// plugged in". See `DisplayPlacementResolver`.
     static let displayPlacement = Key<DisplayPlacement>("displayPlacement", default: .externalTakesOver)
+    /// The display "A display I choose" puts Kannu on: its UUID (`CGDisplayCreateUUIDFromDisplayID`),
+    /// which survives the reconnects and reboots a `CGDirectDisplayID` may not. Nil until someone
+    /// picks, or until `DisplayPlacementRuntime` carries an old `preferred_screen_name` over. That
+    /// key is read raw and never declared: a declared `Key` registers its default.
+    static let preferredScreenUUID = Key<String?>("preferredScreenUUID", default: nil)
     /// Which Kannu windows stay out of screenshots, recordings and capture-based thumbnails.
     /// Replaces the `hideDynamicIslandFromScreenCapture` Bool, which `migrateScreenCaptureVisibility`
     /// reads raw. The old key is never declared again: a declared `Key` registers its default, which
@@ -1817,7 +1822,7 @@ extension Defaults.Keys {
     /// display and then hid the island on all but the notched one until the pointer rested at the
     /// top edge, which is the behaviour being fixed. Carrying the old choice forward would carry the
     /// complaint forward. A user who wants every display back says so in one picker, and
-    /// `chooseDisplay` keeps reading the same `preferred_screen_name` it always did.
+    /// `chooseDisplay` carries the old `preferred_screen_name` over to `preferredScreenUUID`.
     static func migrateCapsLockTintMode() {
         guard Defaults[.didMigrateCapsLockTintMode] == false else { return }
 

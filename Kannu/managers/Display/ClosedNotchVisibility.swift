@@ -37,15 +37,16 @@ enum ClosedNotchVisibility {
     /// - Parameters:
     ///   - detectionEnabled: the user's `enableFullscreenMediaDetection` setting.
     ///   - screen: the display Kannu believes it is on, or `nil` before that is resolved.
-    ///   - fullscreenStatus: the detector's per-screen verdicts, keyed by display name.
+    ///   - fullscreenStatus: the detector's per-screen verdicts, keyed by display id. By name, two
+    ///     identical monitors shared one verdict, and the second hid under the first's fullscreen app.
     ///
     /// A `nil` screen, or a screen the detector has not reported on, answers `false`. Hiding is the
     /// exception that needs evidence; showing is the default. Answering `true` without evidence is
     /// what made the app look broken.
     static func shouldHideClosedNotch(
         detectionEnabled: Bool,
-        screen: String?,
-        fullscreenStatus: [String: Bool]
+        screen: CGDirectDisplayID?,
+        fullscreenStatus: [CGDirectDisplayID: Bool]
     ) -> Bool {
         guard detectionEnabled, let screen else { return false }
         return fullscreenStatus[screen] ?? false

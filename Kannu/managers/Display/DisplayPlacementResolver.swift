@@ -33,7 +33,7 @@ public enum DisplayPlacement: String, CaseIterable, Identifiable, Equatable {
     case allDisplays
     /// The built-in display only, whatever else is connected.
     case builtInOnly
-    /// One named display.
+    /// One display the user picked, remembered by its UUID.
     case chooseDisplay
 
     public var id: String { rawValue }
@@ -64,18 +64,25 @@ public enum DisplayPlacement: String, CaseIterable, Identifiable, Equatable {
 /// Everything the placement decision needs about one screen, so the decision can be tested without
 /// an `NSScreen` — and without the two monitors this was written on a Mac that does not have.
 public struct ScreenFacts: Equatable {
+    /// The live identity: unique among the displays connected now, not promised across a reconnect.
     public let id: CGDirectDisplayID
+    /// For people to read. Two identical monitors share it, so nothing is ever looked up by it.
     public let name: String
     public let isBuiltIn: Bool
     public let hasNotch: Bool
     public let frame: CGRect
+    /// The stored identity (`CGDisplayCreateUUIDFromDisplayID`): the one a saved choice keeps, because
+    /// it survives the reconnects and reboots that can hand the same monitor a new `id`.
+    public let uuid: String?
 
-    public init(id: CGDirectDisplayID, name: String, isBuiltIn: Bool, hasNotch: Bool = false, frame: CGRect = .zero) {
+    public init(id: CGDirectDisplayID, name: String, isBuiltIn: Bool, hasNotch: Bool = false, frame: CGRect = .zero,
+                uuid: String? = nil) {
         self.id = id
         self.name = name
         self.isBuiltIn = isBuiltIn
         self.hasNotch = hasNotch
         self.frame = frame
+        self.uuid = uuid
     }
 }
 
@@ -91,10 +98,14 @@ public enum DisplayPlacementResolver {
     ///   - pointerOn: the display the pointer is on, used only when the mode is
     ///     `externalTakesOver` and two or more externals are connected — the only case with a
     ///     running cost, which is why it is the only case that tracks the pointer.
+    ///   - chosenUUID: the UUID of the display picked in Settings (`preferredScreenUUID`).
+    ///   - chosenName: the pre-UUID choice (`preferred_screen_name`), read only while no UUID is
+    ///     stored: a stored UUID that is not connected falls back, never to a namesake.
     ///   - mainScreen: the display to fall back to when a choice cannot be honoured.
     public static func screensToShowOn(
         _ screens: [ScreenFacts],
         mode: DisplayPlacement,
+        chosenUUID: String? = nil,
         chosenName: String? = nil,
         pointerOn: CGDirectDisplayID? = nil,
         mainScreen: CGDirectDisplayID? = nil
@@ -112,6 +123,9 @@ public enum DisplayPlacementResolver {
             return [screens.first(where: \.isBuiltIn)?.id ?? fallback]
 
         case .chooseDisplay:
+            if let chosenUUID {
+                return [screens.first { $0.uuid == chosenUUID }?.id ?? fallback]
+            }
             guard let chosenName else { return [fallback] }
             return [screens.first { $0.name == chosenName }?.id ?? fallback]
 
@@ -136,5 +150,43 @@ public enum DisplayPlacementResolver {
     /// monitor is installed and torn down on this answer alone.
     public static func needsPointerTracking(_ screens: [ScreenFacts], mode: DisplayPlacement) -> Bool {
         mode == .externalTakesOver && screens.filter { !$0.isBuiltIn }.count >= 2
+    }
+
+    // MARK: - Identity
+
+    /// The screen with `id`, or nil when that display is gone. Never one that merely shares its
+    /// name: two identical monitors are two screens, and a name lookup always found the first.
+    public static func screen(withID id: CGDirectDisplayID?, in screens: [ScreenFacts]) -> ScreenFacts? {
+        guard let id else { return nil }
+        return screens.first { $0.id == id }
+    }
+
+    /// The UUID to store for the pre-UUID choice, or nil when there is nothing to store yet.
+    ///
+    /// A stored UUID is final, connected or not. Without one, a legacy name that a connected display
+    /// carries picks the first such display, as the name lookup always did, and from then on an
+    /// identical second monitor cannot take it. A name that matches nothing stays a name: the dock
+    /// may wake after launch, and storing "main display" now would lose the choice for good.
+    public static func chosenDisplayUUID(
+        storedUUID: String?,
+        legacyName: String?,
+        screens: [ScreenFacts]
+    ) -> String? {
+        if let storedUUID { return storedUUID }
+        guard let legacyName else { return nil }
+        return screens.first { $0.name == legacyName }?.uuid
+    }
+
+    /// The Display picker's titles, in the order given: the name, numbered from 1 when displays
+    /// share it, so two identical monitors read as two choices.
+    public static func pickerTitles(_ screens: [ScreenFacts]) -> [String] {
+        var counts: [String: Int] = [:]
+        for screen in screens { counts[screen.name, default: 0] += 1 }
+        var seen: [String: Int] = [:]
+        return screens.map { screen in
+            guard counts[screen.name, default: 0] > 1 else { return screen.name }
+            seen[screen.name, default: 0] += 1
+            return "\(screen.name) (\(seen[screen.name]!))"
+        }
     }
 }
