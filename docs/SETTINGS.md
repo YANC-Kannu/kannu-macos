@@ -884,6 +884,12 @@ sheet does, and paints `SettingsTheme.panel` under every step and under the titl
   where it is a row. In both, Allow is the row's primary and Not now quiet (the design review's finding 4). Our own
   styles draw alike in a window that is not key, where a native prominent button turns grey, so the rows need no tint
   of their own. The Focus choice is a segmented `SettingsSelect`, and Open at login our switch.
+- **The light step shows the light, it does not ask about it** (`AgentLightShowcaseView`, since 2026-11-18, when
+  Classic and the band below the notch went). One card holds the real sideways pill at a real notch's 32 pt, with a
+  real housing's ratio, in three still rows (working, needs you, finished), each a symbol stand-in for an app icon and
+  a one-line label; then a two-line explanation and Continue. The card and its explanation sit centred between the
+  header and Continue, so the step has no empty band. Nothing animates (docs/REGRESSIONS.md entry 22) and nothing is
+  written to Defaults.
 
 `SettingsDesignSystemRulesTests` holds the root, the panel, Allow's rank, and no `.borderedProminent` under
 `Onboarding/`. No string changed with the theme: the steps' titles keep their Title Case. Behaviour did not change
@@ -1019,10 +1025,9 @@ section describes it, it does not define it.
   `DisclosureGroup` labelled **Advanced** (collapsed by default), keeping the section glanceable.
   Rows inside it carry no highlight ids; their search entries point at the disclosure's own id,
   so search always lands on something visible (the ADR scans section is the model). Brain › Agents ›
-  Traffic light has the second: **Agent light position**, Beside the notch (the 2.0 default, the dot
-  left of the notch and the agent's app icon right of it) or Below the notch (the 1.x band). Its entry
-  lands on the disclosure (`Traffic light advanced`), and the section's Preview draws the chosen
-  position, still: plain dots and a symbol stand-in for the icon, nothing that repeats.
+  Traffic light had a second, Agent light position, until 2.0 removed the band below the notch with
+  the Classic style (2026-11-18): the section now has no choice of look, and its Preview draws the one
+  pill the notch draws, still: a plain dot and a symbol stand-in for the icon, nothing that repeats.
 - A sub-page is an in-tab view swap (Brain has no navigation stack): a row with an Open button
   ("40 open ›") swaps the tab's content, and the sub-page starts with a back row. The same rule
   applies: its rows carry no highlight ids, their search entries land on the row that opens it,

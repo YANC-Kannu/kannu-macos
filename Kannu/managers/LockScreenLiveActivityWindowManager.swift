@@ -254,8 +254,8 @@ class LockScreenLiveActivityWindowManager {
         attentionFlashTask?.cancel()
 
         overlayAnimator.update(isLocked: true, animated: false)
-        // Sideways, the flash carries the agent's dot and icon (the pill shows only for it).
-        overlayModel.showsAgentForAlert = Defaults[.agentPillLayout] == .sideways
+        // The flash carries the agent's dot and icon (the pill shows only for it).
+        overlayModel.showsAgentForAlert = true
         overlayModel.scale = 1
         overlayModel.opacity = 1
         present(notchSize: context.notchSize, on: context.screen, forAttentionAlert: true)

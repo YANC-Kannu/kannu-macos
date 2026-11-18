@@ -1184,6 +1184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateNonNotchAlwaysShow()
         Defaults.Keys.migrateScreenCaptureVisibility()
         Defaults.Keys.migrateRemovedMinimalisticUI()
+        Defaults.Keys.migrateRemovedAgentLightChoices()
         Defaults.Keys.migrateThirdPartyDDCIntegration()
         Defaults.Keys.enforceRemovedFeatureDefaults()
         SecureSecretsStore.migrateFromDefaultsIfNeeded()

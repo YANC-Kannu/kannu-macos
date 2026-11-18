@@ -228,7 +228,7 @@ private struct AgentsHeroCard: View {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     AgentsStateWord(session: session, font: SettingsTheme.cardTitle, text: title)
                     Spacer(minLength: 0)
-                    AgentTrafficLightDots(style: .classic, state: session.displayState)
+                    AgentTrafficLightDots(state: session.displayState)
                         .accessibilityHidden(true)
                 }
                 HStack(alignment: .top, spacing: SettingsMetrics.cardPadding) {
@@ -296,7 +296,7 @@ private struct AgentsSessionRow: View {
                 HStack(spacing: SettingsMetrics.rowContent) {
                     AgentsStateWord(session: session, font: SettingsTheme.description)
                     AgentsMetrics(session: session, live: live, font: SettingsTheme.description, figures: false)
-                    AgentTrafficLightDots(style: .minimal, state: session.displayState)
+                    AgentTrafficLightDots(state: session.displayState)
                         .accessibilityHidden(true)
                 }
                 .frame(width: SettingsTheme.listTrailingWidth, alignment: .trailing)

@@ -25,8 +25,8 @@ import SwiftUI
 
 struct AgentStatusSettings: View {
     // Deliberately not observing CursorAgentStatusMonitor: it publishes on every hook write while
-    // agents run. The product above the settings (AgentsOverview) and the style preview
-    // (AgentTrafficLightStylePreview) each copy what they show, only while Brain is on screen.
+    // agents run. The product above the settings (AgentsOverview) and the light's preview
+    // (AgentTrafficLightPreview) each copy what they show, only while Brain is on screen.
     @ObservedObject private var accessibilityPermission = AccessibilityPermissionStore.shared
     @ObservedObject var hookInstaller = AgentHookInstaller.shared
     @ObservedObject private var notificationBridge = AgentStatusNotificationBridge.shared
@@ -35,8 +35,6 @@ struct AgentStatusSettings: View {
     @Default(.agentStoppedCollapseSeconds) var agentStoppedCollapseSeconds
     @Default(.agentInactiveDisplaySeconds) var agentInactiveDisplaySeconds
     @Default(.showAgentStoppedIndicator) var showAgentStoppedIndicator
-    @Default(.agentTrafficLightStyle) var agentTrafficLightStyle
-    @Default(.agentPillLayout) var agentPillLayout
     @Default(.agentActiveColor) var agentActiveColor
     @Default(.agentAwaitingInputColor) var agentAwaitingInputColor
     @Default(.agentStoppedColor) var agentStoppedColor
@@ -100,14 +98,9 @@ struct AgentStatusSettings: View {
                 }
 
                 SettingsSection {
-                    SettingsRow("Traffic light style", description: agentTrafficLightStyle.description) {
-                        SettingsSelect("Traffic light style", selection: $agentTrafficLightStyle,
-                                       options: AgentTrafficLightStyle.allCases, optionTitle: \.localizedName)
-                    }
-                    .settingsHighlight(id: highlightID("Traffic light style"))
                     // Live preview using the same view the notch draws, so this can't drift.
                     LabeledContent("Preview") {
-                        AgentTrafficLightStylePreview(style: agentTrafficLightStyle, layout: agentPillLayout)
+                        AgentTrafficLightPreview()
                     }
                     stateColorRow(
                         key: .agentActiveColor,
@@ -140,18 +133,6 @@ struct AgentStatusSettings: View {
                         )
                     }
                     .settingsHighlight(id: highlightID("Reset traffic light colors"))
-
-                    // Where the light sits on a notched MacBook: beside the notch since 2.0, or the 1.x band
-                    // below it. Needed rarely, so it waits here; its search entry lands on this disclosure.
-                    DisclosureGroup {
-                        SettingsRow("Agent light position", description: agentPillLayout.description) {
-                            SettingsSelect("Agent light position", selection: $agentPillLayout,
-                                           options: AgentPillLayout.allCases, optionTitle: \.localizedName)
-                        }
-                    } label: {
-                        SettingsRowLabel("Advanced", description: "Where the light sits on a MacBook with a notch.")
-                    }
-                    .settingsHighlight(id: highlightID("Traffic light advanced"))
                 } header: {
                     SettingsSectionHeader("Traffic light")
                 } footer: {
@@ -496,17 +477,16 @@ struct AgentStatusSettings: View {
     }
 }
 
-/// The traffic light in Settings, in the chosen style and the monitor's current state. It follows only
-/// the light, never the whole monitor, and only while Brain is on screen (docs/SETTINGS.md, "Live data"),
-/// so the rest of the Agents tab does not re-render on every rescan and a hidden Brain does no work.
-private struct AgentTrafficLightStylePreview: View {
-    let style: AgentTrafficLightStyle
-    var layout: AgentPillLayout = .sideways
+/// The traffic light in Settings: the sideways pill the notch draws, in the monitor's current state. It
+/// follows only the light, never the whole monitor, and only while Brain is on screen (docs/SETTINGS.md,
+/// "Live data"), so the rest of the Agents tab does not re-render on every rescan and a hidden Brain does
+/// no work.
+private struct AgentTrafficLightPreview: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @State private var state: AgentTrafficLightState = .inactive
 
     var body: some View {
-        AgentPillLayoutPreview(style: style, layout: layout, state: state == .inactive ? .executing : state)
+        AgentPillPreview(state: state == .inactive ? .executing : state)
             .onAppear { state = CursorAgentStatusMonitor.shared.trafficLightState }
             .task(id: visibility.isOnScreen) {
                 guard visibility.isOnScreen else { return }

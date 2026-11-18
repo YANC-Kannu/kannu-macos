@@ -1446,12 +1446,6 @@ extension Defaults.Keys {
     /// tmux to its pane); needs the one-time "control <terminal>" Automation permission.
     static let openAgentTerminalTab = Key<Bool>("openAgentTerminalTab", default: true)
     static let showAgentStoppedIndicator = Key<Bool>("showAgentStoppedIndicator", default: false)
-    /// Closed-notch traffic light shape. Defaults to `.classic` so existing installs keep the
-    /// three-dot look they already have — only fresh installs are asked to choose in onboarding.
-    static let agentTrafficLightStyle = Key<AgentTrafficLightStyle>("agentTrafficLightStyle", default: .classic)
-    /// Where the closed light sits on a notched MacBook. Sideways for everyone, updaters included
-    /// (David, 2026-11-18); the key is new, so nothing migrates. `.belowNotch` is the 1.x band.
-    static let agentPillLayout = Key<AgentPillLayout>("agentPillLayout", default: .sideways)
     /// Traffic-light state colors, chosen from the curated palette. Defaults reproduce the
     /// classic green/yellow/red exactly; the Settings picker prevents two states sharing one.
     static let agentActiveColor = Key<AgentTrafficLightPaletteColor>("agentActiveColor", default: .green)
@@ -1641,7 +1635,9 @@ extension Defaults.Keys {
     // MARK: Tasks Feature
     // The tasks themselves live in Application Support/Kannu/Tasks/tasks.json (TaskFileStore),
     // not here: they hold recorded time, and a Defaults write is a whole-plist rewrite.
-    static let enableTasks = Key<Bool>("enableTasks", default: false)
+    /// On by default since 2.0 (David, 2026-11-18), updaters who never touched it included. Turning it on
+    /// raises no dialog: Reminders access is asked only on Connect, Notifications only on a first schedule.
+    static let enableTasks = Key<Bool>("enableTasks", default: true)
     /// How long a task's timer runs when the task has no estimate left, in minutes.
     static let tasksDefaultSessionMinutes = Key<Int>("tasksDefaultSessionMinutes", default: 25)
     /// Off by default: a task's timer runs on past its estimate silently.
@@ -1802,6 +1798,16 @@ extension Defaults.Keys {
             "enableExtensionNotchMinimalisticOverrides",
         ] {
             store.removeObject(forKey: key)
+        }
+    }
+
+    /// The light's two choices are gone (David, 2026-11-18): it is always one lit dot, the Classic
+    /// three-dot style went with "no need clasic", and on a notched MacBook it always sits beside the
+    /// notch, the 1.x band below it removed. Nothing carries forward, so their stored keys are removed
+    /// raw, as `migrateRemovedMinimalisticUI` removes its own. Idempotent without a flag.
+    static func migrateRemovedAgentLightChoices() {
+        for key in ["agentTrafficLightStyle", "agentPillLayout"] {
+            UserDefaults.standard.removeObject(forKey: key)
         }
     }
 

@@ -111,9 +111,12 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // 2026-11-18: Agents › Traffic light gains an Advanced disclosure holding "Agent light position"
         // (beside the notch, the 2.0 default, or the band below it): one entry, landing on the disclosure,
         // and the disclosure's one row and one id.
-        XCTAssertEqual(inventory.entries.count, 249, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 280, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 274, "distinct registered ids")
+        // 2026-11-18, later: both of the light's choices are gone (David: "no need clasic", and the band
+        // below the notch removed). "Traffic light style" and "Agent light position" leave the search,
+        // and the style row and the Advanced disclosure their registrations and ids: two of each fewer.
+        XCTAssertEqual(inventory.entries.count, 247, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 278, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 272, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

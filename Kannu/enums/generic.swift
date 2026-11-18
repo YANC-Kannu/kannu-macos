@@ -60,35 +60,6 @@ enum ExternalDisplayStyle: String, CaseIterable, Defaults.Serializable, Identifi
     }
 }
 
-/// Where the agent light sits in a notched MacBook's closed notch. Sideways is the 2.0 default for
-/// everyone: the dot left of the housing and the agent's app icon right of it, at the closed height.
-/// Below the notch is the band 1.x drew, kept in Brain › Agents › Advanced. Displays without a notch
-/// draw the centred dots either way.
-enum AgentPillLayout: String, CaseIterable, Defaults.Serializable, Identifiable {
-    case sideways
-    case belowNotch
-
-    var id: String { rawValue }
-
-    var localizedName: String {
-        switch self {
-        case .sideways:
-            return String(localized: "Beside the notch")
-        case .belowNotch:
-            return String(localized: "Below the notch")
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .sideways:
-            return String(localized: "The light sits left of the notch and the agent's app icon right of it, for a few seconds after each change.")
-        case .belowNotch:
-            return String(localized: "A band below the notch holds the light, and it stays in the music and timer pills.")
-        }
-    }
-}
-
 /// How Brain's window looks. The window alone: the notch stays dark whatever this says.
 enum BrainAppearance: String, CaseIterable, Defaults.Serializable, Identifiable {
     case system
@@ -146,39 +117,6 @@ enum AppleNotesSyncScope: String, CaseIterable, Defaults.Serializable, Identifia
             return String(localized: "Your other notes are never read or changed.")
         case .wholeAccount:
             return String(localized: "Your other notes show here, read-only.")
-        }
-    }
-}
-
-/// How the agent traffic light renders in the closed notch.
-/// - `classic`: all three dots, the current state lit and the other two dimmed.
-/// - `minimal`: only the dot that is currently lit.
-///
-/// Either way the notch shows exactly one light — never one per agent. The state
-/// shown is the highest-priority one across every visible session
-/// (`AgentTrafficLightMapper.aggregate`), with the most recently updated chat
-/// breaking ties.
-enum AgentTrafficLightStyle: String, CaseIterable, Defaults.Serializable, Identifiable {
-    case classic = "Classic"
-    case minimal = "Minimal"
-
-    var id: String { rawValue }
-
-    var localizedName: String {
-        switch self {
-        case .classic:
-            return String(localized: "Classic")
-        case .minimal:
-            return String(localized: "Minimal")
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .classic:
-            return String(localized: "All three lights, with the inactive two dimmed")
-        case .minimal:
-            return String(localized: "Only the light that is currently lit")
         }
     }
 }

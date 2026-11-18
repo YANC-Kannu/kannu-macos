@@ -1,12 +1,13 @@
 import Defaults
 import SwiftUI
 
-/// The three-dot (or single-dot) traffic light itself, independent of any live state.
+/// The traffic light itself, independent of any live state: the one dot the state lights, and nothing
+/// while nothing is lit. Since 2.0 that is the only style (David, 2026-11-18: "no need clasic"); the
+/// three-dot Classic look is gone.
 ///
-/// Shared by the notch indicator and by the Settings / onboarding pickers so a preview can
-/// never drift from what the notch actually draws.
+/// Shared by the notch indicator, Brain and onboarding, so a preview can never drift from what the
+/// notch actually draws.
 struct AgentTrafficLightDots: View {
-    let style: AgentTrafficLightStyle
     let state: AgentTrafficLightState
     /// Whether the lit dot should breathe. Previews pass false; the live indicator decides
     /// per-state (red only inside its completion window, yellow/green for as long as they're lit).
@@ -15,7 +16,6 @@ struct AgentTrafficLightDots: View {
     /// breath costs the main thread nothing; previews keep plain SwiftUI circles.
     var live: Bool = false
     var dotSize: CGFloat = 10
-    var spacing: CGFloat = 6
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -30,28 +30,18 @@ struct AgentTrafficLightDots: View {
     }
 
     var body: some View {
-        HStack(spacing: spacing) {
-            switch style {
-            case .classic:
-                dot(stoppedColor.color, isActive: state.showsRedTrafficLight)
-                dot(awaitingColor.color, isActive: state.showsYellowTrafficLight)
-                dot(activeColor.color, isActive: state.showsGreenTrafficLight)
-            case .minimal:
-                // Nothing is lit when inactive, and the indicator is hidden in that case
-                // anyway — draw nothing rather than inventing a colour.
-                if let litColor {
-                    dot(litColor, isActive: true)
-                }
-            }
+        // Nothing is lit when inactive, and the indicator is hidden in that case anyway: draw
+        // nothing rather than inventing a colour.
+        if let litColor {
+            dot(litColor)
         }
     }
 
     @ViewBuilder
-    private func dot(_ color: Color, isActive: Bool) -> some View {
-        let tint = color.opacity(isActive ? 1.0 : 0.2)
+    private func dot(_ tint: Color) -> some View {
         if live {
             // The inner frame leaves room for the breath (1.3×); the outer keeps the layout slot.
-            TrafficLightDot(color: tint, diameter: dotSize, pulsing: isActive && isPulsing && !reduceMotion)
+            TrafficLightDot(color: tint, diameter: dotSize, pulsing: isPulsing && !reduceMotion)
                 .frame(width: dotSize * TrafficLightPulseSpec.scale, height: dotSize * TrafficLightPulseSpec.scale)
                 .frame(width: dotSize, height: dotSize)
         } else {
@@ -74,16 +64,6 @@ struct SecurityShieldGlyph: View {
             .font(.system(size: size, weight: .semibold))
             .foregroundStyle(notchForeground.opacity(0.9))
             .accessibilityLabel(String(localized: "Unacknowledged high-severity security finding"))
-    }
-}
-
-extension AgentTrafficLightStyle {
-    /// How many dots the style draws in the sideways pill's left wing: Classic three, Minimal the lit one.
-    var pillDotCount: Int {
-        switch self {
-        case .classic: return 3
-        case .minimal: return 1
-        }
     }
 }
 
@@ -145,7 +125,8 @@ struct AgentSidewaysPillRow<Lights: View>: View {
 
 /// The lock-screen pill during a reveal: the lit dot in the lock icon's wing, the housing clear, the app
 /// icon in the other wing. The pill's wings are its own (`closed height − 12`), so its window never
-/// changes size (docs/REGRESSIONS.md entry 17); one dot is what fits a wing that size.
+/// changes size (docs/REGRESSIONS.md entry 17). The icon is the notch pill's size,
+/// `closed height − ClosedAgentPillLayout.iconInset`, centred in its wing.
 struct AgentLockPillRow<Light: View>: View {
     let wingWidth: CGFloat
     let housingWidth: CGFloat
@@ -161,7 +142,8 @@ struct AgentLockPillRow<Light: View>: View {
                 .frame(width: wingWidth, height: height)
             Color.clear
                 .frame(width: housingWidth, height: height)
-            AgentPillIcon(source: iconSource, size: wingWidth, symbolsOnly: symbolsOnly)
+            AgentPillIcon(source: iconSource, size: min(wingWidth, ClosedAgentPillLayout.iconSize(closedHeight: height)),
+                          symbolsOnly: symbolsOnly)
                 .frame(width: wingWidth, height: height)
         }
         .accessibilityElement(children: .ignore)
@@ -169,42 +151,32 @@ struct AgentLockPillRow<Light: View>: View {
     }
 }
 
-/// The closed notch with the light where the chosen layout puts it, drawn still: plain dots (never the live
-/// breathing ones) and a symbol stand-in for the app icon, so nothing here repeats while Brain is closed
-/// (docs/REGRESSIONS.md entry 22) and no other company's logo shows. Brain's Traffic light preview and
-/// onboarding's style cards draw it; it lives with the notch's views because it paints the notch's black.
-struct AgentPillLayoutPreview: View {
-    let style: AgentTrafficLightStyle
-    let layout: AgentPillLayout
+/// The sideways pill on a closed notch, drawn still: a plain dot (never the live breathing one) and a symbol
+/// stand-in for the app icon, so nothing here repeats while Brain is closed (docs/REGRESSIONS.md entry 22)
+/// and no other company's logo shows. Brain's Traffic light preview and onboarding's light step draw it; it
+/// lives with the notch's views because it paints the notch's black.
+///
+/// `closedHeight` is the notch's, a real notch's 32 pt by default. The housing keeps a real MacBook's ratio
+/// to it (185 wide on a 32 pt notch) unless a width is given.
+struct AgentPillPreview: View {
     var state: AgentTrafficLightState = .executing
+    var iconSource: AgentProviderIconSource = .claude
+    var closedHeight: CGFloat = 32
+    var housingWidth: CGFloat? = nil
 
-    private static let closedHeight: CGFloat = 24
-    private static let housingWidth: CGFloat = 40
+    /// A 14" MacBook Pro's housing against its 32 pt closed notch, as the boards measure it.
+    static let housingRatio: CGFloat = 185.0 / 32.0
+
+    private var layout: ClosedAgentPillLayout {
+        ClosedAgentPillLayout(closedHeight: closedHeight, housingWidth: housingWidth ?? closedHeight * Self.housingRatio,
+                              showsShield: false)
+    }
 
     var body: some View {
-        Group {
-            switch layout {
-            case .sideways:
-                AgentSidewaysPillRow(
-                    layout: ClosedAgentPillLayout(closedHeight: Self.closedHeight, housingWidth: Self.housingWidth,
-                                                  dotCount: style.pillDotCount, showsShield: false),
-                    iconSource: .claude,
-                    symbolsOnly: true,
-                    accessibilityLabel: ""
-                ) {
-                    AgentTrafficLightDots(style: style, state: state)
-                }
-                .background(NotchShape(topCornerRadius: 4, bottomCornerRadius: 8).fill(Color.black))
-            case .belowNotch:
-                VStack(spacing: 0) {
-                    Color.clear.frame(height: Self.closedHeight)
-                    AgentTrafficLightDots(style: style, state: state)
-                        .frame(height: 18, alignment: .top)
-                }
-                .frame(width: Self.housingWidth + 72)
-                .background(NotchShape(topCornerRadius: 4, bottomCornerRadius: 10).fill(Color.black))
-            }
+        AgentSidewaysPillRow(layout: layout, iconSource: iconSource, symbolsOnly: true, accessibilityLabel: "") {
+            AgentTrafficLightDots(state: state)
         }
+        .background(NotchShape(topCornerRadius: closedHeight / 6, bottomCornerRadius: closedHeight / 3).fill(Color.black))
         .accessibilityHidden(true)
     }
 }
@@ -221,8 +193,8 @@ struct AgentTrafficLightIndicator: View {
     /// Where the indicator draws. Every placement is drawn here, by the one view that observes the monitor
     /// (`ClosedNotchObservationTests`), so the icon and the dots always follow the same session.
     enum Placement: Equatable {
-        /// The dots, and the shield beside them: the band below the notch, the music and timer centres,
-        /// and every display without a notch.
+        /// The dot, and the shield beside it: every display without a notch, the Dynamic Island among them,
+        /// including the music and timer centres there.
         case centred
         /// The sideways pill on a notched MacBook: the dots in a left wing, the housing, the agent's app
         /// icon in a right wing, at the closed height (`ClosedAgentPillLayout`).
@@ -234,7 +206,6 @@ struct AgentTrafficLightIndicator: View {
     @ObservedObject var agentStatusMonitor = CursorAgentStatusMonitor.shared
     @ObservedObject private var findingsStore = SecurityFindingsStore.shared
     @Default(.showAgentStoppedIndicator) private var showAgentStoppedIndicator
-    @Default(.agentTrafficLightStyle) private var trafficLightStyle
     @Default(.adrHighAlertMode) private var highAlertMode
 
     var placement: Placement = .centred
@@ -348,7 +319,7 @@ struct AgentTrafficLightIndicator: View {
         switch placement {
         case .centred:
             HStack(spacing: 6) {
-                lights(at: now, style: trafficLightStyle)
+                lights(at: now)
                     // The dots carry the aggregate state in colour alone, and it is rendered as text
                     // nowhere — the panel shows per-session state, and only on hover.
                     .accessibilityElement(children: .ignore)
@@ -360,25 +331,23 @@ struct AgentTrafficLightIndicator: View {
         case let .beside(housingWidth, closedHeight):
             AgentSidewaysPillRow(
                 layout: ClosedAgentPillLayout(closedHeight: closedHeight, housingWidth: housingWidth,
-                                              dotCount: trafficLightStyle.pillDotCount,
                                               showsShield: showsSecurityGlyph),
                 iconSource: primaryIconSource,
                 accessibilityLabel: pillAccessibilityLabel
             ) {
-                lights(at: now, style: trafficLightStyle)
+                lights(at: now)
             }
         case let .lockPill(wingWidth, housingWidth, height):
             AgentLockPillRow(wingWidth: wingWidth, housingWidth: housingWidth, height: height,
                              iconSource: primaryIconSource, accessibilityLabel: pillAccessibilityLabel) {
-                lights(at: now, style: .minimal)
+                lights(at: now)
             }
         }
     }
 
     /// The live dots. The breath is the only motion any placement has.
-    private func lights(at now: Date, style: AgentTrafficLightStyle) -> AgentTrafficLightDots {
+    private func lights(at now: Date) -> AgentTrafficLightDots {
         AgentTrafficLightDots(
-            style: style,
             state: activeState,
             isPulsing: shouldPulse(at: now),
             live: true
@@ -408,50 +377,23 @@ struct AgentTrafficLightLiveActivity: View {
     let isHovering: Bool
     let gestureProgress: CGFloat
 
-    /// Only supplied when rendering on a display with a physical notch.
-    /// Non-notch displays receive nil and retain their existing sizing.
-    var physicalNotchExpandedHeight: CGFloat? = nil
-
-    /// Must remain zero on non-notch displays.
-    var trafficLightVerticalOffset: CGFloat = 0
-
     /// Clicking the security pill opens the panel on the agent tab, where the pinned card is.
     var onTapSecurityPill: (() -> Void)? = nil
 
     var onHoverAgentCenter: ((Bool) -> Void)? = nil
 
-    /// The sideways pill (`AgentPillLayout.sideways` on a notched MacBook): the light beside the housing at
-    /// the closed height, no band, and the high finding as a shield in the left wing; `SecurityAlertPill`
-    /// stays with the band. False keeps the band exactly as it was.
+    /// The sideways pill, on a notched MacBook: the light beside the housing at the closed height, and the
+    /// high finding as a shield in the left wing. False is every display without a notch, the Dynamic
+    /// Island among them: the light centred in the closed notch, with `SecurityAlertPill` beside it. The 1.x
+    /// band below a physical notch is gone (David, 2026-11-18).
     var sideways = false
 
     private var notchContentHeight: CGFloat {
-        let normalHeight = max(
-            0,
-            vm.effectiveClosedNotchHeight - (isHovering ? 0 : 12)
-        )
-
-        guard let physicalNotchExpandedHeight else {
-            return normalHeight
-        }
-
-        return max(normalHeight, physicalNotchExpandedHeight)
+        max(0, vm.effectiveClosedNotchHeight - (isHovering ? 0 : 12))
     }
 
     private var outerHeight: CGFloat {
-        let normalHeight = max(
-            0,
-            vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0)
-        )
-
-        guard let physicalNotchExpandedHeight else {
-            return normalHeight
-        }
-
-        return max(
-            normalHeight,
-            physicalNotchExpandedHeight + (isHovering ? 8 : 0)
-        )
+        max(0, vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0))
     }
 
     private var contentWidth: CGFloat {
@@ -479,7 +421,7 @@ struct AgentTrafficLightLiveActivity: View {
         if sideways {
             sidewaysBody
         } else {
-            bandBody
+            centredBody
         }
     }
 
@@ -494,8 +436,9 @@ struct AgentTrafficLightLiveActivity: View {
             }
     }
 
+    /// The light centred in the closed notch of a display without one, and the security pill beside it.
     @ViewBuilder
-    private var bandBody: some View {
+    private var centredBody: some View {
         let now = Date()
         let _ = pillWake
         let groups = findingsStore.groupRanking
@@ -520,7 +463,6 @@ struct AgentTrafficLightLiveActivity: View {
             try? await Task.sleep(for: .seconds(max(0, pillEnd.timeIntervalSinceNow) + 0.05))
             if !Task.isCancelled { pillWake = Date() }
         }
-        .offset(y: trafficLightVerticalOffset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(width: contentWidth, height: notchContentHeight)
         .frame(height: outerHeight)

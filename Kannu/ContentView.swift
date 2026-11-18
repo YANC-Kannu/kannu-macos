@@ -127,7 +127,6 @@ struct ContentView: View {
     @Default(.notchSkinScrimOpacity) private var notchSkinScrimOpacity
     @Default(.notchFillColor) private var notchFillColor
     @Default(.enableAgentStatusFeature) private var enableAgentStatusFeature
-    @Default(.agentPillLayout) private var agentPillLayout
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Default(.selectedIdleAnimation) private var selectedIdleAnimation
     
@@ -432,6 +431,9 @@ struct ContentView: View {
         return screen.safeAreaInsets.top <= 0
     }
 
+    /// A notched MacBook's built-in display. The agent light is the sideways pill here, the light beside the
+    /// housing at the closed height; displays without a notch, the Dynamic Island among them, keep their
+    /// centred light. The 1.x band below the notch is gone (David, 2026-11-18).
     private var isPhysicalNotchScreen: Bool {
         !isNonNotchScreen
     }
@@ -455,64 +457,17 @@ struct ContentView: View {
                                                   available: Double(available)))
     }
 
-    /// The sideways agent pill (`AgentPillLayout.sideways`, the 2.0 default) applies on a notched MacBook
-    /// only: the light beside the housing at the closed height, with no band below. Displays without a
-    /// notch, the Dynamic Island among them, keep their centred dots whatever the setting says.
-    private var usesSidewaysAgentPill: Bool {
-        agentPillLayout == .sideways && isPhysicalNotchScreen
-    }
-
     /// How the reveal moves the closed notch. Under Reduce Motion the sideways pill's wings fade in and out
     /// (its transition) instead of sliding (the notch's width animating); every other case is unchanged.
     private var agentRevealAnimation: Animation? {
-        usesSidewaysAgentPill && reduceMotion ? nil : vm.animation
+        isPhysicalNotchScreen && reduceMotion ? nil : vm.animation
     }
 
-    /// The light's own transition. The sideways pill fades under Reduce Motion; the band keeps its blur.
+    /// The light's own transition. The sideways pill fades under Reduce Motion; the centred light keeps its blur.
     private var agentLightTransition: AnyTransition {
-        usesSidewaysAgentPill && reduceMotion
+        isPhysicalNotchScreen && reduceMotion
             ? .opacity.animation(.easeInOut(duration: 0.2))
             : AnyTransition(.blurReplace).animation(.interactiveSpring(dampingFraction: 1.2))
-    }
-
-    private var shouldExpandPhysicalNotchForAgent: Bool {
-        // `showAgentTrafficLight` implies enableAgentStatusFeature && the monitor's
-        // shouldShowTrafficLight (upstream's conditions) plus the hide-until-hover reveal
-        // window — keeping expansion tied to whether a light is actually being drawn. On
-        // physical-notch screens hide-until-hover never applies, so this is equivalent to
-        // upstream's check there, with one source of truth instead of two. The sideways pill
-        // grows no band, so nothing expands for it.
-        isPhysicalNotchScreen
-            && vm.notchState == .closed
-            && showAgentTrafficLight
-            && !vm.hideOnClosed
-            && !usesSidewaysAgentPill
-    }
-
-    private var physicalNotchAgentHeight: CGFloat {
-        physicalNotchAgentTrafficLightHeight(
-            screenName: currentScreenName,
-            closedNotchHeight: vm.effectiveClosedNotchHeight
-        )
-    }
-
-    private var physicalNotchAgentVerticalOffset: CGFloat {
-        guard shouldExpandPhysicalNotchForAgent else { return 0 }
-
-        return physicalNotchAgentTrafficLightVerticalOffset(
-            expandedHeight: physicalNotchAgentHeight,
-            closedNotchHeight: vm.effectiveClosedNotchHeight,
-            screenName: currentScreenName
-        )
-    }
-
-    private var physicalNotchAgentHeightExpansion: CGFloat {
-        guard shouldExpandPhysicalNotchForAgent else { return 0 }
-
-        return max(
-            0,
-            physicalNotchAgentHeight - vm.effectiveClosedNotchHeight
-        )
     }
 
     /// Whether the global sneak peek is visible on this specific screen.
@@ -544,7 +499,7 @@ struct ContentView: View {
     private var showAgentTrafficLight: Bool {
         guard enableAgentStatusFeature, agentLight.shouldShowTrafficLight || securityCueWanted else { return false }
         // Notched displays used to show the light for as long as a session existed; they now
-        // share the same activity-refreshed window so the band collapses between events.
+        // share the same activity-refreshed window so the pill collapses between events.
         guard hideUntilHoverAppliesHere || isPhysicalNotchScreen else { return true }
         // While a music pill is already on screen the light is drawn inside it, so keep it
         // steady rather than blinking a dot in and out of a persistent container. Uses the
@@ -553,7 +508,7 @@ struct ContentView: View {
         // container: the light sits in its centre for as long as it runs.
         // The sideways pill does not stack: it takes the notch from music and the timer for the
         // reveal, then they come back with no light in their centre, so neither holds it lit.
-        if !usesSidewaysAgentPill {
+        if isNonNotchScreen {
             if isClosedMusicPairingEligible || timerOwnsClosedNotch { return true }
         }
         // A pending high finding is a cue in its own right. With no agent activity there is no
@@ -1065,7 +1020,6 @@ struct ContentView: View {
             maxWidth: (dynamicNotchSize.width + (vm.notchState == .open ? 24 : 0) + (isDynamicIslandMode ? dynamicIslandShadowInset * 2 : 0)).rounded(),
             maxHeight: (
                 dynamicNotchSize.height
-                + physicalNotchAgentHeightExpansion
                 + (vm.notchState == .open ? 12 : 0)
                 + (
                     isDynamicIslandMode
@@ -1146,7 +1100,7 @@ struct ContentView: View {
                         revealHoldDeadline = Date().addingTimeInterval(notchRevealHoldSeconds)
                         armRevealCountdown()
                     } else if isPhysicalNotchScreen, agentLightDeadline != nil {
-                        // Closing the notch must not strand the band on a stale deadline.
+                        // Closing the notch must not strand the pill on a stale deadline.
                         agentLightDeadline = Date().addingTimeInterval(notchRevealHoldSeconds)
                         armRevealCountdown()
                     }
@@ -1370,7 +1324,7 @@ struct ContentView: View {
                       } else if vm.notchState == .closed && capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !vm.hideOnClosed && !lockScreenManager.isLocked && !timerOwnsClosedNotch {
                           InlineHUD(type: .constant(.capsLock), value: .constant(1.0), icon: .constant(""), hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(AnyTransition.move(edge: .trailing).combined(with: .opacity))
-                      } else if usesSidewaysAgentPill && agentLightDeadline != nil && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
+                      } else if isPhysicalNotchScreen && agentLightDeadline != nil && !isCurrentScreenExpansionVisible && vm.notchState == .closed && showAgentTrafficLight && !vm.hideOnClosed {
                           // Sideways: an agent's state switch takes the closed notch for the reveal,
                           // ahead of music and a running timer, which come back when it ends.
                           sidewaysAgentPill()
@@ -1386,27 +1340,18 @@ struct ContentView: View {
                             AgentTrafficLightLiveActivity(
                                 isHovering: isHovering,
                                 gestureProgress: gestureProgress,
-                                physicalNotchExpandedHeight: shouldExpandPhysicalNotchForAgent
-                                    ? physicalNotchAgentHeight
-                                    : nil,
-                                trafficLightVerticalOffset: physicalNotchAgentVerticalOffset,
                                 onTapSecurityPill: {
                                     openNotch(focus: .agentStatus)
                                 },
                                 onHoverAgentCenter: { hovering in
                                     handleRegionHoverOpen(hovering, focus: .agentStatus)
                                 },
-                                sideways: usesSidewaysAgentPill
+                                sideways: isPhysicalNotchScreen
                             )
                             .transition(agentLightTransition)
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .timer) && timerOwnsClosedNotch {
                           TimerLiveActivity(
-                              agentLight: showAgentTrafficLight && !usesSidewaysAgentPill
-                                  ? TimerAgentLight(
-                                      expandedHeight: shouldExpandPhysicalNotchForAgent ? physicalNotchAgentHeight : nil,
-                                      verticalOffset: physicalNotchAgentVerticalOffset
-                                  )
-                                  : nil
+                              showsAgentLight: showAgentTrafficLight && isNonNotchScreen
                           )
                       } else if (!isCurrentScreenExpansionVisible || currentScreenExpansionType == .recording) && vm.notchState == .closed && (recordingManager.isRecording || !recordingManager.isRecorderIdle) && Defaults[.enableScreenRecordingDetection] && !vm.hideOnClosed && !musicPairingEligible {
                           RecordingLiveActivity()
@@ -1704,17 +1649,11 @@ struct ContentView: View {
 
             Rectangle()
                 .fill(.clear)
-                .frame(
-                    width: effectiveCenterWidth,
-                    height: shouldExpandPhysicalNotchForAgent
-                        ? physicalNotchAgentHeight
-                        : notchContentHeight
-                )
+                .frame(width: effectiveCenterWidth, height: notchContentHeight)
                 .overlay {
                     // Sideways, the light never sits in the music's centre: it takes the notch instead.
-                    if showAgentTrafficLight && !usesSidewaysAgentPill {
+                    if showAgentTrafficLight && isNonNotchScreen {
                         AgentTrafficLightIndicator()
-                            .offset(y: physicalNotchAgentVerticalOffset)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         closedMusicCenterMetadata(
@@ -1751,22 +1690,8 @@ struct ContentView: View {
                 .id(secondary?.id ?? "music-spectrum")
                 .contentTransition(.symbolEffect(.replace))
         }
-        .frame(
-            width: notchWidth,
-            height: shouldExpandPhysicalNotchForAgent
-                ? physicalNotchAgentHeight
-                : notchContentHeight,
-            alignment: shouldExpandPhysicalNotchForAgent ? .top : .center
-        )
-        .frame(
-            height: shouldExpandPhysicalNotchForAgent
-                ? physicalNotchAgentHeight
-                : max(
-                    0,
-                    vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0)
-                ),
-            alignment: shouldExpandPhysicalNotchForAgent ? .top : .center
-        )
+        .frame(width: notchWidth, height: notchContentHeight)
+        .frame(height: max(0, vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0)))
         .animation(.smooth(duration: 0.25), value: secondary?.id)
     }
 

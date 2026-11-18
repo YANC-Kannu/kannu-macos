@@ -144,6 +144,7 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [x] 11.2 Write `docs/release-notes/2.0.0-beta.2.md` in beta.1's shape, covering everything merged since beta.1, and
   catch `2.0.0.md` up (9.7's #55 line among them). [Cloud] Written in the same change.
 - [x] 11.x The Claude card shows its organization's freshest reading (F1)
+- [ ] 11.x Minimal only, legacy band removed, 16 pt icon, Tasks on by default, onboarding light showcase. [Mac] [David]
 - [ ] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
 - [ ] 11.4 David's Mac checks on that install: beta.2's "Please try" list, and the live checks its changes left open
   (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4, `fix-usage-fresh-reading` 3.4,

@@ -18,50 +18,46 @@
 
 import Foundation
 
-/// The sideways agent pill on a notched MacBook's closed notch: the dot (or dots) in a left wing, the
-/// hardware housing in the middle, and one still app icon in a right wing, all at the closed height.
-/// It replaced the band that grew below the housing (`AgentPillLayout.belowNotch`, still in Brain).
+/// The sideways agent pill on a notched MacBook's closed notch: the lit dot in a left wing, the hardware
+/// housing in the middle, and one still app icon in a right wing, all at the closed height. It replaced the
+/// band that grew below the housing, which 2.0 removed with the Classic three-dot style (David, 2026-11-18).
 ///
 /// - Both wings are the same width, so the housing stays centred on the camera:
 ///   `max(what the left wing holds, the icon) + 2 × wingPadding`, the music wings' arithmetic.
-/// - The icon is `closedHeight − 12` square, the size of the download and lock-screen wings' icons.
-/// - The left wing holds the dots (Classic three, Minimal one) and, while a high finding waits, the
-///   security shield beside them, which widens both wings so the housing never moves off centre.
+/// - The icon is `closedHeight − 16` square: 16 pt on a 32 pt notch (David, 2026-11-18: "reduce the logo
+///   size a bit"), so a wing is 28 pt and the pill 28 | housing | 28.
+/// - The left wing holds the dot and, while a high finding waits, the security shield beside it, which
+///   widens both wings so the housing never moves off centre.
 struct ClosedAgentPillLayout: Equatable {
     static let wingPadding: CGFloat = 6
-    /// Closed height minus this is the icon's side, as in `DownloadLiveActivity` and the lock pill.
-    static let iconInset: CGFloat = 12
-    /// `AgentTrafficLightDots`' defaults: what the band draws, drawn here at the same size.
+    /// Closed height minus this is the icon's side, here and in the lock-screen pill.
+    static let iconInset: CGFloat = 16
+    /// `AgentTrafficLightDots`' default: the dot every display draws, drawn here at the same size.
     static let dotSize: CGFloat = 10
-    static let dotSpacing: CGFloat = 6
-    /// The shield glyph's slot (`SecurityShieldGlyph`, 9 pt type) and its gap from the dots.
+    /// The shield glyph's slot (`SecurityShieldGlyph`, 9 pt type) and its gap from the dot.
     static let shieldWidth: CGFloat = 10
     static let shieldSpacing: CGFloat = 6
 
     let closedHeight: CGFloat
     let housingWidth: CGFloat
-    let dotCount: Int
     let showsShield: Bool
 
-    init(closedHeight: CGFloat, housingWidth: CGFloat, dotCount: Int, showsShield: Bool) {
+    init(closedHeight: CGFloat, housingWidth: CGFloat, showsShield: Bool) {
         self.closedHeight = max(0, closedHeight)
         self.housingWidth = max(0, housingWidth)
-        self.dotCount = max(0, dotCount)
         self.showsShield = showsShield
     }
 
+    /// The app icon's side for a closed notch this tall, never negative.
+    static func iconSize(closedHeight: CGFloat) -> CGFloat { max(0, closedHeight - iconInset) }
+
     /// The square app icon in the right wing.
-    var iconSize: CGFloat { max(0, closedHeight - Self.iconInset) }
+    var iconSize: CGFloat { Self.iconSize(closedHeight: closedHeight) }
 
-    var dotsWidth: CGFloat {
-        guard dotCount > 0 else { return 0 }
-        return CGFloat(dotCount) * Self.dotSize + CGFloat(dotCount - 1) * Self.dotSpacing
-    }
-
-    /// The dots, and the shield beside them while it shows.
+    /// The dot, and the shield beside it while it shows.
     var leftContentWidth: CGFloat {
-        guard showsShield else { return dotsWidth }
-        return dotsWidth + (dotsWidth > 0 ? Self.shieldSpacing : 0) + Self.shieldWidth
+        guard showsShield else { return Self.dotSize }
+        return Self.dotSize + Self.shieldSpacing + Self.shieldWidth
     }
 
     /// Each wing's width; the two are always equal.
@@ -70,7 +66,7 @@ struct ClosedAgentPillLayout: Equatable {
     /// The whole pill: both wings and the housing between them.
     var width: CGFloat { housingWidth + 2 * wingWidth }
 
-    /// Where the dots (and shield) sit in the left wing: centred in it, vertically centred.
+    /// Where the dot (and shield) sit in the left wing: centred in it, vertically centred.
     var leftContentRect: CGRect {
         CGRect(x: (wingWidth - leftContentWidth) / 2, y: (closedHeight - Self.dotSize) / 2,
                width: leftContentWidth, height: Self.dotSize)
