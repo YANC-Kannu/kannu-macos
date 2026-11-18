@@ -392,6 +392,21 @@ struct ClaudeUsageSnapshot: Equatable {
                                    planName: first.planName)
     }
 
+    /// Whether the cache's weekly reading can be the same organization's week as Claude Desktop's
+    /// newest sample: the sample lies inside the cache's week and before the cache, and the cache's
+    /// percentage is at least the sample's (a week's usage only rises; one point of rounding).
+    /// False whenever the check cannot run. Measured 2026-10-28: Team's cache at 0 % fetched after a
+    /// Max profile was written back, against Max's sample at 100 % in the same week — another
+    /// organization's. 2026-11-17: the cache at 75 % against Desktop's 57 % from that morning.
+    static func weekAgrees(cache: ClaudeUsageSnapshot?, desktop: ClaudeUsageSnapshot?) -> Bool {
+        guard let cache, let weekly = cache.window(sevenDayKey), let reset = weekly.resetsAt,
+              let desktop, let sample = desktop.window(sevenDayKey) else { return false }
+        let sampledAt = sample.observedAt ?? desktop.observedAt
+        let cacheAt = weekly.observedAt ?? cache.observedAt
+        guard sampledAt >= reset.addingTimeInterval(-7 * 86_400), sampledAt <= cacheAt else { return false }
+        return weekly.percent + 1 >= sample.percent
+    }
+
     /// Whose usage Claude Code's cache holds, as far as a read can tell.
     /// `ClaudeCachedUsage.cacheOwner(weeklyReset:claudeCode:resets:)` decides it.
     enum CacheOwner: Equatable {
@@ -416,6 +431,9 @@ struct ClaudeUsageSnapshot: Equatable {
         /// The card shows Claude Code's own organization: Claude Desktop is on another one and has
         /// no live reading of it.
         var showsClaudeCodeOrganization = false
+        /// Where Claude Code's cache went and on what evidence, for the log: no ids, only how the
+        /// organizations compare (`cardSources`).
+        var cachePlacement = ""
     }
 
     /// Which sources each card may combine.
@@ -435,14 +453,21 @@ struct ClaudeUsageSnapshot: Equatable {
     /// says whose bars each card shows.
     ///
     /// The cache goes where its `cacheOwner` puts it: with Claude Code's sources, with the
-    /// desktop's when its own week names the desktop's organization, nowhere when unknown.
+    /// desktop's when its own week or the file names the desktop's organization, nowhere when
+    /// unknown.
     ///
     /// `claudeCodeOrganizationRecorded` is false until Kannu's own fetch has recorded which
     /// organization Claude Code's sign-in is on. Until then the organization is a guess — the file
     /// it comes from flips between them — so with desktop history to follow, Claude Code's
-    /// sources stay off the card (`claudeCodeOrganizationUnverified`), and the automatic refresh
+    /// statusline stays off the card (`claudeCodeOrganizationUnverified`), and the automatic refresh
     /// fetches at once to find out (`shouldAutoFetch`). A first look at the card must not show one
-    /// organization's numbers as another's.
+    /// organization's numbers as another's. The cache is the exception when the file names the
+    /// desktop's organization and nothing contradicts it: then it is that organization's newest
+    /// reading, and leaving it off put a desktop sample 13 hours old on the card as "the only live
+    /// reading" (first-run review, 2026-11-18). Desktop samples get no age limit of their own: they
+    /// arrive only while Claude Desktop's usage panel is in use, so gaps of days are normal, and a
+    /// limit would blank the only reading a desktop-only user has. The card labels its age, the
+    /// week's end bounds it, and any fresher reading of the same organization beats it (`selections`).
     static func cardSources(
         statusline: ClaudeUsageSnapshot?,
         cache: ClaudeUsageSnapshot?,
@@ -451,6 +476,40 @@ struct ClaudeUsageSnapshot: Equatable {
         claudeCodeOrganization: String?,
         claudeCodeOrganizationRecorded: Bool = true,
         cacheOwner: CacheOwner = .claudeCode,
+        cacheNamedOrganization: String? = nil,
+        now: Date
+    ) -> CardSources {
+        var card = placeSources(statusline: statusline, cache: cache, desktop: desktop,
+                                desktopOrganization: desktopOrganization, claudeCodeOrganization: claudeCodeOrganization,
+                                claudeCodeOrganizationRecorded: claudeCodeOrganizationRecorded,
+                                cacheOwner: cacheOwner, cacheNamedOrganization: cacheNamedOrganization, now: now)
+        guard let cache else { card.cachePlacement = "no cache"; return card }
+        let place = card.sources.contains(cache) ? "first card"
+            : card.secondCardSources?.contains(cache) == true ? "second card" : "off the cards"
+        let owner: String
+        switch cacheOwner {
+        case .claudeCode: owner = "Claude Code's"
+        case .organization(let id): owner = id == desktopOrganization ? "Desktop's by its week or the file" : "another organization's"
+        case .unknown: owner = "unknown"
+        }
+        let organizations = desktopOrganization == nil ? "no Desktop organization"
+            : claudeCodeOrganization == nil ? "Claude Code's organization unknown"
+            : claudeCodeOrganization == desktopOrganization ? "Claude Code's and Desktop's the same"
+            : "Claude Code's and Desktop's differ"
+        card.cachePlacement = "cache \(place) (owner \(owner); \(organizations); Claude Code's "
+            + (claudeCodeOrganizationRecorded ? "recorded)" : "unrecorded)")
+        return card
+    }
+
+    private static func placeSources(
+        statusline: ClaudeUsageSnapshot?,
+        cache: ClaudeUsageSnapshot?,
+        desktop: ClaudeUsageSnapshot?,
+        desktopOrganization: String?,
+        claudeCodeOrganization: String?,
+        claudeCodeOrganizationRecorded: Bool,
+        cacheOwner: CacheOwner,
+        cacheNamedOrganization: String?,
         now: Date
     ) -> CardSources {
         let cacheOrganization: String?
@@ -464,9 +523,12 @@ struct ClaudeUsageSnapshot: Equatable {
         guard let desktopOrganization else { return CardSources(sources: [statusline, claudeCodeCache, desktop]) }
         let desktopCache = cacheOrganization == desktopOrganization ? cache : nil
         guard claudeCodeOrganizationRecorded else {
-            // Only a cache whose own week names the desktop's organization is safe to show.
-            let named = cacheOwner == .organization(desktopOrganization) ? cache : nil
-            return CardSources(sources: [named, desktop], claudeCodeOrganizationUnverified: true)
+            // A cache whose own week names the desktop's organization, or one the file names the
+            // desktop's organization for (`cacheNamedOrganization`) while nothing contradicts it, is
+            // that organization's reading. The statusline stays off: its organization is still the guess.
+            let sameOrganization = cacheOwner == .organization(desktopOrganization)
+                || (cacheOwner == .claudeCode && cacheNamedOrganization == desktopOrganization)
+            return CardSources(sources: [sameOrganization ? cache : nil, desktop], claudeCodeOrganizationUnverified: true)
         }
         guard let claudeCodeOrganization, desktopOrganization != claudeCodeOrganization else {
             // One organization (or Claude Code's unknown, as before): Claude Code's cache is it.
@@ -599,6 +661,10 @@ enum ClaudeUsageSources {
         /// Claude Code's organization for this read: the recorded one, else the file's.
         var claudeCodeOrganization: String?
         var cacheOwner: ClaudeUsageSnapshot.CacheOwner
+        /// The organization the file names for its cache (`ClaudeCachedUsage.organizationNamingCache`),
+        /// when it is Claude Desktop's and the cache's own week agrees with Desktop's sample
+        /// (`ClaudeUsageSnapshot.weekAgrees`); nil otherwise.
+        var cacheNamedOrganization: String? = nil
         var desktop: ClaudeUsageSnapshot?
         var desktopOrganization: String?
     }
@@ -617,15 +683,23 @@ enum ClaudeUsageSources {
         let context = config.context
         let claudeCode = ClaudeCachedUsage.claudeCodeOrganization(
             recordedAtFetch: request.recordedOrganization, inConfigNow: context.organizationUUID)
+        let named = ClaudeCachedUsage.organizationNamingCache(context)
         let owner = ClaudeCachedUsage.cacheOwner(weeklyReset: context.weeklyResetAnchor, claudeCode: claudeCode,
+                                                 named: named,
                                                  resets: request.resets)
         let desktop = ClaudeDesktopUsageHistory.read(
             from: request.desktopURL, now: request.now,
             resets: resetsWithCache(request.resets, context: context, owner: owner,
                                     recordedOrganization: request.recordedOrganization),
             claudeCodeOrganization: claudeCode)
+        // For an unrecorded Claude Code organization the file's word needs the cache's own to agree:
+        // the profile ordering alone let a Team cache fetched after a Max profile written back read
+        // as Max's (the 2026-10-28 sequence; CodeRabbit on PR #76).
+        let joinsDesktop = named != nil && named == desktop.organizationUUID
+            && ClaudeUsageSnapshot.weekAgrees(cache: config.snapshot, desktop: desktop.snapshot)
         return Result(statusline: statusline,
                       full: Full(config: config, claudeCodeOrganization: claudeCode, cacheOwner: owner,
+                                 cacheNamedOrganization: joinsDesktop ? named : nil,
                                  desktop: desktop.snapshot, desktopOrganization: desktop.organizationUUID))
     }
 

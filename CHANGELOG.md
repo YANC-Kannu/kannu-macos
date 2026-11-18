@@ -4,6 +4,50 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - Pin the Claude card's known first-run limit
+- **Developer label:** "Keep F1, note risk"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's follow-up on PR #76, through Auto-fix
+- **Changes:**
+  - `testTheCardShowsTheFreshestReadingOfItsOrganization` pins the limit David kept. On a fresh install, another
+    organization's cache whose week runs at or above Desktop's sample, fetched after a written-back profile,
+    shows on Desktop's card until Kannu's first fetch records the organization. Requiring a remembered weekly
+    anchor instead would bring F1 back on every fresh install.
+  - `docs/REGRESSIONS.md` entry 24 records the decision and the guard.
+
+### 2026-11-18 - An unrecorded Claude cache joins Desktop's card only when its own week agrees
+- **Developer label:** "Turn on Auto-fix"
+- **Agent label:** Claude Code (Opus 5.5) — CodeRabbit's review of PR #76, through Auto-fix
+- **Changes:**
+  - `ClaudeUsageSnapshot.weekAgrees`: while Claude Code's organization is unrecorded, its cache joins Claude
+    Desktop's card only when the cache's weekly percentage is at least Desktop's newest sample from inside the
+    cache's week. The profile ordering alone let a Team cache fetched after a written-back Max profile (the
+    2026-10-28 order) read as Max's on a fresh install. The stale-recorded path, which needs the recorded
+    organization's week contradicted, is unchanged.
+  - Tests: that order end to end, and `weekAgrees`'s cases.
+  - `docs/REGRESSIONS.md` entry 24 states the first-run exception in its rule and the narrower residual risk; the
+    `fix-usage-fresh-reading` spec and its Mac check state the preconditions; the beta.2 and 2.0.0 notes say
+    "account" or "organization", not "plan", since two organizations can share a plan.
+
+### 2026-11-18 - The Claude card shows the freshest reading of its organization
+- **Developer label:** "Yes, fix first" (F1: the Claude usage card still shows a stale Desktop reading)
+- **Agent label:** Claude Code (Opus 5.5) — usage lane of the 2.0 release, before beta.2
+- **Changes:**
+  - `cardSources`: while Kannu has not recorded Claude Code's organization, its cache joins Claude Desktop's card
+    when `~/.claude.json` names Desktop's organization with a profile fetched no later than the cache
+    (`organizationNamingCache`) and the cache's owner is not unknown, so the newest reading
+    of each window wins. Before, a first run showed a Desktop sample hours old as "the only live reading". The
+    statusline stays off until the organization is recorded.
+  - `ClaudeCachedUsage.cacheOwner`: a cache that rules out the recorded organization goes to the organization the
+    file names when nothing contradicts that one's week, on every read, not only after a run.
+  - Desktop samples get no age limit of their own: a fresher reading of the same organization beats them, and the
+    card labels their age.
+  - The monitor logs each change of the cache's placement (`Usage source cache placement: …`, category
+    `ClaudeUsage`), with no ids.
+  - Tests with made-up organizations: the first run, a stale recorded organization, two organizations kept apart,
+    and an old Desktop sample next to a fresh cache.
+  - `docs/REGRESSIONS.md` entry 24; OpenSpec change `fix-usage-fresh-reading`; `release-2-0` tasks 11.x and 11.4
+    list the fix and its live check; the beta.2 and 2.0.0 notes say a fresh install shows the newest reading.
+
 ### 2026-11-18 - Upstream copyright notices restored, other mentions quieter
 - **Developer label:** "we donot have to specifically mention atoll or dynamic notch apps epxlicitly outside in git or in website right, please see where we have to mention that according to liscense requirements and modify that to keep that less evident"
 - **Agent label:** Claude Code (Opus 5.5) — upstream notices lane, Part A of the 18 Nov plan David approved
