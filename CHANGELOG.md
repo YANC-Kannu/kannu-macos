@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-18 - The onboarding light step reads true on displays without a notch
+- **Developer label:** CodeRabbit's second note on #77: "Make the onboarding light copy accurate on displays without a notch"
+- **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, the copy fix promised in the #77 reply, in #78
+- **Changes:**
+  - `AgentLightShowcaseView`'s two lines no longer describe the notched layout on every display: "One light in the
+    notch shows how your AI agents are doing." and "It shows for a few seconds after each change. On a MacBook with
+    a notch, the agent's app icon sits across from it. You can change its colors in Brain."
+  - Both new keys in all 17 languages; the two old keys retired, since the compiler no longer extracts them.
+
 ### 2026-11-18 - Kannu's eye and "Welcome to Kannu" replace the hello, with a soft chime
 - **Developer label:** "the hello animation and app launch is terrible please update that also to our standards", then "I meant the final animation and welcoming to the app, that to be cleaner"
 - **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, PR 2 of 2 (steps 8–11 of the 18 Nov plan), stacked on PR 1
