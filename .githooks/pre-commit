@@ -81,9 +81,24 @@ committed() { git show ":$1" 2>/dev/null || cat "$1"; }
 # Gate on the index as well: a drifted script staged and then deleted from the working tree (the
 # deletion unstaged) is still what gets committed, and a working-tree gate skipped every check.
 in_index() { git cat-file -e ":$1" 2>/dev/null; }
+# Read each committed copy ONCE, into a variable, and run every grep/awk/sed below on that variable
+# (here-strings: no writer process). Never pipe `committed` or `git show` into a reader that can stop
+# before the end (awk with exit, head, grep -q or -m): the reader closes the pipe while git is still
+# writing the ~175 KB installer, git takes SIGPIPE, the `|| cat` fallback writes into the same closed
+# pipe, and pipefail + errexit end the hook with exit 1 and nothing but "cat: ...: Broken pipe". It is
+# a race, so CI failed now and then on an unchanged tree (docs/REGRESSIONS.md entry 25).
+usage_mirror_script="scripts/kannu-usage-status.sh"
+installer_text=""
+mirror_text=""
+usage_mirror_text=""
+if in_index "${installer_script}"; then installer_text="$(committed "${installer_script}")"; fi
+if in_index "${mirror_script}"; then mirror_text="$(committed "${mirror_script}")"; fi
+if in_index "${usage_mirror_script}"; then usage_mirror_text="$(committed "${usage_mirror_script}")"; fi
+# The first match of an extended regex in a string, or nothing. Replaces `grep -o | head -1`.
+first_match() { local re="$2"; if [[ "$1" =~ ${re} ]]; then printf '%s' "${BASH_REMATCH[0]}"; fi; }
 if in_index "${installer_script}" && in_index "${mirror_script}"; then
-  installer_version="$(committed "${installer_script}" | grep -o 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*' | head -1 || true)"
-  mirror_version="$(committed "${mirror_script}" | grep -o 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*' | head -1 || true)"
+  installer_version="$(first_match "${installer_text}" 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*')"
+  mirror_version="$(first_match "${mirror_text}" 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*')"
   if [[ -n "${installer_version}" && "${installer_version}" != "${mirror_version}" ]]; then
     cat <<EOF
 ERROR: Hook script mirror is out of sync.
@@ -105,15 +120,16 @@ fi
 # embedded copy is a plain Swift string literal, where "\n" becomes a newline and "\U" does not
 # compile. Build code points with chr(). See docs/REGRESSIONS.md entry 1.
 if in_index "${installer_script}" && in_index "${mirror_script}"; then
-  mirror_body="$(committed "${mirror_script}" | awk "/^python3 <<'PY'\$/{f=1;next} /^PY\$/{f=0} f")"
+  mirror_body="$(awk "/^python3 <<'PY'\$/{f=1;next} /^PY\$/{f=0} f" <<< "${mirror_text}")"
   if [[ "${mirror_body}" == *\\* ]]; then
     echo "ERROR: ${mirror_script} has a backslash in its Python body. The embedded Swift literal cannot carry one; use chr()."
     exit 1
   fi
-  installer_marker="$(committed "${installer_script}" | grep -o 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*' | head -1 || true)"
-  embedded_body="$(committed "${installer_script}" | awk '/let script = """$/ && !seen {seen=1; f=1; next} f && /^        """$/ {exit} f' \
+  installer_marker="$(first_match "${installer_text}" 'KANNU_HOOK_SCRIPT_VERSION=[0-9]*')"
+  # awk stops at the closing quotes; it reads a here-string, so no writer is left mid-write.
+  embedded_body="$(awk '/let script = """$/ && !seen {seen=1; f=1; next} f && /^        """$/ {exit} f' <<< "${installer_text}" \
     | sed -e 's/^        //' -e "s/\\\\(scriptVersionMarker)/${installer_marker}/")"
-  if [[ "${embedded_body}" != "$(committed "${mirror_script}")" ]]; then
+  if [[ "${embedded_body}" != "${mirror_text}" ]]; then
     cat <<EOF
 ERROR: the hook script body in ${installer_script} differs from ${mirror_script}.
 
@@ -126,10 +142,9 @@ fi
 # The Claude statusline script has the same two-copy shape (writeUsageScript embeds it,
 # scripts/kannu-usage-status.sh mirrors it) and drifted unnoticed until v4 because only the
 # agent-status pair was checked. Same rule, same fix.
-usage_mirror_script="scripts/kannu-usage-status.sh"
 if in_index "${installer_script}" && in_index "${usage_mirror_script}"; then
-  usage_installer_version="$(committed "${installer_script}" | grep -o 'KANNU_USAGE_SCRIPT_VERSION=[0-9]*' | head -1 || true)"
-  usage_mirror_version="$(committed "${usage_mirror_script}" | grep -o 'KANNU_USAGE_SCRIPT_VERSION=[0-9]*' | head -1 || true)"
+  usage_installer_version="$(first_match "${installer_text}" 'KANNU_USAGE_SCRIPT_VERSION=[0-9]*')"
+  usage_mirror_version="$(first_match "${usage_mirror_text}" 'KANNU_USAGE_SCRIPT_VERSION=[0-9]*')"
   if [[ -n "${usage_installer_version}" && "${usage_installer_version}" != "${usage_mirror_version}" ]]; then
     cat <<EOF
 ERROR: Usage statusline script mirror is out of sync.
@@ -275,9 +290,12 @@ for doc in CONTRIBUTING.md AGENTS.md .agents/skills/kannu-senior-contributor/SKI
   # that key as an unstaged edit would otherwise pass this check while committing the broken file.
   # Every other check in this hook reads the index; this one used to be the exception.
   git cat-file -e ":${doc}" 2>/dev/null || continue
+  # Read once, then grep the variable: grep -q stops at its first match, and a `git show |` still
+  # writing would take SIGPIPE and read as a missing key (entry 25).
+  doc_text="$(git show ":${doc}")"
   for key in '- \*\*Developer label:\*\*' '- \*\*Agent label:\*\*' '- \*\*Changes:\*\*'; do
     # -e is required: every key starts with "-", which grep would read as an option.
-    if ! git show ":${doc}" | grep -q -e "${key}"; then
+    if ! grep -q -e "${key}" <<< "${doc_text}"; then
       echo "ERROR: ${doc} documents the CHANGELOG entry but is missing the literal '${key}'."
       echo "       This hook greps for it; a file that says otherwise makes agents write rejected commits."
       exit 1
