@@ -139,6 +139,26 @@ enum ClaudeDesktopSessionIndex {
         return idMap[cliSessionID.lowercased()]
     }
 
+    /// The attach rule for a row that outlived its process. The id above is set only from a
+    /// `~/.claude/sessions/<pid>.json` record, which goes when the process does; a hook row can
+    /// stay on the list after that (a question held yellow), and it then has no record to borrow
+    /// the id from. Such a Claude row — no live `hostPID`, no id yet — takes what the index
+    /// resolves, the same dead-process rule as above. A row with a live host is never touched:
+    /// its click stays where its process runs. docs/REGRESSIONS.md entry 7.
+    static func attachingDesktopRoutes(
+        toProcesslessSessions sessions: [AgentSessionStatus],
+        idMap: [String: String]
+    ) -> [AgentSessionStatus] {
+        guard !idMap.isEmpty else { return sessions }
+        return sessions.map { session in
+            guard session.provider.lowercased() == "claude", session.hostPID == nil, session.desktopSessionID == nil,
+                  let desktopID = idMap[session.conversationID.lowercased()] else { return session }
+            var located = session
+            located.desktopSessionID = desktopID
+            return located
+        }
+    }
+
     /// Desktop's own validator: `^local_[A-Za-z0-9-]{1,64}$`. `last` (which its `continue`
     /// route also accepts) is deliberately rejected — it would focus whatever chat was last
     /// open, today's behaviour disguised as success.

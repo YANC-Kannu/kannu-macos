@@ -4,6 +4,23 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-19 - A question that outlived its process opens its chat again
+- **Developer label:** "click through still not working", then "the first row that shows as paused is not opening"
+- **Agent label:** Claude Code (Fable 5.2) — main session, measured on the installed 2.0.0 (13) before the change
+- **Changes:**
+  - A Claude row kept yellow after its process ended (the held question) had no click target: no hand cursor,
+    a dead click. Claude Desktop's id for the chat was set only from a live `~/.claude/sessions` record, which
+    goes with the process, and a yellow row is never resumed.
+  - `ClaudeDesktopSessionIndex.attachingDesktopRoutes(toProcesslessSessions:idMap:)`: a Claude row with no live
+    host and no id takes the one Desktop's index resolves, the rule the passive path already has for a dead
+    process. The monitor calls it once, right after the reconcile. A row with a live host is never touched, so a
+    terminal chat still opens its terminal.
+  - The click then takes Desktop's in-app route for that chat, which navigates and creates nothing.
+    `AgentClickThroughPolicy` is unchanged.
+  - Tests: three in `ClaudeDesktopSessionIndexTests` (the attach, the rows it leaves alone, the monitor's call
+    site) and one in `AgentClickThroughPolicyTests`.
+  - Docs: REGRESSIONS entry 7, a 2026-11-19 addendum.
+
 ### 2026-11-19 - The pre-commit hook no longer fails at random with "Broken pipe"
 - **Developer label:** "Fix an intermittent failure in `.githooks/pre-commit`": CI's "OpenSpec and hook" job sometimes exits 1 with only `cat: Kannu/managers/AgentStatus/AgentHookInstaller.swift: Broken pipe`
 - **Agent label:** Claude Code (Opus 5.5) — hook-flake side session off `development`
