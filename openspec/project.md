@@ -30,7 +30,10 @@ Three pillars:
   `super/**`. The same events run one ubuntu job that validates OpenSpec with the pinned CLI and runs
   `.githooks/pre-commit` on the checkout. A `v*` tag runs `.github/workflows/release.yml`. SonarCloud
   (`.github/workflows/sonarcloud.yml`, skipped for fork PRs) runs KannuTests with coverage on macos-15 and scans with
-  the report `scripts/xccov-to-sonar.py` writes from that run.
+  the report `scripts/xccov-to-sonar.py` writes from that run. Snyk Code (`.github/workflows/snyk-code.yml`, ubuntu,
+  skipped for fork PRs and while the `SNYK_TOKEN` secret is unset) scans the source and uploads its findings to
+  GitHub code scanning. It reports without failing on findings. Snyk's dependency scan is not used: it needs a
+  `Package.swift`, which this Xcode project does not have.
 - The OpenSpec CLI is pinned at **0.23.0**. Run it through npx, with telemetry off:
   `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 <command>`, for example `list` or
   `validate --strict --no-interactive`. 0.23.0 is the last release with this layout: this file, `openspec/AGENTS.md`
@@ -159,7 +162,8 @@ A click resolves where it goes in its action, never in `body`.
 - A cloud session cannot build, test, install or notarize the app. Those run on a Mac or in CI.
 
 ## External Dependencies
-- GitHub Actions for CI and releases, CodeRabbit for PR review, Apple notarization, and Sparkle with its appcast.
+- GitHub Actions for CI and releases, CodeRabbit for PR review, SonarCloud and Snyk Code for static analysis, Apple
+  notarization, and Sparkle with its appcast.
 - **The update feed:** since PR #3, `SUFeedURL` points at this repository's `Updates/appcast.xml` on `main`. Copies
   already installed from 1.x still read `libinmv/kannu`'s `Updates/appcast.xml`, so they reach 2.0.0 only through the
   release change's one-time bridge (`release-2-0`, task 7.4).
