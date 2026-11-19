@@ -22,6 +22,20 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Guard: `KannuTests/PreCommitHookPipeTests` runs the hook with that slow `git show` and SIGPIPE ignored, and
     proves the shim does break an early reader. `docs/REGRESSIONS.md` entry 25 and a Danger zones row for the hook.
 
+### 2026-11-19 - Snyk Code scans the source on every push and PR
+- **Developer label:** Issue #8, "Setup Sonar Qube, Coderabbit and Snyk": the Snyk part ("Set up Snyk Code")
+- **Agent label:** Claude Code (Opus 5.5) — main session, after measuring which Snyk products fit this repository
+- **Changes:**
+  - New `.github/workflows/snyk-code.yml`: on push and PR to `main` and `development`, ubuntu, `snyk code test`
+    with the CLI pinned at v1.1308.4 through `snyk/actions/setup` v1.0.0, and the SARIF uploaded to GitHub code
+    scanning (`github/codeql-action/upload-sarif` v4.39.3). Every action is pinned to a commit, as in
+    `sonarcloud.yml`.
+  - Report-only: findings (exit 1) don't fail the check; errors (exit 2 or more) do. Fork PRs are skipped, and
+    the job only leaves a notice while the `SNYK_TOKEN` secret is unset.
+  - Snyk Open Source is not added: Snyk scans SwiftPM only through its CLI and only with a `Package.swift`, which
+    this Xcode project does not have.
+  - `openspec/project.md` lists the workflow and Snyk Code under External Dependencies.
+
 ### 2026-11-18 - The onboarding light step reads true on displays without a notch
 - **Developer label:** CodeRabbit's second note on #77: "Make the onboarding light copy accurate on displays without a notch"
 - **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, the copy fix promised in the #77 reply, in #78
