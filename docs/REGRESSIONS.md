@@ -571,6 +571,23 @@ the parent conversation's own wins whichever arrives first). Guards:
 `AgentTurnMetricsTests.testTheTurnRidesCarryingExtrasAsSelfThenSource`, the three v39
 `SubagentFoldTests`.
 
+**2026-11-19 addendum — a row that outlives its process still needs its locator.** Carrying a
+field across the seam only helps while there is a passive side to carry it from. `desktopSessionID`
+is set from a `~/.claude/sessions/<pid>.json` record, and that record goes when the process does.
+Since the held question (entry 12), a hook row stays yellow for up to 12 hours after its process
+ends, so it had no passive session, no id, and — yellow not being `.inactive` — no resume either:
+no hand cursor, a dead click, on the one row that is waiting for the user. Measured on the
+installed build: Desktop's index held the chat's record, and Kannu never looked. The monitor now
+calls `ClaudeDesktopSessionIndex.attachingDesktopRoutes(toProcesslessSessions:idMap:)` right after
+the reconcile: a Claude row with no `hostPID` and no id takes what the index resolves, the same
+dead-process rule the passive path has. A row with a live `hostPID` is never touched (entry 13).
+The occurrence-3 lesson again: the click was only ever tried on rows whose process was alive.
+Guards: `ClaudeDesktopSessionIndexTests.testARowWithoutAProcessTakesItsDesktopIDFromTheIndex`,
+`...testTheAttachLeavesEveryOtherRowAlone`, `...testTheMonitorAttachesAfterTheReconcileAndBeforeTheMerge`,
+and `AgentClickThroughPolicyTests.testAHeldQuestionWithoutAProcessOpensOnlyThroughItsDesktopRoute`.
+**Still true:** a state that keeps a row on the list after its process ends must say where that
+row's locators come from.
+
 ---
 
 ## 8. Never add a flag or env var to the usage spawn without proving a real fetch

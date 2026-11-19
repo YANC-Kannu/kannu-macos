@@ -112,6 +112,61 @@ final class ClaudeDesktopSessionIndexTests: XCTestCase {
         XCTAssertNil(Index.resolvedDesktopSessionID(cliSessionID: "cli-2", processAlive: false, sessionFile: desktop, idMap: map))
     }
 
+    // MARK: - A row that outlived its process (REGRESSIONS entry 7)
+
+    private func row(_ conversation: String, provider: String = "claude", hostPID: Int? = nil,
+                     desktop: String? = nil) -> AgentSessionStatus {
+        var session = AgentSessionStatus(
+            id: "\(provider)-\(conversation)", provider: provider, conversationID: conversation, chatName: "Chat",
+            projectName: "proj", rawState: "awaiting_input", displayState: .awaitingInput,
+            updatedAt: Date(timeIntervalSince1970: 1_000), isVisible: true, executionStartedAt: nil, cwd: nil,
+            hostPID: hostPID
+        )
+        session.desktopSessionID = desktop
+        return session
+    }
+
+    func testARowWithoutAProcessTakesItsDesktopIDFromTheIndex() throws {
+        let map = ["cli-1": "local_x", "cli-3": "local_z"]
+        let held = Index.attachingDesktopRoutes(toProcesslessSessions: [row("CLI-1")], idMap: map)
+        XCTAssertEqual(held.map(\.desktopSessionID), ["local_x"], "a held question row is the one that most needs its click")
+        let link = try XCTUnwrap(held.first?.desktopSessionID.flatMap(Index.focusDeepLink(desktopSessionID:)))
+        XCTAssertEqual(link.absoluteString, "claude://claude.ai/epitaxy/local_x")
+        XCTAssertEqual(held.first?.displayState, .awaitingInput, "only the locator changes")
+    }
+
+    func testTheAttachLeavesEveryOtherRowAlone() {
+        let map = ["cli-1": "local_x", "cli-3": "local_z"]
+        let rows = [
+            row("cli-2"),
+            row("cli-1", hostPID: 42),
+            row("cli-3", desktop: "local_own"),
+            row("cli-1", provider: "cursor")
+        ]
+        let out = Index.attachingDesktopRoutes(toProcesslessSessions: rows, idMap: map)
+        XCTAssertNil(out[0].desktopSessionID, "Desktop has no record of this chat")
+        XCTAssertNil(out[1].desktopSessionID, "a live session keeps opening where its process runs")
+        XCTAssertEqual(out[2].desktopSessionID, "local_own", "an id the passive side set is never replaced")
+        XCTAssertNil(out[3].desktopSessionID, "only Claude rows live in Desktop's index")
+        XCTAssertEqual(out, rows)
+        XCTAssertEqual(Index.attachingDesktopRoutes(toProcesslessSessions: [row("cli-1")], idMap: [:]), [row("cli-1")])
+    }
+
+    /// The monitor is outside the logic target, so its one call is pinned by reading the source:
+    /// after the reconcile (which carries the passive side's id) and before the merge.
+    func testTheMonitorAttachesAfterTheReconcileAndBeforeTheMerge() throws {
+        let path = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Kannu/managers/AgentStatus/CursorAgentStatusMonitor.swift")
+        let monitor = try String(contentsOf: path, encoding: .utf8)
+        let call = "ClaudeDesktopSessionIndex.attachingDesktopRoutes("
+        XCTAssertEqual(monitor.components(separatedBy: call).count - 1, 1, "one call site")
+        let reconcile = try XCTUnwrap(monitor.range(of: "AgentTrafficLightMapper.reconcileClaudeSessions("))
+        let attach = try XCTUnwrap(monitor.range(of: call))
+        let merge = try XCTUnwrap(monitor.range(of: "to: mergeSessions("))
+        XCTAssertLessThan(reconcile.lowerBound, attach.lowerBound)
+        XCTAssertLessThan(attach.lowerBound, merge.lowerBound)
+    }
+
     // MARK: - Link
 
     func testFocusLinkIsDesktopsSessionRoute() {
