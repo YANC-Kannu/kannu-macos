@@ -4,6 +4,24 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-19 - The pre-commit hook no longer fails at random with "Broken pipe"
+- **Developer label:** "Fix an intermittent failure in `.githooks/pre-commit`": CI's "OpenSpec and hook" job sometimes exits 1 with only `cat: Kannu/managers/AgentStatus/AgentHookInstaller.swift: Broken pipe`
+- **Agent label:** Claude Code (Opus 5.5) — hook-flake side session off `development`
+- **Changes:**
+  - The hook reads the installer and both mirror scripts from the index once, into variables, and runs every
+    grep, awk and sed on those through here-strings. The body-parity awk stops at the closing `"""`, about
+    135 KB into the 175 KB installer; when it stopped before `git show` had finished writing, git took SIGPIPE,
+    the `|| cat` fallback hit the same closed pipe, and pipefail with errexit ended the hook with exit 1.
+  - The five `grep -o | head -1 || true` marker reads are a `first_match` helper on bash's `=~`, so no
+    `|| true` is left to hide a real failure; the CHANGELOG-shape key check greps each document's text the
+    same way instead of `git show | grep -q`. What the hook reads (the index, the working copy only for a
+    file not in it) is unchanged.
+  - Measured on this Mac, 300 runs each on a clean tree: before, 1 failure with SIGPIPE ignored (as on CI) and
+    2 with it at its default; after, 0 and 0. With a planted slow `git show`, before: 20 of 20 failed both
+    ways; after: 0 of 20.
+  - Guard: `KannuTests/PreCommitHookPipeTests` runs the hook with that slow `git show` and SIGPIPE ignored, and
+    proves the shim does break an early reader. `docs/REGRESSIONS.md` entry 25 and a Danger zones row for the hook.
+
 ### 2026-11-18 - The onboarding light step reads true on displays without a notch
 - **Developer label:** CodeRabbit's second note on #77: "Make the onboarding light copy accurate on displays without a notch"
 - **Agent label:** Claude Code (Opus 5.5) — 2.0 polish lane, the copy fix promised in the #77 reply, in #78
