@@ -17,6 +17,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     changing. `docs/SETTINGS.md` already said so.
   - No app code changes.
 
+### 2026-11-20 - A release asks Apple before it builds
+- **Developer label:** "do this too so that we can recheck quickly" (the Apple check at the start of the release workflow)
+- **Agent label:** Claude Code (Fable 5.2) — main session, after both 2.0 beta tags were refused at notarization
+- **Changes:**
+  - `release.yml` gains "Check Apple notary access", right after the secrets are validated and before anything is
+    built. It runs the new `scripts/check-notary-access.sh`: `xcrun notarytool history` with the same three
+    credentials the Notarize step submits with. It uploads nothing and answers in seconds.
+  - Why: both 2.0 betas built and signed for about half an hour and were then refused at Notarize DMG with
+    "HTTP status code: 403. A required agreement is missing or has expired." A refusal now stops the run at the
+    start, with an error that says the team's Account Holder must accept Apple's updated agreement.
+  - Not yet proven against Apple: that `history` is refused the same way `submit` is. If it is not, the run
+    goes on and fails at Notarize DMG as before.
+  - `ReleaseWorkflowRulesTests.testAppleIsAskedBeforeAnythingIsBuilt` pins the step's place before the build,
+    the history call and the named cause, each against a planted offender.
+  - `scripts/RELEASE.md`: "When Apple refuses the notary request", and the script in the workflow reference.
+
 ### 2026-11-20 - Onboarding comes back to the front, "Open chat" only with a chat to open, and a dead badge gone
 - **Developer label:** "The three quick ones", David's pick from a backlog check for 2.0
 - **Agent label:** Claude Code (Fable 5.2) — quick-three side session off `development`

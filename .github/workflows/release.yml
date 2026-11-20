@@ -54,6 +54,17 @@ jobs:
             exit 1
           fi
 
+      - name: Check Apple notary access
+        # Seconds here, not the half hour the build takes: both 2.0 betas built and signed, and were
+        # then refused at Notarize DMG for an agreement the team had not accepted.
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_NOTARIZATION_PASSWORD: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          chmod +x scripts/check-notary-access.sh
+          ./scripts/check-notary-access.sh
+
       - name: Download Metal Toolchain
         run: |
           sudo xcodebuild -runFirstLaunch || true
