@@ -160,4 +160,56 @@ final class DisplayIdentityTests: XCTestCase {
         XCTAssertNil(DisplayPlacementResolver.screen(withID: 8, in: [builtIn, left, replugged]),
                      "a view model still holding the old id finds nothing, not the left monitor")
     }
+
+    // MARK: - PR #80 review: what follows the notch when it moves
+
+    private struct Metrics: Equatable { let width: CGFloat }
+
+    /// The timer and music controls skipped a refresh when the metrics matched, so a notch that
+    /// moved to an equal-sized display left its control window behind.
+    func testAControlWindowRefreshFollowsTheNotchToAnotherDisplay() {
+        let same = Metrics(width: 200)
+        XCTAssertTrue(DisplayPlacementResolver.canSkipRefresh(last: (same, 7), next: (same, 7)))
+        XCTAssertFalse(DisplayPlacementResolver.canSkipRefresh(last: (same, 7), next: (same, 8)),
+                       "equal metrics on another display must still move the window")
+        XCTAssertFalse(DisplayPlacementResolver.canSkipRefresh(last: (same, 8), next: (same, 12)),
+                       "the same monitor back under a new id is a move too")
+        XCTAssertFalse(DisplayPlacementResolver.canSkipRefresh(last: (same, 7), next: (Metrics(width: 220), 7)))
+        XCTAssertFalse(DisplayPlacementResolver.canSkipRefresh(last: nil, next: (same, 7)), "never placed: place it")
+    }
+
+    /// Two equal-sized displays that swap places keep the same id set and the same frame set; only
+    /// the pairing changes.
+    func testTwoEqualDisplaysSwappingPlacesIsALayoutChange() {
+        let before = [builtIn, left, right]
+        let swapped = [builtIn,
+                       ScreenFacts(id: 7, name: left.name, isBuiltIn: false, frame: right.frame, uuid: left.uuid),
+                       ScreenFacts(id: 8, name: right.name, isBuiltIn: false, frame: left.frame, uuid: right.uuid)]
+        XCTAssertEqual(Set(before.map(\.id)), Set(swapped.map(\.id)))
+        XCTAssertEqual(Set(before.map { NSValue(rect: $0.frame) }), Set(swapped.map { NSValue(rect: $0.frame) }),
+                       "the planted swap must leave both sets alone, or this test proves nothing")
+        XCTAssertTrue(DisplayPlacementResolver.layoutChanged(from: before, to: swapped))
+
+        XCTAssertFalse(DisplayPlacementResolver.layoutChanged(from: before, to: before), "nothing moved")
+        let replugged = [builtIn, left,
+                         ScreenFacts(id: 12, name: right.name, isBuiltIn: false, frame: right.frame, uuid: right.uuid)]
+        XCTAssertTrue(DisplayPlacementResolver.layoutChanged(from: before, to: replugged), "a new id is a change")
+        XCTAssertTrue(DisplayPlacementResolver.layoutChanged(from: before, to: [builtIn, left]), "an unplug is a change")
+        XCTAssertTrue(DisplayPlacementResolver.layoutChanged(from: nil, to: before), "no snapshot yet")
+    }
+
+    /// The battery HUD's target was set once, when it appeared. Asked again as the notch moves, it
+    /// follows the notch; with one window per display it stays nil, so every window shows it.
+    func testAnActiveHUDFollowsTheNotchToItsNewDisplay() {
+        func target(_ notch: CGDirectDisplayID?, _ connected: [CGDirectDisplayID], perDisplay: Bool = false) -> CGDirectDisplayID? {
+            DisplayPlacementResolver.hudTargetDisplay(oneWindowPerDisplay: perDisplay, notchDisplay: notch,
+                                                      mainScreen: 1, connected: connected)
+        }
+        XCTAssertEqual(target(8, [1, 7, 8]), 8)
+        XCTAssertEqual(target(12, [1, 7, 12]), 12, "the notch's monitor back under a new id")
+        XCTAssertEqual(target(1, [1, 7]), 1, "the notch fell back to the main display after an unplug")
+        XCTAssertEqual(target(8, [1, 7]), 1, "a notch display that is gone falls back to the main one")
+        XCTAssertEqual(target(nil, [7, 8]), 7, "no notch display and no main: the first connected")
+        XCTAssertNil(target(8, [1, 7, 8], perDisplay: true))
+    }
 }

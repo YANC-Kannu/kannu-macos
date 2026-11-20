@@ -1393,6 +1393,13 @@ migration and a reconnect with fixtures. The launch-seed pins in `ClosedNotchVis
 `NotchToggleRulesTests` now read `viewModel.screenID = screen.displayID`. **Missing:** two real identical monitors
 were not available. The two-monitor behaviour is proven by fixtures only; check it by eye on such a desk.
 
+What follows the notch must follow its id too (PR #80 review). The screen-change check compares id-to-frame pairs
+(`DisplayPlacementResolver.layoutChanged`), because two equal-sized displays that swap places change neither the id
+set nor the frame set. The timer and music control windows skip a refresh only when their display is unchanged as
+well as their metrics (`canSkipRefresh`). A battery HUD that is up while the notch moves re-resolves its target
+(`hudTargetDisplay`) when `selectedScreenID` changes. Guards: three fixture tests in `DisplayIdentityTests` and three
+source pins in `DisplayIdentityRulesTests`.
+
 ---
 
 ## 18. Another app's click never opens the notch

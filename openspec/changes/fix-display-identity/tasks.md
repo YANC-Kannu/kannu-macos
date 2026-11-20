@@ -17,6 +17,8 @@
 - [x] 2.2 `DisplayIdentityRulesTests`: no screen is looked up by `localizedName` in the app's sources, against planted
   offenders.
 - [x] 2.3 Update the source pins that quoted the old launch seed and fullscreen filter.
+- [x] 2.4 PR #80 review: id-to-frame layout changes, control-window refresh by display, the battery HUD target
+  following the notch; a fixture test and a source pin for each.
 
 ## 3. Docs and gates
 - [x] 3.1 REGRESSIONS: entry 17 and entry 23 addenda; one CHANGELOG entry.

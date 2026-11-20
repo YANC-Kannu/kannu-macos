@@ -198,10 +198,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var extensionXPCServiceHost = ExtensionXPCServiceHost.shared
     lazy var extensionRPCServer = ExtensionRPCServer.shared
     var closeNotchWorkItem: DispatchWorkItem?
-    private var previousScreens: [NSScreen]?
-    /// The ids `previousScreens` had when it was taken, copied as values: an `NSScreen` that AppKit
-    /// updates in place would otherwise report its new id and hide the change.
-    private var previousScreenIDs: Set<CGDirectDisplayID>?
+    /// The display layout at the last screen change, as values (`ScreenFacts`): an `NSScreen` that
+    /// AppKit updates in place would otherwise report its new id or frame and hide the change.
+    private var previousScreenLayout: [ScreenFacts]?
     private var onboardingWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
     /// True once the Terms of Use are accepted and the real launch has run. Everything that could
@@ -1569,8 +1568,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        previousScreens = NSScreen.screens
-        previousScreenIDs = Set(NSScreen.screens.compactMap(\.displayID))
+        previousScreenLayout = DisplayPlacementRuntime.facts()
 
         // Skip weather under UI testing: prepareLocationAccess prompts for Location.
         if Defaults[.enableLockScreenWeatherWidget] && !AppRuntimeEnvironment.isUITesting {
@@ -2113,23 +2111,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func screenConfigurationDidChange() {
-        let currentScreens = NSScreen.screens
+        let currentLayout = DisplayPlacementRuntime.facts()
 
         // Opening the lid or undocking may be the first time we ever see the built-in display,
         // so re-resolve here. A machine set up in clamshell corrects its own classification
         // rather than staying misconfigured until onboarding is repeated.
         macHasNotchedBuiltInDisplay()
 
-        // By id, not name: a display that comes back under a new id, with the same name and frame,
-        // must rebuild its window, or the window stays keyed on an id that no longer exists.
-        let currentScreenIDs = Set(currentScreens.compactMap(\.displayID))
-        let screensChanged =
-            currentScreens.count != previousScreens?.count
-            || currentScreenIDs != previousScreenIDs
-            || Set(currentScreens.map { $0.frame }) != Set(previousScreens?.map { $0.frame } ?? [])
+        // By id and frame together, not name: a display that comes back under a new id, with the
+        // same name and frame, must rebuild its window, or the window stays keyed on an id that no
+        // longer exists; and two equal-sized displays that swap places change neither set alone.
+        let screensChanged = DisplayPlacementResolver.layoutChanged(from: previousScreenLayout, to: currentLayout)
 
-        previousScreens = currentScreens
-        previousScreenIDs = currentScreenIDs
+        previousScreenLayout = currentLayout
         
         guard screensChanged else { return }
 

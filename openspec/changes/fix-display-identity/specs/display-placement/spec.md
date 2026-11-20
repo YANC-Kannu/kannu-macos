@@ -4,7 +4,9 @@
 Kannu SHALL select and look up the notch's screen by `CGDirectDisplayID`, never by `NSScreen.localizedName`. Each
 notch view model SHALL hold the id of the display its window is on, and every per-screen decision for that view (its
 closed size, whether it has a notch, its Dynamic Island style check, its fullscreen verdict, its HUD and sneak-peek
-targets) SHALL read that display. `localizedName` SHALL be used only for text people read.
+targets) SHALL read that display. `localizedName` SHALL NOT be used to select or look up a screen. It MAY be read
+from a display already found by id: for text people read, and as the key of the per-display style and "Always show"
+overrides (`displayStyleOverrides`, `alwaysShowOverrides`), which stay keyed by name and are outside this change.
 
 #### Scenario: Two monitors with one name
 - **WHEN** two connected monitors both report the name "DELL U2720Q" under ids 7 and 8
@@ -53,3 +55,8 @@ main display and SHALL leave the name in place for a later look.
 #### Scenario: An existing user's choice is not connected yet
 - **WHEN** `preferred_screen_name` names a monitor that is not connected and no UUID is stored
 - **THEN** the notch goes to the main display and nothing is stored
+
+#### Scenario: A name-keyed override on a display found by id
+- **WHEN** the view on display 8 reads its "Always show" override
+- **THEN** it reads the override stored under display 8's name, taken from the display found by id, and never looks a
+  screen up by that name

@@ -177,6 +177,45 @@ public enum DisplayPlacementResolver {
         return screens.first { $0.name == legacyName }?.uuid
     }
 
+    /// Whether the displays changed in a way that must re-place the notch: one came or went, one
+    /// came back under a new id, or one moved. Compared as id-to-frame pairs, because two
+    /// equal-sized displays that swap places leave both the id set and the frame set unchanged.
+    public static func layoutChanged(from previous: [ScreenFacts]?, to current: [ScreenFacts]) -> Bool {
+        guard let previous else { return true }
+        func layout(_ screens: [ScreenFacts]) -> [CGDirectDisplayID: CGRect] {
+            Dictionary(screens.map { ($0.id, $0.frame) }, uniquingKeysWith: { first, _ in first })
+        }
+        return previous.count != current.count || layout(previous) != layout(current)
+    }
+
+    /// A window that follows the notch (the timer and music controls) may skip a refresh only
+    /// when neither its metrics nor its display changed. Metrics alone left it on the old display
+    /// when the notch moved to another one of the same size.
+    public static func canSkipRefresh<Metrics: Equatable>(
+        last: (metrics: Metrics, display: CGDirectDisplayID?)?,
+        next: (metrics: Metrics, display: CGDirectDisplayID?)
+    ) -> Bool {
+        guard let last else { return false }
+        return last.metrics == next.metrics && last.display == next.display
+    }
+
+    /// The display a temporary HUD for the single notch window belongs on: the notch's display,
+    /// else the main one, else the first connected. Nil with one window per display, where every
+    /// window shows it. Asked again whenever the notch's display changes, so a HUD up while the
+    /// notch moves (an unplug, a reconnect under a new id) follows it rather than staying hidden.
+    public static func hudTargetDisplay(
+        oneWindowPerDisplay: Bool,
+        notchDisplay: CGDirectDisplayID?,
+        mainScreen: CGDirectDisplayID?,
+        connected: [CGDirectDisplayID]
+    ) -> CGDirectDisplayID? {
+        guard !oneWindowPerDisplay else { return nil }
+        for candidate in [notchDisplay, mainScreen].compactMap({ $0 }) where connected.contains(candidate) {
+            return candidate
+        }
+        return connected.first
+    }
+
     /// The Display picker's titles, in the order given: the name, numbered from 1 when displays
     /// share it, so two identical monitors read as two choices.
     public static func pickerTitles(_ screens: [ScreenFacts]) -> [String] {

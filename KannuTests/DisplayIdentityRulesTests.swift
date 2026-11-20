@@ -98,10 +98,33 @@ final class DisplayIdentityRulesTests: XCTestCase {
     }
 
     /// A display that comes back under a new id, with the same name and frame, must count as a change.
+    /// Two equal-sized displays swapping places must count as well, so ids and frames are compared
+    /// as pairs (PR #80 review).
     func testTheScreenChangeCheckComparesIDs() throws {
         let app = try XCTUnwrap(Self.appSources()["Kannu/KannuApp.swift"])
-        XCTAssertTrue(app.contains("|| currentScreenIDs != previousScreenIDs"))
+        XCTAssertTrue(app.contains("DisplayPlacementResolver.layoutChanged(from: previousScreenLayout, to: currentLayout)"))
         XCTAssertTrue(app.contains("let viewModel = KannuViewModel(screenID: id)"))
+    }
+
+    /// The timer and music controls skip a refresh only when their display is unchanged too.
+    func testTheControlWindowsRefreshOnADisplayChange() throws {
+        let sources = Self.appSources()
+        for path in ["Kannu/managers/TimerControlWindowManager.swift", "Kannu/managers/MusicControlWindowManager.swift"] {
+            let text = try XCTUnwrap(sources[path])
+            XCTAssertTrue(text.contains("DisplayPlacementResolver.canSkipRefresh(last: last, next: next)"), path)
+            XCTAssertFalse(text.contains("if let lastMetrics, lastMetrics == metrics"),
+                           "\(path) skips on metrics alone again: the window stays on the old display")
+            XCTAssertTrue(text.contains("lastDisplayID = screen.displayID"), path)
+        }
+    }
+
+    /// A battery HUD that is up while the notch moves follows it.
+    func testTheBatteryHUDTargetFollowsTheNotchDisplay() throws {
+        let text = try XCTUnwrap(Self.appSources()["Kannu/models/BatteryStatusViewModel.swift"])
+        XCTAssertTrue(text.contains("coordinator.$selectedScreenID"))
+        XCTAssertTrue(text.contains(".receive(on: DispatchQueue.main)"),
+                      "without the hop the sink reads selectedScreenID before it is stored")
+        XCTAssertTrue(text.contains("DisplayPlacementResolver.hudTargetDisplay("))
     }
 
     private static func appSources() -> [String: String] {

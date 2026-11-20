@@ -22,6 +22,7 @@
  */
 
 import Cocoa
+import Combine
 import Defaults
 import Foundation
 import IOKit.ps
@@ -61,6 +62,7 @@ class BatteryStatusViewModel: ObservableObject {
 
     private let managerBattery = BatteryActivityManager.shared
     private var managerBatteryId: Int?
+    private var cancellables = Set<AnyCancellable>()
 
     static let shared = BatteryStatusViewModel()
 
@@ -69,6 +71,24 @@ class BatteryStatusViewModel: ObservableObject {
     private init() {
         setupPowerStatus()
         setupMonitor()
+        followNotchDisplay()
+    }
+
+    /// A HUD that is up while the notch moves to another display (an unplug, or a display back
+    /// under a new id) moves with it; its target was set once, when it appeared, and the HUD stayed
+    /// hidden on the new display until its timer ran out. `receive(on:)` reads the target after
+    /// `adjustWindowPosition` has set `selectedScreenID` and moved the window, since `@Published`
+    /// emits before the value is stored.
+    private func followNotchDisplay() {
+        coordinator.$selectedScreenID
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.activeTemporaryHUDKind != nil else { return }
+                self.activeTemporaryHUDTargetScreenID = self.resolvedTemporaryHUDTargetScreenID()
+            }
+            .store(in: &cancellables)
     }
 
     /// Sets up the initial power status by fetching battery information
@@ -228,16 +248,12 @@ class BatteryStatusViewModel: ObservableObject {
     /// The chosen display is not a separate candidate: `selectedScreenID` is already where the
     /// placement put the window, the chosen display included.
     private func resolvedTemporaryHUDTargetScreenID() -> CGDirectDisplayID? {
-        if Defaults[.displayPlacement].usesOneWindowPerDisplay {
-            return nil
-        }
-
-        let candidates = [coordinator.selectedScreenID, NSScreen.main?.displayID].compactMap { $0 }
-        for candidate in candidates where NSScreen.withDisplayID(candidate) != nil {
-            return candidate
-        }
-
-        return NSScreen.screens.first?.displayID
+        DisplayPlacementResolver.hudTargetDisplay(
+            oneWindowPerDisplay: Defaults[.displayPlacement].usesOneWindowPerDisplay,
+            notchDisplay: coordinator.selectedScreenID,
+            mainScreen: NSScreen.main?.displayID,
+            connected: NSScreen.screens.compactMap(\.displayID)
+        )
     }
 
     private func handleLowBatteryAlertIfNeeded(previousLevel: Float, newLevel: Float) {

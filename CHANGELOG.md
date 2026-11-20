@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-19 - What follows the notch follows its display, after the #80 review
+- **Developer label:** CodeRabbit's four notes on #80, answered "Fix them first"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the review fixes on #80
+- **Changes:**
+  - The screen-change check compares display id-to-frame pairs (`DisplayPlacementResolver.layoutChanged`), so two
+    equal-sized displays that swap places re-place the notch. The snapshot is `ScreenFacts` values.
+  - The timer and music control windows skip a refresh only when their display is unchanged as well as their
+    metrics (`canSkipRefresh`); a notch that moved to an equal-sized display left them behind.
+  - A battery HUD that is up while the notch moves re-resolves its target (`hudTargetDisplay`) when
+    `selectedScreenID` changes, so it no longer stays hidden on the new display until its timer ends. It stays nil
+    with one window per display.
+  - The `display-placement` spec limits the name rule to selecting and looking up screens, and names the
+    name-keyed per-display overrides as the exception this change leaves.
+  - Tests: three fixture tests in `DisplayIdentityTests` and three source pins in `DisplayIdentityRulesTests`;
+    REGRESSIONS entry 17's 2026-11-18 addendum records them.
+
 ### 2026-11-19 - A question that outlived its process opens its chat again
 - **Developer label:** "click through still not working", then "the first row that shows as paused is not opening"
 - **Agent label:** Claude Code (Fable 5.2) — main session, measured on the installed 2.0.0 (13) before the change
