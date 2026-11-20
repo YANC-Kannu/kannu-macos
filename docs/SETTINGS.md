@@ -408,14 +408,16 @@ Brain › Timer, Brain › Clipboard, Brain › Tasks and Brain › Notes are th
   colour, with the light at the right. Middle: the icon, provider · project, the chat and the state in words. Bottom,
   pinned: the run's figures, each over a small label (Run time, Tool calls, Tokens in · out), from the text column, and
   "Open chat ›" at the right. The whole card is one button, so "Open chat ›" is a label drawn like a quiet button, never
-  a button inside a button. Then Recent chats, rows `listRowHeight` tall and `listRowGap` apart, each with a trailing
+  a button inside a button. Both show only while the session has somewhere to open (`AgentSessionOpener.target(for:)`
+  is not nil): with nothing to locate, a terminal agent whose hook reported no terminal or a process that has ended,
+  the card is drawn bare, with no label, no button and no dead click (since 2026-11-20). Then Recent chats, rows `listRowHeight` tall and `listRowGap` apart, each with a trailing
   column of `listTrailingWidth`: the state in words and in its light's colour, the metrics and the light. Then a status
   row of three equal cells: Editors & hooks (one line, "5 tools watched · hooks installed", or "2 of 3 hooked" and then
   each tool missing its hook, with Install; only a tool that has a hook counts toward "hooked", so Warp and Claude
   Desktop are watched, never hooked), Usage
   (readings near their limit, each its percentage over what it measures, with its reset and "As of"; never a read of
   its own) and Security (only while findings wait for review). A cell's headline figure is `cardTitle`, and a quiet
-  cell is one line. A click on the hero or a row opens its chat.
+  cell is one line. A click on the hero, while it says "Open chat ›", or on a row opens its chat.
 - **An empty state** keeps the hero's place and height: the status in `cardTitle`, one short sentence at most
   `proseMaxWidth` wide (two lines at most) in `body` on `inkSecondary`, at most one action. No sessions: "No agents running", with "Install <tool> hook" for the
   first tool on this Mac without its hook. Agent Status off: "Agent Status is off", with Turn on. The status row and the
@@ -678,7 +680,14 @@ checked against planted offenders:
    Security keeps no clock at all: a scan is told by its time, and off screen its copy simply stays as it was.
 
 A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding a session's target
-walks parent processes and asks `NSWorkspace`. **Not measured:** the CPU of Agents open, closed, and parked full
+walks parent processes and asks `NSWorkspace`. The hero alone asks ahead whether there is one, so it can say "Open
+chat ›" only when the click lands somewhere: `AgentsHeroCard.resolveTarget` runs as the hero appears and each time its
+session changes, and keeps only the answer, a Bool in `@State` that `body` reads. The session changes with the
+throttled copy, so that is at most twice a second and never while Brain is off screen. Measured on 2026-11-20 with a
+`swiftc` harness of the same calls: a five-process parent walk 0.11 ms (median of 500, 0.20 ms at the 95th
+percentile), the running-apps scan 0.12 ms, so about 0.04 % of one core at the worst rate. The click still resolves
+its own target, fresh, so a stale answer can only mislabel the card until its session next changes; an app quit
+without the session changing is that case. `AgentsPageLiveDataRulesTests` holds both. **Not measured:** the CPU of Agents open, closed, and parked full
 screen in another Space during a busy agent, and the same for Security during a session with permission checks off.
 It needs a real window, so it is David's check before install.
 
@@ -889,6 +898,16 @@ sheet does, and paints `SettingsTheme.panel` under every step and under the titl
   a one-line label; then a two-line explanation and Continue. The card and its explanation sit centred between the
   header and Continue, so the step has no empty band. Nothing animates (docs/REGRESSIONS.md entry 22) and nothing is
   written to Defaults.
+
+**The window comes back to the front** (since 2026-11-20). `AppDelegate.showOnboardingWindow` orders it front once,
+as it opens, so after a trip to System Settings for a permission it could sit behind another app's window and look
+stuck. `OnboardingView` now listens for `NSApplication.didBecomeActiveNotification` and calls
+`bringWindowForward`, which finds the window by its identifier, `"OnboardingWindow"`, and calls
+`makeKeyAndOrderFront` on it while it is on screen, so a window closed at Finish stays closed. It runs only when
+Kannu has already become active, by the user's own click or switch; nothing in the view activates Kannu, so it cannot
+take the keyboard from System Settings. It raises no macOS dialog, so no permission gate is involved.
+`OnboardingWindowRulesTests` holds each part, and that no step keeps a branch that never runs: the welcome carried an
+`if false` "PRO" badge from the app Kannu was forked from.
 
 `SettingsDesignSystemRulesTests` holds the root, the panel, Allow's rank, and no `.borderedProminent` under
 `Onboarding/`. No string changed with the theme: the steps' titles keep their Title Case. Behaviour did not change

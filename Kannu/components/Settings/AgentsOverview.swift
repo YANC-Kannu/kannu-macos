@@ -34,7 +34,8 @@ import SwiftUI
 ///    static copy.
 ///
 /// A click resolves where it goes in its action (`AgentSessionOpener.open`), never in `body`: finding the target walks
-/// parent processes and asks `NSWorkspace`.
+/// parent processes and asks `NSWorkspace`. The hero alone asks ahead whether there is one, as it appears and when its
+/// session changes, so it says "Open chat" only when the click lands somewhere.
 struct AgentsOverview: View {
     @ObservedObject private var visibility = BrainVisibility.shared
     @ObservedObject private var hookInstaller = AgentHookInstaller.shared
@@ -207,10 +208,16 @@ private struct AgentsInstallButton: View {
 /// The session that matters most, titled by its state: a stopped run ranks above one awaiting input
 /// (`AgentTrafficLightMapper.primarySession`). Three bands: the state in its light's colour, with the light; the session
 /// as a row shows it; and, pinned to the bottom, the run's figures from the text column, with "Open chat ›". The whole
-/// card is one button, so a click anywhere opens its chat.
+/// card is one button, so a click anywhere opens its chat. With nothing to open, a terminal agent whose hook reported
+/// no terminal or a process that has ended, it is the card alone: no label, no button, no dead click.
 private struct AgentsHeroCard: View {
     let session: AgentSessionStatus
     let live: Bool
+    /// Whether a click has somewhere to go (`AgentSessionOpener.target(for:)`). Worked out as the hero appears and
+    /// each time its session changes, never in `body`: finding a target walks parent processes and asks `NSWorkspace`.
+    /// Only the answer is kept. The click resolves its own target, so a stale answer can mislabel the card, never
+    /// misdirect the click.
+    @State private var hasTarget = false
 
     private var title: String {
         switch session.displayState {
@@ -220,37 +227,72 @@ private struct AgentsHeroCard: View {
         }
     }
 
+    /// Whether the card is a button that says "Open chat". On a board, the fixture's answer, never this Mac's apps.
+    private var opensChat: Bool {
+        #if DEBUG
+        if let fixture = AgentsOverview.snapshotFixture { return fixture.heroOpensChat }
+        #endif
+        return hasTarget
+    }
+
     var body: some View {
-        Button {
-            _ = AgentSessionOpener.open(session)
-        } label: {
-            VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
-                HStack(spacing: SettingsMetrics.rowContent) {
-                    AgentsStateWord(session: session, font: SettingsTheme.cardTitle, text: title)
-                    Spacer(minLength: 0)
-                    AgentTrafficLightDots(state: session.displayState)
-                        .accessibilityHidden(true)
+        // One parent for both shapes, so the hooks run once per hero, not again as the card gains or loses its button.
+        ZStack {
+            if opensChat {
+                Button {
+                    _ = AgentSessionOpener.open(session)
+                } label: {
+                    card
                 }
-                HStack(alignment: .top, spacing: SettingsMetrics.cardPadding) {
-                    AgentProviderIconView(source: .init(rawProvider: session.provider), size: SettingsTheme.heroIcon)
-                    VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
-                        Text(verbatim: session.providerAndProject)
-                            .font(SettingsTheme.sheetTitle)
-                            .foregroundStyle(SettingsTheme.ink)
-                            .lineLimit(1)
-                        Text(verbatim: session.displayChatName)
-                            .font(SettingsTheme.body)
-                            .foregroundStyle(SettingsTheme.ink)
-                            .lineLimit(2)
-                        AgentsStateWord(session: session, font: SettingsTheme.bodyStrong)
-                    }
-                }
+                .buttonStyle(.plain)
+            } else {
+                // Nothing to open: no button, no label, no dead click.
+                card
+            }
+        }
+        .onAppear { resolveTarget(for: session) }
+        .onChange(of: session) { _, latest in resolveTarget(for: latest) }
+    }
+
+    /// From the two hooks above only. The session changes with the page's throttled copy, so this runs at most twice
+    /// a second and never while Brain is off screen (docs/SETTINGS.md, "Live data", has what a lookup costs).
+    private func resolveTarget(for session: AgentSessionStatus) {
+        #if DEBUG
+        if AgentsOverview.snapshotFixture != nil { return }
+        #endif
+        let found = AgentSessionOpener.target(for: session) != nil
+        if found != hasTarget { hasTarget = found }
+    }
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: SettingsMetrics.cardPadding) {
+            HStack(spacing: SettingsMetrics.rowContent) {
+                AgentsStateWord(session: session, font: SettingsTheme.cardTitle, text: title)
                 Spacer(minLength: 0)
-                HStack(alignment: .bottom, spacing: SettingsMetrics.rowContent) {
-                    AgentsMetrics(session: session, live: live, font: SettingsTheme.cardTitle, figures: true)
-                        // On the text column: past the icon and its gap.
-                        .padding(.leading, SettingsTheme.heroIcon + SettingsMetrics.cardPadding)
-                    Spacer(minLength: 0)
+                AgentTrafficLightDots(state: session.displayState)
+                    .accessibilityHidden(true)
+            }
+            HStack(alignment: .top, spacing: SettingsMetrics.cardPadding) {
+                AgentProviderIconView(source: .init(rawProvider: session.provider), size: SettingsTheme.heroIcon)
+                VStack(alignment: .leading, spacing: SettingsMetrics.labelStack) {
+                    Text(verbatim: session.providerAndProject)
+                        .font(SettingsTheme.sheetTitle)
+                        .foregroundStyle(SettingsTheme.ink)
+                        .lineLimit(1)
+                    Text(verbatim: session.displayChatName)
+                        .font(SettingsTheme.body)
+                        .foregroundStyle(SettingsTheme.ink)
+                        .lineLimit(2)
+                    AgentsStateWord(session: session, font: SettingsTheme.bodyStrong)
+                }
+            }
+            Spacer(minLength: 0)
+            HStack(alignment: .bottom, spacing: SettingsMetrics.rowContent) {
+                AgentsMetrics(session: session, live: live, font: SettingsTheme.cardTitle, figures: true)
+                    // On the text column: past the icon and its gap.
+                    .padding(.leading, SettingsTheme.heroIcon + SettingsMetrics.cardPadding)
+                Spacer(minLength: 0)
+                if opensChat {
                     // A quiet button's look, but a label: the card is the one button, never a button inside a button.
                     HStack(spacing: SettingsMetrics.iconGap) {
                         Text("Open chat")
@@ -260,12 +302,11 @@ private struct AgentsHeroCard: View {
                     .foregroundStyle(SettingsTheme.ink)
                 }
             }
-            .padding(SettingsTheme.heroPadding)
-            .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight, alignment: .topLeading)
-            .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
         }
-        .buttonStyle(.plain)
+        .padding(SettingsTheme.heroPadding)
+        .frame(maxWidth: .infinity, minHeight: SettingsTheme.heroMinHeight, alignment: .topLeading)
+        .background(SettingsTheme.card, in: RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: SettingsTheme.sectionRadius, style: .continuous))
     }
 }
 
@@ -631,5 +672,7 @@ struct AgentsOverviewFixture {
     var security: AgentsSecuritySummary
     /// Agent Status: off, the page shows its off card in place of the sessions.
     var agentStatusOn = true
+    /// Whether the hero is a button that says "Open chat": a board asks nothing of this Mac's apps.
+    var heroOpensChat = true
 }
 #endif

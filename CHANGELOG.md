@@ -4,6 +4,27 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-20 - Onboarding comes back to the front, "Open chat" only with a chat to open, and a dead badge gone
+- **Developer label:** "The three quick ones", David's pick from a backlog check for 2.0
+- **Agent label:** Claude Code (Fable 5.2) — quick-three side session off `development`
+- **Changes:**
+  - Onboarding's window was ordered to the front once, as it opened, so after a trip to System Settings for a
+    permission it could sit behind another app's window and look stuck. `OnboardingView` now brings it forward
+    (`makeKeyAndOrderFront`, found by its identifier, only while it is on screen) each time Kannu becomes active.
+    It never activates Kannu, so it cannot take the keyboard from System Settings, and it raises no macOS dialog.
+  - Brain › Agents' hero said "Open chat ›" and was a button for every session; with nothing to locate (a terminal
+    agent whose hook reported no terminal, a process that has ended) the click did nothing. The label and the button
+    now show only while `AgentSessionOpener.target(for:)` finds a target. The hero asks as it appears and when its
+    session changes, never in `body`, and keeps only the answer. Measured: about 0.1 ms a lookup, at most twice a
+    second, and never while Brain is off screen. Recent chats' rows are unchanged.
+  - `WelcomeView` loses an `if false` "PRO" badge left from the app Kannu was forked from, and the catalog loses
+    its "PRO" key, which nothing else used. The sparkles stay.
+  - Tests: `OnboardingWindowRulesTests` (the refocus, and no branch that never runs under `Onboarding/`) and
+    `AgentsPageLiveDataRulesTests` (the click rule now allows the one lookup in the hero's hooks; a new rule holds
+    "Open chat" and the button behind the answer). Each was run against the unfixed sources first, and failed.
+  - Docs: `docs/SETTINGS.md` (the Agents hero, "Live data", "Onboarding"); the done follow-up leaves
+    `openspec/changes/release-2-0/handoff.md`.
+
 ### 2026-11-19 - A question that outlived its process opens its chat again
 - **Developer label:** "click through still not working", then "the first row that shows as paused is not opening"
 - **Agent label:** Claude Code (Fable 5.2) — main session, measured on the installed 2.0.0 (13) before the change
