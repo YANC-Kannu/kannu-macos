@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-20 - Pin that the hero's lookup reaches its state, and say the "Open chat" label is the last lookup's
+- **Developer label:** "Fix CodeRabbit's findings on PR #83"
+- **Agent label:** Claude Code (Fable 5.2) — quick-three side session, Auto-fix
+- **Changes:**
+  - `AgentsPageLiveDataRulesTests.openChatProblems` now requires `resolveTarget` to write the lookup's answer to
+    `hasTarget`, and allows no other write. Before, deleting that line left every rule satisfied, and the hero would
+    have kept its first `false` and never offered the chat. Three planted offenders prove it: the write removed, the
+    write of a constant, and a second write.
+  - The entry below said the label shows "only while" a target is found, which reads as live. It now says what the
+    code does: the label is the last lookup's answer and can outlive a target whose app quits without the session
+    changing. `docs/SETTINGS.md` already said so.
+  - No app code changes.
+
 ### 2026-11-20 - Onboarding comes back to the front, "Open chat" only with a chat to open, and a dead badge gone
 - **Developer label:** "The three quick ones", David's pick from a backlog check for 2.0
 - **Agent label:** Claude Code (Fable 5.2) — quick-three side session off `development`
@@ -14,9 +27,11 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
     It never activates Kannu, so it cannot take the keyboard from System Settings, and it raises no macOS dialog.
   - Brain › Agents' hero said "Open chat ›" and was a button for every session; with nothing to locate (a terminal
     agent whose hook reported no terminal, a process that has ended) the click did nothing. The label and the button
-    now show only while `AgentSessionOpener.target(for:)` finds a target. The hero asks as it appears and when its
-    session changes, never in `body`, and keeps only the answer. Measured: about 0.1 ms a lookup, at most twice a
-    second, and never while Brain is off screen. Recent chats' rows are unchanged.
+    now show only when the hero's last lookup, `AgentSessionOpener.target(for:)`, found a target. The hero asks as it
+    appears and when its session changes, never in `body`, and keeps only the answer. That answer is the last
+    lookup's, not a live one: if the target's app quits and the session does not change, the label stays until the
+    session next changes, and the click, which resolves its own target, does nothing. Measured: about 0.1 ms a
+    lookup, at most twice a second, and never while Brain is off screen. Recent chats' rows are unchanged.
   - `WelcomeView` loses an `if false` "PRO" badge left from the app Kannu was forked from, and the catalog loses
     its "PRO" key, which nothing else used. The sparkles stay.
   - Tests: `OnboardingWindowRulesTests` (the refocus, and no branch that never runs under `Onboarding/`) and

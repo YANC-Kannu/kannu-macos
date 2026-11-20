@@ -339,6 +339,13 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         if !opens.contains("return hasTarget") || !hero.contains("@State private var hasTarget = false") {
             problems.append("the hero does not ask whether its session has a target")
         }
+        // The lookup's answer is the state's one write after its `false` start, so the label can only say what the
+        // lookup found. Writing only on a change is fine: the comparison is not a write.
+        let resolve = body(after: "private func resolveTarget(for session: AgentSessionStatus) {", in: hero) ?? ""
+        if resolve.components(separatedBy: "hasTarget = found").count - 1 != 1
+            || hero.components(separatedBy: "hasTarget = ").count - 1 != 2 {
+            problems.append("the lookup's answer does not reach the hero's state, or something else writes it")
+        }
         return problems
     }
 
@@ -352,6 +359,11 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
             ("            if opensChat {\n                Button {", "            if true {\n                Button {"),
             ("        return hasTarget\n", "        return true\n"),
             ("@State private var hasTarget = false", "@State private var hasTarget = true"),
+            // The lookup's answer never reaching the state: the hero would keep its first `false` and never offer the chat.
+            ("        if found != hasTarget { hasTarget = found }\n", ""),
+            ("if found != hasTarget { hasTarget = found }", "if found != hasTarget { hasTarget = true }"),
+            ("        let found = AgentSessionOpener.target(for: session) != nil\n",
+             "        let found = AgentSessionOpener.target(for: session) != nil\n        hasTarget = true\n"),
             ("                // Nothing to open: no button, no label, no dead click.\n                card\n",
              "                Button {\n                } label: {\n                    card\n                }\n"),
         ], in: overview, by: Self.openChatProblems)
