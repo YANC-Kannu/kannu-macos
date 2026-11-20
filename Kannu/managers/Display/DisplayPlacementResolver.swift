@@ -177,6 +177,38 @@ public enum DisplayPlacementResolver {
         return screens.first { $0.name == legacyName }?.uuid
     }
 
+    // MARK: - Per-display overrides
+
+    /// The connected displays whose name-keyed overrides are still to carry over to their UUID:
+    /// each display with a UUID, once. A display that is not connected keeps its name entry until
+    /// it is, and a display already carried over is never carried again, so a later Reset sticks.
+    public static func displaysAwaitingOverrideCarryOver(
+        _ screens: [ScreenFacts],
+        carried: Set<String>
+    ) -> [ScreenFacts] {
+        var seen = Set<String>()
+        return screens.filter { screen in
+            guard let uuid = screen.uuid, !carried.contains(uuid) else { return false }
+            return seen.insert(uuid).inserted
+        }
+    }
+
+    /// The UUID-keyed overrides after carrying the name-keyed ones over to `displays`. Every display
+    /// with an overridden name gets that value, so two identical monitors keep what they shared,
+    /// and from then on each one's override is its own. A UUID entry already there is kept.
+    public static func carryOverOverrides<Value>(
+        _ byName: [String: Value],
+        into byUUID: [String: Value],
+        for displays: [ScreenFacts]
+    ) -> [String: Value] {
+        var result = byUUID
+        for display in displays {
+            guard let uuid = display.uuid, result[uuid] == nil, let value = byName[display.name] else { continue }
+            result[uuid] = value
+        }
+        return result
+    }
+
     /// Whether the displays changed in a way that must re-place the notch: one came or went, one
     /// came back under a new id, or one moved. Compared as id-to-frame pairs, because two
     /// equal-sized displays that swap places leave both the id set and the frame set unchanged.

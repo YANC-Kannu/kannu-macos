@@ -217,11 +217,10 @@ func macHasNotchedBuiltInDisplay() -> Bool {
 // MARK: - Per-display settings
 
 /// The style to use for the display `screenID`, preferring a per-display override over the global
-/// choice. The overrides are still keyed by name (`displayStyleOverrides`), so the name is read here,
-/// from the display the id resolves to, and nowhere is a screen found by its name.
+/// choice. The override is keyed by the display's UUID, so two identical monitors have one each.
 func effectiveDisplayStyle(for screenID: CGDirectDisplayID?) -> ExternalDisplayStyle {
-    if let name = NSScreen.withDisplayID(screenID)?.localizedName,
-       let override = Defaults[.displayStyleOverrides][name] {
+    if let key = DisplayPlacementRuntime.overrideKey(for: screenID),
+       let override = Defaults[.displayStyleOverridesByUUID][key] {
         return override
     }
     return Defaults[.externalDisplayStyle]

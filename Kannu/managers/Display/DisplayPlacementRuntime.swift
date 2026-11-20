@@ -62,6 +62,40 @@ enum DisplayPlacementRuntime {
     }
 
     /// Stores a pick from Settings. The name goes along for a downgrade, whose builds read only it.
+    /// Carries the name-keyed per-display overrides of the connected displays over to their UUIDs.
+    ///
+    /// Runs at launch and on every display change, outside any view, so no view writes Defaults
+    /// while it renders. The name-keyed dictionaries are only read here from now on: a downgrade
+    /// still finds the overrides set before this version, and nothing writes to them again.
+    static func carryOverNameKeyedOverrides(screens given: [ScreenFacts]? = nil) {
+        let screens = given ?? facts()
+        let byNameStyle = Defaults[.displayStyleOverrides]
+        let byNameAlwaysShow = Defaults[.alwaysShowOverrides]
+        guard !byNameStyle.isEmpty || !byNameAlwaysShow.isEmpty else { return }
+
+        let carried = Defaults[.displayOverridesCarriedUUIDs]
+        let pending = DisplayPlacementResolver.displaysAwaitingOverrideCarryOver(screens, carried: Set(carried))
+        guard !pending.isEmpty else { return }
+
+        let style = DisplayPlacementResolver.carryOverOverrides(
+            byNameStyle, into: Defaults[.displayStyleOverridesByUUID], for: pending)
+        if style != Defaults[.displayStyleOverridesByUUID] {
+            Defaults[.displayStyleOverridesByUUID] = style
+        }
+        let alwaysShow = DisplayPlacementResolver.carryOverOverrides(
+            byNameAlwaysShow, into: Defaults[.alwaysShowOverridesByUUID], for: pending)
+        if alwaysShow != Defaults[.alwaysShowOverridesByUUID] {
+            Defaults[.alwaysShowOverridesByUUID] = alwaysShow
+        }
+        Defaults[.displayOverridesCarriedUUIDs] = carried + pending.compactMap(\.uuid)
+    }
+
+    /// The key of the per-display overrides for the display `id`, or nil when it has no UUID. Reads
+    /// CoreGraphics only, so the sizing helpers can ask from any context.
+    nonisolated static func overrideKey(for id: CGDirectDisplayID?) -> String? {
+        id.flatMap(NSScreen.displayUUID(for:))
+    }
+
     static func choose(_ screen: ScreenFacts) {
         guard let uuid = screen.uuid else { return }
         UserDefaults.standard.set(screen.name, forKey: legacyPreferredScreenNameKey)

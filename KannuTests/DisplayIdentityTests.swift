@@ -212,4 +212,43 @@ final class DisplayIdentityTests: XCTestCase {
         XCTAssertEqual(target(nil, [7, 8]), 7, "no notch display and no main: the first connected")
         XCTAssertNil(target(8, [1, 7, 8], perDisplay: true))
     }
+
+    // MARK: - Per-display overrides by UUID
+
+    /// Two identical monitors shared one name-keyed override. Carried over, each gets that value
+    /// under its own UUID, and changing one no longer changes the other.
+    func testTwoIdenticalMonitorsKeepTheirSharedOverrideAndThenOwnOne() {
+        var byUUID = DisplayPlacementResolver.carryOverOverrides(["DELL U2720Q": false], into: [:],
+                                                                 for: [left, right])
+        XCTAssertEqual(byUUID, ["UUID-DELL-A": false, "UUID-DELL-B": false])
+        byUUID["UUID-DELL-B"] = true
+        XCTAssertEqual(byUUID["UUID-DELL-A"], false, "the right monitor's change left the left one alone")
+    }
+
+    /// Each display is carried over once: after it, a Reset is not undone by the name entry it came
+    /// from. Displays without a UUID, or listed twice, are not candidates.
+    func testADisplayIsCarriedOverOnce() {
+        let pending = DisplayPlacementResolver.displaysAwaitingOverrideCarryOver(
+            [builtIn, left, right], carried: ["UUID-DELL-A"])
+        XCTAssertEqual(pending.map(\.id), [1, 8])
+        let noUUID = ScreenFacts(id: 9, name: "DELL U2720Q", isBuiltIn: false)
+        XCTAssertEqual(DisplayPlacementResolver.displaysAwaitingOverrideCarryOver(
+            [right, noUUID, right], carried: []).map(\.id), [8])
+        XCTAssertEqual(DisplayPlacementResolver.displaysAwaitingOverrideCarryOver(
+            [left, right], carried: ["UUID-DELL-A", "UUID-DELL-B"]), [])
+    }
+
+    /// A monitor that is not connected at the first carry-over keeps its name entry, and takes it
+    /// when it is plugged in; a UUID entry that is already there wins over the name's.
+    func testALaterMonitorTakesItsNameOverrideAndAUUIDEntryWins() {
+        // The style override's values, as their raw strings: the test target cannot see the enum.
+        let byName = ["Studio Display": "dynamicIsland", "DELL U2720Q": "standard"]
+        let first = DisplayPlacementResolver.carryOverOverrides(byName, into: [:], for: [left])
+        XCTAssertEqual(first, ["UUID-DELL-A": "standard"])
+        let later = DisplayPlacementResolver.carryOverOverrides(byName, into: first, for: [studio])
+        XCTAssertEqual(later, ["UUID-DELL-A": "standard", "UUID-STUDIO": "dynamicIsland"])
+        let kept = DisplayPlacementResolver.carryOverOverrides(byName, into: ["UUID-STUDIO": "standard"],
+                                                               for: [studio])
+        XCTAssertEqual(kept, ["UUID-STUDIO": "standard"], "a choice made by UUID is never overwritten by the name")
+    }
 }

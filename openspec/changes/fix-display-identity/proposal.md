@@ -37,6 +37,6 @@ review). Two identical monitors share that name, so every name lookup found the 
   `GeneralSettings.swift`, `BatteryStatusViewModel.swift`, `FullscreenMediaDetection.swift`, the music and timer
   control window managers, `TimerLiveActivity.swift`, `DoNotDisturbLiveActivity.swift` and the lock-screen live
   activity window manager.
-- Out of scope: the per-display style and "Always show" overrides stay keyed by name, as GeneralSettings already
-  records; keying them by UUID is a follow-up with its own migration.
+- The per-display style and "Always show" overrides move to UUID keys too, with a one-time carry-over per display from
+  the name-keyed dictionaries, which are kept unchanged for a downgrade (added on PR #80's review).
 - No new permission and no new dependency.

@@ -1188,6 +1188,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateMediaControllerToNowPlaying()
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
+        // After the line above, which can fill the name-keyed "Always show" overrides it carries over.
+        DisplayPlacementRuntime.carryOverNameKeyedOverrides()
         Defaults.Keys.migrateScreenCaptureVisibility()
         Defaults.Keys.migrateRemovedMinimalisticUI()
         Defaults.Keys.migrateRemovedAgentLightChoices()
@@ -2112,6 +2114,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func screenConfigurationDidChange() {
         let currentLayout = DisplayPlacementRuntime.facts()
+
+        // A display seen for the first time takes over the override its name had (issue #24).
+        DisplayPlacementRuntime.carryOverNameKeyedOverrides(screens: currentLayout)
 
         // Opening the lid or undocking may be the first time we ever see the built-in display,
         // so re-resolve here. A machine set up in clamshell corrects its own classification

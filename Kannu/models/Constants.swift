@@ -1033,9 +1033,23 @@ extension Defaults.Keys {
     /// Replaces the inverted `hideNonNotchUntilHover`, which is retained only for migration.
     static let alwaysShowOnNonNotchDisplays = Key<Bool>("alwaysShowOnNonNotchDisplays", default: false)
 
-    /// Per-display overrides, keyed by `NSScreen.localizedName` (the identifier the rest of the
-    /// app already uses for screens). A screen with no entry follows the global setting above,
+    /// Per-display overrides, keyed by the display UUID (`CGDisplayCreateUUIDFromDisplayID`), so two
+    /// identical monitors have one each. A screen with no entry follows the global setting above,
     /// so these stay empty until the user deliberately customises a display.
+    static let displayStyleOverridesByUUID = Key<[String: ExternalDisplayStyle]>(
+        "displayStyleOverridesByUUID",
+        default: [:]
+    )
+    static let alwaysShowOverridesByUUID = Key<[String: Bool]>(
+        "alwaysShowOverridesByUUID",
+        default: [:]
+    )
+    /// The UUIDs whose name-keyed overrides have been carried over, so each is carried once and a
+    /// Reset afterwards is not undone by the name entry it came from (issue #24).
+    static let displayOverridesCarriedUUIDs = Key<[String]>("displayOverridesCarriedUUIDs", default: [])
+
+    /// The pre-UUID overrides, keyed by `NSScreen.localizedName`, which two identical monitors share.
+    /// Read only by `DisplayPlacementRuntime.carryOverNameKeyedOverrides`, and kept for a downgrade.
     static let displayStyleOverrides = Key<[String: ExternalDisplayStyle]>(
         "displayStyleOverrides",
         default: [:]
@@ -1044,8 +1058,9 @@ extension Defaults.Keys {
         "hideUntilHoverOverrides",
         default: [:]
     )
-    /// Per-display "always show" overrides in the new polarity; same keying as above.
-    /// Replaces the inverted `hideUntilHoverOverrides`, retained only for migration.
+    /// Pre-UUID per-display "always show" overrides in the new polarity; same keying as above.
+    /// Replaces the inverted `hideUntilHoverOverrides`, retained only for migration, and is itself
+    /// carried over to `alwaysShowOverridesByUUID`.
     static let alwaysShowOverrides = Key<[String: Bool]>(
         "alwaysShowOverrides",
         default: [:]

@@ -116,6 +116,11 @@ final class DisplayIdentityRulesTests: XCTestCase {
                            "\(path) skips on metrics alone again: the window stays on the old display")
             XCTAssertTrue(text.contains("lastDisplayID = screen.displayID"), path)
         }
+        // The music window's refresh is driven from ContentView; a display change must drive one too.
+        let content = try XCTUnwrap(sources["Kannu/ContentView.swift"])
+        let handler = try XCTUnwrap(content.range(of: ".onChange(of: vm.screenID) { _, _ in"),
+                                    "the music control window does not refresh when the notch changes display")
+        XCTAssertTrue(content[handler.upperBound...].prefix(200).contains("enqueueMusicControlWindowSync(forceRefresh: true)"))
     }
 
     /// A battery HUD that is up while the notch moves follows it.
@@ -125,6 +130,37 @@ final class DisplayIdentityRulesTests: XCTestCase {
         XCTAssertTrue(text.contains(".receive(on: DispatchQueue.main)"),
                       "without the hop the sink reads selectedScreenID before it is stored")
         XCTAssertTrue(text.contains("DisplayPlacementResolver.hudTargetDisplay("))
+    }
+
+    /// The per-display overrides are read and written by UUID. The name-keyed dictionaries are read
+    /// only by the carry-over, and written only by the older migration that fills one of them.
+    func testThePerDisplayOverridesAreKeyedByUUID() throws {
+        let allowed: [String: Set<String>] = [
+            "Kannu/managers/Display/DisplayPlacementRuntime.swift": ["Defaults[.displayStyleOverrides]",
+                                                                     "Defaults[.alwaysShowOverrides]"],
+            "Kannu/models/Constants.swift": ["Defaults[.alwaysShowOverrides]"],
+        ]
+        let byName = ["Defaults[.displayStyleOverrides]", "Defaults[.alwaysShowOverrides]",
+                      "@Default(.displayStyleOverrides)", "@Default(.alwaysShowOverrides)"]
+        var offenders: [String] = []
+        for (path, text) in Self.appSources() {
+            for use in byName where text.contains(use) && !(allowed[path]?.contains(use) ?? false) {
+                offenders.append("\(path): \(use)")
+            }
+        }
+        XCTAssertEqual(offenders.sorted(), [], "read and write displayStyleOverridesByUUID / alwaysShowOverridesByUUID")
+
+        let sources = Self.appSources()
+        let app = try XCTUnwrap(sources["Kannu/KannuApp.swift"])
+        let launch = try XCTUnwrap(app.range(of: "Defaults.Keys.migrateNonNotchAlwaysShow()"))
+        let carry = try XCTUnwrap(app.range(of: "DisplayPlacementRuntime.carryOverNameKeyedOverrides()"))
+        XCTAssertLessThan(launch.lowerBound, carry.lowerBound,
+                          "the carry-over runs after the migration that can fill alwaysShowOverrides")
+        XCTAssertTrue(app.contains("DisplayPlacementRuntime.carryOverNameKeyedOverrides(screens: currentLayout)"),
+                      "a display plugged in later takes its name's override")
+        let settings = try XCTUnwrap(sources["Kannu/components/Settings/GeneralSettings.swift"])
+        XCTAssertTrue(settings.contains("ForEach(displays, id: \\.key)"), "one override group per display, by UUID")
+        XCTAssertFalse(settings.contains("seen.insert($0.name)"), "the override list collapses same-named displays again")
     }
 
     private static func appSources() -> [String: String] {

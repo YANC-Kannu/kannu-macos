@@ -4,9 +4,8 @@
 Kannu SHALL select and look up the notch's screen by `CGDirectDisplayID`, never by `NSScreen.localizedName`. Each
 notch view model SHALL hold the id of the display its window is on, and every per-screen decision for that view (its
 closed size, whether it has a notch, its Dynamic Island style check, its fullscreen verdict, its HUD and sneak-peek
-targets) SHALL read that display. `localizedName` SHALL NOT be used to select or look up a screen. It MAY be read
-from a display already found by id: for text people read, and as the key of the per-display style and "Always show"
-overrides (`displayStyleOverrides`, `alwaysShowOverrides`), which stay keyed by name and are outside this change.
+targets) SHALL read that display. `localizedName` SHALL NOT be used to select, look up or key a screen; it is for
+text people read.
 
 #### Scenario: Two monitors with one name
 - **WHEN** two connected monitors both report the name "DELL U2720Q" under ids 7 and 8
@@ -56,7 +55,20 @@ main display and SHALL leave the name in place for a later look.
 - **WHEN** `preferred_screen_name` names a monitor that is not connected and no UUID is stored
 - **THEN** the notch goes to the main display and nothing is stored
 
-#### Scenario: A name-keyed override on a display found by id
-- **WHEN** the view on display 8 reads its "Always show" override
-- **THEN** it reads the override stored under display 8's name, taken from the display found by id, and never looks a
-  screen up by that name
+### Requirement: Per-display overrides are stored by UUID
+The per-display style and "Always show" overrides SHALL be stored under the display's UUID, and Brain › General SHALL
+list one override group for each display without a notch, numbering the titles of displays that share a name. Kannu
+SHALL carry each connected display's name-keyed override over to its UUID once, at launch or when the display first
+appears, SHALL NOT overwrite an override already stored by UUID, and SHALL NOT write the name-keyed overrides again.
+
+#### Scenario: Two monitors shared one override
+- **WHEN** the name-keyed "Always show" override for "DELL U2720Q" is off and two monitors with that name are connected
+- **THEN** each monitor's UUID gets "off", and turning one on leaves the other off
+
+#### Scenario: A Reset after the carry-over
+- **WHEN** a display's overrides were carried over and the user resets them
+- **THEN** the display follows the defaults, and its name-keyed override does not come back
+
+#### Scenario: A monitor plugged in later
+- **WHEN** a monitor with a name-keyed override was not connected at launch and is plugged in
+- **THEN** its UUID gets that override

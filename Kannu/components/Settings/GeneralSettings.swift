@@ -45,8 +45,8 @@ struct GeneralSettings: View {
     @Default(.enableGestures) var enableGestures
     @Default(.openNotchOnHover) var openNotchOnHover
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
-    @Default(.alwaysShowOverrides) var alwaysShowOverrides
-    @Default(.displayStyleOverrides) var displayStyleOverrides
+    @Default(.alwaysShowOverridesByUUID) var alwaysShowOverrides
+    @Default(.displayStyleOverridesByUUID) var displayStyleOverrides
     @Default(.enableHorizontalMusicGestures) var enableHorizontalMusicGestures
     @Default(.musicGestureBehavior) var musicGestureBehavior
     @Default(.reverseSwipeGestures) var reverseSwipeGestures
@@ -339,10 +339,6 @@ struct GeneralSettings: View {
         perDisplayOverrideSections(overrideDisplays)
     }
 
-    /// One entry per *name*: the override dictionaries are keyed by `localizedName`, so two
-    /// identical monitors share one entry, and two rows with one identity made SwiftUI's `ForEach`
-    /// undefined. One row for the pair is honest about what the setting can express; keying the
-    /// overrides on `CGDirectDisplayID` is the real fix and is recorded as a follow-up.
     /// The Display row's choice, as the chosen display's UUID. Nothing stored yet reads as the main
     /// display, which is where "A display I choose" puts Kannu until someone picks.
     private var displayChoice: Binding<String> {
@@ -369,27 +365,29 @@ struct GeneralSettings: View {
         return UserDefaults.standard.string(forKey: DisplayPlacementRuntime.legacyPreferredScreenNameKey) ?? ""
     }
 
-    private var overrideDisplays: [(name: String, isBuiltIn: Bool)] {
-        var seen = Set<String>()
-        return NSScreen.screens
-            .filter { $0.safeAreaInsets.top <= 0 }
-            .map { (name: $0.localizedName, isBuiltIn: isBuiltInDisplay($0)) }
-            .filter { seen.insert($0.name).inserted }
+    /// One entry per display, keyed by its UUID, so two identical monitors are two groups with an
+    /// override each; their titles are numbered like the Display row's. A display without a UUID has
+    /// nothing to store an override under, so it is not listed.
+    private var overrideDisplays: [(key: String, title: String, isBuiltIn: Bool)] {
+        let listed = displays.filter { !$0.hasNotch && $0.uuid != nil }
+        return zip(listed, DisplayPlacementResolver.pickerTitles(listed)).compactMap { display, title in
+            display.uuid.map { (key: $0, title: title, isBuiltIn: display.isBuiltIn) }
+        }
     }
 
     /// One group per display: its two overrides and Reset. The explanation sits under the last one.
     @ViewBuilder
-    func perDisplayOverrideSections(_ displays: [(name: String, isBuiltIn: Bool)]) -> some View {
-        ForEach(displays, id: \.name) { display in
-            let name = display.name
+    func perDisplayOverrideSections(_ displays: [(key: String, title: String, isBuiltIn: Bool)]) -> some View {
+        ForEach(displays, id: \.key) { display in
+            let key = display.key
             SettingsSection {
                 SettingsRow("Style") {
-                    SettingsSelect("Style", selection: displayStyleBinding(for: name),
+                    SettingsSelect("Style", selection: displayStyleBinding(for: key),
                                    options: [nil] + ExternalDisplayStyle.allCases.map(Optional.some),
                                    optionTitle: { $0?.localizedName ?? String(localized: "Follow default") })
                 }
                 SettingsRow("Always show") {
-                    SettingsSelect("Always show", selection: alwaysShowBinding(for: name), choices: [
+                    SettingsSelect("Always show", selection: alwaysShowBinding(for: key), choices: [
                         nil: String(localized: "Follow default"),
                         true: String(localized: "On"),
                         false: String(localized: "Off"),
@@ -397,52 +395,52 @@ struct GeneralSettings: View {
                 }
                 SettingsActionRow {
                     Button("Reset") {
-                        Defaults[.displayStyleOverrides].removeValue(forKey: name)
-                        Defaults[.alwaysShowOverrides].removeValue(forKey: name)
+                        Defaults[.displayStyleOverridesByUUID].removeValue(forKey: key)
+                        Defaults[.alwaysShowOverridesByUUID].removeValue(forKey: key)
                         NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
                     }
                     .disabled(
-                        displayStyleOverrides[name] == nil
-                            && Defaults[.alwaysShowOverrides][name] == nil
+                        displayStyleOverrides[key] == nil
+                            && alwaysShowOverrides[key] == nil
                     )
                 }
             } header: {
                 HStack(spacing: 6) {
-                    SettingsSectionHeader(name)
+                    SettingsSectionHeader(display.title)
                     if display.isBuiltIn {
                         customBadge(text: String(localized: "Built-in"))
                     }
                 }
             } footer: {
-                if display.name == displays.last?.name {
+                if display.key == displays.last?.key {
                     SettingsFooter("Displays without their own setting follow the defaults above. Built-in displays with a notch always use the notch shape and aren't listed.")
                 }
             }
         }
     }
 
-    private func displayStyleBinding(for name: String) -> Binding<ExternalDisplayStyle?> {
+    private func displayStyleBinding(for key: String) -> Binding<ExternalDisplayStyle?> {
         Binding(
-            get: { Defaults[.displayStyleOverrides][name] },
+            get: { Defaults[.displayStyleOverridesByUUID][key] },
             set: { newValue in
                 if let newValue {
-                    Defaults[.displayStyleOverrides][name] = newValue
+                    Defaults[.displayStyleOverridesByUUID][key] = newValue
                 } else {
-                    Defaults[.displayStyleOverrides].removeValue(forKey: name)
+                    Defaults[.displayStyleOverridesByUUID].removeValue(forKey: key)
                 }
                 NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
             }
         )
     }
 
-    private func alwaysShowBinding(for name: String) -> Binding<Bool?> {
+    private func alwaysShowBinding(for key: String) -> Binding<Bool?> {
         Binding(
-            get: { Defaults[.alwaysShowOverrides][name] },
+            get: { Defaults[.alwaysShowOverridesByUUID][key] },
             set: { newValue in
                 if let newValue {
-                    Defaults[.alwaysShowOverrides][name] = newValue
+                    Defaults[.alwaysShowOverridesByUUID][key] = newValue
                 } else {
-                    Defaults[.alwaysShowOverrides].removeValue(forKey: name)
+                    Defaults[.alwaysShowOverridesByUUID].removeValue(forKey: key)
                 }
                 // Changes the closed-notch offset, so the window geometry needs re-evaluating.
                 NotificationCenter.default.post(name: Notification.Name.notchHeightChanged, object: nil)
@@ -458,8 +456,9 @@ extension GeneralSettings {
     static func snapshotPerDisplayRows() -> AnyView {
         AnyView(SettingsPage {
             GeneralSettings().perDisplayOverrideSections([
-                (name: "Studio Display (made up)", isBuiltIn: false),
-                (name: "Built-in Display (made up)", isBuiltIn: true),
+                (key: "example-studio", title: "Studio Display (made up) (1)", isBuiltIn: false),
+                (key: "example-studio-2", title: "Studio Display (made up) (2)", isBuiltIn: false),
+                (key: "example-built-in", title: "Built-in Display (made up)", isBuiltIn: true),
             ])
         })
     }

@@ -1400,6 +1400,17 @@ well as their metrics (`canSkipRefresh`). A battery HUD that is up while the not
 (`hudTargetDisplay`) when `selectedScreenID` changes. Guards: three fixture tests in `DisplayIdentityTests` and three
 source pins in `DisplayIdentityRulesTests`.
 
+The per-display overrides are keyed by UUID as well (PR #80 review, the linked-issue check). Brain › General listed
+one group per *name*, so two identical monitors shared one style and one "Always show". They now live in
+`displayStyleOverridesByUUID` and `alwaysShowOverridesByUUID`, one group per display. The name-keyed dictionaries are
+read only by `DisplayPlacementRuntime.carryOverNameKeyedOverrides`, which runs at launch and on every display change
+and gives each connected display its name's value once (`displayOverridesCarriedUUIDs`), so a Reset afterwards
+sticks and a monitor plugged in later still takes its override. Nothing writes the name-keyed dictionaries any more,
+so a downgrade finds the overrides set before this version. Guards: three fixture tests and a source rule that
+rejects any other read or write of the name-keyed keys. The music control window also refreshes on `vm.screenID`: its
+refresh is driven from `ContentView`, and a move to an equal-sized display changed nothing it watched. A source pin
+holds that handler.
+
 ---
 
 ## 18. Another app's click never opens the notch

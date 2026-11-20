@@ -4,6 +4,22 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-20 - One override group for each of two identical monitors
+- **Developer label:** CodeRabbit's linked-issue check on #80, answered "Do it in #80", and its two notes on the fixes
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the per-display overrides on #80
+- **Changes:**
+  - The per-display style and "Always show" overrides are stored by display UUID (`displayStyleOverridesByUUID`,
+    `alwaysShowOverridesByUUID`). Brain › General lists one group per display, titled like the Display picker, so two
+    identical monitors no longer share one.
+  - `DisplayPlacementRuntime.carryOverNameKeyedOverrides` gives each connected display its name-keyed value once, at
+    launch and on a display change, and records it in `displayOverridesCarriedUUIDs`, so a Reset sticks and a
+    monitor plugged in later still takes its override. The name-keyed dictionaries are no longer written.
+  - The music control window refreshes when the notch's view model changes display (`vm.screenID`), as the timer's
+    already did through its sync key; a move to an equal-sized display had left it behind.
+  - OpenSpec task 3.3 names the pinned validate command, with telemetry off.
+  - Tests: three fixture tests in `DisplayIdentityTests`, a source rule and a music-refresh pin in
+    `DisplayIdentityRulesTests`; the `display-placement` spec gains a requirement; REGRESSIONS entry 17 records it.
+
 ### 2026-11-19 - What follows the notch follows its display, after the #80 review
 - **Developer label:** CodeRabbit's four notes on #80, answered "Fix them first"
 - **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the review fixes on #80

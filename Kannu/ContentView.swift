@@ -113,8 +113,8 @@ struct ContentView: View {
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
     // Observed so SwiftUI invalidates when a per-display override changes. The resolvers in
     // matters.swift read Defaults directly, which is not an observable dependency on its own.
-    @Default(.displayStyleOverrides) var displayStyleOverrides
-    @Default(.alwaysShowOverrides) var alwaysShowOverrides
+    @Default(.displayStyleOverridesByUUID) var displayStyleOverrides
+    @Default(.alwaysShowOverridesByUUID) var alwaysShowOverrides
     
     // Battery settings reactivity
     @Default(.showPowerStatusNotifications) var showPowerStatusNotifications
@@ -427,10 +427,10 @@ struct ContentView: View {
         NSScreen.withDisplayID(currentScreenID)
     }
 
-    /// The per-display overrides are still keyed by name (`alwaysShowOverrides`), so the name is
-    /// read from this view's own display, never used to find one.
-    private var currentScreenName: String? {
-        currentScreen?.localizedName
+    /// The key of this view's display in the per-display overrides: its UUID, which two identical
+    /// monitors do not share.
+    private var currentScreenOverrideKey: String? {
+        DisplayPlacementRuntime.overrideKey(for: currentScreenID)
     }
 
     /// Whether the current screen lacks a physical notch.
@@ -495,7 +495,7 @@ struct ContentView: View {
     /// Whether hide-until-hover applies to *this* screen. Displays with a physical notch are
     /// never affected, so all the time-boxing below leaves them on their existing behaviour.
     private var hideUntilHoverAppliesHere: Bool {
-        let alwaysShow = currentScreenName.flatMap { alwaysShowOverrides[$0] } ?? alwaysShowOnNonNotchDisplays
+        let alwaysShow = currentScreenOverrideKey.flatMap { alwaysShowOverrides[$0] } ?? alwaysShowOnNonNotchDisplays
         return !alwaysShow && isNonNotchScreen
     }
 
@@ -1224,6 +1224,13 @@ struct ContentView: View {
                 }
             }
             .onChange(of: vm.effectiveClosedNotchHeight) { _, _ in
+                if shouldShowMusicControlWindow() {
+                    enqueueMusicControlWindowSync(forceRefresh: true)
+                }
+            }
+            // A move to an equal-sized display changes neither value above, so the window would stay
+            // on the old display until some later sync (PR #80 review). The timer's sync key has the id.
+            .onChange(of: vm.screenID) { _, _ in
                 if shouldShowMusicControlWindow() {
                     enqueueMusicControlWindowSync(forceRefresh: true)
                 }
