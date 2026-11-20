@@ -166,8 +166,6 @@ David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcom
 ## Review follow-ups left for later
 Each was answered on its PR. None is a 2.0 gate unless David makes it one.
 - **#42, first review:**
-  - "Open chat" shows on a session with no target (`AgentsOverview.swift:216`). Hiding it needs a per-session check
-    cached outside `body`.
   - The Timer Presets search result targets a row that isn't built while Timer is off (`SettingsView.swift:974`).
     This predates the PR. Fix: a Timer branch in `landingOnABuiltRow`.
   - Usage's card says "No reading yet" after a failed read. Whether the page shows provider errors and their

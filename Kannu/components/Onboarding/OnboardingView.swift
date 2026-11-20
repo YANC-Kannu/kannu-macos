@@ -137,6 +137,22 @@ struct OnboardingView: View {
         // the panel under every step and the title bar, and Brain's type, buttons and switches.
         .background(SettingsTheme.panel.ignoresSafeArea())
         .settingsDesignSystem()
+        // The window is ordered front once, as it opens, so after a trip to System Settings it could sit behind
+        // another app's window and look stuck. Kannu becoming active is the user's own return to it.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Self.bringWindowForward()
+        }
+    }
+
+    /// The window's identifier, as `AppDelegate.showOnboardingWindow` sets it.
+    static let windowIdentifier = "OnboardingWindow"
+
+    /// Orders onboarding's window to the front and makes it key, while it is on screen: a window closed at Finish
+    /// stays closed. Called only once Kannu is active. It never activates Kannu, so it cannot take the keyboard from
+    /// System Settings, and it raises no macOS dialog.
+    @MainActor
+    static func bringWindowForward() {
+        NSApp.windows.first { $0.identifier?.rawValue == windowIdentifier && $0.isVisible }?.makeKeyAndOrderFront(nil)
     }
 
     private func advance(to next: OnboardingStep) {
