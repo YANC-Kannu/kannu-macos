@@ -46,6 +46,14 @@ final class AgentClickThroughPolicyTests: XCTestCase {
         XCTAssertEqual(P.claude(hasDesktopRoute: true, liveProcess: false, host: .none, displayState: .inactive, canResume: true), .desktopRoute)
     }
 
+    func testAHeldQuestionWithoutAProcessOpensOnlyThroughItsDesktopRoute() {
+        // A question kept yellow after its process ended: with Desktop's id it opens that chat;
+        // without one the click is dead, which is why the monitor attaches the id (entry 7).
+        XCTAssertEqual(P.claude(hasDesktopRoute: true, liveProcess: false, host: .none, displayState: .awaitingInput, canResume: true), .desktopRoute)
+        XCTAssertEqual(P.claude(hasDesktopRoute: false, liveProcess: false, host: .none, displayState: .awaitingInput, canResume: true), .none,
+                       "never an import while the row is still lit")
+    }
+
     func testTerminalAndTmuxHostedSessionsGoToTheirTerminal() {
         XCTAssertEqual(P.claude(hasDesktopRoute: false, liveProcess: true, host: .app, displayState: .awaitingInput, canResume: true), .terminalHost)
         XCTAssertEqual(P.claude(hasDesktopRoute: false, liveProcess: true, host: .tmux, displayState: .inactive, canResume: true), .tmuxPane)

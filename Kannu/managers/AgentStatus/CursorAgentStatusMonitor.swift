@@ -421,6 +421,12 @@ final class CursorAgentStatusMonitor: ObservableObject {
             claudeBusyIDs: claudeWork.busyIDs,
             heldQuestionIDs: heldQuestionConversationIDs
         )
+        // A row whose process has ended has no passive session to borrow Desktop's chat id from,
+        // so its click would be dead (entry 7). It takes the id from the index here.
+        hookSessions = ClaudeDesktopSessionIndex.attachingDesktopRoutes(
+            toProcesslessSessions: hookSessions,
+            idMap: desktopSessionIDByCLISessionID
+        )
 
         let transcriptAnalysis: [String: TranscriptAnalysis]
         let transcriptSessions: [AgentSessionStatus]

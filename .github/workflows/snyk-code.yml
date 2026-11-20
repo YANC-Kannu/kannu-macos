@@ -1,0 +1,61 @@
+name: Snyk Code
+
+on:
+  push:
+    branches:
+      - main
+      - development
+  pull_request:
+    branches:
+      - main
+      - development
+
+permissions:
+  contents: read
+
+jobs:
+  snyk-code:
+    name: Snyk Code
+    runs-on: ubuntu-latest
+    # Fork PRs cannot use repository secrets (SNYK_TOKEN); skip rather than fail noisily.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+    steps:
+      - name: Note Missing Token
+        if: env.SNYK_TOKEN == ''
+        run: echo "::notice::SNYK_TOKEN is not set, so Snyk Code is skipped."
+
+      - name: Checkout Repository
+        if: env.SNYK_TOKEN != ''
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set Up Snyk CLI
+        if: env.SNYK_TOKEN != ''
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        with:
+          snyk-version: v1.1308.4
+
+      - name: Snyk Code Test
+        # Report-only: exit 1 means findings, which go to the Security tab below rather than failing the
+        # check. Any other non-zero exit is an error (auth, setup, Snyk Code off for the org) and fails it.
+        # Snyk's dependency scan is not run: it needs a Package.swift, and this Xcode project has none.
+        if: env.SNYK_TOKEN != ''
+        run: |
+          set +e
+          snyk code test --sarif-file-output=snyk-code.sarif
+          code=$?
+          set -e
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+
+      - name: Upload Results To Code Scanning
+        if: env.SNYK_TOKEN != '' && hashFiles('snyk-code.sarif') != ''
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code

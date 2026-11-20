@@ -571,6 +571,23 @@ the parent conversation's own wins whichever arrives first). Guards:
 `AgentTurnMetricsTests.testTheTurnRidesCarryingExtrasAsSelfThenSource`, the three v39
 `SubagentFoldTests`.
 
+**2026-11-19 addendum — a row that outlives its process still needs its locator.** Carrying a
+field across the seam only helps while there is a passive side to carry it from. `desktopSessionID`
+is set from a `~/.claude/sessions/<pid>.json` record, and that record goes when the process does.
+Since the held question (entry 12), a hook row stays yellow for up to 12 hours after its process
+ends, so it had no passive session, no id, and — yellow not being `.inactive` — no resume either:
+no hand cursor, a dead click, on the one row that is waiting for the user. Measured on the
+installed build: Desktop's index held the chat's record, and Kannu never looked. The monitor now
+calls `ClaudeDesktopSessionIndex.attachingDesktopRoutes(toProcesslessSessions:idMap:)` right after
+the reconcile: a Claude row with no `hostPID` and no id takes what the index resolves, the same
+dead-process rule the passive path has. A row with a live `hostPID` is never touched (entry 13).
+The occurrence-3 lesson again: the click was only ever tried on rows whose process was alive.
+Guards: `ClaudeDesktopSessionIndexTests.testARowWithoutAProcessTakesItsDesktopIDFromTheIndex`,
+`...testTheAttachLeavesEveryOtherRowAlone`, `...testTheMonitorAttachesAfterTheReconcileAndBeforeTheMerge`,
+and `AgentClickThroughPolicyTests.testAHeldQuestionWithoutAProcessOpensOnlyThroughItsDesktopRoute`.
+**Still true:** a state that keeps a row on the list after its process ends must say where that
+row's locators come from.
+
 ---
 
 ## 8. Never add a flag or env var to the usage spawn without proving a real fetch
@@ -2138,6 +2155,44 @@ their refusals.
 
 ---
 
+## 25. A pipe in the pre-commit hook is read to its end
+
+**Rule:** in `.githooks/pre-commit`, nothing that can stop reading early (`awk` with `exit`, `head`,
+`grep -q`, `grep -m`) reads from a pipe whose writer is another process. Read the file into a variable
+once and give the reader a here-string.
+
+**Broken twice**, both times by `set -euo pipefail` (line 2) meeting a reader that stops early:
+- **Before the 2026-10-07 import (`de46b5cc` carries the fix).** The CHANGELOG parser's awk exited at the
+  next `## [` heading while `printf` was still writing the ~78 KB changelog; printf took SIGPIPE and the hook
+  aborted with exit 141. The fix and its comment ("awk must NOT exit early here") covered that one site.
+- **2026-11-18, CI.** The body-parity check piped `committed` (`git show ":$1" || cat "$1"`) into an awk
+  that exits at the embedded script's closing `"""`, about 135 KB into the 175 KB installer. When awk won the
+  race, `git show` took SIGPIPE, the `|| cat` fallback wrote into the same closed pipe, and the hook exited 1
+  with only `cat: Kannu/managers/AgentStatus/AgentHookInstaller.swift: Broken pipe`. CI's "OpenSpec and hook"
+  job failed that way on `development` at 07:59Z and on #78 at 08:20Z (run 44266195882); both reruns passed,
+  and #78 merged red. On a Mac, 300 clean runs failed 1 time with SIGPIPE ignored (as on CI's runner) and 2
+  with it at its default (exit 141, silently).
+
+**Why it keeps happening.** The early exit is the natural way to write each reader, and the failure needs
+a file larger than the pipe buffer plus a scheduler that lets the reader finish first. Files grow past
+64 KB long after the line is written, and the failure then shows up as a rare red CI run that a rerun
+clears. The first fix was local to its line, so the next writer of a similar line had nothing to trip on.
+`|| true`, which five marker reads (`grep -o | head -1`) used, only hides it, along with any real failure.
+
+**Fix (2026-11-19).** The hook reads the installer, both mirrors and each documenting file from the index
+once, into variables (`installer_text`, `mirror_text`, `usage_mirror_text`, `doc_text`), and every awk,
+sed and grep runs on a here-string, which has no writer to cut off. `first_match` (bash `=~`) replaces
+`grep -o | head -1 || true`. What is read, the index and the working copy only for a file not in it, is
+unchanged. After the fix: 0 of 300 clean runs failed either way.
+
+**Guard.** `KannuTests/PreCommitHookPipeTests.testTheHookNeverCutsOffAWriter` runs the hook on a throwaway
+repository holding the real installer, mirrors and documents, with SIGPIPE ignored and a `git` shim on
+`PATH` that makes `git show` write in 4 KB chunks with a 2 ms pause, so every early reader loses the race
+every time. The unfixed hook failed 20 of 20 such runs. `testTheShimMakesAnEarlyReaderFail` keeps the shim
+honest. It covers `git show`, the only large writer in the hook; a new large writer needs the same shim.
+
+---
+
 ## Danger zones
 
 Commit counts across all branches (`--follow`, so pre-rename history counts):
@@ -2155,6 +2210,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
 | `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screenID` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). The screen is a `CGDirectDisplayID`, never a name: two identical monitors share one (entry 17's 2026-11-18 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
+| `.githooks/pre-commit` | — | Runs under `set -euo pipefail`, locally and in CI's "OpenSpec and hook" job. A reader that stops early on a pipe from `git show` aborts it at random with a bare "Broken pipe" (entry 25). Read the file into a variable, use a here-string, and never answer it with `\|\| true`. |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
 | `Kannu/MediaControllers/` | — | Every controller owns something outside itself — a `mediaremote-adapter.pl` child, a timer, a WebSocket — and the protocol no longer defaults the teardown. Read entry 19 before adding a controller or changing how one is released; a missing `stop()` leaks one helper or socket per Music Source change and is invisible from inside the app. |
 | `ContentView.swift` (`handleHover`, `closeWhenPointerLeaves`, the popover and recheck closes) | — | When the open notch closes. Five views patched one stale-hover close each with their own hold-open token, and the notch still shut under a still pointer once a popover or menu had taken the hover (entry 23). Close through `closeWhenPointerLeaves`; never on `!isHovering`. |
