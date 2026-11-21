@@ -120,7 +120,14 @@ final class DisplayIdentityRulesTests: XCTestCase {
         let content = try XCTUnwrap(sources["Kannu/ContentView.swift"])
         let handler = try XCTUnwrap(content.range(of: ".onChange(of: vm.screenID) { _, _ in"),
                                     "the music control window does not refresh when the notch changes display")
-        XCTAssertTrue(content[handler.upperBound...].prefix(200).contains("enqueueMusicControlWindowSync(forceRefresh: true)"))
+        let body = content[handler.upperBound...].prefix(240)
+        XCTAssertTrue(body.contains("enqueueMusicControlWindowSync(forceRefresh: true)"))
+        // The new display may hide the island where the old one showed it; the reveal poll must follow,
+        // outside the music guard (PR #80 review).
+        let sync = try XCTUnwrap(body.range(of: "syncHiddenEdgeHoverPolling()"),
+                                 "a display change does not re-sync the hidden-edge poll")
+        let guardLine = try XCTUnwrap(body.range(of: "if shouldShowMusicControlWindow()"))
+        XCTAssertLessThan(sync.lowerBound, guardLine.lowerBound, "the poll sync sits inside the music guard")
     }
 
     /// A battery HUD that is up while the notch moves follows it.

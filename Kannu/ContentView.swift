@@ -1228,9 +1228,13 @@ struct ContentView: View {
                     enqueueMusicControlWindowSync(forceRefresh: true)
                 }
             }
-            // A move to an equal-sized display changes neither value above, so the window would stay
-            // on the old display until some later sync (PR #80 review). The timer's sync key has the id.
+            // A move to another display changes whether hide-until-hover applies here (that display has
+            // its own "Always show" override, and may have a notch), so the poll that reveals a hidden
+            // island must follow, music window or not. A move to an equal-sized display also changes
+            // neither value above, so the music window would stay on the old display until some later
+            // sync. The timer's sync key has the id. Both from PR #80's review.
             .onChange(of: vm.screenID) { _, _ in
+                syncHiddenEdgeHoverPolling()
                 if shouldShowMusicControlWindow() {
                     enqueueMusicControlWindowSync(forceRefresh: true)
                 }

@@ -4,6 +4,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-21 - A hidden island can be hovered back after the notch changes display
+- **Developer label:** CodeRabbit's note on #80's ContentView display-change handler, answered "Yes, fix #80"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the last review note on #80
+- **Changes:**
+  - `ContentView`'s `vm.screenID` handler re-syncs the hidden-edge poll before its music check. With "Always show" on
+    for one of two identical monitors and off for the other, a move between them hid the island with no poll
+    running to reveal it, so the top edge could not bring it back.
+  - The music-refresh pin in `DisplayIdentityRulesTests` also holds the poll sync, outside the music guard;
+    REGRESSIONS entry 17 records it.
+
 ### 2026-11-20 - Pin that the hero's lookup reaches its state, and say the "Open chat" label is the last lookup's
 - **Developer label:** "Fix CodeRabbit's findings on PR #83"
 - **Agent label:** Claude Code (Fable 5.2) — quick-three side session, Auto-fix

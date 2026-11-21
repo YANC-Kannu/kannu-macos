@@ -1408,8 +1408,10 @@ and gives each connected display its name's value once (`displayOverridesCarried
 sticks and a monitor plugged in later still takes its override. Nothing writes the name-keyed dictionaries any more,
 so a downgrade finds the overrides set before this version. Guards: three fixture tests and a source rule that
 rejects any other read or write of the name-keyed keys. The music control window also refreshes on `vm.screenID`: its
-refresh is driven from `ContentView`, and a move to an equal-sized display changed nothing it watched. A source pin
-holds that handler.
+refresh is driven from `ContentView`, and a move to an equal-sized display changed nothing it watched. The same
+handler re-syncs the hidden-edge poll before its music check: with "Always show" on for one of two identical monitors
+and off for the other, a move between them hid the island with no poll running to reveal it. A source pin holds both,
+and holds the sync outside the music guard.
 
 ---
 
