@@ -268,7 +268,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         }
         // The key is named twice: once to see that it is set, once on its way into sign_update's standard input.
         let allowed = [
-            "if [ -z \"${SPARKLE_EDDSA_PRIVATE_KEY:-}\" ]; then",
+            "if [[ -z \"${SPARKLE_EDDSA_PRIVATE_KEY:-}\" ]]; then",
             "printf '%s' \"$SPARKLE_EDDSA_PRIVATE_KEY\" | \"$SPARKLE_BIN_DIR/sign_update\" --ed-key-file - -p",
         ]
         let uses = script.components(separatedBy: "\n")
@@ -309,7 +309,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
             ("git clone --quiet", "git checkout \"$BRANCH\" #", "the script works in the caller's own checkout"),
             ("xmllint --noout", "true", "the script publishes an appcast it has not checked"),
             ("sparkle:edSignature=", "sparkle:version", "the script publishes an appcast it has not checked"),
-            ("if [ \"$DRY_RUN\" = true ]; then", "if false; then", "a dry run would still push"),
+            ("if [[ \"$DRY_RUN\" = true ]]; then", "if false; then", "a dry run would still push"),
         ] {
             let planted = script.replacingOccurrences(of: target, with: replacement)
             XCTAssertNotEqual(planted, script, "the plant did not take: \(target)")
@@ -340,7 +340,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
             || !script.contains("<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>") {
             problems.append("the script publishes an appcast it has not checked")
         }
-        if let stop = script.range(of: "if [ \"$DRY_RUN\" = true ]; then"), let push = script.range(of: " push origin "),
+        if let stop = script.range(of: "if [[ \"$DRY_RUN\" = true ]]; then"), let push = script.range(of: " push origin "),
            stop.lowerBound < push.lowerBound {
             // The dry run stops before the push.
         } else {

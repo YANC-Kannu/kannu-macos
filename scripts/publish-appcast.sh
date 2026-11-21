@@ -30,12 +30,12 @@ for argument in "$@"; do
     --dry-run) DRY_RUN=true ;;
     -*) usage ;;
     *)
-      if [ -n "$TAG" ]; then usage; fi
+      if [[ -n "$TAG" ]]; then usage; fi
       TAG="$argument"
       ;;
   esac
 done
-if [ -z "$TAG" ]; then usage; fi
+if [[ -z "$TAG" ]]; then usage; fi
 
 REPO="YANC-Kannu/kannu-macos"
 BRANCH="main"
@@ -49,8 +49,8 @@ if [[ "$VERSION" == *-* ]]; then
 fi
 
 REHEARSAL=false
-if [ -n "${KANNU_APPCAST_FILE:-}" ] || [ -n "${KANNU_FEED_REMOTE:-}" ]; then
-  if [ -z "${KANNU_APPCAST_FILE:-}" ] || [ -z "${KANNU_FEED_REMOTE:-}" ]; then
+if [[ -n "${KANNU_APPCAST_FILE:-}" ]] || [[ -n "${KANNU_FEED_REMOTE:-}" ]]; then
+  if [[ -z "${KANNU_APPCAST_FILE:-}" ]] || [[ -z "${KANNU_FEED_REMOTE:-}" ]]; then
     echo "A rehearsal needs both KANNU_APPCAST_FILE and KANNU_FEED_REMOTE." >&2
     exit 1
   fi
@@ -62,7 +62,7 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 NEW_APPCAST="$WORK_DIR/appcast.xml"
 
-if [ "$REHEARSAL" = true ]; then
+if [[ "$REHEARSAL" = true ]]; then
   echo "Rehearsal: taking the appcast from a file, and pushing to $REMOTE_URL."
   cp "$KANNU_APPCAST_FILE" "$NEW_APPCAST"
 else
@@ -85,7 +85,7 @@ ITEM="$(awk -v marker="<sparkle:shortVersionString>${VERSION}</sparkle:shortVers
   inside { item = item $0 "\n" }
   /<\/item>/ { if (inside && index(item, marker)) { printf "%s", item; exit } inside = 0 }
 ' "$NEW_APPCAST")"
-if [ -z "$ITEM" ]; then
+if [[ -z "$ITEM" ]]; then
   echo "The appcast lists no item for ${VERSION}." >&2
   exit 1
 fi
@@ -95,7 +95,7 @@ if ! grep -q 'sparkle:edSignature=' <<<"$ITEM"; then
 fi
 
 ENCLOSURE_URL="$(sed -n 's/.*<enclosure[^>]* url="\([^"]*\)".*/\1/p' <<<"$ITEM" | head -1)"
-if [ "$REHEARSAL" != true ]; then
+if [[ "$REHEARSAL" != true ]]; then
   DOWNLOAD_PREFIX="https://github.com/${REPO}/releases/download/${TAG}/"
   if [[ "$ENCLOSURE_URL" != "$DOWNLOAD_PREFIX"* ]]; then
     echo "The item's download is not on the $TAG release: ${ENCLOSURE_URL:-none}" >&2
@@ -111,11 +111,11 @@ echo "Cloning $BRANCH into a scratch folder..."
 git clone --quiet --depth 1 --branch "$BRANCH" "$REMOTE_URL" "$WORK_DIR/feed"
 
 # Every build the feed already lists must still be listed: the new file replaces the old one whole.
-if [ -f "$WORK_DIR/feed/$FEED_PATH" ]; then
+if [[ -f "$WORK_DIR/feed/$FEED_PATH" ]]; then
   LOST="$(comm -23 \
     <(grep -o '<sparkle:version>[^<]*</sparkle:version>' "$WORK_DIR/feed/$FEED_PATH" | sort -u) \
     <(grep -o '<sparkle:version>[^<]*</sparkle:version>' "$NEW_APPCAST" | sort -u))"
-  if [ -n "$LOST" ]; then
+  if [[ -n "$LOST" ]]; then
     echo "The new appcast drops builds the feed lists today:" >&2
     echo "$LOST" >&2
     exit 1
@@ -131,13 +131,13 @@ if git -C "$WORK_DIR/feed" diff --staged --quiet; then
 fi
 git -C "$WORK_DIR/feed" --no-pager diff --staged --stat
 
-if [ "$DRY_RUN" = true ]; then
+if [[ "$DRY_RUN" = true ]]; then
   echo "Dry run: every check passed, and nothing was pushed."
   exit 0
 fi
 
 # The commit is public, so it carries a GitHub no-reply address, never whatever this Mac's git is set to.
-if [ "$REHEARSAL" = true ]; then
+if [[ "$REHEARSAL" = true ]]; then
   AUTHOR_NAME="Dana Example"
   AUTHOR_EMAIL="dana@example.com"
 else
@@ -149,7 +149,7 @@ git -C "$WORK_DIR/feed" -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL
 git -C "$WORK_DIR/feed" push origin "HEAD:${BRANCH}"
 echo "Published: $FEED_PATH on $BRANCH now lists ${VERSION}."
 
-if [ "$REHEARSAL" != true ]; then
+if [[ "$REHEARSAL" != true ]]; then
   # Read through the API, which is not cached. The raw URL installs read can lag by a few minutes.
   if gh api "repos/${REPO}/contents/${FEED_PATH}?ref=${BRANCH}" -H "Accept: application/vnd.github.raw" \
     | grep -q "<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"; then

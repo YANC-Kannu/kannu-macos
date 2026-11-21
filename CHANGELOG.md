@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-21 - Write the two new release scripts' tests with double brackets
+- **Developer label:** SonarCloud's 18 new issues on the Sparkle key check and the appcast publish script
+- **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after SonarCloud's comment
+- **Changes:**
+  - SonarCloud flagged every `[ … ]` test in `scripts/check-sparkle-key.sh` and `scripts/publish-appcast.sh`
+    (rule `shell:S7688`, 18 times). Both scripts run under bash, so each is now `[[ … ]]`. Nothing they decide
+    changes. The older release scripts keep their single brackets: they are not part of this change.
+  - `ReleaseWorkflowRulesTests` quotes three of those lines (the secret's presence test and the dry-run stop), so
+    its strings follow.
+  - Both scripts were run again locally: the key check with a throwaway key (match, mismatch, no secret), the
+    publish script against a scratch repository (dry run, each refusal).
+
 ### 2026-11-21 - Prove the Sparkle key before the build, and publish the appcast by an admin's hand
 - **Developer label:** "are we sure its not any sparkle issue", then "can you do that and fix this"
 - **Agent label:** Claude Code (Fable 5.2) — release side session, after the third refused `v2.0.0-beta.2` run

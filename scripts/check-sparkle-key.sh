@@ -9,7 +9,7 @@ set -euo pipefail
 # The release workflow only ever saw that the secret was not empty. A key that does not pair would
 # first show on a final release, as every installed Kannu refusing the update.
 
-if [ "$#" -lt 1 ]; then
+if [[ "$#" -lt 1 ]]; then
   echo "Usage: $0 <sparkle-bin-dir> [path-to-Info.plist]" >&2
   exit 1
 fi
@@ -17,17 +17,17 @@ fi
 SPARKLE_BIN_DIR="$1"
 INFO_PLIST="${2:-Kannu/Info.plist}"
 
-if [ -z "${SPARKLE_EDDSA_PRIVATE_KEY:-}" ]; then
+if [[ -z "${SPARKLE_EDDSA_PRIVATE_KEY:-}" ]]; then
   echo "Required environment variable SPARKLE_EDDSA_PRIVATE_KEY is not set." >&2
   exit 1
 fi
-if [ ! -x "$SPARKLE_BIN_DIR/sign_update" ]; then
+if [[ ! -x "$SPARKLE_BIN_DIR/sign_update" ]]; then
   echo "Sparkle's sign_update was not found in $SPARKLE_BIN_DIR." >&2
   exit 1
 fi
 
 PUBLIC_KEY="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$INFO_PLIST" 2>/dev/null || true)"
-if [ -z "$PUBLIC_KEY" ]; then
+if [[ -z "$PUBLIC_KEY" ]]; then
   echo "::error::$INFO_PLIST has no SUPublicEDKey, so no install could verify an update."
   exit 1
 fi
