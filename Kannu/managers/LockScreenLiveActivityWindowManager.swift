@@ -49,7 +49,7 @@ class LockScreenLiveActivityWindowManager {
 
     private func isDynamicIslandModeForScreen(_ screen: NSScreen?) -> Bool {
         guard let screen else { return false }
-        return shouldUseDynamicIslandMode(for: screen.localizedName)
+        return shouldUseDynamicIslandMode(for: screen.displayID)
     }
 
     private init() {
@@ -125,7 +125,7 @@ class LockScreenLiveActivityWindowManager {
 
         var notchSize = viewModel.closedNotchSize
         if notchSize.width <= 0 || notchSize.height <= 0 {
-            notchSize = getClosedNotchSize(screen: screen.localizedName)
+            notchSize = getClosedNotchSize(screen: screen.displayID)
         }
 
         return (notchSize, screen)

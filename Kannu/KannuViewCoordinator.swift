@@ -83,7 +83,8 @@ struct sneakPeek {
     var subtitle: String = ""
     var accentColor: Color?
     var styleOverride: SneakPeekStyle? = nil
-    var targetScreenName: String? = nil
+    /// The display the peek belongs on, by id; nil shows it everywhere.
+    var targetScreenID: CGDirectDisplayID? = nil
 }
 
 enum BrowserType {
@@ -157,20 +158,14 @@ class KannuViewCoordinator: ObservableObject {
     
     @AppStorage("hudReplacement") var hudReplacement: Bool = true
     
-    @AppStorage("preferred_screen_name") var preferredScreen = NSScreen.main?.localizedName ?? "Unknown" {
-        didSet {
-            selectedScreen = preferredScreen
-            NotificationCenter.default.post(name: Notification.Name.selectedScreenChanged, object: nil)
-        }
-    }
-    
-    @Published var selectedScreen: String = NSScreen.main?.localizedName ?? "Unknown"
+    /// The display the single notch window is on, by id (`adjustWindowPosition` writes it). The
+    /// chosen display is `Defaults[.preferredScreenUUID]`; this is where Kannu actually is.
+    @Published var selectedScreenID: CGDirectDisplayID? = NSScreen.main?.displayID
 
     @Published var optionKeyPressed: Bool = true
     private let extensionNotchExperienceManager = ExtensionNotchExperienceManager.shared
     
     private init() {
-        selectedScreen = preferredScreen
         Defaults.publisher(.timerDisplayMode)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] change in
@@ -384,7 +379,7 @@ class KannuViewCoordinator: ObservableObject {
             updated.subtitle = subtitle
             updated.accentColor = accentColor
             updated.styleOverride = styleOverride
-            updated.targetScreenName = targetScreen?.localizedName
+            updated.targetScreenID = targetScreen?.displayID
             withAnimation(.smooth(duration: 0.3)) {
                 self.sneakPeek = updated
             }

@@ -64,6 +64,16 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Docs: `scripts/RELEASE.md` (Release day, beta tags, "When the Sparkle key check fails"); the `release-2-0`
     change's release spec, tasks 7.2a to 7.3a, design risks and run log.
 
+### 2026-11-21 - A hidden island can be hovered back after the notch changes display
+- **Developer label:** CodeRabbit's note on #80's ContentView display-change handler, answered "Yes, fix #80"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the last review note on #80
+- **Changes:**
+  - `ContentView`'s `vm.screenID` handler re-syncs the hidden-edge poll before its music check. With "Always show" on
+    for one of two identical monitors and off for the other, a move between them hid the island with no poll
+    running to reveal it, so the top edge could not bring it back.
+  - The music-refresh pin in `DisplayIdentityRulesTests` also holds the poll sync, outside the music guard;
+    REGRESSIONS entry 17 records it.
+
 ### 2026-11-20 - Pin that the hero's lookup reaches its state, and say the "Open chat" label is the last lookup's
 - **Developer label:** "Fix CodeRabbit's findings on PR #83"
 - **Agent label:** Claude Code (Fable 5.2) — quick-three side session, Auto-fix
@@ -116,6 +126,38 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Docs: `docs/SETTINGS.md` (the Agents hero, "Live data", "Onboarding"); the done follow-up leaves
     `openspec/changes/release-2-0/handoff.md`.
 
+### 2026-11-20 - One override group for each of two identical monitors
+- **Developer label:** CodeRabbit's linked-issue check on #80, answered "Do it in #80", and its two notes on the fixes
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the per-display overrides on #80
+- **Changes:**
+  - The per-display style and "Always show" overrides are stored by display UUID (`displayStyleOverridesByUUID`,
+    `alwaysShowOverridesByUUID`). Brain › General lists one group per display, titled like the Display picker, so two
+    identical monitors no longer share one.
+  - `DisplayPlacementRuntime.carryOverNameKeyedOverrides` gives each connected display its name-keyed value once, at
+    launch and on a display change, and records it in `displayOverridesCarriedUUIDs`, so a Reset sticks and a
+    monitor plugged in later still takes its override. The name-keyed dictionaries are no longer written.
+  - The music control window refreshes when the notch's view model changes display (`vm.screenID`), as the timer's
+    already did through its sync key; a move to an equal-sized display had left it behind.
+  - OpenSpec task 3.3 names the pinned validate command, with telemetry off.
+  - Tests: three fixture tests in `DisplayIdentityTests`, a source rule and a music-refresh pin in
+    `DisplayIdentityRulesTests`; the `display-placement` spec gains a requirement; REGRESSIONS entry 17 records it.
+
+### 2026-11-19 - What follows the notch follows its display, after the #80 review
+- **Developer label:** CodeRabbit's four notes on #80, answered "Fix them first"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the review fixes on #80
+- **Changes:**
+  - The screen-change check compares display id-to-frame pairs (`DisplayPlacementResolver.layoutChanged`), so two
+    equal-sized displays that swap places re-place the notch. The snapshot is `ScreenFacts` values.
+  - The timer and music control windows skip a refresh only when their display is unchanged as well as their
+    metrics (`canSkipRefresh`); a notch that moved to an equal-sized display left them behind.
+  - A battery HUD that is up while the notch moves re-resolves its target (`hudTargetDisplay`) when
+    `selectedScreenID` changes, so it no longer stays hidden on the new display until its timer ends. It stays nil
+    with one window per display.
+  - The `display-placement` spec limits the name rule to selecting and looking up screens, and names the
+    name-keyed per-display overrides as the exception this change leaves.
+  - Tests: three fixture tests in `DisplayIdentityTests` and three source pins in `DisplayIdentityRulesTests`;
+    REGRESSIONS entry 17's 2026-11-18 addendum records them.
+
 ### 2026-11-19 - A question that outlived its process opens its chat again
 - **Developer label:** "click through still not working", then "the first row that shows as paused is not opening"
 - **Agent label:** Claude Code (Fable 5.2) — main session, measured on the installed 2.0.0 (13) before the change
@@ -164,6 +206,32 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
   - Snyk Open Source is not added: Snyk scans SwiftPM only through its CLI and only with a `Package.swift`, which
     this Xcode project does not have.
   - `openspec/project.md` lists the workflow and Snyk Code under External Dependencies.
+### 2026-11-18 - The notch finds its display by identity, so two identical monitors stay two
+- **Developer label:** Issue #24, "Use display identity for notch screen selection"
+- **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the #24 fix deferred from PR #11's review
+- **Changes:**
+  - Screens are found by `CGDirectDisplayID`, never by `localizedName`, which two identical monitors share:
+    `vm.screen` (a name) is `vm.screenID`; `coordinator.selectedScreen` is `selectedScreenID`; the sizing helpers
+    in `matters.swift`, `ContentView`'s per-screen checks, the battery HUD and sneak-peek targets, the fullscreen
+    verdict (`fullscreenStatus` and `ClosedNotchVisibility`), the music and timer control windows, the Do Not
+    Disturb activity and the lock-screen activity all take or match an id. New `NSScreen.displayID`,
+    `NSScreen.withDisplayID(_:)` and `NSScreen.displayUUID(for:)`.
+  - The open notch's pointer check measures its own display's frame and reads only that display's attached
+    windows. On the second of two identical monitors it measured the first, so the notch closed under the pointer.
+    `NotchInteractionGeometry.openNotchRect` is unchanged.
+  - "A display I choose" stores the display's UUID (`preferredScreenUUID`), which survives the reconnects and
+    reboots a display id may not. The old `preferred_screen_name` carries over: a connected match stores its UUID,
+    an unmatched one falls back to the main display and is kept for a later look. Picking a display also writes
+    the name, for a downgrade. Brain › General › Display lists every display, numbering shared names.
+  - Reconnects: the screen-change check compares display ids (copied as values), so a display back under a new id
+    rebuilds its window, and the choice follows the UUID to the new id.
+  - Tests: `DisplayIdentityTests` (two same-named displays, each display's own pointer frame, the per-display
+    fullscreen verdict, the migration, a reconnect), `DisplayIdentityRulesTests` (no screen found by name in the
+    app's sources, against planted offenders; it flags 19 sites on the tree before this change). The launch-seed
+    and fullscreen-filter pins and `ClosedNotchVisibilityTests` follow the new names.
+  - Docs: the `fix-display-identity` OpenSpec change; REGRESSIONS entry 17 and 23 addenda and the danger-zones row.
+  - Out of scope: the per-display style and "Always show" overrides stay keyed by name, the follow-up
+    GeneralSettings already records.
 
 ### 2026-11-18 - The onboarding light step reads true on displays without a notch
 - **Developer label:** CodeRabbit's second note on #77: "Make the onboarding light copy accurate on displays without a notch"

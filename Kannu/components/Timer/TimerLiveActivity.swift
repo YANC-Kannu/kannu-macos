@@ -77,7 +77,7 @@ struct TimerLiveActivity: View {
         var isOvertime: Bool
         var isPaused: Bool
         var closedNotchSize: CGSize
-        var screenName: String?
+        var screenID: CGDirectDisplayID?
         var hideOnClosed: Bool
         var controlWindowEnabled: Bool
         var showsLabel: Bool
@@ -199,7 +199,7 @@ struct TimerLiveActivity: View {
             isOvertime: timerManager.isOvertime,
             isPaused: timerManager.isPaused,
             closedNotchSize: vm.closedNotchSize,
-            screenName: vm.screen,
+            screenID: vm.screenID,
             hideOnClosed: vm.hideOnClosed,
             controlWindowEnabled: controlWindowEnabled,
             showsLabel: showsLabel,
