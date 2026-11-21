@@ -36,7 +36,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         XCTAssertEqual(Self.problems(in: unguarded), [
             "Export Sparkle Update Assets runs for a pre-release",
             "Upload Sparkle Artifact runs for a pre-release",
-            "Update appcast on main runs for a pre-release",
+            "Attach appcast to the release runs for a pre-release",
         ])
         let unflagged = workflow
             .replacingOccurrences(of: "          prerelease: ${{ env.RELEASE_PRERELEASE == 'true' }}\n", with: "")
@@ -199,6 +199,220 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         return problems
     }
 
+    // MARK: - Sparkle is proven before the build
+
+    /// Apple's refusal stopped both 2.0 betas at Notarize DMG, so no Sparkle step had ever run in this
+    /// repository, and a pre-release skips them anyway. Nothing had shown that the signing-key secret
+    /// pairs with `SUPublicEDKey` inside the app: the workflow only saw that it was not empty. A wrong
+    /// key would first show on the final tag, as every install refusing the update. The key is now
+    /// checked on every tag, and before Apple is asked, so a refused agreement cannot hide it.
+    func testTheSparkleKeyIsCheckedBeforeAnythingIsBuilt() throws {
+        let workflow = try Self.read(Self.workflowPath)
+        let script = try Self.read("scripts/check-sparkle-key.sh")
+        XCTAssertEqual(Self.sparkleKeyProblems(workflow: workflow, script: script), [])
+
+        let check = try XCTUnwrap(Self.step("Check Sparkle signing key", in: workflow))
+        let without = workflow.replacingOccurrences(of: check, with: "")
+        XCTAssertEqual(Self.sparkleKeyProblems(workflow: without, script: script), ["the workflow never checks the Sparkle key"])
+        // After Apple is asked, a refused agreement ends the run before the key is looked at.
+        let metal = "      - name: Download Metal Toolchain\n"
+        let late = without.replacingOccurrences(of: metal, with: check + metal)
+        XCTAssertNotEqual(late, without, "the plant did not take")
+        XCTAssertEqual(Self.sparkleKeyProblems(workflow: late, script: script), ["the Sparkle key is checked only after Apple is asked"])
+        let tools = try XCTUnwrap(Self.step("Download Sparkle Tools", in: workflow))
+        let apple = "      - name: Check Apple notary access\n"
+        let toolsLate = workflow.replacingOccurrences(of: tools, with: "").replacingOccurrences(of: apple, with: tools + apple)
+        XCTAssertNotEqual(toolsLate, workflow, "the plant did not take")
+        XCTAssertEqual(Self.sparkleKeyProblems(workflow: toolsLate, script: script), ["the Sparkle key is checked before its tools are downloaded"])
+        // A beta is the only tag that runs before the final one: skipping it there proves nothing in time.
+        let name = "      - name: Check Sparkle signing key\n"
+        let finalOnly = workflow.replacingOccurrences(of: name, with: name + "        if: env.RELEASE_PRERELEASE != 'true'\n")
+        XCTAssertEqual(Self.sparkleKeyProblems(workflow: finalOnly, script: script), ["a pre-release skips the Sparkle key check"])
+
+        // A key checked against itself always passes; the app's own public key is the one that matters.
+        for (target, replacement) in [("Print :SUPublicEDKey", "Print :CFBundleVersion"), ("key.isValidSignature(signature, for: data)", "true")] {
+            let planted = script.replacingOccurrences(of: target, with: replacement)
+            XCTAssertNotEqual(planted, script, "the plant did not take: \(target)")
+            XCTAssertEqual(Self.sparkleKeyProblems(workflow: workflow, script: planted),
+                           ["the check does not verify against the app's own public key"])
+        }
+        for (target, replacement) in [
+            ("set -euo pipefail\n", "set -euxo pipefail\n"),
+            ("echo \"Checking the Sparkle signing key...\"\n", "echo \"Checking the Sparkle signing key $SPARKLE_EDDSA_PRIVATE_KEY\"\n"),
+        ] {
+            let planted = script.replacingOccurrences(of: target, with: replacement)
+            XCTAssertNotEqual(planted, script, "the plant did not take: \(target)")
+            XCTAssertEqual(Self.sparkleKeyProblems(workflow: workflow, script: planted), ["the check could print the private key"])
+        }
+    }
+
+    static func sparkleKeyProblems(workflow: String, script: String) -> [String] {
+        var problems: [String] = []
+        if let call = workflow.range(of: "./scripts/check-sparkle-key.sh") {
+            let apple = workflow.range(of: "- name: Check Apple notary access")
+            if apple.map({ call.lowerBound > $0.lowerBound }) ?? true {
+                problems.append("the Sparkle key is checked only after Apple is asked")
+            }
+            let tools = workflow.range(of: "- name: Download Sparkle Tools")
+            if tools.map({ call.lowerBound < $0.lowerBound }) ?? true {
+                problems.append("the Sparkle key is checked before its tools are downloaded")
+            }
+            if step("Check Sparkle signing key", in: workflow)?.contains("        if: ") ?? true {
+                problems.append("a pre-release skips the Sparkle key check")
+            }
+        } else {
+            problems.append("the workflow never checks the Sparkle key")
+        }
+        if !script.contains("Print :SUPublicEDKey") || !script.contains("isValidSignature(") || script.contains("--verify") {
+            problems.append("the check does not verify against the app's own public key")
+        }
+        // The key is named twice: once to see that it is set, once on its way into sign_update's standard input.
+        let allowed = [
+            "if [ -z \"${SPARKLE_EDDSA_PRIVATE_KEY:-}\" ]; then",
+            "printf '%s' \"$SPARKLE_EDDSA_PRIVATE_KEY\" | \"$SPARKLE_BIN_DIR/sign_update\" --ed-key-file - -p",
+        ]
+        let uses = script.components(separatedBy: "\n")
+            .filter { $0.contains("$SPARKLE_EDDSA_PRIVATE_KEY") || $0.contains("${SPARKLE_EDDSA_PRIVATE_KEY") }
+        if uses.count != 2 || !uses.allSatisfy({ line in allowed.contains { line.contains($0) } })
+            || script.range(of: "set -[a-z]*x", options: .regularExpression) != nil || script.contains("xtrace") {
+            problems.append("the check could print the private key")
+        }
+        return problems
+    }
+
+    // MARK: - The appcast reaches main by an admin's hand
+
+    /// The workflow's last step committed the appcast to `main` as `github-actions[bot]`. The ruleset
+    /// on `main` lets only an admin update it, so on the first final tag that push would have been
+    /// refused: a release on GitHub, and a feed still offering 1.3.4. The job now attaches the signed
+    /// appcast to the release, and `scripts/publish-appcast.sh`, run by an admin, commits it.
+    func testTheWorkflowNeverPushesTheAppcastItself() throws {
+        let workflow = try Self.read(Self.workflowPath)
+        let script = try Self.read("scripts/publish-appcast.sh")
+        XCTAssertEqual(Self.appcastProblems(workflow: workflow, script: script), [])
+
+        // The old step back in place of the upload.
+        let upload = "          gh release upload \"$TAG\" Updates/appcast.xml --clobber --repo \"$GITHUB_REPOSITORY\"\n"
+        let pushed = workflow.replacingOccurrences(
+            of: upload, with: "          git commit -m \"Update appcast for ${TAG}\"\n          git push origin main\n")
+        XCTAssertNotEqual(pushed, workflow, "the plant did not take")
+        XCTAssertEqual(Self.appcastProblems(workflow: pushed, script: script), [
+            "the workflow pushes to a branch, which the ruleset on main refuses",
+            "the signed appcast is not attached to the release",
+        ])
+        let silent = workflow.replacingOccurrences(of: "./scripts/publish-appcast.sh ${TAG}", with: "the release guide")
+        XCTAssertNotEqual(silent, workflow, "the plant did not take")
+        XCTAssertEqual(Self.appcastProblems(workflow: silent, script: script), ["the run does not say which step is left"])
+
+        for (target, replacement, problem) in [
+            ("if [[ \"$VERSION\" == *-* ]]; then", "if false; then", "the script would publish a pre-release to the feed"),
+            ("git clone --quiet", "git checkout \"$BRANCH\" #", "the script works in the caller's own checkout"),
+            ("xmllint --noout", "true", "the script publishes an appcast it has not checked"),
+            ("sparkle:edSignature=", "sparkle:version", "the script publishes an appcast it has not checked"),
+            ("if [ \"$DRY_RUN\" = true ]; then", "if false; then", "a dry run would still push"),
+        ] {
+            let planted = script.replacingOccurrences(of: target, with: replacement)
+            XCTAssertNotEqual(planted, script, "the plant did not take: \(target)")
+            XCTAssertEqual(Self.appcastProblems(workflow: workflow, script: planted), [problem], "planted: \(target)")
+        }
+    }
+
+    static func appcastProblems(workflow: String, script: String) -> [String] {
+        var problems: [String] = []
+        if workflow.contains("git push") {
+            problems.append("the workflow pushes to a branch, which the ruleset on main refuses")
+        }
+        let attach = step("Attach appcast to the release", in: workflow) ?? ""
+        if !attach.contains("gh release upload \"$TAG\" Updates/appcast.xml") {
+            problems.append("the signed appcast is not attached to the release")
+        }
+        if !attach.contains("./scripts/publish-appcast.sh ${TAG}") {
+            problems.append("the run does not say which step is left")
+        }
+        if !script.contains("if [[ \"$VERSION\" == *-* ]]; then") {
+            problems.append("the script would publish a pre-release to the feed")
+        }
+        // A fresh clone in a scratch folder: the caller's checkout and its worktrees keep their branches.
+        if !script.contains("git clone ") || script.contains("git checkout") || script.contains("git switch") {
+            problems.append("the script works in the caller's own checkout")
+        }
+        if !script.contains("xmllint --noout") || !script.contains("sparkle:edSignature=")
+            || !script.contains("<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>") {
+            problems.append("the script publishes an appcast it has not checked")
+        }
+        if let stop = script.range(of: "if [ \"$DRY_RUN\" = true ]; then"), let push = script.range(of: " push origin "),
+           stop.lowerBound < push.lowerBound {
+            // The dry run stops before the push.
+        } else {
+            problems.append("a dry run would still push")
+        }
+        return problems
+    }
+
+    // MARK: - A beta rehearses the Sparkle export
+
+    /// A pre-release publishes no appcast, so the export script would first run on the final tag. A
+    /// beta now runs it into a scratch folder, after the beta itself is published, and uploads the
+    /// result under a name of its own. Nothing reads it but a person.
+    func testABetaRehearsesTheSparkleExportAndPublishesNoneOfIt() throws {
+        let workflow = try Self.read(Self.workflowPath)
+        XCTAssertEqual(Self.rehearsalProblems(in: workflow), [])
+
+        let name = "      - name: Rehearse Sparkle export\n"
+        let rehearsal = try XCTUnwrap(Self.step("Rehearse Sparkle export", in: workflow))
+        let publish = "      - name: Publish GitHub Release\n"
+        let early = workflow.replacingOccurrences(of: rehearsal, with: "").replacingOccurrences(of: publish, with: rehearsal + publish)
+        for (planted, problem) in [
+            (workflow.replacingOccurrences(of: name + "        if: env.RELEASE_PRERELEASE == 'true'\n", with: name),
+             "Rehearse Sparkle export does not run only for a pre-release"),
+            (workflow.replacingOccurrences(of: "            \"$REHEARSAL_DIR\" \\\n", with: "            Updates \\\n"),
+             "the rehearsal writes the real appcast"),
+            (workflow.replacingOccurrences(of: "          name: Kannu-sparkle-rehearsal\n", with: "          name: Kannu-sparkle\n"),
+             "the rehearsal's result could be taken for the real appcast"),
+            (workflow.replacingOccurrences(of: "            build/${{ env.RELEASE_DMG }}\n          body_path",
+                                           with: "            build/${{ env.RELEASE_DMG }}\n            ${{ env.REHEARSAL_DIR }}/appcast.xml\n          body_path"),
+             "the rehearsal's result could be taken for the real appcast"),
+            (early, "a failed rehearsal would hold back the beta itself"),
+        ] {
+            XCTAssertNotEqual(planted, workflow, "the plant did not take: \(problem)")
+            XCTAssertEqual(Self.rehearsalProblems(in: planted), [problem])
+        }
+    }
+
+    static func rehearsalProblems(in workflow: String) -> [String] {
+        var problems: [String] = []
+        for name in ["Rehearse Sparkle export", "Upload Sparkle Rehearsal"] {
+            guard let range = workflow.range(of: "- name: \(name)\n") else {
+                problems.append("\(name) is gone")
+                continue
+            }
+            if !workflow[range.upperBound...].hasPrefix("        if: env.RELEASE_PRERELEASE == 'true'\n") {
+                problems.append("\(name) does not run only for a pre-release")
+            }
+        }
+        let rehearsal = step("Rehearse Sparkle export", in: workflow) ?? ""
+        if !rehearsal.contains("REHEARSAL_DIR=\"$RUNNER_TEMP/sparkle-rehearsal\"\n")
+            || !rehearsal.contains("            \"$REHEARSAL_DIR\" \\\n") || rehearsal.contains("            Updates \\\n") {
+            problems.append("the rehearsal writes the real appcast")
+        }
+        if step("Publish GitHub Release", in: workflow)?.contains("REHEARSAL") ?? true
+            || !(step("Upload Sparkle Rehearsal", in: workflow) ?? "").contains("          name: Kannu-sparkle-rehearsal\n") {
+            problems.append("the rehearsal's result could be taken for the real appcast")
+        }
+        if let rehearse = workflow.range(of: "- name: Rehearse Sparkle export"),
+           let publish = workflow.range(of: "- name: Publish GitHub Release"), rehearse.lowerBound < publish.lowerBound {
+            problems.append("a failed rehearsal would hold back the beta itself")
+        }
+        return problems
+    }
+
+    /// One step's text: from its `- name:` line to the next step's, or to the end of the file.
+    static func step(_ name: String, in workflow: String) -> String? {
+        guard let start = workflow.range(of: "      - name: \(name)\n") else { return nil }
+        let end = workflow[start.upperBound...].range(of: "      - name: ")?.lowerBound ?? workflow.endIndex
+        return String(workflow[start.lowerBound..<end])
+    }
+
     // MARK: - Rules
 
     static func problems(in workflow: String) -> [String] {
@@ -206,7 +420,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         if !workflow.contains("if [[ \"${VERSION}\" == *-* ]]; then\n            echo \"RELEASE_PRERELEASE=true\" >> \"$GITHUB_ENV\"") {
             problems.append("a tag with a hyphen is not marked a pre-release")
         }
-        for step in ["Export Sparkle Update Assets", "Upload Sparkle Artifact", "Update appcast on main"] {
+        for step in ["Export Sparkle Update Assets", "Upload Sparkle Artifact", "Attach appcast to the release"] {
             guard let range = workflow.range(of: "- name: \(step)\n") else {
                 problems.append("\(step) is gone")
                 continue

@@ -48,6 +48,13 @@ Three facts shape 2.0 (measured 2026-11-13):
 ## Risks / Trade-offs
 - **The bridge is forgotten, and 1.x users never see 2.0.** Mitigation: the ship step's checklist reads the old feed's
   raw XML after release (tasks 7.3 and 7.4).
+- **The appcast never reaches `main`, and no install is offered 2.0.** The workflow used to push it as
+  `github-actions[bot]`, which the ruleset on `main` refuses (read from the ruleset on 2026-11-21, never seen in a
+  run). Mitigation: the run attaches the signed appcast to the release and names the step left, and an admin runs
+  `scripts/publish-appcast.sh` (task 7.3a). No bot is given the right to update `main`.
+- **The signing-key secret does not pair with the app's key, and every install refuses 2.0.** A pre-release skips
+  the Sparkle steps, and Apple's refusal stopped both betas before them, so nothing had exercised the key.
+  Mitigation: every tag checks the key before Apple is asked, and a beta rehearses the export (task 7.2b).
 - **A build number is too low, and Sparkle offers nothing.** Mitigation: the version step checks the numbers against
   the table above, and the beta's notarized pre-release proves the build before final (`ReleaseWorkflowRulesTests`
   holds the pre-release rules).

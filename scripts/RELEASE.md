@@ -4,7 +4,7 @@ Ship Kannu via **automated CI** (recommended) or **manual Xcode** export.
 
 ## Automated CI release (recommended)
 
-Triggered only by pushing a `v*` tag. The workflow archives with Developer ID, notarizes the DMG, Sparkle-signs the appcast, publishes to GitHub Releases, and commits [`Updates/appcast.xml`](../Updates/appcast.xml).
+Triggered only by pushing a `v*` tag. The workflow archives with Developer ID, notarizes the DMG, Sparkle-signs the appcast, publishes to GitHub Releases, and attaches the signed appcast to the release. It does not commit [`Updates/appcast.xml`](../Updates/appcast.xml): an admin does, with one script (see Release day).
 
 ### One-time: GitHub secrets
 
@@ -44,14 +44,33 @@ git push origin v1.0.0
 ```
 
 4. Watch **Actions → Release**
-5. Verify the GitHub Release contains `Kannu.<version>.dmg` and `Updates/appcast.xml` updated on `main`
+5. Verify the GitHub Release contains `Kannu.<version>.dmg` and `appcast.xml`
+6. Publish the appcast. Until this step no install is offered the release:
+
+```bash
+./scripts/publish-appcast.sh v1.0.0 --dry-run
+./scripts/publish-appcast.sh v1.0.0
+```
+
+The feed is `Updates/appcast.xml` on `main`, and the "Push to main" ruleset lets only an admin update
+that branch, so the workflow cannot commit it and no bot is given that right. The script is run by an
+admin, from any checkout: it works in a fresh clone in a scratch folder, so no checkout changes branch.
+Before it pushes, it checks that the appcast is well-formed, lists the tag's version with an EdDSA
+signature, points at a download on that release that answers, and keeps every build the feed lists
+today. `--dry-run` runs every check, shows the change and pushes nothing. After the push it reads the
+feed back through GitHub's API; the raw URL that installs read can lag by a few minutes.
+
+It ends by printing the release's `<item>`. For 2.0.0 that item is also added, once, to the old
+repository's feed, which every 1.x install still reads.
 
 ### Beta (pre-release) tags
 
 A tag with a hyphen — `v1.4.0-beta.1` — runs the same build, signing and notarization as a release,
-publishes the DMG as a GitHub **pre-release** (never marked Latest), and skips the Sparkle export and
-the appcast commit to `main`. Sparkle never offers it: only testers who download it from the Releases
-page run it. The release notes come from `docs/release-notes/<version>.md` for the tag's version
+publishes the DMG as a GitHub **pre-release** (never marked Latest), and publishes no appcast. Sparkle
+never offers it: only testers who download it from the Releases page run it. A beta still proves
+Sparkle before the final tag: the key check below runs on every tag, and once the beta is published
+the run rehearses the appcast export into a scratch folder and uploads the result as the
+`Kannu-sparkle-rehearsal` artifact, which nothing reads but a person. The release notes come from `docs/release-notes/<version>.md` for the tag's version
 (`1.4.0-beta.1.md`), or GitHub's generated list.
 
 ```bash
@@ -81,6 +100,19 @@ A re-run uses the workflow file at the tagged commit, so a tag made before this 
 still fails only at Notarize DMG.
 
 ---
+
+### When the Sparkle key check fails
+
+Before Apple is asked, the workflow signs a small probe file with `SPARKLE_EDDSA_PRIVATE_KEY` and
+checks the signature against `SUPublicEDKey` in `Kannu/Info.plist`, the key every installed Kannu
+verifies an update with (`scripts/check-sparkle-key.sh`). It takes seconds and runs on every tag.
+
+- **"does not pair with SUPublicEDKey".** The secret holds a different key from the one the app ships
+  with. Every install would refuse the update, so nothing is built. Set the secret to the private key
+  that belongs to that public key, then re-run the job. Never change `SUPublicEDKey` to fit a new
+  key: installed copies hold the old one.
+- **"could not sign".** The secret is not a key as Sparkle's `generate_keys` exports it: usually a
+  wrapped line or a stray character.
 
 ## Manual GitHub release (fallback)
 
@@ -191,7 +223,9 @@ Scripts:
 
 - [`create-dmg.sh`](create-dmg.sh) — styled DMG via `dmgbuild` and [`dmg-settings.py`](dmg-settings.py), then signs it
 - [`install-dmgbuild.sh`](install-dmgbuild.sh) — pinned `dmgbuild` into a temporary venv
+- [`check-sparkle-key.sh`](check-sparkle-key.sh) — checks the Sparkle signing key against the app's public key, before the build
 - [`check-notary-access.sh`](check-notary-access.sh) — asks Apple's notary service before the build (`notarytool history`)
 - [`notarize-dmg.sh`](notarize-dmg.sh) — `notarytool submit` + staple
 - [`export-sparkle-update.sh`](export-sparkle-update.sh) — Sparkle-sign DMG + appcast
+- [`publish-appcast.sh`](publish-appcast.sh) — an admin commits a final release's appcast to `main`
 - [`manual-release.sh`](manual-release.sh) — local release helper

@@ -83,6 +83,13 @@ David's decisions of 13 Nov match what the copy assumed: Horus (9.1), the welcom
    - Then the final install from `development` (6.1).
    - Then the Mac checks (6.2), with What's New on an updated install and on a fresh account.
    - The release copy (#60) and What's New (#59) have merged.
+4. **Apple's agreement.** Every release run stops at Notarize DMG with Apple's 403, "A required agreement is missing
+   or has expired": `v2.0.0-beta.2`'s third attempt was refused on 2026-11-21 at 07:26 UTC (the run's log). Only the
+   team's Account Holder can accept it, at developer.apple.com/account. It is not the repository move: the old
+   repository's last good run (24 Oct) and this one's failed runs sign with the same Developer ID identity (both
+   runs' logs).
+5. **On the next beta tag** (7.2b): the key check and the rehearsed appcast are the first proof that Sparkle works
+   from this repository. **On `v2.0.0`** (7.3a): run `scripts/publish-appcast.sh`, or no install is offered it.
 
 ## David's Mac checks
 **On the installed build:**
