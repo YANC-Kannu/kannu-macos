@@ -131,7 +131,9 @@ class KannuViewModel: NSObject, ObservableObject {
         }
     }
     
-    @Published var screen: String?
+    /// The display this view model's notch window is on, by `CGDirectDisplayID`. Never a name:
+    /// two identical monitors share one, and every lookup by it found the first of the pair.
+    @Published var screenID: CGDirectDisplayID?
 
     @Published var notchSize: CGSize = getClosedNotchSize()
     @Published var closedNotchSize: CGSize = getClosedNotchSize()
@@ -148,13 +150,13 @@ class KannuViewModel: NSObject, ObservableObject {
         cancellables.removeAll()
     }
 
-    init(screen: String? = nil) {
+    init(screenID: CGDirectDisplayID? = nil) {
         animation = animationLibrary.animation
 
         super.init()
         
-        self.screen = screen
-        notchSize = getClosedNotchSize(screen: screen)
+        self.screenID = screenID
+        notchSize = getClosedNotchSize(screen: screenID)
         closedNotchSize = notchSize
 
         Publishers.CombineLatest($dropZoneTargeting, $dragDetectorTargeting)
@@ -239,12 +241,12 @@ class KannuViewModel: NSObject, ObservableObject {
         // All three inputs are combined flat, and the verdict itself lives in
         // `ClosedNotchVisibility.shouldHideClosedNotch` so it can be tested.
         //
-        // This used to gate the chain on `$screen.compactMap { $0 }` feeding a `switchToLatest`.
+        // This used to gate the chain on `$screen.compactMap { $0 }` (now `$screenID`) feeding a `switchToLatest`.
         // That swallowed the initial nil screen, and `CombineLatest` emits nothing until every
         // side has spoken — so a view model whose `screen` was never assigned produced no signal
         // at all, and `hideOnClosed` kept whatever it was initialised to for the whole session.
         // A nil screen now simply answers "not fullscreen", so there is no silent state left.
-        Publishers.CombineLatest3($screen, detector.$fullscreenStatus, enabledPublisher)
+        Publishers.CombineLatest3($screenID, detector.$fullscreenStatus, enabledPublisher)
             .map { screen, status, enabled in
                 ClosedNotchVisibility.shouldHideClosedNotch(
                     detectionEnabled: enabled,
@@ -268,7 +270,7 @@ class KannuViewModel: NSObject, ObservableObject {
     /// hover target with it, so the user could not even point at it to bring it back. The rule
     /// itself is in `ClosedNotchVisibility` where it is tested; this resolves the screen for it.
     var effectiveClosedNotchHeight: CGFloat {
-        let currentScreen = NSScreen.screens.first { $0.localizedName == screen } ?? NSScreen.main
+        let currentScreen = screenID.map(NSScreen.withDisplayID) ?? NSScreen.main
         return ClosedNotchVisibility.effectiveClosedNotchHeight(
             hideOnClosed: hideOnClosed,
             topSafeAreaInset: currentScreen?.safeAreaInsets.top,
@@ -329,7 +331,7 @@ class KannuViewModel: NSObject, ObservableObject {
     }
 
     func close() {
-        let targetSize = getClosedNotchSize(screen: screen)
+        let targetSize = getClosedNotchSize(screen: screenID)
         notchSize = targetSize
         closedNotchSize = targetSize
         notchState = .closed
@@ -344,7 +346,7 @@ class KannuViewModel: NSObject, ObservableObject {
     }
 
     func closeForLockScreen() {
-        let targetSize = getClosedNotchSize(screen: screen)
+        let targetSize = getClosedNotchSize(screen: screenID)
         withAnimation(.none) {
             notchSize = targetSize
             closedNotchSize = targetSize

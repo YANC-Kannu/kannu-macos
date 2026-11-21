@@ -31,7 +31,8 @@ class FullscreenMediaDetector: ObservableObject {
     static let shared = FullscreenMediaDetector()
     private let detector: MacroVisionKit
     @ObservedObject private var musicManager = MusicManager.shared
-    @MainActor @Published private(set) var fullscreenStatus: [String: Bool] = [:]
+    /// Keyed by display id: by name, two identical monitors shared one verdict.
+    @MainActor @Published private(set) var fullscreenStatus: [CGDirectDisplayID: Bool] = [:]
     /// Bumped per scan on the main actor. A scan publishes only while it is the latest, so one
     /// that finishes late cannot overwrite a newer verdict (CodeRabbit on #112).
     @MainActor private var scanGeneration = 0
@@ -132,32 +133,32 @@ class FullscreenMediaDetector: ObservableObject {
     /// this is the one place that assigns it. It used to be assigned from whichever thread ran
     /// the scan. A scan another one has overtaken is dropped: its screens and windows are older.
     @MainActor
-    private func publish(_ newStatus: [String: Bool], ticket: Int) {
+    private func publish(_ newStatus: [CGDirectDisplayID: Bool], ticket: Int) {
         guard ticket == scanGeneration, newStatus != fullscreenStatus else { return }
         fullscreenStatus = newStatus
         NSLog("✅ Fullscreen status: \(newStatus)")
     }
 
-    private func currentFullscreenStatus() -> [String: Bool] {
+    private func currentFullscreenStatus() -> [CGDirectDisplayID: Bool] {
         guard Defaults[.enableFullscreenMediaDetection] else {
-            // Two displays can share a name; nothing is fullscreen here, so the first entry stands.
-            return Dictionary(NSScreen.screens.map { ($0.localizedName, false) }, uniquingKeysWith: { first, _ in first })
+            // Ids are unique; nothing is fullscreen here, so the first entry would stand anyway.
+            return Dictionary(NSScreen.screens.compactMap { $0.displayID.map { ($0, false) } }, uniquingKeysWith: { first, _ in first })
         }
         
 
         let apps = detector.detectFullscreenApps(debug: false)
-        let names = NSScreen.screens.map { $0.localizedName }
+        let ids = NSScreen.screens.compactMap(\.displayID)
         let hideOption = Defaults[.hideNotchOption]
         // One window snapshot per pass: the AX-denied fallback reads each screen's menu-bar
         // visibility, and must not pay a CGWindowList walk per candidate app.
         let menuBarByScreen = AXIsProcessTrusted() ? nil : menuBarVisibilityByScreen()
 
-        var newStatus: [String: Bool] = [:]
-        for name in names {
-            newStatus[name] = apps.contains { app in
+        var newStatus: [CGDirectDisplayID: Bool] = [:]
+        for id in ids {
+            newStatus[id] = apps.contains { app in
                 // Brain in full screen must not hide its own app's notch. By pid, since Debug and
                 // Release have different bundle ids.
-                guard app.screen.localizedName == name,
+                guard app.screen.displayID == id,
                       app.bundleIdentifier != "com.apple.finder",
                       app.processId != ProcessInfo.processInfo.processIdentifier else { return false }
 
@@ -210,11 +211,11 @@ class FullscreenMediaDetector: ObservableObject {
     /// (nothing maximized can) or that screen's menu bar is gone — the one signal a maximized
     /// window can't fake without the menu bar set to auto-hide.
     private func isInNativeFullscreen(_ app: MacroVisionKit.FullscreenWindowInfo,
-                                      menuBarVisibleByScreen: [String: Bool]?) -> Bool {
+                                      menuBarVisibleByScreen: [CGDirectDisplayID: Bool]?) -> Bool {
         guard AXIsProcessTrusted() else {
             Self.warnAboutMissingAccessibilityOnce()
             // Unknown visibility reads as "menu bar there" — the safe bias: show the notch.
-            let menuBarVisible = menuBarVisibleByScreen?[app.screen.localizedName] ?? true
+            let menuBarVisible = app.screen.displayID.flatMap { menuBarVisibleByScreen?[$0] } ?? true
             return FullscreenFallbackVerdict.isLikelyFullscreen(
                 windowFrame: app.windowFrame,
                 screenFrame: app.screen.frame,
@@ -254,7 +255,7 @@ class FullscreenMediaDetector: ObservableObject {
     /// Each screen's menu-bar visibility from one `CGWindowList` snapshot, converted to AppKit
     /// coordinates the way MacroVisionKit converts its own. Only taken while the Accessibility
     /// grant is missing — with the grant, `AXFullScreen` answers and this never runs.
-    private func menuBarVisibilityByScreen() -> [String: Bool] {
+    private func menuBarVisibilityByScreen() -> [CGDirectDisplayID: Bool] {
         let raw = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
         let mainQuartzHeight = CGDisplayBounds(CGMainDisplayID()).height
         let menuBarLayer = Int(CGWindowLevelForKey(.mainMenuWindow))
@@ -271,9 +272,10 @@ class FullscreenMediaDetector: ObservableObject {
                 frame: CGRect(origin: appKitOrigin, size: quartzFrame.size)
             )
         }
-        var byScreen: [String: Bool] = [:]
+        var byScreen: [CGDirectDisplayID: Bool] = [:]
         for screen in NSScreen.screens {
-            byScreen[screen.localizedName] = FullscreenFallbackVerdict.menuBarIsVisible(
+            guard let id = screen.displayID else { continue }
+            byScreen[id] = FullscreenFallbackVerdict.menuBarIsVisible(
                 onScreenWithFrame: screen.frame,
                 windows: records,
                 menuBarLayer: menuBarLayer

@@ -39,6 +39,9 @@ final class MusicControlWindowManager {
     private var hostingView: NSHostingView<MusicControlOverlay>?
     private var hasDelegated = false
     private var lastMetrics: MusicControlWindowMetrics?
+    /// The display the window was last placed on. A refresh with equal metrics still moves the
+    /// window when the notch has moved to another display (`canSkipRefresh`).
+    private var lastDisplayID: CGDirectDisplayID?
 
     private init() {}
 
@@ -65,6 +68,7 @@ final class MusicControlWindowManager {
 
         let targetFrame = frame(for: fittingSize, viewModel: viewModel, screen: screen, metrics: metrics)
         lastMetrics = metrics
+        lastDisplayID = screen.displayID
 
         if !hasDelegated {
             SkyLightOperator.shared.delegateWindow(window)
@@ -106,7 +110,9 @@ final class MusicControlWindowManager {
             return present(using: viewModel, metrics: metrics)
         }
 
-        if let lastMetrics, lastMetrics == metrics {
+        let last = lastMetrics.map { (metrics: $0, display: lastDisplayID) }
+        let next = (metrics: metrics, display: resolveScreen(from: viewModel)?.displayID)
+        if DisplayPlacementResolver.canSkipRefresh(last: last, next: next) {
             return true
         }
 
@@ -151,6 +157,7 @@ final class MusicControlWindowManager {
         targetWindow?.orderOut(nil)
         hostingView = nil
         lastMetrics = nil
+        lastDisplayID = nil
         self.window = nil
         hasDelegated = false
     }
@@ -202,8 +209,7 @@ final class MusicControlWindowManager {
     }
 
     private func resolveScreen(from viewModel: KannuViewModel) -> NSScreen? {
-        if let screenName = viewModel.screen,
-           let targetScreen = NSScreen.screens.first(where: { $0.localizedName == screenName }) {
+        if let targetScreen = NSScreen.withDisplayID(viewModel.screenID) {
             return targetScreen
         }
         return NSScreen.main

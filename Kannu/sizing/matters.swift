@@ -36,10 +36,10 @@ var openNotchSize: CGSize {
 
 /// Maximum notch width based on the current screen's point width.
 /// Prevents the notch from extending beyond the screen on scaled displays.
-func maxAllowedNotchWidth(for screenName: String? = nil) -> CGFloat {
+func maxAllowedNotchWidth(for screenID: CGDirectDisplayID? = nil) -> CGFloat {
     let screen: NSScreen?
-    if let screenName {
-        screen = NSScreen.screens.first { $0.localizedName == screenName }
+    if let screenID {
+        screen = NSScreen.withDisplayID(screenID)
     } else {
         screen = NSScreen.main
     }
@@ -216,23 +216,22 @@ func macHasNotchedBuiltInDisplay() -> Bool {
 
 // MARK: - Per-display settings
 
-/// The style to use for `screenName`, preferring a per-display override over the global choice.
-func effectiveDisplayStyle(for screenName: String?) -> ExternalDisplayStyle {
-    if let screenName, let override = Defaults[.displayStyleOverrides][screenName] {
+/// The style to use for the display `screenID`, preferring a per-display override over the global
+/// choice. The override is keyed by the display's UUID, so two identical monitors have one each.
+func effectiveDisplayStyle(for screenID: CGDirectDisplayID?) -> ExternalDisplayStyle {
+    if let key = DisplayPlacementRuntime.overrideKey(for: screenID),
+       let override = Defaults[.displayStyleOverridesByUUID][key] {
         return override
     }
     return Defaults[.externalDisplayStyle]
 }
 
 
-func shouldUseDynamicIslandMode(for screenName: String?) -> Bool {
-    guard effectiveDisplayStyle(for: screenName) == .dynamicIsland else {
+/// Nil means the main screen; an id whose display is gone means no screen, and the standard shape.
+func shouldUseDynamicIslandMode(for screenID: CGDirectDisplayID?) -> Bool {
+    let selectedScreen: NSScreen? = screenID.map(NSScreen.withDisplayID) ?? NSScreen.main
+    guard effectiveDisplayStyle(for: selectedScreen?.displayID) == .dynamicIsland else {
         return false
-    }
-
-    var selectedScreen: NSScreen? = NSScreen.main
-    if let screenName {
-        selectedScreen = NSScreen.screens.first(where: { $0.localizedName == screenName })
     }
 
     guard let screen = selectedScreen else {
@@ -283,11 +282,11 @@ enum MusicPlayerImageSizes {
     static let size = (opened: CGSize(width: 90, height: 90), closed: CGSize(width: 20, height: 20))
 }
 
-func getScreenFrame(_ screen: String? = nil) -> CGRect? {
+func getScreenFrame(_ screenID: CGDirectDisplayID? = nil) -> CGRect? {
     var selectedScreen = NSScreen.main
 
-    if let customScreen = screen {
-        selectedScreen = NSScreen.screens.first(where: { $0.localizedName == customScreen })
+    if let screenID {
+        selectedScreen = NSScreen.withDisplayID(screenID)
     }
     
     if let screen = selectedScreen {
@@ -297,15 +296,15 @@ func getScreenFrame(_ screen: String? = nil) -> CGRect? {
     return nil
 }
 
-func getClosedNotchSize(screen: String? = nil) -> CGSize {
+func getClosedNotchSize(screen screenID: CGDirectDisplayID? = nil) -> CGSize {
     // Default notch size, to avoid using optionals
     var notchHeight: CGFloat = Defaults[.nonNotchHeight]
     var notchWidth: CGFloat = Defaults[.closedNotchWidth]
 
     var selectedScreen = NSScreen.main
 
-    if let customScreen = screen {
-        selectedScreen = NSScreen.screens.first(where: { $0.localizedName == customScreen })
+    if let screenID {
+        selectedScreen = NSScreen.withDisplayID(screenID)
     }
 
     // Check if the screen is available

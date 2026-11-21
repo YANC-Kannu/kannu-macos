@@ -198,7 +198,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     lazy var extensionXPCServiceHost = ExtensionXPCServiceHost.shared
     lazy var extensionRPCServer = ExtensionRPCServer.shared
     var closeNotchWorkItem: DispatchWorkItem?
-    private var previousScreens: [NSScreen]?
+    /// The display layout at the last screen change, as values (`ScreenFacts`): an `NSScreen` that
+    /// AppKit updates in place would otherwise report its new id or frame and hide the change.
+    private var previousScreenLayout: [ScreenFacts]?
     private var onboardingWindowController: NSWindowController?
     private var cancellables = Set<AnyCancellable>()
     /// True once the Terms of Use are accepted and the real launch has run. Everything that could
@@ -808,7 +810,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// shadow insets and top-offset only when the screen lacks a physical notch
     /// and the user has chosen the Dynamic Island style.
     private func adjustedSizeForScreen(_ baseSize: CGSize, screen: NSScreen) -> CGSize {
-        guard shouldUseDynamicIslandMode(for: screen.localizedName) else {
+        guard shouldUseDynamicIslandMode(for: screen.displayID) else {
             return baseSize
         }
         var adjusted = baseSize
@@ -1186,6 +1188,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Defaults.Keys.migrateMediaControllerToNowPlaying()
         Defaults.Keys.migrateCapsLockTintMode()
         Defaults.Keys.migrateNonNotchAlwaysShow()
+        // After the line above, which can fill the name-keyed "Always show" overrides it carries over.
+        DisplayPlacementRuntime.carryOverNameKeyedOverrides()
         Defaults.Keys.migrateScreenCaptureVisibility()
         Defaults.Keys.migrateRemovedMinimalisticUI()
         Defaults.Keys.migrateRemovedAgentLightChoices()
@@ -1532,7 +1536,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         registerOptionalShortcutHandlers()
         updateFeatureShortcutAvailability()
 
-        // Seed the shared view model's screen name here, not only inside adjustWindowPosition.
+        // Seed the shared view model's display here, not only inside adjustWindowPosition.
         // That assignment sits below the lock guard and the no-screens return, so a launch while
         // the screen was locked — or in clamshell — left `vm.screen` nil for the whole session,
         // which left the closed notch unpainted and zero-height even after the situation cleared.
@@ -1540,14 +1544,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !Defaults[.displayPlacement].usesOneWindowPerDisplay {
             if let screen = DisplayPlacementRuntime.activeScreen() {
                 let viewModel = self.vm
-                viewModel.screen = screen.localizedName
+                viewModel.screenID = screen.displayID
                 // The seed above stays ungated: a hidden notch shown later must find its screen.
                 if Defaults[.showNotch] {
                     let window = createKannuWindow(for: screen, with: viewModel)
                     self.window = window
                 }
             } else if let fallback = NSScreen.main {
-                self.vm.screen = fallback.localizedName
+                self.vm.screenID = fallback.displayID
             }
         }
         adjustWindowPosition(changeAlpha: true)
@@ -1566,7 +1570,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        previousScreens = NSScreen.screens
+        previousScreenLayout = DisplayPlacementRuntime.facts()
 
         // Skip weather under UI testing: prepareLocationAccess prompts for Location.
         if Defaults[.enableLockScreenWeatherWidget] && !AppRuntimeEnvironment.isUITesting {
@@ -2109,20 +2113,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     @objc func screenConfigurationDidChange() {
-        let currentScreens = NSScreen.screens
+        let currentLayout = DisplayPlacementRuntime.facts()
+
+        // A display seen for the first time takes over the override its name had (issue #24).
+        DisplayPlacementRuntime.carryOverNameKeyedOverrides(screens: currentLayout)
 
         // Opening the lid or undocking may be the first time we ever see the built-in display,
         // so re-resolve here. A machine set up in clamshell corrects its own classification
         // rather than staying misconfigured until onboarding is repeated.
         macHasNotchedBuiltInDisplay()
 
-        let screensChanged =
-            currentScreens.count != previousScreens?.count
-            || Set(currentScreens.map { $0.localizedName })
-                != Set(previousScreens?.map { $0.localizedName } ?? [])
-            || Set(currentScreens.map { $0.frame }) != Set(previousScreens?.map { $0.frame } ?? [])
+        // By id and frame together, not name: a display that comes back under a new id, with the
+        // same name and frame, must rebuild its window, or the window stays keyed on an id that no
+        // longer exists; and two equal-sized displays that swap places change neither set alone.
+        let screensChanged = DisplayPlacementResolver.layoutChanged(from: previousScreenLayout, to: currentLayout)
 
-        previousScreens = currentScreens
+        previousScreenLayout = currentLayout
         
         guard screensChanged else { return }
 
@@ -2426,7 +2432,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             for (id, screen) in screensByID {
                 if windows[id] == nil {
-                    let viewModel = KannuViewModel(screen: screen.localizedName)
+                    let viewModel = KannuViewModel(screenID: id)
                     windows[id] = createKannuWindow(for: screen, with: viewModel)
                     viewModels[id] = viewModel
                 }
@@ -2450,10 +2456,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 window?.alphaValue = 0
                 return
             }
-            coordinator.selectedScreen = selectedScreen.localizedName
+            coordinator.selectedScreenID = selectedScreen.displayID
             
-            vm.screen = selectedScreen.localizedName
-            vm.notchSize = getClosedNotchSize(screen: selectedScreen.localizedName)
+            vm.screenID = selectedScreen.displayID
+            vm.notchSize = getClosedNotchSize(screen: selectedScreen.displayID)
             
             if window == nil {
                 window = createKannuWindow(for: selectedScreen, with: vm)

@@ -1374,6 +1374,45 @@ observes to a content view that draws it, so a board can draw fixtures; the pick
 appears. `FloatingPanelRulesTests` holds the boards and the theme; `HostedContentRulesTests` and
 `ClipboardPanelPlacementTests` are unchanged.
 
+**2026-11-18 addendum: the screen is an identity, not a name.** Issue #24, deferred from PR #11's review. The
+addendum above made sure the view model *has* a screen; this one is about *which* screen it has. `vm.screen` held
+`NSScreen.localizedName`, and nineteen lookups found a screen by it. Two identical monitors share that name, so every
+lookup on the second found the first: its closed size, its notch-or-not check, its Dynamic Island check and its
+fullscreen verdict all read the wrong display, and "A display I choose" could only ever pick the first of the pair.
+
+**Rule this adds:** a screen is found by `CGDirectDisplayID` (`NSScreen.withDisplayID`), and a stored choice is the
+display's UUID (`preferredScreenUUID`), because an id is not promised across a reconnect or a reboot.
+`localizedName` is for text people read. The view model holds `screenID`; launch and `adjustWindowPosition` seed it
+ahead of every guard, as before. `screenConfigurationDidChange` compares ids, copied as values, so a display that
+comes back under a new id rebuilds its window.
+
+**Guard — exists.** `DisplayIdentityRulesTests` fails on any line in `Kannu/` that compares a screen's name or keys a
+dictionary by one, against the seven shapes the old code used; on the tree before this change it flags 19 sites.
+It also pins `screenID`'s type and the UUID key. `DisplayIdentityTests` covers two same-named displays, the
+migration and a reconnect with fixtures. The launch-seed pins in `ClosedNotchVisibilityRulesTests` and
+`NotchToggleRulesTests` now read `viewModel.screenID = screen.displayID`. **Missing:** two real identical monitors
+were not available. The two-monitor behaviour is proven by fixtures only; check it by eye on such a desk.
+
+What follows the notch must follow its id too (PR #80 review). The screen-change check compares id-to-frame pairs
+(`DisplayPlacementResolver.layoutChanged`), because two equal-sized displays that swap places change neither the id
+set nor the frame set. The timer and music control windows skip a refresh only when their display is unchanged as
+well as their metrics (`canSkipRefresh`). A battery HUD that is up while the notch moves re-resolves its target
+(`hudTargetDisplay`) when `selectedScreenID` changes. Guards: three fixture tests in `DisplayIdentityTests` and three
+source pins in `DisplayIdentityRulesTests`.
+
+The per-display overrides are keyed by UUID as well (PR #80 review, the linked-issue check). Brain › General listed
+one group per *name*, so two identical monitors shared one style and one "Always show". They now live in
+`displayStyleOverridesByUUID` and `alwaysShowOverridesByUUID`, one group per display. The name-keyed dictionaries are
+read only by `DisplayPlacementRuntime.carryOverNameKeyedOverrides`, which runs at launch and on every display change
+and gives each connected display its name's value once (`displayOverridesCarriedUUIDs`), so a Reset afterwards
+sticks and a monitor plugged in later still takes its override. Nothing writes the name-keyed dictionaries any more,
+so a downgrade finds the overrides set before this version. Guards: three fixture tests and a source rule that
+rejects any other read or write of the name-keyed keys. The music control window also refreshes on `vm.screenID`: its
+refresh is driven from `ContentView`, and a move to an equal-sized display changed nothing it watched. The same
+handler re-syncs the hidden-edge poll before its music check: with "Always show" on for one of two identical monitors
+and off for the other, a move between them hid the island with no poll running to reveal it. A source pin holds both,
+and holds the sync outside the music guard.
+
 ---
 
 ## 18. Another app's click never opens the notch
@@ -2064,6 +2103,15 @@ until a click elsewhere, ×, Esc or Save.
 Guard: `TimerSideColumnRulesTests.testTheTaskFormHoldsTheNotchOnlyWhileAFieldHasFocus`. **Missing:**
 the behaviour itself is checked by eye on the installed build.
 
+**2026-11-18 addendum: the pointer check measures its own display.** Issue #24. `isPointerOnOpenNotch` found its
+screen by name, so on the second of two identical monitors `openNotchRect` was built from the first one's frame: the
+pointer resting on the open body was off the notch, and `closeWhenPointerLeaves` closed it under the pointer. That is
+this entry's symptom with a new cause. `attachedWindowFrames` filtered the notch windows by name the same way. Both
+now use this view's display, found by id (`currentScreen`, `currentScreenID`); `openNotchRect`'s maths is unchanged.
+Guards: `DisplayIdentityTests.testThePointerCheckUsesEachDisplaysOwnFrame`, with the name lookup planted to show it
+reproduces the bug, and `DisplayIdentityRulesTests.testThePointerCheckReadsItsOwnDisplay`. **Missing:** checked with
+fixtures only; no two identical monitors were available.
+
 ---
 
 ## 24. The Claude card shows the freshest reading of its organization
@@ -2180,7 +2228,7 @@ Commit counts across all branches (`--follow`, so pre-rename history counts):
 | `HostedContent.swift` | 3 | `setHostedContent` / `HostingContainerView` holds the content of 21 panels. Entry 17's crash fix introduced it; its sizing contract silently failed for a panel built at 0×0 and doubled the clipboard's content (entry 19). |
 | `CGSSpace.swift`, `KannuApp.swift` (`rejoinNotchSpacesIfNeeded`, `pinNotchWindows`) | — | Which spaces the notch window is in. Two different failures: the slide, then a repair that misread the healthy state and put the notch back on every space, which drew stale copies of it into switches and Mission Control. Read entry 20 and the 2026-09-30 addendum first, and check membership with a probe, not with `isOnActiveSpace`. |
 | `ModalPresenter.swift` | 2 | The only place allowed to stop the main run loop. Every site in the app funnels through it, and the hang watchdog trusts it to declare a deliberate stall (entry 14). |
-| `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screen` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
+| `KannuApp.swift` (`createKannuWindow`, `adjustWindowPosition`) and every panel manager | — | Window creation **and the screen assignment that feeds the view model**. A hosting view installed as a panel's content view gets SwiftUI's window-size bridge and fights Kannu's sizing until AppKit aborts; and an early return that skips `vm.screenID` leaves a correctly-sized window that paints nothing and has zero height, permanently (entry 17 and its 2026-09-26 addendum). The screen is a `CGDirectDisplayID`, never a name: two identical monitors share one (entry 17's 2026-11-18 addendum). Use `setHostedContent`, and keep identity ahead of every guard. |
 | `BluetoothAudioManager.swift` | 19 | Battery collection. Spawns `system_profiler` and `pmset` and waits, on whatever thread calls it — moved off main four separate times: twice re-landing there in the same change that was meant to fix it, once leaving the connect path itself on main (entry 11, 2026-09-13 and 2026-09-16 addenda). |
 | `.githooks/pre-commit` | — | Runs under `set -euo pipefail`, locally and in CI's "OpenSpec and hook" job. A reader that stops early on a pipe from `git show` aborts it at random with a bare "Broken pipe" (entry 25). Read the file into a variable, use a here-string, and never answer it with `\|\| true`. |
 | `AGENTS.md` / `CLAUDE.md` | — | The instruction files every agent reads. One rule stated in both drifts silently; the split and the import are pinned by `ChangelogRuleDocsTests` (entry 16). |
