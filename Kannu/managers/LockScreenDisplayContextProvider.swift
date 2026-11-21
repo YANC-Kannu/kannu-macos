@@ -23,7 +23,8 @@ import CoreGraphics
 struct LockScreenDisplayContext {
     let screen: NSScreen
     let frame: NSRect
-    let identifier: String
+    /// The display's id. It held `localizedName`, which two identical monitors share.
+    let displayID: CGDirectDisplayID?
 }
 
 @MainActor
@@ -58,7 +59,7 @@ final class LockScreenDisplayContextProvider {
         let snapshot = LockScreenDisplayContext(
             screen: screen,
             frame: screen.frame,
-            identifier: screen.localizedName
+            displayID: screen.displayID
         )
 
         context = snapshot

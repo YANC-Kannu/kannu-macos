@@ -26,7 +26,7 @@ final class ClosedNotchVisibilityTests: XCTestCase {
 
     // MARK: - shouldHideClosedNotch
 
-    /// The regression. `vm.screen` is nil until `adjustWindowPosition` assigns it, and that
+    /// The regression. `vm.screen` (now `vm.screenID`) was nil until `adjustWindowPosition` assigns it, and that
     /// assignment sits below a lock guard and a no-screens return — so a launch while locked, or in
     /// clamshell, left it nil permanently. An unknown screen must never mean "hide".
     func testAnUnresolvedScreenDoesNotHideTheNotch() {
@@ -34,7 +34,7 @@ final class ClosedNotchVisibilityTests: XCTestCase {
             ClosedNotchVisibility.shouldHideClosedNotch(
                 detectionEnabled: true,
                 screen: nil,
-                fullscreenStatus: ["Built-in Retina Display": true]
+                fullscreenStatus: [1: true]
             ),
             "A nil screen must not hide the notch — that is a bookkeeping gap, not a fullscreen app."
         )
@@ -44,8 +44,8 @@ final class ClosedNotchVisibilityTests: XCTestCase {
         XCTAssertFalse(
             ClosedNotchVisibility.shouldHideClosedNotch(
                 detectionEnabled: true,
-                screen: "Sidecar Display",
-                fullscreenStatus: ["Built-in Retina Display": true]
+                screen: 2,
+                fullscreenStatus: [1: true]
             )
         )
     }
@@ -54,8 +54,8 @@ final class ClosedNotchVisibilityTests: XCTestCase {
         XCTAssertTrue(
             ClosedNotchVisibility.shouldHideClosedNotch(
                 detectionEnabled: true,
-                screen: "Built-in Retina Display",
-                fullscreenStatus: ["Built-in Retina Display": true]
+                screen: 1,
+                fullscreenStatus: [1: true]
             )
         )
     }
@@ -64,8 +64,8 @@ final class ClosedNotchVisibilityTests: XCTestCase {
         XCTAssertFalse(
             ClosedNotchVisibility.shouldHideClosedNotch(
                 detectionEnabled: false,
-                screen: "Built-in Retina Display",
-                fullscreenStatus: ["Built-in Retina Display": true]
+                screen: 1,
+                fullscreenStatus: [1: true]
             )
         )
     }
@@ -74,8 +74,8 @@ final class ClosedNotchVisibilityTests: XCTestCase {
         XCTAssertFalse(
             ClosedNotchVisibility.shouldHideClosedNotch(
                 detectionEnabled: true,
-                screen: "Built-in Retina Display",
-                fullscreenStatus: ["Built-in Retina Display": false]
+                screen: 1,
+                fullscreenStatus: [1: false]
             )
         )
     }
@@ -141,7 +141,7 @@ final class ClosedNotchVisibilityTests: XCTestCase {
         let hide = ClosedNotchVisibility.shouldHideClosedNotch(
             detectionEnabled: true,
             screen: nil,
-            fullscreenStatus: ["Built-in Retina XDR Display": true]
+            fullscreenStatus: [1: true]
         )
         XCTAssertFalse(hide)
         XCTAssertEqual(

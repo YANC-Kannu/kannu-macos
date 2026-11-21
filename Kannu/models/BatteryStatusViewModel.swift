@@ -22,6 +22,7 @@
  */
 
 import Cocoa
+import Combine
 import Defaults
 import Foundation
 import IOKit.ps
@@ -54,12 +55,14 @@ class BatteryStatusViewModel: ObservableObject {
     @Published private(set) var statusText: String = ""
     @Published private(set) var activeTemporaryHUDKind: BatteryTemporaryHUDKind?
     @Published private(set) var activeTemporaryHUDToken: UUID = UUID()
-    @Published private(set) var activeTemporaryHUDTargetScreenName: String?
+    /// The display the temporary battery HUD belongs on, by id; nil shows it on every window.
+    @Published private(set) var activeTemporaryHUDTargetScreenID: CGDirectDisplayID?
     @Published private(set) var activeTemporaryHUDLevelOverride: Int?
     @Published private(set) var activeTemporaryHUDLowPowerModeOverride: Bool?
 
     private let managerBattery = BatteryActivityManager.shared
     private var managerBatteryId: Int?
+    private var cancellables = Set<AnyCancellable>()
 
     static let shared = BatteryStatusViewModel()
 
@@ -68,6 +71,24 @@ class BatteryStatusViewModel: ObservableObject {
     private init() {
         setupPowerStatus()
         setupMonitor()
+        followNotchDisplay()
+    }
+
+    /// A HUD that is up while the notch moves to another display (an unplug, or a display back
+    /// under a new id) moves with it; its target was set once, when it appeared, and the HUD stayed
+    /// hidden on the new display until its timer ran out. `receive(on:)` reads the target after
+    /// `adjustWindowPosition` has set `selectedScreenID` and moved the window, since `@Published`
+    /// emits before the value is stored.
+    private func followNotchDisplay() {
+        coordinator.$selectedScreenID
+            .dropFirst()
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.activeTemporaryHUDKind != nil else { return }
+                self.activeTemporaryHUDTargetScreenID = self.resolvedTemporaryHUDTargetScreenID()
+            }
+            .store(in: &cancellables)
     }
 
     /// Sets up the initial power status by fetching battery information
@@ -213,7 +234,7 @@ class BatteryStatusViewModel: ObservableObject {
 
         activeTemporaryHUDKind = kind
         activeTemporaryHUDToken = UUID()
-        activeTemporaryHUDTargetScreenName = resolvedTemporaryHUDTargetScreenName()
+        activeTemporaryHUDTargetScreenID = resolvedTemporaryHUDTargetScreenID()
         activeTemporaryHUDLevelOverride = levelOverride
         activeTemporaryHUDLowPowerModeOverride = lowPowerModeOverride
         coordinator.toggleExpandingView(
@@ -223,46 +244,16 @@ class BatteryStatusViewModel: ObservableObject {
         )
     }
 
-    private func resolvedTemporaryHUDTargetScreenName() -> String? {
-        if Defaults[.displayPlacement].usesOneWindowPerDisplay {
-            return nil
-        }
-
-        let preferredNames = [
-            coordinator.selectedScreen,
-            coordinator.preferredScreen,
-            NSScreen.main?.localizedName
-        ]
-        .compactMap { $0 }
-
-        for candidate in preferredNames where NSScreen.screens.contains(where: { $0.localizedName == candidate }) {
-            return candidate
-        }
-
-        return NSScreen.screens.first?.localizedName
-    }
-
-    private func preferredDynamicIslandTargetScreenName() -> String? {
-        let mainScreenName = NSScreen.main?.localizedName
-        let preferredNames = [coordinator.selectedScreen, coordinator.preferredScreen]
-
-        for candidate in preferredNames where shouldUseDynamicIslandMode(for: candidate) {
-            return candidate
-        }
-
-        if let externalDynamicIslandScreen = NSScreen.screens.first(where: {
-            $0.localizedName != mainScreenName && shouldUseDynamicIslandMode(for: $0.localizedName)
-        }) {
-            return externalDynamicIslandScreen.localizedName
-        }
-
-        if let anyDynamicIslandScreen = NSScreen.screens.first(where: {
-            shouldUseDynamicIslandMode(for: $0.localizedName)
-        }) {
-            return anyDynamicIslandScreen.localizedName
-        }
-
-        return nil
+    /// Where the single notch window is (`selectedScreenID`), else the main display, else the first.
+    /// The chosen display is not a separate candidate: `selectedScreenID` is already where the
+    /// placement put the window, the chosen display included.
+    private func resolvedTemporaryHUDTargetScreenID() -> CGDirectDisplayID? {
+        DisplayPlacementResolver.hudTargetDisplay(
+            oneWindowPerDisplay: Defaults[.displayPlacement].usesOneWindowPerDisplay,
+            notchDisplay: coordinator.selectedScreenID,
+            mainScreen: NSScreen.main?.displayID,
+            connected: NSScreen.screens.compactMap(\.displayID)
+        )
     }
 
     private func handleLowBatteryAlertIfNeeded(previousLevel: Float, newLevel: Float) {

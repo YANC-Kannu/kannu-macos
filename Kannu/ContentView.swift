@@ -113,8 +113,8 @@ struct ContentView: View {
     @Default(.alwaysShowOnNonNotchDisplays) var alwaysShowOnNonNotchDisplays
     // Observed so SwiftUI invalidates when a per-display override changes. The resolvers in
     // matters.swift read Defaults directly, which is not an observable dependency on its own.
-    @Default(.displayStyleOverrides) var displayStyleOverrides
-    @Default(.alwaysShowOverrides) var alwaysShowOverrides
+    @Default(.displayStyleOverridesByUUID) var displayStyleOverrides
+    @Default(.alwaysShowOverridesByUUID) var alwaysShowOverrides
     
     // Battery settings reactivity
     @Default(.showPowerStatusNotifications) var showPowerStatusNotifications
@@ -412,11 +412,25 @@ struct ContentView: View {
         // Touch the observed copies so a per-display or global style change invalidates the view;
         // the resolver itself reads Defaults directly and wouldn't register a dependency.
         _ = (displayStyleOverrides, externalDisplayStyle)
-        return shouldUseDynamicIslandMode(for: currentScreenName)
+        return shouldUseDynamicIslandMode(for: currentScreenID)
     }
 
-    private var currentScreenName: String {
-        vm.screen ?? coordinator.selectedScreen
+    /// The display this view's window is on, by id. Every per-screen check below finds its screen
+    /// with it (`currentScreen`); `localizedName` is never used to find one, because two identical
+    /// monitors share it and the lookup always found the first of the pair (issue #24).
+    private var currentScreenID: CGDirectDisplayID? {
+        vm.screenID ?? coordinator.selectedScreenID
+    }
+
+    /// This view's own display, or nil when it has gone. Never another display with its name.
+    private var currentScreen: NSScreen? {
+        NSScreen.withDisplayID(currentScreenID)
+    }
+
+    /// The key of this view's display in the per-display overrides: its UUID, which two identical
+    /// monitors do not share.
+    private var currentScreenOverrideKey: String? {
+        DisplayPlacementRuntime.overrideKey(for: currentScreenID)
     }
 
     /// Whether the current screen lacks a physical notch.
@@ -425,7 +439,7 @@ struct ContentView: View {
     /// a vanished display on the hide-until-hover path — including its 20 Hz poll. It counts as
     /// notched instead, which is the branch that does nothing.
     private var isNonNotchScreen: Bool {
-        guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }) else {
+        guard let screen = currentScreen else {
             return false
         }
         return screen.safeAreaInsets.top <= 0
@@ -474,14 +488,14 @@ struct ContentView: View {
     private var isSneakPeekVisibleOnCurrentScreen: Bool {
         guard coordinator.sneakPeek.show else { return false }
         guard Defaults[.displayPlacement].usesOneWindowPerDisplay else { return true }
-        guard let targetScreenName = coordinator.sneakPeek.targetScreenName else { return true }
-        return currentScreenName == targetScreenName
+        guard let targetScreenID = coordinator.sneakPeek.targetScreenID else { return true }
+        return currentScreenID == targetScreenID
     }
 
     /// Whether hide-until-hover applies to *this* screen. Displays with a physical notch are
     /// never affected, so all the time-boxing below leaves them on their existing behaviour.
     private var hideUntilHoverAppliesHere: Bool {
-        let alwaysShow = alwaysShowOverrides[currentScreenName] ?? alwaysShowOnNonNotchDisplays
+        let alwaysShow = currentScreenOverrideKey.flatMap { alwaysShowOverrides[$0] } ?? alwaysShowOnNonNotchDisplays
         return !alwaysShow && isNonNotchScreen
     }
 
@@ -674,8 +688,8 @@ struct ContentView: View {
         guard showPowerStatusNotifications else { return false }
         guard batteryModel.activeTemporaryHUDKind != nil else { return false }
         if displayPlacement.usesOneWindowPerDisplay { return true }
-        guard let targetScreenName = batteryModel.activeTemporaryHUDTargetScreenName else { return true }
-        return currentScreenName == targetScreenName
+        guard let targetScreenID = batteryModel.activeTemporaryHUDTargetScreenID else { return true }
+        return currentScreenID == targetScreenID
     }
 
     private var isCurrentScreenExpansionVisible: Bool {
@@ -1210,6 +1224,17 @@ struct ContentView: View {
                 }
             }
             .onChange(of: vm.effectiveClosedNotchHeight) { _, _ in
+                if shouldShowMusicControlWindow() {
+                    enqueueMusicControlWindowSync(forceRefresh: true)
+                }
+            }
+            // A move to another display changes whether hide-until-hover applies here (that display has
+            // its own "Always show" override, and may have a notch), so the poll that reveals a hidden
+            // island must follow, music window or not. A move to an equal-sized display also changes
+            // neither value above, so the music window would stay on the old display until some later
+            // sync. The timer's sync key has the id. Both from PR #80's review.
+            .onChange(of: vm.screenID) { _, _ in
+                syncHiddenEdgeHoverPolling()
                 if shouldShowMusicControlWindow() {
                     enqueueMusicControlWindowSync(forceRefresh: true)
                 }
@@ -2332,7 +2357,7 @@ struct ContentView: View {
     }
 
     private func hiddenHoverActivationContainsMouse(_ location: NSPoint = NSEvent.mouseLocation) -> Bool {
-        guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }) else {
+        guard let screen = currentScreen else {
             return false
         }
 
@@ -2613,7 +2638,7 @@ struct ContentView: View {
     /// The hardware notch on this view's screen, in screen coordinates; nil off a notched screen.
     /// Resolved on demand (hover-in and the dwell's checks), never per mouse move.
     private func physicalNotchRect() -> CGRect? {
-        guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }) else { return nil }
+        guard let screen = currentScreen else { return nil }
         return NotchInteractionGeometry.physicalNotchRect(
             screenFrame: screen.frame,
             leftAreaWidth: screen.auxiliaryTopLeftArea?.width ?? 0,
@@ -2821,8 +2846,10 @@ struct ContentView: View {
     /// Whether `point` (screen coordinates) is on this window's open notch, with
     /// `NotchInteractionGeometry.openNotchMargin` to spare, or on a window hanging off it
     /// (`attachedWindowFrames`). False before the body has laid out, or when the screen has gone.
+    /// The frame is this view's own display's, found by id: by name, the second of two identical
+    /// monitors measured its notch on the first and closed under a pointer still on its body.
     private func isPointerOnOpenNotch(_ point: CGPoint) -> Bool {
-        guard let screen = NSScreen.screens.first(where: { $0.localizedName == currentScreenName }),
+        guard let screen = currentScreen,
               let notch = NotchInteractionGeometry.openNotchRect(screenFrame: screen.frame,
                                                                  bodyInWindow: closeWatch.bodyInWindow) else {
             return false
@@ -2839,7 +2866,7 @@ struct ContentView: View {
             (window.childWindows ?? []).flatMap { [$0] + descendants(of: $0) }
         }
         return NSApp.windows
-            .filter { $0 is KannuWindow && $0.screen?.localizedName == currentScreenName }
+            .filter { $0 is KannuWindow && $0.screen?.displayID == currentScreenID }
             .flatMap(descendants(of:))
             .filter { $0.isVisible && !$0.ignoresMouseEvents }
             .map(\.frame)

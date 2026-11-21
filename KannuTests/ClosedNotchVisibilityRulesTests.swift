@@ -81,7 +81,7 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
             "continueLaunch went away — this pin is now vacuous, update it"
         )
         let seed = try XCTUnwrap(
-            launch.range(of: "viewModel.screen = screen.localizedName")?.lowerBound,
+            launch.range(of: "viewModel.screenID = screen.displayID")?.lowerBound,
             """
             The launch path no longer seeds the shared view model's screen. Without it a launch \
             while locked leaves `screen` nil, the fullscreen detector's sink never resolves, and \
@@ -142,7 +142,7 @@ final class ClosedNotchVisibilityRulesTests: XCTestCase {
     /// traffic light included. By pid: Debug and Release have different bundle ids.
     private static func skipsItsOwnWindows(_ detector: String) -> Bool {
         let code = strippingComments(detector)
-        guard let start = code.range(of: "guard app.screen.localizedName == name,"),
+        guard let start = code.range(of: "guard app.screen.displayID == id,"),
               let end = code.range(of: "else { return false }", range: start.upperBound..<code.endIndex) else { return false }
         return code[start.upperBound..<end.lowerBound].contains("app.processId != ProcessInfo.processInfo.processIdentifier")
     }
