@@ -82,9 +82,17 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 - [x] 7.1 Tag `v2.0.0-beta.1` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
   unchanged. [CI] [David] — superseded by §11 (beta.2)
 - [ ] 7.2 The fix window: fixes land in `development` and ship as `v2.0.0-beta.N` if needed. [Mac] [David]
-- [ ] 7.3 Tag `v2.0.0`. CI publishes, and commits the appcast to this repository's `main`. [CI] [David]
-- [ ] 7.4 The feed bridge: copy 2.0.0's appcast item into `libinmv/kannu`'s `Updates/appcast.xml`, then read that
-  file's raw XML to check it lists 2.0.0. [David]
+- [x] 7.2a Prove Sparkle before the final tag, and stop the workflow pushing to `main`: `scripts/check-sparkle-key.sh`
+  on every tag before Apple is asked, a rehearsal of the appcast export on a beta, the signed appcast attached to a
+  final release, and `scripts/publish-appcast.sh` for an admin. [Mac] Both scripts were run against throwaway keys
+  and a scratch repository; the workflow's steps are proven only by a tag.
+- [ ] 7.2b On the next beta tag, see "Check Sparkle signing key" pass and read the `Kannu-sparkle-rehearsal`
+  artifact. Until then nothing has shown that the repository's secret pairs with the app's key. [CI] [David]
+- [ ] 7.3 Tag `v2.0.0`. CI publishes, and attaches the signed appcast to the release. [CI] [David]
+- [ ] 7.3a Publish the appcast: `./scripts/publish-appcast.sh v2.0.0 --dry-run`, then without the flag. It commits
+  `Updates/appcast.xml` to this repository's `main`, which the workflow may not. [David]
+- [ ] 7.4 The feed bridge: copy 2.0.0's appcast item, which 7.3a's script prints, into `libinmv/kannu`'s
+  `Updates/appcast.xml`, then read that file's raw XML to check it lists 2.0.0. [David]
 - [ ] 7.5 Archive this change once 2.0.0 ships:
   `OPENSPEC_TELEMETRY=0 npx -y @fission-ai/openspec@0.23.0 archive release-2-0 --yes`. [Cloud]
 

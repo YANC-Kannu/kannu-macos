@@ -4,6 +4,29 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-21 - Prove the Sparkle key before the build, and publish the appcast by an admin's hand
+- **Developer label:** "are we sure its not any sparkle issue", then "can you do that and fix this"
+- **Agent label:** Claude Code (Fable 5.2) — release side session, after the third refused `v2.0.0-beta.2` run
+- **Changes:**
+  - Apple's refusal at Notarize DMG meant no Sparkle step had ever run in this repository, and a pre-release skips
+    them anyway. The workflow only saw that `SPARKLE_EDDSA_PRIVATE_KEY` was not empty. New
+    `scripts/check-sparkle-key.sh` signs a probe file with the secret and verifies the signature against
+    `SUPublicEDKey` in `Kannu/Info.plist`, the key installed copies verify with. It runs on every tag, a beta too,
+    before Apple is asked and before the build, and never prints the key.
+  - A beta now rehearses the appcast export once it is published: into a scratch folder, uploaded as the
+    `Kannu-sparkle-rehearsal` artifact. `Updates/appcast.xml` and the release are untouched.
+  - The last step pushed the appcast to `main` as `github-actions[bot]`. The ruleset on `main` lets only an admin
+    update it, so on the first final tag that push would have been refused, with the feed left at 1.3.4. The run
+    now attaches the signed appcast to the release and says which step is left. New `scripts/publish-appcast.sh`,
+    run by an admin, checks the appcast (well-formed, a signed item for the tag's version, a download that answers,
+    no build dropped) and commits it from a scratch clone. `--dry-run` pushes nothing, and a pre-release tag is
+    refused. It prints the item for the old repository's feed.
+  - Tests: three rules in `ReleaseWorkflowRulesTests`, each against planted offenders, run against the old workflow
+    first, where they failed. Both scripts were run locally with a throwaway key and a scratch repository. The
+    workflow's own steps are proven only by a tag.
+  - Docs: `scripts/RELEASE.md` (Release day, beta tags, "When the Sparkle key check fails"); the `release-2-0`
+    change's release spec, tasks 7.2a to 7.3a, design risks and run log.
+
 ### 2026-11-20 - Pin that the hero's lookup reaches its state, and say the "Open chat" label is the last lookup's
 - **Developer label:** "Fix CodeRabbit's findings on PR #83"
 - **Agent label:** Claude Code (Fable 5.2) — quick-three side session, Auto-fix
