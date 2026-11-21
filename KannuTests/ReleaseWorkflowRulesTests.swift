@@ -151,6 +151,54 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         return problems
     }
 
+    /// Both 2.0 betas built and signed for half an hour and were then refused at Notarize DMG:
+    /// Apple had revised its agreement and the team had not accepted it. The workflow now asks the
+    /// notary service first, with a call that uploads nothing, before anything is built.
+    func testAppleIsAskedBeforeAnythingIsBuilt() throws {
+        let workflow = try Self.read(Self.workflowPath)
+        let script = try Self.read("scripts/check-notary-access.sh")
+        XCTAssertEqual(Self.notaryCheckProblems(workflow: workflow, script: script), [])
+        // The step moved after the build, where a refusal costs the whole build again.
+        let step = try XCTUnwrap(workflow.range(of: "      - name: Check Apple notary access\n"))
+        let nextStep = try XCTUnwrap(workflow.range(of: "      - name: Download Metal Toolchain\n"))
+        let block = String(workflow[step.lowerBound..<nextStep.lowerBound])
+        let late = workflow.replacingOccurrences(of: block, with: "")
+            .replacingOccurrences(of: "      - name: Notarize DMG\n", with: block + "      - name: Notarize DMG\n")
+        XCTAssertNotEqual(late, workflow, "the plant did not take")
+        XCTAssertEqual(Self.notaryCheckProblems(workflow: late, script: script),
+                       ["Apple is asked only after the build"])
+        XCTAssertEqual(Self.notaryCheckProblems(workflow: workflow.replacingOccurrences(of: block, with: ""), script: script),
+                       ["the workflow never asks Apple before building"])
+        // A check that submits would upload a file; one that never names the agreement hides the cause.
+        let submits = script.replacingOccurrences(of: "xcrun notarytool history", with: "xcrun notarytool submit build/Kannu.dmg")
+        XCTAssertEqual(Self.notaryCheckProblems(workflow: workflow, script: submits),
+                       ["the check does not ask for the history"])
+        let silent = script.replacingOccurrences(of: "grep -qi \"agreement\"", with: "false")
+        XCTAssertNotEqual(silent, script, "the plant did not take")
+        XCTAssertEqual(Self.notaryCheckProblems(workflow: workflow, script: silent),
+                       ["a refused agreement is not named"])
+    }
+
+    static func notaryCheckProblems(workflow: String, script: String) -> [String] {
+        var problems: [String] = []
+        let call = "./scripts/check-notary-access.sh"
+        if let check = workflow.range(of: call) {
+            let build = workflow.range(of: "- name: Archive and export Release app")
+            if build.map({ check.lowerBound > $0.lowerBound }) ?? true {
+                problems.append("Apple is asked only after the build")
+            }
+        } else {
+            problems.append("the workflow never asks Apple before building")
+        }
+        if !script.contains("xcrun notarytool history") || script.contains("notarytool submit") {
+            problems.append("the check does not ask for the history")
+        }
+        if !script.contains("grep -qi \"agreement\"") || !script.contains("Account Holder") {
+            problems.append("a refused agreement is not named")
+        }
+        return problems
+    }
+
     // MARK: - Rules
 
     static func problems(in workflow: String) -> [String] {

@@ -277,11 +277,23 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
     // MARK: - A click resolves its target in the action
 
     /// Finding a session's target walks parent processes and asks `NSWorkspace`, so Brain never does it in `body`, for
-    /// each row on every render: a click calls `AgentSessionOpener.open`, which resolves it then.
+    /// each row on every render: a click calls `AgentSessionOpener.open`, which resolves it then. The hero alone asks
+    /// ahead whether there is one, in `resolveTarget`, which only its two hooks call: as it appears, and when its
+    /// session changes.
     static func clickProblems(in overview: String) -> [String] {
         let code = SettingsDesignSystemRulesTests.code(overview)
         var problems: [String] = []
-        if code.contains("AgentSessionOpener.target(") { problems.append("a target is resolved while drawing") }
+        let hero = region(from: "private struct AgentsHeroCard", to: "private struct AgentsSessionRow", in: code) ?? ""
+        let resolve = body(after: "private func resolveTarget(for session: AgentSessionStatus) {", in: hero) ?? ""
+        if code.components(separatedBy: "AgentSessionOpener.target(").count - 1 != 1
+            || !resolve.contains("let found = AgentSessionOpener.target(for: session) != nil") {
+            problems.append("a target is resolved while drawing")
+        }
+        if !hero.contains(".onAppear { resolveTarget(for: session) }")
+            || !hero.contains(".onChange(of: session) { _, latest in resolveTarget(for: latest) }")
+            || code.components(separatedBy: "resolveTarget(").count - 1 != 3 {
+            problems.append("the hero's target is not worked out once as it appears and once per change of its session")
+        }
         if SettingsDesignSystemRulesTests.matches(of: #"Button \{\s*_ = AgentSessionOpener\.open\(session\)"#, in: code).count != 2 {
             problems.append("the hero and the rows do not open their chat from the click")
         }
@@ -293,7 +305,68 @@ final class AgentsPageLiveDataRulesTests: XCTestCase {
         XCTAssertEqual(Self.clickProblems(in: overview), [])
         SettingsDesignSystemRulesTests.assertCaught([
             ("Button {\n            _ = AgentSessionOpener.open(session)", "Button {\n            _ = AgentSessionOpener.target(for: session)"),
+            ("        return hasTarget\n", "        return AgentSessionOpener.target(for: session) != nil\n"),
+            ("            if opensChat {\n                Button {", "            if AgentSessionOpener.target(for: session) != nil {\n                Button {"),
+            ("        .onChange(of: session) { _, latest in resolveTarget(for: latest) }\n", ""),
+            ("        .onAppear { resolveTarget(for: session) }\n", ""),
+            ("                    card\n                }\n                .buttonStyle(.plain)",
+             "                    card\n                }\n                .buttonStyle(.plain)\n                .onHover { _ in resolveTarget(for: session) }"),
         ], in: overview, by: Self.clickProblems)
+    }
+
+    // MARK: - "Open chat" only when the click has somewhere to go
+
+    /// The hero said "Open chat" and was a button whatever the session: with nothing to locate (a terminal agent whose
+    /// hook reported no terminal, a process that has ended), the click did nothing. Now the label and the button both
+    /// sit behind `opensChat`, which reads the answer the hooks worked out; with no target the card is drawn bare.
+    static func openChatProblems(in overview: String) -> [String] {
+        let code = SettingsDesignSystemRulesTests.code(overview)
+        guard let hero = region(from: "private struct AgentsHeroCard", to: "private struct AgentsSessionRow", in: code) else {
+            return ["the hero is not where this rule reads it"]
+        }
+        var problems: [String] = []
+        let gated = hero.components(separatedBy: "if opensChat {").dropFirst().compactMap { body(after: "", in: "{" + $0) }
+        let label = #"Text("Open chat")"#
+        if hero.components(separatedBy: label).count - 1 != 1 || gated.filter({ $0.contains(label) }).count != 1 {
+            problems.append("the hero says \"Open chat\" whether or not there is a chat to open")
+        }
+        let click = "AgentSessionOpener.open(session)"
+        if hero.components(separatedBy: click).count - 1 != 1 || gated.filter({ $0.contains(click) }).count != 1
+            || hero.components(separatedBy: "Button").count - 1 != 1 {
+            problems.append("the hero is a button with nowhere to go")
+        }
+        let opens = body(after: "private var opensChat: Bool {", in: hero) ?? ""
+        if !opens.contains("return hasTarget") || !hero.contains("@State private var hasTarget = false") {
+            problems.append("the hero does not ask whether its session has a target")
+        }
+        // The lookup's answer is the state's one write after its `false` start, so the label can only say what the
+        // lookup found. Writing only on a change is fine: the comparison is not a write.
+        let resolve = body(after: "private func resolveTarget(for session: AgentSessionStatus) {", in: hero) ?? ""
+        if resolve.components(separatedBy: "hasTarget = found").count - 1 != 1
+            || hero.components(separatedBy: "hasTarget = ").count - 1 != 2 {
+            problems.append("the lookup's answer does not reach the hero's state, or something else writes it")
+        }
+        return problems
+    }
+
+    func testOpenChatShowsOnlyWithATarget() throws {
+        let overview = try Self.source(Self.overviewPath)
+        XCTAssertEqual(Self.openChatProblems(in: overview), [])
+        let label = "                if opensChat {\n                    // A quiet button's look"
+        SettingsDesignSystemRulesTests.assertCaught([
+            // The fix removed, a piece at a time: the label back on every hero, the button back on every hero.
+            (label, "                if true {\n                    // A quiet button's look"),
+            ("            if opensChat {\n                Button {", "            if true {\n                Button {"),
+            ("        return hasTarget\n", "        return true\n"),
+            ("@State private var hasTarget = false", "@State private var hasTarget = true"),
+            // The lookup's answer never reaching the state: the hero would keep its first `false` and never offer the chat.
+            ("        if found != hasTarget { hasTarget = found }\n", ""),
+            ("if found != hasTarget { hasTarget = found }", "if found != hasTarget { hasTarget = true }"),
+            ("        let found = AgentSessionOpener.target(for: session) != nil\n",
+             "        let found = AgentSessionOpener.target(for: session) != nil\n        hasTarget = true\n"),
+            ("                // Nothing to open: no button, no label, no dead click.\n                card\n",
+             "                Button {\n                } label: {\n                    card\n                }\n"),
+        ], in: overview, by: Self.openChatProblems)
     }
 
     // MARK: - Tools are checked once per visit

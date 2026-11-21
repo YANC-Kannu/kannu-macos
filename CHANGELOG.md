@@ -4,6 +4,58 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-20 - Pin that the hero's lookup reaches its state, and say the "Open chat" label is the last lookup's
+- **Developer label:** "Fix CodeRabbit's findings on PR #83"
+- **Agent label:** Claude Code (Fable 5.2) — quick-three side session, Auto-fix
+- **Changes:**
+  - `AgentsPageLiveDataRulesTests.openChatProblems` now requires `resolveTarget` to write the lookup's answer to
+    `hasTarget`, and allows no other write. Before, deleting that line left every rule satisfied, and the hero would
+    have kept its first `false` and never offered the chat. Three planted offenders prove it: the write removed, the
+    write of a constant, and a second write.
+  - The entry below said the label shows "only while" a target is found, which reads as live. It now says what the
+    code does: the label is the last lookup's answer and can outlive a target whose app quits without the session
+    changing. `docs/SETTINGS.md` already said so.
+  - No app code changes.
+
+### 2026-11-20 - A release asks Apple before it builds
+- **Developer label:** "do this too so that we can recheck quickly" (the Apple check at the start of the release workflow)
+- **Agent label:** Claude Code (Fable 5.2) — main session, after both 2.0 beta tags were refused at notarization
+- **Changes:**
+  - `release.yml` gains "Check Apple notary access", right after the secrets are validated and before anything is
+    built. It runs the new `scripts/check-notary-access.sh`: `xcrun notarytool history` with the same three
+    credentials the Notarize step submits with. It uploads nothing and answers in seconds.
+  - Why: both 2.0 betas built and signed for about half an hour and were then refused at Notarize DMG with
+    "HTTP status code: 403. A required agreement is missing or has expired." A refusal now stops the run at the
+    start, with an error that says the team's Account Holder must accept Apple's updated agreement.
+  - Not yet proven against Apple: that `history` is refused the same way `submit` is. If it is not, the run
+    goes on and fails at Notarize DMG as before.
+  - `ReleaseWorkflowRulesTests.testAppleIsAskedBeforeAnythingIsBuilt` pins the step's place before the build,
+    the history call and the named cause, each against a planted offender.
+  - `scripts/RELEASE.md`: "When Apple refuses the notary request", and the script in the workflow reference.
+
+### 2026-11-20 - Onboarding comes back to the front, "Open chat" only with a chat to open, and a dead badge gone
+- **Developer label:** "The three quick ones", David's pick from a backlog check for 2.0
+- **Agent label:** Claude Code (Fable 5.2) — quick-three side session off `development`
+- **Changes:**
+  - Onboarding's window was ordered to the front once, as it opened, so after a trip to System Settings for a
+    permission it could sit behind another app's window and look stuck. `OnboardingView` now brings it forward
+    (`makeKeyAndOrderFront`, found by its identifier, only while it is on screen) each time Kannu becomes active.
+    It never activates Kannu, so it cannot take the keyboard from System Settings, and it raises no macOS dialog.
+  - Brain › Agents' hero said "Open chat ›" and was a button for every session; with nothing to locate (a terminal
+    agent whose hook reported no terminal, a process that has ended) the click did nothing. The label and the button
+    now show only when the hero's last lookup, `AgentSessionOpener.target(for:)`, found a target. The hero asks as it
+    appears and when its session changes, never in `body`, and keeps only the answer. That answer is the last
+    lookup's, not a live one: if the target's app quits and the session does not change, the label stays until the
+    session next changes, and the click, which resolves its own target, does nothing. Measured: about 0.1 ms a
+    lookup, at most twice a second, and never while Brain is off screen. Recent chats' rows are unchanged.
+  - `WelcomeView` loses an `if false` "PRO" badge left from the app Kannu was forked from, and the catalog loses
+    its "PRO" key, which nothing else used. The sparkles stay.
+  - Tests: `OnboardingWindowRulesTests` (the refocus, and no branch that never runs under `Onboarding/`) and
+    `AgentsPageLiveDataRulesTests` (the click rule now allows the one lookup in the hero's hooks; a new rule holds
+    "Open chat" and the button behind the answer). Each was run against the unfixed sources first, and failed.
+  - Docs: `docs/SETTINGS.md` (the Agents hero, "Live data", "Onboarding"); the done follow-up leaves
+    `openspec/changes/release-2-0/handoff.md`.
+
 ### 2026-11-20 - One override group for each of two identical monitors
 - **Developer label:** CodeRabbit's linked-issue check on #80, answered "Do it in #80", and its two notes on the fixes
 - **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the per-display overrides on #80

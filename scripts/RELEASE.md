@@ -63,6 +63,23 @@ Number the beta's build above the feed's newest and below the release's: with 1.
 the 1.4.0 beta is build 9 and 1.4.0 itself build 10, so Sparkle moves every beta tester to the
 release when it ships. `ReleaseWorkflowRulesTests` pins the pre-release rules.
 
+### When Apple refuses the notary request
+
+The workflow asks Apple's notary service for the team's submission history right after it validates
+the secrets (`scripts/check-notary-access.sh`). The call uploads nothing and answers in seconds, so a
+refusal stops the run before the build, not after it.
+
+- **"A required agreement is missing or has expired" (HTTP 403).** Apple revised an agreement and the
+  team has not accepted it. Only the team's Account Holder can: sign in at developer.apple.com/account,
+  accept the updated agreement, and check the membership's renewal date. Then re-run the failed job;
+  the same tag is reused. Both 2.0 betas were refused this way, after Apple revised the Developer
+  Program License Agreement in October 2026.
+- **Anything else.** Check the `APPLE_ID`, `APPLE_NOTARIZATION_PASSWORD` and `APPLE_TEAM_ID` secrets:
+  the Apple ID must belong to that team, and the app-specific password must still be valid.
+
+A re-run uses the workflow file at the tagged commit, so a tag made before this check was added
+still fails only at Notarize DMG.
+
 ---
 
 ## Manual GitHub release (fallback)
@@ -174,6 +191,7 @@ Scripts:
 
 - [`create-dmg.sh`](create-dmg.sh) — styled DMG via `dmgbuild` and [`dmg-settings.py`](dmg-settings.py), then signs it
 - [`install-dmgbuild.sh`](install-dmgbuild.sh) — pinned `dmgbuild` into a temporary venv
+- [`check-notary-access.sh`](check-notary-access.sh) — asks Apple's notary service before the build (`notarytool history`)
 - [`notarize-dmg.sh`](notarize-dmg.sh) — `notarytool submit` + staple
 - [`export-sparkle-update.sh`](export-sparkle-update.sh) — Sparkle-sign DMG + appcast
 - [`manual-release.sh`](manual-release.sh) — local release helper
