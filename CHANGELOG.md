@@ -4,6 +4,31 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-21 - Keep every build in the next feed, and let a second publish run finish the first
+- **Developer label:** CodeRabbit's review of the Sparkle proof and appcast change: 3 findings
+- **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after CodeRabbit's review
+- **Changes:**
+  - Major, would have blocked 2.0.0: Sparkle's `generate_appcast` keeps three builds per branch unless told
+    otherwise, and the feed already lists three (builds 8, 7 and 6). Adding 2.0.0 removed build 6, and
+    `publish-appcast.sh` refuses an appcast that drops a build, with the release already public.
+    `scripts/export-sparkle-update.sh` now passes `--maximum-versions 0`, and stops the run before the release is
+    published if the generated appcast drops a build it started with.
+  - Major, the release after 2.0.0: the export started from the tagged tree's `Updates/appcast.xml`, which misses
+    any build an admin published after the tag's branch was cut. The final export and the beta rehearsal now start
+    from the feed on `main`.
+  - Minor: `publish-appcast.sh` stopped at "nothing to publish", so a run that pushed and then failed its read-back
+    could never be finished. A second run now pushes nothing, and still reads the feed back and prints the old
+    repository's item. A dry run is the only early success.
+  - Found while checking the first finding: the rehearsal looked for a signature anywhere in the appcast, and the
+    builds the feed already lists are signed, so an unsigned new build would have passed. It now reads the new
+    build's own line.
+  - Tests: one new rule and two extended ones in `ReleaseWorkflowRulesTests`, with planted offenders, run against
+    the unfixed sources first, where they failed. The export was run with a made-up app archive and a made-up feed
+    of three builds: before, build 6 was removed; after, all four are listed, and with the flag taken out the new
+    guard stops the run. The publish script's second run and its dry run were run against a scratch repository.
+  - Docs: `scripts/RELEASE.md`; the `release-2-0` change's release spec (three scenarios), task 7.2c and a design
+    risk.
+
 ### 2026-11-21 - Write the two new release scripts' tests with double brackets
 - **Developer label:** SonarCloud's 18 new issues on the Sparkle key check and the appcast publish script
 - **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after SonarCloud's comment

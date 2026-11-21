@@ -8,7 +8,12 @@ A final release's workflow run SHALL attach the signed appcast to the GitHub rel
 branch: the ruleset on `main` lets only an admin update it. An admin SHALL then commit the appcast to this
 repository's `main` with `scripts/publish-appcast.sh`. The script SHALL refuse a pre-release tag, and an appcast that
 is malformed, lacks a signed item for the tag's version, or drops a build the feed lists. Its `--dry-run` SHALL push
-nothing. `ReleaseWorkflowRulesTests` pins this.
+nothing. Run again after a push whose read-back failed, it SHALL push nothing, and SHALL still read the feed back
+and print the item for the old repository's feed.
+
+The new appcast SHALL be built from the feed on `main`, never from the tagged tree's `Updates/appcast.xml`, and
+SHALL list every build that feed lists. `scripts/export-sparkle-update.sh` SHALL stop the run, before the release is
+published, when the generated appcast drops one. `ReleaseWorkflowRulesTests` pins this.
 
 #### Scenario: Checking for updates on 2.0
 - **WHEN** a 2.0 install checks for updates
@@ -17,6 +22,18 @@ nothing. `ReleaseWorkflowRulesTests` pins this.
 #### Scenario: Publishing a final release's appcast
 - **WHEN** `v2.0.0`'s run has finished and an admin runs `./scripts/publish-appcast.sh v2.0.0`
 - **THEN** `Updates/appcast.xml` on `main` lists 2.0.0, and the workflow itself pushed nothing
+
+#### Scenario: A feed that already lists three builds
+- **WHEN** the feed on `main` lists builds 8, 7 and 6 and `v2.0.0`'s run exports the appcast
+- **THEN** the new appcast lists 2.0.0's build and builds 8, 7 and 6
+
+#### Scenario: The release after 2.0.0
+- **WHEN** a final tag is cut from a tree whose `Updates/appcast.xml` does not list 2.0.0, and `main`'s does
+- **THEN** the new appcast lists that release and 2.0.0
+
+#### Scenario: A read-back that failed
+- **WHEN** the script pushed the appcast, its read-back failed, and an admin runs it again
+- **THEN** it pushes nothing, reads the feed back, and prints the item for the old repository's feed
 
 ### Requirement: A hyphenated tag is a pre-release
 A tag whose version has a hyphen (`v1.4.0-beta.1`) SHALL be built, signed and notarized like a release. It SHALL be

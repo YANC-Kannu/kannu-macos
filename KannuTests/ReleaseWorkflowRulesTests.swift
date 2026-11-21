@@ -310,6 +310,7 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
             ("xmllint --noout", "true", "the script publishes an appcast it has not checked"),
             ("sparkle:edSignature=", "sparkle:version", "the script publishes an appcast it has not checked"),
             ("if [[ \"$DRY_RUN\" = true ]]; then", "if false; then", "a dry run would still push"),
+            ("  CHANGED=false\n", "  exit 0\n", "a second run would stop before the read-back and the old feed's item"),
         ] {
             let planted = script.replacingOccurrences(of: target, with: replacement)
             XCTAssertNotEqual(planted, script, "the plant did not take: \(target)")
@@ -346,6 +347,78 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         } else {
             problems.append("a dry run would still push")
         }
+        // A run that pushed and then failed to read the feed back is finished by running it again. That
+        // second run finds nothing to commit, and must still read the feed back and print the old
+        // feed's item: the dry run's is the only early success.
+        if script.components(separatedBy: "exit 0").count - 1 != 1 {
+            problems.append("a second run would stop before the read-back and the old feed's item")
+        }
+        return problems
+    }
+
+    // MARK: - The next feed lists every build the published one does
+
+    /// The feed installs read is `Updates/appcast.xml` on `main`, and an admin puts each release
+    /// there after the tag. Two ways the next release's feed could come out without a build that
+    /// one lists, and `publish-appcast.sh` would then refuse it with the release already public:
+    /// `generate_appcast` keeps three builds per branch unless told otherwise (the feed held three,
+    /// so adding 2.0.0 dropped the oldest), and the export started from the tagged tree's copy,
+    /// which misses whatever was published after the tag's branch was cut.
+    func testTheNextFeedStartsFromThePublishedOneAndKeepsEveryBuild() throws {
+        let workflow = try Self.read(Self.workflowPath)
+        let export = try Self.read("scripts/export-sparkle-update.sh")
+        XCTAssertEqual(Self.feedProblems(workflow: workflow, export: export), [])
+
+        for (target, replacement, problem) in [
+            ("    --maximum-versions 0\n", "", "the export prunes the feed to Sparkle's default of three builds"),
+            ("comm -23", "true", "the export would write a feed that drops a build it started with"),
+        ] {
+            let planted = export.replacingOccurrences(of: target, with: replacement)
+            XCTAssertNotEqual(planted, export, "the plant did not take: \(target)")
+            XCTAssertEqual(Self.feedProblems(workflow: workflow, export: planted), [problem], "planted: \(target)")
+        }
+
+        let fromMain = "          git show FETCH_HEAD:Updates/appcast.xml > Updates/appcast.xml\n"
+        let rehearsedFromMain = "          git show FETCH_HEAD:Updates/appcast.xml > \"$REHEARSAL_DIR/appcast.xml\"\n"
+        let final = try XCTUnwrap(Self.step("Export Sparkle Update Assets", in: workflow))
+        let late = final.replacingOccurrences(of: fromMain, with: "") + fromMain
+        for (planted, problem) in [
+            (workflow.replacingOccurrences(of: fromMain, with: ""),
+             "the final feed starts from the tagged tree, not from the feed on main"),
+            (workflow.replacingOccurrences(of: final, with: late),
+             "the final feed starts from the tagged tree, not from the feed on main"),
+            (workflow.replacingOccurrences(of: rehearsedFromMain, with: "          cp Updates/appcast.xml \"$REHEARSAL_DIR/appcast.xml\"\n"),
+             "the rehearsal starts from the tagged tree, not from the feed on main"),
+        ] {
+            XCTAssertNotEqual(planted, workflow, "the plant did not take: \(problem)")
+            XCTAssertEqual(Self.feedProblems(workflow: planted, export: export), [problem])
+        }
+    }
+
+    static func feedProblems(workflow: String, export: String) -> [String] {
+        var problems: [String] = []
+        if !export.contains("    --maximum-versions 0\n") {
+            problems.append("the export prunes the feed to Sparkle's default of three builds")
+        }
+        if !export.contains("comm -23") || !export.contains("drops builds the feed it started from lists") {
+            problems.append("the export would write a feed that drops a build it started with")
+        }
+        let fetch = "git fetch --quiet --depth 1 origin main\n"
+        for (name, seed, problem) in [
+            ("Export Sparkle Update Assets", "git show FETCH_HEAD:Updates/appcast.xml > Updates/appcast.xml\n",
+             "the final feed starts from the tagged tree, not from the feed on main"),
+            ("Rehearse Sparkle export", "git show FETCH_HEAD:Updates/appcast.xml > \"$REHEARSAL_DIR/appcast.xml\"\n",
+             "the rehearsal starts from the tagged tree, not from the feed on main"),
+        ] {
+            let text = step(name, in: workflow) ?? ""
+            if let fetched = text.range(of: fetch), let seeded = text.range(of: seed),
+               let exported = text.range(of: "./scripts/export-sparkle-update.sh"),
+               fetched.lowerBound < seeded.lowerBound, seeded.lowerBound < exported.lowerBound {
+                // Fetched, then seeded, then exported.
+            } else {
+                problems.append(problem)
+            }
+        }
         return problems
     }
 
@@ -373,6 +446,11 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
                                            with: "            build/${{ env.RELEASE_DMG }}\n            ${{ env.REHEARSAL_DIR }}/appcast.xml\n          body_path"),
              "the rehearsal's result could be taken for the real appcast"),
             (early, "a failed rehearsal would hold back the beta itself"),
+            // The builds the feed already lists are signed, so a signature anywhere in the file would pass.
+            (workflow.replacingOccurrences(
+                of: "if ! grep \"${RELEASE_DMG}\" \"$REHEARSAL_DIR/appcast.xml\" | grep -q 'sparkle:edSignature='; then\n",
+                with: "if ! grep -q \"${RELEASE_DMG}\" \"$REHEARSAL_DIR/appcast.xml\" || ! grep -q 'sparkle:edSignature=' \"$REHEARSAL_DIR/appcast.xml\"; then\n"),
+             "the rehearsal would pass a new build that is not signed"),
         ] {
             XCTAssertNotEqual(planted, workflow, "the plant did not take: \(problem)")
             XCTAssertEqual(Self.rehearsalProblems(in: planted), [problem])
@@ -402,6 +480,9 @@ final class ReleaseWorkflowRulesTests: XCTestCase {
         if let rehearse = workflow.range(of: "- name: Rehearse Sparkle export"),
            let publish = workflow.range(of: "- name: Publish GitHub Release"), rehearse.lowerBound < publish.lowerBound {
             problems.append("a failed rehearsal would hold back the beta itself")
+        }
+        if !rehearsal.contains("if ! grep \"${RELEASE_DMG}\" \"$REHEARSAL_DIR/appcast.xml\" | grep -q 'sparkle:edSignature='; then\n") {
+            problems.append("the rehearsal would pass a new build that is not signed")
         }
         return problems
     }

@@ -125,29 +125,35 @@ fi
 mkdir -p "$(dirname "$WORK_DIR/feed/$FEED_PATH")"
 cp "$NEW_APPCAST" "$WORK_DIR/feed/$FEED_PATH"
 git -C "$WORK_DIR/feed" add "$FEED_PATH"
+CHANGED=true
 if git -C "$WORK_DIR/feed" diff --staged --quiet; then
+  # Not the end. A run that pushed and then could not read the feed back is finished by running it
+  # again: this one pushes nothing, and still reads the feed back and prints the old feed's item.
   echo "$FEED_PATH on $BRANCH already lists ${VERSION}: nothing to publish."
-  exit 0
+  CHANGED=false
+else
+  git -C "$WORK_DIR/feed" --no-pager diff --staged --stat
 fi
-git -C "$WORK_DIR/feed" --no-pager diff --staged --stat
 
 if [[ "$DRY_RUN" = true ]]; then
   echo "Dry run: every check passed, and nothing was pushed."
   exit 0
 fi
 
-# The commit is public, so it carries a GitHub no-reply address, never whatever this Mac's git is set to.
-if [[ "$REHEARSAL" = true ]]; then
-  AUTHOR_NAME="Dana Example"
-  AUTHOR_EMAIL="dana@example.com"
-else
-  AUTHOR_NAME="$(gh api user --jq .login)"
-  AUTHOR_EMAIL="$(gh api user --jq '"\(.id)+\(.login)@users.noreply.github.com"')"
+if [[ "$CHANGED" = true ]]; then
+  # The commit is public, so it carries a GitHub no-reply address, never whatever this Mac's git is set to.
+  if [[ "$REHEARSAL" = true ]]; then
+    AUTHOR_NAME="Dana Example"
+    AUTHOR_EMAIL="dana@example.com"
+  else
+    AUTHOR_NAME="$(gh api user --jq .login)"
+    AUTHOR_EMAIL="$(gh api user --jq '"\(.id)+\(.login)@users.noreply.github.com"')"
+  fi
+  git -C "$WORK_DIR/feed" -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL" \
+    commit --quiet -m "Update appcast for ${TAG}"
+  git -C "$WORK_DIR/feed" push origin "HEAD:${BRANCH}"
+  echo "Published: $FEED_PATH on $BRANCH now lists ${VERSION}."
 fi
-git -C "$WORK_DIR/feed" -c user.name="$AUTHOR_NAME" -c user.email="$AUTHOR_EMAIL" \
-  commit --quiet -m "Update appcast for ${TAG}"
-git -C "$WORK_DIR/feed" push origin "HEAD:${BRANCH}"
-echo "Published: $FEED_PATH on $BRANCH now lists ${VERSION}."
 
 if [[ "$REHEARSAL" != true ]]; then
   # Read through the API, which is not cached. The raw URL installs read can lag by a few minutes.
@@ -155,7 +161,8 @@ if [[ "$REHEARSAL" != true ]]; then
     | grep -q "<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>"; then
     echo "Read back from GitHub: the feed lists ${VERSION}."
   else
-    echo "The push went through, but the feed read back from GitHub does not list ${VERSION}." >&2
+    echo "The feed on $BRANCH holds the new appcast, but read back from GitHub it does not list ${VERSION}." >&2
+    echo "Run this again in a minute: it will not push again, and it finishes the read-back and prints the item below." >&2
     exit 1
   fi
 fi

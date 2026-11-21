@@ -58,7 +58,14 @@ admin, from any checkout: it works in a fresh clone in a scratch folder, so no c
 Before it pushes, it checks that the appcast is well-formed, lists the tag's version with an EdDSA
 signature, points at a download on that release that answers, and keeps every build the feed lists
 today. `--dry-run` runs every check, shows the change and pushes nothing. After the push it reads the
-feed back through GitHub's API; the raw URL that installs read can lag by a few minutes.
+feed back through GitHub's API; the raw URL that installs read can lag by a few minutes. If that
+read-back fails, run it again: the second run pushes nothing, and still reads the feed back and prints
+the item below.
+
+The run builds the new appcast from the feed on `main`, not from the tagged tree's `Updates/appcast.xml`,
+which misses any build published after the tag's branch was cut. It keeps every build the feed lists:
+`generate_appcast` would otherwise keep three, and `export-sparkle-update.sh` stops the run, before the
+release is published, if the result drops one.
 
 It ends by printing the release's `<item>`. For 2.0.0 that item is also added, once, to the old
 repository's feed, which every 1.x install still reads.
@@ -69,8 +76,10 @@ A tag with a hyphen — `v1.4.0-beta.1` — runs the same build, signing and not
 publishes the DMG as a GitHub **pre-release** (never marked Latest), and publishes no appcast. Sparkle
 never offers it: only testers who download it from the Releases page run it. A beta still proves
 Sparkle before the final tag: the key check below runs on every tag, and once the beta is published
-the run rehearses the appcast export into a scratch folder and uploads the result as the
-`Kannu-sparkle-rehearsal` artifact, which nothing reads but a person. The release notes come from `docs/release-notes/<version>.md` for the tag's version
+the run rehearses the appcast export into a scratch folder, from the feed on `main` as a final release
+does, and uploads the result as the `Kannu-sparkle-rehearsal` artifact, which nothing reads but a person.
+The rehearsal fails if the new build's own line carries no EdDSA signature, or if a build the feed lists is
+gone. The release notes come from `docs/release-notes/<version>.md` for the tag's version
 (`1.4.0-beta.1.md`), or GitHub's generated list.
 
 ```bash

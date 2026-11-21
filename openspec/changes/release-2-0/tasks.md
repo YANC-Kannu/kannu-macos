@@ -87,7 +87,12 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
   final release, and `scripts/publish-appcast.sh` for an admin. [Mac] Both scripts were run against throwaway keys
   and a scratch repository; the workflow's steps are proven only by a tag.
 - [ ] 7.2b On the next beta tag, see "Check Sparkle signing key" pass and read the `Kannu-sparkle-rehearsal`
-  artifact. Until then nothing has shown that the repository's secret pairs with the app's key. [CI] [David]
+  artifact: it lists the beta's build with a signature, and builds 8, 7 and 6. Until then nothing has shown that
+  the repository's secret pairs with the app's key. [CI] [David]
+- [x] 7.2c The next feed lists every build the published one does: the export passes `--maximum-versions 0`, starts
+  from the feed on `main`, and stops the run if a build is gone; `publish-appcast.sh` run a second time still reads
+  the feed back and prints the old feed's item. [Mac] Reproduced with a made-up app archive and feed: before, build
+  6 was removed; after, all four builds are listed.
 - [ ] 7.3 Tag `v2.0.0`. CI publishes, and attaches the signed appcast to the release. [CI] [David]
 - [ ] 7.3a Publish the appcast: `./scripts/publish-appcast.sh v2.0.0 --dry-run`, then without the flag. It commits
   `Updates/appcast.xml` to this repository's `main`, which the workflow may not. [David]
