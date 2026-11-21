@@ -54,6 +54,24 @@ jobs:
             exit 1
           fi
 
+      - name: Download Sparkle Tools
+        run: |
+          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/2.7.0/Sparkle-2.7.0.tar.xz" -o /tmp/Sparkle-2.7.0.tar.xz
+          mkdir -p /tmp/sparkle-tools
+          tar -xf /tmp/Sparkle-2.7.0.tar.xz -C /tmp/sparkle-tools
+          echo "SPARKLE_BIN_DIR=/tmp/sparkle-tools/bin" >> "$GITHUB_ENV"
+
+      - name: Check Sparkle signing key
+        # Every tag, a beta too, and before Apple is asked. Apple's refusal stopped both 2.0 betas at
+        # Notarize DMG, so no Sparkle step had ever run here, and nothing had shown that this secret
+        # pairs with the public key inside the app. Seconds here; found on the final tag, a wrong key
+        # is every install refusing the update.
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          chmod +x scripts/check-sparkle-key.sh
+          ./scripts/check-sparkle-key.sh "$SPARKLE_BIN_DIR" Kannu/Info.plist
+
       - name: Check Apple notary access
         # Seconds here, not the half hour the build takes: both 2.0 betas built and signed, and were
         # then refused at Notarize DMG for an agreement the team had not accepted.
@@ -106,13 +124,6 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
-
-      - name: Download Sparkle Tools
-        run: |
-          curl -sL "https://github.com/sparkle-project/Sparkle/releases/download/2.7.0/Sparkle-2.7.0.tar.xz" -o /tmp/Sparkle-2.7.0.tar.xz
-          mkdir -p /tmp/sparkle-tools
-          tar -xf /tmp/Sparkle-2.7.0.tar.xz -C /tmp/sparkle-tools
-          echo "SPARKLE_BIN_DIR=/tmp/sparkle-tools/bin" >> "$GITHUB_ENV"
 
       - name: Archive and export Release app
         env:
@@ -196,6 +207,12 @@ jobs:
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
 
+          # The feed installs read is the one on main, where an admin puts each release after its
+          # tag. Start from it, never from the tagged tree's copy, which misses any build that
+          # was published after the tag's branch was cut.
+          git fetch --quiet --depth 1 origin main
+          git show FETCH_HEAD:Updates/appcast.xml > Updates/appcast.xml
+
           chmod +x scripts/export-sparkle-update.sh
           ./scripts/export-sparkle-update.sh \
             "build/${RELEASE_DMG}" \
@@ -246,26 +263,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update appcast on main
+      # The feed is Updates/appcast.xml on `main`, and the ruleset on `main` lets only an admin update
+      # that branch, so this job cannot commit it: its push would be refused. The signed appcast
+      # rides on the release, and an admin publishes it with scripts/publish-appcast.sh.
+      - name: Attach appcast to the release
         if: env.RELEASE_PRERELEASE != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ ! -f Updates/appcast.xml ]; then
-            echo "No generated Updates/appcast.xml found; skipping main branch update."
-            exit 0
-          fi
-
           TAG="${GITHUB_REF#refs/tags/}"
-          cp Updates/appcast.xml /tmp/kannu-appcast.xml
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git checkout main
-          cp /tmp/kannu-appcast.xml Updates/appcast.xml
-          git add Updates/appcast.xml
-          if git diff --staged --quiet; then
-            echo "Updates/appcast.xml unchanged."
-          else
-            git commit -m "Update appcast for ${TAG}"
-            git push origin main
+          if [ ! -f Updates/appcast.xml ]; then
+            echo "::error::No Updates/appcast.xml was generated, so ${TAG} has no feed entry to publish."
+            exit 1
           fi
+
+          gh release upload "$TAG" Updates/appcast.xml --clobber --repo "$GITHUB_REPOSITORY"
+          {
+            echo "### One step left: publish the appcast"
+            echo "No install is offered ${TAG} until an admin runs this from a checkout:"
+            echo '```'
+            echo "./scripts/publish-appcast.sh ${TAG}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A pre-release publishes no appcast, so without this the export script would first run on
+      # the final tag. It runs last, after the beta itself is out, and writes to a scratch folder:
+      # the result is uploaded under a name of its own, and nothing reads it but a person.
+      - name: Rehearse Sparkle export
+        if: env.RELEASE_PRERELEASE == 'true'
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          REHEARSAL_DIR="$RUNNER_TEMP/sparkle-rehearsal"
+          mkdir -p "$REHEARSAL_DIR"
+          # The same starting point as a final release: the feed on main, not the tagged tree's copy.
+          git fetch --quiet --depth 1 origin main
+          git show FETCH_HEAD:Updates/appcast.xml > "$REHEARSAL_DIR/appcast.xml"
+
+          chmod +x scripts/export-sparkle-update.sh
+          ./scripts/export-sparkle-update.sh \
+            "build/${RELEASE_DMG}" \
+            "$REHEARSAL_DIR" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/" \
+            "$SPARKLE_BIN_DIR"
+
+          # The new build's own line. The builds the feed already lists are signed, so a signature
+          # anywhere in the file says nothing about this one.
+          if ! grep "${RELEASE_DMG}" "$REHEARSAL_DIR/appcast.xml" | grep -q 'sparkle:edSignature='; then
+            echo "::error::The rehearsed appcast does not list ${RELEASE_DMG} with an EdDSA signature."
+            exit 1
+          fi
+          echo "REHEARSAL_DIR=$REHEARSAL_DIR" >> "$GITHUB_ENV"
+
+      - name: Upload Sparkle Rehearsal
+        if: env.RELEASE_PRERELEASE == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Kannu-sparkle-rehearsal
+          path: ${{ env.REHEARSAL_DIR }}/appcast.xml
+          if-no-files-found: error

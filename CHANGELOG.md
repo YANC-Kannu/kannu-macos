@@ -4,6 +4,66 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-21 - Keep every build in the next feed, and let a second publish run finish the first
+- **Developer label:** CodeRabbit's review of the Sparkle proof and appcast change: 3 findings
+- **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after CodeRabbit's review
+- **Changes:**
+  - Major, would have blocked 2.0.0: Sparkle's `generate_appcast` keeps three builds per branch unless told
+    otherwise, and the feed already lists three (builds 8, 7 and 6). Adding 2.0.0 removed build 6, and
+    `publish-appcast.sh` refuses an appcast that drops a build, with the release already public.
+    `scripts/export-sparkle-update.sh` now passes `--maximum-versions 0`, and stops the run before the release is
+    published if the generated appcast drops a build it started with.
+  - Major, the release after 2.0.0: the export started from the tagged tree's `Updates/appcast.xml`, which misses
+    any build an admin published after the tag's branch was cut. The final export and the beta rehearsal now start
+    from the feed on `main`.
+  - Minor: `publish-appcast.sh` stopped at "nothing to publish", so a run that pushed and then failed its read-back
+    could never be finished. A second run now pushes nothing, and still reads the feed back and prints the old
+    repository's item. A dry run is the only early success.
+  - Found while checking the first finding: the rehearsal looked for a signature anywhere in the appcast, and the
+    builds the feed already lists are signed, so an unsigned new build would have passed. It now reads the new
+    build's own line.
+  - Tests: one new rule and two extended ones in `ReleaseWorkflowRulesTests`, with planted offenders, run against
+    the unfixed sources first, where they failed. The export was run with a made-up app archive and a made-up feed
+    of three builds: before, build 6 was removed; after, all four are listed, and with the flag taken out the new
+    guard stops the run. The publish script's second run and its dry run were run against a scratch repository.
+  - Docs: `scripts/RELEASE.md`; the `release-2-0` change's release spec (three scenarios), task 7.2c and a design
+    risk.
+
+### 2026-11-21 - Write the two new release scripts' tests with double brackets
+- **Developer label:** SonarCloud's 18 new issues on the Sparkle key check and the appcast publish script
+- **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after SonarCloud's comment
+- **Changes:**
+  - SonarCloud flagged every `[ … ]` test in `scripts/check-sparkle-key.sh` and `scripts/publish-appcast.sh`
+    (rule `shell:S7688`, 18 times). Both scripts run under bash, so each is now `[[ … ]]`. Nothing they decide
+    changes. The older release scripts keep their single brackets: they are not part of this change.
+  - `ReleaseWorkflowRulesTests` quotes three of those lines (the secret's presence test and the dry-run stop), so
+    its strings follow.
+  - Both scripts were run again locally: the key check with a throwaway key (match, mismatch, no secret), the
+    publish script against a scratch repository (dry run, each refusal).
+
+### 2026-11-21 - Prove the Sparkle key before the build, and publish the appcast by an admin's hand
+- **Developer label:** "are we sure its not any sparkle issue", then "can you do that and fix this"
+- **Agent label:** Claude Code (Fable 5.2) — release side session, after the third refused `v2.0.0-beta.2` run
+- **Changes:**
+  - Apple's refusal at Notarize DMG meant no Sparkle step had ever run in this repository, and a pre-release skips
+    them anyway. The workflow only saw that `SPARKLE_EDDSA_PRIVATE_KEY` was not empty. New
+    `scripts/check-sparkle-key.sh` signs a probe file with the secret and verifies the signature against
+    `SUPublicEDKey` in `Kannu/Info.plist`, the key installed copies verify with. It runs on every tag, a beta too,
+    before Apple is asked and before the build, and never prints the key.
+  - A beta now rehearses the appcast export once it is published: into a scratch folder, uploaded as the
+    `Kannu-sparkle-rehearsal` artifact. `Updates/appcast.xml` and the release are untouched.
+  - The last step pushed the appcast to `main` as `github-actions[bot]`. The ruleset on `main` lets only an admin
+    update it, so on the first final tag that push would have been refused, with the feed left at 1.3.4. The run
+    now attaches the signed appcast to the release and says which step is left. New `scripts/publish-appcast.sh`,
+    run by an admin, checks the appcast (well-formed, a signed item for the tag's version, a download that answers,
+    no build dropped) and commits it from a scratch clone. `--dry-run` pushes nothing, and a pre-release tag is
+    refused. It prints the item for the old repository's feed.
+  - Tests: three rules in `ReleaseWorkflowRulesTests`, each against planted offenders, run against the old workflow
+    first, where they failed. Both scripts were run locally with a throwaway key and a scratch repository. The
+    workflow's own steps are proven only by a tag.
+  - Docs: `scripts/RELEASE.md` (Release day, beta tags, "When the Sparkle key check fails"); the `release-2-0`
+    change's release spec, tasks 7.2a to 7.3a, design risks and run log.
+
 ### 2026-11-21 - A hidden island can be hovered back after the notch changes display
 - **Developer label:** CodeRabbit's note on #80's ContentView display-change handler, answered "Yes, fix #80"
 - **Agent label:** Claude Code (Opus 5.5) — display-identity lane, the last review note on #80

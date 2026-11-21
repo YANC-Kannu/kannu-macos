@@ -55,6 +55,9 @@ if [ -n "$SPARKLE_BIN_DIR" ] && [ -x "$SPARKLE_BIN_DIR/generate_appcast" ]; then
     "$SPARKLE_BIN_DIR/generate_appcast"
     --download-url-prefix "$DOWNLOAD_URL_PREFIX"
     --maximum-deltas 0
+    # generate_appcast keeps three builds per branch unless told otherwise, and would drop the
+    # oldest from a feed that already lists three. 0 keeps every build.
+    --maximum-versions 0
   )
 
   if [ -n "$KEY_FILE" ]; then
@@ -65,6 +68,21 @@ if [ -n "$SPARKLE_BIN_DIR" ] && [ -x "$SPARKLE_BIN_DIR/generate_appcast" ]; then
   GENERATE_ARGS+=("$STAGING_DIR")
 
   "${GENERATE_ARGS[@]}"
+
+  # Every build the feed started with must still be listed, whatever generate_appcast decided.
+  # This runs before the release is published. publish-appcast.sh checks the same against the
+  # feed on main, but by then the release is public.
+  if [[ -f "$UPDATES_DIR/appcast.xml" ]]; then
+    LOST="$(comm -23 \
+      <(grep -o '<sparkle:version>[^<]*</sparkle:version>' "$UPDATES_DIR/appcast.xml" | sort -u) \
+      <(grep -o '<sparkle:version>[^<]*</sparkle:version>' "$STAGING_DIR/appcast.xml" | sort -u))"
+    if [[ -n "$LOST" ]]; then
+      echo "::error::The generated appcast drops builds the feed it started from lists:"
+      echo "$LOST"
+      exit 1
+    fi
+  fi
+
   cp "$STAGING_DIR/appcast.xml" "$UPDATES_DIR/appcast.xml"
 else
   echo "Skipping appcast generation: Sparkle generate_appcast not available." >&2
