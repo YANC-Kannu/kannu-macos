@@ -38,6 +38,9 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
   its row to `scripts/RELEASE.md`'s Codenames table. [Cloud] [David] Horus, set in both on 2026-11-13. Vigil is next,
   then Sentinel, and the first line of both release notes already says Horus.
 - [ ] 3.3 Before final: set 2.0.0's build to the last beta's plus one. [Mac]
+- [x] 3.4 Set `CURRENT_PROJECT_VERSION` to 14 for the next tag from `development`. [Mac] Set on 2026-11-22. The
+  `v2.0.0-beta.2` tag holds build 13 and never published, so 14 keeps the next build apart from it. If the next tag
+  is another beta, 3.3 makes 2.0.0 build 15.
 
 ## 4. Notes
 - [x] 4.1 Draft the user-facing 2.0 summary for the top of CHANGELOG's `[2.0.0]`. [Cloud] Drafted in
@@ -160,11 +163,14 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [x] 11.2 Write `docs/release-notes/2.0.0-beta.2.md` in beta.1's shape, covering everything merged since beta.1, and
   catch `2.0.0.md` up (9.7's #55 line among them). [Cloud] Written in the same change.
 - [x] 11.x The Claude card shows its organization's freshest reading (F1)
-- [ ] 11.x Minimal only, legacy band removed, 16 pt icon, Tasks on by default, onboarding light showcase. [Mac] [David]
-- [ ] 11.x Welcome finale: Kannu's eye, 'Welcome to Kannu', a soft chime. [Mac] [David]
-- [ ] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
+- [x] 11.x Minimal only, legacy band removed, 16 pt icon, Tasks on by default, onboarding light showcase. [Mac] [David]
+  Merged in #77 on 2026-11-18.
+- [x] 11.x Welcome finale: Kannu's eye, 'Welcome to Kannu', a soft chime. [Mac] [David] Merged in #78 on 2026-11-18.
+- [x] 11.3 Build the signed Release app from `development` with build 13, and install it the house way. [Mac] [David]
+  Built and installed on 2026-11-18.
 - [ ] 11.4 David's Mac checks on that install: beta.2's "Please try" list, and the live checks its changes left open
   (`add-attention-alert` 5.6, `fix-project-name-detection` 3.4, `fix-usage-reset-staleness` 4.4, `fix-usage-fresh-reading` 3.4,
   `update-sideways-agent-pill` 4.6, `fix-claude-desktop-detection` 3.4). [Mac] [David]
 - [ ] 11.5 Tag `v2.0.0-beta.2` on the release commit. CI publishes a notarized pre-release, and both appcasts stay
-  unchanged. [CI] [David]
+  unchanged. [CI] [David] Tagged on 2026-11-18, not published: Apple's notary service refuses the request until the
+  team's Account Holder accepts the updated agreement (`scripts/RELEASE.md`, "When Apple refuses the notary request").

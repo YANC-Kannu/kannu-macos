@@ -4,6 +4,19 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-22 - Build 14 for the next tag
+- **Developer label:** "Yes, bump to 14"
+- **Agent label:** Claude Code (Fable 5.2) — build number for the next tag from development
+- **Changes:**
+  - `CURRENT_PROJECT_VERSION` is 14 in both configurations of `Kannu.xcodeproj/project.pbxproj`. `MARKETING_VERSION`
+    stays 2.0.0.
+  - Why 14: the `v2.0.0-beta.2` tag holds build 13 and never published, and `development` has moved on since. A
+    second build 13 from a later commit would be a different app under the same number.
+  - `openspec/changes/release-2-0/tasks.md`: 3.4 records the bump. Section 11 catches up with what already
+    happened: both polish lines (#77, #78) and the build 13 install are ticked, and 11.5 says the tag exists but
+    did not publish, and why.
+  - No release notes and no tag in this change.
+
 ### 2026-11-21 - Keep every build in the next feed, and let a second publish run finish the first
 - **Developer label:** CodeRabbit's review of the Sparkle proof and appcast change: 3 findings
 - **Agent label:** Claude Code (Fable 5.2) — Auto-fix on the pull request, after CodeRabbit's review
