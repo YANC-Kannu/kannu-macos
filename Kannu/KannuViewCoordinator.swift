@@ -36,6 +36,9 @@ enum SneakContentType: Equatable {
     case privacy
     case lockScreen
     case capsLock
+    /// A call's 5 s on a closed notch that a running timer or a screen recording holds. It has a
+    /// pair in the hand-written `==` below: without it the takeover never matches.
+    case call
     case extensionLiveActivity(bundleID: String, activityID: String)
 }
 
@@ -55,7 +58,8 @@ extension SneakContentType {
              (.bluetoothAudio, .bluetoothAudio),
              (.privacy, .privacy),
              (.lockScreen, .lockScreen),
-             (.capsLock, .capsLock):
+             (.capsLock, .capsLock),
+             (.call, .call):
             return true
         case let (.extensionLiveActivity(lb, la), .extensionLiveActivity(rb, ra)):
             return lb == rb && la == ra
@@ -353,7 +357,7 @@ class KannuViewCoordinator: ObservableObject {
             resolvedDuration = duration
         }
         sneakPeekDuration = resolvedDuration
-        let bypassedTypes: [SneakContentType] = [.music, .timer, .bluetoothAudio]
+        let bypassedTypes: [SneakContentType] = [.music, .timer, .bluetoothAudio, .call]
         
         // Check if it's an extension type
         let isExtensionType: Bool

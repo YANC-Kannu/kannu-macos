@@ -393,6 +393,17 @@ enum DebugSnapshots {
             await render(AnyView(closedAgentPillBoard), name: "closedAgentPill", dark: true, width: 1440,
                          into: request.directory, scale: 2, background: Color(white: 0.16))
         }
+        if request.tabs == nil || request.tabs?.contains("closedCallPill") == true {
+            // The call pill on the closed notch, 1 pt to 2 px like the agent pill's board. Fixtures only:
+            // a symbol stand-in for the calling app's icon and fixed readings for the time.
+            await render(AnyView(closedCallPillBoard), name: "closedCallPill", dark: true, width: 1440,
+                         into: request.directory, scale: 2, background: Color(white: 0.16))
+        }
+        if request.tabs == nil || request.tabs?.contains("homeCallPage") == true {
+            // The call's page on the open notch's media screen, with its "Call · Media" labels.
+            await render(AnyView(homeCallPageBoard), name: "homeCallPage", dark: true, width: 1440,
+                         into: request.directory, scale: 2, background: Color(white: 0.16))
+        }
         if request.tabs == nil || request.tabs?.contains("notchWelcome") == true {
             // Onboarding's welcome line in the open notch, settled (`AppDelegate.startWelcome` opens it).
             await render(AnyView(notchWelcomeBoard), name: "notchWelcome", dark: true, width: 560,
@@ -1115,6 +1126,130 @@ enum DebugSnapshots {
                                    bottomCornerRadius: cornerRadiusInsets.opened.bottom).fill(Color.black))
             .environment(\.colorScheme, .dark)
             .padding(24)
+    }
+
+    /// The stand-in for a calling app's icon on the boards: a symbol on a tile, never the app's logo.
+    private static let callStandInIcon = CallIconSource.standIn(symbol: "phone.bubble.fill", tile: Color(red: 0.16, green: 0.62, blue: 0.36))
+
+    /// The call pill on the closed notch, from fixtures: a call that runs (with the time, past an hour, and
+    /// with the camera on) and a ring, on a notched MacBook and on a display without a notch. Each caption
+    /// carries its measured size.
+    private static var closedCallPillBoard: some View {
+        let closedHeight: CGFloat = 32
+        let housing: CGFloat = 185
+        let notch = NotchShape(topCornerRadius: cornerRadiusInsets.closed.top,
+                               bottomCornerRadius: cornerRadiusInsets.closed.bottom)
+        let bodyPadding = cornerRadiusInsets.closed.bottom
+        let rows: [(name: String, elapsed: CallElapsed?, camera: Bool)] = [
+            ("a call, 12 minutes in", .fixed("12:34"), false),
+            ("past an hour: the time scales into its slot", .fixed("1:02:34"), false),
+            ("with the camera on", .fixed("0:07"), true),
+            ("ringing: the glyph alone", nil, false),
+        ]
+
+        func caption(_ text: String) -> some View {
+            Text(verbatim: text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.75))
+        }
+        func layout(_ row: (name: String, elapsed: CallElapsed?, camera: Bool)) -> ClosedCallPillLayout {
+            ClosedCallPillLayout(closedHeight: closedHeight, housingWidth: housing,
+                                 showsTime: row.elapsed != nil, showsCamera: row.camera)
+        }
+        func pill(_ row: (name: String, elapsed: CallElapsed?, camera: Bool)) -> some View {
+            CallLiveActivity(layout: layout(row), icon: callStandInIcon, elapsed: row.elapsed, accessibilityLabel: "")
+        }
+        func size(_ layout: ClosedCallPillLayout) -> String {
+            "body \(Int(layout.width + 2 * bodyPadding)) × \(Int(layout.closedHeight)) pt (content \(Int(layout.width)), wings \(Int(layout.wingWidth)), housing \(Int(layout.housingWidth)), icon \(Int(layout.iconSize)))"
+        }
+
+        return VStack(alignment: .leading, spacing: 22) {
+            ForEach([false, true], id: \.self) { island in
+                VStack(alignment: .leading, spacing: 12) {
+                    caption(island ? "Dynamic Island (no notch): the same pill" : "Notched MacBook: the app's icon, the housing, the phone glyph and the time")
+                    ForEach(rows.indices, id: \.self) { index in
+                        VStack(alignment: .leading, spacing: 4) {
+                            pill(rows[index])
+                                .padding(.horizontal, bodyPadding)
+                                .background {
+                                    if island {
+                                        DynamicIslandPillShape(cornerRadius: max(closedHeight / 2, dynamicIslandPillCornerRadiusInsets.closed))
+                                            .fill(Color.black)
+                                    } else {
+                                        notch.fill(Color.black)
+                                    }
+                                }
+                            caption("\(rows[index].name): \(size(layout(rows[index])))")
+                        }
+                    }
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The media screen during a call, from fixtures: the call's page while it runs and while it rings, and
+    /// the labels with Media chosen. The music player itself is not drawn: it shows this Mac's own player.
+    private static var homeCallPageBoard: some View {
+        let size = CGSize(width: 640, height: 200)
+        let headerHeight: CGFloat = 32
+        let open = NotchShape(topCornerRadius: cornerRadiusInsets.opened.top,
+                              bottomCornerRadius: cornerRadiusInsets.opened.bottom)
+
+        func caption(_ text: String) -> some View {
+            Text(verbatim: text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color.white.opacity(0.75))
+        }
+        func screen(shown: HomePage, @ViewBuilder page: () -> some View) -> some View {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: headerHeight)
+                HStack(alignment: .top, spacing: 20) {
+                    page()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .overlay(alignment: .bottom) {
+                    HomePagerLabels(shown: shown, onSelect: { _ in })
+                        .offset(y: HomePage.pagerFooterOffset)
+                }
+                .padding(8)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
+            .frame(width: size.width, height: size.height)
+            .background(open.fill(Color.black))
+            .environment(\.colorScheme, .dark)
+        }
+
+        return VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 8) {
+                caption("A call that runs: the app's icon where the album art sits, the app's name, the elapsed time. Labels below the screen's bottom line.")
+                screen(shown: .call) {
+                    CallPageView(icon: callStandInIcon, title: "WhatsApp", elapsed: .fixed("12:34"), accessibilityLabel: "")
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                caption("A ring (the opt-in that follows): the caller's name when the ring gave one, and \"Ringing\"")
+                screen(shown: .call) {
+                    CallPageView(icon: callStandInIcon, title: "Dana Example", elapsed: nil, accessibilityLabel: "")
+                }
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                caption("Swiped to Media: the music player (a placeholder here; the board never draws this Mac's player)")
+                screen(shown: .media) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                        .overlay {
+                            Text(verbatim: "Music player")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.4))
+                        }
+                }
+            }
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The closed agent light on every display kind, from fixtures: the sideways pill on a notched MacBook

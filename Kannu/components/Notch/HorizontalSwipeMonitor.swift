@@ -28,8 +28,9 @@ import SwiftUI
 /// view. `onScroll` returns true to consume the event. The monitor is removed when the view goes
 /// away.
 ///
-/// Two users: the ruler (`RulerTimerPicker`) turns sideways trackpad scrolls into minutes, and the
-/// timer tab (`HorizontalSwipeMonitor`) turns a two-finger swipe into a side-column page change.
+/// Two users: the ruler (`RulerTimerPicker`) turns sideways trackpad scrolls into minutes, and
+/// `HorizontalSwipeMonitor` turns a two-finger swipe into a page change, on the timer tab's side
+/// column and, while a call exists, on the media screen.
 ///
 /// Both are local monitors, and AppKit runs local monitors in no promised order, so when the two
 /// views overlap (the ruler sits on the tab) the one that runs first and consumes decides. The ruler
@@ -147,11 +148,31 @@ extension NSEvent {
 
 // MARK: - Two-finger page swipe
 
-/// Turns a two-finger swipe over the view into a page change for the timer tab's side column.
+/// One two-finger gesture's running total for a two-page pager: `TimerSideSwipe` and
+/// `HomePageSwipe`, which are pure and live in the logic target.
+protocol PageSwipeGesture {
+    associatedtype Page
+    init()
+    mutating func reset()
+    mutating func add(dx: Double, dy: Double, current: Page) -> Page?
+}
+
+/// A page a two-finger swipe turns to, and the gesture that counts its swipe.
+protocol SwipeablePage: Equatable {
+    associatedtype Swipe: PageSwipeGesture where Swipe.Page == Self
+}
+
+extension TimerSideSwipe: PageSwipeGesture {}
+extension TimerSidePage: SwipeablePage { typealias Swipe = TimerSideSwipe }
+extension HomePageSwipe: PageSwipeGesture {}
+extension HomePage: SwipeablePage { typealias Swipe = HomePageSwipe }
+
+/// Turns a two-finger swipe over the view into a page change. It takes the page type: the timer
+/// tab's side column (`TimerSidePage`) and the media screen during a call (`HomePage`).
 /// `NotchTimerView` puts it behind the whole tab (composer, divider and column), so a swipe works
 /// anywhere on the tab, not only over the column.
 ///
-/// It follows one gesture from `.began` to `.ended` (`TimerSideSwipe`) and ignores momentum, so a
+/// It follows one gesture from `.began` to `.ended` (the page's `Swipe`) and ignores momentum, so a
 /// flick changes the page once and its coasting changes nothing. It consumes only sideways
 /// (horizontal-dominant) events: a vertical scroll still reaches the list, or the notch, under it.
 /// A plain mouse wheel has no gesture phase and is left alone.
@@ -165,10 +186,10 @@ extension NSEvent {
 /// is inside the ruler's view is never offered here (`ScrollWheelMonitor.sidewaysScrollOwners`).
 /// `isSuspended` (the ruler's hover, as `NotchTimerView` tracks it) is a second guard on top, not
 /// the first: it reaches this view through `@State` and a re-render, which a scroll can beat.
-struct HorizontalSwipeMonitor: View {
-    let current: TimerSidePage
+struct HorizontalSwipeMonitor<Page: SwipeablePage>: View {
+    let current: Page
     var isSuspended = false
-    let onSwipe: (TimerSidePage) -> Void
+    let onSwipe: (Page) -> Void
 
     /// The gesture so far. A class, so counting deltas does not redraw the tab on every event.
     @State private var tracker = Tracker()
@@ -187,9 +208,9 @@ struct HorizontalSwipeMonitor: View {
 
     @MainActor
     final class Tracker {
-        private var swipe = TimerSideSwipe()
+        private var swipe = Page.Swipe()
 
-        func handle(_ event: NSEvent, current: TimerSidePage) -> TimerSidePage? {
+        func handle(_ event: NSEvent, current: Page) -> Page? {
             let phase = event.phase
             if phase.contains(.began) {
                 swipe.reset()
@@ -199,7 +220,7 @@ struct HorizontalSwipeMonitor: View {
                 return nil
             }
             guard phase.contains(.began) || phase.contains(.changed) else { return nil }
-            // TimerSideSwipe counts in the natural-scrolling sense (fingers left is negative), so a
+            // The gesture counts in the natural-scrolling sense (fingers left is negative), so a
             // swipe follows the fingers whichever way the user's scrolling runs.
             let natural = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
             return swipe.add(

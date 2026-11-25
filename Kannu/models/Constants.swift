@@ -1606,6 +1606,11 @@ extension Defaults.Keys {
     // MARK: Privacy Indicators (Camera & Microphone Detection)
     static let enableCameraDetection = Key<Bool>("enableCameraDetection", default: true)
     static let enableMicrophoneDetection = Key<Bool>("enableMicrophoneDetection", default: true)
+
+    // MARK: Calls
+    /// Shows a call another app is on: the pill on the closed notch and the call page on the open
+    /// notch's media screen. Off stops `CallActivityManager`'s monitor.
+    static let enableCallActivity = Key<Bool>("enableCallActivity", default: true)
     
     // MARK: Lock Screen Features
     static let enableLockScreenLiveActivity = Key<Bool>("enableLockScreenLiveActivity", default: true)

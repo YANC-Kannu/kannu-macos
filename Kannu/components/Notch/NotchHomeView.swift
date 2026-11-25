@@ -739,9 +739,16 @@ struct MusicControlsView: View {
 // MARK: - Main View
 
 struct NotchHomeView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var vm: KannuViewModel
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = KannuViewCoordinator.shared
+    /// One value, assigned when a call starts or ends and at no other time.
+    @ObservedObject private var callActivity = CallActivityManager.shared
+    @Default(.enableCallActivity) private var enableCallActivity
+    /// The page last chosen while a call exists. The screen is built as the notch opens, so every
+    /// open during a call starts on the call's page.
+    @State private var selectedPage: HomePage = .call
     let albumArtNamespace: Namespace.ID
     
     var body: some View {
@@ -753,17 +760,70 @@ struct NotchHomeView: View {
         .transition(.opacity.combined(with: .blurReplace))
     }
 
+    /// The call another app is on, while Calls is switched on. With none, this screen is the
+    /// music player alone: no call page, no labels, no page swipe.
+    private var call: CallActivity? {
+        enableCallActivity ? callActivity.activity : nil
+    }
+
+    private var shownPage: HomePage {
+        HomePage.shown(selected: selectedPage, hasCall: call != nil)
+    }
+
+    private func select(_ page: HomePage) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) {
+            selectedPage = page
+        }
+    }
+
     private var mainContent: some View {
         HStack(alignment: .top, spacing: 20) {
-            // Home tab: Now Playing (inactive placeholder until media starts)
-            MusicPlayerView(albumArtNamespace: albumArtNamespace)
+            if let call, shownPage == .call {
+                CallPageView(
+                    icon: .app(bundleID: call.app.bundleID),
+                    title: call.app.name,
+                    elapsed: call.startedAt.map { .since($0) },
+                    accessibilityLabel: CallAccessibility.label(appName: call.app.name, isRinging: call.isRinging)
+                )
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
+            } else {
+                // Home tab: Now Playing (inactive placeholder until media starts)
+                MusicPlayerView(albumArtNamespace: albumArtNamespace)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .transition(.opacity)
+            }
+        }
+        // The page swipe and the "Call · Media" labels exist only while a call does. With none, a
+        // sideways swipe here is the track skip it has always been (`canPerformSkipGesture`).
+        .background {
+            if call != nil {
+                HorizontalSwipeMonitor(current: shownPage, onSwipe: select)
+            }
+        }
+        // Hangs below the screen's bottom line, into the footer: an overlay takes no room.
+        .overlay(alignment: .bottom) {
+            if call != nil {
+                pager
+                    .offset(y: HomePage.pagerFooterOffset)
+            }
+        }
+        // A call that begins while the screen is open turns it to the call's page.
+        .onChange(of: call?.app.id) { _, _ in
+            selectedPage = HomePage.initial(hasCall: call != nil)
         }
         .transition(.opacity.animation(.smooth.speed(0.9))
             .combined(with: .blurReplace.animation(.smooth.speed(0.9)))
             .combined(with: .move(edge: .top)))
         .blur(radius: vm.notchState == .closed ? 30 : 0)
         .padding(8) //Putting the main padding for home view here for consistency
+    }
+
+    // MARK: - Call and Media labels
+
+    /// "Call · Media", centred under the screen (`HomePagerLabels`).
+    private var pager: some View {
+        HomePagerLabels(shown: shownPage, onSelect: select)
     }
 }
 
