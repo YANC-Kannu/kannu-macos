@@ -4,6 +4,18 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-25 - Removed the daily LLM pricing workflow
+- **Developer label:** "Remove LLM pricing workflow"
+- **Agent label:** Claude Code (Opus 5.5) — the workflow file only; the app's pricing data and code are unchanged
+- **Changes:**
+  - Deleted `.github/workflows/update-pricing.yml` ("Update LLM Pricing Data"). Once a day it fetched OpenRouter's
+    model list, rewrote `Kannu/managers/LLMUsage/pricing.json` and pushed the result to `main`.
+  - Why: `main` is protected, so that push is refused ("Cannot update this protected ref"), and every scheduled run
+    has failed. The file's last update from the workflow was 2026-10-26.
+  - Unchanged: the bundled `pricing.json`, `ModelPricing.swift` and `ModelPricingManager.swift`, which still loads
+    the bundled file and then tries the copy on `main`. Cost estimates behave as they have since 2026-10-26.
+  - Scheduled runs read the workflow from `main`, so the daily failure stops once this change reaches `main`.
+
 ### 2026-11-25 - The album-art tap brings back a closed Spotify window
 - **Developer label:** "i think spotify and media click through has regression, check why" … "Yes, fix it"
 - **Agent label:** Claude Code (Fable 5.2) — a running Spotify with no window on screen gets its window back through its own link
