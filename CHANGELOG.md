@@ -4,6 +4,23 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-25 - The album-art tap brings back a closed Spotify window
+- **Developer label:** "i think spotify and media click through has regression, check why" … "Yes, fix it"
+- **Agent label:** Claude Code (Fable 5.2) — a running Spotify with no window on screen gets its window back through its own link
+- **Changes:**
+  - Tapping the album art with Spotify running and its window closed looked dead. Since 2026-10-22 a running
+    Spotify is only activated, never reopened, because it answered a reopen with a second, hidden audio session;
+    activation brings the app forward and leaves a closed window closed.
+  - `MusicManager.openMusicApp()` still activates and still never reopens. When Spotify has no ordinary window on
+    screen, it then opens Spotify's own bare link (`spotify:`), which reaches Spotify as "open this link" and
+    brought the window back on Spotify 1.3.8. A Spotify with a window on screen is brought forward and sent
+    nowhere. The window check reads window owners and layers only, so it needs no screen-recording permission.
+  - Every other player keeps the reopen, unchanged.
+  - `MusicAppActivationRulesTests` gains the rule (after the activation, behind the window check, one bare link)
+    and its planted offenders.
+  - Measured before the change: the link brought the window back, and no second Spotify audio process appeared.
+    Spotify was not playing at the time, so the two-tracks check with music playing is still to do on a build.
+
 ### 2026-11-22 - Build 14 for the next tag
 - **Developer label:** "Yes, bump to 14"
 - **Agent label:** Claude Code (Fable 5.2) — build number for the next tag from development
