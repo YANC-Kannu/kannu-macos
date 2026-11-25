@@ -1338,12 +1338,18 @@ class MusicManager: ObservableObject {
         // A running Spotify is brought forward the way Cmd-Tab does it and never reopened.
         // `openApplication` on a running app sends it a reopen event, and 0.2 s after one
         // (2026-10-22, 20:49:00) Spotify started a second, hidden audio session in its helper
-        // process that every later Play woke too: two tracks at once. With its window closed it
-        // comes forward without one; its Dock icon reopens it. Every other app keeps the reopen,
-        // which brings back a closed or minimized window.
+        // process that every later Play woke too: two tracks at once. Every other app keeps the
+        // reopen, which brings back a closed or minimized window.
         if bundleID == Self.spotifyBundleID,
            let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
             running.activate()
+            // Activation leaves a closed window closed, so the tap looked dead. Spotify's own link
+            // reaches it as "open this link", not as a reopen, and brings the window back. Only
+            // with no window on screen: a visible Spotify is brought forward and sent nowhere.
+            if !Self.hasWindowOnScreen(processIdentifier: running.processIdentifier),
+               let link = URL(string: Self.spotifyLink) {
+                workspace.open(link)
+            }
         } else if let appURL = workspace.urlForApplication(withBundleIdentifier: bundleID) {
             let configuration = NSWorkspace.OpenConfiguration()
             workspace.openApplication(at: appURL, configuration: configuration) { (app, error) in
@@ -1369,6 +1375,18 @@ class MusicManager: ObservableObject {
 
     /// Spotify answers a reopen event with a stray second audio session; see `openMusicApp()`.
     private static let spotifyBundleID = "com.spotify.client"
+    /// Spotify's own link scheme, bare: it names no page, so Spotify shows what it was showing.
+    private static let spotifyLink = "spotify:"
+
+    /// Whether the process has an ordinary window on screen right now. Reads owners and layers
+    /// only, which needs no screen-recording permission.
+    private static func hasWindowOnScreen(processIdentifier: pid_t) -> Bool {
+        let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]]) ?? []
+        return windows.contains { window in
+            (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == processIdentifier
+                && (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0
+        }
+    }
 
     func forceUpdate() {
         // Request immediate update from the active controller
