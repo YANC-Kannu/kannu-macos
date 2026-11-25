@@ -760,6 +760,67 @@ and `$isPaused`, never the time, so nothing in the sidebar ticks. Nothing observ
 reads one: every board is quiet but `shellBadges`, which draws all four from a fixture. **Not measured:** the CPU of
 Brain open while an agent works; it needs a real window.
 
+### Calls
+
+**Brain › Settings › Live activities › Calls** is one switch, **Show calls from other apps** (`enableCallActivity`,
+on), and a footer. It has no live status row and never observes `CallActivityManager`: the page would redraw for a
+call nobody is looking at Brain for. Off stops the monitor, its listeners and its timer, not only the drawing.
+
+What the switch shows, and where:
+
+- **The closed notch:** the call pill (`CallLiveActivity`, laid out by `ClosedCallPillLayout`), ahead of music for the
+  whole call. A running timer or a screen recording keeps the notch but for the call's first 5 s
+  (`ContentView.callOwnsClosedNotch`). An agent's switch still takes its 7 s ahead of it.
+- **The open notch:** during a call the media screen has two pages, Call and Media (`HomePage`), with the
+  "Call · Media" labels and a two-finger sideways swipe. A sideways swipe skips no track then. With no call the screen
+  is the music player alone.
+- **Never:** the notch opening by itself, anything over the calling app's own call window or notification, or any
+  action on that app.
+
+How a call is seen (`CallAudioProcessMonitor`, off the main thread): CoreAudio's process list says which apps capture
+and which play, with no permission and no prompt. A call starts when one app does both, goes on while it captures, and
+ends 2 s after it stops (`CallActivityResolver`). A ringtone is output only, so it is no call.
+
+**A recording is not a call, where that was measured.** A WhatsApp voice note captures and plays for its whole
+length, exactly as a call does (2026-11-25; it showed as a call until then). What differs is where the capture comes
+from: a call captured from the microphone and the speakers, which is echo cancellation taking the output as its
+reference, and a voice note from the microphone alone. So the monitor also reads whether a process captures from a
+device it plays to (`kAudioProcessPropertyDevices`, input scope against output scope), and WhatsApp's calls need it
+(`CallApp.callsCaptureFromOutput`). The other apps keep the plain rule until their call and their recording are both
+measured, so a clip recorded in one of them may show as a call. On a headset that is microphone and speaker in one
+device the two cannot be told apart, and a WhatsApp voice note there still reads as a call.
+
+The reading is taken on the default input device's "running somewhere" event, on a change of default input device and
+of the process list, every 2 s while the microphone is in use, and every second while a listed app is itself
+capturing. A process that starts or stops capturing sends no event of its own on macOS 27.2, and the device-level
+event came 2 s after WhatsApp stopped, so the re-read is what ends a call's clock: about 3 s after hang-up at worst.
+A call on a microphone that is not the default input is seen only when one of those events arrives with it.
+
+The apps (`CallAppCatalog`), each matched by its bundle ID or a helper's:
+
+| App | Bundle ID | Checked on a real call |
+|---|---|---|
+| WhatsApp | `net.whatsapp.WhatsApp` | Yes (macOS 27.2.1, 2026-11-24) |
+| Slack | `com.tinyspeck.slackmacgap` (a huddle's audio runs in its `.helper`) | Yes, a huddle (2026-11-25) |
+| Zoom | `us.zoom.xos` | No |
+| Microsoft Teams | `com.microsoft.teams2`, `com.microsoft.teams` | No |
+| Discord | `com.hnc.Discord` | No |
+| Telegram | `ru.keepcoder.Telegram`, `com.tdesktop.Telegram` | No |
+| Signal | `org.whispersystems.signal-desktop` | No |
+
+Browsers are left out: a browser holding the microphone is not necessarily a call. An app is checked once a real call
+in it was measured: the app, or its helper, capturing and playing, and the capture stopping as the call ends. After a
+Slack huddle the helper went on playing for 11 s; the call ends on the capture, so that does not hold the pill up. An
+outgoing call counts from the moment it is placed, because that is when the app starts capturing.
+FaceTime is not listed: its capturing process has not been measured. The camera glyph follows the camera privacy
+indicator, so it shows when any app has the camera on.
+
+`ClosedCallPillRulesTests` and `HomeCallPageRulesTests` hold each rule above against planted offenders; the
+`closedCallPill` and `homeCallPage` boards draw the pill and the page from fixtures. **Not measured:** a muted call
+(if an app stops capturing while muted, its pill goes after 2 s and the clock restarts on unmute; a huddle joined
+muted would not show until unmuted), a clip recorded in a listed app other than WhatsApp, a call or a voice note on a
+headset or on AirPods, a call on a microphone that is not the default input, and the CPU over a long call.
+
 ## The shell and navigation
 
 `BrainShell` is the layout: a title row, the sidebar on the paper, and the page in an inset panel. It

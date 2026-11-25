@@ -1244,6 +1244,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !AppRuntimeEnvironment.isUITesting {
             PrivacyIndicatorManager.shared.startMonitoring()
         }
+
+        // Calls in other apps: reads who holds the microphone, off the main thread, with no prompt.
+        if Defaults[.enableCallActivity] && !AppRuntimeEnvironment.isUITesting {
+            CallActivityManager.shared.startMonitoring()
+        }
         
         // Setup Real-time Audio Waveform capture if enabled
         if Defaults[.enableRealTimeWaveform] {
@@ -1362,6 +1367,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }.store(in: &cancellables)
         
+        // The Calls switch: off stops the monitor's listeners and its timer, not only the pill.
+        Defaults.publisher(.enableCallActivity, options: []).sink { _ in
+            guard !AppRuntimeEnvironment.isUITesting else { return }
+            Task { @MainActor in
+                if Defaults[.enableCallActivity] {
+                    CallActivityManager.shared.startMonitoring()
+                } else {
+                    CallActivityManager.shared.stopMonitoring()
+                }
+            }
+        }.store(in: &cancellables)
+
         Defaults.publisher(.enableDoNotDisturbDetection, options: []).sink { [weak self] _ in
             guard let self else { return }
 

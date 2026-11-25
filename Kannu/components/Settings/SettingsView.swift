@@ -858,6 +858,7 @@ struct SettingsView: View {
             SettingsSearchEntry(tab: .liveActivities, title: "Show Focus label", keywords: ["focus label", "text"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show Focus Label")),
             SettingsSearchEntry(tab: .liveActivities, title: "Enable camera detection", keywords: ["camera", "privacy indicator"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Camera Detection")),
             SettingsSearchEntry(tab: .liveActivities, title: "Enable microphone detection", keywords: ["microphone", "privacy"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable Microphone Detection")),
+            SettingsSearchEntry(tab: .liveActivities, title: "Show calls from other apps", keywords: ["call", "calls", "phone", "huddle", "whatsapp", "slack", "zoom", "teams", "discord"], highlightID: SettingsTab.liveActivities.highlightID(for: "Show calls from other apps")),
             SettingsSearchEntry(tab: .liveActivities, title: "Enable music live activity", keywords: ["music", "now playing"], highlightID: SettingsTab.liveActivities.highlightID(for: "Enable music live activity")),
 
             // Battery (Charge)

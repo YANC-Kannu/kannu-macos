@@ -4,6 +4,50 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-25 - Calls in other apps show in the notch
+- **Developer label:** "can the call take over the media screen maybe as swipeable and call geting priority"
+- **Agent label:** Claude Code (Fable 5.2) — ongoing calls on the closed notch and a call page on the media screen
+- **Changes:**
+  - A call in another app now shows on the closed notch: the calling app's still icon left of the housing, a phone
+    glyph with the elapsed time right of it, and a camera glyph while the camera is on (`CallLiveActivity`,
+    `ClosedCallPillLayout`). It is drawn ahead of music for the whole call. A running timer or a screen recording
+    keeps the notch but for the call's first 5 s, and an agent's switch still takes its 7 s ahead of it. Hidden while
+    locked or while the notch hides for a full-screen app.
+  - Opening the notch during a call lands on the media screen, which then has two pages, Call and Media, with a
+    "Call · Media" label pair and a two-finger sideways swipe (`HomePage`, `CallPageView`, `NotchHomeView`). A
+    sideways swipe skips no track while a call has a page. With no call the media screen is as it was. A file
+    dragged to the notch still opens the shelf.
+  - Detection needs no permission and raises no prompt: `CallAudioProcessMonitor` reads CoreAudio's process list,
+    off the main thread, on the default input device's "running somewhere" event, a change of default input device
+    and a change of the process list, and every 2 s while the microphone is in use (every second while a listed app
+    is itself capturing), because on macOS 27.2 a process that starts or stops capturing sends no event of its own
+    (measured: 12 starts, no event; a stop whose device-level event came 2 s late). `stop()` removes every listener
+    and the timer.
+  - A WhatsApp voice note is not a call. It captures and plays for its whole length, as a call does, and an earlier
+    build of this change showed it as one (David: "incorrectly detected voice note"). Measured difference: a call
+    captures from the microphone and the speakers (echo cancellation), a voice note from the microphone alone. The
+    monitor reads that, and WhatsApp's calls need it. On a headset that is microphone and speaker in one, the two
+    cannot be told apart.
+  - `CallActivity.swift`: the catalog and the rule. A call starts when one app both captures and plays, goes on
+    while it captures and ends 2 s after it stops. WhatsApp is checked on a real call and Slack on a real huddle,
+    whose audio runs in Slack's helper; Zoom, Microsoft Teams, Discord, Telegram and Signal are matched by their
+    public bundle IDs, unchecked. Browsers are left out.
+  - `CallActivityManager` publishes one value, started in `continueLaunch()` behind the new `enableCallActivity`
+    (on) and stopped when it goes off. Brain › Settings › Live activities gains **Calls**, one switch and a footer,
+    with one search entry; its strings are in all 17 languages.
+  - `SneakContentType` gains `.call` with its pair in the hand-written `==`. The takeover is never drawn or sized as
+    a HUD. `HorizontalSwipeMonitor` takes the page type, so the timer tab and the media screen share it.
+  - Kannu only watches: the notch never opens by itself, the calling app's own call window and notification are
+    untouched, and the log names only the catalog's key for the app.
+  - Tests: `CallActivityTests`, `ClosedCallPillLayoutTests`, `HomePageTests`, and two source-reading suites,
+    `ClosedCallPillRulesTests` and `HomeCallPageRulesTests`, each rule against a planted offender. The highlight
+    inventory is 248 / 279 / 273. New DEBUG boards `closedCallPill` and `homeCallPage`, from fixtures.
+  - Docs: the OpenSpec change `add-call-live-activity` (new `call-activity` capability), docs/SETTINGS.md "Calls",
+    the 2.0.0 release notes, and decision 9.4 in `release-2-0`.
+  - Not in this change: a ring (an opt-in that follows) and FaceTime (not measured yet). Not measured: a muted
+    call or huddle, a clip recorded in a listed app other than WhatsApp, a call or a voice note on a headset or on
+    AirPods, a call on a microphone that is not the default input, and the CPU over a long call.
+
 ### 2026-11-25 - Removed the daily LLM pricing workflow
 - **Developer label:** "Remove LLM pricing workflow"
 - **Agent label:** Claude Code (Opus 5.5) — the workflow file only; the app's pricing data and code are unchanged

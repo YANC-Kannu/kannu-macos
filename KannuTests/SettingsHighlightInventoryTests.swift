@@ -114,9 +114,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // 2026-11-18, later: both of the light's choices are gone (David: "no need clasic", and the band
         // below the notch removed). "Traffic light style" and "Agent light position" leave the search,
         // and the style row and the Advanced disclosure their registrations and ids: two of each fewer.
-        XCTAssertEqual(inventory.entries.count, 247, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 278, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 272, "distinct registered ids")
+        // 2026-11-25: Live activities gains Calls, "Show calls from other apps" (one entry, one row, one
+        // id): a call in another app on the closed notch and on the media screen.
+        XCTAssertEqual(inventory.entries.count, 248, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 279, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 273, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

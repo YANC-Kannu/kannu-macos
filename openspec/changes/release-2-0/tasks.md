@@ -134,7 +134,10 @@ never committed (David, 2026-11-13). `marketing/` is never staged.
 - [x] 9.2 Whether 2.0 adds the What's New window. Recommended: yes, one small child PR. Decided: yes (David,
   2026-11-13).
 - [ ] 9.3 Who pushes the `libinmv/kannu` feed bridge.
-- [ ] 9.4 Whether 2.0 adds features beyond what is built. If not, "more features" leads the 2.x roadmap.
+- [x] 9.4 Whether 2.0 adds features beyond what is built. If not, "more features" leads the 2.x roadmap. Decided: one
+  more, calls in other apps on the notch (David, 2026-11-24, after two probe runs on his Mac). Ongoing calls are
+  `add-call-live-activity`: the pill above music only, the call page on the media screen, the notch never opening by
+  itself. The ring follows as an opt-in change of its own. Anything else leads the 2.x roadmap.
 - [x] 9.5 Where the storyboard and prompts live: on David's Mac only, never committed (David, 2026-11-13). A cloud
   session cannot write there, so the storyboard is a local task (8.1).
 - [ ] 9.6 AGENTS.md's "Project overview" and the pivot (4.4, 4.5).

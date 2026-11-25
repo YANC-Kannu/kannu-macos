@@ -76,6 +76,8 @@ struct ContentView: View {
     @ObservedObject var idleScheduleManager = IdleAnimationScheduleManager.shared
     @ObservedObject var idlePreviewManager = IdleAnimationPreviewManager.shared
     @ObservedObject var privacyManager = PrivacyIndicatorManager.shared
+    /// One value, assigned when a call starts or ends and at no other time.
+    @ObservedObject private var callActivity = CallActivityManager.shared
     @ObservedObject var doNotDisturbManager = DoNotDisturbManager.shared
     @ObservedObject var lockScreenManager = LockScreenManager.shared
     @ObservedObject var capsLockManager = CapsLockManager.shared
@@ -127,6 +129,7 @@ struct ContentView: View {
     @Default(.notchSkinScrimOpacity) private var notchSkinScrimOpacity
     @Default(.notchFillColor) private var notchFillColor
     @Default(.enableAgentStatusFeature) private var enableAgentStatusFeature
+    @Default(.enableCallActivity) private var enableCallActivity
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Default(.selectedIdleAnimation) private var selectedIdleAnimation
     
@@ -548,6 +551,39 @@ struct ContentView: View {
             && !vm.hideOnClosed
     }
 
+    /// The call another app is on, while Calls is switched on.
+    private var currentCall: CallActivity? {
+        enableCallActivity ? callActivity.activity : nil
+    }
+
+    /// The open notch's media screen has a call page: every hover or click that opens the notch
+    /// lands there, and a sideways swipe on it turns the page instead of skipping a track.
+    private var homeHasCallPage: Bool {
+        currentCall != nil
+    }
+
+    /// A screen recording has the closed notch (its own pill, or music's badge for it).
+    private var recordingHoldsClosedNotch: Bool {
+        enableScreenRecordingDetection && (recordingManager.isRecording || !recordingManager.isRecorderIdle)
+    }
+
+    /// The call's 5 s on a closed notch that a timer or a recording holds, as it starts.
+    private var isCallTakeoverShowing: Bool {
+        isSneakPeekVisibleOnCurrentScreen && coordinator.sneakPeek.type == .call
+    }
+
+    /// A call has the closed notch: its pill is drawn ahead of music for as long as the call
+    /// runs. A running timer and a screen recording keep the notch instead ("Call above music
+    /// only"), except for the call's own 5 s takeover as it starts. Hidden while the screen is
+    /// locked or the notch hides for a full-screen app; an agent's switch still takes its 7 s
+    /// ahead of it, because the sideways pill's branch comes first.
+    private var callOwnsClosedNotch: Bool {
+        guard currentCall != nil else { return false }
+        guard vm.notchState == .closed, !vm.hideOnClosed, !lockScreenManager.isLocked else { return false }
+        if isCallTakeoverShowing { return true }
+        return !isCurrentScreenExpansionVisible && !timerOwnsClosedNotch && !recordingHoldsClosedNotch
+    }
+
     /// Whether the notch/island should hide off-screen when closed on a non-notch display.
     /// Temporarily reveals the notch when a sneakPeek HUD (volume, brightness, music, etc.) is active.
     private var shouldHideUntilHover: Bool {
@@ -640,6 +676,7 @@ struct ContentView: View {
         if idleScheduleManager.isActive { return false }
 
         if isClosedMusicPairingEligible { return false }
+        if callOwnsClosedNotch { return false }
 
         if isSneakPeekVisibleOnCurrentScreen && Defaults[.inlineHUD] { return false }
         if capsLockManager.isCapsLockActive && Defaults[.enableCapsLockIndicator] && !lockScreenManager.isLocked { return false }
@@ -890,7 +927,7 @@ struct ContentView: View {
                         if vm.notchState == .closed && Defaults[.enableHaptics] {
                             triggerHapticIfAllowed()
                         }
-                        openNotch()
+                        openNotch(focus: callOpenFocus)
                     }
                     .conditionalModifier(Defaults[.enableGestures]) { view in
                         view
@@ -988,7 +1025,7 @@ struct ContentView: View {
                 if !sneakPeekShowing {
                     runAfter(0.2) {
                         if isHovering && vm.notchState == .closed {
-                            openNotch()
+                            openNotch(focus: callOpenFocus)
                         }
                     }
                 }
@@ -1089,6 +1126,10 @@ struct ContentView: View {
             // without the poll the top edge could not bring it back.
             .onChange(of: timerOwnsClosedNotch) { _, _ in
                 syncHiddenEdgeHoverPolling()
+            }
+            // A call began (a new app, or a new start): its 5 s on a held notch.
+            .onChange(of: currentCall?.app.id) { _, _ in
+                noteCallStarted()
             }
             .onChange(of: vm.notchState) { _, state in
                 if state == .open {
@@ -1325,7 +1366,7 @@ struct ContentView: View {
                             styleOverride: batteryModel.activeTemporaryHUDKind.map { resolvedBatteryNotificationStyle(for: $0) }
                         )
                         .id(batteryModel.activeTemporaryHUDToken)
-                      } else if isSneakPeekVisibleOnCurrentScreen && (Defaults[.inlineHUD] || isAirPodsListeningModeSneak) && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && (coordinator.sneakPeek.type != .timer) && !coordinator.sneakPeek.type.isExtensionPayload && ((coordinator.sneakPeek.type != .volume && coordinator.sneakPeek.type != .brightness && coordinator.sneakPeek.type != .backlight) || vm.notchState == .closed) {
+                      } else if isSneakPeekVisibleOnCurrentScreen && (Defaults[.inlineHUD] || isAirPodsListeningModeSneak) && (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && (coordinator.sneakPeek.type != .timer) && (coordinator.sneakPeek.type != .call) && !coordinator.sneakPeek.type.isExtensionPayload && ((coordinator.sneakPeek.type != .volume && coordinator.sneakPeek.type != .brightness && coordinator.sneakPeek.type != .backlight) || vm.notchState == .closed) {
                           InlineHUD(type: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, hoverAnimation: $isHovering, gestureProgress: $gestureProgress)
                               .transition(
                                   coordinator.sneakPeek.type == .capsLock
@@ -1339,6 +1380,10 @@ struct ContentView: View {
                           // Sideways: an agent's state switch takes the closed notch for the reveal,
                           // ahead of music and a running timer, which come back when it ends.
                           sidewaysAgentPill()
+                      } else if callOwnsClosedNotch, let call = currentCall {
+                          // A call outranks music for as long as it runs. A timer or a recording
+                          // keeps the notch but for the call's first 5 s (`callOwnsClosedNotch`).
+                          closedCallPill(call)
                       } else if canShowMusicDuringExpansion && musicPairingEligible {
                           // While music plays, MusicLiveActivity embeds the traffic light in its
                           // center (agent hover → agent status; wings keep media art/spectrum).
@@ -1414,7 +1459,7 @@ struct ContentView: View {
                        }
                       
                       if isSneakPeekVisibleOnCurrentScreen {
-                          if (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && (coordinator.sneakPeek.type != .timer) && (coordinator.sneakPeek.type != .capsLock) && !coordinator.sneakPeek.type.isExtensionPayload && !Defaults[.inlineHUD] && !isAirPodsListeningModeSneak && ((coordinator.sneakPeek.type != .volume && coordinator.sneakPeek.type != .brightness && coordinator.sneakPeek.type != .backlight) || vm.notchState == .closed) {
+                          if (coordinator.sneakPeek.type != .music) && (coordinator.sneakPeek.type != .battery) && (coordinator.sneakPeek.type != .timer) && (coordinator.sneakPeek.type != .capsLock) && (coordinator.sneakPeek.type != .call) && !coordinator.sneakPeek.type.isExtensionPayload && !Defaults[.inlineHUD] && !isAirPodsListeningModeSneak && ((coordinator.sneakPeek.type != .volume && coordinator.sneakPeek.type != .brightness && coordinator.sneakPeek.type != .backlight) || vm.notchState == .closed) {
                               SystemEventIndicatorModifier(eventType: $coordinator.sneakPeek.type, value: $coordinator.sneakPeek.value, icon: $coordinator.sneakPeek.icon, sendEventBack: { newValue in
                                   switch coordinator.sneakPeek.type {
                                   case .volume:
@@ -1596,6 +1641,39 @@ struct ContentView: View {
         )
         .id("closed-agent-pill")
         .transition(agentLightTransition)
+    }
+
+    /// The call pill: the calling app's icon, the housing, and the phone glyph with the elapsed
+    /// time. It only reads what this view already observes and hands it in as parameters.
+    private func closedCallPill(_ call: CallActivity) -> some View {
+        CallLiveActivity(
+            layout: ClosedCallPillLayout(
+                closedHeight: vm.effectiveClosedNotchHeight,
+                housingWidth: max(0, vm.closedNotchSize.width + (isHovering ? 8 : 0)),
+                showsTime: !call.isRinging,
+                showsCamera: privacyManager.cameraActive && Defaults[.enableCameraDetection]
+            ),
+            icon: .app(bundleID: call.app.bundleID),
+            elapsed: call.startedAt.map { .since($0) },
+            accessibilityLabel: CallAccessibility.label(appName: call.app.name, isRinging: call.isRinging)
+        )
+        .frame(height: max(0, vm.effectiveClosedNotchHeight + (isHovering ? 8 : 0)))
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            handleRegionHoverOpen(hovering, focus: .home)
+        }
+        .id("closed-call-pill")
+        .transition(closedLiveActivitySwapTransition)
+    }
+
+    /// A call that starts while a timer or a screen recording holds the closed notch, or while the
+    /// island is hidden until hover, takes it for `CallActivityManager.takeoverDuration` and hands
+    /// it back. With the notch free the pill is simply there, and no takeover is asked for, so a
+    /// hover can open the notch at once.
+    private func noteCallStarted() {
+        guard currentCall != nil, vm.notchState == .closed else { return }
+        guard timerOwnsClosedNotch || recordingHoldsClosedNotch || hideUntilHoverAppliesHere else { return }
+        coordinator.toggleSneakPeek(status: true, type: .call, duration: CallActivityManager.takeoverDuration)
     }
 
     @ViewBuilder
@@ -2271,6 +2349,13 @@ struct ContentView: View {
     }
 
     // MARK: - Private Methods
+    /// Where a click, a swipe or a hover that names no tab lands the open: the media screen during
+    /// a call, where the call's page is; otherwise the tab last shown. A file dragged to the notch
+    /// does not use it: it opens the shelf.
+    private var callOpenFocus: NotchViews? {
+        homeHasCallPage ? .home : nil
+    }
+
     private func openNotch(focus: NotchViews? = nil) {
         if let focus {
             withAnimation(.smooth) {
@@ -2305,6 +2390,9 @@ struct ContentView: View {
         guard vm.notchState == .closed,
               !isSneakPeekVisibleOnCurrentScreen,
               Defaults[.openNotchOnHover] else { return }
+
+        // During a call every wing opens on the media screen, where the call's page is.
+        let focus: NotchViews = homeHasCallPage ? .home : focus
 
         if isPhysicalNotchScreen {
             // A wing or the agent band sits over menu-bar items and window toolbars: hovering it
@@ -2610,7 +2698,7 @@ struct ContentView: View {
                 if Defaults[.enableHaptics] {
                     self.triggerHapticIfAllowed()
                 }
-                self.openNotch()
+                self.openNotch(focus: self.callOpenFocus)
             }
         }
 
@@ -2705,7 +2793,13 @@ struct ContentView: View {
     /// The open half of hover-to-open, once the debounce (or the hidden-edge poll's dwell) has
     /// been served. Callers re-check `notchState` / `isHovering` before calling.
     private func completeHoverOpen(shouldFocusTimerTab: Bool) {
-        if shouldFocusTimerTab {
+        if homeHasCallPage {
+            // A call comes first: the media screen, where its page is, ahead of the timer tab
+            // and the agents tab.
+            withAnimation(.smooth) {
+                coordinator.currentView = .home
+            }
+        } else if shouldFocusTimerTab {
             withAnimation(.smooth) {
                 coordinator.currentView = .timer
             }
@@ -2977,7 +3071,7 @@ struct ContentView: View {
             withAnimation(.smooth) {
                 gestureProgress = .zero
             }
-            openNotch()
+            openNotch(focus: callOpenFocus)
         }
     }
 
@@ -3042,6 +3136,11 @@ struct ContentView: View {
     private func canPerformSkipGesture() -> Bool {
         let canSkipInOpenHome = vm.notchState == .open && coordinator.currentView == .home
         let canSkipInClosedMusic = !Defaults[.openNotchOnHover] && isClosedMusicGestureContext
+
+        // While a call exists a sideways swipe on the media screen turns its page (Call, Media),
+        // and the closed notch shows the call's pill, not music's: neither skips a track. The
+        // media buttons still do.
+        guard !homeHasCallPage else { return false }
 
         return enableHorizontalMusicGestures
             && (canSkipInOpenHome || canSkipInClosedMusic)
@@ -3332,7 +3431,9 @@ struct ContentView: View {
         // Original logic for other types
         let isMusicSneak = coordinator.sneakPeek.type == .music && vm.notchState == .closed && !vm.hideOnClosed && style == .standard
         let isTimerSneak = coordinator.sneakPeek.type == .timer && !vm.hideOnClosed && style == .standard
-        let isOtherSneak = coordinator.sneakPeek.type != .music && coordinator.sneakPeek.type != .timer && vm.notchState == .closed
+        // The call's takeover is the call pill at its own size, not a HUD under the notch.
+        let isOtherSneak = coordinator.sneakPeek.type != .music && coordinator.sneakPeek.type != .timer
+            && coordinator.sneakPeek.type != .call && vm.notchState == .closed
         
         return isMusicSneak || isTimerSneak || isOtherSneak
     }

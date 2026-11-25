@@ -232,6 +232,19 @@ struct LiveActivitiesSettings: View {
                 SettingsFooter("Shows green camera icon and yellow microphone icon when in use. Uses event-driven CoreAudio and CoreMediaIO APIs.")
             }
 
+            // A switch and a footer, and no live status row: Brain's content outlives its window,
+            // so this page never observes the call manager (docs/SETTINGS.md, "Live data").
+            SettingsSection {
+                Defaults.Toggle(key: .enableCallActivity) {
+                    Text("Show calls from other apps")
+                }
+                .settingsHighlight(id: highlightID("Show calls from other apps"))
+            } header: {
+                SettingsSectionHeader("Calls")
+            } footer: {
+                SettingsFooter("Shows a call in WhatsApp and other calling apps on the closed notch, above music, and as a page on the media screen when you open the notch. Kannu reads which app is using the microphone, never the audio, and needs no permission.")
+            }
+
             SettingsSection {
                 Toggle(
                     "Enable music live activity",
