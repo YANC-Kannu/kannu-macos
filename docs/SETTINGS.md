@@ -762,8 +762,9 @@ Brain open while an agent works; it needs a real window.
 
 ### Calls
 
-**Brain › Settings › Live activities › Calls** is one switch, **Show calls from other apps** (`enableCallActivity`,
-on), and a footer. It has no live status row and never observes `CallActivityManager`: the page would redraw for a
+**Brain › Settings › Live activities › Calls** is two switches, each with a footer: **Show calls from other apps**
+(`enableCallActivity`, on) and **Pause music during calls** (`pauseMusicDuringCalls`, on, greyed out while calls are
+off; see "Pause music during calls" below). It has no live status row and never observes `CallActivityManager`: the page would redraw for a
 call nobody is looking at Brain for. Off stops the monitor, its listeners and its timer, not only the drawing.
 
 What the switch shows, and where:
@@ -820,6 +821,19 @@ indicator, so it shows when any app has the camera on.
 (if an app stops capturing while muted, its pill goes after 2 s and the clock restarts on unmute; a huddle joined
 muted would not show until unmuted), a clip recorded in a listed app other than WhatsApp, a call or a voice note on a
 headset or on AirPods, a call on a microphone that is not the default input, and the CPU over a long call.
+
+**Pause music during calls** (`pauseMusicDuringCalls`, on). When a call becomes ongoing, from none or from a ring,
+`CallMusicPauser` asks `CallMusicPolicy` (pure, in the logic target) and, on `.pause`, sends one explicit
+`MusicManager.pause()` through the music source's controller, exactly as the notch's own pause button does. Never a
+toggle, which would start music that had stopped by itself, and never a play. The conditions: both switches on,
+Kannu's music state says playing, and the music's source is not the calling app or one of its helpers (WhatsApp is
+the Now Playing app for its own voice notes). Once per call: nothing while the call goes on, nothing when it ends, and
+no resume, so music the user starts again during the call plays on. The pauser follows `CallActivityManager.$activity`
+and nothing else; it is started beside the call monitor in `continueLaunch()`, re-synced when either switch changes,
+and its `stop()` drops the subscription (docs/REGRESSIONS.md, entry 19). A call already running when the switch goes
+on is not a start. `CallMusicPolicyTests` pins the rule and `CallMusicPauseRulesTests` the wiring, each against a
+planted offender. **Not measured:** the delay from a call connecting to the music pausing on a real call; it is the
+call's detection (up to 2 s) plus the source's own pause.
 
 ## The shell and navigation
 
