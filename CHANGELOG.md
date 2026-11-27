@@ -4,6 +4,15 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-27 - Build 15 for the 2.0.0 release
+- **Developer label:** "release our 2.0 app"
+- **Agent label:** Claude Code (Opus 5.5) — set 2.0.0's build above the last beta, and keep the release notes to what was tested
+- **Changes:**
+  - `CURRENT_PROJECT_VERSION` 14 → 15 in both configurations. `v2.0.0-beta.3`, the last beta, holds build 14, so
+    Sparkle orders 2.0.0 after it (release-2-0 task 3.3).
+  - docs/release-notes/2.0.0.md: the calls line names WhatsApp only. Slack huddles were never tested on a Mac, and
+    David chose to leave the call checks out of 2.0.
+
 ### 2026-11-27 - A call pauses the music
 - **Developer label:** "when whatsapp call starts i think music starts and donot stop in kannu"
 - **Agent label:** Claude Code (Opus 5.5) — pause the playing music app once when a call connects, never resume

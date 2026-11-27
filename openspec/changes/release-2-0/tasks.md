@@ -37,7 +37,8 @@ Keep this file current as work moves; `handoff.md` holds the latest state behind
 - [x] 3.2 Set the codename in `ReleaseInfo.codename` (`Kannu/models/Constants.swift`), once David picks it (9.1). Add
   its row to `scripts/RELEASE.md`'s Codenames table. [Cloud] [David] Horus, set in both on 2026-11-13. Vigil is next,
   then Sentinel, and the first line of both release notes already says Horus.
-- [ ] 3.3 Before final: set 2.0.0's build to the last beta's plus one. [Mac]
+- [x] 3.3 Before final: set 2.0.0's build to the last beta's plus one. [Mac] Set to 15 on 2026-11-27: the
+  `v2.0.0-beta.3` tag, the last beta, holds build 14.
 - [x] 3.4 Set `CURRENT_PROJECT_VERSION` to 14 for the next tag from `development`. [Mac] Set on 2026-11-22. The
   `v2.0.0-beta.2` tag holds build 13 and never published, so 14 keeps the next build apart from it. If the next tag
   is another beta, 3.3 makes 2.0.0 build 15.
