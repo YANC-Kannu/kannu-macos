@@ -4,6 +4,28 @@ Each commit must add one new entry under `## [Unreleased]` before committing.
 
 ## [Unreleased]
 
+### 2026-11-27 - A call pauses the music
+- **Developer label:** "when whatsapp call starts i think music starts and donot stop in kannu"
+- **Agent label:** Claude Code (Opus 5.5) — pause the playing music app once when a call connects, never resume
+- **Changes:**
+  - When a call becomes ongoing, from none or from a ring, Kannu sends one explicit `MusicManager.pause()`: never a
+    toggle and never a play. Only while the new **Pause music during calls** (`pauseMusicDuringCalls`, on) and
+    **Show calls from other apps** are both on, only when Kannu's music state says playing, and never when the
+    music's source is the calling app (WhatsApp is the Now Playing app for its own voice notes).
+  - Once per call: nothing while the call goes on, nothing when it ends, no resume. Measured before the change: a
+    WhatsApp call on 27 Nov left Spotify playing throughout, because nothing in the calls feature sent a command.
+  - `CallMusicPolicy` (pure, in the logic test target) decides; `CallMusicPauser` follows
+    `CallActivityManager.$activity`, is started beside the call monitor in `continueLaunch()` and when either switch
+    changes, and has an explicit `stop()` (docs/REGRESSIONS.md, entry 19). `CallActivityManager`'s doc comment now
+    says a call may pause the music.
+  - Brain › Settings › Live activities › Calls gains the switch with a footer, greyed out while calls are off, and
+    one search entry; both strings are in all 17 languages. The highlight inventory moves to the measured counts.
+  - Tests: `CallMusicPolicyTests` (start, ring to call, paused music, switch off, calling app as source, update, end,
+    a call replacing the last) and `CallMusicPauseRulesTests` (only `pause()`, the switch gate, `stop()` and its
+    owner, no resume or play path), each rule against a planted offender.
+  - OpenSpec change `add-call-pauses-music` (one ADDED requirement on `call-activity`), docs/SETTINGS.md, and one
+    line in the 2.0.0 release notes.
+
 ### 2026-11-25 - Calls in other apps show in the notch
 - **Developer label:** "can the call take over the media screen maybe as swipeable and call geting priority"
 - **Agent label:** Claude Code (Fable 5.2) — ongoing calls on the closed notch and a call page on the media screen

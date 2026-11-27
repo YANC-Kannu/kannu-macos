@@ -35,6 +35,7 @@ struct LiveActivitiesSettings: View {
     @Default(.focusIndicatorNonPersistent) var focusIndicatorNonPersistent
     @Default(.capsLockIndicatorTintMode) var capsLockTintMode
     @Default(.enableCapsLockIndicator) var enableCapsLockIndicator
+    @Default(.enableCallActivity) var enableCallActivity
 
     private func highlightID(_ title: String) -> String {
         SettingsTab.liveActivities.highlightID(for: title)
@@ -243,6 +244,16 @@ struct LiveActivitiesSettings: View {
                 SettingsSectionHeader("Calls")
             } footer: {
                 SettingsFooter("Shows a call in WhatsApp and other calling apps on the closed notch, above music, and as a page on the media screen when you open the notch. Kannu reads which app is using the microphone, never the audio, and needs no permission.")
+            }
+
+            SettingsSection {
+                Defaults.Toggle(key: .pauseMusicDuringCalls) {
+                    Text("Pause music during calls")
+                }
+                .disabled(!enableCallActivity)
+                .settingsHighlight(id: highlightID("Pause music during calls"))
+            } footer: {
+                SettingsFooter("When a call connects, Kannu pauses the music app that is playing, once. It never starts the music again after the call.")
             }
 
             SettingsSection {

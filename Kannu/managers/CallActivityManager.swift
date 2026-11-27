@@ -26,8 +26,10 @@ import os
 /// value is assigned only when it changes, which is when a call starts or ends, so a view that
 /// observes this manager redraws at those two moments and at no other.
 ///
-/// Kannu only watches: it never opens the notch for a call, never touches the calling app, and
-/// leaves that app's own call window and notification as they are.
+/// Kannu watches the call: it never opens the notch for one, never touches the calling app, and
+/// leaves that app's own call window and notification as they are. The one thing a call may do is
+/// pause the user's music app, once, as it starts, when "Pause music during calls" is on
+/// (`CallMusicPauser`, which follows `activity`).
 @MainActor
 final class CallActivityManager: ObservableObject {
     static let shared = CallActivityManager()

@@ -1611,6 +1611,9 @@ extension Defaults.Keys {
     /// Shows a call another app is on: the pill on the closed notch and the call page on the open
     /// notch's media screen. Off stops `CallActivityManager`'s monitor.
     static let enableCallActivity = Key<Bool>("enableCallActivity", default: true)
+    /// When a call starts, pauses the music app that is playing, once (`CallMusicPauser`). It never
+    /// resumes. Acts only while `enableCallActivity` is on too.
+    static let pauseMusicDuringCalls = Key<Bool>("pauseMusicDuringCalls", default: true)
     
     // MARK: Lock Screen Features
     static let enableLockScreenLiveActivity = Key<Bool>("enableLockScreenLiveActivity", default: true)

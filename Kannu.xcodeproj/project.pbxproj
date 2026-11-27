@@ -49,6 +49,7 @@
 		AA1000000000000000000E74 /* CallActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000E73 /* CallActivity.swift */; };
 		AA1000000000000000000E76 /* ClosedCallPillLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000E75 /* ClosedCallPillLayout.swift */; };
 		AA1000000000000000000E78 /* HomePage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000E77 /* HomePage.swift */; };
+		AA1000000000000000000E7A /* CallMusicPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000E79 /* CallMusicPolicy.swift */; };
 		AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */; };
 		AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */; };
 		AA1000000000000000000035 /* ClaudeCachedUsage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000034 /* ClaudeCachedUsage.swift */; };
@@ -224,6 +225,7 @@
 		AA1000000000000000000E73 /* CallActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CallActivity.swift; path = Kannu/models/CallActivity.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000E75 /* ClosedCallPillLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClosedCallPillLayout.swift; path = Kannu/sizing/ClosedCallPillLayout.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000E77 /* HomePage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = HomePage.swift; path = Kannu/models/HomePage.swift; sourceTree = SOURCE_ROOT; };
+		AA1000000000000000000E79 /* CallMusicPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CallMusicPolicy.swift; path = Kannu/models/CallMusicPolicy.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000030 /* ClaudeUsageSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeUsageSnapshot.swift; path = Kannu/managers/AgentStatus/ClaudeUsageSnapshot.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000032 /* ClaudeDesktopUsageHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeDesktopUsageHistory.swift; path = Kannu/managers/AgentStatus/ClaudeDesktopUsageHistory.swift; sourceTree = SOURCE_ROOT; };
 		AA1000000000000000000034 /* ClaudeCachedUsage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClaudeCachedUsage.swift; path = Kannu/managers/AgentStatus/ClaudeCachedUsage.swift; sourceTree = SOURCE_ROOT; };
@@ -748,6 +750,7 @@
 				AA1000000000000000000E74 /* CallActivity.swift in Sources */,
 				AA1000000000000000000E76 /* ClosedCallPillLayout.swift in Sources */,
 				AA1000000000000000000E78 /* HomePage.swift in Sources */,
+				AA1000000000000000000E7A /* CallMusicPolicy.swift in Sources */,
 				AA1000000000000000000031 /* ClaudeUsageSnapshot.swift in Sources */,
 				AA1000000000000000000033 /* ClaudeDesktopUsageHistory.swift in Sources */,
 				AA1000000000000000000035 /* ClaudeCachedUsage.swift in Sources */,

@@ -116,9 +116,11 @@ final class SettingsHighlightInventoryTests: XCTestCase {
         // and the style row and the Advanced disclosure their registrations and ids: two of each fewer.
         // 2026-11-25: Live activities gains Calls, "Show calls from other apps" (one entry, one row, one
         // id): a call in another app on the closed notch and on the media screen.
-        XCTAssertEqual(inventory.entries.count, 248, "search entries")
-        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 279, "row registrations")
-        XCTAssertEqual(inventory.registrations.count, 273, "distinct registered ids")
+        // 2026-11-27: Calls gains "Pause music during calls" (one entry, one row, one id): a call that
+        // connects pauses the playing music once, and never resumes it.
+        XCTAssertEqual(inventory.entries.count, 249, "search entries")
+        XCTAssertEqual(inventory.registrations.values.reduce(0, +), 280, "row registrations")
+        XCTAssertEqual(inventory.registrations.count, 274, "distinct registered ids")
     }
 
     /// 2026-11-11: "Accent colour" left the list. Timer's presets moved to start tiles on the product, and their entry,

@@ -1246,8 +1246,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Calls in other apps: reads who holds the microphone, off the main thread, with no prompt.
+        // The pauser follows the calls, and pauses the music once when one starts, if its switch is on.
         if Defaults[.enableCallActivity] && !AppRuntimeEnvironment.isUITesting {
             CallActivityManager.shared.startMonitoring()
+            CallMusicPauser.shared.sync()
         }
         
         // Setup Real-time Audio Waveform capture if enabled
@@ -1373,9 +1375,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in
                 if Defaults[.enableCallActivity] {
                     CallActivityManager.shared.startMonitoring()
+                    CallMusicPauser.shared.sync()
                 } else {
                     CallActivityManager.shared.stopMonitoring()
+                    CallMusicPauser.shared.stop()
                 }
+            }
+        }.store(in: &cancellables)
+
+        // Pause music during calls: the pauser runs only while Calls is on too.
+        Defaults.publisher(.pauseMusicDuringCalls, options: []).sink { _ in
+            guard !AppRuntimeEnvironment.isUITesting else { return }
+            Task { @MainActor in
+                CallMusicPauser.shared.sync()
             }
         }.store(in: &cancellables)
 
